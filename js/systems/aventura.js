@@ -66,6 +66,7 @@ var AVT_STATE = {
     _modoEscolha: null     // 'completa' | 'manual'
   },
   _novaFaseWizard: null,   // wizard state for creating extra phases
+  invocacoes_ativas: [],   // [{ id, invocacao_def, dono_char_nome, hp_atual, hpMax, iniciativa, _turnosRestantes, _cooldowns }]
   _modoPortaPlacement: false, // when true, next map click sets door position
   _faseAnterior: null,     // saved dungeon to return to from extra phase
   itemCatalog: [],         // item_catalog loaded for this adventure
@@ -3348,14 +3349,16 @@ function _avtRenderFrame() {
   // ── Desenhar entidades ────────────────────────────────────────────────────
   entidades.forEach(e => {
     if (e.escondido || (e.tipo === 'inimigo' && e.hp <= 0)) return; // NPCs mortos não aparecem no mapa
-    const _isAvatar = e.tipo === 'avatar';
-    if (_isAvatar) ctx.globalAlpha = 0.45;
+    const _isAvatar   = e.tipo === 'avatar';
+    const _isInvocado = e.tipo === 'invocado';
+    if (_isAvatar)   ctx.globalAlpha = 0.45;
+    if (_isInvocado) ctx.globalAlpha = 0.85;
     const _t = performance.now();
     if (e._tremendo && _t > (e._tremendoUntil || 0)) { e._tremendo = false; }
     const _shake = e._tremendo ? Math.round(Math.sin(_t * 0.09) * 4) : 0;
     const px = Math.round(e.renderX * SZ - camera.x) + _shake;
     const py = Math.round(e.renderY * SZ - camera.y) + (e._tremendo ? Math.round(Math.cos(_t * 0.13) * 3) : 0);
-    if (px+SZ<0 || px>canvas.width || py+SZ<0 || py>canvas.height) { if (_isAvatar) ctx.globalAlpha = 1; return; }
+    if (px+SZ<0 || px>canvas.width || py+SZ<0 || py>canvas.height) { if (_isAvatar || _isInvocado) ctx.globalAlpha = 1; return; }
 
     const isBoss = e.isBoss === true;
     const rBase = Math.floor(SZ * 0.36);
@@ -3455,7 +3458,7 @@ function _avtRenderFrame() {
             ctx.strokeStyle = '#e74c3c';
             ctx.lineWidth = 3;
           } else {
-            ctx.strokeStyle = e.tipo==='inimigo' ? 'rgba(232,96,76,0.6)' : 'rgba(255,255,255,0.4)';
+            ctx.strokeStyle = e.tipo==='inimigo' ? 'rgba(232,96,76,0.6)' : e.tipo==='invocado' ? 'rgba(176,126,240,0.8)' : 'rgba(255,255,255,0.4)';
             ctx.lineWidth = 1.5;
           }
           ctx.stroke();
@@ -3664,7 +3667,21 @@ function _avtRenderFrame() {
       ctx.restore();
     }
 
-    if (_isAvatar) ctx.globalAlpha = 1;
+    if (_isAvatar || _isInvocado) ctx.globalAlpha = 1;
+
+    // Aura pulsante para invocados
+    if (_isInvocado) {
+      const _pulse = 0.5 + 0.5 * Math.sin(performance.now() / 400);
+      ctx.save();
+      ctx.shadowColor = '#b07ef0';
+      ctx.shadowBlur  = Math.round(8 + _pulse * 8);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(176,126,240,0.6)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
   });
 
   // Atualizar posição do botão de rolar dados (desktop) para seguir o token ativo
@@ -7896,9 +7913,9 @@ function _avtCheckAbandonoCombate(ativo, bat) {
     mostrarToast(`${ativo.nome} saiu do combate`, 'aviso');
     _avtHudMostrar(!!_avtMinhaBatalha());
     _avtHudUpdate();
-    // Fix freeze: se agora é turno de inimigo, agendar _avtNpcTurno
+    // Fix freeze: se agora é turno de inimigo ou invocado, agendar _avtNpcTurno
     const novoAtivo = bat.iniciativa[bat.turnoIdx];
-    if (novoAtivo?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
+    if (novoAtivo?.tipo === 'inimigo' || novoAtivo?.tipo === 'invocado') _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
   }
 }
 
@@ -7986,7 +8003,7 @@ function avtCombateIniciar(inimigo_trigger, forcedId, opts) {
   _avtRenderLog();
   // Não abre o painel do mestre automaticamente — o botão ⚙ está disponível manualmente
   const ativoNovo = bat.iniciativa[bat.turnoIdx];
-  if (ativoNovo?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
+  if (ativoNovo?.tipo === 'inimigo' || ativoNovo?.tipo === 'invocado') _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
   return bat;
 }
 
@@ -9371,7 +9388,7 @@ function _avtTurnoAvancar(bat) {
   _avtLimparModoAlvo();
   _avtEsconderBotaoRolar();
   bat.moverModo = false;
-  bat.iniciativa = bat.iniciativa.filter(e => e.tipo === 'avatar' || e.hp > 0);
+  bat.iniciativa = bat.iniciativa.filter(e => e.tipo === 'avatar' || e.tipo === 'invocado' || e.hp > 0);
   bat.envolvidos = bat.envolvidos.filter(id => bat.iniciativa.some(e => e.id === id));
   const _temInimigos = bat.iniciativa.some(e => e.tipo === 'inimigo');
   if (!bat.iniciativa.length || !_temInimigos) { avtCombateEncerrar(bat.id); return; }
@@ -9403,7 +9420,13 @@ function _avtTurnoAvancar(bat) {
     if (av._turnosRestantes <= 0) _avtDestruirAvatar(av.id, bat);
   });
 
-  bat.iniciativa = bat.iniciativa.filter(e => e.tipo === 'avatar' || e.hp > 0);
+  // Expirar invocados
+  AVT_STATE.entidades.filter(e => e.tipo === 'invocado').forEach(inv => {
+    inv._turnosRestantes = (inv._turnosRestantes ?? 1) - 1;
+    if (inv._turnosRestantes <= 0) _avtDestruirInvocacao(inv.id, bat);
+  });
+
+  bat.iniciativa = bat.iniciativa.filter(e => e.tipo === 'avatar' || e.tipo === 'invocado' || e.hp > 0);
   if (!bat.iniciativa.length) { avtCombateEncerrar(bat.id); return; }
   bat.turnoIdx = (bat.turnoIdx + 1) % bat.iniciativa.length;
   // Reset movement budget for the new active entity
@@ -9476,7 +9499,7 @@ function _avtTurnoAvancar(bat) {
   _avtRenderLog();
   _avtBroadcastBatalha(bat);
   const ativoAgora = bat.iniciativa[bat.turnoIdx];
-  if (ativoAgora?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
+  if (ativoAgora?.tipo === 'inimigo' || ativoAgora?.tipo === 'invocado') _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
 }
 
 function _avtGetMovimentoMax(ent) {
@@ -10013,7 +10036,8 @@ async function _avtNpcTurno(bat) {
   if (!bat) bat = _avtMinhaBatalha();
   if (!bat) return;
   const npc = bat.iniciativa[bat.turnoIdx];
-  if (!npc || npc.tipo !== 'inimigo') return;
+  if (!npc || (npc.tipo !== 'inimigo' && npc.tipo !== 'invocado')) return;
+  if (npc.tipo === 'invocado') { _avtNpcTurnoInvocado(bat); return; }
   const entNpc = AVT_STATE.entidades.find(e => e.id===npc.id);
   if (!entNpc || entNpc.hp<=0) {
     _avtTurnoAvancar(bat); return;
@@ -10079,9 +10103,11 @@ async function _avtNpcTurno(bat) {
     perseguicaoGlobal = true;
   }
 
-  // Priorizar avatares: se houver avatar em campo, NPC persegue ele
+  // Priorizar avatares ou dummies invocados: se houver um em campo, NPC persegue ele
   const _avatares = AVT_STATE.entidades.filter(e => e.tipo === 'avatar' && (e._hitsRestantes ?? 1) > 0);
-  if (_avatares.length) jogadores = _avatares;
+  const _dummies  = AVT_STATE.entidades.filter(e => e.tipo === 'invocado' && e.comportamento === 'dummy' && e.hp > 0 && bat.envolvidos.includes(e.id));
+  if (_dummies.length) jogadores = _dummies;
+  else if (_avatares.length) jogadores = _avatares;
 
   let nearest = jogadores[0], nearDist = Infinity;
   jogadores.forEach(j => {
@@ -19738,3 +19764,265 @@ try{
 
   try { console.log('[AVT] PATCH v22 carregado — HP authority, câmera, fases, NPC robusto'); } catch(_) {}
 })();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SISTEMA DE INVOCAÇÕES
+// ══════════════════════════════════════════════════════════════════════════════
+
+function avtInvocar(charNome, invocacaoId) {
+  const char = AVT_STATE.chars.find(c => c.nome === charNome);
+  const entChar = AVT_STATE.entidades.find(e => e.nome === charNome && e.tipo === 'jogador');
+  if (!char || !entChar) { mostrarToast('Personagem não está no mapa', 'aviso'); return; }
+
+  const invDef = typeof INV_OCACOES !== 'undefined' && INV_OCACOES.catalogo.find(i => i.id === invocacaoId);
+  if (!invDef) { mostrarToast('Definição de invocação não encontrada', 'erro'); return; }
+
+  const atrs = char.custom_attrs?.atributos || {};
+  const sabKey = Object.keys(atrs).find(k => k.toLowerCase().includes('sabedor') || k.toLowerCase() === 'wisdom') || 'Sabedoria';
+  const sabValor = parseFloat(atrs[sabKey] ?? 0);
+
+  const duracao = (invDef.duracao_base_turnos || 3) + Math.ceil(sabValor * (invDef.duracao_sabedoria_mult || 0));
+
+  const hpScalingAttr = invDef.hp_atributo_scaling;
+  const hpScalingVal = hpScalingAttr ? parseFloat(atrs[hpScalingAttr] ?? 0) : 0;
+  const hpMax = (invDef.hp_base || 20) + Math.ceil(hpScalingVal * (invDef.hp_atributo_pct || 0) / 100);
+
+  const initRoll = Math.floor(Math.random() * 20) + 1 + (invDef.iniciativa_bonus || 0);
+  const invId = 'invocado_' + invocacaoId.replace(/-/g, '').slice(0, 8) + '_' + Date.now();
+
+  const invAtiva = {
+    id: invId,
+    invocacao_def: invDef,
+    dono_char_nome: charNome,
+    dono_char_id: char.id,
+    hp_atual: hpMax,
+    hpMax,
+    iniciativa: initRoll,
+    turno_invocado: 0,
+    posicao_x: entChar.x + 1,
+    posicao_y: entChar.y,
+    estado: 'ativo',
+    _cooldowns: {},
+    _turnosRestantes: duracao,
+  };
+  AVT_STATE.invocacoes_ativas.push(invAtiva);
+
+  const entInv = _avtCriarEntidadeInvocacao(invAtiva, entChar);
+
+  const bat = _avtMinhaBatalha();
+  if (bat) {
+    const initEntry = { ...entInv, initRoll };
+    bat.iniciativa.push(initEntry);
+    bat.iniciativa.sort((a, b) => b.initRoll - a.initRoll);
+    if (bat.turnoIdx >= bat.iniciativa.length) bat.turnoIdx = 0;
+    if (!bat.envolvidos.includes(invId)) bat.envolvidos.push(invId);
+    invAtiva.turno_invocado = bat.turnoIdx;
+    _avtBroadcastBatalha(bat);
+  }
+
+  mostrarToast(`🔮 ${invDef.nome} invocado por ${charNome}! (${hpMax} HP, ${duracao} turnos)`, 'ok');
+  _avtLog(`🔮 ${charNome} invoca ${invDef.nome}! Init:${initRoll} HP:${hpMax} Dur:${duracao}t`, bat?.id);
+  _avtBroadcast('avt_entidade_nova', { entidade: { ...entInv }, casterId: entChar.id });
+}
+window.avtInvocar = avtInvocar;
+
+function _avtCriarEntidadeInvocacao(invAtiva, entDono) {
+  const invDef = invAtiva.invocacao_def;
+  const aparencia = invDef.visual_tipo === 'token' && invDef.visual_config?.img_url
+    ? { img_frente: invDef.visual_config.img_url }
+    : null;
+
+  const ent = {
+    id: invAtiva.id,
+    nome: invDef.nome,
+    tipo: 'invocado',
+    x: invAtiva.posicao_x,
+    y: invAtiva.posicao_y,
+    renderX: invAtiva.posicao_x,
+    renderY: invAtiva.posicao_y,
+    hp: invAtiva.hp_atual,
+    hpMax: invAtiva.hpMax,
+    cor: '#b07ef0',
+    aparencia,
+    _invAtiva: invAtiva,
+    _donoCor: entDono.cor,
+    comportamento: invDef.comportamento,
+    dummy_explosivo: invDef.dummy_explosivo || false,
+    _turnosRestantes: invAtiva._turnosRestantes,
+    alcance_celulas: 1,
+    icone: '🔮',
+    _particleConfig: invDef.visual_tipo === 'particles' ? invDef.visual_config : null,
+  };
+  AVT_STATE.entidades.push(ent);
+  return ent;
+}
+
+function _avtDestruirInvocacao(invId, bat) {
+  const ent = AVT_STATE.entidades.find(e => e.id === invId);
+  if (ent?.dummy_explosivo && bat) {
+    _avtInvocacaoExplosao(ent, bat);
+  }
+  AVT_STATE.entidades = AVT_STATE.entidades.filter(e => e.id !== invId);
+  AVT_STATE.invocacoes_ativas = AVT_STATE.invocacoes_ativas.filter(i => i.id !== invId);
+  if (bat) {
+    bat.iniciativa = bat.iniciativa.filter(e => e.id !== invId);
+    bat.envolvidos  = bat.envolvidos.filter(id => id !== invId);
+  }
+  _avtLog(`💨 Invocação ${ent?.nome || invId} desapareceu`, bat?.id);
+  _avtBroadcast('avt_invocacao_destruida', { invId });
+}
+
+function _avtInvocacaoExplosao(ent, bat) {
+  const invDef = ent._invAtiva?.invocacao_def;
+  const formula = invDef?.dano_formula || '2d6';
+  const dano = _avtRolarFormula(formula);
+  const raio = 2;
+  const alvos = AVT_STATE.entidades.filter(e =>
+    e.tipo === 'inimigo' && e.hp > 0 &&
+    Math.abs(e.x - ent.x) <= raio && Math.abs(e.y - ent.y) <= raio
+  );
+  alvos.forEach(alvo => {
+    alvo.hp = Math.max(0, alvo.hp - dano);
+    const alvoBat = bat?.iniciativa.find(e => e.id === alvo.id);
+    if (alvoBat) alvoBat.hp = alvo.hp;
+    _avtMostrarDanoAbaixoHp(alvo, dano, false);
+    try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
+    if (alvo.hp <= 0 && bat) { _avtNpcMorreu(alvo, bat); _avtCheckVitoria(bat); }
+  });
+  if (alvos.length) _avtLog(`💥 ${ent.nome} explode causando ${dano} a ${alvos.length} inimigos!`, bat?.id);
+}
+
+function _avtNpcTurnoInvocado(bat) {
+  const inv = bat.iniciativa[bat.turnoIdx];
+  if (!inv || inv.tipo !== 'invocado') return;
+  const entInv = AVT_STATE.entidades.find(e => e.id === inv.id);
+  if (!entInv || entInv.hp <= 0) { _avtTurnoAvancar(bat); return; }
+
+  const invDef = entInv._invAtiva?.invocacao_def;
+  if (!invDef) { _avtTurnoAvancar(bat); return; }
+
+  const dono = AVT_STATE.entidades.find(e => e.nome === entInv._invAtiva?.dono_char_nome);
+  const inimigos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0 && bat.envolvidos.includes(e.id));
+
+  if (!inimigos.length && invDef.comportamento !== 'dummy') {
+    _avtLog(`🔮 ${inv.nome} aguarda (sem inimigos)`, bat.id);
+    _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
+    return;
+  }
+
+  const _invDist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  const _nearest = (origem, lista) => lista.length
+    ? lista.reduce((acc, e) => _invDist(origem, e) < _invDist(origem, acc) ? e : acc, lista[0])
+    : null;
+
+  let alvo = null;
+
+  switch (invDef.comportamento) {
+    case 'agressivo':
+      alvo = _nearest(entInv, inimigos);
+      break;
+
+    case 'assassino':
+      alvo = inimigos.length ? inimigos.reduce((a, b) => {
+        if (a.hp !== b.hp) return a.hp < b.hp ? a : b;
+        return _invDist(entInv, a) < _invDist(entInv, b) ? a : b;
+      }, inimigos[0]) : null;
+      break;
+
+    case 'protetor': {
+      alvo = inimigos.find(e => e._alvoAtual === dono?.nome) || _nearest(entInv, inimigos);
+      if (dono) {
+        const dirDono = _avtNpcMelhorDirecao(entInv, dono, 2);
+        if (dirDono && _invDist(entInv, dono) > 2) {
+          entInv.x += dirDono[0]; entInv.y += dirDono[1];
+          inv.x = entInv.x; inv.y = entInv.y;
+          _avtBcastTokenMove({ nome: entInv.nome, id: entInv.id, x: entInv.x, y: entInv.y });
+        }
+      }
+      break;
+    }
+
+    case 'curador': {
+      const donoChar = AVT_STATE.chars.find(c => c.nome === entInv._invAtiva?.dono_char_nome);
+      const donoHpMax = dono?.hpMax || dono?.hp || 1;
+      if (dono && dono.hp < donoHpMax * 0.5 && invDef.cura_formula) {
+        const cura = _avtRolarFormulaInvocado(invDef, 'cura', entInv._invAtiva?.dono_char_nome);
+        dono.hp = Math.min(donoHpMax, dono.hp + cura);
+        const donoInit = bat.iniciativa.find(e => e.id === dono.id);
+        if (donoInit) donoInit.hp = dono.hp;
+        _avtMostrarCuraAcimaDaHead(dono, cura);
+        try { _avtBroadcast('avt_hp_update', { nome: dono.nome, hp: dono.hp, hpMax: dono.hpMax }); } catch(_) {}
+        _avtLog(`💚 ${inv.nome} cura ${dono.nome} por ${cura} HP`, bat.id);
+        _avtBroadcastBatalha(bat);
+        _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
+        return;
+      }
+      alvo = _nearest(entInv, inimigos);
+      break;
+    }
+
+    case 'dummy':
+      _avtLog(`🎯 ${inv.nome} aguarda como isca`, bat.id);
+      _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
+      return;
+  }
+
+  if (!alvo) {
+    _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
+    return;
+  }
+
+  // Movimento
+  if (!bat.movimentoRestante) bat.movimentoRestante = {};
+  let movRestante = _avtGetMovimentoMax ? _avtGetMovimentoMax(entInv) : 3;
+  bat.movimentoRestante[entInv.id] = movRestante;
+  while (movRestante > 0) {
+    const dir = _avtNpcMelhorDirecao(entInv, alvo, 1);
+    if (!dir) break;
+    entInv.x += dir[0]; entInv.y += dir[1];
+    inv.x = entInv.x; inv.y = entInv.y;
+    movRestante--;
+  }
+  _avtBcastTokenMove({ nome: entInv.nome, id: entInv.id, x: entInv.x, y: entInv.y });
+
+  // Ataque se adjacente
+  const dist = Math.max(Math.abs(entInv.x - alvo.x), Math.abs(entInv.y - alvo.y));
+  if (dist <= 1 && invDef.dano_formula) {
+    const dano = _avtRolarFormulaInvocado(invDef, 'dano', entInv._invAtiva?.dono_char_nome);
+    alvo.hp = Math.max(0, alvo.hp - dano);
+    const alvoBat = bat.iniciativa.find(e => e.id === alvo.id);
+    if (alvoBat) alvoBat.hp = alvo.hp;
+    _avtMostrarDanoAbaixoHp(alvo, dano, false);
+    try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
+    _avtLog(`⚔ ${inv.nome} ataca ${alvo.nome} por ${dano}!`, bat.id);
+    if (alvo.hp <= 0 && alvo.tipo === 'inimigo') { _avtNpcMorreu(alvo, bat); _avtCheckVitoria(bat); }
+  }
+
+  _avtBroadcastBatalha(bat);
+  _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
+}
+
+function avtReceberInvocacaoDestruida({ invId }) {
+  if (!invId) return;
+  AVT_STATE.entidades = AVT_STATE.entidades.filter(e => e.id !== invId);
+  AVT_STATE.invocacoes_ativas = AVT_STATE.invocacoes_ativas.filter(i => i.id !== invId);
+  AVT_STATE.batalhas.forEach(bat => {
+    bat.iniciativa = bat.iniciativa.filter(e => e.id !== invId);
+    bat.envolvidos  = bat.envolvidos.filter(id => id !== invId);
+  });
+}
+window.avtReceberInvocacaoDestruida = avtReceberInvocacaoDestruida;
+
+function _avtRolarFormulaInvocado(invDef, tipo, donoNome) {
+  const formula = tipo === 'cura' ? invDef.cura_formula : invDef.dano_formula;
+  let base = _avtRolarFormula(formula || '1d6');
+  const scalingAttr = tipo === 'cura' ? invDef.cura_atributo_scaling : invDef.dano_atributo_scaling;
+  const scalingPct  = tipo === 'cura' ? invDef.cura_atributo_pct     : invDef.dano_atributo_pct;
+  if (scalingAttr && scalingPct) {
+    const char = AVT_STATE.chars.find(c => c.nome === donoNome);
+    const atrs = char?.custom_attrs?.atributos || {};
+    const val = parseFloat(atrs[scalingAttr] ?? 0);
+    base += Math.ceil(val * scalingPct / 100);
+  }
+  return Math.max(1, base);
+}

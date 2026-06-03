@@ -405,6 +405,7 @@ function iniciarRealtime(rpgId){
            avt_level_config_update: 'avtReceberLevelConfigUpdate',
            avt_colisao_config: 'avtReceberColisaoConfig',
            avt_entidade_nova: 'avtReceberEntidadeNova',
+           avt_invocacao_destruida: 'avtReceberInvocacaoDestruida',
            avt_state_tick:    'avtReceberStateTick',
            avt_player_hp:     'avtReceberPlayerHp',
            avt_player_damage: 'avtReceberPlayerDamage',
@@ -753,7 +754,8 @@ window.__avtFlushPendingBroadcasts = function(){
       avt_attack_anim: 'avtReceberAttackAnim',
       avt_level_config_update: 'avtReceberLevelConfigUpdate',
       avt_colisao_config: 'avtReceberColisaoConfig',
-      avt_entidade_nova: 'avtReceberEntidadeNova'
+      avt_entidade_nova: 'avtReceberEntidadeNova',
+      avt_invocacao_destruida: 'avtReceberInvocacaoDestruida'
     };
     const kept = [];
     for(const item of q){

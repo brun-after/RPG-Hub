@@ -230,6 +230,10 @@ function _efeitoLabel(ef) {
     // BUG FIX #6: tipos buff e dot não tinham label
     case 'buff':     return `✨ Buff "${ef.nome||'Buff'}"${ef.duracao_turnos?` (${ef.duracao_turnos}t)`:ef.hot_turnos?` (${ef.hot_turnos}t)`:''}`;
     case 'dot':      return `🩸 DOT "${ef.nome||'DOT'}" ${ef.dot_formula||ef.valor||'?'}/t${ef.duracao_turnos?` (${ef.duracao_turnos}t)`:''}`;
+    case 'invocar': {
+      const _invDef = typeof INV_OCACOES !== 'undefined' && INV_OCACOES.catalogo?.find(i => i.id === ef.invocacao_id);
+      return `🔮 Concede Invocação "${_invDef?.nome || ef.invocacao_id?.slice(0,8) || '?'}"`;
+    }
     default: return ef.tipo ? `⚙ ${ef.tipo}` : '';
   }
 }
@@ -836,6 +840,22 @@ async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
         });
         toastMsgs.push(`🩸 DOT "${ef.nome||'DOT'}" aplicado em ${alvoNome}`);
         break;
+      case 'invocar': {
+        if (!ef.invocacao_id) break;
+        if (!Array.isArray(ca.invocacoes)) ca.invocacoes = [];
+        const _jaTemInv = ca.invocacoes.some(i => i.invocacao_id === ef.invocacao_id);
+        if (_jaTemInv) { toastMsgs.push(`🔮 ${alvoNome} já possui esta invocação`); break; }
+        ca.invocacoes.push({ invocacao_id: ef.invocacao_id, origem: 'item', item_id: ef._item_id || null });
+        alvo.custom_attrs = ca;
+        if (!emArena) {
+          await saveCharacterStats(RPG_DATA.rpgId, alvoNome, { custom_attrs: ca }).catch(() => {});
+        }
+        toastMsgs.push(`🔮 Invocação concedida a ${alvoNome}!`);
+        if (typeof renderFichaView === 'function' && typeof FICHAS_VIEW !== 'undefined' && FICHAS_VIEW === alvoNome) {
+          renderFichaView(alvoNome);
+        }
+        break;
+      }
     }
   }
 
@@ -1193,10 +1213,13 @@ function _renderItemDefEfeitos() {
         <option value="remover_debuff"${ef.tipo==='remover_debuff'?' selected':''}>🌟 Remove Debuff</option>
         <option value="dano"${ef.tipo==='dano'?' selected':''}>💥 Dano</option>
         <option value="debuff"${ef.tipo==='debuff'?' selected':''}>☠ Debuff</option>
+        <option value="invocar"${ef.tipo==='invocar'?' selected':''}>🔮 Invocar</option>
       </select>
       ${ef.tipo==='recurso'||ef.tipo==='atributo'||ef.tipo==='remover_debuff'||ef.tipo==='debuff'
         ? `<input type="text" value="${ef.recurso||ef.attr||ef.debuff||''}" placeholder="${ef.tipo==='recurso'?'Mana':'nome'}" onchange="_itemDefEfeitoChange(${i},'${ef.tipo==='recurso'?'recurso':ef.tipo==='atributo'?'attr':'debuff'}',this.value)" style="width:80px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem;padding:3px 5px">` : ''}
-      ${ef.tipo!=='remover_debuff'
+      ${ef.tipo==='invocar'
+        ? (() => { const _invOpts = (typeof INV_OCACOES !== 'undefined' ? INV_OCACOES.catalogo : []).map(inv => `<option value="${inv.id}"${inv.id===ef.invocacao_id?' selected':''}>🔮 ${inv.nome}</option>`).join(''); return `<select onchange="_itemDefEfeitoChange(${i},'invocacao_id',this.value)" style="background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem;padding:3px 5px;max-width:140px"><option value="">— Invocação —</option>${_invOpts}</select>`; })() : ''}
+      ${ef.tipo!=='remover_debuff' && ef.tipo !== 'invocar'
         ? `<input type="number" value="${ef.valor||0}" placeholder="valor" onchange="_itemDefEfeitoChange(${i},'valor',+this.value)" style="width:60px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem;padding:3px 5px">` : ''}
       ${(ef.tipo==='atributo'||ef.tipo==='debuff')
         ? `<input type="number" value="${ef.duracao_turnos||0}" placeholder="turnos" onchange="_itemDefEfeitoChange(${i},'duracao_turnos',+this.value)" style="width:55px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--suave);font-size:0.72rem;padding:3px 5px" title="Duração em turnos (0=permanente)">` : ''}
