@@ -6800,9 +6800,21 @@ function _avtTickEfeitosOOC(now) {
         delete ent._atravessar;
         const ex = Math.round(ent.x), ey = Math.round(ent.y);
         if (!_avtTilePassavel(ex, ey, AVT_STATE.dungeon)) {
-          const _pushDirs = [[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
-          const valid = _pushDirs.map(([ddx,ddy]) => ({x:ex+ddx, y:ey+ddy}))
-            .find(p => _avtTilePassavel(p.x, p.y, AVT_STATE.dungeon));
+          // BFS para célula válida mais próxima (lida com paredes espessas)
+          let valid = null;
+          const visited = new Set([`${ex},${ey}`]);
+          const queue = [[ex, ey, 0]];
+          while (queue.length && !valid) {
+            const [qx, qy] = queue.shift();
+            for (const [ddx, ddy] of [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]]) {
+              const nx = qx + ddx, ny = qy + ddy;
+              const key = `${nx},${ny}`;
+              if (visited.has(key)) continue;
+              visited.add(key);
+              if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) { valid = {x: nx, y: ny}; break; }
+              if (visited.size < 200) queue.push([nx, ny]);
+            }
+          }
           if (valid) {
             ent.x = valid.x; ent.y = valid.y;
             _avtBcastTokenMove({nome:ent.nome, x:valid.x, y:valid.y});
