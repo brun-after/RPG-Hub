@@ -2615,6 +2615,9 @@ function _avtCanvasInit() {
   // Destroy old canvas
   const old = document.getElementById('avt-canvas');
   if (old) { old.onclick = null; old.remove(); }
+  // Save overlay and dpad BEFORE clearing wrap (innerHTML='' detaches all children)
+  const _savedOverlay = document.getElementById('avt-dados-overlay');
+  const _savedDpad    = document.getElementById('avt-dpad');
   wrap.innerHTML = '';
 
   const canvas = document.createElement('canvas');
@@ -2622,9 +2625,17 @@ function _avtCanvasInit() {
   canvas.style.cssText = 'display:block;cursor:pointer;image-rendering:pixelated;position:absolute;inset:0';
   wrap.appendChild(canvas);
 
+  // Re-attach overlay (above canvas, below HUD)
+  if (_savedOverlay) {
+    wrap.appendChild(_savedOverlay);
+  } else {
+    const ov = document.createElement('div');
+    ov.id = 'avt-dados-overlay';
+    ov.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:35;overflow:hidden';
+    wrap.appendChild(ov);
+  }
   // Re-add D-pad inside wrap so it stays on top of canvas
-  const dpad = document.getElementById('avt-dpad');
-  if (dpad) wrap.appendChild(dpad);
+  if (_savedDpad) wrap.appendChild(_savedDpad);
 
   AVT_STATE.canvas = canvas;
 
