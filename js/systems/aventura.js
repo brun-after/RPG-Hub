@@ -10898,6 +10898,42 @@ function avtJogadorPainelRender(targetEl) {
     🎒 Inventário
   </button>`;
 
+  // ── 4b. Invocações ativas/disponíveis (compacto) ───────────────
+  const _minhasInvs = (AVT_STATE.invocacoes_ativas || []).filter(i => i.dono_char_nome === jogador.nome);
+  const _invDisp = Array.isArray(char?.custom_attrs?.invocacoes) ? char.custom_attrs.invocacoes : [];
+  if (_minhasInvs.length || _invDisp.length) {
+    const _nomeSafeInv = (jogador.nome || '').replace(/'/g, "\\'");
+    html += `
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em">🔮 Invocações</div>
+      ${_minhasInvs.map(inv => {
+        const def = inv.invocacao_def || {};
+        const hpPct = inv.hpMax > 0 ? Math.max(0, Math.min(100, (inv.hp_atual / inv.hpMax) * 100)) : 0;
+        const hpCol = hpPct > 50 ? '#27ae60' : hpPct > 25 ? '#c8a84b' : '#e74c3c';
+        return `<div style="border:1px solid rgba(176,126,240,0.2);border-radius:7px;padding:7px 10px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+            <span style="font-family:var(--fonte-d);font-size:0.72rem;color:#b07ef0">🔮 ${def.nome || 'Invocação'}</span>
+            <span style="font-family:var(--fonte-d);font-size:0.58rem;color:#7a92aa;margin-left:auto">⏳ ${inv._turnosRestantes ?? '?'}t</span>
+          </div>
+          <div style="height:4px;background:rgba(176,126,240,0.1);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${hpPct}%;background:${hpCol};border-radius:3px;transition:width .3s"></div>
+          </div>
+        </div>`;
+      }).join('')}
+      ${_invDisp.slice(0, 3).map(entry => {
+        const def = typeof INV_OCACOES !== 'undefined' && INV_OCACOES.catalogo.find(i => i.id === entry.invocacao_id);
+        if (!def) return '';
+        const jaAtiva = _minhasInvs.some(i => i.invocacao_def?.id === def.id);
+        if (jaAtiva) return '';
+        const defIdSafe = def.id.replace(/'/g, "\\'");
+        return `<button onclick="avtInvocar('${_nomeSafeInv}','${defIdSafe}')"
+          style="width:100%;background:rgba(176,126,240,0.06);border:1px solid rgba(176,126,240,0.18);
+          border-radius:6px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.62rem;
+          padding:6px 10px;cursor:pointer;text-align:left">✨ Invocar ${def.nome}</button>`;
+      }).join('')}
+    </div>`;
+  }
+
   // ── 5. Combate ativo ───────────────────────────────────────────
   if (bat) {
     const podeEncerrar = bat.iniciador === jogador.nome;
@@ -15848,9 +15884,9 @@ function _avtCharEditorRenderRight(ent, dbChar, attrs) {
   const right = document.getElementById('avt-ce-right');
   if (!right) return;
   const isMestre = _avtSouMestre();
-  const tabs = isMestre ? ['attrs', 'equip', 'skills', 'skill-edit'] : ['attrs', 'equip', 'skills'];
+  const tabs = isMestre ? ['attrs', 'equip', 'skills', 'skill-edit', 'invocacoes'] : ['attrs', 'equip', 'skills', 'invocacoes'];
   const tab = AVT_STATE.charEditorTab;
-  const labels = { attrs: '📊 Atributos', equip: '⚔ Equipamentos', skills: '✨ Skills', 'skill-edit': '⚙ Editar' };
+  const labels = { attrs: '📊 Atributos', equip: '⚔ Equipamentos', skills: '✨ Skills', 'skill-edit': '⚙ Editar', invocacoes: '🔮 Invocações' };
   right.innerHTML = `
     <div class="avt-ce2-tabs">
       ${tabs.map(t => `<button class="avt-ce2-tab${t === tab ? ' ativo' : ''}" onclick="_avtCharEditorTab('${t}')">${labels[t]}</button>`).join('')}
@@ -15858,10 +15894,11 @@ function _avtCharEditorRenderRight(ent, dbChar, attrs) {
     <div class="avt-ce2-content" id="avt-ce-content"></div>
   `;
   const content = document.getElementById('avt-ce-content');
-  if (tab === 'attrs')           _avtCharEditorRenderAttrs(content, ent, dbChar, attrs);
-  else if (tab === 'equip')      _avtCharEditorRenderEquip(content, ent, dbChar);
-  else if (tab === 'skills')     _avtCharEditorRenderSkills(content, ent, dbChar);
-  else if (tab === 'skill-edit') _avtCharEditorRenderSkillEdit(content);
+  if (tab === 'attrs')              _avtCharEditorRenderAttrs(content, ent, dbChar, attrs);
+  else if (tab === 'equip')         _avtCharEditorRenderEquip(content, ent, dbChar);
+  else if (tab === 'skills')        _avtCharEditorRenderSkills(content, ent, dbChar);
+  else if (tab === 'skill-edit')    _avtCharEditorRenderSkillEdit(content);
+  else if (tab === 'invocacoes')    _avtCharEditorRenderInvocacoes(content, ent, dbChar);
 }
 
 function _avtCharEditorTab(tab) {
@@ -16488,6 +16525,119 @@ function _avtCharEditorRenderSkills(container, ent, dbChar) {
 
   container.innerHTML = `<div class="avt-ce2-skills-list">${atqBasicoCard}${skillCards}</div>${manageHtml}${editBtn}`;
 }
+
+function _avtCharEditorRenderInvocacoes(container, ent, dbChar) {
+  if (!container) return;
+  const isMestre = _avtSouMestre();
+  const nomeSafe = ent.nome.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+  // ── Invocações ativas no campo ────────────────────────────────
+  const ativas = (AVT_STATE.invocacoes_ativas || []).filter(i => i.dono_char_nome === ent.nome);
+  let ativasHtml = '';
+  if (ativas.length) {
+    ativasHtml = `
+      <div style="margin-bottom:14px">
+        <div class="avt-ce2-skill-manage-title" style="margin-bottom:6px">⚡ Ativas no campo (${ativas.length})</div>
+        ${ativas.map(inv => {
+          const hpPct = inv.hpMax > 0 ? Math.max(0, Math.min(100, inv.hp_atual / inv.hpMax * 100)) : 0;
+          const hpCol = hpPct > 50 ? '#27ae60' : hpPct > 25 ? '#c8a84b' : '#e74c3c';
+          const idSafe = inv.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          return `
+          <div class="avt-ce2-skill-card" style="border-color:rgba(176,126,240,0.35)">
+            <div class="avt-ce2-skill-header">
+              <div class="avt-ce2-skill-icon" style="background:rgba(176,126,240,0.12);border-color:rgba(176,126,240,0.35)">🔮</div>
+              <div class="avt-ce2-skill-meta">
+                <div class="avt-ce2-skill-name" style="color:#b07ef0">${inv.invocacao_def?.nome || inv.id}</div>
+                <div class="avt-ce2-skill-badges">
+                  <span class="avt-ce2-skill-badge purple">${inv.hp_atual}/${inv.hpMax} HP</span>
+                  <span class="avt-ce2-skill-badge purple">⏱ ${inv._turnosRestantes}t</span>
+                </div>
+                <div style="height:4px;background:rgba(176,126,240,0.12);border-radius:2px;margin-top:5px;overflow:hidden">
+                  <div style="height:100%;width:${hpPct}%;background:${hpCol};border-radius:2px;transition:width .3s"></div>
+                </div>
+              </div>
+              <div class="avt-ce2-skill-actions">
+                <button class="avt-ce2-sm-btn danger" onclick="_avtDispensarInvocacao('${idSafe}')" title="Dispensar invocação">✕</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  // ── Invocações disponíveis do personagem ──────────────────────
+  const catEntradas = Array.isArray(dbChar?.custom_attrs?.invocacoes) ? dbChar.custom_attrs.invocacoes : [];
+  const catalogo = (typeof INV_OCACOES !== 'undefined' && INV_OCACOES.catalogo) ? INV_OCACOES.catalogo : [];
+  const disponiveis = catEntradas.map(e => ({ entry: e, def: catalogo.find(i => i.id === e.invocacao_id) })).filter(x => x.def);
+
+  let dispHtml = '';
+  if (disponiveis.length) {
+    dispHtml = disponiveis.map(({ entry, def }) => {
+      const defIdSafe = def.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const comp = (typeof _invComportamentoBadge === 'function') ? _invComportamentoBadge(def.comportamento) : def.comportamento;
+      const durStr = def.duracao_base_turnos + (def.duracao_sabedoria_mult > 0 ? `+Sab×${def.duracao_sabedoria_mult}` : '') + 't';
+      const jaAtiva = ativas.some(a => a.invocacao_def?.id === def.id);
+      const origemBadge = entry.origem === 'item'
+        ? `<span class="avt-ce2-skill-badge">📦 Item</span>` : '';
+      const invocarBtn = jaAtiva
+        ? `<button class="avt-ce2-sm-btn" disabled style="opacity:0.4;cursor:default" title="Já está ativa">✨ Ativa</button>`
+        : `<button class="avt-ce2-sm-btn add" onclick="avtInvocar('${nomeSafe}','${defIdSafe}')" title="Invocar no mapa">✨ Invocar</button>`;
+      const editBtn = isMestre
+        ? `<button class="avt-ce2-sm-btn" onclick="event.stopPropagation();abrirModalInvocacao('${defIdSafe}','${nomeSafe}')" title="Editar">✏</button>` : '';
+      const remBtn = isMestre
+        ? `<button class="avt-ce2-sm-btn danger" onclick="event.stopPropagation();invocacaoRemoverDePersonagem('${defIdSafe}','${nomeSafe}')" title="Remover do personagem">✕</button>` : '';
+      return `
+        <div class="avt-ce2-skill-card">
+          <div class="avt-ce2-skill-header">
+            <div class="avt-ce2-skill-icon" style="background:rgba(176,126,240,0.1);border-color:rgba(176,126,240,0.25)">🔮</div>
+            <div class="avt-ce2-skill-meta">
+              <div class="avt-ce2-skill-name">${def.nome}</div>
+              <div class="avt-ce2-skill-badges">
+                <span class="avt-ce2-skill-badge purple">${comp}</span>
+                <span class="avt-ce2-skill-badge">⏳ ${durStr}</span>
+                ${def.dano_formula ? `<span class="avt-ce2-skill-badge">⚔ ${def.dano_formula}</span>` : ''}
+                ${origemBadge}
+              </div>
+              ${def.descricao ? `<div style="font-size:0.62rem;color:#4a6275;margin-top:4px">${def.descricao}</div>` : ''}
+            </div>
+            <div class="avt-ce2-skill-actions">${invocarBtn}${editBtn}${remBtn}</div>
+          </div>
+        </div>`;
+    }).join('');
+  } else {
+    dispHtml = `<div class="avt-ce2-empty">Nenhuma invocação disponível para este personagem.</div>`;
+  }
+
+  // ── Controles do mestre ───────────────────────────────────────
+  let mestreHtml = '';
+  if (isMestre) {
+    mestreHtml = `
+      <div class="avt-ce2-skill-manage" style="margin-top:8px">
+        <div class="avt-ce2-skill-manage-title">Gerenciar</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 0">
+          <button class="avt-ce2-sm-btn add" onclick="abrirModalInvocacao(null,'${nomeSafe}')">＋ Criar Invocação</button>
+          <button class="avt-ce2-sm-btn add" onclick="abrirModalDarInvocacao('${nomeSafe}')">🎁 Dar Invocação</button>
+        </div>
+      </div>`;
+  }
+
+  container.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:4px">
+      ${ativasHtml}
+      <div class="avt-ce2-skill-manage-title" style="margin-bottom:6px">🔮 Invocações do personagem (${disponiveis.length})</div>
+      <div class="avt-ce2-skills-list">${dispHtml}</div>
+      ${mestreHtml}
+    </div>`;
+}
+window._avtCharEditorRenderInvocacoes = _avtCharEditorRenderInvocacoes;
+
+function _avtDispensarInvocacao(invId) {
+  const bat = _avtMinhaBatalha() || AVT_STATE.batalhas?.[Object.keys(AVT_STATE.batalhas||{})[0]];
+  _avtDestruirInvocacao(invId, bat || null);
+  mostrarToast('Invocação dispensada', 'ok');
+  _avtCharEditorRender();
+}
+window._avtDispensarInvocacao = _avtDispensarInvocacao;
 
 function _avtSkillToggleChar(entId, skillId) {
   const ent = AVT_STATE.entidades.find(e=>e.id===entId);
