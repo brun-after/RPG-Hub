@@ -3104,14 +3104,14 @@ function _avtCtrlRolarSkillEsquerda() {
 }
 window._avtCtrlRolarSkillEsquerda = _avtCtrlRolarSkillEsquerda;
 
-// Posições absolutas pré-calculadas dos 5 slots do arco (270° → 180°, R=110, centro=(138,138))
-// Arco ligeiramente mais largo: Norte vai mais ao norte e Oeste mais ao oeste (overflow visible)
+// Posições absolutas pré-calculadas dos 5 slots do arco (270° → 180°, R=125, centro=(138,138))
+// R aumentado para dar mais espaço entre botões; overflow visible acomoda valores negativos
 const _ARC_SLOTS = [
-  { top: 6,   left: 116 }, // slot 0: Norte
-  { top: 14,  left: 74  }, // slot 1: Skill 1
-  { top: 38,  left: 38  }, // slot 2: Skill 2
-  { top: 74,  left: 14  }, // slot 3: Skill 3
-  { top: 116, left: 6   }, // slot 4: Oeste
+  { top: -9,  left: 116 }, // slot 0: Norte
+  { top: 1,   left: 68  }, // slot 1: Skill 1
+  { top: 28,  left: 28  }, // slot 2: Skill 2
+  { top: 68,  left: 1   }, // slot 3: Skill 3
+  { top: 116, left: -9  }, // slot 4: Oeste
 ];
 
 function _avtCtrlToggleAutoAlvo() {
@@ -4501,7 +4501,7 @@ function _atualizarZonaDireitaAventura() {
     const isUltDisabled = !ultItem || ultItem.cd > 0 || (alvoDistancia !== null && alvoDistancia > ultItem.alcance);
     const ultLabel = !ultItem ? '⚡' : (ultItem.cd > 0 ? '⏱' : (ultItem.num != null ? String(ultItem.num) : '⚡'));
     const btnUlt = document.createElement('button');
-    btnUlt.style.cssText = `position:absolute;top:60px;left:60px;` +
+    btnUlt.style.cssText = `position:absolute;top:66px;left:66px;` +
       `width:54px;height:54px;padding:0;border-radius:50%;` +
       `background:rgba(${isUltSel?'200,168,75,0.45':ultItem?'150,80,220,0.28':'100,60,150,0.12'});` +
       `border:2px solid rgba(${isUltSel?'200,168,75,0.9':ultItem?'150,80,220,0.65':'130,80,180,0.3'});` +
@@ -4578,7 +4578,7 @@ function _atualizarZonaDireitaAventura() {
 
     // Botão expandir (fora do arco, canto superior-direito)
     const expandBtn = document.createElement('button');
-    expandBtn.style.cssText = `position:absolute;top:-22px;left:138px;` +
+    expandBtn.style.cssText = `position:absolute;top:-28px;left:138px;` +
       `width:40px;height:18px;padding:0;` +
       `background:rgba(79,163,209,0.18);border:1px solid rgba(79,163,209,0.45);border-radius:4px;` +
       `color:#7ec8f0;font-size:0.7rem;line-height:1;cursor:pointer;touch-action:manipulation`;
