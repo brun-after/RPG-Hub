@@ -4645,7 +4645,7 @@ function _atualizarZonaDireitaAventura() {
           `border:1px solid rgba(${isUltThis?'150,80,220,0.8':'255,255,255,0.15'});` +
           `color:${isUltThis?'#d8a8f8':'rgba(200,180,220,0.35)'}`;
         ultToggle.textContent = '⚡';
-        ultToggle.title = isUltThis ? 'Desmarcar como Ult' : 'Marcar como Ult';
+        ultToggle.title = isUltThis ? 'Desmarcar como Arc' : 'Marcar como Arc';
         const capKey = charKey, capId = item.id;
         ultToggle.addEventListener('touchend', e => { e.preventDefault(); _setUltSkillId(capKey, capId); });
         ultToggle.addEventListener('click', () => _setUltSkillId(capKey, capId));
