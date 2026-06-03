@@ -16603,6 +16603,13 @@ function _avtCharEditorRenderSkills(container, ent, dbChar) {
         onchange="_avtSetSkillNumero('${entIdSafe}','${skIdSafe}', this.value)"
         title="Número da skill no controle móvel"
         style="width:42px;padding:3px 4px;background:rgba(5,8,16,0.7);border:1px solid rgba(200,168,75,0.35);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.7rem;text-align:center;margin-right:4px">`;
+    const isArc = (dbChar?.custom_attrs?.arc_skill_id || ent?.custom_attrs?.arc_skill_id) === sk.id;
+    const arcBtn = `<button onclick="event.stopPropagation();_avtSetArcSkill('${entIdSafe}','${skIdSafe}')"
+        title="${isArc ? 'Desmarcar Arc' : 'Marcar como Arc — botão central do controle mobile'}"
+        style="width:28px;height:28px;padding:0;border-radius:6px;font-size:0.75rem;cursor:pointer;flex-shrink:0;
+               background:${isArc ? 'rgba(150,80,220,0.35)' : 'rgba(255,255,255,0.04)'};
+               border:1px solid ${isArc ? 'rgba(150,80,220,0.8)' : 'rgba(255,255,255,0.12)'};
+               color:${isArc ? '#d8a8f8' : 'rgba(200,180,220,0.3)'};margin-right:3px">⚡</button>`;
     return `
       <div class="avt-ce2-skill-card">
         <div class="avt-ce2-skill-header" onclick="const b=document.getElementById('${bodyId}');b.classList.toggle('open')">
@@ -16611,7 +16618,7 @@ function _avtCharEditorRenderSkills(container, ent, dbChar) {
             <div class="avt-ce2-skill-name">${sk.habilidade || 'Habilidade'}</div>
             ${badges.length ? `<div class="avt-ce2-skill-badges">${badges.join('')}</div>` : ''}
           </div>
-          <div class="avt-ce2-skill-actions">${numInput}${removeBtn}</div>
+          <div class="avt-ce2-skill-actions">${arcBtn}${numInput}${removeBtn}</div>
         </div>
         <div class="avt-ce2-skill-body" id="${bodyId}">
           ${sk.efeito ? `<div class="avt-ce2-skill-desc">${sk.efeito}</div>` : ''}
@@ -16847,6 +16854,24 @@ function _avtSetSkillNumero(entId, skillId, valor) {
   if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
 }
 window._avtSetSkillNumero = _avtSetSkillNumero;
+
+function _avtSetArcSkill(entId, skillId) {
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  if (!ent) return;
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent?.dbId || c.nome === ent?.nome);
+  const target = dbChar || ent;
+  if (!target.custom_attrs) target.custom_attrs = {};
+  const cur = target.custom_attrs.arc_skill_id;
+  target.custom_attrs.arc_skill_id = (cur === skillId) ? null : skillId;
+  if (dbChar?.id) {
+    _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs })
+    }).catch(e => mostrarToast('Erro ao salvar Arc: ' + (e?.message || e), 'erro'));
+  }
+  _avtCharEditorRender();
+  if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._avtSetArcSkill = _avtSetArcSkill;
 
 function _avtCharEditorRenderSkillEdit(container) {
   if (!container) return;

@@ -4448,7 +4448,7 @@ function _atualizarZonaDireitaAventura() {
   }
 
   const charKey = (jogador && (jogador.dbId || jogador.nome)) || '';
-  const ultId = _getUltSkillId(charKey);
+  const ultId = _dbCharCtrl?.custom_attrs?.arc_skill_id || null;
   const recolhido = !!MOBILE_CTRL.skillsRecolhidas;
 
   // Ajusta largura/layout da coluna ctxEl e dos alvos
@@ -4646,9 +4646,9 @@ function _atualizarZonaDireitaAventura() {
           `color:${isUltThis?'#d8a8f8':'rgba(200,180,220,0.35)'}`;
         ultToggle.textContent = '⚡';
         ultToggle.title = isUltThis ? 'Desmarcar como Arc' : 'Marcar como Arc';
-        const capKey = charKey, capId = item.id;
-        ultToggle.addEventListener('touchend', e => { e.preventDefault(); _setUltSkillId(capKey, capId); });
-        ultToggle.addEventListener('click', () => _setUltSkillId(capKey, capId));
+        const capEntId = jogador.id, capId = item.id;
+        ultToggle.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtSetArcSkill === 'function') _avtSetArcSkill(capEntId, capId); });
+        ultToggle.addEventListener('click', () => { if (typeof _avtSetArcSkill === 'function') _avtSetArcSkill(capEntId, capId); });
         rowEl.appendChild(btn);
         rowEl.appendChild(ultToggle);
         listEl.appendChild(rowEl);

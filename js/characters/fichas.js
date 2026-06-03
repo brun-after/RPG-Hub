@@ -252,7 +252,6 @@ function _fichasSecPersonagem(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp
   const xp_pct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 100;
   const hpPct = Math.min(100, Math.round((hp / hp_max) * 100));
   const sk = typeof _skFiltrarPorChar === 'function' ? _skFiltrarPorChar(RPG_DATA.skills, c.nome) : [];
-  const _arcId = typeof _getUltSkillId === 'function' ? _getUltSkillId(c.nome) : ((() => { try { return localStorage.getItem('mc_ult_' + c.nome); } catch(_){return null;} })());
 
   const levelUpHtml = isMestre && nivel < nivel_maximo
     ? `<button onclick="abrirModalLevelUp('${nomeSafe}')" style="width:100%;padding:10px;background:linear-gradient(135deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08));border:1px solid rgba(200,168,75,0.5);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">⬆ Level Up — Nível ${nivel} → ${nivel + 1}</button>`
@@ -262,8 +261,6 @@ function _fichasSecPersonagem(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp
     const sId = s.id;
     const nivelNecessario = s.nivel_necessario || 1;
     const bloqueada = nivelNecessario > nivel;
-    const isArc = !!sId && _arcId === sId;
-    const arcCheckbox = sId ? `<label style="display:flex;align-items:center;gap:3px;cursor:pointer;font-family:var(--fonte-d);font-size:0.6rem;color:${isArc ? '#d8a8f8' : 'var(--suave)'};white-space:nowrap;margin-left:4px" title="${isArc ? 'Desmarcar Arc' : 'Marcar como Arc'}"><input type="checkbox" ${isArc ? 'checked' : ''} onchange="fichasToggleArcSkill('${nomeSafe}','${sId}')" style="accent-color:#b07ef0;width:12px;height:12px;cursor:pointer;flex-shrink:0">Arc</label>` : '';
     const botoesSkill = podEditar
       ? `<button onclick="abrirModalSkill('${sId}')" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Editar">✏️</button>`
         + `<button onclick="removerSkill('${sId}','${s.habilidade.replace(/'/g, "\\'")}','${nomeSafe}')" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Remover">✕</button>`
@@ -272,7 +269,6 @@ function _fichasSecPersonagem(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp
       <div class="skill-header">
         <div class="skill-nome">${s.habilidade}${bloqueada ? ` <span style="font-size:0.6rem;color:var(--suave)">(Nível ${nivelNecessario})</span>` : ''}</div>
         ${s.custo_rsv ? `<span class="badge badge-roxo">${s.custo_rsv}</span>` : ''}
-        ${arcCheckbox}
         ${botoesSkill}
       </div>
       <div class="skill-efeito">${s.efeito}</div>
@@ -572,16 +568,3 @@ function fichasRefreshAtributos(nome) {
 }
 window.fichasRefreshAtributos = fichasRefreshAtributos;
 
-function fichasToggleArcSkill(charNome, skillId) {
-  if (typeof _setUltSkillId === 'function') {
-    _setUltSkillId(charNome, skillId);
-  } else {
-    try {
-      const k = 'mc_ult_' + charNome;
-      const cur = localStorage.getItem(k);
-      if (cur === skillId) localStorage.removeItem(k); else localStorage.setItem(k, skillId);
-    } catch(_) {}
-  }
-  if (typeof renderFichaView === 'function' && typeof FICHAS_VIEW !== 'undefined') renderFichaView(FICHAS_VIEW);
-}
-window.fichasToggleArcSkill = fichasToggleArcSkill;
