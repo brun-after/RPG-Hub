@@ -4494,6 +4494,25 @@ function _avtMostrarDanoAbaixoHp(ent, dano, isCrit) {
   setTimeout(() => el.remove(), 600);
 }
 
+function _avtMostrarD20AbaixoDaHead(ent, hitRoll, critMult) {
+  const overlay = document.getElementById('avt-dados-overlay');
+  const canvas  = AVT_STATE.canvas;
+  if (!overlay || !canvas || !ent) return;
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const rx = ent.renderX ?? ent.x;
+  const ry = ent.renderY ?? ent.y;
+  const px = Math.round(rx * SZ - AVT_STATE.camera.x);
+  const py = Math.round(ry * SZ - AVT_STATE.camera.y);
+  const el = document.createElement('div');
+  const cls = critMult === 0 ? ' fumble' : critMult > 1 ? ' critico' : '';
+  el.className = 'avt-dano-popup-baixo' + cls;
+  el.style.left = (px + SZ / 2) + 'px';
+  el.style.top  = (py + SZ + 4) + 'px';
+  el.textContent = `d20: ${hitRoll}`;
+  overlay.appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+}
+
 function _avtMostrarDanoAcimaDaHead(ent, dano, isCrit) {
   const overlay = document.getElementById('avt-dados-overlay');
   const canvas  = AVT_STATE.canvas;
@@ -6386,9 +6405,9 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
 
   const hitRoll  = Math.floor(Math.random()*20)+1;
   const _danoBase0 = dadosRolados.reduce((s,d)=>s+d.val, 0);
-  const critMult = _avtCalcCritMult(dadosRolados);
+  const critMult = _avtCritMultFromD20(hitRoll);
   const isCrit   = critMult > 1;
-  const isFumble = hitRoll === 1;
+  const isFumble = critMult === 0;
 
   // Escalonamento multiplicativo para ataque básico e skills
   const myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
@@ -6419,6 +6438,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   const result = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: multInfo ? dadosRolados.reduce((s,d)=>s+d.val,0) : danoTotal };
   _avtMostrarDadosAcimaDaHeadCompleto(entJog || jogador, result, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal', multInfo);
   _avtMostrarRollCenter(result, isCrit, multInfo);
+  _avtMostrarD20AbaixoDaHead(entJog || jogador, hitRoll, critMult);
   _avtSetEntState(jogador.id, 'attack');
 
   // Animação: ataque_basico.animacao > ataque_basico_animacao (legado) > skill > placeholder
@@ -6441,8 +6461,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   AVT_STATE._oocCooldowns[_oocKey] = Date.now() + _oocMs;
 
   setTimeout(() => {
-    if (isFumble || hitRoll < 5) {
-      mostrarToast(`💨 ${jogador.nome} errou o ataque!`, '');
+    if (critMult === 0) {
+      mostrarToast(`💨 ${jogador.nome} errou o ataque! (d20: ${hitRoll})`, '');
       // Erro: colocar inimigo em perseguição
       const timer = AVT_STATE.npcTimers[ini.id];
       if (timer) {
@@ -6454,7 +6474,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       _avtIniciarPerseguicao(ini.id);
       return;
     }
-    const real = danoTotal * critMult;
+    const real = Math.ceil(danoTotal * critMult);
     ini.hp = Math.max(0, ini.hp - real);
     _avtAplicarDanoPersistir(ini, ini.hp);
     // Sincronizar HP no b.iniciativa para o caso do inimigo já estar em batalha
@@ -6463,7 +6483,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     try { _avtBroadcast('avt_hp_update', { nome: ini.nome, hp: ini.hp, hpMax: ini.hpMax }); } catch(_) {}
     if (isCrit) _avtTokenTremer(AVT_STATE.entidades.find(e=>e.id===ini.id) || ini);
     _avtMostrarDanoAbaixoHp(ini, real, isCrit);
-    mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${critMult===3?' ✦✦ CRÍTICO MAIOR!':isCrit?' 🎯 CRÍTICO!':''}`, 'ok');
+    const _critMsg = critMult === 2 ? ' ✦✦ CRÍTICO TOTAL!' : critMult === 1.5 ? ' ✦ CRÍTICO!' : critMult === 1.2 ? ' ⭐ CRÍTICO MENOR!' : '';
+    mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${_critMsg}`, 'ok');
     // Aplicar efeitos de skill OOC
     if (sk?.efeitos_bonus?.length) {
       const entIniOoc = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
@@ -7062,8 +7083,10 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     });
   }
   const _danoBase = dadosRolados.reduce((s,d)=>s+d.val, 0);
-  const critMult = _avtCalcCritMult(dadosRolados);
+  const hitRoll = Math.floor(Math.random()*20)+1;
+  const critMult = _avtCritMultFromD20(hitRoll);
   const isCrit = critMult > 1;
+  const isFumble = critMult === 0;
 
   {
     const _normA2 = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
@@ -7088,8 +7111,9 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   const _multInfoNpc = (danoTotal !== _danoBase) ? { atributoVal: _danoBase > 0 ? (danoTotal / _danoBase) : 1, danoFinal: danoTotal } : null;
   const resultNpc = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: _multInfoNpc ? _danoBase : danoTotal };
   _avtSetEntState(enemyId, 'attack');
-  _avtMostrarDadosAcimaDaHeadCompleto(ini, resultNpc, skillNome, isCrit ? 'critico_maior' : 'normal', _multInfoNpc);
+  _avtMostrarDadosAcimaDaHeadCompleto(ini, resultNpc, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal', _multInfoNpc);
   _avtMostrarRollInimigo(ini, resultNpc, isCrit);
+  _avtMostrarD20AbaixoDaHead(ini, hitRoll, critMult);
 
   const animPlaceholder = _avtAnimacaoPlaceholder(ini, sk);
   if (animPlaceholder && typeof animarAtaque === 'function') {
@@ -7101,7 +7125,12 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   }
 
   setTimeout(() => {
-    const dano = danoTotal * critMult;
+    if (isFumble) {
+      mostrarToast(`💨 ${ini.nome} errou o ataque! (d20: ${hitRoll})`, '');
+      timer.inactionTimer = 0;
+      return;
+    }
+    const dano = Math.ceil(danoTotal * critMult);
     if (alvo.tipo === 'jogador') {
       // HP authority do dono — só emite intent
       try { _avtRTBroadcastPlayerDamage(alvo.nome, dano, ini.nome); } catch(_) {}
@@ -7110,7 +7139,8 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
       _avtAplicarDanoPersistir(alvo, alvo.hp);
     }
     timer.inactionTimer = 0;
-    mostrarToast(`🗡 ${ini.nome} ataca ${alvo.nome} por ${dano}!${isCrit ? ' ✦ CRÍTICO' : ''}`, 'aviso');
+    const _critMsgNpc = critMult === 2 ? ' ✦✦ CRÍTICO TOTAL!' : critMult === 1.5 ? ' ✦ CRÍTICO!' : critMult === 1.2 ? ' ⭐ CRÍTICO MENOR!' : '';
+    mostrarToast(`🗡 ${ini.nome} ataca ${alvo.nome} por ${dano}!${_critMsgNpc}`, 'aviso');
     try { _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano, isCrit, critMult }); } catch(_) {}
     if (alvo.tipo !== 'jogador') {
       try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
@@ -8913,9 +8943,9 @@ async function _avtExecutarAtaque() {
 
   const hitRoll  = Math.floor(Math.random() * 20) + 1;
   const _danoBase1 = dadosRolados.reduce((s,d)=>s+d.val, 0);
-  const critMult = _avtCalcCritMult(dadosRolados);
+  const critMult = _avtCritMultFromD20(hitRoll);
   const isCrit   = critMult > 1;
-  const isFumble = hitRoll === 1;
+  const isFumble = critMult === 0;
   if (multInfoAtk) multInfoAtk.danoFinal = danoTotal * critMult;
 
   const entAtacanteAnim = AVT_STATE.entidades.find(e => e.id === ativo.id);
@@ -8926,6 +8956,7 @@ async function _avtExecutarAtaque() {
   const _mobileAvtDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
   _avtMostrarRollCenter(resultadoDados, isCrit, multInfoAtk);
   _avtMostrarDadosAcimaDaHeadCompleto(entAtacanteAnim || ativo, resultadoDados, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal', multInfoAtk);
+  _avtMostrarD20AbaixoDaHead(entAtacanteAnim || ativo, hitRoll, critMult);
 
 
 
@@ -9002,15 +9033,12 @@ async function _avtExecutarAtaque() {
 
   // ── Após animação dos dados, aplicar dano ───────────────────────────────
   _avtSetTimeout(() => {
-    if (isFumble) {
-      const msg = `💨 ${ativo.nome} falha criticamente! (d20: 1)${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
+    if (critMult === 0) {
+      const msg = `💨 ${ativo.nome} errou! (d20: ${hitRoll})${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
       _avtLog(msg, b.id);
       if (!_mobileAvtDisp) mostrarToast(msg, '');
-    } else if (hitRoll < 5 && !_isAreaAttack) {
-      _avtLog(`${ativo.nome} erra ${alvo.nome}! (d20: ${hitRoll})`, b.id);
-      if (!_mobileAvtDisp) mostrarToast(`💨 ${ativo.nome} errou! (d20: ${hitRoll})`, '');
     } else {
-      let real = danoTotal * critMult;
+      let real = Math.ceil(danoTotal * critMult);
       if (ativo.tipo === 'jogador') {
         const dbAtivo = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
         const nivelAtivo = dbAtivo?.custom_attrs?.nivel ?? dbAtivo?.nivel ?? 1;
@@ -9113,9 +9141,10 @@ async function _avtExecutarAtaque() {
         _avtMostrarDanoAbaixoHp(entAlvo || alvo, real, isCrit);
         _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano: real, isCrit, critMult });
 
+        const _critLabelTurno = critMult === 2 ? '✦✦ CRÍTICO TOTAL! ' : critMult === 1.5 ? '✦ CRÍTICO! ' : critMult === 1.2 ? '⭐ CRÍTICO MENOR! ' : '';
         const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
         const msg = isCrit
-          ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
+          ? `${_critLabelTurno}${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
           : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})`;
         _avtLog(msg, b.id); if (!_mobileAvtDisp) mostrarToast(msg, 'ok');
 
@@ -9859,7 +9888,6 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
 
   _avtSetTimeout(() => {
     const hitRoll  = Math.floor(Math.random()*20)+1;
-    const isFumble = hitRoll === 1;
 
     const dadosRolados = [];
     let danoTotal = 0;
@@ -9875,8 +9903,9 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
       } else { danoTotal += parseInt(part) || 0; }
     });
     const _danoBase2 = dadosRolados.reduce((s,d)=>s+d.val, 0);
-    const critMult = _avtCalcCritMult(dadosRolados);
+    const critMult = _avtCritMultFromD20(hitRoll);
     const isCrit = critMult > 1;
+    const isFumble = critMult === 0;
 
     {
       const _normA4 = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
@@ -9893,6 +9922,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
     const resultNpc = { dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })), total: danoTotal };
     _avtMostrarDadosAcimaDaHeadCompleto(entNpc, resultNpc, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal');
     _avtMostrarRollInimigo(entNpc, resultNpc, isCrit);
+    _avtMostrarD20AbaixoDaHead(entNpc, hitRoll, critMult);
 
     // Animação placeholder do NPC em direção ao alvo
     const animPlaceholderNpc = _avtAnimacaoPlaceholder(entNpc || npc, sk);
@@ -9920,12 +9950,10 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
 
     // ── Após animação, aplicar dano ─────────────────────────────────────────
     _avtSetTimeout(() => {
-      if (isFumble) {
-        _avtLog(`💨 ${npc.nome} falha criticamente!`, bat.id);
-      } else if (hitRoll < 5) {
-        _avtLog(`${npc.nome} erra ${skillAlvo.nome}!`, bat.id);
+      if (critMult === 0) {
+        _avtLog(`💨 ${npc.nome} errou! (d20: ${hitRoll})`, bat.id);
       } else {
-        let real = danoTotal * critMult;
+        let real = Math.ceil(danoTotal * critMult);
         const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
         if (skillAlvo.tipo === 'jogador') {
           try { _avtRTBroadcastPlayerDamage(skillAlvo.nome, real, npc.nome); } catch(_) {}
@@ -9976,9 +10004,9 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         _avtMostrarDanoAbaixoHp(entAlvo || skillAlvo, real, isCrit);
         _avtBroadcast('avt_dano_visual', { alvoNome: skillAlvo.nome, dano: real, isCrit, critMult });
 
-        const critMsg = isCrit ? ' 🎯 CRÍTICO!' : '';
-        _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`, bat.id);
-        mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${critMsg}`, 'aviso');
+        const _critLabelNpc = critMult === 2 ? ' ✦✦ CRÍTICO TOTAL!' : critMult === 1.5 ? ' ✦ CRÍTICO!' : critMult === 1.2 ? ' ⭐ CRÍTICO MENOR!' : '';
+        _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${_critLabelNpc}`, bat.id);
+        mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${_critLabelNpc}`, 'aviso');
         const _delayMorteNpc = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || skillAlvo), _avtEntViva(entNpc)) : 0;
         if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:(entAlvo||skillAlvo).nome }); } catch(_) {} }
         _avtRenderHpBar();
@@ -18440,23 +18468,15 @@ function _avtCalcLimiarCrit(formula) {
   return Math.floor(maxDados * 2 / 3);
 }
 
-// ─── CRÍTICO POR PERCENTUAL DA ROLAGEM (sempre sobre os dados, nunca sobre o dano final)
-// pct = soma(dados) / soma(faces).  pct == 1.0 → ×3 (crítico maior). pct > 0.9 → ×2. Caso contrário ×1.
-function _avtCalcCritMult(dadosRolados){
-  if(!dadosRolados || !dadosRolados.length) return 1;
-  let sum = 0, max = 0;
-  for(const d of dadosRolados){
-    const v = d.val ?? d.valor ?? 0;
-    const f = d.faces ?? 0;
-    sum += v; max += f;
-  }
-  if(max <= 0) return 1;
-  const pct = sum / max;
-  if(pct >= 1)   return 3;
-  if(pct >  0.9) return 2;
-  return 1;
+// ─── CRÍTICO BASEADO NO D20: 1-3=sem dano, 4-12=normal, 13-15=×1.2, 16-19=×1.5, 20=×2
+function _avtCritMultFromD20(hitRoll) {
+  if (hitRoll <= 3)  return 0;
+  if (hitRoll <= 12) return 1;
+  if (hitRoll <= 15) return 1.2;
+  if (hitRoll <= 19) return 1.5;
+  return 2;
 }
-window._avtCalcCritMult = _avtCalcCritMult;
+window._avtCritMultFromD20 = _avtCritMultFromD20;
 
 function _avtTokenTremer(ent) {
   if (!ent) return;

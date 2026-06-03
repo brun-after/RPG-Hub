@@ -478,68 +478,62 @@ function resetarEstadoCombate() {
 
 /**
  * Verifica e aplica crítico baseado em d20
- * NOVO SISTEMA:
- * - d20 < 2 (apenas 1) = ERRO (0 dano)
- * - d20 = 2-17 = Normal (100%)
- * - d20 = 18-19 = Crítico Menor (+20%)
- * - d20 = 20 = Crítico Maior (+30%)
+ * - d20 = 1-3  = Sem dano (0x)
+ * - d20 = 4-12 = Normal (1x)
+ * - d20 = 13-15 = Crítico Menor (+20%, 1.2x)
+ * - d20 = 16-19 = Crítico (+50%, 1.5x)
+ * - d20 = 20   = Crítico Total (+100%, 2x)
  */
 function calcularDanoCritico(danoBase, d20) {
-  // Validação
   if (!d20 || d20 < 1 || d20 > 20) {
     console.warn('[Crítico] d20 inválido:', d20);
-    return {
-      dano: danoBase,
-      tipo: 'normal',
-      multiplicador: 1,
-      mensagem: null
-    };
+    return { dano: danoBase, tipo: 'normal', multiplicador: 1, mensagem: null };
   }
-  
-  // Erro crítico (apenas 1)
-  if (d20 < 2) {
+
+  if (d20 <= 3) {
     return {
       dano: 0,
       tipo: 'erro',
       multiplicador: 0,
-      mensagem: '💀 ERRO CRÍTICO! Sem dano!',
+      mensagem: `💀 Sem dano! (d20: ${d20})`,
       cor: '#e74c3c'
     };
   }
-  
-  // Crítico menor (18-19)
-  if (d20 >= 18 && d20 <= 19) {
+
+  if (d20 <= 12) {
+    return { dano: danoBase, tipo: 'normal', multiplicador: 1, mensagem: null, cor: null };
+  }
+
+  if (d20 <= 15) {
     const dano = Math.ceil(danoBase * 1.2);
-    const bonus = dano - danoBase;
     return {
-      dano: dano,
+      dano,
       tipo: 'critico_menor',
       multiplicador: 1.2,
-      mensagem: `⭐ Crítico Menor! +20% (${danoBase} → ${dano}, +${bonus})`,
+      mensagem: `⭐ Crítico Menor! +20% (${danoBase} → ${dano})`,
       cor: '#f39c12'
     };
   }
-  
-  // Crítico maior (20 natural)
-  if (d20 === 20) {
-    const dano = Math.ceil(danoBase * 1.3);
-    const bonus = dano - danoBase;
+
+  if (d20 <= 19) {
+    const dano = Math.ceil(danoBase * 1.5);
     return {
-      dano: dano,
-      tipo: 'critico_maior',
-      multiplicador: 1.3,
-      mensagem: `🌟 CRÍTICO PERFEITO! +30% (${danoBase} → ${dano}, +${bonus})`,
-      cor: '#f0cc6a'
+      dano,
+      tipo: 'critico',
+      multiplicador: 1.5,
+      mensagem: `✦ Crítico! +50% (${danoBase} → ${dano})`,
+      cor: '#e67e22'
     };
   }
-  
-  // Acerto normal
+
+  // d20 = 20
+  const dano = Math.ceil(danoBase * 2);
   return {
-    dano: danoBase,
-    tipo: 'normal',
-    multiplicador: 1,
-    mensagem: null,
-    cor: null
+    dano,
+    tipo: 'critico_total',
+    multiplicador: 2,
+    mensagem: `✦✦ CRÍTICO TOTAL! +100% (${danoBase} → ${dano})`,
+    cor: '#f0cc6a'
   };
 }
 
