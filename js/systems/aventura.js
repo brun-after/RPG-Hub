@@ -8937,6 +8937,19 @@ function avtReceberHpUpdate({ nome, hp, hpMax }) {
 }
 window.avtReceberHpUpdate = avtReceberHpUpdate;
 
+function avtReceberRsvUpdate({ nome, atributos }) {
+  const char = AVT_STATE.chars.find(c => c.nome === nome);
+  if (!char || !atributos) return;
+  if (!char.custom_attrs) char.custom_attrs = {};
+  if (!char.custom_attrs.atributos) char.custom_attrs.atributos = {};
+  const atrsLocais = char.custom_attrs.atributos;
+  Object.keys(atributos).forEach(k => { atrsLocais[k] = atributos[k]; });
+  _avtRenderHpBar();
+  const pp = document.getElementById('avt-player-panel');
+  if (pp && pp.style.display !== 'none') avtJogadorPainelRender();
+}
+window.avtReceberRsvUpdate = avtReceberRsvUpdate;
+
 function _avtHudUpdate() {
   const b = _avtMinhaBatalha();
   if (!b) { _avtHudMostrar(false); return; }
@@ -10629,6 +10642,7 @@ async function _avtDescontarCustoSkill(nomeChar, custo_rsv) {
   }
   atrs[chave] = Math.max(0, atual - quantidade);
   mostrarToast(`−${quantidade} ${chave}`, '');
+  try { _avtBroadcast('avt_rsv_update', { nome: nomeChar, atributos: { ...atrs } }); } catch(_) {}
   await _avtSb(`characters?id=eq.${encodeURIComponent(char.id)}`,
     { method: 'PATCH', body: JSON.stringify({ custom_attrs: char.custom_attrs }) }
   ).catch(() => {});
@@ -10780,7 +10794,8 @@ function avtJogadorPainel() {
 }
 window.avtJogadorPainel = avtJogadorPainel;
 
-function avtJogadorPainelRender(targetEl) {
+function avtJogadorPainelRender(targetEl, opts) {
+  const compact = !!(opts && opts.compact);
   const el = targetEl || document.getElementById('avt-pp-content');
   if (!el) return;
   const jogador = _avtMeuJogador();
@@ -10802,8 +10817,10 @@ function avtJogadorPainelRender(targetEl) {
   const xpProximo  = atMaxNivel ? null : _avtXpParaNivel(nivel);
   const xpPct      = atMaxNivel ? 100 : Math.min(100, (xp / xpProximo) * 100);
 
-  // ── 1. Header: avatar + nome + nível ──────────────────────────
-  let html = `
+  // ── 1. Header: avatar + nome + nível (omitido no modo compacto) ──
+  let html = '';
+  if (!compact) {
+    html += `
     <div style="display:flex;flex-direction:column;gap:8px">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:44px;height:44px;border-radius:50%;background:${jogador.cor || '#4fa3d1'};display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">${jogador.icone || '⚔'}</div>
@@ -10826,6 +10843,15 @@ function avtJogadorPainelRender(targetEl) {
         </div>
       </div>
     </div>`;
+  } else {
+    html += `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0 6px;border-bottom:1px solid rgba(79,163,209,0.08);margin-bottom:2px">
+      <span style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa">${atMaxNivel ? `Nv ${nivel} <span style="color:#c8a84b">(MAX)</span>` : `Nv ${nivel} · ${xp}/${xpProximo} XP`}</span>
+      <div style="width:80px;height:4px;background:rgba(200,168,75,0.12);border-radius:2px;overflow:hidden">
+        <div style="height:100%;width:${xpPct}%;background:${atMaxNivel ? '#c8a84b' : 'linear-gradient(90deg,#b8922b,#ffe066,#c8a84b)'};border-radius:2px;transition:width .5s ease"></div>
+      </div>
+    </div>`;
+  }
 
   // ── 2. Barras de recurso (Mana, Stamina, etc.) ─────────────────
   const recursos = _avtRecursosDoChar(char);
@@ -13886,6 +13912,32 @@ function _avtMpConteudoAba() {
         </div>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">📦 Pacotes de Itens</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Instale catálogos prontos nesta campanha. Cada pacote é copiado de forma isolada — modificar itens aqui não afeta outras campanhas.</div>
+        ${(() => {
+          const pkgs = (typeof CATALOG_PACKAGES !== 'undefined' ? CATALOG_PACKAGES : []);
+          const instalados = AVT_STATE.rpg?.theme_json?.installed_packages || {};
+          if (!pkgs.length) return '<div class="avt-mp-hint">Nenhum pacote disponível.</div>';
+          return `
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${pkgs.map(pkg => {
+              const inst = !!instalados[pkg.id];
+              const nInst = inst ? (instalados[pkg.id]?.length || 0) : pkg.itens.length;
+              return `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;background:${inst?'rgba(79,163,209,0.08)':'rgba(10,15,24,0.4)'};border:1px solid ${inst?'rgba(79,163,209,0.25)':'rgba(79,163,209,0.1)'}">
+                <div style="flex:1;min-width:0">
+                  <div style="font-family:var(--fonte-d);font-size:0.7rem;color:${inst?'#4fa3d1':'#c8d8e8'}">${pkg.label}${inst?' <span style="font-size:0.55rem;color:#4fa3d1">✓ instalado</span>':''}</div>
+                  <div style="font-size:0.6rem;color:#7a92aa;margin-top:1px">${nInst} itens · ${pkg.descricao}</div>
+                </div>
+                ${inst
+                  ? `<button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 7px;font-size:0.62rem;flex-shrink:0" onclick="_avtPackageRemover('${pkg.id}')">✕</button>`
+                  : `<button class="avt-mp-btn avt-mp-btn-ok" style="padding:2px 7px;font-size:0.62rem;flex-shrink:0" onclick="_avtPackageAdicionar('${pkg.id}')">+ Adicionar</button>`
+                }
+              </div>`;
+            }).join('')}
+          </div>`;
+        })()}
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-hint">Ações permanentes da campanha atual.</div>
         <button class="avt-mp-btn avt-mp-btn-danger" style="width:100%;margin-top:12px"
           onclick="_avtMestreExcluirCampanha()">🗑 Excluir campanha</button>
@@ -14537,6 +14589,101 @@ async function _avtMestreExcluirCampanha() {
     mostrarToast('Erro ao excluir: ' + (e?.message || e), 'erro');
   }
 }
+
+// ─── Pacotes de Itens embutidos ───────────────────────────────────────────────
+// installed_packages é um objeto em theme_json: { pkgId: [id1, id2, ...] }
+// Os IDs são os IDs do item_catalog inseridos, para remoção sem coluna extra no banco.
+
+async function _avtPackageAdicionar(pkgId) {
+  const pkgs = typeof CATALOG_PACKAGES !== 'undefined' ? CATALOG_PACKAGES : [];
+  const pkg = pkgs.find(p => p.id === pkgId);
+  if (!pkg) { mostrarToast('Pacote não encontrado', 'erro'); return; }
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  const instalados = rpg.theme_json.installed_packages || {};
+  if (instalados[pkgId]) { mostrarToast('Pacote já instalado', 'aviso'); return; }
+
+  mostrarToast(`Instalando ${pkg.label}…`, '');
+  const idsInseridos = [];
+  let err = 0;
+  for (const item of (pkg.itens || [])) {
+    const payload = {
+      rpg_id: AVT_STATE.rpgId,
+      nome: item.nome,
+      icone: item.icone || '📦',
+      tipo_canonico: item.tipo_canonico,
+      subtipo: item.subtipo || null,
+      raridade: item.raridade || 'comum',
+      descricao: item.descricao || null,
+      slot_padrao: item.slot_padrao || null,
+      grupo_atributo_base: item.grupo_atributo_base || null,
+      aceita_amuleto_aninhado: false,
+      atributos_bonus: item.atributos_bonus || null,
+      trade_offs: item.trade_offs || null,
+      efeitos: item.efeitos || null,
+      visual_config: item.visual_config || { tipo_visual: 'emoji', valor: item.icone || '📦' },
+      nivel: item.nivel || 1,
+      nivel_minimo_uso: item.nivel_minimo_uso || 1,
+      unico_no_mundo: false,
+      droppable: item.droppable || false,
+      drop_rate: item.drop_rate || null,
+      tier_min: item.tier_min || null,
+      tier_max: item.tier_max || null,
+    };
+    try {
+      const rows = await _avtSb('item_catalog', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify(payload),
+      });
+      const id = Array.isArray(rows) ? rows[0]?.id : rows?.id;
+      if (id) idsInseridos.push(id);
+    } catch(_) { err++; }
+  }
+
+  // Guarda os IDs inseridos em theme_json para remoção futura sem precisar de coluna extra
+  if (!rpg.theme_json.installed_packages) rpg.theme_json.installed_packages = {};
+  rpg.theme_json.installed_packages[pkgId] = idsInseridos;
+  await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
+    method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }),
+  }).catch(() => {});
+
+  mostrarToast(`✓ ${pkg.label}: ${idsInseridos.length} itens adicionados${err ? ` (${err} erros)` : ''}`, idsInseridos.length > 0 ? 'ok' : 'erro');
+  _avtMestrePainelRender();
+  if (typeof carregarCatalogo === 'function') carregarCatalogo();
+}
+window._avtPackageAdicionar = _avtPackageAdicionar;
+
+async function _avtPackageRemover(pkgId) {
+  const pkgs = typeof CATALOG_PACKAGES !== 'undefined' ? CATALOG_PACKAGES : [];
+  const pkg = pkgs.find(p => p.id === pkgId);
+  const nome = pkg?.label || pkgId;
+  if (!confirm(`Remover o pacote "${nome}" e todos os seus itens desta campanha?`)) return;
+
+  const rpg = AVT_STATE.rpg;
+  const ids = rpg?.theme_json?.installed_packages?.[pkgId] || [];
+  mostrarToast(`Removendo ${nome}…`, '');
+  let ok = 0;
+  for (const id of ids) {
+    await _avtSb(`item_catalog?id=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: { 'Prefer': 'return=minimal' },
+    }).catch(() => {});
+    ok++;
+  }
+
+  if (rpg?.theme_json?.installed_packages) {
+    delete rpg.theme_json.installed_packages[pkgId];
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
+      method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }),
+    }).catch(() => {});
+  }
+
+  mostrarToast(`✓ ${nome}: ${ok} itens removidos`, 'ok');
+  _avtMestrePainelRender();
+  if (typeof carregarCatalogo === 'function') carregarCatalogo();
+}
+window._avtPackageRemover = _avtPackageRemover;
 
 // ─── Editor com Tileset ───────────────────────────────────────────────────────
 function _avtMestreAbrirEditorTileset() {
@@ -15771,7 +15918,7 @@ function _avtCharEditorRender() {
   if (ehMeu) {
     const meuEl = document.getElementById('avt-ce-meu');
     if (meuEl && typeof avtJogadorPainelRender === 'function') {
-      try { avtJogadorPainelRender(meuEl); } catch(_) {}
+      try { avtJogadorPainelRender(meuEl, { compact: true }); } catch(_) {}
     }
   }
 
