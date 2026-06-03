@@ -13906,6 +13906,7 @@ function _avtMpConteudoAba() {
       const rd = AVT_STATE.dungeon?.render_data;
       const bausMap = (rd?.objetos || []).filter(o => o.tipo === 'bau' || o.tipo === 'chest');
       const bausPre = AVT_STATE._bausPreDungeon || [];
+      const RAR_COR = {comum:'#888',incomum:'#2ecc71',raro:'#3498db',epico:'#9b59b6',lendario:'#f39c12'};
       const charSelectHtml = `<select onchange="AVT_STATE._itensCharSel=this.value;_avtMestrePainelRender()"
         style="width:100%;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;margin-bottom:8px">
         <option value="">— Escolher personagem —</option>
