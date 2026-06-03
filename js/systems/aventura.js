@@ -2842,7 +2842,7 @@ function _avtCanvasInit() {
   window.addEventListener('blur', () => { AVT_STATE._holdMove = null; });
 
   // O modo controle real (catalog.js) gerencia os controles touch — ocultar d-pad legado
-  if (dpad) dpad.style.display = 'none';
+  if (_savedDpad) _savedDpad.style.display = 'none';
   const dpadBtn = document.getElementById('avt-btn-dpad');
   if (dpadBtn) dpadBtn.style.display = 'none';
   const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
