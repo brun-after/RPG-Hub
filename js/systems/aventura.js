@@ -278,6 +278,10 @@ function _avtEfetosAtivosEnt(ent) {
 
   (ent.status_effects || []).forEach(ef => {
     if ((ef._turnos_restantes ?? 0) <= 0) return;
+    // Efeitos OOC vivem em _oocStatusEffects com expiry_ms (mostra segundos).
+    // Fora de combate: pular aqui para não mascarar a entrada correta abaixo.
+    // Em combate: _turnos_restantes é decrementado pelo sistema → mostrar como turno.
+    if (ef._ooc && !_avtBatalhaDeEnt(ent.id)) return;
     if (seen.has(ef.tipo)) return;
     seen.add(ef.tipo);
     results.push({
