@@ -5799,7 +5799,10 @@ async function _avtPrimeiroAtaqueSelecionarSkill(skId) {
         if (ef.tipo === 'cura') {
           const val = _avtRolarFormula(ef.cura_formula || '1d6');
           entJog.hp = Math.min(entJog.hpMax || entJog.hp, entJog.hp + val);
+          _avtAplicarDanoPersistir(entJog, entJog.hp);
           _avtMostrarCuraAcimaDaHead(entJog, val);
+          try { _avtBroadcast('avt_hp_update', { nome: entJog.nome, hp: entJog.hp, hpMax: entJog.hpMax }); } catch(_) {}
+          _avtLog(`✨ ${sk.habilidade} cura ${entJog.nome} em ${val} HP`);
         } else if (ef.tipo === 'teleporte') {
           // Teleporte OOC: ativar imediatamente
           AVT_STATE._modoTeleporte = { entId: entJog.id };
@@ -5872,7 +5875,9 @@ async function _avtAplicarSkillAliadoOoc(skId, alvoId) {
       if (ef.tipo === 'cura') {
         const val = _avtRolarFormula(ef.cura_formula || '1d6');
         entAlvo.hp = Math.min(entAlvo.hpMax || entAlvo.hp, entAlvo.hp + val);
+        _avtAplicarDanoPersistir(entAlvo, entAlvo.hp);
         _avtMostrarCuraAcimaDaHead(entAlvo, val);
+        try { _avtBroadcast('avt_hp_update', { nome: entAlvo.nome, hp: entAlvo.hp, hpMax: entAlvo.hpMax }); } catch(_) {}
         _avtLog(`✨ ${jogador.nome} cura ${entAlvo.nome} em ${val} HP`);
       } else if (ef.tipo === 'teleporte') {
         // Teleporte OOC aliado: ativar imediatamente para o alvo
@@ -5881,7 +5886,8 @@ async function _avtAplicarSkillAliadoOoc(skId, alvoId) {
           _avtAtivarIndicadorTeleporte(entAlvo, sk);
           mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
         }
-      } else if (['dot','hot','stun','silence','fantasma','atravessar'].includes(ef.tipo)) {
+      } else if (['hot','fantasma','atravessar'].includes(ef.tipo)) {
+        // Apenas efeitos positivos/neutros são aplicados a aliados (negativos como dot/stun/silence são ignorados)
         const _oocEfAl = {...ef, _turnos_restantes: ef.duracao_turnos??1,
           expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs(), _ooc:true};
         if (!entAlvo.status_effects) entAlvo.status_effects = [];
@@ -5890,8 +5896,6 @@ async function _avtAplicarSkillAliadoOoc(skId, alvoId) {
         AVT_STATE._oocStatusEffects.push({entId:entAlvo.id, ef:{..._oocEfAl}, lastTickAt:Date.now()});
         if (ef.tipo === 'fantasma')   entAlvo._fantasma   = true;
         if (ef.tipo === 'atravessar') entAlvo._atravessar = true;
-        if (ef.tipo === 'stun')       entAlvo._stunned    = true;
-        if (ef.tipo === 'silence')    entAlvo._silenciado = true;
       }
     });
   }
@@ -6181,7 +6185,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       const entJogOoc = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
       const cooldownEfMs = _avtGetEfeitoCooldownMs();
       sk.efeitos_bonus.forEach(ef => {
-        const alvoProcOoc = (['hot','cura','teleporte','atravessar'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo') ? entJogOoc : entIniOoc;
+        const alvoProcOoc = (['hot','cura','teleporte','atravessar','fantasma'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo') ? entJogOoc : entIniOoc;
         if (ef.tipo === 'teleporte_alvo') {
           _avtTeleportarParaAlvo(entJogOoc, entIniOoc, ef.delay_ms ?? 1000, null);
         } else if (ef.tipo === 'avatar') {
@@ -6189,7 +6193,9 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
         } else if (ef.tipo === 'cura') {
           const valorCura = _avtRolarFormula(ef.cura_formula || '1d6');
           alvoProcOoc.hp = Math.min(alvoProcOoc.hpMax || alvoProcOoc.hp, alvoProcOoc.hp + valorCura);
+          _avtAplicarDanoPersistir(alvoProcOoc, alvoProcOoc.hp);
           _avtMostrarCuraAcimaDaHead(alvoProcOoc, valorCura);
+          try { _avtBroadcast('avt_hp_update', { nome: alvoProcOoc.nome, hp: alvoProcOoc.hp, hpMax: alvoProcOoc.hpMax }); } catch(_) {}
         } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar'].includes(ef.tipo)) {
           if (!alvoProcOoc.status_effects) alvoProcOoc.status_effects = [];
           const _oocEfPa = {...ef, _turnos_restantes: ef.duracao_turnos??1,
@@ -7989,6 +7995,19 @@ function avtCombateEncerrar(batalhaId) {
     if (AVT_STATE.batalhas.length === 0) return;
     batalhaId = AVT_STATE.batalhas[0].id;
   }
+  // Limpar efeitos de combate (não-OOC) das entidades para evitar flags infinitas pós-combate
+  const _batEncerrando = AVT_STATE.batalhas.find(b => b.id === batalhaId);
+  if (_batEncerrando) {
+    _batEncerrando.iniciativa.forEach(ini => {
+      const entObj = AVT_STATE.entidades.find(e => e.id === ini.id);
+      if (!entObj) return;
+      entObj.status_effects = (entObj.status_effects || []).filter(ef => ef._ooc);
+      if (!entObj.status_effects.some(ef => ef.tipo === 'stun'))     delete entObj._stunned;
+      if (!entObj.status_effects.some(ef => ef.tipo === 'silence'))  delete entObj._silenciado;
+      if (!entObj.status_effects.some(ef => ef.tipo === 'fantasma')) delete entObj._fantasma;
+      if (!entObj.status_effects.some(ef => ef.tipo === 'atravessar')) delete entObj._atravessar;
+    });
+  }
   _avtBroadcastFimBatalha(batalhaId);
   _avtRemoverBatalhaDb(batalhaId);
   AVT_STATE.batalhas = AVT_STATE.batalhas.filter(b => b.id !== batalhaId);
@@ -8732,10 +8751,24 @@ async function _avtExecutarAtaque() {
 
             if (sk?.efeitos_bonus?.length) {
               const entCasterAoe = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
+              let _curaSelfAppliedArea = false;
               sk.efeitos_bonus.forEach(ef => {
-                const _selfApply = ['hot','cura','teleporte','atravessar'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo';
+                const _selfApply = ['hot','cura','teleporte','atravessar','fantasma'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo';
                 const alvoProcEf = _selfApply ? entCasterAoe : (entAlvA || alvA);
-                if (!['teleporte_alvo','avatar','cura'].includes(ef.tipo)) {
+                if (ef.tipo === 'cura') {
+                  // Cura: aplicada uma só vez ao caster quando _selfApply, ou a cada alvo da área
+                  if (!_selfApply || !_curaSelfAppliedArea) {
+                    const valorCuraArea = _avtRolarFormula(ef.cura_formula || '1d6');
+                    const _alvoCuraObj = AVT_STATE.entidades.find(e => e.id === alvoProcEf.id) || alvoProcEf;
+                    _alvoCuraObj.hp = Math.min(_alvoCuraObj.hpMax || _alvoCuraObj.hp, _alvoCuraObj.hp + valorCuraArea);
+                    if (_alvoCuraObj !== alvoProcEf) alvoProcEf.hp = _alvoCuraObj.hp;
+                    _avtAplicarDanoPersistir(_alvoCuraObj, _alvoCuraObj.hp);
+                    _avtMostrarCuraAcimaDaHead(_alvoCuraObj, valorCuraArea);
+                    try { _avtBroadcast('avt_hp_update', { nome: _alvoCuraObj.nome, hp: _alvoCuraObj.hp, hpMax: _alvoCuraObj.hpMax }); } catch(_) {}
+                    _avtLog(`  ↳ Cura (área): ${_alvoCuraObj.nome} recupera ${valorCuraArea} HP`, b.id);
+                    if (_selfApply) _curaSelfAppliedArea = true;
+                  }
+                } else if (!['teleporte_alvo','avatar'].includes(ef.tipo)) {
                   if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
                   const _efEntryA = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
                     expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs()};
@@ -8791,7 +8824,7 @@ async function _avtExecutarAtaque() {
         if (sk?.efeitos_bonus?.length) {
           const entCaster = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
           sk.efeitos_bonus.forEach(ef => {
-            const alvoProcEf = (['hot','cura','teleporte','atravessar'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo')
+            const alvoProcEf = (['hot','cura','teleporte','atravessar','fantasma'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo')
               ? entCaster : (entAlvo || alvo);
             if (ef.tipo === 'teleporte_alvo') {
               _avtTeleportarParaAlvo(entCaster, entAlvo || alvo, ef.delay_ms ?? 1000, b);
@@ -9275,7 +9308,8 @@ async function _avtExecutarSkillEmAliado(skId, alvoId) {
             entAlvoObj.status_effects.push({..._efTpAl});
           }
         }
-      } else if (['stun','silence','dot','fantasma','atravessar'].includes(ef.tipo)) {
+      } else if (['fantasma','atravessar'].includes(ef.tipo)) {
+        // Apenas efeitos neutros são aplicados a aliados (negativos como stun/silence/dot são ignorados)
         const _efEntryAl = {...ef, _turnos_restantes: ef.duracao_turnos??1,
           expiry_ms: Date.now() + (ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs()};
         if (!entAlvo.status_effects) entAlvo.status_effects = [];
@@ -9286,9 +9320,6 @@ async function _avtExecutarSkillEmAliado(skId, alvoId) {
         }
         if (ef.tipo === 'fantasma')   { if(entAlvoObj)entAlvoObj._fantasma=true; }
         if (ef.tipo === 'atravessar') { if(entAlvoObj)entAlvoObj._atravessar=true; }
-        if (ef.tipo === 'stun')       { if(entAlvoObj)entAlvoObj._stunned=true; }
-        if (ef.tipo === 'silence')    { if(entAlvoObj)entAlvoObj._silenciado=true; }
-        if (ef.tipo === 'dot')        _avtMostrarDotDrip(entAlvoObj||entAlvo);
       } else if (ef.tipo === 'avatar') {
         _avtCriarAvatar(caster, ef, bat);
       } else if (ef.tipo === 'teleporte_alvo') {
