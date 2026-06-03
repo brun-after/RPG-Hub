@@ -247,13 +247,66 @@ const AVT_SZ = 48;
 
 // ── Cores dos efeitos de status (usados em visuais de canvas e CSS) ──────────
 const AVT_STATUS_COLORS = {
-  stun:       '#9b59b6',
-  silence:    '#1a0028',
-  dot:        '#c0392b',
-  hot:        '#2ecc71',
-  atravessar: '#3498db',
-  cura:       '#27ae60',
+  stun:         '#9b59b6',
+  silence:      '#1a0028',
+  dot:          '#c0392b',
+  hot:          '#2ecc71',
+  atravessar:   '#3498db',
+  cura:         '#27ae60',
+  boost_dano:   '#f0cc6a',
+  mod_dano:     '#e8604c',
+  sem_movimento:'#c0392b',
+  sem_ataque:   '#e67e22',
+  esquiva:      '#74b9ff',
+  rec:          '#b07ef0',
+  fantasma:     '#74b9ff',
+  teleporte:    '#a29bfe',
+  invocacao:    '#b07ef0',
 };
+
+function _avtHexRgb(hex) {
+  if (!hex || hex.length < 7) return '122,146,170';
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+
+function _avtEfetosAtivosEnt(ent) {
+  if (!ent) return [];
+  const results = [];
+  const seen = new Set();
+  const now = Date.now();
+
+  (ent.status_effects || []).forEach(ef => {
+    if ((ef._turnos_restantes ?? 0) <= 0) return;
+    if (seen.has(ef.tipo)) return;
+    seen.add(ef.tipo);
+    results.push({
+      tipo:  ef.tipo,
+      nome:  ef.nome || ef.tipo,
+      cor:   ef.cor || AVT_STATUS_COLORS[ef.tipo] || '#7a92aa',
+      label: String(ef._turnos_restantes),
+      isOoc: false,
+    });
+  });
+
+  (AVT_STATE._oocStatusEffects || [])
+    .filter(r => r.entId === ent.id && now < r.ef.expiry_ms)
+    .forEach(r => {
+      const ef = r.ef;
+      if (seen.has(ef.tipo)) return;
+      seen.add(ef.tipo);
+      const secsLeft = Math.max(1, Math.ceil((ef.expiry_ms - now) / 1000));
+      results.push({
+        tipo:  ef.tipo,
+        nome:  ef.nome || ef.tipo,
+        cor:   ef.cor || AVT_STATUS_COLORS[ef.tipo] || '#7a92aa',
+        label: secsLeft + 's',
+        isOoc: true,
+      });
+    });
+
+  return results;
+}
 
 // ── Sprites pixel art por classe (SVG 16×16 escalado para canvas) ─────────────
 const AVT_WARRIOR_SVG_A = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="6" y="1" width="4" height="1" fill="#c0c8d0"/><rect x="5" y="2" width="6" height="2" fill="#c0c8d0"/><rect x="6" y="4" width="4" height="1" fill="#8a9199"/><rect x="6" y="3" width="1" height="1" fill="#1a1a2a"/><rect x="9" y="3" width="1" height="1" fill="#1a1a2a"/><rect x="7" y="5" width="2" height="1" fill="#8a9199"/><rect x="3" y="6" width="3" height="2" fill="#c0c8d0"/><rect x="10" y="6" width="3" height="2" fill="#c0c8d0"/><rect x="5" y="6" width="6" height="4" fill="#c0c8d0"/><rect x="7" y="7" width="2" height="4" fill="#cc2233"/><rect x="6" y="8" width="4" height="2" fill="#cc2233"/><rect x="5" y="10" width="6" height="1" fill="#8a5520"/><rect x="5" y="11" width="2" height="2" fill="#c0c8d0"/><rect x="9" y="11" width="2" height="2" fill="#c0c8d0"/><rect x="6" y="13" width="2" height="2" fill="#8a9199"/><rect x="8" y="13" width="2" height="2" fill="#8a9199"/><rect x="12" y="2" width="1" height="1" fill="#e8e8f0"/><rect x="11" y="3" width="1" height="1" fill="#e8e8f0"/><rect x="10" y="4" width="1" height="1" fill="#c0c0cc"/><rect x="11" y="5" width="2" height="1" fill="#8a5520"/><rect x="1" y="7" width="2" height="3" fill="#c0c8d0"/><rect x="2" y="10" width="1" height="1" fill="#8a9199"/><rect x="1" y="8" width="1" height="1" fill="#cc2233"/></svg>`;
@@ -3688,6 +3741,42 @@ function _avtRenderFrame() {
   _avtAtualizarPosBotaoRolar();
   // Atualizar posição dos dados de inimigos acoplados ao token
   _avtAtualizarPosRollInimigos();
+  // Renderizar badges de contagem de efeitos acima dos tokens
+  _avtRenderEffectCountersOverlay();
+}
+
+function _avtRenderEffectCountersOverlay() {
+  const overlay = document.getElementById('avt-dados-overlay');
+  if (!overlay || !AVT_STATE.canvas) return;
+
+  overlay.querySelectorAll('.avt-ef-counter-wrap').forEach(el => el.remove());
+
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const canvasW = AVT_STATE.canvas.width;
+  const canvasH = AVT_STATE.canvas.height;
+
+  (AVT_STATE.entidades || []).forEach(ent => {
+    const efeitos = _avtEfetosAtivosEnt(ent);
+    if (!efeitos.length) return;
+
+    const rx = ent.renderX ?? ent.x;
+    const ry = ent.renderY ?? ent.y;
+    const px = Math.round(rx * SZ - AVT_STATE.camera.x);
+    const py = Math.round(ry * SZ - AVT_STATE.camera.y);
+
+    if (px < -80 || px > canvasW + 80 || py < -80 || py > canvasH + 80) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'avt-ef-counter-wrap';
+    wrap.style.left = (px + SZ / 2) + 'px';
+    wrap.style.top  = Math.max(2, py - Math.round(SZ * 0.28)) + 'px';
+
+    wrap.innerHTML = efeitos.map(ef =>
+      `<span class="avt-ef-count-badge" style="color:${ef.cor};border-color:${ef.cor}60;text-shadow:0 0 5px ${ef.cor}80">${ef.label}</span>`
+    ).join('');
+
+    overlay.appendChild(wrap);
+  });
 }
 
 function _avtAtualizarPosRollInimigos() {
@@ -10371,11 +10460,16 @@ function _avtRenderHpBar() {
     const rsvPct = rsv ? Math.max(0, rsv.atual / rsv.max * 100) : Math.max(0, (char?.custom_attrs?.atributos?.Mana ?? 10) / (char?.custom_attrs?.atributos?.ManaMax ?? 10) * 100);
     const rsvCor = rsv ? (/mana/i.test(rsv.nome) ? '#7ec8f0' : '#f0a050') : '#7ec8f0';
     const rsvLabel = rsv ? rsv.nome : 'Mana';
+    const _efJog = _avtEfetosAtivosEnt(j);
+    const _efDotsHtml = _efJog.length
+      ? `<div class="avt-hp-ef-row">${_efJog.map(ef => `<span class="avt-hp-ef-dot" style="background:${ef.cor}" title="${ef.nome}: ${ef.label}"></span>`).join('')}</div>`
+      : '';
     return `<div class="avt-hp-item">
       <span class="avt-hp-nome" style="color:${j.cor}">${j.nome.split(' ')[0]}</span>
       <div style="display:flex;flex-direction:column;flex:1;gap:2px">
         <div class="avt-hp-bar-wrap"><div class="avt-hp-bar-fill" style="width:${pct}%;background:${col}"></div></div>
         <div class="avt-rsv-bar-wrap" title="${rsvLabel}"><div class="avt-rsv-bar-fill" style="width:${rsvPct}%;background:${rsvCor}"></div></div>
+        ${_efDotsHtml}
       </div>
       <span class="avt-hp-val">${j.hp}/${j.hpMax}</span>
     </div>`;
@@ -10877,7 +10971,25 @@ function avtJogadorPainelRender(targetEl, opts) {
     html += `</div>`;
   }
 
-  // ── 3. Mini-painel de atributos (colapsável) ───────────────────
+  // ── 3. Efeitos ativos do modo aventura ────────────────────────
+  const _entJogAv = AVT_STATE.entidades.find(e => e.nome === jogador.nome || e.id === jogador.id);
+  const _efAtivos = _entJogAv ? _avtEfetosAtivosEnt(_entJogAv) : [];
+  if (_efAtivos.length) {
+    html += `
+    <div style="border:1px solid rgba(79,163,209,0.12);border-radius:8px;overflow:hidden">
+      <div style="padding:7px 12px;background:rgba(79,163,209,0.05);font-family:var(--fonte-d);font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em">🧪 Efeitos Ativos</div>
+      <div style="padding:8px 10px;display:flex;flex-direction:column;gap:5px">
+        ${_efAtivos.map(ef => `
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;background:rgba(${_avtHexRgb(ef.cor)},0.08);border:1px solid ${ef.cor}30">
+          <span style="width:8px;height:8px;border-radius:50%;background:${ef.cor};flex-shrink:0"></span>
+          <span style="flex:1;font-family:var(--fonte-d);font-size:0.62rem;color:${ef.cor}">${ef.nome}</span>
+          <span style="font-family:monospace;font-size:0.65rem;color:${ef.cor};font-weight:700">${ef.label}</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  // ── 4. Mini-painel de atributos (colapsável) ───────────────────
   const atrs = char?.custom_attrs?.atributos || {};
   const recursosNomes = new Set(recursos.flatMap(r => [r.nome, r.maxAttr]));
   const atrsKeys = Object.keys(atrs).filter(k => !recursosNomes.has(k)).slice(0, 8);
