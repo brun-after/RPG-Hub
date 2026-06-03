@@ -2103,13 +2103,10 @@ async function _avtMestreDarItemChar(charNome, itemId, qty) {
         bonus_snapshot: null
       })
     });
-    if (typeof INV !== 'undefined') {
-      const newRow = Array.isArray(row) ? row[0] : row;
-      if (newRow) {
-        INV.inventario.push(newRow);
-        if (!INV.inventarios[char.id]) INV.inventarios[char.id] = [];
-        INV.inventarios[char.id].push(newRow);
-      }
+    const newRow = Array.isArray(row) ? row[0] : row;
+    if (newRow && typeof AVT_INV !== 'undefined') {
+      if (!AVT_INV.inventarios[char.id]) AVT_INV.inventarios[char.id] = [];
+      AVT_INV.inventarios[char.id].push(newRow);
     }
     mostrarToast(`${item.icone||'📦'} ${item.nome} ×${q} → ${char.nome}`, 'ok');
     _avtMestrePainelRender();
@@ -2139,11 +2136,10 @@ async function _avtMestreAtualizarOuroChar(charNome, delta) {
 async function _avtMestreRemoverItemChar(invId, charNome, rerender) {
   try {
     await _avtSb(`inventario?id=eq.${encodeURIComponent(invId)}`, { method: 'DELETE' });
-    if (typeof INV !== 'undefined') {
-      INV.inventario = INV.inventario.filter(i => String(i.id) !== String(invId));
+    if (typeof AVT_INV !== 'undefined') {
       const char = AVT_STATE.chars.find(c => c.nome === charNome);
-      if (char?.id && INV.inventarios[char.id]) {
-        INV.inventarios[char.id] = INV.inventarios[char.id].filter(i => String(i.id) !== String(invId));
+      if (char?.id && AVT_INV.inventarios[char.id]) {
+        AVT_INV.inventarios[char.id] = AVT_INV.inventarios[char.id].filter(i => String(i.id) !== String(invId));
       }
     }
     mostrarToast('Item removido', 'ok');
@@ -2152,26 +2148,19 @@ async function _avtMestreRemoverItemChar(invId, charNome, rerender) {
 }
 
 async function _avtMestreDesequiparSlotChar(charNome, slot) {
-  if (typeof INV === 'undefined') return;
+  if (typeof avtInvEquipar !== 'function') return;
   const char = AVT_STATE.chars.find(c => c.nome === charNome);
   if (!char?.id) return;
-  const item = INV.inventario.find(i => i.character_id === char.id && i.equipado && i.slot_equipado === slot);
+  const charInv = (typeof AVT_INV !== 'undefined' && AVT_INV.inventarios[char.id]) || [];
+  const item = charInv.find(i => i.equipado && i.slot_equipado === slot);
   if (!item) return;
-  try {
-    await _avtSb(`inventario?id=eq.${encodeURIComponent(item.id)}`, {
-      method: 'PATCH',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ equipado: false, slot_equipado: null, bonus_snapshot: null })
-    });
-    item.equipado = false; item.slot_equipado = null; item.bonus_snapshot = null;
-    mostrarToast('Item desequipado', 'ok');
-    _avtMestrePainelRender();
-  } catch(e) { mostrarToast('Erro ao desequipar: ' + (e?.message||e), 'erro'); }
+  await avtInvEquipar(charNome, item.id);
+  _avtMestrePainelRender();
 }
 
 async function _avtMestreCarregarInvChar(charId, charNome) {
   try {
-    await invCarregarInventarioChar(charId);
+    if (typeof avtInvCarregarChar === 'function') await avtInvCarregarChar(charId);
     mostrarToast(`Inventário de ${charNome} carregado`, 'ok');
     _avtMestrePainelRender();
   } catch(e) { mostrarToast('Erro ao carregar inventário', 'erro'); }
@@ -2324,13 +2313,8 @@ async function entrarAventura(rpgId) {
     _avtCarregarTodasAparencias();
     // Restaura combates em andamento (persistência)
     _avtCarregarBatalhasAtivas().catch(()=>{});
-    // Carregar catálogo e inventário do jogador em background (não bloqueia init)
-    if (typeof invCarregarDados === 'function') {
-      invCarregarDados(rpgId).then(() => {
-        const myChar = AVT_STATE.chars.find(c => c.nome === AVT_STATE.myCharNome);
-        if (myChar?.id) invCarregarInventarioChar(myChar.id).catch(() => {});
-      }).catch(() => {});
-    }
+    // Carregar catálogo e inventário via módulo de aventura (sem fluxo VTT)
+    if (typeof avtInvInit === 'function') avtInvInit(rpgId).catch(() => {});
 
     // Connect realtime for multiplayer sync
     window.CURRENT_RPG = rpgId;
@@ -2478,6 +2462,7 @@ function sairAventura() {
   AVT_STATE.myCharNome = null;
   AVT_STATE.membros = [];
   AVT_STATE._lastFrameTs = 0;
+  if (typeof avtInvReset === 'function') avtInvReset();
 }
 
 function _avtCleanupListeners() {
@@ -10964,77 +10949,12 @@ async function _avtDescontarCustoSkill(nomeChar, custo_rsv) {
   return true;
 }
 
-// Abre modal de inventário dentro do modo aventura
-async function avtAbrirInventario() {
-  const jogador = _avtMeuJogador();
-  if (!jogador) return mostrarToast('Nenhum personagem vinculado', 'aviso');
-  const char = AVT_STATE.chars.find(c => c.nome === jogador.nome);
-  if (!char) return;
+// avtAbrirInventario / avtFecharInventario / avtUsarConsumivel
+// são definidos e exportados por avt-inventario.js (carregado após este arquivo)
 
-  const modal = document.getElementById('avt-inventario-modal');
-  if (!modal) return;
-
-  // Garantir que dados de inventário estão carregados
-  if (!INV?.itemDefs?.length) {
-    mostrarToast('Carregando inventário…', '');
-    const restore0 = _avtPatchRpgData();
-    try { await invCarregarDados(AVT_STATE.rpgId).catch(() => {}); } finally { restore0(); }
-  }
-  if (char.id && !INV.inventario.some(i => i.character_id === char.id)) {
-    await invCarregarInventarioChar(char.id).catch(() => {});
-  }
-
-  modal.style.display = 'flex';
-
-  // Monkey-patch invToggleEquip para usar RPG_DATA bridge
-  const _origToggle = window.invToggleEquip;
-  window.invToggleEquip = async function(nome, id) {
-    const restore2 = _avtPatchRpgData();
-    try { await _origToggle(nome, id); } finally { restore2(); }
-    // Sincronizar atributos atualizados de volta ao AVT_STATE
-    const updated = window.RPG_DATA?.characters?.find?.(x => x.nome === nome);
-    const avt = AVT_STATE.chars.find(x => x.nome === nome);
-    if (avt && updated) avt.custom_attrs = updated.custom_attrs;
-    const pp = document.getElementById('avt-player-panel');
-    if (pp && pp.style.display !== 'none') avtJogadorPainelRender();
-    // Refreshar o modal com RPG_DATA ativo
-    const body = document.getElementById('avt-inv-body');
-    if (body) {
-      body.id = 'fichas-sec-inventario';
-      const r3 = _avtPatchRpgData();
-      try { await renderInventarioChar(nome); } finally { r3(); body.id = 'avt-inv-body'; }
-    }
-  };
-  // Salva restore para quando o modal fechar
-  modal._restoreToggle = () => { window.invToggleEquip = _origToggle; };
-
-  // Troca temporária de ID para renderInventarioChar encontrar o container
-  const body = document.getElementById('avt-inv-body');
-  if (body) body.id = 'fichas-sec-inventario';
-  const restore = _avtPatchRpgData();
-  try {
-    await renderInventarioChar(jogador.nome);
-  } finally {
-    restore();
-    const el = document.getElementById('fichas-sec-inventario');
-    if (el && el.closest('#avt-inventario-modal')) el.id = 'avt-inv-body';
-  }
-}
-window.avtAbrirInventario = avtAbrirInventario;
-
-function avtFecharInventario() {
-  const modal = document.getElementById('avt-inventario-modal');
-  if (!modal) return;
-  modal.style.display = 'none';
-  if (typeof modal._restoreToggle === 'function') { modal._restoreToggle(); modal._restoreToggle = null; }
-}
-window.avtFecharInventario = avtFecharInventario;
-
-// Bridge para usar consumível no contexto de aventura
+// Bridge de compatibilidade para código que chama avtUsarConsumivel(invId, nome)
 async function avtUsarConsumivel(invId, nomeUsuario) {
-  if (!INV?.inventario?.length) await invCarregarTodosInventarios().catch(() => {});
-  const restore = _avtPatchRpgData();
-  try { await abrirModalUsarItem(invId, nomeUsuario); } finally { restore(); }
+  if (typeof avtInvUsarConsumivel === 'function') await avtInvUsarConsumivel(nomeUsuario, invId);
 }
 window.avtUsarConsumivel = avtUsarConsumivel;
 
@@ -11266,34 +11186,7 @@ function avtJogadorPainelRender(targetEl, opts) {
   </div>`;
 
   // ── 4b. Equipamentos rápidos (colapsável) ─────────────────────
-  if (char?.id && typeof INV !== 'undefined') {
-    const _invEq = (INV.inventario || []).filter(i => i.character_id === char.id && i.equipado && i.slot_equipado);
-    if (_invEq.length) {
-      const _equipOpen = AVT_STATE._ppEquipOpen || false;
-      const _SLOTS_PP = {arma_principal:'⚔',arma_secundaria:'🗡',cabeca:'🪖',corpo:'🥋',maos:'🧤',pernas:'👖',pes:'👢',anel:'💍',amuleto:'📿',capa:'🧣'};
-      html += `
-      <div style="border:1px solid rgba(79,163,209,0.1);border-radius:8px;overflow:hidden">
-        <div onclick="AVT_STATE._ppEquipOpen=!AVT_STATE._ppEquipOpen;avtJogadorPainelRender()"
-          style="padding:7px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:rgba(79,163,209,0.04)">
-          <span style="font-family:var(--fonte-d);font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em">⚔ Equipado</span>
-          <span style="font-size:0.65rem;color:#7a92aa">${_equipOpen ? '▴' : '▾'}</span>
-        </div>
-        ${_equipOpen ? `<div style="padding:8px 10px;display:flex;flex-direction:column;gap:3px">
-          ${_invEq.map(inv => {
-            const _def = (INV.itemDefs||[]).find(d => d.id === (inv.item_catalog_id||inv.item_def_id));
-            if (!_def) return '';
-            const _slotIcon = _SLOTS_PP[inv.slot_equipado] || '📦';
-            const _rarC = {comum:'#888',incomum:'#2ecc71',raro:'#3498db',epico:'#9b59b6',lendario:'#f39c12'}[_def.raridade]||'#888';
-            return `<div style="display:flex;align-items:center;gap:7px;padding:3px 6px">
-              <span style="font-size:0.75rem;flex-shrink:0">${_slotIcon}</span>
-              <span style="font-size:0.62rem;color:#c8d8e8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_def.icone||''} ${_def.nome}</span>
-              <span style="font-size:0.55rem;color:${_rarC}">${_def.raridade||'comum'}</span>
-            </div>`;
-          }).join('')}
-        </div>` : ''}
-      </div>`;
-    }
-  }
+  if (char) html += (typeof avtInvRenderSlotsHud === 'function' ? avtInvRenderSlotsHud(char) : '');
 
   // ── 4c. Invocações ativas/disponíveis (compacto) ───────────────
   const _minhasInvs = (AVT_STATE.invocacoes_ativas || []).filter(i => i.dono_char_nome === jogador.nome);
@@ -11355,41 +11248,7 @@ function avtJogadorPainelRender(targetEl, opts) {
   }
 
   // ── 7. Consumíveis rápidos ─────────────────────────────────────
-  if (char?.id && typeof INV !== 'undefined') {
-    const invChar = (INV.inventario || []).filter(i => i.character_id === char.id);
-    const consumiveis = invChar.filter(i => {
-      const def = (INV.itemDefs || []).find(d => d.id === (i.item_catalog_id || i.item_def_id));
-      return def?.tipo === 'consumivel' && i.quantidade > 0;
-    });
-    if (consumiveis.length) {
-      const nomeSafe = jogador.nome.replace(/'/g, "\\'");
-      html += `
-      <div style="display:flex;flex-direction:column;gap:5px">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em">🧪 Consumíveis</div>
-          <button onclick="avtAbrirInventario()" style="background:none;border:none;font-family:var(--fonte-d);font-size:0.58rem;color:#4fa3d1;cursor:pointer;padding:0">ver todos</button>
-        </div>
-        ${consumiveis.slice(0, 3).map(i => {
-          const def = (INV.itemDefs || []).find(d => d.id === (i.item_catalog_id || i.item_def_id));
-          if (!def) return '';
-          const efeitos = Array.isArray(def.efeitos) ? def.efeitos : [];
-          const ef1 = efeitos[0];
-          const efLabel = ef1
-            ? (ef1.tipo === 'hp' ? `❤ +${ef1.valor}` : ef1.tipo === 'recurso' ? `✨ +${ef1.valor}` : (def.descricao || ''))
-            : (def.descricao || '');
-          return `
-          <div style="display:flex;align-items:center;gap:8px;border:1px solid rgba(79,163,209,0.1);border-radius:6px;padding:6px 9px">
-            <span style="font-size:1.1rem;flex-shrink:0">${def.icone || '📦'}</span>
-            <div style="flex:1;min-width:0">
-              <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${def.nome}</div>
-              <div style="font-size:0.6rem;color:#7a92aa">${efLabel ? efLabel + ' · ' : ''}×${i.quantidade}</div>
-            </div>
-            <button onclick="avtUsarConsumivel(${i.id},'${nomeSafe}')" style="background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.22);border-radius:5px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.58rem;padding:4px 8px;cursor:pointer;flex-shrink:0">Usar</button>
-          </div>`;
-        }).join('')}
-      </div>`;
-    }
-  }
+  if (char) html += (typeof avtInvRenderConsumiveisHud === 'function' ? avtInvRenderConsumiveisHud(char) : '');
 
   // ── 8. Habilidades (aprimoradas) ───────────────────────────────
   if (skills.length) {
@@ -11513,22 +11372,26 @@ async function avtAbrirBau(bauId) {
     mostrarToast(`📦 Baú: +${bau.ouro} ouro!`, 'sucesso');
   }
 
-  // Add items to inventario
+  // Add items to inventario and sync to AVT_INV
   for (const item of loot) {
     if (!item.item_catalog_id && !item.id) continue;
     const itemId = item.item_catalog_id || item.id;
-    await _avtSb('inventario', {
-      method: 'POST',
-      headers: { 'Prefer': 'return=minimal' },
-      body: JSON.stringify({
-        rpg_id: AVT_STATE.rpgId,
-        character_id: char.id,
-        personagem_nome: char.nome,
-        item_catalog_id: itemId,
-        quantidade: item.quantidade || 1,
-        origem: 'bau',
-      })
-    }).catch(()=>{});
+    if (typeof avtInvDarItem === 'function') {
+      await avtInvDarItem(char.id, itemId, item.quantidade || 1).catch(() => {});
+    } else {
+      await _avtSb('inventario', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          rpg_id: AVT_STATE.rpgId,
+          character_id: char.id,
+          personagem_nome: char.nome,
+          item_catalog_id: itemId,
+          quantidade: item.quantidade || 1,
+          origem: 'bau',
+        })
+      }).catch(() => {});
+    }
   }
 
   if (loot.length) mostrarToast(`📦 Baú aberto! ${loot.length} item(ns) adicionado(s) ao inventário`, 'sucesso');
@@ -14038,39 +13901,16 @@ function _avtMpConteudoAba() {
       const selChar = AVT_STATE._itensCharSel || '';
       const filtroTipo = AVT_STATE._itensFiltroTipo || '';
       const charSel = chars.find(c => c.nome === selChar) || null;
-      const invChar = (typeof INV !== 'undefined' && charSel)
-        ? (INV.inventario || []).filter(i => i.character_id === charSel.id)
-        : [];
-      const itemDefs = typeof INV !== 'undefined' ? (INV.itemDefs || catalog) : catalog;
       const catalogFiltrado = filtroTipo ? catalog.filter(i => i.tipo === filtroTipo) : catalog;
       const ouroAtual = charSel?.custom_attrs?.ouro ?? 0;
       const rd = AVT_STATE.dungeon?.render_data;
       const bausMap = (rd?.objetos || []).filter(o => o.tipo === 'bau' || o.tipo === 'chest');
       const bausPre = AVT_STATE._bausPreDungeon || [];
-      const pendentes = typeof INV !== 'undefined' ? (INV.usosPendentes || []) : [];
-      const SLOTS_LBL = {arma_principal:{l:'Arma',i:'⚔'},arma_secundaria:{l:'Escudo',i:'🗡'},cabeca:{l:'Cabeça',i:'🪖'},corpo:{l:'Corpo',i:'🥋'},maos:{l:'Mãos',i:'🧤'},pernas:{l:'Pernas',i:'👖'},pes:{l:'Pés',i:'👢'},anel:{l:'Anel',i:'💍'},amuleto:{l:'Amuleto',i:'📿'},capa:{l:'Capa',i:'🧣'}};
-      const RAR_COR = {comum:'#888',incomum:'#2ecc71',raro:'#3498db',epico:'#9b59b6',lendario:'#f39c12'};
-      const consumiveis = invChar.filter(i => { const d = itemDefs.find(d => d.id === (i.item_catalog_id||i.item_def_id)); return d?.tipo === 'consumivel'; });
-      const equipSoltos = invChar.filter(i => { const d = itemDefs.find(d => d.id === (i.item_catalog_id||i.item_def_id)); return d?.tipo === 'equipamento' && !i.equipado; });
-      const misc = invChar.filter(i => { const d = itemDefs.find(d => d.id === (i.item_catalog_id||i.item_def_id)); return d && d.tipo !== 'consumivel' && d.tipo !== 'equipamento' && !i.equipado; });
-      const slotsEquipados = invChar.filter(i => i.equipado && i.slot_equipado);
       const charSelectHtml = `<select onchange="AVT_STATE._itensCharSel=this.value;_avtMestrePainelRender()"
         style="width:100%;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;margin-bottom:8px">
         <option value="">— Escolher personagem —</option>
         ${chars.map(c=>`<option value="${c.nome.replace(/"/g,'&quot;')}" ${selChar===c.nome?'selected':''}>${c.nome}</option>`).join('')}
       </select>`;
-      const slotsHtml = Object.entries(SLOTS_LBL).map(([slot, {l, i}]) => {
-        const eqItem = slotsEquipados.find(e => e.slot_equipado === slot);
-        const def = eqItem ? itemDefs.find(d => d.id === (eqItem.item_catalog_id||eqItem.item_def_id)) : null;
-        const rarBorder = def ? (RAR_COR[def.raridade]||'#888') : 'rgba(79,163,209,0.12)';
-        const nomeSafe = (charSel?.nome||'').replace(/'/g,"\\'");
-        return `<div style="padding:5px 6px;background:${def?'rgba(79,163,209,0.06)':'rgba(79,163,209,0.02)'};border:1px solid ${rarBorder};border-radius:5px;min-width:0">
-          <div style="font-size:0.55rem;color:#7a92aa;margin-bottom:2px">${i} ${l}</div>
-          ${def ? `<div style="font-size:0.62rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${def.nome}">${def.icone||'📦'} ${def.nome}</div>
-            <button onclick="_avtMestreDesequiparSlotChar('${nomeSafe}','${slot}')" style="margin-top:2px;width:100%;background:none;border:1px solid rgba(200,168,75,0.15);border-radius:3px;color:#7a92aa;font-size:0.52rem;cursor:pointer;padding:1px 0">↩ Remover</button>`
-          : `<div style="font-size:0.58rem;color:#444">vazio</div>`}
-        </div>`;
-      }).join('');
       return `
       <div class="avt-mp-secao">
         <div class="avt-mp-label">🎁 Dar Item ao Personagem</div>
@@ -14135,67 +13975,7 @@ function _avtMpConteudoAba() {
       <div class="avt-mp-secao">
         <div class="avt-mp-label">🎒 Inventário do Personagem</div>
         ${charSelectHtml}
-        ${charSel ? (invChar.length === 0 ? `
-        <div class="avt-mp-hint">Inventário vazio ou não carregado.
-          <button class="avt-mp-btn" style="padding:2px 8px;font-size:0.65rem;margin-left:6px"
-            onclick="_avtMestreCarregarInvChar('${charSel.id.replace(/'/g,"\\'")}','${(charSel.nome||'').replace(/'/g,"\\'")}')">↺ Carregar</button>
-        </div>
-        ` : `
-        ${slotsEquipados.length ? `
-        <div style="margin-bottom:8px">
-          <div style="font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">⚔ Slots Equipados</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">${slotsHtml}</div>
-        </div>
-        ` : `<div style="font-size:0.62rem;color:#555;margin-bottom:6px;font-style:italic">Nenhum slot equipado.</div>`}
-        ${equipSoltos.length ? `
-        <div style="margin-bottom:8px">
-          <div style="font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">🗃 Equipamentos (guardados)</div>
-          ${equipSoltos.map(i => {
-            const def = itemDefs.find(d => d.id === (i.item_catalog_id||i.item_def_id));
-            if (!def) return '';
-            return `<div style="display:flex;align-items:center;gap:6px;padding:4px 7px;background:rgba(79,163,209,0.03);border:1px solid rgba(79,163,209,0.08);border-radius:5px;margin-bottom:3px">
-              <span style="font-size:0.9rem">${def.icone||'📦'}</span>
-              <span style="flex:1;font-size:0.68rem;color:#c8d8e8">${def.nome}</span>
-              <button onclick="_avtMestreRemoverItemChar('${String(i.id).replace(/'/g,"\\'")}','${(charSel.nome||'').replace(/'/g,"\\'")}',true)"
-                style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.8rem;padding:0">✕</button>
-            </div>`;
-          }).join('')}
-        </div>
-        ` : ''}
-        ${consumiveis.length ? `
-        <div style="margin-bottom:8px">
-          <div style="font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">🧪 Consumíveis</div>
-          ${consumiveis.map(i => {
-            const def = itemDefs.find(d => d.id === (i.item_catalog_id||i.item_def_id));
-            if (!def) return '';
-            return `<div style="display:flex;align-items:center;gap:6px;padding:4px 7px;background:rgba(79,163,209,0.03);border:1px solid rgba(79,163,209,0.08);border-radius:5px;margin-bottom:3px">
-              <span style="font-size:0.9rem">${def.icone||'📦'}</span>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:0.68rem;color:#c8d8e8">${def.nome}</div>
-                <div style="font-size:0.58rem;color:#7a92aa">×${i.quantidade||1}</div>
-              </div>
-              <button onclick="_avtMestreRemoverItemChar('${String(i.id).replace(/'/g,"\\'")}','${(charSel.nome||'').replace(/'/g,"\\'")}',true)"
-                style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.8rem;padding:0">✕</button>
-            </div>`;
-          }).join('')}
-        </div>
-        ` : ''}
-        ${misc.length ? `
-        <div>
-          <div style="font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">📦 Outros</div>
-          ${misc.map(i => {
-            const def = itemDefs.find(d => d.id === (i.item_catalog_id||i.item_def_id));
-            if (!def) return '';
-            return `<div style="display:flex;align-items:center;gap:6px;padding:4px 7px;background:rgba(79,163,209,0.03);border:1px solid rgba(79,163,209,0.08);border-radius:5px;margin-bottom:3px">
-              <span style="font-size:0.9rem">${def.icone||'📦'}</span>
-              <span style="flex:1;font-size:0.68rem;color:#c8d8e8">${def.nome} ×${i.quantidade||1}</span>
-              <button onclick="_avtMestreRemoverItemChar('${String(i.id).replace(/'/g,"\\'")}','${(charSel.nome||'').replace(/'/g,"\\'")}',true)"
-                style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.8rem;padding:0">✕</button>
-            </div>`;
-          }).join('')}
-        </div>
-        ` : ''}
-        `) : `<div class="avt-mp-hint">Selecione um personagem para ver o inventário.</div>`}
+        ${charSel ? (typeof avtInvRenderMestreInv === 'function' ? avtInvRenderMestreInv(charSel.nome) : '') : '<div class="avt-mp-hint">Selecione um personagem para ver o inventário.</div>'}
       </div>
 
       <div class="avt-mp-secao">
@@ -14236,31 +14016,7 @@ function _avtMpConteudoAba() {
         ` : ''}
       </div>
 
-      ${pendentes.length ? `
-      <div class="avt-mp-secao">
-        <div class="avt-mp-label">⏳ Aprovações Pendentes</div>
-        <div class="avt-mp-hint" style="margin-bottom:6px">Jogadores solicitaram uso desses itens.</div>
-        ${pendentes.map(uso => {
-          const item = (typeof INV !== 'undefined' ? INV.itemDefs : []).find(d => d.id === uso.item_catalog_id);
-          const safe = String(uso.id).replace(/'/g,"\\'");
-          return `<div style="padding:8px;border:1px solid rgba(79,163,209,0.15);border-radius:6px;margin-bottom:6px">
-            <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
-              <span style="font-size:1rem">${item?.icone||'📦'}</span>
-              <div style="flex:1">
-                <div style="font-size:0.7rem;color:#c8d8e8">${item?.nome||uso.item_nome||'Item'}</div>
-                <div style="font-size:0.6rem;color:#7a92aa">${uso.personagem_nome||''}</div>
-              </div>
-            </div>
-            <div style="display:flex;gap:6px">
-              <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1;padding:3px 8px;font-size:0.68rem"
-                onclick="if(typeof aprovarUsoItem==='function')aprovarUsoItem('${safe}');_avtMestrePainelRender()">✅ Aprovar</button>
-              <button class="avt-mp-btn avt-mp-btn-danger" style="flex:1;padding:3px 8px;font-size:0.68rem"
-                onclick="if(typeof rejeitarUsoItem==='function')rejeitarUsoItem('${safe}');_avtMestrePainelRender()">✕ Rejeitar</button>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-      ` : ''}`;
+`;
     }
 
     case 'campanha': {
