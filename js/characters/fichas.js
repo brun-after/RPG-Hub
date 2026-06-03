@@ -536,12 +536,16 @@ async function renderFichaView(nome) {
   const secAparencia = _fichasSecAparencia(c, ca, cor, podEditar);
   const secPersonagem = _fichasSecPersonagem(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp_max, nivel_maximo);
   const secAtributos = _fichasSecAtributos(c, ca, cor, podEditar, isMestre);
+  const secInvocacoes = (typeof renderSecaoInvocacoes === 'function')
+    ? renderSecaoInvocacoes(c, ca, isMestre, podEditar)
+    : '<div style="color:var(--suave);font-style:italic;font-size:0.82rem;padding:6px 0">Módulo de invocações não carregado.</div>';
 
   container.innerHTML =
-    _fichasAccordion('aparencia', '🎨 Aparência', secAparencia, aparenciaAberta) +
-    _fichasAccordion('personagem', '👤 Personagem', secPersonagem, true) +
-    _fichasAccordion('atributos', '📊 Atributos', secAtributos, true) +
-    _fichasAccordion('inventario', '🎒 Inventário', '<div style="color:var(--suave);font-style:italic;font-size:0.82rem;padding:6px 0">Carregando…</div>', false);
+    _fichasAccordion('aparencia',  '🎨 Aparência',   secAparencia,   aparenciaAberta) +
+    _fichasAccordion('personagem', '👤 Personagem',  secPersonagem,  true) +
+    _fichasAccordion('atributos',  '📊 Atributos',   secAtributos,   true) +
+    _fichasAccordion('invocacoes', '🔮 Invocações',  secInvocacoes,  false) +
+    _fichasAccordion('inventario', '🎒 Inventário',  '<div style="color:var(--suave);font-style:italic;font-size:0.82rem;padding:6px 0">Carregando…</div>', false);
 
   // Montar canvas animado para personagens com aparência animada
   requestAnimationFrame(() => { window._animScheduleTokenMount?.(true); });
