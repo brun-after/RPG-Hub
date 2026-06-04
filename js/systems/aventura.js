@@ -17656,10 +17656,11 @@ function _avtSkmRenderEfeitos() {
     {v:'hot',l:'💚 HOT'},{v:'cura',l:'✨ Cura'},{v:'teleporte',l:'🌀 Teleporte'},
     {v:'teleporte_alvo',l:'🎯 Teleporte ao Alvo'},{v:'avatar',l:'👥 Avatar'},
     {v:'fantasma',l:'👻 Fantasma'},{v:'atravessar',l:'🧱 Atravessar'},
+    {v:'necromante',l:'☠ Necromante'},
   ];
   const inpSt = 'padding:3px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem';
   cont.innerHTML = _AVT_SK_MODAL.efeitos.map((ef,i)=>{
-    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar','fantasma','atravessar'].includes(ef.tipo);
+    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar','fantasma','atravessar','necromante'].includes(ef.tipo);
     return `<div style="padding:7px 8px;margin-bottom:6px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:6px">
       <div style="display:flex;gap:5px;align-items:center;margin-bottom:2px">
         <select onchange="_AVT_SK_MODAL.efeitos[${i}].tipo=this.value;_avtSkmRenderEfeitos()" style="${inpSt};flex:1">
@@ -17675,6 +17676,11 @@ function _avtSkmRenderEfeitos() {
       ${ef.tipo==='hot' ? _avtSkmMiniDiceBuilderHTML(i,'hot','💚 Cura por turno (fórmula de dados)') : ''}
       ${ef.tipo==='cura' ? _avtSkmMiniDiceBuilderHTML(i,'cura','✨ Cura instântanea (fórmula de dados)') : ''}
       ${ef.tipo==='avatar' ? _avtSkmMiniDiceBuilderHTML(i,'avatar','👥 Hits para destruir o avatar (fórmula de dados)') : ''}
+      ${ef.tipo==='necromante' ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+        <span style="font-size:0.65rem;color:#8e44ad">Cor do dominado:</span>
+        <input type="color" value="${ef.cor_dominado||'#8e44ad'}" oninput="_AVT_SK_MODAL.efeitos[${i}].cor_dominado=this.value"
+          style="width:32px;height:22px;padding:1px;border:1px solid rgba(142,68,173,0.4);border-radius:3px;background:#0a0f18;cursor:pointer">
+      </div>` : ''}
     </div>`;
   }).join('') || '<div style="font-size:0.72rem;color:#7a92aa;font-style:italic">Nenhum efeito.</div>';
 
