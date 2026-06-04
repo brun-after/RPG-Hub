@@ -6528,10 +6528,15 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
           _avtAplicarDanoPersistir(alvoProcOoc, alvoProcOoc.hp);
           _avtMostrarCuraAcimaDaHead(alvoProcOoc, valorCura);
           try { _avtBroadcast('avt_hp_update', { nome: alvoProcOoc.nome, hp: alvoProcOoc.hp, hpMax: alvoProcOoc.hpMax }); } catch(_) {}
-        } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar'].includes(ef.tipo)) {
+        } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar','necromante'].includes(ef.tipo)) {
           if (!alvoProcOoc.status_effects) alvoProcOoc.status_effects = [];
           const _oocEfPa = {...ef, _turnos_restantes: ef.duracao_turnos??1,
-            expiry_ms: Date.now() + (ef.duracao_turnos??1)*cooldownEfMs, _ooc:true};
+            expiry_ms: Date.now() + (ef.duracao_turnos??1)*cooldownEfMs, _ooc:true,
+            _casterNome: jogador.nome,
+            _casterId: jogador.id,
+            _skillEfeitos: sk?.efeitos_bonus || [],
+            _formulaAtaque: sk?.formula_dano || '1d6',
+          };
           alvoProcOoc.status_effects.push(_oocEfPa);
           if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
           AVT_STATE._oocStatusEffects.push({entId: alvoProcOoc.id, entNome: alvoProcOoc.nome, ef: {..._oocEfPa}, lastTickAt: Date.now()});
@@ -6554,24 +6559,28 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
 
     if (ini.hp <= 0) {
       // Inimigo morreu no primeiro ataque — sem combate
-      _avtLog(`💀 ${ini.nome} abatido antes do combate começar!`);
-      mostrarToast(`✦ ${ini.nome} derrotado! XP concedido.`, 'sucesso');
-      const xpBase = ini.xpBase ?? 10;
-      const vezesMorto = ini.vezes_morto || 0;
-      const xpFinal = Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)));
-      const myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
-      if (myChar) {
-        myChar.xp = (myChar.xp || 0) + xpFinal;
-        mostrarToast(`✦ ${jogador.nome} +${xpFinal} XP`, 'sucesso');
-        if (jogador.nome === AVT_STATE.myCharNome) _avtMostrarXpFloat(xpFinal);
-        if (myChar.id) {
-          _avtSb('characters?id=eq.' + encodeURIComponent(myChar.id), {
-            method: 'PATCH', body: JSON.stringify({ xp: myChar.xp })
-          }).catch(()=>{});
+      // Verificar se será dominado pelo Necromante antes de conceder XP/toast de morte
+      const _efNecroOoc = (ini.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
+      if (!_efNecroOoc) {
+        _avtLog(`💀 ${ini.nome} abatido antes do combate começar!`);
+        mostrarToast(`✦ ${ini.nome} derrotado! XP concedido.`, 'sucesso');
+        const xpBase = ini.xpBase ?? 10;
+        const vezesMorto = ini.vezes_morto || 0;
+        const xpFinal = Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)));
+        const myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
+        if (myChar) {
+          myChar.xp = (myChar.xp || 0) + xpFinal;
+          mostrarToast(`✦ ${jogador.nome} +${xpFinal} XP`, 'sucesso');
+          if (jogador.nome === AVT_STATE.myCharNome) _avtMostrarXpFloat(xpFinal);
+          if (myChar.id) {
+            _avtSb('characters?id=eq.' + encodeURIComponent(myChar.id), {
+              method: 'PATCH', body: JSON.stringify({ xp: myChar.xp })
+            }).catch(()=>{});
+          }
+          _avtAutoLevelUp(myChar);
         }
-        _avtAutoLevelUp(myChar);
       }
-      _avtNpcMorreu(ini, null); // escondido, vezes_morto, broadcast, drop, respawn
+      _avtNpcMorreu(ini, null); // escondido ou dominado por necromante
       _avtCancelarPerseguicao(ini.id);
     } else {
       // Sobreviveu — colocar em perseguição (não inicia combate diretamente)
@@ -8133,7 +8142,7 @@ async function _avtAutoLevelUp(char) {
 function _avtNpcMorreu(npcEnt, bat) {
   if (!npcEnt || npcEnt.escondido) return;
   // Se o NPC tem efeito Necromante ativo e ainda não está dominado, dominar em vez de matar
-  if (!npcEnt._dominado && bat) {
+  if (!npcEnt._dominado) {
     const efNecro = (npcEnt.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
     if (efNecro) { _avtNecromanteDominar(npcEnt, efNecro, bat); return; }
   }
@@ -8210,19 +8219,21 @@ function _avtNecromanteDominar(npcEnt, efNecro, bat) {
   AVT_STATE.invocacoes_ativas = AVT_STATE.invocacoes_ativas || [];
   AVT_STATE.invocacoes_ativas.push(invAtiva);
 
-  // Sincronizar na iniciativa da batalha
-  const initEntry = bat.iniciativa.find(e => e.id === npcEnt.id);
-  if (initEntry) {
-    initEntry.tipo          = 'invocado';
-    initEntry.hp            = hpNecro;
-    initEntry.hpMax         = hpNecro;
-    initEntry.cor           = corDominado;
-    initEntry.status_effects = [{ ...efDominado }];
-    initEntry._dominado     = true;
+  // Sincronizar na iniciativa da batalha (se houver)
+  if (bat) {
+    const initEntry = bat.iniciativa.find(e => e.id === npcEnt.id);
+    if (initEntry) {
+      initEntry.tipo          = 'invocado';
+      initEntry.hp            = hpNecro;
+      initEntry.hpMax         = hpNecro;
+      initEntry.cor           = corDominado;
+      initEntry.status_effects = [{ ...efDominado }];
+      initEntry._dominado     = true;
+    }
+    _avtBroadcastBatalha(bat);
   }
 
   try { _avtBroadcast('avt_hp_update', { nome: npcEnt.nome, hp: hpNecro, hpMax: hpNecro }); } catch(_) {}
-  _avtBroadcastBatalha(bat);
   _avtLog(`☠ ${npcEnt.nome} dominado por Necromante! HP:${hpNecro} Dur:${duracaoT}t dono:${donoNome}`, bat?.id);
   mostrarToast(`☠ ${npcEnt.nome} ressuscitado como aliado! (${hpNecro} HP, ${duracaoT}t)`, 'ok');
 }
