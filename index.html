@@ -2034,6 +2034,16 @@ Resistência elemental:
             </div>
           </div>
         </div>
+        <!-- Necromante (domina o inimigo ao matar) -->
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#8e44ad;cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="sef-necro-on" onchange="skToggleNecroFields()" style="accent-color:#8e44ad"> ☠ Necromante (domina o inimigo ao matar)
+        </label>
+        <div id="sef-necro-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="form-group"><label>Duração (turnos)</label><input type="number" id="sef-necro-turnos" min="1" value="3" style="text-align:center"></div>
+            <div class="form-group"><label>Cor do dominado</label><input type="color" id="sef-necro-cor" value="#8e44ad" style="width:100%;height:34px;padding:2px;border:1px solid var(--borda);border-radius:4px;background:var(--painel);cursor:pointer"></div>
+          </div>
+        </div>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button onclick="skConfirmarEfeito()" style="flex:1;padding:8px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">✓ Confirmar Efeito</button>
           <button onclick="skCancelarEfeito()" style="padding:8px 14px;background:transparent;border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">Cancelar</button>

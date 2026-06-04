@@ -2085,6 +2085,7 @@ function skToggleMovFields()   { document.getElementById('sef-mov-fields').style
 function skToggleAtkFields()   { document.getElementById('sef-atk-fields').style.display   = document.getElementById('sef-atk-on').checked   ? 'block' : 'none'; }
 function skToggleDebFields()   { document.getElementById('sef-deb-fields').style.display   = document.getElementById('sef-deb-on').checked   ? 'block' : 'none'; }
 function skToggleSefFields(tipo) { const el = document.getElementById('sef-' + tipo + '-fields'); const cb = document.getElementById('sef-' + tipo + '-on'); if (el && cb) el.style.display = cb.checked ? 'block' : 'none'; }
+function skToggleNecroFields() { const el = document.getElementById('sef-necro-fields'); if (el) el.style.display = document.getElementById('sef-necro-on').checked ? 'block' : 'none'; }
 
 function skAlvoTipoChange() {
   const v = document.getElementById('sk-alvo-tipo').value;
@@ -2158,8 +2159,8 @@ function skAbrirFormEfeito() {
     if (lastBtn && lastBtn.parentNode) lastBtn.parentNode.insertBefore(divU, lastBtn);
     else form.appendChild(divU);
   }
-  const fields = ['sef-stun-fields','sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields','sef-imune-fields','sef-delayed-fields'];
-  const checks = ['sef-stun-on','sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-imune-on','sef-delayed-on','sef-alvo-usuario'];
+  const fields = ['sef-stun-fields','sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields','sef-imune-fields','sef-delayed-fields','sef-necro-fields'];
+  const checks = ['sef-stun-on','sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-imune-on','sef-delayed-on','sef-alvo-usuario','sef-necro-on'];
   const inputs = ['sef-nome','sef-dot-formula','sef-hot-formula','sef-rec-atributo','sef-rec-formula'];
   fields.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
   checks.forEach(id => { const el = document.getElementById(id); if(el) el.checked=false; });
@@ -2176,6 +2177,8 @@ function skAbrirFormEfeito() {
   document.getElementById('sef-atk-tipo').value    = 'todos';
   document.getElementById('sef-deb-mod').value     = -3;
   document.getElementById('sef-deb-turnos').value  = 2;
+  const _sefNecroTurnos = document.getElementById('sef-necro-turnos'); if (_sefNecroTurnos) _sefNecroTurnos.value = 3;
+  const _sefNecroCor = document.getElementById('sef-necro-cor'); if (_sefNecroCor) _sefNecroCor.value = '#8e44ad';
   document.getElementById('sk-efeito-form').style.display = 'block';
 }
 
@@ -2275,6 +2278,12 @@ function skConfirmarEfeito() {
   if (document.getElementById('sef-alvo-usuario')?.checked) {
     efeito.alvo = 'usuario';
   }
+  // Necromante (domina o inimigo ao matar)
+  if (document.getElementById('sef-necro-on')?.checked) {
+    efeito.tipo          = 'necromante';
+    efeito.duracao_turnos = parseInt(document.getElementById('sef-necro-turnos')?.value) || 3;
+    efeito.cor_dominado  = document.getElementById('sef-necro-cor')?.value || '#8e44ad';
+  }
   SK_EFEITOS_TEMP.push(efeito);
   skRenderEfeitosLista();
   document.getElementById('sk-efeito-form').style.display = 'none';
@@ -2309,6 +2318,7 @@ function skRenderEfeitosLista() {
     if (ef.boost_dano)        tags.push({ txt: `⚡ Dano +${ef.boost_dano}×${ef.boost_dano_turnos}t`,cor: '#f0cc6a' });
     if (ef.rec_atributo)      tags.push({ txt: `🔷 ${ef.rec_atributo} ${ef.rec_formula}${ef.rec_modo==='turno'?'×'+ef.rec_turnos+'t':' (imediato)'}`, cor: '#b07ef0' });
     if (ef.imune_dano)        tags.push({ txt: `🛡 Imune ${ef.imune_dano_turnos}t`, cor: '#f0cc6a' });
+    if (ef.tipo === 'necromante') tags.push({ txt: `☠ Necromante ${ef.duracao_turnos}t`, cor: ef.cor_dominado || '#8e44ad' });
     if (ef.tipo === 'mover_usuario') {
       const destLbl = { escolha_livre:'clique no mapa', adjacente_alvo:'adj. ao alvo', trocar_com_alvo:'troca c/ alvo' }[ef.mover_destino] || ef.mover_destino;
       tags.push({ txt: `🌀 Move usuário: ${destLbl}${ef.mover_destino === 'escolha_livre' ? ' ('+ef.mover_distancia+'cel)' : ''}`, cor: '#7ec8f0' });
