@@ -16,6 +16,8 @@ var AVT_STATE = {
   batalhas: [],           // Array of active combat objects (multiple simultaneous combats)
   globalLog: [],           // Log de eventos fora de combate (perseguição, entrada em fase, etc.)
   batalhaAutoSuspensa: false,
+  _jogoAutoSuspenso: false,       // pause automático por inatividade de todos os jogadores
+  _jogoAutoSuspensoPausadoEm: 0,
   alvoSelecionado: null,   // entId do alvo selecionado pelo clique no canvas
   _fleeTracker: {},        // { entId: { pursuing, prevDist } }
   _primeiroAtaqueAlvo: null,      // legado — mantido para compat com avtCombateEncerrar
@@ -2729,8 +2731,17 @@ function _avtPopularEntidades() {
       id: c.id || c.nome, nome: c.nome, tipo: 'jogador',
       x: sx, y: sy, renderX: sx, renderY: sy, _velocidadeLerp: null, _waypoints: [],
       hp: _hpAtualJ, hpMax: _hpMaxJ, cor: col, dbId: c.id,
-      presetTipo: temAparencia ? null : 'npc_generico'
+      presetTipo: temAparencia ? null : 'npc_generico',
+      _charOffline: false
     });
+    // Esconder personagem se o jogador vinculado estiver offline (somente em sessão multiplayer)
+    if (AVT_STATE.membros?.length && c.nome !== AVT_STATE.myCharNome) {
+      const _ent = AVT_STATE.entidades[AVT_STATE.entidades.length - 1];
+      if (!_avtJogadorEstaOnline(c.nome)) {
+        _ent.escondido = true;
+        _ent._charOffline = true;
+      }
+    }
   });
 
   // Populate enemies for this dungeon
@@ -3228,7 +3239,11 @@ function _avtRenderFrame() {
     AVT_STATE.entidades
       .filter(e => e.tipo === 'jogador' && e.hp > 0 && !_avtBatalhaDeEnt(e.id))
       .forEach(j => { try { _avtCheckProximidadeInimigos(j); } catch(_) {} });
+    // Inatividade geral e visibilidade de chars offline
+    try { _avtVerificarInatividade(); } catch(_) {}
+    try { _avtAtualizarVisibilidadeOffline(); } catch(_) {}
     // Mostrar lista de skills para o jogador local se inimigo estiver próximo
+    // (a própria função redireciona ao auto-ataque quando aplicável — ver _avtCheckPrimeiroAtaque)
     try { _avtCheckPrimeiroAtaque(); } catch(_) {}
     // Auto-ataque básico periódico para jogador parado (complementa o trigger por movimento)
     const _jLocalAuto = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
@@ -5650,6 +5665,102 @@ function _avtPersonagemCombateAtivo(charNome) {
   return agora - ts < 120000;
 }
 
+// Verifica se o jogador vinculado a charNome está online (visto nos últimos 2 min)
+function _avtJogadorEstaOnline(charNome) {
+  const membro = (AVT_STATE.membros || []).find(m => m.linked === charNome);
+  if (!membro) return false;
+  const ts = ((typeof CHAT !== 'undefined' && CHAT._lastSeenAll) || {})[membro.nickname] || 0;
+  return Date.now() - ts < 120000;
+}
+window._avtJogadorEstaOnline = _avtJogadorEstaOnline;
+
+// Atualiza visibilidade de personagens vinculados a jogadores offline/online
+function _avtAtualizarVisibilidadeOffline() {
+  if (!AVT_STATE.membros?.length) return;
+  const d = AVT_STATE.dungeonData || AVT_STATE.dungeon;
+  AVT_STATE.entidades.filter(e => e.tipo === 'jogador').forEach(e => {
+    const online = _avtJogadorEstaOnline(e.nome);
+    const mestroControlando = AVT_STATE.npcControlando === e.id;
+    const ehMeuPersonagem = e.nome === AVT_STATE.myCharNome;
+    if (!online && !mestroControlando && !ehMeuPersonagem) {
+      if (!e.escondido) {
+        e.escondido = true;
+        e._charOffline = true;
+      }
+    } else if (e._charOffline && (online || mestroControlando || ehMeuPersonagem)) {
+      e.escondido = false;
+      e._charOffline = false;
+      // Posicionar no spawn se não tiver posição salva no DB
+      const dbChar = AVT_STATE.chars.find(c => c.id === e.dbId || c.nome === e.nome);
+      const ca = dbChar?.custom_attrs || {};
+      if (typeof ca.avt_x !== 'number') {
+        const spawns = d?._spawnJogadores;
+        const idx = AVT_STATE.entidades.filter(j => j.tipo === 'jogador').indexOf(e);
+        const sp = spawns?.[idx] || spawns?.[0];
+        const rooms = d?.rooms?.length ? d.rooms : (typeof _avtDetectarSalas === 'function' ? _avtDetectarSalas(d) : [{ x: 1, y: 1 }]);
+        e.x = sp ? sp.x + (idx % 3) : (rooms[0]?.x || 1) + 1 + (idx % 3);
+        e.y = sp ? sp.y + Math.floor(idx / 3) : (rooms[0]?.y || 1) + 1 + Math.floor(idx / 3);
+        e.renderX = e.x; e.renderY = e.y;
+      }
+    }
+  });
+}
+window._avtAtualizarVisibilidadeOffline = _avtAtualizarVisibilidadeOffline;
+
+// Banner visual de pausa automática por inatividade
+function _avtRenderBannerPausa(show) {
+  let banner = document.getElementById('avt-inatividade-banner');
+  if (!show) { if (banner) banner.remove(); return; }
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'avt-inatividade-banner';
+    banner.style.cssText = [
+      'position:fixed', 'top:50%', 'left:50%', 'transform:translate(-50%,-50%)',
+      'z-index:9500', 'background:rgba(5,8,16,0.92)', 'border:1px solid rgba(79,163,209,0.4)',
+      'border-radius:12px', 'padding:18px 28px', 'text-align:center',
+      'color:#e8eef5', 'font:600 14px/1.5 system-ui,sans-serif',
+      'box-shadow:0 4px 32px rgba(0,0,0,.7)', 'pointer-events:none'
+    ].join(';');
+    banner.innerHTML = '<div style="font-size:2rem;margin-bottom:8px">⏸</div>' +
+      '<div>Jogo pausado</div>' +
+      '<div style="font-size:11px;color:#7a92aa;margin-top:4px">Aguardando jogadores…</div>';
+    document.body.appendChild(banner);
+  }
+}
+window._avtRenderBannerPausa = _avtRenderBannerPausa;
+
+// Verifica inatividade geral e suspende/retoma o jogo automaticamente
+function _avtVerificarInatividade() {
+  const membros = AVT_STATE.membros || [];
+  const chars   = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0);
+  // Somente em sessão multiplayer com membros vinculados
+  if (!chars.length || !membros.length) return;
+  const algumVinculado = chars.some(e => membros.some(m => m.linked === e.nome));
+  if (!algumVinculado) return;
+
+  const agora = Date.now();
+  const lastSeen = (typeof CHAT !== 'undefined' && CHAT._lastSeenAll) || {};
+
+  const algumAtivo = chars.some(e => {
+    const membro = membros.find(m => m.linked === e.nome);
+    if (!membro) return false;
+    const ts = lastSeen[membro.nickname] || 0;
+    return agora - ts < 120000;
+  });
+
+  if (!algumAtivo && !AVT_STATE._jogoAutoSuspenso) {
+    AVT_STATE._jogoAutoSuspenso = true;
+    AVT_STATE._jogoAutoSuspensoPausadoEm = agora;
+    if (typeof mostrarToast === 'function') mostrarToast('⏸ Jogo pausado por inatividade', 'aviso', 0);
+    _avtRenderBannerPausa(true);
+  } else if (algumAtivo && AVT_STATE._jogoAutoSuspenso) {
+    AVT_STATE._jogoAutoSuspenso = false;
+    if (typeof mostrarToast === 'function') mostrarToast('▶ Jogo retomado', 'ok', 2000);
+    _avtRenderBannerPausa(false);
+  }
+}
+window._avtVerificarInatividade = _avtVerificarInatividade;
+
 // Returns the entity the current user controls (their assigned character, or any player if master active)
 function _avtMeuJogador() {
   // Prefer linked character (works for master and player alike)
@@ -5939,7 +6050,26 @@ function _avtCheckPrimeiroAtaque() {
     !AVT_STATE._inimigosIgnorados.includes(e.id) &&
     Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlcance
   );
-  if (temInimigo) _avtMostrarPrimeiroAtaqueModal(jogador);
+  if (temInimigo) {
+    // Se há inimigo EM PERSEGUIÇÃO dentro do alcance do ataque básico e sem cooldown,
+    // disparar auto-ataque diretamente em vez de abrir o seletor manual de skills.
+    const _defAbCk = _avtDefaultAtaqueBasico(jogador.classe_aventura);
+    const _dbCharCk = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
+    const _alcBasico = _dbCharCk?.custom_attrs?.ataque_basico?.alcance_celulas ?? _defAbCk.alcance_celulas;
+    const _abKeyCk = (jogador.id || jogador.nome) + '_basico';
+    const _emCooldownCk = (AVT_STATE._oocCooldowns[_abKeyCk] || 0) > Date.now();
+    const _temPursuingEmAlcance = !_emCooldownCk && AVT_STATE.entidades.some(e => {
+      if (e.tipo !== 'inimigo' || e.hp <= 0 || e.escondido) return false;
+      const t = AVT_STATE.npcTimers[e.id];
+      if (!t?.isPursuing) return false;
+      return Math.max(Math.abs(Math.round(e.x) - jogador.x), Math.abs(Math.round(e.y) - jogador.y)) <= _alcBasico;
+    });
+    if (_temPursuingEmAlcance) {
+      _avtVerificarAutoAtaqueBasico(jogador);
+      return;
+    }
+    _avtMostrarPrimeiroAtaqueModal(jogador);
+  }
 }
 
 // Enquadra câmera para mostrar o jogador e o inimigo mais próximo
@@ -6614,6 +6744,7 @@ window.avtReceberPrimeiroAtaque = avtReceberPrimeiroAtaque;
 
 function _avtCheckProximidadeInimigos(jogadorMovendo) {
   if (AVT_STATE.batalhaAutoSuspensa) return;
+  if (AVT_STATE._jogoAutoSuspenso) return;
   // Checa proximidade do jogador passado — também chamado periodicamente para jogadores parados
   if (!jogadorMovendo || _avtBatalhaDeEnt(jogadorMovendo.id)) return;
   if (!_avtPersonagemCombateAtivo(jogadorMovendo.nome)) return;
@@ -6653,6 +6784,7 @@ function _avtCheckProximidadeInimigos(jogadorMovendo) {
 
 function _avtAtualizarPaciencias(dt) {
   if (!dt) return;
+  if (AVT_STATE._jogoAutoSuspenso) return;
   for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
     if (!timer.ativo) continue;
     // Pausa paciência enquanto menu do personagem ou painel do mestre estiver aberto
@@ -6784,6 +6916,7 @@ function _avtCancelarPerseguicao(enemyId) {
 
 function _avtAtualizarPerseguicoes(dt) {
   if (!dt) return;
+  if (AVT_STATE._jogoAutoSuspenso) return;
   const velMs = Math.max(300, _avtGetVelocidadePerseguicao());
 
   // Helper: tenta retargetar para o jogador vivo mais próximo dentro do raio de detecção do NPC.
@@ -11119,11 +11252,16 @@ function _avtAtualizarUiPorRole() {
     if (_topbar) {
       if (tog.parentElement !== _topbar) _topbar.appendChild(tog);
     } else {
-      // Fallback: tenta montar topbar e re-anexar; senão, body como antes
+      // Fallback: tenta montar topbar primeiro
       try { if (typeof window._avtRenderTopbar === 'function') window._avtRenderTopbar(); } catch(_) {}
       const _tb2 = document.getElementById('avt-topbar');
-      if (_tb2) { if (tog.parentElement !== _tb2) _tb2.appendChild(tog); }
-      else if (!tog.parentElement) document.body.appendChild(tog);
+      if (_tb2) {
+        if (tog.parentElement !== _tb2) _tb2.appendChild(tog);
+      } else {
+        // Topbar ainda não existe — não criar o botão agora (será re-criado quando topbar existir)
+        if (tog.parentElement) tog.remove();
+        return;
+      }
     }
     tog.style.display = 'inline-flex';
     tog.textContent = AVT_STATE.mestreComoJogador
@@ -11150,19 +11288,32 @@ function _avtToggleModoJogador() {
     AVT_STATE.mestreReposicionando = null;
 
     if (!AVT_STATE.myCharNome) {
-      const alvo = AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0);
+      // Incluir personagens escondidos (offline) pois o mestre pode querer controlar o seu próprio
+      const alvo = AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0)
+                || AVT_STATE.entidades.find(e => e.tipo === 'jogador');
       if (alvo) {
+        // Auto-vincular para que câmera e controles funcionem imediatamente
+        AVT_STATE.myCharNome = alvo.nome;
+        // Se o personagem estava escondido (offline), torná-lo visível para o mestre controlar
+        if (alvo.escondido) { alvo.escondido = false; alvo._charOffline = false; }
         mostrarToast(`🎮 Controlando ${alvo.nome} (vincule no painel para fixar)`, 'aviso', 3500);
-      } else if (AVT_STATE.entidades.some(e => e.tipo === 'jogador')) {
-        mostrarToast('⚠️ Todos os personagens estão sem HP — vincule um no painel para controlar', 'aviso', 4000);
-        AVT_STATE.mestreComoJogador = false;
       } else {
         mostrarToast('⚠️ Nenhum personagem-jogador no mapa para controlar', 'erro', 3500);
         AVT_STATE.mestreComoJogador = false;
       }
+    } else {
+      // Garantir que o personagem vinculado esteja visível
+      const entVinculada = AVT_STATE.entidades.find(e => e.nome === AVT_STATE.myCharNome && e.tipo === 'jogador');
+      if (entVinculada?.escondido) { entVinculada.escondido = false; entVinculada._charOffline = false; }
     }
   }
   _avtAtualizarUiPorRole();
+  if (AVT_STATE.mestreComoJogador) {
+    const j = _avtMeuJogador();
+    if (j && typeof _avtCameraCenter === 'function') {
+      try { _avtCameraCenter(); } catch(_) {}
+    }
+  }
   mostrarToast(
     AVT_STATE.mestreComoJogador ? '🎭 Agora você joga como jogador' : '👑 Modo Mestre restaurado',
     'ok'
