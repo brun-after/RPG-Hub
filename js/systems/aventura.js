@@ -983,23 +983,22 @@ function _avtCriarRenderMapaSub(opcao) {
           </div>
         </div>
 
-        <!-- Passo 3: prompt de layout (opcional) -->
+        <!-- Passo 3: prompt de layout -->
         <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(200,168,75,0.15);border-radius:6px;padding:10px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-            <span style="font-size:0.72rem;color:#c8a84b;font-weight:600">3. Prompt de layout da dungeon <span style="color:#7a92aa;font-weight:400">(opcional)</span></span>
+            <span style="font-size:0.72rem;color:#c8a84b;font-weight:600">3. Prompt de layout da dungeon</span>
             <button onclick="faseTilesetCopiarPromptLayout()"
               style="padding:4px 10px;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.3);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">
               ⎘ Copiar
             </button>
           </div>
-          <div style="font-size:0.67rem;color:#7a92aa;line-height:1.5">Envie para Claude.ai ou ChatGPT <strong style="color:#c8a84b">junto com a imagem</strong> para que a IA projete salas e corredores personalizados. Se pular, o layout é gerado proceduralmente.</div>
+          <div style="font-size:0.67rem;color:#7a92aa;line-height:1.5">Envie para Claude.ai ou ChatGPT <strong style="color:#c8a84b">junto com a imagem</strong>. A IA identifica os blocos e projeta as salas, corredores e objetos.</div>
         </div>
 
         <!-- Passo 4: colar JSON -->
         <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(200,168,75,0.15);border-radius:6px;padding:10px">
-          <div style="font-size:0.72rem;color:#c8a84b;font-weight:600;margin-bottom:4px">4. Cole o JSON retornado</div>
-          <div style="font-size:0.67rem;color:#7a92aa;margin-bottom:8px;line-height:1.5">Cole o JSON da IA (com ou sem <code style="color:#c8d8e8">mapa.tiles</code>). Se o layout não vier no JSON, a dungeon é gerada automaticamente com as dimensões acima.</div>
-          <textarea id="avt-tileset-json-input" rows="6" placeholder='{"version":2,"cols":4,"rows":4,"blocos":{...}}'
+          <div style="font-size:0.72rem;color:#c8a84b;font-weight:600;margin-bottom:8px">4. Cole o JSON retornado</div>
+          <textarea id="avt-tileset-json-input" rows="6" placeholder='{"version":2,"cols":4,"rows":4,"blocos":{...},"mapa":{"tiles":[...]}}'
             style="width:100%;box-sizing:border-box;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.15);border-radius:6px;color:#c8d8e8;font-family:monospace;font-size:0.65rem;resize:vertical;line-height:1.4"
             oninput="faseTilesetHandleJSONPaste(this.value)"></textarea>
           <div id="avt-tileset-json-status" style="margin-top:4px;font-size:0.72rem"></div>
@@ -1675,7 +1674,7 @@ async function aventuraCriarSubmit() {
       mostrarToast('Carregue a imagem do tileset', 'aviso'); return;
     }
     if (!c._tilesetConfig?.mapa?.tiles) {
-      mostrarToast('Cole o JSON de configuração do tileset (passo 4)', 'aviso'); return;
+      mostrarToast('Cole o JSON de layout da dungeon (passo 4)', 'aviso'); return;
     }
   }
   if (c.mapaOpcao === 'ia_externa') {
@@ -15077,10 +15076,51 @@ async function _avtPackageRemover(pkgId) {
 window._avtPackageRemover = _avtPackageRemover;
 
 // ─── Editor com Tileset ───────────────────────────────────────────────────────
+function _avtAutoDistribuirTilesetPaintsCalc(dungeon, tsConfig) {
+  const blocos = tsConfig?.blocos;
+  if (!blocos) return {};
+  const paints = {};
+  const W = dungeon.w, H = dungeon.h;
+  const prev = AVT_STATE._tilesetConfig;
+  AVT_STATE._tilesetConfig = tsConfig;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const cell = dungeon.tiles[y]?.[x];
+      if (cell === null || cell === undefined) continue;
+      let key;
+      if (typeof cell === 'string') {
+        key = cell;
+      } else {
+        key = _avtGetTileSemanticKey(x, y, dungeon);
+      }
+      if (!key) continue;
+      const blocoRef = blocos[key];
+      if (!blocoRef) continue;
+      const m = String(blocoRef).match(/^bloco_(\d+)_(\d+)$/);
+      if (!m) continue;
+      paints[`${x}_${y}`] = { tc: +m[1], tr: +m[2] };
+    }
+  }
+  AVT_STATE._tilesetConfig = prev;
+  return paints;
+}
+
+function _avtMestreAutoDistribuirTileset() {
+  const dungeon = AVT_STATE.dungeon;
+  const tsConfig = dungeon?.tileset_config
+    || AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_config;
+  if (!tsConfig?.blocos) { mostrarToast('Tileset sem configuração de blocos', 'aviso'); return; }
+  _avtEd.tilesetPaints = _avtAutoDistribuirTilesetPaintsCalc(dungeon, tsConfig);
+  _avtMestreAbrirEditorTileset();
+}
+
 function _avtMestreAbrirEditorTileset() {
   const dungeon = AVT_STATE.dungeon;
   if (!dungeon) { mostrarToast('Nenhum mapa carregado', 'aviso'); return; }
   const tilesetUrl = AVT_STATE.rpg?.theme_json?.tileset_img_url;
+  const tsConfig = dungeon.tileset_config
+    || AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_config
+    || null;
 
   let overlay = document.getElementById('avt-mestre-map-editor-overlay');
   if (!overlay) {
@@ -15095,9 +15135,16 @@ function _avtMestreAbrirEditorTileset() {
   const W = dungeon.w, H = dungeon.h;
   _avtEd.tiles = dungeon.tiles.map(row => [...row]);
   _avtEd.w = W; _avtEd.h = H;
-  if (!_avtEd.tilesetPaints) _avtEd.tilesetPaints = Object.assign({}, AVT_STATE.rpg?.theme_json?.tileset_paints || {});
-  _avtEd.tsBrush = null; // {tc, tr}
-  const TSCOLS = 8; // assumed tileset grid columns
+  if (!_avtEd.tilesetPaints) {
+    _avtEd.tilesetPaints = Object.assign({}, AVT_STATE.rpg?.theme_json?.tileset_paints || {});
+    // Auto-distribuir na primeira abertura se não há tiles pintados
+    if (!Object.keys(_avtEd.tilesetPaints).length && tsConfig?.blocos) {
+      _avtEd.tilesetPaints = _avtAutoDistribuirTilesetPaintsCalc(dungeon, tsConfig);
+    }
+  }
+  _avtEd.tsBrush = null;
+  const TS_COLS = tsConfig?.cols || 4;
+  const TS_ROWS = tsConfig?.rows || 4;
 
   if (!tilesetUrl) {
     overlay.innerHTML = `
@@ -15155,7 +15202,11 @@ function _avtMestreAbrirEditorTileset() {
     <div style="width:100%;max-width:1100px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8d8e8">🎨 Editor com Tileset</div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="avt-mp-btn" onclick="_avtMestreAutoDistribuirTileset()"
+            style="background:rgba(200,168,75,0.1);border-color:rgba(200,168,75,0.35);color:#c8a84b">
+            ✦ Distribuir automaticamente
+          </button>
           <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtMestreSalvarTilesetPaints()">💾 Salvar</button>
           <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
         </div>
@@ -15203,13 +15254,12 @@ function _avtMestreAbrirEditorTileset() {
     }
     // Draw tileset paints
     if (tsImg.complete && tsImg.naturalWidth) {
-      const tsW = tsImg.naturalWidth, tsH = tsImg.naturalHeight;
-      const TSROWS = Math.ceil(tsH / (tsW / TSCOLS));
-      const tcSz = tsW / TSCOLS;
+      const tcSz = tsImg.naturalWidth / TS_COLS;
+      const trSz = tsImg.naturalHeight / TS_ROWS;
       Object.entries(_avtEd.tilesetPaints).forEach(([key, p]) => {
         const [px, py] = key.split('_').map(Number);
         if (px < 0 || px >= W || py < 0 || py >= H) return;
-        ctx.drawImage(tsImg, p.tc * tcSz, p.tr * (tsH / TSROWS), tcSz, tsH / TSROWS,
+        ctx.drawImage(tsImg, p.tc * tcSz, p.tr * trSz, tcSz, trSz,
           px * EDSZ, py * EDSZ, EDSZ, EDSZ);
       });
     }
@@ -15233,23 +15283,19 @@ function _avtMestreAbrirEditorTileset() {
   tsPicker.addEventListener('click', e => {
     const rect = tsImg.getBoundingClientRect();
     const x = e.clientX - rect.left, y = e.clientY - rect.top;
-    const cellW = rect.width / TSCOLS;
-    const tsH = tsImg.naturalHeight, tsW = tsImg.naturalWidth;
-    const TSROWS = Math.ceil(tsH / (tsW / TSCOLS));
-    const cellH = rect.height / TSROWS;
+    const cellW = rect.width / TS_COLS;
+    const cellH = rect.height / TS_ROWS;
     const tc = Math.floor(x / cellW), tr = Math.floor(y / cellH);
     _avtEd.tsBrush = { tc, tr };
     document.getElementById('avt-ts-brush-info').textContent = `Bloco selecionado: coluna ${tc}, linha ${tr}`;
-    // Draw selection outline
     const oc = tsOverlay.getContext('2d');
-    oc.clearRect(0, 0, tsOverlay.width, tsOverlay.height);
-    oc.strokeStyle = '#4fa3d1';
-    oc.lineWidth = 2;
-    oc.strokeRect(tc * cellW + 1, tr * cellH + 1, cellW - 2, cellH - 2);
     tsOverlay.style.width = rect.width + 'px';
     tsOverlay.style.height = rect.height + 'px';
     tsOverlay.width = rect.width;
     tsOverlay.height = rect.height;
+    oc.clearRect(0, 0, tsOverlay.width, tsOverlay.height);
+    oc.strokeStyle = '#4fa3d1';
+    oc.lineWidth = 2;
     oc.strokeRect(tc * cellW + 1, tr * cellH + 1, cellW - 2, cellH - 2);
   });
 
