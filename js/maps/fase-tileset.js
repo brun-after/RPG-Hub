@@ -556,26 +556,13 @@ function faseTilesetHandleJSONPaste(val) {
   if (!val.trim()) { if (status) status.textContent = ''; return; }
   try {
     const cfg = faseTilesetValidarJSON(val);
-    if (cfg.mapa?.tiles) {
-      cfg.mapa.tiles = _avtNormalizarTilesParedes(cfg.mapa.tiles);
-    } else {
-      // Sem layout no JSON — gerar dungeon proceduralmente com as dimensões configuradas
-      const largura  = parseInt(document.getElementById('avt-tileset-largura')?.value  || '24', 10);
-      const altura   = parseInt(document.getElementById('avt-tileset-altura')?.value   || '18', 10);
-      const numSalas = Math.max(3, Math.round((largura * altura) / 60));
-      const dungeon  = _avtGerarDungeon(largura, altura, numSalas);
-      cfg.mapa = {
-        largura, altura,
-        tiles:           _avtNormalizarTilesParedes(dungeon.tiles),
-        salas:           dungeon.rooms || [],
-        spawn_jogadores: [],
-        inimigos:        []
-      };
-    }
+    if (cfg.mapa?.tiles) cfg.mapa.tiles = _avtNormalizarTilesParedes(cfg.mapa.tiles);
     AVT_STATE._criando._tilesetConfig = cfg;
-    const w = cfg.mapa.largura, h = cfg.mapa.altura;
-    if (status) status.innerHTML =
-      `<span style="color:#27ae60">✓ Tileset + mapa ${w}×${h} — ${cfg.mapa.salas?.length||0} salas</span>`;
+    const w = cfg.mapa?.largura || '?', h = cfg.mapa?.altura || '?';
+    const hasMapa = !!cfg.mapa?.tiles;
+    if (status) status.innerHTML = hasMapa
+      ? `<span style="color:#27ae60">✓ Tileset + mapa ${w}×${h} válidos — ${cfg.mapa.salas?.length||0} salas</span>`
+      : `<span style="color:#e67e22">⚠ Tileset válido mas sem "mapa.tiles" — a IA não incluiu o layout</span>`;
   } catch(e) {
     AVT_STATE._criando._tilesetConfig = null;
     if (status) status.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
