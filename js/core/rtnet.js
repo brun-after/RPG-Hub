@@ -60,6 +60,9 @@ window.RTNet = (() => {
     // Voluntary host election
     _volunteers:    [],     // { userId, ts } — candidatos ao host (modo voluntário)
     _volunteerTimer: null,  // timer de janela de coleta de volunteers
+
+    // Peer leave callbacks
+    _peerLeaveCallbacks: [],
   };
 
   const STUN_SERVERS         = [{ urls: 'stun:stun.l.google.com:19302' }];
@@ -107,6 +110,10 @@ window.RTNet = (() => {
     avt_entidade_nova:        'avtReceberEntidadeNova',
     // [MOVE-INPUT] movimento baseado em input (não-host → host)
     avt_move_input:           'avtReceberMoveInput',
+    // [SYNC-COMPLETO] equipamento, atributos e mudanças do mestre
+    avt_item_equipado:        'avtReceberItemEquipado',
+    avt_item_desequipado:     'avtReceberItemDesequipado',
+    avt_char_update:          'avtReceberCharUpdate',
   };
 
   // opts padrão por tipo de evento (camada A/B/C conforme plano §5)
@@ -144,6 +151,10 @@ window.RTNet = (() => {
     avt_player_damage:        { persist: 'never',     reliable: true  },
     // [MOVE-INPUT] intenção de movimento do cliente para o host (canal confiável)
     avt_move_input:           { persist: 'never',     reliable: true  },
+    // [SYNC-COMPLETO] equipamento e mudanças de atributos pelo mestre
+    avt_item_equipado:        { persist: 'never',     reliable: true  },
+    avt_item_desequipado:     { persist: 'never',     reliable: true  },
+    avt_char_update:          { persist: 'never',     reliable: true  },
   };
 
   function _log(...a)  { try { console.log('[RTNet]',  ...a); } catch(_) {} }
@@ -317,6 +328,10 @@ window.RTNet = (() => {
   }
 
   function _cleanPeer(peerId) {
+    // peerId IS the userId in this mesh — notify before cleaning
+    if (_s.peers.has(peerId) && _s._peerLeaveCallbacks.length) {
+      _s._peerLeaveCallbacks.forEach(fn => { try { fn(peerId); } catch(_) {} });
+    }
     const pc = _s.peers.get(peerId);
     if (pc) { try { pc.close(); } catch(_) {} _s.peers.delete(peerId); }
     _s.channels.delete(peerId);
@@ -841,6 +856,11 @@ window.RTNet = (() => {
     onHostChange(cb) {
       _s.hostCbs.push(cb);
       return () => { _s.hostCbs = _s.hostCbs.filter(c => c !== cb); };
+    },
+
+    onPeerLeave(fn) {
+      _s._peerLeaveCallbacks.push(fn);
+      return () => { _s._peerLeaveCallbacks = _s._peerLeaveCallbacks.filter(c => c !== fn); };
     },
 
     async assumirHost() {
