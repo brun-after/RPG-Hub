@@ -983,22 +983,23 @@ function _avtCriarRenderMapaSub(opcao) {
           </div>
         </div>
 
-        <!-- Passo 3: prompt de layout -->
+        <!-- Passo 3: prompt de layout (opcional) -->
         <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(200,168,75,0.15);border-radius:6px;padding:10px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-            <span style="font-size:0.72rem;color:#c8a84b;font-weight:600">3. Prompt de layout da dungeon</span>
+            <span style="font-size:0.72rem;color:#c8a84b;font-weight:600">3. Prompt de layout da dungeon <span style="color:#7a92aa;font-weight:400">(opcional)</span></span>
             <button onclick="faseTilesetCopiarPromptLayout()"
               style="padding:4px 10px;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.3);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">
               ⎘ Copiar
             </button>
           </div>
-          <div style="font-size:0.67rem;color:#7a92aa;line-height:1.5">Envie para Claude.ai ou ChatGPT <strong style="color:#c8a84b">junto com a imagem</strong>. A IA identifica os blocos e projeta as salas, corredores e objetos.</div>
+          <div style="font-size:0.67rem;color:#7a92aa;line-height:1.5">Envie para Claude.ai ou ChatGPT <strong style="color:#c8a84b">junto com a imagem</strong> para que a IA projete salas e corredores personalizados. Se pular, o layout é gerado proceduralmente.</div>
         </div>
 
         <!-- Passo 4: colar JSON -->
         <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(200,168,75,0.15);border-radius:6px;padding:10px">
-          <div style="font-size:0.72rem;color:#c8a84b;font-weight:600;margin-bottom:8px">4. Cole o JSON retornado</div>
-          <textarea id="avt-tileset-json-input" rows="6" placeholder='{"version":2,"cols":4,"rows":4,"blocos":{...},"mapa":{"tiles":[...]}}'
+          <div style="font-size:0.72rem;color:#c8a84b;font-weight:600;margin-bottom:4px">4. Cole o JSON retornado</div>
+          <div style="font-size:0.67rem;color:#7a92aa;margin-bottom:8px;line-height:1.5">Cole o JSON da IA (com ou sem <code style="color:#c8d8e8">mapa.tiles</code>). Se o layout não vier no JSON, a dungeon é gerada automaticamente com as dimensões acima.</div>
+          <textarea id="avt-tileset-json-input" rows="6" placeholder='{"version":2,"cols":4,"rows":4,"blocos":{...}}'
             style="width:100%;box-sizing:border-box;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.15);border-radius:6px;color:#c8d8e8;font-family:monospace;font-size:0.65rem;resize:vertical;line-height:1.4"
             oninput="faseTilesetHandleJSONPaste(this.value)"></textarea>
           <div id="avt-tileset-json-status" style="margin-top:4px;font-size:0.72rem"></div>
@@ -1674,7 +1675,7 @@ async function aventuraCriarSubmit() {
       mostrarToast('Carregue a imagem do tileset', 'aviso'); return;
     }
     if (!c._tilesetConfig?.mapa?.tiles) {
-      mostrarToast('Cole o JSON de layout da dungeon (passo 4)', 'aviso'); return;
+      mostrarToast('Cole o JSON de configuração do tileset (passo 4)', 'aviso'); return;
     }
   }
   if (c.mapaOpcao === 'ia_externa') {
