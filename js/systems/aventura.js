@@ -8576,6 +8576,31 @@ function avtCombateEncerrar(batalhaId) {
   // Limpar efeitos de combate (não-OOC) das entidades para evitar flags infinitas pós-combate
   const _batEncerrando = AVT_STATE.batalhas.find(b => b.id === batalhaId);
   if (_batEncerrando) {
+    // Registrar NPCs dominados em _oocStatusEffects antes de limpar status_effects,
+    // para que continuem funcionando (movendo e atacando) após o fim do combate.
+    const _allDomIds = new Set(_batEncerrando.iniciativa.map(i => i.id));
+    AVT_STATE.invocacoes_ativas = AVT_STATE.invocacoes_ativas || [];
+    AVT_STATE.invocacoes_ativas.forEach(inv => {
+      const entDom = AVT_STATE.entidades.find(e => e.id === inv.id);
+      if (!entDom?._dominado || !inv._ehNecromante) return;
+      const _already = (AVT_STATE._oocStatusEffects || []).some(r => r.entId === entDom.id && r.ef.tipo === 'necromante');
+      if (_already) return;
+      const _efDomAtual = (entDom.status_effects || []).find(ef => ef.tipo === 'necromante');
+      const _durRestante = _efDomAtual?._turnos_restantes ?? 1;
+      const _durMs = _durRestante * _avtGetEfeitoCooldownMs();
+      const _oocEfDom = {
+        tipo: 'necromante', nome: 'Dominado', cor: entDom.cor,
+        _ooc: true, _turnos_restantes: _durRestante, duracao_turnos: _durRestante,
+        expiry_ms: Date.now() + _durMs,
+        _formulaAtaque: inv._formulaAtaqueBasico || '1d6',
+        _efeitosNecromante: inv._efeitosNecromante || [],
+      };
+      if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+      AVT_STATE._oocStatusEffects.push({ entId: entDom.id, entNome: entDom.nome, lastTickAt: Date.now(), ef: _oocEfDom });
+      // Substituir badge de combate pelo OOC (com expiry_ms para contagem em segundos)
+      entDom.status_effects = (entDom.status_effects || []).filter(ef => ef.tipo !== 'necromante');
+      entDom.status_effects.push(_oocEfDom);
+    });
     _batEncerrando.iniciativa.forEach(ini => {
       const entObj = AVT_STATE.entidades.find(e => e.id === ini.id);
       if (!entObj) return;
@@ -9990,6 +10015,18 @@ function _avtTurnoAvancar(bat) {
   _avtLimparModoAlvo();
   _avtEsconderBotaoRolar();
   bat.moverModo = false;
+  // Antes de filtrar, dominar sincronamente quaisquer inimigos hp:0 com efeito Necromante ativo.
+  // Isso evita que o filtro abaixo os remova antes que o setTimeout de _avtNpcMorreu dispare,
+  // o que causaria fim prematuro do combate quando outros inimigos ainda estão vivos.
+  bat.iniciativa.forEach(ini => {
+    if (ini.hp <= 0 && ini.tipo === 'inimigo') {
+      const _entNecPre = AVT_STATE.entidades.find(e => e.id === ini.id);
+      if (_entNecPre && !_entNecPre._dominado && !_entNecPre.escondido) {
+        const _efNecPre = (_entNecPre.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
+        if (_efNecPre) _avtNecromanteDominar(_entNecPre, _efNecPre, bat);
+      }
+    }
+  });
   bat.iniciativa = bat.iniciativa.filter(e => e.tipo === 'avatar' || e.tipo === 'invocado' || e.hp > 0);
   bat.envolvidos = bat.envolvidos.filter(id => bat.iniciativa.some(e => e.id === id));
   const _temInimigos = bat.iniciativa.some(e => e.tipo === 'inimigo');
