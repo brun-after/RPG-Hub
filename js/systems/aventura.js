@@ -2417,6 +2417,25 @@ async function entrarAventura(rpgId) {
         AVT_STATE._charHpFlushTimer = setInterval(() => {
           try { if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('heartbeat-90s').catch(()=>{}); } catch(_) {}
         }, 90_000);
+        // Auto-save a cada 10 minutos
+        if (AVT_STATE._autoSaveTimer) clearInterval(AVT_STATE._autoSaveTimer);
+        AVT_STATE._autoSaveTimer = setInterval(() => {
+          try { if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('autosave-10min').catch(()=>{}); } catch(_) {}
+          try { if (RTNet.isHost() && typeof _avtPersistirEstadoInimigos === 'function') _avtPersistirEstadoInimigos(); } catch(_) {}
+        }, 600_000);
+        // Save imediato quando um peer desconecta (host persiste estado do personagem daquele peer)
+        RTNet.onPeerLeave(userId => {
+          try {
+            if (!RTNet.isHost()) return;
+            const ent = (AVT_STATE.entidades || []).find(e => e.tipo === 'jogador' && (e.userId === userId || e.peerId === userId));
+            if (ent && ent.dbId && typeof ent.hp === 'number') {
+              AVT_STATE._charHpBuffer = AVT_STATE._charHpBuffer || {};
+              AVT_STATE._charHpBuffer[ent.dbId] = { hp: ent.hp };
+              if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('peer-leave').catch(()=>{});
+            }
+            if (typeof _avtPersistirEstadoInimigos === 'function') _avtPersistirEstadoInimigos();
+          } catch(_) {}
+        });
         // [NPC-SYNC] iniciado aqui para que RTNet.mode já esteja definido ao entrar na função
         try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
         // Sala de espera: aguarda host eleito antes de iniciar o canvas
@@ -2539,6 +2558,7 @@ window._avtFlushPersistencia = _avtFlushPersistencia;
 
 function sairAventura() {
   _avtCleanupListeners();
+  try { if (AVT_STATE._autoSaveTimer) { clearInterval(AVT_STATE._autoSaveTimer); AVT_STATE._autoSaveTimer = null; } } catch(_) {}
   try { if (typeof RTNet !== 'undefined' && RTNet.initialized) RTNet.shutdown(); } catch(_) {}
   try { if (typeof _avtNpcSyncShutdown === 'function') _avtNpcSyncShutdown(); } catch(_){}
   const screen = document.getElementById('aventura-screen');
@@ -17320,6 +17340,14 @@ function _avtAttrDelta(entId, attr, delta) {
     ent.hpMax = novoHpMax;
     if (ent.hp > novoHpMax) ent.hp = novoHpMax;
     if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar();
+    // Broadcast para não-hosts quando mestre altera atributos (HP já vem no tick)
+    if (isMestre && typeof RTNet !== 'undefined' && RTNet.initialized) {
+      RTNet.broadcast('avt_char_update', {
+        charNome: dbChar.nome,
+        atributos: { ...dbChar.custom_attrs.atributos },
+        hpMax: novoHpMax,
+      });
+    }
   }
   _avtCharEditorRender();
 }
@@ -17358,6 +17386,13 @@ function _avtAttrDeltaRpg(entId, attrNome, delta) {
     ent.hpMax = novoHpMax;
     if (ent.hp > novoHpMax) ent.hp = novoHpMax;
     if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar();
+    if (isMestre && typeof RTNet !== 'undefined' && RTNet.initialized) {
+      RTNet.broadcast('avt_char_update', {
+        charNome: dbChar.nome,
+        atributos: { ...dbChar.custom_attrs.atributos },
+        hpMax: novoHpMax,
+      });
+    }
   }
   _avtCharEditorRender();
 }
@@ -17379,6 +17414,9 @@ function _avtAttrHpBaseOverride(entId, val) {
   if (ent.hp > novo) ent.hp = novo;
   if ((dbChar.hp_atual || 0) > novo) dbChar.hp_atual = novo;
   if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar();
+  if (typeof RTNet !== 'undefined' && RTNet.initialized && _avtSouMestre()) {
+    RTNet.broadcast('avt_char_update', { charNome: dbChar.nome, hpMax: novo });
+  }
 }
 window._avtAttrHpBaseOverride = _avtAttrHpBaseOverride;
 
@@ -17526,6 +17564,14 @@ function _avtEquiparItem(entId, slotKey, itemId) {
   _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
     method:'PATCH', body:JSON.stringify({ custom_attrs: dbChar.custom_attrs })
   }).catch(e => mostrarToast('Erro ao equipar: ' + (e?.message||e), 'erro'));
+  if (typeof RTNet !== 'undefined' && RTNet.initialized) {
+    RTNet.broadcast('avt_item_equipado', {
+      charNome: dbChar.nome, slotKey,
+      itemId: item.id, nomeItem: item.nome,
+      bonusSnapshot: snapshot,
+      atributosAtuais: { ...dbChar.custom_attrs.atributos },
+    });
+  }
   _avtCharEditorRender();
 }
 
@@ -17541,10 +17587,18 @@ function _avtDesequiparItem(entId, slotKey) {
       dbChar.custom_attrs.atributos[attr] = (parseFloat(dbChar.custom_attrs.atributos[attr])||0) - delta;
     });
   }
+  const _desequipBonusSnapshot = prev?.bonus_snapshot || null;
   if (dbChar.custom_attrs.equipamento) delete dbChar.custom_attrs.equipamento[slotKey];
   _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
     method:'PATCH', body:JSON.stringify({ custom_attrs: dbChar.custom_attrs })
   }).catch(e => mostrarToast('Erro ao desequipar: ' + (e?.message||e), 'erro'));
+  if (typeof RTNet !== 'undefined' && RTNet.initialized) {
+    RTNet.broadcast('avt_item_desequipado', {
+      charNome: dbChar.nome, slotKey,
+      bonusSnapshot: _desequipBonusSnapshot,
+      atributosAtuais: { ...(dbChar.custom_attrs.atributos || {}) },
+    });
+  }
   _avtCharEditorRender();
 }
 
@@ -20454,6 +20508,9 @@ try{
           tipo: e.tipo,
           anim: e._currentAnim || null,
           escondido: e.escondido || false,
+          status_effects: e.status_effects || [],
+          atravessar: !!e.atravessar,
+          fantasma: !!e.fantasma,
         });
       }
       return { t: Date.now(), entidades: ents, hostId: _myUid() };
@@ -20483,6 +20540,10 @@ try{
         if (r.escondido === true || (typeof r.hp === 'number' && r.hp <= 0 && ent.tipo === 'inimigo')) {
           ent.escondido = true;
         }
+        // Status effects e flags de movimento: sincronizar do host
+        if (Array.isArray(r.status_effects)) ent.status_effects = r.status_effects;
+        if (r.atravessar !== undefined) ent.atravessar = r.atravessar;
+        if (r.fantasma !== undefined) ent.fantasma = r.fantasma;
         // Posição: reconciliação com dead-band adaptativa
         if (typeof r.x === 'number' && typeof r.y === 'number') {
           const dx = Math.abs((ent.x||0) - r.x);
@@ -20509,6 +20570,67 @@ try{
         }
       }
     } catch(e) { try { console.warn('[HOST-RTC] state_tick:', e); } catch(_){} }
+  };
+
+  // ── Sync completo: equipamento e atributos ────────────────────────────────
+  window.avtReceberItemEquipado = function({ charNome, slotKey, itemId, nomeItem, bonusSnapshot, atributosAtuais } = {}) {
+    try {
+      if (typeof RTNet !== 'undefined' && RTNet.isHost()) return; // host já tem estado atualizado
+      if (!charNome || !slotKey) return;
+      const ent = (AVT_STATE?.entidades || []).find(e => e.nome === charNome);
+      if (!ent) return;
+      const dbChar = (AVT_STATE?.chars || []).find(c => c.nome === charNome);
+      if (!dbChar) return;
+      if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+      if (atributosAtuais) dbChar.custom_attrs.atributos = atributosAtuais;
+      if (!dbChar.custom_attrs.equipamento) dbChar.custom_attrs.equipamento = {};
+      dbChar.custom_attrs.equipamento[slotKey] = { item_id: itemId, nome: nomeItem, bonus_snapshot: bonusSnapshot };
+      if (typeof _avtCalcHpJog === 'function') {
+        const novoHpMax = _avtCalcHpJog(dbChar);
+        ent.hpMax = novoHpMax;
+        if (ent.hp > novoHpMax) ent.hp = novoHpMax;
+      }
+      if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar();
+    } catch(e) { try { console.warn('[SYNC] avtReceberItemEquipado:', e); } catch(_){} }
+  };
+
+  window.avtReceberItemDesequipado = function({ charNome, slotKey, atributosAtuais } = {}) {
+    try {
+      if (typeof RTNet !== 'undefined' && RTNet.isHost()) return;
+      if (!charNome || !slotKey) return;
+      const ent = (AVT_STATE?.entidades || []).find(e => e.nome === charNome);
+      if (!ent) return;
+      const dbChar = (AVT_STATE?.chars || []).find(c => c.nome === charNome);
+      if (!dbChar) return;
+      if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+      if (atributosAtuais) dbChar.custom_attrs.atributos = atributosAtuais;
+      if (dbChar.custom_attrs.equipamento) delete dbChar.custom_attrs.equipamento[slotKey];
+      if (typeof _avtCalcHpJog === 'function') {
+        const novoHpMax = _avtCalcHpJog(dbChar);
+        ent.hpMax = novoHpMax;
+        if (ent.hp > novoHpMax) ent.hp = novoHpMax;
+      }
+      if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar();
+    } catch(e) { try { console.warn('[SYNC] avtReceberItemDesequipado:', e); } catch(_){} }
+  };
+
+  window.avtReceberCharUpdate = function({ charNome, atributos, hpMax } = {}) {
+    try {
+      if (typeof RTNet !== 'undefined' && RTNet.isHost()) return;
+      if (!charNome) return;
+      const ent = (AVT_STATE?.entidades || []).find(e => e.nome === charNome);
+      if (!ent) return;
+      const dbChar = (AVT_STATE?.chars || []).find(c => c.nome === charNome);
+      if (dbChar && atributos) {
+        if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+        dbChar.custom_attrs.atributos = atributos;
+      }
+      if (typeof hpMax === 'number') {
+        ent.hpMax = hpMax;
+        if (ent.hp > hpMax) ent.hp = hpMax;
+        if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar();
+      }
+    } catch(e) { try { console.warn('[SYNC] avtReceberCharUpdate:', e); } catch(_){} }
   };
 
   // ── Fallback Supabase: HP de jogadores (P2P usa RTNet.on diretamente) ────
