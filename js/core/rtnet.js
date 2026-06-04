@@ -64,7 +64,7 @@ window.RTNet = (() => {
   const SNAPSHOT_INTERVAL    = 15_000;  // ms — snapshot persistido em banco
   const STATE_TICK_INTERVAL  = 500;     // ms — tick autoritativo via DataChannel
   const ELECTION_WAIT        = 250;     // ms — janela curta de coleta (apenas empate raro)
-  const PERIODIC_SYNC_INTERVAL = 30_000; // ms — ressincronização periódica forçada
+  const PERIODIC_SYNC_INTERVAL = 10_000; // ms — ressincronização periódica forçada
 
   // Mapa: tipo de evento → nome da função global handler (mesmo que realtime.js)
   const AVT_HANDLER_MAP = {
@@ -549,8 +549,11 @@ window.RTNet = (() => {
     }
 
     if (!allP2P) {
-      // Solo (sem peers): despacha localmente sem custo de Supabase
-      if (_s.peers.size === 0) {
+      // "Solo" apenas quando não há nenhum peer conhecido — nem WebRTC nem Supabase signaling.
+      // _s.peerJoinTs é preenchido em _onAnnounce assim que qualquer peer anuncia chegada,
+      // antes mesmo do WebRTC abrir; _s.peers só tem conexões WebRTC abertas.
+      const hasAnyPeer = (_s.peers.size > 0) || (_s.peerJoinTs.size > 0);
+      if (!hasAnyPeer) {
         _dispatch(tipo, payload);
         return;
       }

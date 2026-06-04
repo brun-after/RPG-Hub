@@ -2334,9 +2334,13 @@ async function entrarAventura(rpgId) {
       const _uid = SESSION?.user?.id || ('anon-' + Math.random().toString(36).slice(2));
       RTNet.init({ rpgId, userId: _uid, isAventura: true }).then(() => {
         RTNet.registrarSnapshotProvider(() => ({
-          entidades:          AVT_STATE.entidades,
+          // Exclui estado transitório de animação para reduzir tamanho do snapshot
+          entidades: (AVT_STATE.entidades || []).map(
+            ({ _waypoints, _lerpTo, _patrolDir, _patrolNext, _recent, _npcLastTick,
+               _onWaypointReached, _wpCallbackOwner, ...rest }) => rest
+          ),
           batalhas:           AVT_STATE.batalhas,
-          globalLog:          (AVT_STATE.globalLog || []).slice(-100),
+          globalLog:          (AVT_STATE.globalLog || []).slice(-20),
           npcTimers:          AVT_STATE.npcTimers,
           _fleeTracker:       AVT_STATE._fleeTracker,
           _oocCooldowns:      AVT_STATE._oocCooldowns,
@@ -10383,7 +10387,7 @@ async function _avtNpcTurno(bat) {
   if (!npc || (npc.tipo !== 'inimigo' && npc.tipo !== 'invocado')) return;
   if (npc.tipo === 'invocado') { _avtNpcTurnoInvocado(bat); return; }
   const entNpc = AVT_STATE.entidades.find(e => e.id===npc.id);
-  if (!entNpc || entNpc.hp<=0) {
+  if (!entNpc || entNpc.hp<=0 || entNpc.escondido) {
     _avtTurnoAvancar(bat); return;
   }
   // Master controlling this NPC — show HUD and wait for master input
@@ -19608,10 +19612,17 @@ try{
         if (!souHost) {
           const dx = Math.abs((ent.x||0) - row.x);
           const dy = Math.abs((ent.y||0) - row.y);
-          if (Math.max(dx, dy) > 1.5) {
-            // Divergência maior que 1.5 célula → lerp suave (250ms)
+          const maxDiv = Math.max(dx, dy);
+          const hasMidAnim = (ent._waypoints?.length > 0) || ent._lerpTo;
+          if (maxDiv > 2.0) {
+            // Divergência grande: corrige à força, descarta waypoints obsoletos
+            ent._waypoints = [];
+            ent._lerpTo = { fromX: ent.renderX ?? ent.x, fromY: ent.renderY ?? ent.y, x: row.x, y: row.y, t0: performance.now(), dur: 300 };
+          } else if (maxDiv > 1.5 && !hasMidAnim) {
+            // Divergência média sem animação ativa: lerp suave
             ent._lerpTo = { fromX: ent.renderX ?? ent.x, fromY: ent.renderY ?? ent.y, x: row.x, y: row.y, t0: performance.now(), dur: 250 };
           }
+          // else: waypoints ativos ou divergência pequena → deixa animação concluir
         }
       }
     } catch(e){ try{ console.warn('[NPC-SYNC] onRemoteUpdate falhou:', e); }catch(_){} }
@@ -19623,6 +19634,7 @@ try{
       if (idx >= 0) {
         const ent = AVT_STATE.entidades[idx];
         ent.hp = 0;
+        ent.escondido = true;
         // Marca morto, mas mantém pipeline de remoção/respawn já existente
         try { _avtPersistirEstadoInimigos(); } catch(_){}
       }
@@ -19820,28 +19832,37 @@ try{
         if (!ent) continue;
         // Não sobrescreve a entidade que ESTE jogador controla
         if (meCharNome && ent.nome === meCharNome) continue;
-        // HP autoritativo — respeita avt_hp_update recente (evita race condition com state_tick stale)
-        const _hpFresh = ent._lastHpDirectUpdateAt && (Date.now() - ent._lastHpDirectUpdateAt < 1500);
-        if (!_hpFresh) {
-          if (typeof r.hp === 'number')    ent.hp    = r.hp;
-          if (typeof r.hpMax === 'number') ent.hpMax = r.hpMax;
+        // HP autoritativo — só atualiza entidades ainda visíveis (evita ressuscitar mortos)
+        if (!ent.escondido) {
+          const _hpFresh = ent._lastHpDirectUpdateAt && (Date.now() - ent._lastHpDirectUpdateAt < 1500);
+          if (!_hpFresh) {
+            if (typeof r.hp === 'number')    ent.hp    = r.hp;
+            if (typeof r.hpMax === 'number') ent.hpMax = r.hpMax;
+          }
         }
-        // Sincronizar flag de morte — garante que inimigo morto desapareça em todos os clientes
-        if (typeof r.escondido === 'boolean') ent.escondido = r.escondido;
-        if (typeof r.hp === 'number' && r.hp <= 0 && ent.tipo === 'inimigo') ent.escondido = true;
-        // Posição: lerp suave se divergência > 1 célula
+        // Tick pode esconder, nunca revelar (revelar é exclusivo de avt_npc_respawn)
+        if (r.escondido === true || (typeof r.hp === 'number' && r.hp <= 0 && ent.tipo === 'inimigo')) {
+          ent.escondido = true;
+        }
+        // Posição: deixa waypoints ativos rodarem; só corrige divergências significativas
         if (typeof r.x === 'number' && typeof r.y === 'number') {
           const dx = Math.abs((ent.x||0) - r.x);
           const dy = Math.abs((ent.y||0) - r.y);
-          if (Math.max(dx, dy) > 1.0) {
-            ent._lerpTo = {
-              fromX: ent.renderX ?? ent.x, fromY: ent.renderY ?? ent.y,
-              x: r.x, y: r.y, t0: performance.now(), dur: 250,
-            };
-          } else {
-            ent.x = r.x; ent.y = r.y;
-            if (typeof ent.renderX === 'number') { ent.renderX = r.x; ent.renderY = r.y; }
+          const maxDiv = Math.max(dx, dy);
+          const hasMidAnim = (ent._waypoints?.length > 0) || ent._lerpTo;
+          if (maxDiv > 2.0) {
+            // Divergência grande: corrige à força, descarta waypoints obsoletos
+            ent._waypoints = [];
+            ent._lerpTo = { fromX: ent.renderX ?? ent.x, fromY: ent.renderY ?? ent.y, x: r.x, y: r.y, t0: performance.now(), dur: 300 };
+          } else if (!hasMidAnim) {
+            if (maxDiv > 1.0) {
+              ent._lerpTo = { fromX: ent.renderX ?? ent.x, fromY: ent.renderY ?? ent.y, x: r.x, y: r.y, t0: performance.now(), dur: 250 };
+            } else {
+              ent.x = r.x; ent.y = r.y;
+              // Não toca renderX/Y para não interromper animações em andamento
+            }
           }
+          // else: animação ativa com divergência ≤ 2 células → waypoints cuidam do movimento
         }
       }
     } catch(e) { try { console.warn('[HOST-RTC] state_tick:', e); } catch(_){} }
@@ -19890,11 +19911,9 @@ try{
           ent.hp = novoHp;
           if (typeof _avtAplicarDanoPersistir === 'function') _avtAplicarDanoPersistir(ent, novoHp);
           try { _avtBroadcast('avt_hp_update', { nome: ent.nome, hp: novoHp, hpMax: ent.hpMax }); } catch(_){}
-          if (novoHp <= 0) {
+          if (novoHp <= 0 && !ent.escondido) {
             const bat = (AVT_STATE.batalhas||[]).find(b => b.iniciativa?.some(e => e.id === ent.id));
-            if (bat) {
-              try { _avtNpcMorreu(ent, bat); _avtCheckVitoria(bat); } catch(_){}
-            }
+            try { _avtNpcMorreu(ent, bat || null); if (bat) _avtCheckVitoria(bat); } catch(_){}
           }
         }
         return;
