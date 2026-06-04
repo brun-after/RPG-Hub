@@ -443,6 +443,20 @@
     <button onclick="if(typeof RTNet!=='undefined')RTNet.assumirHost()" style="background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.4);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;padding:3px 10px;cursor:pointer;margin-left:8px">Assumir Host</button>
   </div>
 
+  <!-- Sala de Espera: overlay antes do dungeon iniciar, aguarda eleição de host -->
+  <div id="avt-sala-espera" style="display:none;position:absolute;inset:0;z-index:100;background:rgba(5,8,16,0.97);flex-direction:column;align-items:center;justify-content:center;gap:20px">
+    <div style="font-family:var(--fonte-d);font-size:1.0rem;letter-spacing:.12em;color:#c8a84b">Sala de Espera</div>
+    <div id="avt-sala-nome" style="font-family:var(--fonte-d);font-size:0.72rem;color:#7a92aa;letter-spacing:.08em"></div>
+    <div id="avt-sala-lista" style="min-width:240px;max-width:340px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.15);border-radius:8px;padding:14px 18px;font-family:var(--fonte-d);font-size:0.66rem;color:#7a92aa;display:flex;flex-direction:column;gap:6px">
+      <div style="color:#4fa3d1;margin-bottom:2px;letter-spacing:.05em;font-size:0.6rem;text-transform:uppercase">Jogadores na sala</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+      <button id="avt-btn-ser-host" onclick="if(typeof RTNet!=='undefined')RTNet.volunteerAsHost()" style="background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.45);border-radius:8px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.72rem;padding:10px 22px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase">▶ Iniciar como Host</button>
+      <button id="avt-btn-aguardar-host" onclick="window._avtAguardarSemHost&&window._avtAguardarSemHost()" style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:8px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.72rem;padding:10px 22px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase">⏳ Aguardar Host</button>
+    </div>
+    <div id="avt-sala-status" style="font-family:var(--fonte-d);font-size:0.60rem;color:#7a92aa;letter-spacing:.05em;min-height:18px"></div>
+  </div>
+
   <!-- Map + sidebar -->
   <div style="display:flex;flex:1;min-height:0;position:relative">
 
