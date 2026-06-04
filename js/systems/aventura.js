@@ -268,6 +268,7 @@ const AVT_STATUS_COLORS = {
   fantasma:     '#74b9ff',
   teleporte:    '#a29bfe',
   invocacao:    '#b07ef0',
+  necromante:   '#8e44ad',
 };
 
 function _avtHexRgb(hex) {
@@ -8131,6 +8132,16 @@ async function _avtAutoLevelUp(char) {
 // Handle NPC death: hide from map, maybe drop item, schedule respawn, give XP
 function _avtNpcMorreu(npcEnt, bat) {
   if (!npcEnt || npcEnt.escondido) return;
+  // Se o NPC tem efeito Necromante ativo e ainda não está dominado, dominar em vez de matar
+  if (!npcEnt._dominado && bat) {
+    const efNecro = (npcEnt.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
+    if (efNecro) { _avtNecromanteDominar(npcEnt, efNecro, bat); return; }
+  }
+  // Se estava dominado, limpar registro de invocação antes da morte real
+  if (npcEnt._dominado) {
+    AVT_STATE.invocacoes_ativas = (AVT_STATE.invocacoes_ativas || []).filter(i => i.id !== npcEnt.id);
+    npcEnt._dominado = false;
+  }
   npcEnt.escondido = true;
   npcEnt.vezes_morto = (npcEnt.vezes_morto || 0) + 1;
   npcEnt.hp = 0;
@@ -8149,6 +8160,71 @@ function _avtNpcMorreu(npcEnt, bat) {
 
   // Schedule respawn
   _avtAgendarRespawnNpc(npcEnt);
+}
+
+function _avtNecromanteDominar(npcEnt, efNecro, bat) {
+  const corDominado  = efNecro.cor_dominado || '#8e44ad';
+  const duracaoT     = efNecro.duracao_turnos ?? 3;
+  const hpNecro      = Math.max(1, Math.floor((npcEnt.hpMax || npcEnt.hp || 10) / 10));
+  const donoNome     = efNecro._casterNome || '';
+
+  // Efeitos da skill original a propagar nos ataques (exceto o próprio necromante)
+  const efeitosPropagate = (efNecro._skillEfeitos || []).filter(e => e.tipo !== 'necromante');
+
+  // Atualizar entidade: converte para aliado dominado
+  npcEnt.hp            = hpNecro;
+  npcEnt.hpMax         = hpNecro;
+  npcEnt._dominado     = true;
+  npcEnt._donoNome     = donoNome;
+  npcEnt.cor           = corDominado;
+  npcEnt.tipo          = 'invocado';
+  npcEnt._efeitosNecromante = efeitosPropagate;
+  npcEnt.status_effects = [];
+
+  // Badge visual de dominado
+  const efDominado = { tipo: 'necromante', nome: 'Dominado', cor: corDominado,
+    _turnos_restantes: duracaoT, duracao_turnos: duracaoT };
+  npcEnt.status_effects.push(efDominado);
+
+  // Registro em invocacoes_ativas com definição sintética
+  const invDef = {
+    nome: npcEnt.nome,
+    comportamento: 'agressivo',
+    dano_formula: efNecro._formulaAtaque || '1d6',
+    duracao_base_turnos: duracaoT,
+  };
+  const invAtiva = {
+    id: npcEnt.id,
+    invocacao_def: invDef,
+    dono_char_nome: donoNome,
+    dono_char_id: null,
+    hp_atual: hpNecro,
+    hpMax: hpNecro,
+    iniciativa: 5,
+    _turnosRestantes: duracaoT,
+    _cooldowns: {},
+    _efeitosNecromante: efeitosPropagate,
+    _ehNecromante: true,
+  };
+  npcEnt._invAtiva = invAtiva;
+  AVT_STATE.invocacoes_ativas = AVT_STATE.invocacoes_ativas || [];
+  AVT_STATE.invocacoes_ativas.push(invAtiva);
+
+  // Sincronizar na iniciativa da batalha
+  const initEntry = bat.iniciativa.find(e => e.id === npcEnt.id);
+  if (initEntry) {
+    initEntry.tipo          = 'invocado';
+    initEntry.hp            = hpNecro;
+    initEntry.hpMax         = hpNecro;
+    initEntry.cor           = corDominado;
+    initEntry.status_effects = [{ ...efDominado }];
+    initEntry._dominado     = true;
+  }
+
+  try { _avtBroadcast('avt_hp_update', { nome: npcEnt.nome, hp: hpNecro, hpMax: hpNecro }); } catch(_) {}
+  _avtBroadcastBatalha(bat);
+  _avtLog(`☠ ${npcEnt.nome} dominado por Necromante! HP:${hpNecro} Dur:${duracaoT}t dono:${donoNome}`, bat?.id);
+  mostrarToast(`☠ ${npcEnt.nome} ressuscitado como aliado! (${hpNecro} HP, ${duracaoT}t)`, 'ok');
 }
 
 // Generate a loot drop at NPC's position
@@ -9122,7 +9198,12 @@ async function _avtExecutarAtaque() {
                 } else if (!['teleporte_alvo','avatar'].includes(ef.tipo)) {
                   if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
                   const _efEntryA = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
-                    expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs()};
+                    expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs(),
+                    _casterNome: ativo.nome,
+                    _casterId: ativo.id,
+                    _skillEfeitos: sk?.efeitos_bonus || [],
+                    _formulaAtaque: sk?.formula_dano || '1d6',
+                  };
                   // Evitar duplicatas quando self-apply em área (aplicar só uma vez para o caster)
                   if (!_selfApply || !alvoProcEf.status_effects.some(e => e.tipo === ef.tipo && e._turnos_restantes > 0)) {
                     alvoProcEf.status_effects.push(_efEntryA);
@@ -9194,7 +9275,12 @@ async function _avtExecutarAtaque() {
             } else {
               if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
               const _efEntry = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
-                expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs()};
+                expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs(),
+                _casterNome: ativo.nome,
+                _casterId: ativo.id,
+                _skillEfeitos: sk?.efeitos_bonus || [],
+                _formulaAtaque: sk?.formula_dano || '1d6',
+              };
               alvoProcEf.status_effects.push(_efEntry);
               const _initEntSync = b.iniciativa.find(e => e.id === alvoProcEf.id);
               if (_initEntSync) {
@@ -9553,6 +9639,24 @@ function _avtProcessarStatusEffects(bat, ent) {
       case 'atravessar':
         if (entObj) entObj._atravessar = true;
         break;
+      case 'necromante': {
+        // Ao expirar, inimigo dominado morre de vez
+        const _turnosRestNecro = (ef._turnos_restantes ?? ef.duracao_turnos ?? 1) - 1;
+        ef._turnos_restantes = _turnosRestNecro;
+        if (_turnosRestNecro <= 0 && (ent._dominado || (entObj && entObj._dominado))) {
+          const _entDom = entObj || ent;
+          _avtLog(`☠ ${_entDom.nome} expirou o domínio e tombou.`, bat?.id);
+          mostrarToast(`☠ ${_entDom.nome} voltou à morte.`, 'aviso', 3000);
+          AVT_STATE.invocacoes_ativas = (AVT_STATE.invocacoes_ativas || []).filter(i => i.id !== _entDom.id);
+          _entDom._dominado = false;
+          _entDom.tipo = 'inimigo';
+          if (ent !== _entDom) { ent._dominado = false; ent.tipo = 'inimigo'; }
+          _entDom.hp = 0;
+          ent.hp = 0;
+          _avtNpcMorreu(_entDom, bat);
+        }
+        return _turnosRestNecro > 0;
+      }
     }
     ef._turnos_restantes = (ef._turnos_restantes ?? ef.duracao_turnos ?? 1) - 1;
     const mantido = ef._turnos_restantes > 0;
@@ -9769,8 +9873,8 @@ function _avtTurnoAvancar(bat) {
     if (av._turnosRestantes <= 0) _avtDestruirAvatar(av.id, bat);
   });
 
-  // Expirar invocados
-  AVT_STATE.entidades.filter(e => e.tipo === 'invocado').forEach(inv => {
+  // Expirar invocados (dominados por Necromante têm expiração gerenciada pelo status effect)
+  AVT_STATE.entidades.filter(e => e.tipo === 'invocado' && !e._dominado).forEach(inv => {
     inv._turnosRestantes = (inv._turnosRestantes ?? 1) - 1;
     if (inv._turnosRestantes <= 0) _avtDestruirInvocacao(inv.id, bat);
   });
@@ -10038,7 +10142,12 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         _avtBroadcastBatalha(bat);
         if (skillAlvo.hp <= 0) {
           _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id);
-          setTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }, _delayMorteNpc);
+          if (skillAlvo._dominado || (entAlvo && entAlvo._dominado)) {
+            // Dominado por Necromante morreu — tratar como NPC morto
+            setTimeout(() => { _avtNpcMorreu(entAlvo || skillAlvo, bat); _avtCheckVitoria(bat); }, _delayMorteNpc);
+          } else {
+            setTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }, _delayMorteNpc);
+          }
         }
       }
       // Cooldown já foi gravado antes da animação (fix UI lag); nada a fazer aqui.
@@ -10454,7 +10563,14 @@ async function _avtNpcTurno(bat) {
   // Priorizar avatares ou dummies invocados: se houver um em campo, NPC persegue ele
   const _avatares = AVT_STATE.entidades.filter(e => e.tipo === 'avatar' && (e._hitsRestantes ?? 1) > 0);
   const _dummies  = AVT_STATE.entidades.filter(e => e.tipo === 'invocado' && e.comportamento === 'dummy' && e.hp > 0 && bat.envolvidos.includes(e.id));
-  if (_dummies.length) jogadores = _dummies;
+  // Aggro por Necromante: se este NPC foi atacado por um dominado, focar nele
+  const _aggroAlvo = entNpc._alvoId
+    ? AVT_STATE.entidades.find(e => e.id === entNpc._alvoId && e._dominado && e.hp > 0)
+    : entNpc._alvoAtual
+      ? AVT_STATE.entidades.find(e => e.nome === entNpc._alvoAtual && e._dominado && e.hp > 0)
+      : null;
+  if (_aggroAlvo) jogadores = [_aggroAlvo];
+  else if (_dummies.length) jogadores = _dummies;
   else if (_avatares.length) jogadores = _avatares;
 
   let nearest = jogadores[0], nearDist = Infinity;
@@ -20762,6 +20878,29 @@ function _avtNpcTurnoInvocado(bat) {
     _avtMostrarDanoAbaixoHp(alvo, dano, false);
     try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
     _avtLog(`⚔ ${inv.nome} ataca ${alvo.nome} por ${dano}!`, bat.id);
+
+    // Efeitos Necromante: propagar efeitos da skill original ao alvo (exceto necromante)
+    if (invAtiva._ehNecromante && invAtiva._efeitosNecromante?.length) {
+      if (!alvo.status_effects) alvo.status_effects = [];
+      const entAlvoObj = AVT_STATE.entidades.find(e => e.id === alvo.id);
+      invAtiva._efeitosNecromante.forEach(efP => {
+        const _efNecroEntry = { ...efP, _turnos_restantes: efP.duracao_turnos ?? 1 };
+        alvo.status_effects.push(_efNecroEntry);
+        const _alvoInitNecro = bat.iniciativa.find(e => e.id === alvo.id);
+        if (_alvoInitNecro) {
+          if (!_alvoInitNecro.status_effects) _alvoInitNecro.status_effects = [];
+          _alvoInitNecro.status_effects.push({ ..._efNecroEntry });
+        }
+        if (entAlvoObj && entAlvoObj !== alvo) entAlvoObj.status_effects = alvo.status_effects;
+        if (efP.tipo === 'dot') _avtMostrarDotDrip(entAlvoObj || alvo);
+        _avtLog(`  ↳ [Necromante] ${efP.tipo} aplicado em ${alvo.nome}`, bat.id);
+      });
+    }
+    // Aggro: inimigo atacado passa a focar no dominado
+    const entAlvoAggro = AVT_STATE.entidades.find(e => e.id === alvo.id);
+    if (entAlvoAggro) { entAlvoAggro._alvoAtual = entInv.nome; entAlvoAggro._alvoId = entInv.id; }
+    if (alvo._alvoAtual !== undefined) { alvo._alvoAtual = entInv.nome; alvo._alvoId = entInv.id; }
+
     if (alvo.hp <= 0 && alvo.tipo === 'inimigo') { _avtNpcMorreu(alvo, bat); _avtCheckVitoria(bat); }
   }
 
