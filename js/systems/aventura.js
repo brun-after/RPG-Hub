@@ -7196,11 +7196,15 @@ function _avtTickEfeitosOOC(now) {
             _invAtivaOoc._cooldowns[k] = Math.max(0, (_invAtivaOoc._cooldowns[k] || 0) - 1);
           });
         }
+        const _RAIO_DOM_OOC = 10;
         const _alvosDom = AVT_STATE.entidades.filter(e =>
-          e.tipo === 'inimigo' && e.hp > 0 && !e.escondido && !e._dominado
+          e.tipo === 'inimigo' && e.hp > 0 && !e.escondido && !e._dominado &&
+          (Math.abs(e.x-ent.x)+Math.abs(e.y-ent.y)) <= _RAIO_DOM_OOC
         );
         if (_alvosDom.length) {
-          const _alvoDom = _alvosDom.reduce((a, b) =>
+          const _perseguindoOoc = _alvosDom.filter(e => AVT_STATE.npcTimers?.[e.id]?.isPursuing);
+          const _poolAlvosDom = _perseguindoOoc.length ? _perseguindoOoc : _alvosDom;
+          const _alvoDom = _poolAlvosDom.reduce((a, b) =>
             (Math.abs(a.x-ent.x)+Math.abs(a.y-ent.y)) <= (Math.abs(b.x-ent.x)+Math.abs(b.y-ent.y)) ? a : b
           );
           const _distDom = Math.abs(_alvoDom.x - ent.x) + Math.abs(_alvoDom.y - ent.y);
@@ -8500,6 +8504,12 @@ function _avtNecromanteDominar(npcEnt, efNecro, bat) {
       initEntry.cor           = corDominado;
       initEntry.status_effects = [{ ...efDominado }];
       initEntry._dominado     = true;
+    }
+    // Limpar CDs do NPC original para garantir que o primeiro ataque não seja bloqueado
+    if (bat._cooldowns) {
+      Object.keys(bat._cooldowns).forEach(k => {
+        if (k.startsWith(npcEnt.id + '_')) delete bat._cooldowns[k];
+      });
     }
     _avtBroadcastBatalha(bat);
   }
@@ -21139,7 +21149,12 @@ function _avtNpcTurnoInvocado(bat) {
   if (!invDef) { _avtTurnoAvancar(bat); return; }
 
   const dono = AVT_STATE.entidades.find(e => e.nome === entInv._invAtiva?.dono_char_nome);
-  const inimigos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0 && bat.envolvidos.includes(e.id));
+  const _RAIO_INV_DOM = 10;
+  const inimigos = AVT_STATE.entidades.filter(e =>
+    e.tipo === 'inimigo' && e.hp > 0 &&
+    (bat.envolvidos.includes(e.id) ||
+     (Math.abs(e.x - entInv.x) + Math.abs(e.y - entInv.y)) <= _RAIO_INV_DOM)
+  );
 
   if (!inimigos.length && invDef.comportamento !== 'dummy') {
     _avtLog(`🔮 ${inv.nome} aguarda (sem inimigos)`, bat.id);
@@ -21155,9 +21170,11 @@ function _avtNpcTurnoInvocado(bat) {
   let alvo = null;
 
   switch (invDef.comportamento) {
-    case 'agressivo':
-      alvo = _nearest(entInv, inimigos);
+    case 'agressivo': {
+      const _perseguindo = inimigos.filter(e => AVT_STATE.npcTimers?.[e.id]?.isPursuing);
+      alvo = _perseguindo.length ? _nearest(entInv, _perseguindo) : _nearest(entInv, inimigos);
       break;
+    }
 
     case 'assassino':
       alvo = inimigos.length ? inimigos.reduce((a, b) => {
@@ -21226,10 +21243,12 @@ function _avtNpcTurnoInvocado(bat) {
   const dist = Math.max(Math.abs(entInv.x - alvo.x), Math.abs(entInv.y - alvo.y));
   const _invAtiva = entInv._invAtiva;
   if (dist <= 1) {
-    let dano = 0;
+    // Determinar skill/fórmula/nome do ataque
+    let _skUsada = null;
+    let _formulaUsada = invDef.dano_formula || '1d6';
+    let _skNome = 'Ataque básico';
 
     if (_invAtiva?._ehNecromante) {
-      // Dominado usa skills originais do NPC ou ataque básico
       const _npcSks = (AVT_STATE.skills || []).filter(sk =>
         (_invAtiva._npcNome && sk.personagem === _invAtiva._npcNome) ||
         (_invAtiva._npcDbId && sk.character_id === _invAtiva._npcDbId)
@@ -21245,43 +21264,103 @@ function _avtNpcTurnoInvocado(bat) {
         : null;
 
       if (_skEscolhida) {
+        _skUsada = _skEscolhida;
+        _formulaUsada = _skEscolhida.formula_dano || '1d6';
+        _skNome = _skEscolhida.habilidade || 'Habilidade';
         if (!bat._cooldowns) bat._cooldowns = {};
         if ((_skEscolhida.cooldown_turnos || 0) > 0)
           bat._cooldowns[_cdBase + _skEscolhida.id] = _skEscolhida.cooldown_turnos;
-        dano = _avtRolarFormula(_skEscolhida.formula_dano || '1d6');
-        // Efeitos_bonus da skill do NPC original
-        if (_skEscolhida.efeitos_bonus?.length) {
-          const _entAlvoEf = AVT_STATE.entidades.find(e => e.id === alvo.id) || alvo;
-          const _alvoBatEf = bat.iniciativa.find(e => e.id === alvo.id);
-          _skEscolhida.efeitos_bonus.forEach(efB => {
-            if (efB.tipo === 'cura') return;
-            const _efBEntry = { ...efB, _turnos_restantes: efB.duracao_turnos ?? 1,
-              expiry_ms: Date.now() + (efB.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs() };
-            if (!_entAlvoEf.status_effects) _entAlvoEf.status_effects = [];
-            _entAlvoEf.status_effects.push(_efBEntry);
-            if (_alvoBatEf) { if (!_alvoBatEf.status_effects) _alvoBatEf.status_effects = []; _alvoBatEf.status_effects.push({..._efBEntry}); }
-            if (efB.tipo === 'dot') _avtMostrarDotDrip(_entAlvoEf);
-          });
-        }
-        _avtLog(`⚔ ${inv.nome} usa [${_skEscolhida.habilidade}] em ${alvo.nome} por ${dano}!`, bat.id);
       } else if (_basicDispo) {
         if (!bat._cooldowns) bat._cooldowns = {};
         bat._cooldowns[_basicCdKey] = _avtGetAtaqueBasicoCooldown();
-        dano = _avtRolarFormula(_invAtiva._formulaAtaqueBasico || invDef.dano_formula || '1d6');
-        _avtLog(`⚔ ${inv.nome} ataca ${alvo.nome} por ${dano}!`, bat.id);
+        _formulaUsada = _invAtiva._formulaAtaqueBasico || invDef.dano_formula || '1d6';
+      } else {
+        _avtBroadcastBatalha(bat);
+        _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
+        return;
       }
-    } else if (invDef.dano_formula) {
-      // Invocado normal: usa fórmula sintética
-      dano = _avtRolarFormulaInvocado(invDef, 'dano', _invAtiva?.dono_char_nome);
-      _avtLog(`⚔ ${inv.nome} ataca ${alvo.nome} por ${dano}!`, bat.id);
     }
 
-    if (dano > 0) {
-      alvo.hp = Math.max(0, alvo.hp - dano);
-      const alvoBat = bat.iniciativa.find(e => e.id === alvo.id);
-      if (alvoBat) alvoBat.hp = alvo.hp;
-      _avtMostrarDanoAbaixoHp(alvo, dano, false);
+    // Broadcast de skill selecionada
+    _avtBroadcast('avt_skill_selecionada', {
+      atacanteNome: inv.nome, skillId: _skUsada?.id || null, skillNome: _skNome, alvoNome: alvo.nome
+    });
+
+    // Rolar dados
+    const _dadosInv = [];
+    let _danoTotalInv = 0;
+    String(_formulaUsada).toLowerCase().split('+').forEach(part => {
+      part = part.trim();
+      const m = part.match(/^(\d*)d(\d+)$/);
+      if (m) {
+        const n = parseInt(m[1]) || 1, faces = parseInt(m[2]) || 6;
+        for (let i = 0; i < n; i++) {
+          const val = Math.floor(Math.random() * faces) + 1;
+          _dadosInv.push({ val, faces }); _danoTotalInv += val;
+        }
+      } else { _danoTotalInv += parseInt(part) || 0; }
+    });
+    const _hitRollInv = Math.floor(Math.random() * 20) + 1;
+    const _critMultInv = _avtCritMultFromD20(_hitRollInv);
+    const _isCritInv = _critMultInv > 1;
+    const _isFumbleInv = _critMultInv === 0;
+
+    // Animação de dados acima da cabeça do dominado
+    const _resultInv = { dados: _dadosInv.map(d => ({ faces: d.faces, valor: d.val })), total: _danoTotalInv };
+    _avtMostrarDadosAcimaDaHeadCompleto(entInv, _resultInv, _skNome, _isCritInv ? 'critico_maior' : _isFumbleInv ? 'erro' : 'normal');
+    _avtMostrarD20AbaixoDaHead(entInv, _hitRollInv, _critMultInv);
+
+    // Animação de ataque (placeholder ou da skill)
+    const _animInv = _avtAnimacaoPlaceholder(entInv, _skUsada);
+    const _animDuracaoInv = _skUsada?.animacao?.duracao ?? _animInv?.duracao ?? 600;
+    if (_animInv && typeof animarAtaque === 'function') {
+      const _atacElInv = _avtElPosicaoCanvas(entInv);
+      const _alvoElInv = _avtElPosicaoCanvas(alvo);
+      if (_atacElInv && _alvoElInv)
+        setTimeout(() => animarAtaque({ atacEl: _atacElInv, alvoEl: _alvoElInv, animacao: _animInv, dano: 0 }), AVT_SLOT_MACHINE_MS);
+      try { _avtBroadcast('avt_attack_anim', { atacanteNome: entInv.nome, alvoNome: alvo.nome, animacao: _animInv, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+    }
+
+    _avtSetTimeout(() => {
+      if (_isFumbleInv) {
+        _avtLog(`💨 ${inv.nome} errou! (d20: ${_hitRollInv})`, bat.id);
+        _avtBroadcastBatalha(bat);
+        _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
+        return;
+      }
+
+      const _danoFinalInv = Math.max(1, Math.ceil(_danoTotalInv * _critMultInv));
+
+      // Aplicar efeitos_bonus da skill
+      if (_skUsada?.efeitos_bonus?.length) {
+        const _entAlvoEf = AVT_STATE.entidades.find(e => e.id === alvo.id) || alvo;
+        const _alvoBatEf = bat.iniciativa.find(e => e.id === alvo.id);
+        _skUsada.efeitos_bonus.forEach(efB => {
+          if (efB.tipo === 'cura') return;
+          const _efBEntry = { ...efB, _turnos_restantes: efB.duracao_turnos ?? 1,
+            expiry_ms: Date.now() + (efB.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs() };
+          if (!_entAlvoEf.status_effects) _entAlvoEf.status_effects = [];
+          _entAlvoEf.status_effects.push(_efBEntry);
+          if (_alvoBatEf) { if (!_alvoBatEf.status_effects) _alvoBatEf.status_effects = []; _alvoBatEf.status_effects.push({..._efBEntry}); }
+          if (efB.tipo === 'dot') _avtMostrarDotDrip(_entAlvoEf);
+        });
+      }
+
+      // Animação de skill configurada
+      if (_skUsada && typeof _avtPlaySkillAnim === 'function') {
+        _avtPlaySkillAnim(_skUsada, _avtEntViva(alvo), _avtEntViva(entInv));
+        try { _avtBroadcast('avt_skill_anim', { skillId: _skUsada.id || null, animacao: _skUsada.animacao || null, atacanteNome: entInv.nome, alvoNome: alvo.nome }); } catch(_) {}
+      }
+
+      // Aplicar dano
+      alvo.hp = Math.max(0, alvo.hp - _danoFinalInv);
+      const _alvoBatInv = bat.iniciativa.find(e => e.id === alvo.id);
+      if (_alvoBatInv) _alvoBatInv.hp = alvo.hp;
+      _avtMostrarDanoAbaixoHp(alvo, _danoFinalInv, _isCritInv);
+      if (_isCritInv) _avtTokenTremer(alvo);
       try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
+      const _critLabelInv = _critMultInv === 2 ? ' ✦✦ CRÍTICO TOTAL!' : _critMultInv === 1.5 ? ' ✦ CRÍTICO!' : _critMultInv === 1.2 ? ' ⭐ CRÍTICO MENOR!' : '';
+      _avtLog(`⚔ ${inv.nome} usa [${_skNome}] em ${alvo.nome} por ${_danoFinalInv}!${_critLabelInv}`, bat.id);
 
       // Propagar TODOS os efeitosNecromante (incluindo necromante → cascata)
       if (_invAtiva?._ehNecromante && _invAtiva._efeitosNecromante?.length) {
@@ -21303,19 +21382,22 @@ function _avtNpcTurnoInvocado(bat) {
             if (!_alvoBatNecro.status_effects) _alvoBatNecro.status_effects = [];
             _alvoBatNecro.status_effects.push({..._efNecroEntry});
           }
-          if (_entAlvoNecro !== alvo) _entAlvoNecro.status_effects = _entAlvoNecro.status_effects;
           if (efP.tipo === 'dot') _avtMostrarDotDrip(_entAlvoNecro);
           _avtLog(`  ↳ [Necromante] ${efP.tipo} aplicado em ${alvo.nome}`, bat.id);
         });
       }
 
       // Aggro: inimigo atacado passa a focar no dominado
-      const entAlvoAggro = AVT_STATE.entidades.find(e => e.id === alvo.id);
-      if (entAlvoAggro) { entAlvoAggro._alvoAtual = entInv.nome; entAlvoAggro._alvoId = entInv.id; }
+      const _entAlvoAggro = AVT_STATE.entidades.find(e => e.id === alvo.id);
+      if (_entAlvoAggro) { _entAlvoAggro._alvoAtual = entInv.nome; _entAlvoAggro._alvoId = entInv.id; }
       if (alvo._alvoAtual !== undefined) { alvo._alvoAtual = entInv.nome; alvo._alvoId = entInv.id; }
 
       if (alvo.hp <= 0 && alvo.tipo === 'inimigo') { _avtNpcMorreu(alvo, bat); _avtCheckVitoria(bat); }
-    }
+
+      _avtBroadcastBatalha(bat);
+      _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
+    }, AVT_SLOT_MACHINE_MS + _animDuracaoInv);
+    return;
   }
 
   _avtBroadcastBatalha(bat);
