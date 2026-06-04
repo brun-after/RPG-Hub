@@ -7026,6 +7026,19 @@ function _avtTickEfeitosOOC(now) {
           }
         }
       }
+      if (rec.ef.tipo === 'necromante') {
+        // Dominação OOC expirou: matar o dominado de vez
+        if (ent._dominado) {
+          AVT_STATE.invocacoes_ativas = (AVT_STATE.invocacoes_ativas || []).filter(i => i.id !== ent.id);
+          ent._dominado = false;
+          ent.tipo = 'inimigo';
+          ent.hp = 0;
+          if (ent.status_effects) ent.status_effects = ent.status_effects.filter(e => e.tipo !== 'necromante');
+          _avtNpcMorreu(ent, null);
+          mostrarToast(`☠ ${ent.nome} voltou à morte.`, 'aviso', 3000);
+        }
+        return false;
+      }
       if (rec.ef.tipo === 'fantasma') delete ent._fantasma;
       if (rec.ef.tipo === 'stun')     delete ent._stunned;
       if (rec.ef.tipo === 'silence')  delete ent._silenciado;
@@ -7042,6 +7055,41 @@ function _avtTickEfeitosOOC(now) {
       if (typeof _avtBatalhaDeEnt === 'function' && _avtBatalhaDeEnt(rec.entId)) return true;
       rec.lastTickAt = nowMs;
       const ef = rec.ef;
+      if (ef.tipo === 'necromante' && ent._dominado) {
+        // Movimento OOC: mover o dominado em direção ao inimigo mais próximo e atacar
+        const _alvosDom = AVT_STATE.entidades.filter(e =>
+          e.tipo === 'inimigo' && e.hp > 0 && !e.escondido && !e._dominado
+        );
+        if (_alvosDom.length) {
+          const _alvoDom = _alvosDom.reduce((a, b) =>
+            (Math.abs(a.x-ent.x)+Math.abs(a.y-ent.y)) <= (Math.abs(b.x-ent.x)+Math.abs(b.y-ent.y)) ? a : b
+          );
+          const _distDom = Math.abs(_alvoDom.x - ent.x) + Math.abs(_alvoDom.y - ent.y);
+          if (_distDom <= 1) {
+            const _danoDom = _avtRolarFormula(ef._formulaAtaque || '1d6');
+            _alvoDom.hp = Math.max(0, _alvoDom.hp - _danoDom);
+            _avtMostrarDanoAbaixoHp(_alvoDom, _danoDom, false);
+            _alvoDom._alvoAtual = ent.nome;
+            _alvoDom._alvoId    = ent.id;
+            try { _avtBroadcast('avt_hp_update', { nome: _alvoDom.nome, hp: _alvoDom.hp, hpMax: _alvoDom.hpMax }); } catch(_) {}
+            if (_alvoDom.hp <= 0) _avtNpcMorreu(_alvoDom, null);
+          } else {
+            const _dxDom = _alvoDom.x > ent.x ? 1 : _alvoDom.x < ent.x ? -1 : 0;
+            const _dyDom = _alvoDom.y > ent.y ? 1 : _alvoDom.y < ent.y ? -1 : 0;
+            const _passos = _dxDom && _dyDom ? [[_dxDom,0],[0,_dyDom]] : _dxDom ? [[_dxDom,0]] : [[0,_dyDom]];
+            for (const [tdx, tdy] of _passos) {
+              const nx = Math.round(ent.x)+tdx, ny = Math.round(ent.y)+tdy;
+              if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon) && !_avtCelulaOcupada(nx, ny, ent.id, ent.tipo, false)) {
+                ent.x = nx; ent.y = ny;
+                try { _avtBcastTokenMove({ nome: ent.nome, x: nx, y: ny }); } catch(_) {}
+                break;
+              }
+            }
+          }
+        }
+        _avtRenderHpBar();
+        return true;
+      }
       if (ef.tipo === 'fantasma')   ent._fantasma   = true;
       if (ef.tipo === 'atravessar') ent._atravessar = true;
       if (ef.tipo === 'stun')       ent._stunned    = true;
@@ -8190,16 +8238,32 @@ function _avtNecromanteDominar(npcEnt, efNecro, bat) {
   npcEnt._efeitosNecromante = efeitosPropagate;
   npcEnt.status_effects = [];
 
-  // Badge visual de dominado
-  const efDominado = { tipo: 'necromante', nome: 'Dominado', cor: corDominado,
-    _turnos_restantes: duracaoT, duracao_turnos: duracaoT };
+  const _necroFormula = efNecro._formulaAtaque || '1d6';
+
+  // Badge visual de dominado — OOC usa _ooc:true p/ mostrar segundos em vez de turnos
+  const _necroOoc = !bat;
+  const _necroExpiryMs = _necroOoc ? Date.now() + duracaoT * _avtGetEfeitoCooldownMs() : 0;
+  const efDominado = {
+    tipo: 'necromante', nome: 'Dominado', cor: corDominado,
+    _turnos_restantes: duracaoT, duracao_turnos: duracaoT,
+    ...(_necroOoc ? { _ooc: true, expiry_ms: _necroExpiryMs } : {}),
+  };
   npcEnt.status_effects.push(efDominado);
+
+  // Registro em _oocStatusEffects quando dominado fora de combate (exibe contagem em segundos)
+  if (_necroOoc) {
+    if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+    AVT_STATE._oocStatusEffects.push({
+      entId: npcEnt.id, entNome: npcEnt.nome, lastTickAt: Date.now(),
+      ef: { ...efDominado, _formulaAtaque: _necroFormula, _efeitosNecromante: efeitosPropagate },
+    });
+  }
 
   // Registro em invocacoes_ativas com definição sintética
   const invDef = {
     nome: npcEnt.nome,
     comportamento: 'agressivo',
-    dano_formula: efNecro._formulaAtaque || '1d6',
+    dano_formula: _necroFormula,
     duracao_base_turnos: duracaoT,
   };
   const invAtiva = {
