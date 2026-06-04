@@ -134,6 +134,68 @@ function _avtBcastTokenMove(payload){
 }
 window._avtBcastTokenMove = _avtBcastTokenMove;
 
+// ─── SALA DE ESPERA (host voluntário) ──────────────────────────────────────
+// Exibe o lobby antes do canvas iniciar. Resolve quando host é eleito.
+// callback: função a chamar assim que host_elected disparar.
+function _avtSalaEspera(rpgNome, callback) {
+  const rtn = typeof RTNet !== 'undefined' && RTNet.initialized;
+
+  // Se não há RTNet, ou host já eleito (reconexão/reload): inicia diretamente
+  if (!rtn) { callback(); return; }
+  const jaTemHost = RTNet.isHost() || RTNet.hostId;
+  if (jaTemHost) {
+    if (!RTNet.isHost() && RTNet.hostId) RTNet.requisitarSnapshot().catch(() => {});
+    callback();
+    return;
+  }
+
+  // Mostra overlay de sala de espera
+  const seEl = document.getElementById('avt-sala-espera');
+  if (seEl) seEl.style.display = 'flex';
+  const statusEl = document.getElementById('avt-sala-status');
+  if (statusEl) statusEl.textContent = '';
+
+  // Atualiza lista de presença periodicamente
+  function _atualizarLista() {
+    const lista = document.getElementById('avt-sala-lista');
+    if (!lista) return;
+    const header = '<div style="color:#4fa3d1;margin-bottom:2px;letter-spacing:.05em;font-size:0.6rem;text-transform:uppercase">Jogadores na sala</div>';
+    let linhas = header;
+    const eu = (typeof SESSION !== 'undefined' && SESSION?.user?.email) || 'Você';
+    linhas += `<div style="color:#a8c4d4;padding:2px 0">• ${eu} <span style="color:#7a92aa;font-size:0.58rem">(você)</span></div>`;
+    if (rtn && typeof RTNet._peerJoinTs === 'function') {
+      for (const [peerId] of RTNet._peerJoinTs()) {
+        linhas += `<div style="color:#7a92aa;padding:2px 0">• ${peerId.slice(0, 12)}…</div>`;
+      }
+    }
+    lista.innerHTML = linhas;
+  }
+  _atualizarLista();
+  const listInterval = setInterval(_atualizarLista, 2000);
+
+  // Botão "Aguardar Host" apenas desativa ele mesmo e exibe status
+  window._avtAguardarSemHost = function() {
+    const btn = document.getElementById('avt-btn-aguardar-host');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+    if (statusEl) statusEl.textContent = '⏳ Aguardando host iniciar a sessão…';
+  };
+
+  function _onHostChange() {
+    clearInterval(listInterval);
+    window.removeEventListener('rtnet:hostchange', _onHostChange);
+    delete window._avtAguardarSemHost;
+    // Re-enable buttons
+    const btnHost = document.getElementById('avt-btn-ser-host');
+    const btnAguardar = document.getElementById('avt-btn-aguardar-host');
+    if (btnHost) { btnHost.disabled = false; btnHost.style.opacity = ''; }
+    if (btnAguardar) { btnAguardar.disabled = false; btnAguardar.style.opacity = ''; }
+    if (!RTNet.isHost()) RTNet.requisitarSnapshot().catch(() => {});
+    callback();
+  }
+  window.addEventListener('rtnet:hostchange', _onHostChange);
+}
+window._avtSalaEspera = _avtSalaEspera;
+
 // ─── PRNG DETERMINÍSTICO ────────────────────────────────────────────────────
 // Todos os clientes na mesma janela de 2s geram o mesmo valor para o mesmo NPC.
 // Isso garante que decisões de IA (patrulha, perseguição) sejam idênticas em
@@ -2350,7 +2412,6 @@ async function entrarAventura(rpgId) {
           _oocStatusEffects:  AVT_STATE._oocStatusEffects,
           batalhaAutoSuspensa:AVT_STATE.batalhaAutoSuspensa,
         }));
-        if (!RTNet.isHost()) RTNet.requisitarSnapshot().catch(() => {});
         // Timer de segurança: flush de HP buffered a cada 90s
         if (AVT_STATE._charHpFlushTimer) clearInterval(AVT_STATE._charHpFlushTimer);
         AVT_STATE._charHpFlushTimer = setInterval(() => {
@@ -2358,10 +2419,16 @@ async function entrarAventura(rpgId) {
         }, 90_000);
         // [NPC-SYNC] iniciado aqui para que RTNet.mode já esteja definido ao entrar na função
         try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
-      }).catch(e => console.warn('[AVT] RTNet.init falhou:', e));
+        // Sala de espera: aguarda host eleito antes de iniciar o canvas
+        _avtSalaEspera(AVT_STATE.rpg.name, _iniciarCanvas);
+      }).catch(e => {
+        console.warn('[AVT] RTNet.init falhou:', e);
+        _iniciarCanvas(); // fallback: inicia canvas mesmo sem RTNet
+      });
     } else {
-      // Sem RTNet: iniciar NPC-SYNC em modo Supabase diretamente
+      // Sem RTNet: iniciar NPC-SYNC em modo Supabase e canvas diretamente
       try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
+      _iniciarCanvas();
     }
 
     // Carregar configurações de colisão persistidas
@@ -2385,19 +2452,30 @@ async function entrarAventura(rpgId) {
     document.getElementById('avt-nome').textContent = AVT_STATE.rpg.name;
     document.getElementById('avt-nome').style.color = t.destaque || '#c8a84b';
 
-    // Double-RAF: wait for browser reflow before measuring canvas dimensions
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      _avtCanvasInit();
-      _avtRenderLoop();
-      _avtRenderHpBar();
-      // Pre-warm particle emitter so first battle animation starts immediately
-      if (typeof _avtEnsurePixiParticles === 'function') _avtEnsurePixiParticles().catch(() => {});
-      ocultarLoading();
-      if (AVT_STATE._tilesetConfig && AVT_STATE._tilesetImgUrl) {
-        _avtCarregarTileset(AVT_STATE._tilesetImgUrl, AVT_STATE._tilesetConfig)
-          .catch(e => console.warn('[tileset] load failed:', e));
-      }
-    }));
+    // Exibe sala de espera enquanto aguarda eleição de host.
+    // Inicia fade-out do loading para que o overlay fique visível.
+    ocultarLoading();
+    const _seNomeEl = document.getElementById('avt-sala-nome');
+    if (_seNomeEl) _seNomeEl.textContent = AVT_STATE.rpg.name || '';
+
+    // Função que inicia o canvas após o host ser eleito
+    const _iniciarCanvas = () => {
+      const seEl = document.getElementById('avt-sala-espera');
+      if (seEl) seEl.style.display = 'none';
+      // Double-RAF: wait for browser reflow before measuring canvas dimensions
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        _avtCanvasInit();
+        _avtRenderLoop();
+        _avtRenderHpBar();
+        // Pre-warm particle emitter so first battle animation starts immediately
+        if (typeof _avtEnsurePixiParticles === 'function') _avtEnsurePixiParticles().catch(() => {});
+        ocultarLoading();
+        if (AVT_STATE._tilesetConfig && AVT_STATE._tilesetImgUrl) {
+          _avtCarregarTileset(AVT_STATE._tilesetImgUrl, AVT_STATE._tilesetConfig)
+            .catch(e => console.warn('[tileset] load failed:', e));
+        }
+      }));
+    };
 
     salvarNav('rpg', rpgId);
   } catch(e) {
@@ -5782,10 +5860,11 @@ function _avtMeuJogador() {
   // Fallback só para sessão solo (único jogador no mapa, sem vínculo configurado)
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
   if (jogadores.length === 1) return jogadores[0];
-  // Múltiplos jogadores e sem vínculo: avisa uma vez e retorna null
+  // Múltiplos jogadores e sem vínculo: avisa uma vez (mas não se for o host técnico)
   if (jogadores.length > 1 && !AVT_STATE._avisouSemVinculo) {
     AVT_STATE._avisouSemVinculo = true;
-    if (typeof mostrarToast === 'function') {
+    const isHostSemPersonagem = typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.isHost();
+    if (!isHostSemPersonagem && typeof mostrarToast === 'function') {
       mostrarToast('⏳ Aguardando o mestre atribuir seu personagem', 'aviso', 4000);
     }
   }
@@ -5856,7 +5935,11 @@ function _avtMoverJogador(dx, dy) {
       _avtLog(`${jogador.nome} move para (${nx},${ny})`, minhaBat.id);
       _avtCheckAbandonoCombate(ativo, minhaBat);
       _avtHudUpdate(); _avtCameraUpdate();
-      _avtBcastTokenMove({ nome: ativo.nome, x: nx, y: ny });
+      if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost() && RTNet.mode !== 'supabase') {
+        try { RTNet.sendToHost('avt_move_input', { id: ativo.id, nome: ativo.nome, nx, ny }); } catch(_) {}
+      } else {
+        _avtBcastTokenMove({ nome: ativo.nome, x: nx, y: ny });
+      }
       _avtBroadcastBatalha(minhaBat); // sincroniza movimentoRestante com todos os clientes
       if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
       else _avtDebounceSalvarPosicaoNpc(ativo);
@@ -5893,7 +5976,14 @@ function _avtMoverJogador(dx, dy) {
         _avtCheckPrimeiroAtaque();
         _avtCheckEntradaCombateAtivo(jogador);
         _avtVerificarAutoAtaqueBasico(jogador);
-        try { _avtBcastTokenMove({ nome: jogador.nome, x: cell.x, y: cell.y }); } catch (_) {}
+        // Em P2P não-host: envia intenção de movimento ao host (canal confiável).
+        // O tick autoritativo confirma a posição de volta para todos (≤100ms).
+        // No fallback Supabase ou quando é host: broadcast direto.
+        if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost() && RTNet.mode !== 'supabase') {
+          try { RTNet.sendToHost('avt_move_input', { id: jogador.id, nome: jogador.nome, nx: cell.x, ny: cell.y }); } catch(_) {}
+        } else {
+          try { _avtBcastTokenMove({ nome: jogador.nome, x: cell.x, y: cell.y }); } catch (_) {}
+        }
         if (jogador.tipo === 'jogador') _avtDebounceSalvarPosicao(jogador);
         else if (typeof _avtDebounceSalvarPosicaoNpc === 'function') _avtDebounceSalvarPosicaoNpc(jogador);
         _avtVerificarPortaFase(cell.x, cell.y);
@@ -7624,6 +7714,9 @@ function avtReceberMovimento(_payload) {
   const ent = (id && AVT_STATE.entidades.find(e => e.id === id))
     || AVT_STATE.entidades.find(e => e.nome === nome);
   if (!ent) return;
+  // Em modo P2P: posições de jogadores chegam pelo tick autoritativo (avt_state_tick).
+  // Ignorar avt_token_move para evitar conflito com a reconciliação do tick.
+  if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase' && ent.tipo === 'jogador') return;
 
   // Ignorar eco da própria entidade controlada (jogador vinculado OU NPC sob mestreAtivo)
   const _meCtrl = typeof _avtEntidadeControlada === 'function' && _avtEntidadeControlada();
@@ -19953,16 +20046,11 @@ try{
   // ── Init ────────────────────────────────────────────────────────────────
   async function _avtNpcSyncInit(rpgId){
     if (!rpgId || typeof sb !== 'function' || typeof sbRpc !== 'function') return;
-    // Modo P2P: NPC é gerenciado pelo host RTNet — sem chamadas Supabase para NPC
+    // Modo P2P: NPC é gerenciado exclusivamente pelo host RTNet.
+    // Sem leases, sem RPC de posição, sem timer. O tick autoritativo (100ms) é suficiente.
     if (typeof RTNet !== 'undefined' && RTNet.initialized) {
-      if (_hostLoopTimer) clearInterval(_hostLoopTimer);
-      _hostLoopTimer = setInterval(_avtNpcHostLoop, 3000);
-      try {
-        if (!window._avtNpcSyncUnloadBound) {
-          window.addEventListener('beforeunload', _releaseAllLeases, { capture: false });
-          window._avtNpcSyncUnloadBound = true;
-        }
-      } catch(_) {}
+      if (_hostLoopTimer) { clearInterval(_hostLoopTimer); _hostLoopTimer = null; }
+      if (RTNet.isHost()) AVT_STATE._npcHostOwned = true;
       return;
     }
     try {
@@ -20048,9 +20136,10 @@ try{
   }
 
   function _avtNpcApplyDamage(npcId, delta, attackerUserId, _retry){
-    if (!AVT_STATE.rpgId || !npcId || typeof sbRpc !== 'function') return;
-    // Não-host: delega ao host que detém o lease do NPC (o RPC valida host_user)
-    if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost()) {
+    if (!AVT_STATE.rpgId || !npcId) return;
+    const isRTNet = typeof RTNet !== 'undefined' && RTNet.initialized;
+    // Não-host em P2P: delega ao host pelo canal confiável
+    if (isRTNet && !RTNet.isHost()) {
       if (typeof RTNet.sendToHost === 'function') {
         RTNet.sendToHost('avt_player_action', {
           tipo: 'npc_dano_delta', from: attackerUserId,
@@ -20059,7 +20148,21 @@ try{
       }
       return;
     }
+    // Host em P2P: aplica diretamente em memória — tick propaga para todos
+    if (isRTNet && RTNet.isHost()) {
+      const ent = (AVT_STATE.entidades||[]).find(e => e.id === npcId);
+      if (ent && typeof ent.hp === 'number') {
+        ent.hp = Math.max(0, ent.hp - (delta|0));
+        if (ent.hp <= 0 && !ent._npcDespawned) {
+          const bat = (AVT_STATE.batalhas||[]).find(b => b.iniciativa?.some(e => e.id === npcId));
+          try { _avtNpcMorreu(ent, bat||null); if (bat) _avtCheckVitoria(bat); } catch(_){}
+        }
+      }
+      return;
+    }
+    if (typeof sbRpc !== 'function') return;
     const nonce = _newNonce();
+    // Somente usa _npcPending em modo Supabase (reconciliação com RPC canônico)
     AVT_STATE._npcPending[npcId] = AVT_STATE._npcPending[npcId] || [];
     AVT_STATE._npcPending[npcId].push({ nonce, delta });
 
@@ -20096,6 +20199,8 @@ try{
     try {
       if (!row || !row.npc_id) return;
       if (row.rpg_id && AVT_STATE.rpgId && row.rpg_id !== AVT_STATE.rpgId) return;
+      // Em P2P, estado de NPC chega pelo tick autoritativo — postgres_changes é ignorado
+      if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') return;
       const ent = (AVT_STATE.entidades||[]).find(e => e.id === row.npc_id);
 
       // Dedup por version (eventos podem chegar duplicados em reconnect)
@@ -20162,8 +20267,11 @@ try{
         const ent = AVT_STATE.entidades[idx];
         ent.hp = 0;
         ent.escondido = true;
-        // Marca morto, mas mantém pipeline de remoção/respawn já existente
-        try { _avtPersistirEstadoInimigos(); } catch(_){}
+        // Em P2P, adiar persistência para exit/snapshot (evita cascata de writes por NPC morto)
+        const isP2P = typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase';
+        if (!isP2P) {
+          try { _avtPersistirEstadoInimigos(); } catch(_){}
+        }
       }
       if (AVT_STATE.npcTimers) delete AVT_STATE.npcTimers[npcId];
     } catch(_){}
@@ -20171,6 +20279,10 @@ try{
 
   // ── Host eleito ─────────────────────────────────────────────────────────
   function _avtSouHostDe(npcId){
+    // Em P2P: o host RTNet controla todos os NPCs (sem lease individual)
+    if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') {
+      return RTNet.isHost();
+    }
     const exp = AVT_STATE._npcHostLease && AVT_STATE._npcHostLease[npcId];
     return !!(exp && exp > Date.now());
   }
@@ -20281,7 +20393,7 @@ try{
 // ───────────────────────────────────────────────────────────────────────────
 // • Topbar com botão Host (transferência manual)
 // • Banner "Host desconectado — Assumir host"
-// • Tick autoritativo do host (HP/posição) a cada 500ms via DataChannel
+// • Tick autoritativo do host (HP/posição) a cada 100ms via DataChannel confiável
 // • Protocolo player → host → all para interações (avt_player_action /
 //   avt_authoritative_apply)
 // • Gate de avt_token_move para NPCs/inimigos (somente host emite)
@@ -20357,9 +20469,9 @@ try{
       for (const r of payload.entidades) {
         const ent = _findEnt(r.id) || _findEnt(r.nome);
         if (!ent) continue;
-        // Não sobrescreve a entidade que ESTE jogador controla
-        if (meCharNome && ent.nome === meCharNome) continue;
         // HP autoritativo — só atualiza entidades ainda visíveis (evita ressuscitar mortos)
+        // Nota: o próprio personagem do jogador também é reconciliado pelo tick.
+        // A dead-band de posição abaixo absorve jitter normal de predição local.
         if (!ent.escondido) {
           const _hpFresh = ent._lastHpDirectUpdateAt && (Date.now() - ent._lastHpDirectUpdateAt < 1500);
           if (!_hpFresh) {
@@ -20371,22 +20483,26 @@ try{
         if (r.escondido === true || (typeof r.hp === 'number' && r.hp <= 0 && ent.tipo === 'inimigo')) {
           ent.escondido = true;
         }
-        // Posição: deixa waypoints ativos rodarem; só corrige divergências significativas
+        // Posição: reconciliação com dead-band adaptativa
         if (typeof r.x === 'number' && typeof r.y === 'number') {
           const dx = Math.abs((ent.x||0) - r.x);
           const dy = Math.abs((ent.y||0) - r.y);
           const maxDiv = Math.max(dx, dy);
           const hasMidAnim = (ent._waypoints?.length > 0) || ent._lerpTo;
+          const isMe = meCharNome && ent.nome === meCharNome;
           if (maxDiv > 2.0) {
-            // Divergência grande: corrige à força, descarta waypoints obsoletos
+            // Divergência grande (p. ex. rejeição de movimento pelo host): corrige à força
             ent._waypoints = [];
             ent._lerpTo = { fromX: ent.renderX ?? ent.x, fromY: ent.renderY ?? ent.y, x: r.x, y: r.y, t0: performance.now(), dur: 300 };
+          } else if (isMe && maxDiv > 0.5) {
+            // Próprio personagem: corrige desvios > 0.5 célula mesmo durante animação.
+            // Jitter de predição normal (≤ 0.5) é absorvido silenciosamente.
+            ent._lerpTo = { fromX: ent.renderX ?? ent.x, fromY: ent.renderY ?? ent.y, x: r.x, y: r.y, t0: performance.now(), dur: 200 };
           } else if (!hasMidAnim) {
             if (maxDiv > 1.0) {
               ent._lerpTo = { fromX: ent.renderX ?? ent.x, fromY: ent.renderY ?? ent.y, x: r.x, y: r.y, t0: performance.now(), dur: 250 };
             } else {
               ent.x = r.x; ent.y = r.y;
-              // Não toca renderX/Y para não interromper animações em andamento
             }
           }
           // else: animação ativa com divergência ≤ 2 células → waypoints cuidam do movimento
@@ -20468,6 +20584,29 @@ try{
       if (payload.anim) ent._currentAnim = payload.anim;
       if (payload.morto && ent.hp > 0) ent.hp = 0;
     } catch(_) {}
+  };
+
+  // ── [MOVE-INPUT] Host aplica intenção de movimento de jogador não-host ────
+  // Valida colisão no lado autoritativo e aplica à entidade.
+  // O tick confiável (100ms) propaga a posição confirmada para todos os clientes.
+  window.avtReceberMoveInput = function(payload) {
+    try {
+      if (!_isHost()) return; // apenas o host processa
+      if (!payload) return;
+      const { id, nome, nx, ny } = payload;
+      if (typeof nx !== 'number' || typeof ny !== 'number') return;
+      const ent = _findEnt(id) || _findEnt(nome);
+      if (!ent || ent.hp <= 0) return;
+      // Validação de colisão autoritativa — rejeita silenciosamente se inválido
+      if (typeof _avtTilePassavel === 'function' && !ent._atravessar) {
+        if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
+      }
+      if (typeof _avtCelulaOcupada === 'function' && !ent._fantasma) {
+        if (_avtCelulaOcupada(nx, ny, ent.id, ent.tipo, false)) return;
+      }
+      ent.x = nx; ent.y = ny;
+      // Posição será incluída no próximo tick autoritativo (≤100ms)
+    } catch(e) { try { console.warn('[MOVE-INPUT]', e); } catch(_) {} }
   };
 
   // ── Helper para jogadores: envia ação ao host ───────────────────────────
@@ -20852,10 +20991,12 @@ try{
       } catch(e) { try { console.warn('[AVT][HP] avt_player_damage:', e); } catch(_){} }
     });
 
-    // Host muda → re-emite turnos de NPC pendentes
+    // Host muda → assume controle de NPC e re-emite turnos pendentes
     if (typeof RTNet.onHostChange === 'function') {
       RTNet.onHostChange(({ isHost } = {}) => {
         if (!isHost) return;
+        // Assume controle de todos os NPCs (P2P: sem lease, apenas flag em memória)
+        AVT_STATE._npcHostOwned = true;
         setTimeout(() => {
           try {
             (AVT_STATE.batalhas || []).forEach(b => {

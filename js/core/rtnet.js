@@ -56,14 +56,19 @@ window.RTNet = (() => {
 
     // Election candidates collected during window
     _candidates: new Map(), // userId → joinTs
+
+    // Voluntary host election
+    _volunteers:    [],     // { userId, ts } — candidatos ao host (modo voluntário)
+    _volunteerTimer: null,  // timer de janela de coleta de volunteers
   };
 
   const STUN_SERVERS         = [{ urls: 'stun:stun.l.google.com:19302' }];
   const HOST_HB_INTERVAL     = 5_000;   // ms — host heartbeat via signaling
   const HOST_DEAD_THRESH     = 15_000;  // ms — host considerado morto sem heartbeats
   const SNAPSHOT_INTERVAL    = 15_000;  // ms — snapshot persistido em banco
-  const STATE_TICK_INTERVAL  = 500;     // ms — tick autoritativo via DataChannel
+  const STATE_TICK_INTERVAL  = 100;     // ms — tick autoritativo via DataChannel (10 Hz, confiável)
   const ELECTION_WAIT        = 250;     // ms — janela curta de coleta (apenas empate raro)
+  const ELECTION_MODE        = 'voluntary'; // 'auto' = primeiro a entrar; 'voluntary' = aguarda host_volunteer
   const PERIODIC_SYNC_INTERVAL = 10_000; // ms — ressincronização periódica forçada
 
   // Mapa: tipo de evento → nome da função global handler (mesmo que realtime.js)
@@ -100,6 +105,8 @@ window.RTNet = (() => {
     // [COLISAO + ENTIDADE]
     avt_colisao_config:       'avtReceberColisaoConfig',
     avt_entidade_nova:        'avtReceberEntidadeNova',
+    // [MOVE-INPUT] movimento baseado em input (não-host → host)
+    avt_move_input:           'avtReceberMoveInput',
   };
 
   // opts padrão por tipo de evento (camada A/B/C conforme plano §5)
@@ -129,12 +136,14 @@ window.RTNet = (() => {
     avt_attack_anim:       { persist: 'never',     reliable: true  },
     avt_level_config_update:{ persist: 'immediate',reliable: true  },
     // [HOST-RTC] novos
-    avt_state_tick:           { persist: 'never',     reliable: false },
+    avt_state_tick:           { persist: 'never',     reliable: true  }, // tick autoritativo usa canal confiável
     avt_player_action:        { persist: 'never',     reliable: true  },
     avt_authoritative_apply:  { persist: 'never',     reliable: true  },
     // [HP-AUTHORITY v22] novos — HP fast (unreliable, alta frequência); damage reliable
     avt_player_hp:            { persist: 'never',     reliable: true  },
     avt_player_damage:        { persist: 'never',     reliable: true  },
+    // [MOVE-INPUT] intenção de movimento do cliente para o host (canal confiável)
+    avt_move_input:           { persist: 'never',     reliable: true  },
   };
 
   function _log(...a)  { try { console.log('[RTNet]',  ...a); } catch(_) {} }
@@ -205,6 +214,14 @@ window.RTNet = (() => {
         break;
       case 'host_transfer_ack':
         _onHostTransferAck(payload.new_host_id, payload.old_host_id);
+        break;
+      case 'host_volunteer':
+        // Candidatura voluntária ao host: coleta numa janela de 200ms e elege o menor ts
+        if (!_s.hostId) {
+          _s._volunteers.push(payload);
+          clearTimeout(_s._volunteerTimer);
+          _s._volunteerTimer = setTimeout(_decideHostFromVolunteers, 200);
+        }
         break;
     }
   }
@@ -338,12 +355,39 @@ window.RTNet = (() => {
   }
 
   function _startElection() {
+    if (ELECTION_MODE === 'voluntary') {
+      // Anuncia presença sem candidatar-se: host será eleito só quando alguém clicar "Iniciar como Host"
+      _signal('peer_announce', { isHostCandidate: false, userId: _s.userId, joinTs: _s.joinedAt });
+      return;
+    }
     _s._candidates.clear();
     _s._candidates.set(_s.userId, _s.joinedAt);
     // Anuncia já candidatando-se; quem chegar depois vê e desiste.
     _signal('peer_announce', { isHostCandidate: true, userId: _s.userId, joinTs: _s.joinedAt });
     if (_s._candidateTimer) clearTimeout(_s._candidateTimer);
     _s._candidateTimer = setTimeout(_decideHost, ELECTION_WAIT);
+  }
+
+  // Elege host com base nas candidaturas voluntárias recebidas
+  function _decideHostFromVolunteers() {
+    if (_s.hostId) return; // já eleito
+    if (!_s._volunteers || _s._volunteers.length === 0) return;
+    let winner = null, winnerTs = Infinity;
+    for (const v of _s._volunteers) {
+      const ts = typeof v.ts === 'number' ? v.ts : 0;
+      const uid = v.userId || v._from || '';
+      if (ts < winnerTs || (ts === winnerTs && uid < (winner ? (winner.userId || winner._from || '') : ''))) {
+        winner = v; winnerTs = ts;
+      }
+    }
+    if (!winner) return;
+    const winnerId = winner.userId || winner._from || '';
+    _log('host voluntário eleito:', winnerId);
+    if (winnerId === _s.userId) {
+      _electSelf();
+    } else {
+      _onHostElected(winnerId);
+    }
   }
 
   function _onAnnounce(fromId, payload) {
@@ -475,7 +519,7 @@ window.RTNet = (() => {
       try {
         if (typeof window._avtBuildStateTick === 'function') {
           const tick = window._avtBuildStateTick();
-          if (tick) _broadcast('avt_state_tick', tick, { reliable: false });
+          if (tick) _broadcast('avt_state_tick', tick);
         }
       } catch(e) { _warn('stateTick:', e); }
     }, STATE_TICK_INTERVAL);
@@ -636,6 +680,7 @@ window.RTNet = (() => {
   return {
     get initialized() { return _s.initialized; },
     get mode()        { return _s.mode; },
+    get hostId()      { return _s.hostId; },
 
     async init({ rpgId, userId, isAventura = true }) {
       if (_s.initialized) this.shutdown();
@@ -650,6 +695,8 @@ window.RTNet = (() => {
       _s.lastHostHb  = 0;
       _s._candidates.clear();
       _s.peerJoinTs.clear();
+      _s._volunteers = [];
+      if (_s._volunteerTimer) { clearTimeout(_s._volunteerTimer); _s._volunteerTimer = null; }
       _log('init rpgId:', rpgId, 'userId:', userId, 'joinedAt:', _s.joinedAt);
 
       window.RTNet._signalingActive = true;
@@ -766,6 +813,22 @@ window.RTNet = (() => {
       out.unshift({ userId: _s.userId, joinTs: _s.joinedAt, channelState: 'self' });
       return out;
     },
+
+    // Candidatura voluntária ao host (chamado pelo botão "Iniciar como Host" na sala de espera)
+    volunteerAsHost() {
+      if (!_s.initialized) return;
+      if (_s.hostId) return; // já há host
+      const v = { userId: _s.userId, ts: Date.now(), _from: _s.userId };
+      _log('volunteerAsHost:', _s.userId);
+      _signal('host_volunteer', v);
+      // Processa localmente também (self-broadcast não chega de volta via Supabase)
+      _s._volunteers.push(v);
+      clearTimeout(_s._volunteerTimer);
+      _s._volunteerTimer = setTimeout(_decideHostFromVolunteers, 200);
+    },
+
+    // Expõe mapa de joinTs dos peers para listagem na sala de espera
+    _peerJoinTs() { return _s.peerJoinTs; },
 
     transferirHost(targetUserId) {
       if (!_s._isHost) { _warn('transferirHost: só o host pode transferir'); return false; }
