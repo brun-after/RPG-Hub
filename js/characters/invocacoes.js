@@ -38,7 +38,6 @@ function renderSecaoInvocacoes(c, ca, isMestre, podEditar) {
     html = `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;padding:6px 0">Nenhuma invocação disponível.</div>`;
   }
 
-  // Listar invocações do personagem
   invs.forEach(entry => {
     const def = INV_OCACOES.catalogo.find(i => i.id === entry.invocacao_id);
     if (!def) return;
@@ -53,8 +52,23 @@ function renderSecaoInvocacoes(c, ca, isMestre, podEditar) {
       ? `<button class="btn-sm btn-roxo" onclick="avtInvocar('${nomeSafe}','${def.id}')" title="Invocar no mapa">✨ Invocar</button>`
       : `<button class="btn-sm" style="opacity:0.4;cursor:default" title="Só disponível no modo aventura" disabled>✨ Invocar</button>`;
 
+    // Token preview
+    const imgToken = def.visual_config?.img_url || '';
+    const tokenHtml = imgToken
+      ? `<img src="${imgToken}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1.5px solid #b07ef0;flex-shrink:0">`
+      : `<div style="width:32px;height:32px;border-radius:50%;border:1.5px solid #b07ef0;background:rgba(176,126,240,0.15);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🔮</div>`;
+
+    // Skills vinculadas
+    const skillIds = Array.isArray(def.habilidades) ? def.habilidades.filter(h => typeof h === 'string') : [];
+    const skills = typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA.skills)
+      ? RPG_DATA.skills.filter(s => skillIds.includes(s.id))
+      : (typeof AVT_STATE !== 'undefined' && Array.isArray(AVT_STATE.skills)
+          ? AVT_STATE.skills.filter(s => skillIds.includes(s.id)) : []);
+    const skillsStr = skills.length ? skills.map(s => s.habilidade).join(', ') : '';
+
     html += `<div class="skill-item">
       <div class="skill-header">
+        ${tokenHtml}
         <div class="skill-nome">🔮 ${def.nome}</div>
         <span class="badge badge-roxo">${comp}</span>
         <span style="font-size:0.75rem;color:var(--suave)">${durStr}</span>
@@ -64,7 +78,7 @@ function renderSecaoInvocacoes(c, ca, isMestre, podEditar) {
         ${btnInvocar}
       </div>
       <div class="skill-efeito" style="font-size:0.82rem;color:var(--suave)">${def.descricao || ''}</div>
-      <div style="font-size:0.72rem;color:var(--suave);margin-top:4px">HP: ${def.hp_base}${def.hp_atributo_scaling ? `+${def.hp_atributo_scaling}×${def.hp_atributo_pct}%` : ''} · ${def.dano_formula || '—'} dano · ${def.resistencia_base || 0} resist.</div>
+      <div style="font-size:0.72rem;color:var(--suave);margin-top:4px">HP: ${def.hp_base}${def.hp_atributo_scaling ? `+${def.hp_atributo_scaling}×${def.hp_atributo_pct}%` : ''} · ${def.dano_formula || '—'} dano · ${def.resistencia_base || 0} resist.${skillsStr ? ` · ⚡ ${skillsStr}` : ''}</div>
     </div>`;
   });
 
@@ -84,6 +98,81 @@ function _invComportamentoBadge(c) {
   return map[c] || c || '—';
 }
 
+// ── Upload de imagem ──────────────────────────────────────────
+async function _invFileUpload(input, targetId, isToken) {
+  const file = input.files?.[0]; if (!file) return;
+  mostrarToast('Enviando imagem…', 'info');
+  try {
+    const url = await uploadToStorage(file, 'invocacoes');
+    const el = document.getElementById(targetId);
+    if (el) {
+      el.value = url;
+      if (isToken) _invAtualizarTokenPreview();
+      else _invAtualizarPerfilPreview();
+    }
+    mostrarToast('Imagem enviada!', 'sucesso');
+  } catch(e) {
+    mostrarToast('Erro no upload da imagem', 'erro');
+    console.error(e);
+  }
+}
+window._invFileUpload = _invFileUpload;
+
+function _invAtualizarTokenPreview() {
+  const url = document.getElementById('inv-img-token')?.value.trim() || '';
+  const prev = document.getElementById('inv-token-preview');
+  if (!prev) return;
+  if (url) {
+    prev.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover">`;
+  } else {
+    prev.innerHTML = '🔮';
+  }
+}
+window._invAtualizarTokenPreview = _invAtualizarTokenPreview;
+
+function _invAtualizarPerfilPreview() {
+  const url = document.getElementById('inv-img-perfil')?.value.trim() || '';
+  const prev = document.getElementById('inv-perfil-preview');
+  if (!prev) return;
+  if (url) {
+    prev.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover">`;
+  } else {
+    prev.innerHTML = '🎨';
+  }
+}
+window._invAtualizarPerfilPreview = _invAtualizarPerfilPreview;
+
+// ── Checklist de skills ───────────────────────────────────────
+function _invRenderSkillsChecklist(selectedIds) {
+  const container = document.getElementById('inv-skills-lista');
+  if (!container) return;
+
+  const selectedSet = new Set(Array.isArray(selectedIds) ? selectedIds.filter(h => typeof h === 'string') : []);
+  const allSkills = (typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA.skills) ? RPG_DATA.skills : [])
+    .concat(typeof AVT_STATE !== 'undefined' && Array.isArray(AVT_STATE.skills) ? AVT_STATE.skills.filter(s =>
+      !(typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA.skills) && RPG_DATA.skills.some(r => r.id === s.id))
+    ) : []);
+
+  if (!allSkills.length) {
+    container.innerHTML = `<div style="color:var(--suave);font-size:0.75rem;font-style:italic;padding:6px 0">Nenhuma skill disponível neste RPG. Crie skills na ficha dos personagens primeiro.</div>`;
+    return;
+  }
+
+  container.innerHTML = allSkills.map(sk => {
+    const checked = selectedSet.has(sk.id) ? 'checked' : '';
+    const formula = sk.formula_dano || sk.custo_rsv || '';
+    const personagem = sk.personagem ? ` · ${sk.personagem}` : '';
+    return `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;border-radius:5px;transition:background 0.1s" onmouseover="this.style.background='rgba(176,126,240,0.08)'" onmouseout="this.style.background=''">
+      <input type="checkbox" value="${sk.id}" ${checked} style="accent-color:#b07ef0;width:15px;height:15px;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.8rem;color:var(--texto)">${sk.habilidade}</div>
+        <div style="font-size:0.68rem;color:var(--suave)">${formula}${personagem}</div>
+      </div>
+    </label>`;
+  }).join('');
+}
+window._invRenderSkillsChecklist = _invRenderSkillsChecklist;
+
 // ── Editor Modal ──────────────────────────────────────────────
 function abrirModalInvocacao(invId, charNomeHint) {
   const overlay = document.getElementById('modal-invocacao-overlay');
@@ -91,7 +180,6 @@ function abrirModalInvocacao(invId, charNomeHint) {
   _invModalId = invId || null;
 
   _invPopularAtributosSelects();
-  _invPopularComportamentoSelect();
 
   if (invId) {
     const inv = INV_OCACOES.catalogo.find(i => i.id === invId);
@@ -100,11 +188,20 @@ function abrirModalInvocacao(invId, charNomeHint) {
     document.getElementById('inv-id').value = invId;
     document.getElementById('inv-nome').value = inv.nome || '';
     document.getElementById('inv-descricao').value = inv.descricao || '';
-    document.getElementById('inv-visual-tipo').value = inv.visual_tipo || 'particles';
-    _invVisualTipoChange();
-    document.getElementById('inv-visual-config').value = inv.visual_config
-      ? (inv.visual_tipo === 'token' ? (inv.visual_config.img_url || '') : JSON.stringify(inv.visual_config, null, 2))
-      : '';
+
+    // Imagens
+    const imgToken = inv.visual_config?.img_url || '';
+    const imgPerfil = inv.visual_config?.img_perfil || inv.img_perfil || '';
+    document.getElementById('inv-img-token').value = imgToken;
+    document.getElementById('inv-img-perfil').value = imgPerfil;
+    _invAtualizarTokenPreview();
+    _invAtualizarPerfilPreview();
+
+    // Partículas
+    const particleConfig = inv.visual_tipo === 'particles' && inv.visual_config
+      ? JSON.stringify(inv.visual_config, null, 2) : '';
+    document.getElementById('inv-visual-config').value = particleConfig;
+
     document.getElementById('inv-comportamento').value = inv.comportamento || 'agressivo';
     _invComportamentoChange();
     document.getElementById('inv-dummy-explosivo').checked = !!inv.dummy_explosivo;
@@ -123,15 +220,19 @@ function abrirModalInvocacao(invId, charNomeHint) {
     document.getElementById('inv-duracao-base').value = inv.duracao_base_turnos || 3;
     document.getElementById('inv-sab-mult').value = inv.duracao_sabedoria_mult || 0;
     document.getElementById('inv-init-bonus').value = inv.iniciativa_bonus || 0;
-    document.getElementById('inv-habilidades').value = Array.isArray(inv.habilidades) && inv.habilidades.length
-      ? JSON.stringify(inv.habilidades, null, 2) : '';
+
+    // Skills (carregar apenas UUIDs — ignora formato antigo de objetos)
+    const skillIds = Array.isArray(inv.habilidades) ? inv.habilidades.filter(h => typeof h === 'string') : [];
+    _invRenderSkillsChecklist(skillIds);
   } else {
     document.getElementById('modal-invocacao-titulo').textContent = 'Nova Invocação';
     document.getElementById('inv-id').value = '';
     document.getElementById('inv-nome').value = '';
     document.getElementById('inv-descricao').value = '';
-    document.getElementById('inv-visual-tipo').value = 'particles';
-    _invVisualTipoChange();
+    document.getElementById('inv-img-token').value = '';
+    document.getElementById('inv-img-perfil').value = '';
+    _invAtualizarTokenPreview();
+    _invAtualizarPerfilPreview();
     document.getElementById('inv-visual-config').value = '';
     document.getElementById('inv-comportamento').value = 'agressivo';
     _invComportamentoChange();
@@ -151,7 +252,7 @@ function abrirModalInvocacao(invId, charNomeHint) {
     document.getElementById('inv-duracao-base').value = 3;
     document.getElementById('inv-sab-mult').value = 0;
     document.getElementById('inv-init-bonus').value = 0;
-    document.getElementById('inv-habilidades').value = '';
+    _invRenderSkillsChecklist([]);
   }
 
   overlay.style.display = 'flex';
@@ -165,20 +266,6 @@ function fecharModalInvocacao() {
   _invModalId = null;
 }
 window.fecharModalInvocacao = fecharModalInvocacao;
-
-function _invVisualTipoChange() {
-  const tipo = document.getElementById('inv-visual-tipo')?.value || 'particles';
-  const lbl = document.getElementById('inv-visual-config-label');
-  const hint = document.getElementById('inv-visual-config-hint');
-  if (tipo === 'token') {
-    if (lbl) lbl.textContent = 'URL da imagem do token';
-    if (hint) hint.textContent = 'URL direta de imagem (PNG, JPG, GIF)';
-  } else {
-    if (lbl) lbl.textContent = 'Config. de partículas (JSON ou vazio para padrão)';
-    if (hint) hint.textContent = 'Deixe vazio para usar o visual padrão de invocação';
-  }
-}
-window._invVisualTipoChange = _invVisualTipoChange;
 
 function _invComportamentoChange() {
   const comp = document.getElementById('inv-comportamento')?.value || 'agressivo';
@@ -199,40 +286,29 @@ function _invPopularAtributosSelects() {
   });
 }
 
-function _invPopularComportamentoSelect() {
-  const sel = document.getElementById('inv-comportamento');
-  if (!sel || sel.options.length > 1) return;
-  const opts = [
-    ['protetor', '🛡 Protetor — segue o dono, ataca quem o ataca'],
-    ['curador', '💚 Curador — cura/bufa o dono, ataca quando dono está bem'],
-    ['agressivo', '⚔ Agressivo — vai ao inimigo mais próximo'],
-    ['assassino', '🗡 Assassino — foca no inimigo com menor HP'],
-    ['dummy', '🎯 Isca — fica parado, atrai inimigos'],
-  ];
-  sel.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
-}
-
 async function salvarInvocacao() {
   if (RPG_DATA?.myRole !== 'mestre') { mostrarToast('Apenas o mestre pode criar invocações', 'erro'); return; }
   const nome = document.getElementById('inv-nome').value.trim();
   if (!nome) { mostrarToast('Nome da invocação obrigatório', 'erro'); return; }
 
-  const visualTipo = document.getElementById('inv-visual-tipo').value;
+  // Imagens
+  const imgToken  = document.getElementById('inv-img-token')?.value.trim() || '';
+  const imgPerfil = document.getElementById('inv-img-perfil')?.value.trim() || '';
+
+  // Visual config
+  const visualTipo = imgToken ? 'token' : 'particles';
   let visualConfig = {};
-  const configRaw = document.getElementById('inv-visual-config').value.trim();
-  if (configRaw) {
-    if (visualTipo === 'token') {
-      visualConfig = { img_url: configRaw };
-    } else {
-      try { visualConfig = JSON.parse(configRaw); } catch (_) { visualConfig = {}; }
-    }
+  if (imgToken) {
+    visualConfig = { img_url: imgToken, img_perfil: imgPerfil || null };
+  } else {
+    const particleRaw = document.getElementById('inv-visual-config')?.value.trim() || '';
+    if (particleRaw) { try { visualConfig = JSON.parse(particleRaw); } catch(_) { visualConfig = {}; } }
   }
 
-  let habilidades = [];
-  const habRaw = document.getElementById('inv-habilidades').value.trim();
-  if (habRaw) {
-    try { habilidades = JSON.parse(habRaw); } catch (_) { habilidades = []; }
-  }
+  // Habilidades: coleta UUIDs dos checkboxes marcados
+  const habilidades = Array.from(
+    document.querySelectorAll('#inv-skills-lista input[type=checkbox]:checked')
+  ).map(cb => cb.value);
 
   const body = {
     rpg_id: RPG_DATA.rpgId,
@@ -266,7 +342,7 @@ async function salvarInvocacao() {
         { method: 'PATCH', body: JSON.stringify(body) });
       const updated = Array.isArray(rows) ? rows[0] : rows;
       const idx = INV_OCACOES.catalogo.findIndex(i => i.id === _invModalId);
-      if (idx >= 0 && updated) INV_OCACOES.catalogo[idx] = { ...INV_OCACOES.catalogo[idx], ...body, ...updated };
+      if (idx >= 0) INV_OCACOES.catalogo[idx] = { ...INV_OCACOES.catalogo[idx], ...body, ...(updated || {}) };
       mostrarToast('Invocação atualizada!', 'sucesso');
     } else {
       const rows = await sb('invocacoes', { method: 'POST', body: JSON.stringify(body) });
@@ -290,7 +366,6 @@ async function removerInvocacaoGlobal(invId, nome) {
   try {
     await sb(`invocacoes?id=eq.${encodeURIComponent(invId)}`, { method: 'DELETE' });
     INV_OCACOES.catalogo = INV_OCACOES.catalogo.filter(i => i.id !== invId);
-    // Remove de todos os personagens
     const chars = RPG_DATA?.characters || [];
     for (const ch of chars) {
       const ca = ch.custom_attrs || {};
@@ -383,7 +458,12 @@ function _invRenderListaDarInvocacao() {
   container.innerHTML = INV_OCACOES.catalogo.map(inv => {
     const tem = possuidas.has(inv.id);
     const nomeSafe = (_invDarCharNome || '').replace(/'/g, "\\'");
+    const imgToken = inv.visual_config?.img_url || '';
+    const tokenHtml = imgToken
+      ? `<img src="${imgToken}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid #b07ef0">`
+      : `<div style="width:28px;height:28px;border-radius:50%;border:1px solid #b07ef0;background:rgba(176,126,240,0.15);display:flex;align-items:center;justify-content:center;font-size:0.85rem">🔮</div>`;
     return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--borda)">
+      ${tokenHtml}
       <div style="flex:1">
         <div style="font-size:0.85rem;color:var(--primario-v)">🔮 ${inv.nome}</div>
         <div style="font-size:0.72rem;color:var(--suave)">${_invComportamentoBadge(inv.comportamento)} · ${inv.duracao_base_turnos}t</div>
