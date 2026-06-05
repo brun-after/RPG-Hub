@@ -20381,8 +20381,8 @@ try{
 
   // ── Host eleito ─────────────────────────────────────────────────────────
   function _avtSouHostDe(npcId){
-    // Em P2P: o host RTNet controla todos os NPCs (sem lease individual)
-    if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') {
+    // Em qualquer modo RTNet (incluindo supabase sem peers), o host RTNet controla todos os NPCs
+    if (typeof RTNet !== 'undefined' && RTNet.initialized) {
       return RTNet.isHost();
     }
     const exp = AVT_STATE._npcHostLease && AVT_STATE._npcHostLease[npcId];
