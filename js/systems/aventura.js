@@ -3312,7 +3312,10 @@ function _avtRenderFrame() {
   // Update patience timers (only for enemies not already in a combat)
   _avtAtualizarPaciencias(dt);
   _avtAtualizarPerseguicoes(dt);
-  _avtTickEfeitosOOC(now);
+  // Em P2P, só o host aplica OOC tick (HP, flags). Não-host apenas exibe countdown via _oocStatusEffects.
+  if (typeof RTNet === 'undefined' || !RTNet.initialized || RTNet.isHost()) {
+    _avtTickEfeitosOOC(now);
+  }
 
   if (AVT_STATE._oocStatusEffects?.length) {
     const _agPanel = Date.now();
@@ -6384,11 +6387,22 @@ async function _avtPrimeiroAtaqueSelecionarSkill(skId) {
           if (!entJog.status_effects) entJog.status_effects = [];
           entJog.status_effects.push(_oocEf);
           if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
-          AVT_STATE._oocStatusEffects.push({entId:entJog.id, entNome:entJog.nome, ef:{..._oocEf}, lastTickAt:Date.now()});
+          const _oocEntry = {entId:entJog.id, entNome:entJog.nome, ef:{..._oocEf}, lastTickAt:Date.now()};
+          AVT_STATE._oocStatusEffects.push(_oocEntry);
           if (ef.tipo === 'fantasma')   entJog._fantasma   = true;
           if (ef.tipo === 'atravessar') entJog._atravessar = true;
           if (ef.tipo === 'stun')       entJog._stunned    = true;
           if (ef.tipo === 'silence')    entJog._silenciado = true;
+          // Em P2P não-host: enviar para o host aplicar autoritativamente
+          if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost()) {
+            RTNet.sendToHost('avt_player_action', {
+              tipo: 'ooc_effect_apply',
+              entId: entJog.id, entNome: entJog.nome,
+              oocEntry: _oocEntry,
+              statusEffect: _oocEf,
+              atravessar: ef.tipo === 'atravessar', fantasma: ef.tipo === 'fantasma',
+            });
+          }
         }
       });
     }
@@ -6463,9 +6477,20 @@ async function _avtAplicarSkillAliadoOoc(skId, alvoId) {
         if (!entAlvo.status_effects) entAlvo.status_effects = [];
         entAlvo.status_effects.push(_oocEfAl);
         if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
-        AVT_STATE._oocStatusEffects.push({entId:entAlvo.id, entNome:entAlvo.nome, ef:{..._oocEfAl}, lastTickAt:Date.now()});
+        const _oocEntryAl = {entId:entAlvo.id, entNome:entAlvo.nome, ef:{..._oocEfAl}, lastTickAt:Date.now()};
+        AVT_STATE._oocStatusEffects.push(_oocEntryAl);
         if (ef.tipo === 'fantasma')   entAlvo._fantasma   = true;
         if (ef.tipo === 'atravessar') entAlvo._atravessar = true;
+        // Em P2P não-host: enviar para o host aplicar autoritativamente
+        if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost()) {
+          RTNet.sendToHost('avt_player_action', {
+            tipo: 'ooc_effect_apply',
+            entId: entAlvo.id, entNome: entAlvo.nome,
+            oocEntry: _oocEntryAl,
+            statusEffect: _oocEfAl,
+            atravessar: ef.tipo === 'atravessar', fantasma: ef.tipo === 'fantasma',
+          });
+        }
       }
     });
   }
@@ -17460,6 +17485,15 @@ async function _avtCharSalvarAttrs(entId) {
     });
     refreshBaseline();
     mostrarToast('Atributos salvos!', 'ok');
+    // Propagar atributos atualizados para outros clientes (ex.: jogador distribuiu pontos de nível)
+    if (ent && typeof RTNet !== 'undefined' && RTNet.initialized) {
+      const novoHpMax = typeof _avtCalcHpJog === 'function' ? _avtCalcHpJog(dbChar) : ent.hpMax;
+      RTNet.broadcast('avt_char_update', {
+        charNome: dbChar.nome,
+        atributos: { ...dbChar.custom_attrs?.atributos },
+        hpMax: novoHpMax,
+      });
+    }
     _avtCharEditorRender();
   } catch(e) { mostrarToast('Erro: ' + (e?.message||e), 'erro'); }
 }
@@ -20667,6 +20701,27 @@ try{
     try {
       if (!_isHost()) return; // só host processa
       if (!payload) return;
+
+      // Efeito OOC enviado por não-host: host aplica em sua cópia e propaga via tick
+      if (payload.tipo === 'ooc_effect_apply') {
+        const _eoEnt = _findEnt(payload.entId) || _findEnt(payload.entNome);
+        if (_eoEnt && payload.statusEffect) {
+          if (!_eoEnt.status_effects) _eoEnt.status_effects = [];
+          const _alreadyHas = _eoEnt.status_effects.some(e => e._ooc && e.tipo === payload.statusEffect.tipo
+            && Math.abs((e.expiry_ms||0) - (payload.statusEffect.expiry_ms||0)) < 2000);
+          if (!_alreadyHas) _eoEnt.status_effects.push(payload.statusEffect);
+          if (payload.atravessar) _eoEnt._atravessar = _eoEnt.atravessar = true;
+          if (payload.fantasma)   _eoEnt._fantasma   = _eoEnt.fantasma   = true;
+        }
+        if (payload.oocEntry) {
+          if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+          const _dup = AVT_STATE._oocStatusEffects.some(r => r.entId === payload.oocEntry.entId
+            && r.ef?.tipo === payload.oocEntry.ef?.tipo
+            && Math.abs((r.ef?.expiry_ms||0) - (payload.oocEntry.ef?.expiry_ms||0)) < 2000);
+          if (!_dup) AVT_STATE._oocStatusEffects.push(payload.oocEntry);
+        }
+        return;
+      }
 
       // Dano de NPC delegado por não-host: host aplica com seu lease e propaga
       if (payload.tipo === 'npc_dano_delta') {

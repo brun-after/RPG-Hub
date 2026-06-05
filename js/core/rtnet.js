@@ -768,6 +768,8 @@ window.RTNet = (() => {
       _s.paused = false;
       _s._candidates.clear();
       _s.peerJoinTs.clear();
+      _s._volunteers = [];
+      _s._peerLeaveCallbacks = [];
 
       const banner = document.getElementById('avt-host-dead-banner');
       if (banner) banner.style.display = 'none';
