@@ -8579,6 +8579,9 @@ function _avtNecromanteDominar(npcEnt, efNecro, bat) {
   npcEnt._donoNome     = donoNome;
   npcEnt.cor           = corDominado;
   npcEnt.tipo          = 'invocado';
+  // Clear pursuit and disable patience timer so dominated NPC stops chasing its captor
+  _avtCancelarPerseguicao(npcEnt.id);
+  if (AVT_STATE.npcTimers[npcEnt.id]) AVT_STATE.npcTimers[npcEnt.id].ativo = false;
   npcEnt._efeitosNecromante = efeitosPropagate;
   npcEnt.status_effects = [];
 
