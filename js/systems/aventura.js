@@ -1582,17 +1582,58 @@ function _avtEditorRenderCanvas() {
   if (!canvas || !_avtEd.tiles) return;
   const ctx = canvas.getContext('2d');
   const EDSZ = 14, W = _avtEd.w, H = _avtEd.h;
-  ctx.fillStyle = '#050810';
+  ctx.fillStyle = '#020408';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      ctx.fillStyle = _avtEd.tiles[y][x] === AVT_T.PISO ? '#1a2535' : '#0a0c14';
-      ctx.fillRect(x*EDSZ, y*EDSZ, EDSZ, EDSZ);
-      ctx.strokeStyle = 'rgba(79,163,209,0.06)';
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(x*EDSZ+0.5, y*EDSZ+0.5, EDSZ-1, EDSZ-1);
+      const t = _avtEd.tiles[y][x];
+      const px = x * EDSZ, py = y * EDSZ;
+      if (t === AVT_T.SAIDA) {
+        ctx.fillStyle = '#0d2a10';
+        ctx.fillRect(px, py, EDSZ, EDSZ);
+        ctx.strokeStyle = 'rgba(46,204,113,0.35)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(px + 0.5, py + 0.5, EDSZ - 1, EDSZ - 1);
+        ctx.fillStyle = 'rgba(46,204,113,0.5)';
+        ctx.fillRect(px + EDSZ/2 - 1, py + EDSZ/2 - 1, 2, 2);
+      } else if (t === AVT_T.PISO) {
+        ctx.fillStyle = '#162840';
+        ctx.fillRect(px, py, EDSZ, EDSZ);
+        ctx.strokeStyle = 'rgba(79,163,209,0.14)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(px + 0.5, py + 0.5, EDSZ - 1, EDSZ - 1);
+        ctx.fillStyle = 'rgba(79,163,209,0.2)';
+        ctx.fillRect(px + EDSZ/2 - 0.5, py + EDSZ/2 - 0.5, 1, 1);
+      } else {
+        // Parede: diferencia as que fazem borda com piso (edge walls) das paredes internas
+        const adjFloor = (
+          (_avtEd.tiles[y-1]?.[x] === AVT_T.PISO) ||
+          (_avtEd.tiles[y+1]?.[x] === AVT_T.PISO) ||
+          (_avtEd.tiles[y]?.[x-1] === AVT_T.PISO) ||
+          (_avtEd.tiles[y]?.[x+1] === AVT_T.PISO)
+        );
+        ctx.fillStyle = adjFloor ? '#0b0e18' : '#060810';
+        ctx.fillRect(px, py, EDSZ, EDSZ);
+        if (adjFloor) {
+          ctx.strokeStyle = 'rgba(79,163,209,0.12)';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(px + 0.5, py + 0.5, EDSZ - 1, EDSZ - 1);
+        }
+      }
     }
   }
+  // Legenda compacta
+  const leg = document.getElementById('avt-ed-legenda');
+  if (leg) return;
+  const legEl = document.createElement('div');
+  legEl.id = 'avt-ed-legenda';
+  legEl.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;margin-top:5px;font-size:0.6rem;color:#7a92aa;font-family:var(--fonte-d,monospace)';
+  legEl.innerHTML = `
+    <span><span style="display:inline-block;width:10px;height:10px;background:#162840;border:1px solid rgba(79,163,209,0.14);vertical-align:middle;margin-right:3px"></span>Piso</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#060810;vertical-align:middle;margin-right:3px"></span>Parede</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#0b0e18;border:1px solid rgba(79,163,209,0.12);vertical-align:middle;margin-right:3px"></span>Borda de parede</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#0d2a10;border:1px solid rgba(46,204,113,0.35);vertical-align:middle;margin-right:3px"></span>Saída</span>`;
+  canvas.parentNode.insertBefore(legEl, canvas.nextSibling);
 }
 
 function _avtEditorExport() {
@@ -3347,6 +3388,28 @@ function _avtCanvasInit() {
   const ctrlBtn = document.getElementById('avt-btn-controle');
   if (ctrlBtn) ctrlBtn.style.display = isRealMobile ? 'inline-block' : 'none';
 
+  // Criar minimap canvas se não existir
+  if (!document.getElementById('avt-minimap')) {
+    const mm = document.createElement('canvas');
+    mm.id = 'avt-minimap';
+    mm.width = 120; mm.height = 120;
+    mm.style.cssText = [
+      'position:fixed',
+      'left:12px',
+      'top:50%',
+      'transform:translateY(-50%)',
+      'width:120px',
+      'height:120px',
+      'opacity:0.35',
+      'border-radius:8px',
+      'z-index:9100',
+      'pointer-events:none',
+      'display:none',
+      'image-rendering:pixelated'
+    ].join(';');
+    document.body.appendChild(mm);
+  }
+
   _avtCameraCenter();
 }
 
@@ -4277,6 +4340,81 @@ function _avtRenderFrame() {
   _avtAtualizarPosRollInimigos();
   // Renderizar badges de contagem de efeitos acima dos tokens
   _avtRenderEffectCountersOverlay();
+  // Minimap/radar
+  _avtRenderMinimap();
+}
+
+function _avtRenderMinimap() {
+  const mm = document.getElementById('avt-minimap');
+  if (!mm) return;
+  const { dungeon, entidades, npcTimers } = AVT_STATE;
+  if (!dungeon || !dungeon.tiles) { mm.style.display = 'none'; return; }
+  mm.style.display = 'block';
+
+  const W = dungeon.w, H = dungeon.h;
+  const mmW = mm.width, mmH = mm.height;
+  const scaleX = mmW / W, scaleY = mmH / H;
+
+  const ctx = mm.getContext('2d');
+  ctx.clearRect(0, 0, mmW, mmH);
+
+  // Background
+  ctx.fillStyle = 'rgba(5,8,16,0.88)';
+  ctx.fillRect(0, 0, mmW, mmH);
+
+  // Tiles
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const t = dungeon.tiles[y]?.[x];
+      const passavel = t === AVT_T.PISO || t === AVT_T.SAIDA || (typeof t === 'string' && t !== 'parede');
+      if (!passavel) continue;
+      ctx.fillStyle = t === AVT_T.SAIDA ? 'rgba(46,204,113,0.55)' : 'rgba(30,58,95,0.75)';
+      ctx.fillRect(
+        Math.floor(x * scaleX), Math.floor(y * scaleY),
+        Math.max(1, Math.ceil(scaleX)), Math.max(1, Math.ceil(scaleY))
+      );
+    }
+  }
+
+  // Entidades
+  const meuEnt = (typeof _avtEntidadeControlada === 'function') ? _avtEntidadeControlada() : _avtMeuJogador?.();
+  entidades.forEach(e => {
+    if (e.escondido || (e.tipo === 'inimigo' && e.hp <= 0)) return;
+    const ex = Math.round((e.renderX ?? e.x) * scaleX);
+    const ey = Math.round((e.renderY ?? e.y) * scaleY);
+    let color, radius;
+    if (e.id === meuEnt?.id) {
+      color = '#ffffff'; radius = 3;
+      ctx.save();
+      ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 5;
+    } else if (e.isBoss) {
+      color = '#f1c40f'; radius = 4;
+      ctx.save();
+      ctx.shadowColor = '#f1c40f'; ctx.shadowBlur = 6;
+    } else if (e.tipo === 'inimigo') {
+      const timer = npcTimers?.[e.id];
+      color = timer?.ativo ? '#e74c3c' : 'rgba(180,80,40,0.6)';
+      radius = timer?.ativo ? 2.5 : 1.5;
+      ctx.save();
+      if (timer?.ativo) { ctx.shadowColor = '#e74c3c'; ctx.shadowBlur = 4; }
+    } else if (e.tipo === 'jogador' || e.tipo === 'invocado' || e.tipo === 'avatar') {
+      color = e.tipo === 'invocado' ? '#b07ef0' : '#27ae60';
+      radius = 2.5;
+      ctx.save();
+    } else {
+      return;
+    }
+    ctx.beginPath();
+    ctx.arc(ex, ey, radius, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // Borda
+  ctx.strokeStyle = 'rgba(100,150,200,0.25)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, mmW - 1, mmH - 1);
 }
 
 function _avtRenderEffectCountersOverlay() {
@@ -16128,8 +16266,41 @@ function _avtMestreAbrirEditorTileset() {
             style="background:rgba(200,168,75,0.1);border-color:rgba(200,168,75,0.35);color:#c8a84b">
             ✦ Distribuir automaticamente
           </button>
+          <button class="avt-mp-btn" onclick="_avtMestreToggleTrocaTileset()"
+            style="background:rgba(79,163,209,0.08);border-color:rgba(79,163,209,0.3);color:#4fa3d1">
+            🔄 Trocar imagem
+          </button>
           <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtMestreSalvarTilesetPaints()">💾 Salvar</button>
           <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
+        </div>
+      </div>
+      <div id="avt-ts-troca-painel" style="display:none;background:rgba(0,0,0,0.4);border:1px solid rgba(79,163,209,0.2);border-radius:8px;padding:12px;margin-bottom:10px">
+        <div style="font-size:0.7rem;color:#4fa3d1;margin-bottom:8px">📁 Escolher nova imagem de tileset</div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px">
+          <div style="min-width:56px">
+            <label style="display:block;font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Colunas</label>
+            <input id="avt-mp-ts-cols" type="number" value="${TS_COLS}" min="4" max="10"
+              style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem">
+          </div>
+          <div style="min-width:56px">
+            <label style="display:block;font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Linhas</label>
+            <input id="avt-mp-ts-rows" type="number" value="${TS_ROWS}" min="4" max="10"
+              style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label style="display:inline-block;padding:6px 12px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:5px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">
+            📁 Escolher imagem
+            <input type="file" accept="image/*" style="display:none" onchange="_avtMestreHandleTilesetUpload(this)">
+          </label>
+          <span id="avt-mp-ts-nome" style="font-size:0.67rem;color:#7a92aa"></span>
+        </div>
+        <img id="avt-mp-ts-preview" style="display:none;max-width:100%;max-height:100px;border:1px solid rgba(79,163,209,0.2);border-radius:4px;image-rendering:pixelated;margin-top:6px">
+        <div style="margin-top:8px">
+          <button onclick="_avtMestreAplicarTilesetUpload()"
+            style="padding:7px 14px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.3);border-radius:6px;color:#27ae60;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
+            ✓ Aplicar nova imagem
+          </button>
         </div>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
@@ -16246,6 +16417,12 @@ function _avtMestreAbrirEditorTileset() {
 
 // ── Upload de tileset no editor do mestre (quando dungeon não tem tileset) ────
 let _avtMpTilesetFile = null;
+
+function _avtMestreToggleTrocaTileset() {
+  const painel = document.getElementById('avt-ts-troca-painel');
+  if (!painel) return;
+  painel.style.display = painel.style.display === 'none' ? 'block' : 'none';
+}
 
 function _avtMestreCopiarPromptTileset() {
   const cols = parseInt(document.getElementById('avt-mp-ts-cols')?.value || '4', 10);
@@ -16410,6 +16587,20 @@ function _avtMestreNovaFaseRender() {
             <button class="avt-mp-btn" onclick="_avtNfIniciarPlacement()">📍 Clique no mapa para definir</button>
             <span style="font-size:0.72rem">${portaLabel}</span>
           </div>
+        </div>
+
+        <!-- Tileset próprio (opcional) -->
+        <div>
+          <div style="font-size:0.65rem;color:rgba(79,163,209,0.7);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Tileset da Fase <span style="color:#7a92aa;font-size:0.6rem;text-transform:none;letter-spacing:0">(opcional — usa o tileset principal se não definido)</span></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label style="display:inline-block;padding:5px 10px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">
+              📁 Imagem tileset
+              <input type="file" accept="image/*" style="display:none" onchange="_avtNfHandleTilesetImg(this)">
+            </label>
+            <span id="avt-nf-ts-nome" style="font-size:0.65rem;color:#7a92aa">${w._tilesetImgNome || ''}</span>
+            ${w._tilesetImgUrl ? `<button onclick="_avtNfRemoverTileset()" style="padding:3px 8px;background:rgba(232,96,76,0.08);border:1px solid rgba(232,96,76,0.2);border-radius:4px;color:#e74c3c;font-size:0.6rem;cursor:pointer">✕ Remover</button>` : ''}
+          </div>
+          ${w._tilesetImgUrl ? `<img src="${w._tilesetImgUrl}" style="display:block;max-width:100%;max-height:80px;border:1px solid rgba(79,163,209,0.2);border-radius:4px;image-rendering:pixelated;margin-top:6px">` : ''}
         </div>
 
       </div>
@@ -16654,6 +16845,26 @@ function _avtNfEditorExport() {
   _avtMestreNovaFaseRender();
 }
 
+function _avtNfHandleTilesetImg(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const w = AVT_STATE._novaFaseWizard;
+  if (!w) return;
+  w._tilesetImgFile = file;
+  w._tilesetImgNome = file.name;
+  w._tilesetImgUrl = URL.createObjectURL(file);
+  _avtMestreNovaFaseRender();
+}
+
+function _avtNfRemoverTileset() {
+  const w = AVT_STATE._novaFaseWizard;
+  if (!w) return;
+  w._tilesetImgFile = null;
+  w._tilesetImgNome = null;
+  w._tilesetImgUrl = null;
+  _avtMestreNovaFaseRender();
+}
+
 function _avtNfIniciarPlacement() {
   const w = AVT_STATE._novaFaseWizard;
   if (!w) return;
@@ -16693,10 +16904,20 @@ async function _avtMestreSalvarNovaFase() {
     if (dungeonData.tiles[sy]?.[sx] !== undefined) dungeonData.tiles[sy][sx] = AVT_T.SAIDA;
   }
 
+  // Upload phase-specific tileset if provided
+  let faseTilesetUrl = null;
+  if (w._tilesetImgFile) {
+    try {
+      const tsId = Date.now().toString();
+      faseTilesetUrl = await uploadToStorage(w._tilesetImgFile, `aventuras/${AVT_STATE.rpgId}/tileset_fase_${tsId}`);
+    } catch(e) { mostrarToast('Aviso: erro ao enviar tileset da fase (continuando sem ele)', 'aviso'); }
+  }
+
   const fase = {
     id: Date.now().toString(),
     nome,
     dungeon_data: dungeonData,
+    tileset_img_url: faseTilesetUrl || null,
     porta: { col: w.porta_col, row: w.porta_row, lock_type: w.lock_type, chave_palavra: w.chave_palavra, npc_boss_id: w.npc_boss_id }
   };
 
@@ -16779,16 +17000,37 @@ async function _avtEntrarFaseExtra(fase) {
   // Salvar estado completo da fase atual antes de trocar
   const jogador = _avtMeuJogador();
   AVT_STATE._faseAnterior = {
-    dungeon:    AVT_STATE.dungeon,
-    entidades:  AVT_STATE.entidades.map(e => ({ ...e })),
-    npcTimers:  { ...AVT_STATE.npcTimers },
-    faseId:     AVT_STATE._faseAtualId || 'principal'
+    dungeon:          AVT_STATE.dungeon,
+    entidades:        AVT_STATE.entidades.map(e => ({ ...e })),
+    npcTimers:        { ...AVT_STATE.npcTimers },
+    faseId:           AVT_STATE._faseAtualId || 'principal',
+    tilesetImgUrl:    AVT_STATE._tilesetImgUrl || null,
+    tilesetConfig:    AVT_STATE._tilesetConfig || null,
+    tilesetTextures:  AVT_STATE._tilesetTextures || {},
+    tilesetLoaded:    AVT_STATE._tilesetLoaded || false
   };
 
   // Trocar dungeon
   AVT_STATE.dungeon = fase.dungeon_data;
   AVT_STATE._faseAtualId = fase.id;
   if (typeof AudioManager !== 'undefined') AudioManager.onEnterPhase(fase);
+
+  // Carregar tileset específico da fase, se houver; senão mantém o da fase principal
+  if (fase.tileset_img_url) {
+    const faseTs = fase.dungeon_data?.tileset_config
+      || AVT_STATE._faseAnterior?.tilesetConfig
+      || AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_config
+      || null;
+    if (faseTs) {
+      AVT_STATE._tilesetImgUrl   = fase.tileset_img_url;
+      AVT_STATE._tilesetConfig   = faseTs;
+      AVT_STATE._tilesetLoaded   = false;
+      AVT_STATE._tilesetTextures = {};
+      _avtCarregarTileset(fase.tileset_img_url, faseTs)
+        .then(() => { AVT_STATE._tilesetLoaded = true; })
+        .catch(() => {});
+    }
+  }
 
   // Na nova fase: apenas o jogador que cruzou a porta + inimigos próprios da fase
   const jogadorNaFase = jogador ? { ...jogador } : null;
@@ -16839,6 +17081,13 @@ function _avtVoltarFaseAnterior() {
   AVT_STATE.entidades  = AVT_STATE._faseAnterior.entidades.map(e => ({ ...e }));
   AVT_STATE.npcTimers  = { ...AVT_STATE._faseAnterior.npcTimers };
   AVT_STATE._faseAtualId = AVT_STATE._faseAnterior.faseId || 'principal';
+  // Restaurar tileset da fase principal se a fase extra tinha um diferente
+  if (AVT_STATE._faseAnterior.tilesetImgUrl != null) {
+    AVT_STATE._tilesetImgUrl   = AVT_STATE._faseAnterior.tilesetImgUrl;
+    AVT_STATE._tilesetConfig   = AVT_STATE._faseAnterior.tilesetConfig;
+    AVT_STATE._tilesetTextures = AVT_STATE._faseAnterior.tilesetTextures;
+    AVT_STATE._tilesetLoaded   = AVT_STATE._faseAnterior.tilesetLoaded;
+  }
   AVT_STATE._faseAnterior = null;
 
   // Mover o jogador de volta para perto da porta de entrada (fase principal)

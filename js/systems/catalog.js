@@ -3531,6 +3531,9 @@ function _ativarControleMobile() {
   _atualizarEstadoDpad();
   _iniciarDpadReposicionamento();
 
+  // Reposicionar minimap acima do dpad no modo mobile dispositivo
+  if (emAventuraDisp) _avtMinimapSetMobile(true);
+
   const tabMapas = document.getElementById('tab-mapas');
   if (tabMapas) tabMapas.style.overflow = 'hidden';
 }
@@ -3578,8 +3581,47 @@ function _desativarControleMobile() {
   document.getElementById('avt-log-mobile-panel')?.remove();
   // Redimensionar canvas para o estado normal
   if (_emModoAventura() && typeof _avtCanvasResize === 'function') setTimeout(_avtCanvasResize, 50);
+  // Restaurar minimap para posição desktop
+  _avtMinimapSetMobile(false);
   _atualizarBotaoControleMobile();
   _atualizarBannerControleMobile?.();
+}
+
+function _avtMinimapSetMobile(mobile) {
+  const mm = document.getElementById('avt-minimap');
+  if (!mm) return;
+  if (mobile) {
+    mm.width = 90; mm.height = 90;
+    mm.style.cssText = [
+      'position:fixed',
+      'left:12px',
+      'bottom:200px',
+      'width:90px',
+      'height:90px',
+      'opacity:0.55',
+      'border-radius:7px',
+      'z-index:9100',
+      'pointer-events:none',
+      'display:none',
+      'image-rendering:pixelated'
+    ].join(';');
+  } else {
+    mm.width = 120; mm.height = 120;
+    mm.style.cssText = [
+      'position:fixed',
+      'left:12px',
+      'top:50%',
+      'transform:translateY(-50%)',
+      'width:120px',
+      'height:120px',
+      'opacity:0.35',
+      'border-radius:8px',
+      'z-index:9100',
+      'pointer-events:none',
+      'display:none',
+      'image-rendering:pixelated'
+    ].join(';');
+  }
 }
 
 // ── HTML das 3 zonas ────────────────────────────────────────────────────
