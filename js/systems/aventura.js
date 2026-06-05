@@ -2625,7 +2625,7 @@ async function entrarAventura(rpgId) {
       if (!char.custom_attrs) char.custom_attrs = {};
       const atrs = char.custom_attrs.atributos || {};
       const _manaFaltava = atrs.Mana == null;
-      if (_manaFaltava) { atrs.Mana = 10; atrs.ManaMax = 10; }
+      if (_manaFaltava) { atrs.ManaMax = _avtCalcManaMaxChar(char); atrs.Mana = atrs.ManaMax; }
       char.custom_attrs.atributos = atrs;
       if (_manaFaltava && char.id) _manaToSeed.push(char);
     });
@@ -10760,24 +10760,29 @@ function _avtTurnoAvancar(bat) {
   bat.envolvidos = bat.envolvidos.filter(id => bat.iniciativa.some(e => e.id === id));
   const _temInimigos = bat.iniciativa.some(e => e.tipo === 'inimigo');
   if (!bat.iniciativa.length || !_temInimigos) { avtCombateEncerrar(bat.id); return; }
-  // +1 recurso por turno se a entidade que terminou o turno se moveu (sem HP em combate)
+  // Recuperação de recursos por turno em combate (todo jogador ao encerrar seu turno)
   const _entTerminou = bat.iniciativa[bat.turnoIdx];
-  if (_entTerminou?.tipo === 'jogador' && bat._moveuNesteTurno?.[_entTerminou.id]) {
+  if (_entTerminou?.tipo === 'jogador') {
     const _charTerm = AVT_STATE.chars.find(c => c.nome === _entTerminou.nome || c.id === _entTerminou.dbId);
     if (_charTerm?.custom_attrs?.atributos) {
-      (_avtRecursosDoChar(_charTerm) || []).forEach(r => {
-        _charTerm.custom_attrs.atributos[r.nome] = Math.min(r.max, r.atual + 1);
-      });
-      if (_entTerminou.nome === AVT_STATE.myCharNome) {
-        _avtRenderHpBar();
-        const _pp = document.getElementById('avt-player-panel');
-        if (_pp && _pp.style.display !== 'none') avtJogadorPainelRender();
+      const _lcRegen = AVT_STATE.rpg?.theme_json?.level_config || {};
+      const _regenTurno = _lcRegen.mana_regen_por_turno ?? 1;
+      if (_regenTurno > 0) {
+        (_avtRecursosDoChar(_charTerm) || []).forEach(r => {
+          _charTerm.custom_attrs.atributos[r.nome] = Math.min(r.max, r.atual + _regenTurno);
+        });
+        try { _avtBroadcast('avt_rsv_update', { nome: _charTerm.nome, atributos: { ..._charTerm.custom_attrs.atributos } }); } catch(_) {}
+        if (_entTerminou.nome === AVT_STATE.myCharNome) {
+          _avtRenderHpBar();
+          const _pp = document.getElementById('avt-player-panel');
+          if (_pp && _pp.style.display !== 'none') avtJogadorPainelRender();
+        }
         _avtSb(`characters?id=eq.${encodeURIComponent(_charTerm.id)}`,
           { method: 'PATCH', body: JSON.stringify({ custom_attrs: _charTerm.custom_attrs }) }
         ).catch(() => {});
       }
     }
-    delete bat._moveuNesteTurno[_entTerminou.id];
+    if (bat._moveuNesteTurno) delete bat._moveuNesteTurno[_entTerminou.id];
   }
   // Processar efeitos de status da entidade que terminou o turno
   if (_entTerminou) _avtProcessarStatusEffects(bat, _entTerminou);
@@ -11983,6 +11988,18 @@ function _avtPatchRpgData() {
   return () => { window.RPG_DATA = prev; };
 }
 
+// Calcula ManaMax com base na Sabedoria do personagem
+function _avtCalcManaMaxChar(char) {
+  const lc = (typeof AVT_STATE !== 'undefined' && AVT_STATE.rpg?.theme_json?.level_config) || {};
+  const pctPorPonto = lc.mana_sabedoria_pct ?? 10;
+  const atrs = char.custom_attrs?.atributos || {};
+  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  const sabKey = Object.keys(atrs).find(k => _norm(k) === 'sabedoria') || 'Sabedoria';
+  const sabedoria = parseFloat(atrs[sabKey] ?? 10) || 10;
+  const sabExtra = Math.max(0, sabedoria - 10);
+  return Math.max(1, Math.round(10 * (1 + sabExtra * pctPorPonto / 100)));
+}
+
 // Retorna lista de recursos do char: { nome, atual, max, maxAttr }
 function _avtRecursosDoChar(char) {
   if (!char) return [];
@@ -12025,7 +12042,7 @@ async function _avtDescontarCustoSkill(nomeChar, custo_rsv) {
   if (/^passiv/i.test(custo_rsv)) return true;
   // Aceita "3 Mana", "3Mana", "3  mana" etc.
   const match = custo_rsv.trim().match(/^(\d+(?:\.\d+)?)\s*(.+)$/);
-  if (!match) return true;
+  if (!match) { mostrarToast(`❌ Custo inválido: "${custo_rsv}"`, 'erro'); return false; }
   const quantidade = parseFloat(match[1]);
   const atributoSolicitado = match[2].trim();
   const char = AVT_STATE.chars.find(c => c.nome === nomeChar);
@@ -15285,6 +15302,41 @@ function _avtMpConteudoAba() {
           </label>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarHpRegen()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🔮 Mana por Sabedoria (%)</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Sabedoria base 10 = 10 de Mana. Cada ponto adicional de Sabedoria aumenta a Mana Máxima em X% (padrão: 10% por ponto).</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-mana-sab-pct" min="0" max="100" step="1" value="${lc.mana_sabedoria_pct ?? 10}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">% de mana por ponto de Sabedoria acima de 10</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarManaSabedoria()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">⚡ Recuperação de Mana em Combate</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Quantidade de Mana (e outros recursos) recuperada por turno em combate ao encerrar o turno (padrão: 1). Use 0 para desabilitar.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-mana-regen-turno" min="0" max="9999" step="1" value="${lc.mana_regen_por_turno ?? 1}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">por turno</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarManaRegenTurno()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🔷 Recuperação de Mana Fora de Combate</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Mana recuperada a cada X segundos fora de combate (padrão: 1 a cada 5s). Use 0 em qualquer campo para desabilitar.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="number" id="avt-mp-mana-regen-qtd" min="0" max="9999" step="1" value="${lc.mana_regen_quantidade ?? 1}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">mana por intervalo (0 = desabilitado)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-mana-regen-intv" min="1" max="300" step="1" value="${lc.mana_regen_intervalo_s ?? 5}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">segundos entre recuperações</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarManaRegenOoc()" style="width:100%">💾 Salvar</button>
       </div>`;
     }
 
@@ -15877,6 +15929,48 @@ async function _avtSalvarSecsPerTurno() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Segundos por turno (OOC): ${val}s`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarManaSabedoria() {
+  const val = Math.max(0, Math.min(100, parseInt(document.getElementById('avt-mp-mana-sab-pct')?.value) ?? 10));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.mana_sabedoria_pct = val;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`Mana por Sabedoria: ${val}% por ponto`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarManaRegenTurno() {
+  const val = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-mana-regen-turno')?.value) ?? 1));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.mana_regen_por_turno = val;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`Regen de Mana em combate: ${val} por turno`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarManaRegenOoc() {
+  const qtd  = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-mana-regen-qtd')?.value)  ?? 1));
+  const intv = Math.max(1, Math.min(300,  parseInt(document.getElementById('avt-mp-mana-regen-intv')?.value) ?? 5));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.mana_regen_quantidade  = qtd;
+  rpg.theme_json.level_config.mana_regen_intervalo_s = intv;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`Regen de Mana OOC: ${qtd} a cada ${intv}s`, 'sucesso');
+    if (typeof _avtPararRegenManaPorSegundo === 'function') { _avtPararRegenManaPorSegundo(); _avtIniciarRegenManaPorSegundo(); }
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
@@ -21673,6 +21767,59 @@ try{
   window._avtIniciarRegenHpPorSegundo = _avtIniciarRegenHpPorSegundo;
   window._avtPararRegenHpPorSegundo   = _avtPararRegenHpPorSegundo;
 
+  // ─── 2c) Mana regen por segundo/intervalo (OOC — tick local do dono) ──────
+  let _manaRegenTimer = null;
+  let _manaRegenDbTimer = null;
+  let _manaRegenTickAccum = 0;
+
+  function _avtIniciarRegenManaPorSegundo() {
+    if (_manaRegenTimer) return;
+    _manaRegenTickAccum = 0;
+    _manaRegenTimer = setInterval(() => {
+      try {
+        const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+        const regenQtd  = lc.mana_regen_quantidade  ?? 1;
+        const regenIntv = lc.mana_regen_intervalo_s  ?? 5;
+        if (regenQtd <= 0 || regenIntv <= 0) return;
+        _manaRegenTickAccum++;
+        if (_manaRegenTickAccum < regenIntv) return;
+        _manaRegenTickAccum = 0;
+        const meuNome = AVT_STATE.myCharNome;
+        if (!meuNome) return;
+        if (typeof _avtMinhaBatalha === 'function' && _avtMinhaBatalha()) return;
+        const char = AVT_STATE.chars.find(c => c.nome === meuNome);
+        if (!char?.custom_attrs?.atributos) return;
+        const recursos = _avtRecursosDoChar(char);
+        if (!recursos.length) return;
+        let algumMudou = false;
+        recursos.forEach(r => {
+          if (r.atual < r.max) {
+            char.custom_attrs.atributos[r.nome] = Math.min(r.max, r.atual + regenQtd);
+            algumMudou = true;
+          }
+        });
+        if (!algumMudou) return;
+        try { _avtBroadcast('avt_rsv_update', { nome: meuNome, atributos: { ...char.custom_attrs.atributos } }); } catch(_) {}
+        if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender();
+        clearTimeout(_manaRegenDbTimer);
+        _manaRegenDbTimer = setTimeout(() => {
+          _avtSb(`characters?id=eq.${encodeURIComponent(char.id)}`,
+            { method: 'PATCH', body: JSON.stringify({ custom_attrs: char.custom_attrs }) }
+          ).catch(() => {});
+        }, 3000);
+      } catch(_) {}
+    }, 1000);
+  }
+
+  function _avtPararRegenManaPorSegundo() {
+    if (_manaRegenTimer) { clearInterval(_manaRegenTimer); _manaRegenTimer = null; }
+    clearTimeout(_manaRegenDbTimer); _manaRegenDbTimer = null;
+    _manaRegenTickAccum = 0;
+  }
+
+  window._avtIniciarRegenManaPorSegundo = _avtIniciarRegenManaPorSegundo;
+  window._avtPararRegenManaPorSegundo   = _avtPararRegenManaPorSegundo;
+
   // ─── 2) Helper: host emite "intent de dano" ao dono do jogador ───────────
   function _avtRTBroadcastPlayerDamage(nome, dano, fonte) {
     if (typeof RTNet === 'undefined' || !RTNet.initialized) {
@@ -21915,6 +22062,7 @@ try{
       window.sairAventura = function() {
         try { _avtPararHpHeartbeat(); } catch(_) {}
         try { _avtPararRegenHpPorSegundo(); } catch(_) {}
+        try { _avtPararRegenManaPorSegundo(); } catch(_) {}
         // Parar timer de flush de HP e persistir estado final
         try { if (AVT_STATE._charHpFlushTimer) { clearInterval(AVT_STATE._charHpFlushTimer); AVT_STATE._charHpFlushTimer = null; } } catch(_) {}
         try { if (typeof _avtFlushPersistencia === 'function') _avtFlushPersistencia('sairAventura').catch(()=>{}); } catch(_) {}
@@ -21931,6 +22079,7 @@ try{
     if (AVT_STATE.myCharNome && AVT_STATE.rpgId && typeof RTNet !== 'undefined' && RTNet.initialized) {
       _avtIniciarHpHeartbeat();
       _avtIniciarRegenHpPorSegundo();
+      _avtIniciarRegenManaPorSegundo();
       // continua o poll caso o jogador troque de personagem (mantém heartbeat ativo)
     } else {
       _avtPararHpHeartbeat();
