@@ -714,20 +714,27 @@ function _avtCriarRenderPersonagens(body) {
 }
 
 function _avtCriarRenderCharsLista() {
-  return AVT_STATE._criando.personagens.map((p, i) => `
+  return AVT_STATE._criando.personagens.map((p, i) => {
+    const temConfig = !!(p._atributos || p._aparencia?.img_frente);
+    const configBadge = temConfig
+      ? `<span style="font-size:0.58rem;color:#27ae60;padding:2px 5px;border-radius:3px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.3)">✓ Config</span>`
+      : '';
+    return `
     <div style="margin-bottom:10px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.08)">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
         <div style="width:10px;height:10px;border-radius:50%;background:${p.cor||'#4fa3d1'};flex-shrink:0"></div>
-        <input style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
+        <input style="flex:1;min-width:80px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
                       border-radius:5px;color:#fff;padding:5px 8px;font-size:0.82rem;font-family:inherit"
           placeholder="Nome do personagem" value="${p.nome}"
           oninput="AVT_STATE._criando.personagens[${i}].nome=this.value">
-        <span style="font-size:0.62rem;color:#7a92aa;padding:2px 6px;border-radius:4px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2)" title="HP é calculado pela fórmula do mestre (level_config)">HP auto</span>
         <select onchange="AVT_STATE._criando.personagens[${i}].classe_aventura=this.value"
           style="padding:4px 6px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
           <option value="guerreiro" ${(p.classe_aventura||'guerreiro')==='guerreiro'?'selected':''}>⚔ Guerreiro</option>
           <option value="mago" ${p.classe_aventura==='mago'?'selected':''}>🔮 Mago</option>
         </select>
+        ${configBadge}
+        <button onclick="_avtAbrirConfigPersonagem(${i})"
+          style="padding:3px 8px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#4fa3d1;font-size:0.68rem;cursor:pointer;font-family:var(--fonte-d);white-space:nowrap">⚙ Configurar</button>
         ${i > 0 ? `<button onclick="avtCriarRemChar(${i})"
           style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:0.9rem;padding:2px 4px">✕</button>` : ''}
       </div>
@@ -735,8 +742,232 @@ function _avtCriarRenderCharsLista() {
                     border-radius:5px;color:#c8d8e8;padding:5px 8px;font-size:0.75rem;font-family:inherit"
         placeholder="Descrição para a IA (ex: guerreiro anão focado em defesa e escudos...)" value="${p.descricao||''}"
         oninput="AVT_STATE._criando.personagens[${i}].descricao=this.value">
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
+
+// ── Modal de configuração avançada por personagem (atributos, recursos, aparência) ──
+function _avtAbrirConfigPersonagem(idx) {
+  const p = AVT_STATE._criando.personagens[idx];
+  if (!p) return;
+
+  // Atributos padrão do Modo Aventura (fallback se attrDefs não configurados)
+  const _defaultAttrs = [
+    { nome: 'Força', valor: 10 },
+    { nome: 'Destreza', valor: 10 },
+    { nome: 'Constituição', valor: 10 },
+    { nome: 'Inteligência', valor: 10 },
+    { nome: 'Sabedoria', valor: 10 },
+  ];
+  const attrDefs = (typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA.attrDefs) && RPG_DATA.attrDefs.length)
+    ? RPG_DATA.attrDefs.filter(a => a.tipo === 'number')
+    : _defaultAttrs.map(a => ({ nome: a.nome, tipo: 'number' }));
+
+  const atributos = p._atributos || {};
+  const recursos = p._recursos || {};
+  const aparencia = p._aparencia || {};
+
+  // Detectar recursos configurados
+  const levelCfg = (typeof AVT_STATE !== 'undefined' && AVT_STATE.rpg?.theme_json?.level_config) || {};
+  const recursosConfig = Array.isArray(levelCfg.e_recursos) ? levelCfg.e_recursos : [
+    { e_recurso: 'Mana', max_attr: 'ManaMax' },
+    { e_recurso: 'Stamina', max_attr: 'StaminaMax' },
+  ];
+
+  // HP preview
+  function _calcHpPreview(atrs) {
+    const hp_base = levelCfg.hp_base ?? 100;
+    const hp_attr = levelCfg.hp_attr || 'Constituição';
+    const hp_mult = levelCfg.hp_attr_mult ?? 4;
+    const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    const k = Object.keys(atrs).find(k => _norm(k) === _norm(hp_attr));
+    return Math.max(1, Math.round(hp_base + (k ? parseFloat(atrs[k]||0) : 0) * hp_mult));
+  }
+
+  let modal = document.getElementById('avt-config-char-overlay');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'avt-config-char-overlay';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:flex;align-items:flex-end;justify-content:center';
+    document.body.appendChild(modal);
+  }
+
+  const renderAtributos = () => {
+    const atrsAtuais = AVT_STATE._criando.personagens[idx]._atributos || {};
+    return attrDefs.map(a => {
+      const val = atrsAtuais[a.nome] ?? _defaultAttrs.find(d => d.nome.toLowerCase() === a.nome.toLowerCase())?.valor ?? 10;
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <label style="font-size:0.75rem;color:var(--suave);width:100px;flex-shrink:0">${a.nome}</label>
+        <input type="number" min="1" max="30" value="${val}"
+          style="width:60px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#fff;padding:4px 7px;font-size:0.82rem;text-align:center"
+          oninput="if(!AVT_STATE._criando.personagens[${idx}]._atributos)AVT_STATE._criando.personagens[${idx}]._atributos={};AVT_STATE._criando.personagens[${idx}]._atributos['${a.nome}']=parseFloat(this.value)||10;document.getElementById('avt-cfg-hp-preview').textContent='HP: '+_avtCfgHpPreview(${idx})">
+        <input type="range" min="1" max="30" value="${val}"
+          style="flex:1;accent-color:#4fa3d1"
+          oninput="if(!AVT_STATE._criando.personagens[${idx}]._atributos)AVT_STATE._criando.personagens[${idx}]._atributos={};AVT_STATE._criando.personagens[${idx}]._atributos['${a.nome}']=parseFloat(this.value)||10;this.previousElementSibling.value=this.value;document.getElementById('avt-cfg-hp-preview').textContent='HP: '+_avtCfgHpPreview(${idx})">
+      </div>`;
+    }).join('');
+  };
+
+  const renderRecursos = () => {
+    const resAtuais = AVT_STATE._criando.personagens[idx]._recursos || {};
+    return recursosConfig.map(r => {
+      const valAtual = resAtuais[r.e_recurso] ?? 10;
+      const valMax = resAtuais[r.max_attr] ?? 10;
+      return `<div style="margin-bottom:10px">
+        <div style="font-size:0.72rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">${r.e_recurso}</div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <label style="font-size:0.65rem;color:var(--suave);display:block;margin-bottom:2px">Valor inicial</label>
+            <input type="number" min="0" value="${valAtual}"
+              style="width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#fff;padding:4px 7px;font-size:0.8rem;box-sizing:border-box"
+              oninput="if(!AVT_STATE._criando.personagens[${idx}]._recursos)AVT_STATE._criando.personagens[${idx}]._recursos={};AVT_STATE._criando.personagens[${idx}]._recursos['${r.e_recurso}']=parseFloat(this.value)||0">
+          </div>
+          <div style="flex:1">
+            <label style="font-size:0.65rem;color:var(--suave);display:block;margin-bottom:2px">Máximo</label>
+            <input type="number" min="0" value="${valMax}"
+              style="width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#fff;padding:4px 7px;font-size:0.8rem;box-sizing:border-box"
+              oninput="if(!AVT_STATE._criando.personagens[${idx}]._recursos)AVT_STATE._criando.personagens[${idx}]._recursos={};AVT_STATE._criando.personagens[${idx}]._recursos['${r.max_attr}']=parseFloat(this.value)||0">
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  };
+
+  const hpAtual = _calcHpPreview(atributos);
+  const imgToken = aparencia.img_frente || '';
+  const imgPerfil = aparencia.img_iso || '';
+
+  modal.innerHTML = `
+    <div style="background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-top:2px solid #4fa3d1;border-radius:14px 14px 0 0;width:100%;max-width:500px;max-height:92vh;display:flex;flex-direction:column">
+      <div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <div>
+          <div style="font-size:0.52rem;color:#4fa3d1;text-transform:uppercase;letter-spacing:0.1em;font-family:var(--fonte-d)">Configurar Personagem</div>
+          <div style="font-size:0.9rem;color:#c8d8e8;font-family:var(--fonte-d)">${p.nome || 'Sem nome'}</div>
+        </div>
+        <button onclick="document.getElementById('avt-config-char-overlay').style.display='none'" style="background:none;border:none;color:#7a92aa;font-size:1.3rem;cursor:pointer">✕</button>
+      </div>
+
+      <!-- Abas -->
+      <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0">
+        <button class="avt-cfg-tab avt-cfg-tab-ativo" onclick="_avtCfgSwitchTab('atributos',this)" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid #4fa3d1;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;text-transform:uppercase">🎯 Atributos</button>
+        <button class="avt-cfg-tab" onclick="_avtCfgSwitchTab('recursos',this)" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:#7a92aa;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;text-transform:uppercase">⚡ Recursos</button>
+        <button class="avt-cfg-tab" onclick="_avtCfgSwitchTab('aparencia',this)" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:#7a92aa;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;text-transform:uppercase">🖼 Aparência</button>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;padding:16px">
+        <!-- Aba Atributos -->
+        <div id="avt-cfg-tab-atributos" style="display:block">
+          <div id="avt-cfg-hp-preview" style="margin-bottom:12px;padding:8px 12px;background:rgba(39,174,96,0.08);border:1px solid rgba(39,174,96,0.2);border-radius:6px;font-size:0.8rem;color:#27ae60;font-family:var(--fonte-d)">HP: ${hpAtual}</div>
+          ${renderAtributos()}
+        </div>
+
+        <!-- Aba Recursos -->
+        <div id="avt-cfg-tab-recursos" style="display:none">
+          <div style="font-size:0.72rem;color:#7a92aa;margin-bottom:12px;line-height:1.5">Configure os valores iniciais de recursos como Mana e Stamina. O máximo define o teto do recurso.</div>
+          ${renderRecursos()}
+        </div>
+
+        <!-- Aba Aparência -->
+        <div id="avt-cfg-tab-aparencia" style="display:none">
+          <div style="font-size:0.72rem;color:#7a92aa;margin-bottom:12px;line-height:1.5">Defina como o personagem aparecerá no mapa e no perfil. Você pode fazer upload ou colar uma URL.</div>
+          <div style="margin-bottom:14px">
+            <label style="font-size:0.72rem;color:var(--suave);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em">Token (no mapa)</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <div id="avt-cfg-token-prev" style="width:44px;height:44px;border-radius:50%;border:2px solid #4fa3d1;background:rgba(0,0,0,0.4);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#4fa3d1;font-size:1.2rem">${imgToken?`<img src="${imgToken}" style="width:100%;height:100%;object-fit:cover">`:'⚔'}</div>
+              <input id="avt-cfg-img-token" type="text" value="${imgToken}" placeholder="https://... (PNG/JPG/GIF com fundo transparente)"
+                style="flex:1;min-width:0;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:5px;color:#c8d8e8;padding:6px 8px;font-family:monospace;font-size:0.65rem"
+                oninput="_avtCfgAtualizarTokenPrev(this.value,${idx})">
+              <label style="padding:6px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#4fa3d1;font-size:0.6rem;cursor:pointer;white-space:nowrap;flex-shrink:0">
+                📁<input type="file" accept="image/*" style="display:none" onchange="_avtCfgFileUpload(this,'avt-cfg-img-token',${idx},true)">
+              </label>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:0.72rem;color:var(--suave);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em">Arte / Perfil</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <div id="avt-cfg-perfil-prev" style="width:44px;height:62px;border-radius:6px;border:1px solid rgba(79,163,209,0.4);background:rgba(0,0,0,0.4);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#4fa3d1;font-size:1.2rem">${imgPerfil?`<img src="${imgPerfil}" style="width:100%;height:100%;object-fit:cover">`:'🎨'}</div>
+              <input id="avt-cfg-img-perfil" type="text" value="${imgPerfil}" placeholder="URL da arte em tamanho completo..."
+                style="flex:1;min-width:0;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:5px;color:#c8d8e8;padding:6px 8px;font-family:monospace;font-size:0.65rem"
+                oninput="_avtCfgAtualizarPerfilPrev(this.value,${idx})">
+              <label style="padding:6px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#4fa3d1;font-size:0.6rem;cursor:pointer;white-space:nowrap;flex-shrink:0">
+                📁<input type="file" accept="image/*" style="display:none" onchange="_avtCfgFileUpload(this,'avt-cfg-img-perfil',${idx},false)">
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:12px 16px;border-top:1px solid rgba(255,255,255,0.06);flex-shrink:0">
+        <button onclick="document.getElementById('avt-config-char-overlay').style.display='none';document.getElementById('avt-chars-lista').innerHTML=_avtCriarRenderCharsLista()"
+          style="width:100%;padding:11px;background:linear-gradient(135deg,rgba(79,163,209,0.2),rgba(79,163,209,0.1));border:1px solid rgba(79,163,209,0.5);border-radius:8px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.78rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">
+          ✓ Confirmar Configuração
+        </button>
+      </div>
+    </div>`;
+
+  modal.style.display = 'flex';
+  modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+}
+window._avtAbrirConfigPersonagem = _avtAbrirConfigPersonagem;
+
+function _avtCfgSwitchTab(tab, btn) {
+  ['atributos','recursos','aparencia'].forEach(t => {
+    const el = document.getElementById('avt-cfg-tab-' + t);
+    if (el) el.style.display = t === tab ? 'block' : 'none';
+  });
+  document.querySelectorAll('.avt-cfg-tab').forEach(b => {
+    b.style.borderBottomColor = 'transparent';
+    b.style.color = '#7a92aa';
+  });
+  if (btn) { btn.style.borderBottomColor = '#4fa3d1'; btn.style.color = '#4fa3d1'; }
+}
+window._avtCfgSwitchTab = _avtCfgSwitchTab;
+
+function _avtCfgHpPreview(idx) {
+  const p = AVT_STATE._criando.personagens[idx];
+  const atrs = p?._atributos || {};
+  const levelCfg = (typeof AVT_STATE !== 'undefined' && AVT_STATE.rpg?.theme_json?.level_config) || {};
+  const hp_base = levelCfg.hp_base ?? 100;
+  const hp_attr = levelCfg.hp_attr || 'Constituição';
+  const hp_mult = levelCfg.hp_attr_mult ?? 4;
+  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const k = Object.keys(atrs).find(k => _norm(k) === _norm(hp_attr));
+  return Math.max(1, Math.round(hp_base + (k ? parseFloat(atrs[k]||0) : 0) * hp_mult));
+}
+window._avtCfgHpPreview = _avtCfgHpPreview;
+
+function _avtCfgAtualizarTokenPrev(url, idx) {
+  const prev = document.getElementById('avt-cfg-token-prev');
+  if (prev) prev.innerHTML = url ? `<img src="${url}" style="width:100%;height:100%;object-fit:cover">` : '⚔';
+  if (!AVT_STATE._criando.personagens[idx]._aparencia) AVT_STATE._criando.personagens[idx]._aparencia = {};
+  AVT_STATE._criando.personagens[idx]._aparencia.img_frente = url;
+}
+window._avtCfgAtualizarTokenPrev = _avtCfgAtualizarTokenPrev;
+
+function _avtCfgAtualizarPerfilPrev(url, idx) {
+  const prev = document.getElementById('avt-cfg-perfil-prev');
+  if (prev) prev.innerHTML = url ? `<img src="${url}" style="width:100%;height:100%;object-fit:cover">` : '🎨';
+  if (!AVT_STATE._criando.personagens[idx]._aparencia) AVT_STATE._criando.personagens[idx]._aparencia = {};
+  AVT_STATE._criando.personagens[idx]._aparencia.img_iso = url;
+}
+window._avtCfgAtualizarPerfilPrev = _avtCfgAtualizarPerfilPrev;
+
+async function _avtCfgFileUpload(input, targetId, idx, isToken) {
+  const file = input.files?.[0]; if (!file) return;
+  mostrarToast('Enviando imagem…', 'info');
+  try {
+    const url = await uploadToStorage(file, 'characters');
+    const el = document.getElementById(targetId);
+    if (el) el.value = url;
+    if (isToken) _avtCfgAtualizarTokenPrev(url, idx);
+    else _avtCfgAtualizarPerfilPrev(url, idx);
+    mostrarToast('Imagem enviada!', 'sucesso');
+  } catch(e) {
+    mostrarToast('Erro no upload', 'erro');
+    console.error(e);
+  }
+}
+window._avtCfgFileUpload = _avtCfgFileUpload;
 
 // ── ETAPA 3: Mapa ─────────────────────────────────────────────────────────────
 function _avtCriarRenderMapa(body) {
@@ -1850,12 +2081,21 @@ async function aventuraCriarSubmit() {
     for (let i = 0; i < chars.length; i++) {
       const p = chars[i];
       const atributosIA = p._atributosIA || {};
+      // Atributos: configuração manual > IA > vazio (sistema aplica defaults ao entrar)
+      const atributosFinais = Object.keys(p._atributos||{}).length
+        ? { ...atributosIA, ...p._atributos, ...(p._recursos||{}) }
+        : (Object.keys(atributosIA).length ? atributosIA : {});
+      // Aparência configurada manualmente
+      const aparenciaFinal = (p._aparencia?.img_frente || p._aparencia?.img_iso)
+        ? { modo: 'imagem', img_frente: p._aparencia.img_frente || '', img_iso: p._aparencia.img_iso || '' }
+        : undefined;
       const custom_attrs = {
         cor: p.cor || cores[i % cores.length],
         tipo_personagem: 'jogador',
         classe_aventura: p.classe_aventura || 'guerreiro',
-        ...(Object.keys(atributosIA).length ? { atributos: atributosIA } : {}),
-        ...(p._movimentoMaxIA != null ? { movimentoMax: p._movimentoMaxIA } : {})
+        ...(Object.keys(atributosFinais).length ? { atributos: atributosFinais } : {}),
+        ...(p._movimentoMaxIA != null ? { movimentoMax: p._movimentoMaxIA } : {}),
+        ...(aparenciaFinal ? { aparencia: aparenciaFinal } : {})
       };
       // HP via fórmula do mestre (hp_base + atributo × multiplicador). Se a campanha
       // ainda não configurou level_config, _avtCalcHpJog cai em hp_base=100 default.
@@ -9033,7 +9273,7 @@ function _avtMostrarSkillOverlay() {
   document.getElementById('avt-skill-overlay')?.remove();
   const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
-  if (!b || !ativo || ativo.tipo !== 'jogador') return;
+  if (!b || !ativo || (ativo.tipo !== 'jogador' && ativo.tipo !== 'invocado')) return;
   // No modo controle dispositivo: usar a UI fixa em vez de overlay flutuante
   const _ctrlDispSk = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo' && typeof _emModoAventura === 'function' && _emModoAventura();
   if (_ctrlDispSk) {
@@ -9063,6 +9303,15 @@ function _avtMostrarSkillOverlay() {
   );
   mySkills = _avtSkillsOrdenadasPorNumero(mySkills, _dbChar, ativo);
 
+  // Invocações: usar as skills vinculadas à definição da invocação
+  if (ativo.tipo === 'invocado') {
+    const _invAtiva = (AVT_STATE.invocacoes_ativas || []).find(i => i.id === ativo.id);
+    const _invDef = _invAtiva?.invocacao_def;
+    const _invSkillIds = Array.isArray(_invDef?.habilidades)
+      ? _invDef.habilidades.filter(h => typeof h === 'string') : [];
+    mySkills = AVT_STATE.skills.filter(sk => _invSkillIds.includes(sk.id));
+  }
+
   const pendingId = AVT_STATE._pendingSkillId ?? null;
 
   const overlay = document.createElement('div');
@@ -9074,7 +9323,7 @@ function _avtMostrarSkillOverlay() {
     border-radius:10px;padding:8px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
 
   overlay.innerHTML = `
-    <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.65rem;margin-bottom:6px">⚔ Skill — ${ativo.nome}</div>
+    <div style="font-family:var(--fonte-d);color:${ativo.tipo==='invocado'?'#b07ef0':'#c8a84b'};font-size:0.65rem;margin-bottom:6px">${ativo.tipo==='invocado'?'🔮':'⚔'} Skill — ${ativo.nome}</div>
     ${alvoFixado
       ? `<div style="font-size:0.62rem;color:#e87850;margin-bottom:6px;padding:3px 7px;background:rgba(232,120,80,0.1);border-radius:5px;cursor:pointer"
            onclick="AVT_STATE.alvoSelecionado=null;_avtMostrarSkillOverlay()">🎯 <b>${alvo.nome}</b> (${alvo.hp}/${alvo.hpMax}HP) ✕</div>`
@@ -9112,6 +9361,11 @@ async function _avtSkillOverlaySel(skId) {
     return;
   }
 
+  // Para invocações, deduz recursos do dono (invocações não têm ficha própria)
+  const _nomeParaCusto = ativo.tipo === 'invocado'
+    ? ((AVT_STATE.invocacoes_ativas || []).find(i => i.id === ativo.id)?.dono_char_nome || ativo.nome)
+    : ativo.nome;
+
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
   const skNome = sk?.habilidade || 'Ataque básico';
 
@@ -9132,7 +9386,7 @@ async function _avtSkillOverlaySel(skId) {
   if (sk?.alvo_tipo === 'proprio') {
     document.getElementById('avt-skill-overlay')?.remove();
     if (sk.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
-      const ok = await _avtDescontarCustoSkill(ativo.nome, sk.custo_rsv);
+      const ok = await _avtDescontarCustoSkill(_nomeParaCusto, sk.custo_rsv);
       if (!ok) return;
     }
     const casterEnt = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
@@ -9342,7 +9596,12 @@ async function _avtExecutarAtaque() {
 
   const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
-  if (!b || !ativo || ativo.tipo !== 'jogador') return;
+  if (!b || !ativo || (ativo.tipo !== 'jogador' && ativo.tipo !== 'invocado')) return;
+
+  // Para invocações: resolve o nome do dono para dedução de recursos
+  const _nomeParaCusto = ativo.tipo === 'invocado'
+    ? ((AVT_STATE.invocacoes_ativas || []).find(i => i.id === ativo.id)?.dono_char_nome || ativo.nome)
+    : ativo.nome;
 
   const skIdArea = AVT_STATE._pendingSkillId ?? null;
   const skArea = skIdArea ? AVT_STATE.skills.find(s => s.id === skIdArea) : null;
@@ -9428,7 +9687,7 @@ async function _avtExecutarAtaque() {
     }
     // Verificar e deduzir custo de recurso (Mana, Stamina, etc.)
     if (sk.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
-      const ok = await _avtDescontarCustoSkill(ativo.nome, sk.custo_rsv);
+      const ok = await _avtDescontarCustoSkill(_nomeParaCusto, sk.custo_rsv);
       if (!ok) return;
     }
     // Cooldown gravado IMEDIATAMENTE ao confirmar a skill — antes da animação dos
@@ -21443,8 +21702,8 @@ window.avtInvocar = avtInvocar;
 
 function _avtCriarEntidadeInvocacao(invAtiva, entDono) {
   const invDef = invAtiva.invocacao_def;
-  const aparencia = invDef.visual_tipo === 'token' && invDef.visual_config?.img_url
-    ? { img_frente: invDef.visual_config.img_url }
+  const aparencia = invDef.visual_config?.img_url
+    ? { modo: 'imagem', img_frente: invDef.visual_config.img_url, img_iso: invDef.visual_config.img_perfil || '' }
     : null;
 
   const ent = {

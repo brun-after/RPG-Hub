@@ -2405,56 +2405,77 @@ Resistência elemental:
 
 <!-- ── MODAL INVOCAÇÃO ──────────────────────────────────────── -->
 <div id="modal-invocacao-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:flex-end;justify-content:center">
-  <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid #b07ef0;border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid #b07ef0;border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
       <div id="modal-invocacao-titulo" style="font-family:var(--fonte-d);font-size:0.9rem;color:#b07ef0">Nova Invocação</div>
       <button onclick="fecharModalInvocacao()" style="background:none;border:none;color:var(--suave);font-size:1.1rem;cursor:pointer;padding:4px 8px">✕</button>
     </div>
     <input type="hidden" id="inv-id">
 
-    <div class="form-group" style="margin-bottom:12px">
+    <!-- ── Identidade ── -->
+    <div style="margin-bottom:14px">
       <label style="font-size:0.75rem;color:var(--suave);display:block;margin-bottom:4px">Nome *</label>
       <input id="inv-nome" type="text" placeholder="Nome da invocação" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.85rem;padding:8px 10px;box-sizing:border-box">
     </div>
-
-    <div class="form-group" style="margin-bottom:12px">
+    <div style="margin-bottom:16px">
       <label style="font-size:0.75rem;color:var(--suave);display:block;margin-bottom:4px">Descrição</label>
       <textarea id="inv-descricao" rows="2" placeholder="Descrição da invocação..." style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.82rem;padding:8px 10px;resize:vertical;box-sizing:border-box"></textarea>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-      <div>
-        <label style="font-size:0.75rem;color:var(--suave);display:block;margin-bottom:4px">Visual</label>
-        <select id="inv-visual-tipo" onchange="_invVisualTipoChange()" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.82rem;padding:6px 8px">
-          <option value="particles">✨ Partículas</option>
-          <option value="token">🖼 Token/Imagem</option>
-        </select>
+    <!-- ── Aparência ── -->
+    <div style="font-size:0.75rem;color:#b07ef0;margin-bottom:8px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.06em">🖼 Aparência</div>
+    <div style="background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.2);border-radius:8px;padding:12px;margin-bottom:16px">
+      <div style="margin-bottom:10px">
+        <label style="font-size:0.72rem;color:var(--suave);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em">Token (no mapa)</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <div id="inv-token-preview" style="width:40px;height:40px;border-radius:50%;border:2px solid #b07ef0;background:rgba(0,0,0,0.4);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#b07ef0;font-size:1.1rem">🔮</div>
+          <input id="inv-img-token" type="text" placeholder="URL da imagem (PNG, JPG, GIF)..." style="flex:1;min-width:0;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:6px 8px;color:var(--texto);font-family:monospace;font-size:0.68rem" oninput="_invAtualizarTokenPreview()">
+          <label style="padding:6px 10px;background:rgba(176,126,240,0.1);border:1px solid rgba(176,126,240,0.3);border-radius:6px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap;flex-shrink:0" title="Upload imagem">
+            📁<input type="file" accept="image/*" style="display:none" onchange="_invFileUpload(this,'inv-img-token',true)">
+          </label>
+        </div>
       </div>
       <div>
-        <label style="font-size:0.75rem;color:var(--suave);display:block;margin-bottom:4px">Comportamento</label>
+        <label style="font-size:0.72rem;color:var(--suave);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em">Arte / Perfil</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <div id="inv-perfil-preview" style="width:40px;height:56px;border-radius:6px;border:1px solid rgba(176,126,240,0.4);background:rgba(0,0,0,0.4);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#b07ef0;font-size:1.1rem">🎨</div>
+          <input id="inv-img-perfil" type="text" placeholder="URL da arte/perfil da invocação..." style="flex:1;min-width:0;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:6px 8px;color:var(--texto);font-family:monospace;font-size:0.68rem" oninput="_invAtualizarPerfilPreview()">
+          <label style="padding:6px 10px;background:rgba(176,126,240,0.1);border:1px solid rgba(176,126,240,0.3);border-radius:6px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap;flex-shrink:0" title="Upload imagem">
+            📁<input type="file" accept="image/*" style="display:none" onchange="_invFileUpload(this,'inv-img-perfil',false)">
+          </label>
+        </div>
+      </div>
+      <details style="margin-top:10px">
+        <summary style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);cursor:pointer;text-transform:uppercase;letter-spacing:0.05em">✨ Config. de Partículas (avançado)</summary>
+        <div style="margin-top:8px">
+          <textarea id="inv-visual-config" rows="2" placeholder='JSON de configuração (vazio = visual padrão)' style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:5px;color:var(--texto);font-size:0.68rem;padding:6px 8px;resize:vertical;font-family:monospace;box-sizing:border-box"></textarea>
+          <div style="font-size:0.65rem;color:var(--suave);margin-top:2px">Deixe vazio para usar o efeito de partículas padrão das invocações.</div>
+        </div>
+      </details>
+    </div>
+
+    <!-- ── Comportamento ── -->
+    <div style="font-size:0.75rem;color:#b07ef0;margin-bottom:8px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.06em">🧠 Comportamento</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+      <div>
+        <label style="font-size:0.72rem;color:var(--suave);display:block;margin-bottom:4px">Tipo</label>
         <select id="inv-comportamento" onchange="_invComportamentoChange()" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.82rem;padding:6px 8px">
-          <option value="agressivo">⚔ Agressivo</option>
-          <option value="assassino">🗡 Assassino</option>
-          <option value="protetor">🛡 Protetor</option>
-          <option value="curador">💚 Curador</option>
-          <option value="dummy">🎯 Isca (Dummy)</option>
+          <option value="agressivo">⚔ Agressivo — ataca o mais próximo</option>
+          <option value="assassino">🗡 Assassino — foca menor HP</option>
+          <option value="protetor">🛡 Protetor — segue e defende o dono</option>
+          <option value="curador">💚 Curador — cura e bufa o dono</option>
+          <option value="dummy">🎯 Isca — fica parado, atrai inimigos</option>
         </select>
+      </div>
+      <div id="inv-dummy-wrap" style="display:none;align-self:end">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.78rem;color:var(--texto);padding-bottom:6px">
+          <input type="checkbox" id="inv-dummy-explosivo"> Dummy Explosivo
+        </label>
       </div>
     </div>
 
-    <div id="inv-dummy-wrap" style="display:none;margin-bottom:12px">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.82rem;color:var(--texto)">
-        <input type="checkbox" id="inv-dummy-explosivo"> Dummy Explosivo (explode ao morrer causando dano em área)
-      </label>
-    </div>
-
-    <div class="form-group" style="margin-bottom:12px">
-      <label id="inv-visual-config-label" style="font-size:0.75rem;color:var(--suave);display:block;margin-bottom:4px">Config. de partículas (JSON ou vazio para padrão)</label>
-      <textarea id="inv-visual-config" rows="2" placeholder='URL da imagem ou JSON de config...' style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.75rem;padding:8px 10px;resize:vertical;font-family:monospace;box-sizing:border-box"></textarea>
-      <div id="inv-visual-config-hint" style="font-size:0.7rem;color:var(--suave);margin-top:2px">Deixe vazio para usar o visual padrão de invocação</div>
-    </div>
-
-    <div style="font-size:0.75rem;color:#b07ef0;margin-bottom:8px;font-family:var(--fonte-d)">⚔ Estatísticas</div>
+    <!-- ── Estatísticas ── -->
+    <div style="font-size:0.75rem;color:#b07ef0;margin-bottom:8px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.06em">⚔ Estatísticas de Combate</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 60px;gap:6px;align-items:end;margin-bottom:8px">
       <div>
         <label style="font-size:0.7rem;color:var(--suave);display:block;margin-bottom:2px">Fórmula Dano</label>
@@ -2483,16 +2504,7 @@ Resistência elemental:
         <input id="inv-cura-pct" type="number" value="0" min="0" max="200" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;padding:5px 7px;box-sizing:border-box">
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:80px 1fr 1fr 60px;gap:6px;align-items:end;margin-bottom:8px">
-      <div>
-        <label style="font-size:0.7rem;color:var(--suave);display:block;margin-bottom:2px">Resist. Base</label>
-        <input id="inv-resist-base" type="number" value="0" min="0" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;padding:5px 7px;box-sizing:border-box">
-      </div>
-      <div>
-        <label style="font-size:0.7rem;color:var(--suave);display:block;margin-bottom:2px">Resist. Atributo</label>
-        <select id="inv-resist-attr" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;padding:5px 7px"><option value="">—</option></select>
-      </div>
-      <div style="display:none"><input id="inv-resist-pct" type="number" value="0"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;align-items:end;margin-bottom:16px">
       <div>
         <label style="font-size:0.7rem;color:var(--suave);display:block;margin-bottom:2px">HP Base</label>
         <input id="inv-hp-base" type="number" value="20" min="1" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;padding:5px 7px;box-sizing:border-box">
@@ -2505,10 +2517,22 @@ Resistência elemental:
         <label style="font-size:0.7rem;color:var(--suave);display:block;margin-bottom:2px">HP %</label>
         <input id="inv-hp-pct" type="number" value="0" min="0" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;padding:5px 7px;box-sizing:border-box">
       </div>
+      <div>
+        <label style="font-size:0.7rem;color:var(--suave);display:block;margin-bottom:2px">Resist. Base</label>
+        <input id="inv-resist-base" type="number" value="0" min="0" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;padding:5px 7px;box-sizing:border-box">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:end;margin-bottom:8px">
+      <div>
+        <label style="font-size:0.7rem;color:var(--suave);display:block;margin-bottom:2px">Resist. Atributo</label>
+        <select id="inv-resist-attr" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;padding:5px 7px"><option value="">—</option></select>
+      </div>
+      <div style="display:none"><input id="inv-resist-pct" type="number" value="0"></div>
     </div>
 
-    <div style="font-size:0.75rem;color:#b07ef0;margin-bottom:8px;font-family:var(--fonte-d)">⏱ Duração & Iniciativa</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px">
+    <!-- ── Duração & Iniciativa ── -->
+    <div style="font-size:0.75rem;color:#b07ef0;margin-bottom:8px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.06em">⏱ Duração & Iniciativa</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:16px">
       <div>
         <label style="font-size:0.7rem;color:var(--suave);display:block;margin-bottom:2px">Dur. Base (turnos)</label>
         <input id="inv-duracao-base" type="number" value="3" min="1" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;padding:5px 7px;box-sizing:border-box">
@@ -2523,11 +2547,15 @@ Resistência elemental:
       </div>
     </div>
 
-    <div style="font-size:0.75rem;color:#b07ef0;margin-bottom:6px;font-family:var(--fonte-d)">⚡ Habilidades (JSON)</div>
-    <textarea id="inv-habilidades" rows="3" placeholder='[{"habilidade":"Chama","formula_dano":"2d6","custo_rsv":"Mana","custo_rsv_valor":2}]' style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.72rem;padding:8px 10px;resize:vertical;font-family:monospace;box-sizing:border-box;margin-bottom:16px"></textarea>
+    <!-- ── Habilidades ── -->
+    <div style="font-size:0.75rem;color:#b07ef0;margin-bottom:6px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.06em">⚡ Habilidades Vinculadas</div>
+    <div style="font-size:0.7rem;color:var(--suave);margin-bottom:8px;line-height:1.4">Selecione as skills do RPG que esta invocação pode usar em combate. Quando invocada, essas skills aparecem no turno da invocação.</div>
+    <div id="inv-skills-lista" style="background:rgba(176,126,240,0.04);border:1px solid rgba(176,126,240,0.15);border-radius:8px;padding:10px;max-height:180px;overflow-y:auto;margin-bottom:16px">
+      <div style="color:var(--suave);font-size:0.75rem;font-style:italic">Carregando skills...</div>
+    </div>
 
     <div style="display:flex;gap:8px">
-      <button onclick="salvarInvocacao()" style="flex:1;background:rgba(176,126,240,0.15);border:1px solid #b07ef0;border-radius:8px;color:#b07ef0;font-size:0.85rem;padding:10px;cursor:pointer;font-family:var(--fonte-d)">Salvar</button>
+      <button onclick="salvarInvocacao()" style="flex:1;background:rgba(176,126,240,0.15);border:1px solid #b07ef0;border-radius:8px;color:#b07ef0;font-size:0.85rem;padding:10px;cursor:pointer;font-family:var(--fonte-d)">💾 Salvar Invocação</button>
       <button onclick="fecharModalInvocacao()" style="background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-size:0.85rem;padding:10px 16px;cursor:pointer">Cancelar</button>
     </div>
   </div>
