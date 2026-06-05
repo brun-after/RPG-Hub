@@ -3699,14 +3699,15 @@ function _avtRenderFrame() {
   entidades.forEach(e => {
     if (e.renderX == null) {
       e.renderX = e.x; e.renderY = e.y;
-      e._velocidadeLerp = null;
     }
     if (!Array.isArray(e._waypoints)) e._waypoints = [];
 
-    const baseSpeed = e._velocidadeLerp ?? (e._velocidadeLerp = _avtGetVelocidadeMovimento(e));
-    // catch-up suave quando a fila acumula por latência de broadcast
+    const baseSpeed = _avtGetVelocidadeMovimento(e);
+    // catch-up suave para NPCs quando a fila acumula por latência de broadcast;
+    // jogador local nunca ultrapassa baseSpeed para respeitar o teto de destreza
     const qLen = e._waypoints.length;
-    const catchUp = qLen > 4 ? Math.min(2.5, 1 + (qLen - 4) * 0.25) : 1;
+    const ehJogadorLocal = typeof _avtEntidadeControlada === 'function' && e.id === _avtEntidadeControlada()?.id;
+    const catchUp = ehJogadorLocal ? 1 : (qLen > 4 ? Math.min(2.5, 1 + (qLen - 4) * 0.25) : 1);
     let remaining = (dt / 1000) * baseSpeed * catchUp;
 
     let safety = 12;
@@ -4817,11 +4818,12 @@ function _avtDesenharAparencia(ctx, ent, cx, cy, SZ, ap) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _avtGetVelocidadeMovimento(ent) {
+  const ms  = _avtGetVelocidadeCorridaMs();
+  const pct = _avtGetDestrezaVelPct();
   const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
-  const dex = dbChar?.custom_attrs?.atributos?.destreza ?? 10;
-  const dexMod = Math.floor((dex - 10) / 2);
-  // Base: 10 tiles/s (~100ms/célula). Cada ponto de mod = ±1 tile/s
-  return Math.max(3, Math.min(25, 10 + dexMod));
+  const dex  = dbChar?.custom_attrs?.atributos?.destreza ?? ent.atributos?.destreza ?? 10;
+  const mult = Math.max(0.2, 1 + ((dex - 10) * pct) / 100);
+  return Math.max(0.3, (1000 / ms) * mult);
 }
 
 // BFS — retorna array de {x,y} do caminho (incluindo start). maxLen é opcional (default 60).
@@ -7335,10 +7337,25 @@ function _avtAtualizarPaciencias(dt) {
 }
 
 function _avtGetVelocidadePerseguicao() {
-  return AVT_STATE.rpg?.theme_json?.level_config?.velocidade_perseguicao_ms ?? 1000;
+  return _avtGetVelocidadeCorridaMs();
 }
 function _avtGetVelocidadePatrulha() {
   return AVT_STATE.rpg?.theme_json?.level_config?.velocidade_patrulha_ms ?? 1500;
+}
+function _avtGetVelocidadeCorridaMs() {
+  return AVT_STATE.rpg?.theme_json?.level_config?.velocidade_corrida_ms
+      ?? AVT_STATE.rpg?.theme_json?.level_config?.velocidade_perseguicao_ms
+      ?? 400;
+}
+function _avtGetDestrezaVelPct() {
+  return AVT_STATE.rpg?.theme_json?.level_config?.destreza_vel_pct_por_ponto ?? 5;
+}
+function _avtGetVelocidadePerseguicaoNpc(ini) {
+  const ms  = _avtGetVelocidadeCorridaMs();
+  const pct = _avtGetDestrezaVelPct();
+  const dex = ini?.custom_attrs?.atributos?.destreza ?? ini?.atributos?.destreza ?? 10;
+  const mult = Math.max(0.2, 1 + ((dex - 10) * pct) / 100);
+  return Math.max(150, Math.round(ms / mult));
 }
 function _avtGetSecsPerTurno() {
   return AVT_STATE.rpg?.theme_json?.level_config?.secs_por_turno_ooc ?? 5;
@@ -7373,7 +7390,7 @@ function _avtIniciarPerseguicao(enemyId) {
   if (timer.isPursuing) return;
   timer.isPursuing = true;
   // Delay inicial de meio passo para evitar teletransporte no frame de ativação
-  const _velInicio = Math.max(300, _avtGetVelocidadePerseguicao());
+  const _velInicio = _avtGetVelocidadePerseguicaoNpc(ini);
   timer.pursuitStepTimer = _velInicio * 0.5;
   timer.inactionTimer = 0;
   timer.attackCooldownTimer = 0;
@@ -7433,7 +7450,7 @@ function _avtCancelarPerseguicao(enemyId) {
 function _avtAtualizarPerseguicoes(dt) {
   if (!dt) return;
   if (AVT_STATE._jogoAutoSuspenso) return;
-  const velMs = Math.max(300, _avtGetVelocidadePerseguicao());
+  // velMs calculado por NPC individualmente dentro do loop (ver _avtGetVelocidadePerseguicaoNpc)
 
   // Helper: tenta retargetar para o jogador vivo mais próximo dentro do raio de detecção do NPC.
   const _tentarRetarget = (ini, timer) => {
@@ -7503,7 +7520,7 @@ function _avtAtualizarPerseguicoes(dt) {
     }
 
     if (timer.pursuitStepTimer > 0) continue;
-    timer.pursuitStepTimer = velMs;
+    timer.pursuitStepTimer = _avtGetVelocidadePerseguicaoNpc(ini);
 
     // Stunado: não move nem ataca
     if (ini._stunned) continue;
@@ -14629,8 +14646,9 @@ function _avtMestrePainelRender() {
     { id: 'jogadores',   label: '👥 Jogadores' },
     { id: 'loot_xp',     label: '📊 XP' },
     { id: 'itens',       label: '🎒 Itens' },
-    { id: 'mapa',        label: '🗺 Mapa' },
-    { id: 'campanha',    label: '🏰 Campanha', perigo: true },
+    { id: 'mapa',           label: '🗺 Mapa' },
+    { id: 'balanceamento',  label: '⚖ Balanceamento', perigo: true },
+    { id: 'campanha',       label: '🏰 Campanha', perigo: true },
   ];
 
   panel.innerHTML = `
@@ -14791,21 +14809,15 @@ function _avtMpConteudoAba() {
         ${_avtBulkAparSecao('mago')}
       </div>
       <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
-        <div class="avt-mp-label">⚙ Velocidades de IA</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">Tempo (ms) entre passos do inimigo. Menor = mais rápido. Faixa: 200–10000.</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div class="avt-mp-label">⚙ Velocidade de Patrulha</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Tempo (ms) entre passos do inimigo patrulhando. Menor = mais rápido. A velocidade de perseguição é configurada na aba ⚖ Balanceamento.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <span style="flex:1;font-size:0.72rem;color:#c8d8e8">🚶 Patrulha</span>
           <input type="number" id="avt-mp-vel-patrulha-npc" min="200" max="10000" step="50" value="${lc.velocidade_patrulha_ms ?? 1500}"
             style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
           <span style="font-size:0.65rem;color:#7a92aa">ms</span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span style="flex:1;font-size:0.72rem;color:#c8d8e8">🏃 Perseguição</span>
-          <input type="number" id="avt-mp-vel-perseguicao-npc" min="200" max="10000" step="50" value="${lc.velocidade_perseguicao_ms ?? 1000}"
-            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
-          <span style="font-size:0.65rem;color:#7a92aa">ms</span>
-        </div>
-        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtSalvarVelocidadesIA()">💾 Salvar velocidades</button>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtSalvarVelocidadesIA()">💾 Salvar patrulha</button>
       </div>
       <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
         <div class="avt-mp-label">⚔ Ataque Básico dos NPCs</div>
@@ -15122,16 +15134,36 @@ function _avtMpConteudoAba() {
 `;
     }
 
-    case 'campanha': {
+    case 'balanceamento': {
       const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
-      const avt_audio = AVT_STATE.rpg?.theme_json?.audio || {};
-      const pontosAtual = lc.pontos_attr_por_nivel ?? 3;
-      const janelaAtual = lc.janela_movimento_ms ?? 3000;
-      const hpBaseAtual = lc.hp_base ?? 100;
-      const hpAttrAtual = lc.hp_attr ?? 'Constituição';
-      const hpMultAtual = lc.hp_attr_mult ?? 4;
       const attrDefs = AVT_STATE.attrDefs || [];
+      const corridaAtual  = lc.velocidade_corrida_ms ?? lc.velocidade_perseguicao_ms ?? 400;
+      const dexPctAtual   = lc.destreza_vel_pct_por_ponto ?? 5;
+      const pontosAtual   = lc.pontos_attr_por_nivel ?? 3;
+      const hpBaseAtual   = lc.hp_base ?? 100;
+      const hpAttrAtual   = lc.hp_attr ?? 'Constituição';
+      const hpMultAtual   = lc.hp_attr_mult ?? 4;
       return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🏃 Velocidade de Corrida (ms/célula)</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Tempo base (ms) para percorrer uma célula a 100% de velocidade (Destreza 10). Define também a velocidade de perseguição dos NPCs. Menor = mais rápido.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-vel-corrida" min="100" max="5000" step="50" value="${corridaAtual}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">ms por célula (ex: 400 = 2,5 células/s)</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarVelocidadeCorrida()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">⚡ Bônus de Velocidade por Destreza (%/ponto)</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Cada ponto de Destreza acima ou abaixo de 10 altera a velocidade em ±X%. Aplica a jogadores e NPCs. Ex: 5% com Destreza 12 → velocidade ×1,10 (10% mais rápido).</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-dex-vel-pct" min="0" max="50" step="1" value="${dexPctAtual}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">% por ponto de Destreza</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDestrezaVelPct()" style="width:100%">💾 Salvar</button>
+      </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-label">🎯 Pontos de atributo por nível</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">Quantos pontos de atributo cada jogador recebe ao subir de nível para distribuir.</div>
@@ -15141,17 +15173,6 @@ function _avtMpConteudoAba() {
           <span style="font-size:0.7rem;color:#7a92aa">pontos por nível</span>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarPontosAttrPorNivel()"
-          style="width:100%">💾 Salvar</button>
-      </div>
-      <div class="avt-mp-secao">
-        <div class="avt-mp-label">↔ Janela de movimento pós-dado</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">Tempo (em ms) que jogadores têm para mover o restante de seus pontos de movimento após rolar o dado de ataque.</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <input type="number" id="avt-mp-janela-mov" min="500" max="15000" step="500" value="${janelaAtual}"
-            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
-          <span style="font-size:0.7rem;color:#7a92aa">ms (ex: 3000 = 3s)</span>
-        </div>
-        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarJanelaMovimento()"
           style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
@@ -15182,36 +15203,6 @@ function _avtMpConteudoAba() {
           style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
-        <div class="avt-mp-label">🏃 Velocidade de Perseguição</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">Intervalo entre cada passo do inimigo durante perseguição (ms).</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <input type="number" id="avt-mp-vel-perseguicao" min="200" max="5000" step="100" value="${lc.velocidade_perseguicao_ms ?? 1000}"
-            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
-          <span style="font-size:0.7rem;color:#7a92aa">ms por passo</span>
-        </div>
-        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarVelocidadePerseguicao()" style="width:100%">💾 Salvar</button>
-      </div>
-      <div class="avt-mp-secao">
-        <div class="avt-mp-label">🏃 Desistência de Perseguição</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">Após X segundos sem interação, inimigos têm Y% de chance de desistir a cada Z segundos. Interação = atacar ou receber dano.</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <input type="number" id="avt-mp-desistir-apos" min="1" max="120" step="1" value="${lc.perseguicao_desistir_apos_s ?? 10}"
-            style="width:70px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
-          <span style="font-size:0.7rem;color:#7a92aa">s sem interação para começar a checar</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <input type="number" id="avt-mp-desistir-chance" min="1" max="100" step="1" value="${Math.round((lc.perseguicao_desistir_chance ?? 0.10) * 100)}"
-            style="width:70px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
-          <span style="font-size:0.7rem;color:#7a92aa">% de chance por verificação</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <input type="number" id="avt-mp-desistir-intervalo" min="1" max="60" step="1" value="${lc.perseguicao_desistir_intervalo_s ?? 3}"
-            style="width:70px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
-          <span style="font-size:0.7rem;color:#7a92aa">s entre cada verificação</span>
-        </div>
-        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarPerseguicaoDesistir()" style="width:100%">💾 Salvar</button>
-      </div>
-      <div class="avt-mp-secao">
         <div class="avt-mp-label">⏱ Segundos por Turno (fora de combate)</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">Duração do cooldown de habilidades fora de combate.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -15230,36 +15221,6 @@ function _avtMpConteudoAba() {
           <span style="font-size:0.7rem;color:#7a92aa">turnos</span>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarAtaqueBasicoCooldown()" style="width:100%">💾 Salvar</button>
-      </div>
-      <div class="avt-mp-secao">
-        <div class="avt-mp-label">🤝 Raio de Convite a Aliados</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">Distância (em células) para convidar aliados ao aceitar combate.</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <input type="number" id="avt-mp-raio-aliado" min="1" max="20" step="1" value="${lc.raio_convite_aliado ?? 5}"
-            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
-          <span style="font-size:0.7rem;color:#7a92aa">células</span>
-        </div>
-        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarRaioAliado()" style="width:100%">💾 Salvar</button>
-      </div>
-      <div class="avt-mp-secao">
-        <div class="avt-mp-label">⚔ Range para Aceitar Combate</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">Distância máxima (em células) para o jogador aceitar combate de um inimigo em perseguição. Padrão: 8.</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <input type="number" id="avt-mp-range-aceitar-combate" min="1" max="30" step="1" value="${lc.range_aceitar_combate ?? 8}"
-            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
-          <span style="font-size:0.7rem;color:#7a92aa">células</span>
-        </div>
-        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarRangeAceitarCombate()" style="width:100%">💾 Salvar</button>
-      </div>
-      <div class="avt-mp-secao">
-        <div class="avt-mp-label">🎲 Duração da animação de dados</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">Tempo (em ms) da animação de rolagem dos dados exibida no centro da tela (padrão: 500).</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <input type="number" id="avt-mp-duracao-anim-dados" min="100" max="2000" step="50" value="${lc.duracao_anim_dados_ms ?? 500}"
-            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
-          <span style="font-size:0.7rem;color:#7a92aa">ms (ex: 500 = 0,5s)</span>
-        </div>
-        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDuracaoAnimDados()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-label">⚡ Duração do cooldown de Efeitos</div>
@@ -15324,6 +15285,74 @@ function _avtMpConteudoAba() {
           </label>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarHpRegen()" style="width:100%">💾 Salvar</button>
+      </div>`;
+    }
+
+    case 'campanha': {
+      const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+      const avt_audio = AVT_STATE.rpg?.theme_json?.audio || {};
+      const janelaAtual = lc.janela_movimento_ms ?? 3000;
+      return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">↔ Janela de movimento pós-dado</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Tempo (em ms) que jogadores têm para mover o restante de seus pontos de movimento após rolar o dado de ataque.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-janela-mov" min="500" max="15000" step="500" value="${janelaAtual}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">ms (ex: 3000 = 3s)</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarJanelaMovimento()"
+          style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🏃 Desistência de Perseguição</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Após X segundos sem interação, inimigos têm Y% de chance de desistir a cada Z segundos. Interação = atacar ou receber dano.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="number" id="avt-mp-desistir-apos" min="1" max="120" step="1" value="${lc.perseguicao_desistir_apos_s ?? 10}"
+            style="width:70px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">s sem interação para começar a checar</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="number" id="avt-mp-desistir-chance" min="1" max="100" step="1" value="${Math.round((lc.perseguicao_desistir_chance ?? 0.10) * 100)}"
+            style="width:70px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">% de chance por verificação</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-desistir-intervalo" min="1" max="60" step="1" value="${lc.perseguicao_desistir_intervalo_s ?? 3}"
+            style="width:70px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">s entre cada verificação</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarPerseguicaoDesistir()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🤝 Raio de Convite a Aliados</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Distância (em células) para convidar aliados ao aceitar combate.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-raio-aliado" min="1" max="20" step="1" value="${lc.raio_convite_aliado ?? 5}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">células</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarRaioAliado()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">⚔ Range para Aceitar Combate</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Distância máxima (em células) para o jogador aceitar combate de um inimigo em perseguição. Padrão: 8.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-range-aceitar-combate" min="1" max="30" step="1" value="${lc.range_aceitar_combate ?? 8}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">células</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarRangeAceitarCombate()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🎲 Duração da animação de dados</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Tempo (em ms) da animação de rolagem dos dados exibida no centro da tela (padrão: 500).</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-duracao-anim-dados" min="100" max="2000" step="50" value="${lc.duracao_anim_dados_ms ?? 500}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">ms (ex: 500 = 0,5s)</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDuracaoAnimDados()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-label">🎵 Trilha Sonora</div>
@@ -15584,36 +15613,56 @@ async function _avtSalvarHpConfig() {
 }
 
 async function _avtSalvarVelocidadePerseguicao() {
-  const val = Math.max(200, Math.min(5000, parseInt(document.getElementById('avt-mp-vel-perseguicao')?.value) || 1000));
+  await _avtSalvarVelocidadeCorrida();
+}
+
+async function _avtSalvarVelocidadeCorrida() {
+  const val = Math.max(100, Math.min(5000, parseInt(document.getElementById('avt-mp-vel-corrida')?.value) || 400));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
-  rpg.theme_json.level_config.velocidade_perseguicao_ms = val;
+  rpg.theme_json.level_config.velocidade_corrida_ms = val;
+  AVT_STATE.entidades.forEach(e => { e._velocidadeLerp = null; });
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
-    mostrarToast(`Velocidade de perseguição: ${val}ms`, 'sucesso');
+    try { _avtBroadcast('avt_level_config_update', { config: { velocidade_corrida_ms: val } }); } catch(_) {}
+    mostrarToast(`Velocidade de corrida: ${val}ms/célula`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
+window._avtSalvarVelocidadeCorrida = _avtSalvarVelocidadeCorrida;
 
-// Salva ambas as velocidades de IA (patrulha + perseguição) configuradas na aba NPCs
+async function _avtSalvarDestrezaVelPct() {
+  const val = Math.max(0, Math.min(50, parseInt(document.getElementById('avt-mp-dex-vel-pct')?.value) || 5));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.destreza_vel_pct_por_ponto = val;
+  AVT_STATE.entidades.forEach(e => { e._velocidadeLerp = null; });
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    try { _avtBroadcast('avt_level_config_update', { config: { destreza_vel_pct_por_ponto: val } }); } catch(_) {}
+    mostrarToast(`Bônus de velocidade: ${val}% por ponto de Destreza`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtSalvarDestrezaVelPct = _avtSalvarDestrezaVelPct;
+
+// Salva velocidade de patrulha dos NPCs (perseguição agora controlada pela aba Balanceamento)
 async function _avtSalvarVelocidadesIA() {
   const inP = document.getElementById('avt-mp-vel-patrulha-npc');
-  const inC = document.getElementById('avt-mp-vel-perseguicao-npc');
   const patrol = Math.max(200, Math.min(10000, parseInt(inP?.value) || 1500));
-  const chase  = Math.max(200, Math.min(10000, parseInt(inC?.value) || 1000));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
   rpg.theme_json.level_config.velocidade_patrulha_ms = patrol;
-  rpg.theme_json.level_config.velocidade_perseguicao_ms = chase;
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
       method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json })
     });
-    try { _avtBroadcast('avt_level_config_update', { config: { velocidade_patrulha_ms: patrol, velocidade_perseguicao_ms: chase } }); } catch(_) {}
-    mostrarToast(`IA — patrulha:${patrol}ms · perseguição:${chase}ms`, 'sucesso');
+    try { _avtBroadcast('avt_level_config_update', { config: { velocidade_patrulha_ms: patrol } }); } catch(_) {}
+    mostrarToast(`Patrulha: ${patrol}ms`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarVelocidadesIA = _avtSalvarVelocidadesIA;
@@ -15699,6 +15748,9 @@ function avtReceberLevelConfigUpdate({ config } = {}) {
   if (!AVT_STATE.rpg.theme_json) AVT_STATE.rpg.theme_json = {};
   if (!AVT_STATE.rpg.theme_json.level_config) AVT_STATE.rpg.theme_json.level_config = {};
   Object.assign(AVT_STATE.rpg.theme_json.level_config, config);
+  if ('velocidade_corrida_ms' in config || 'destreza_vel_pct_por_ponto' in config) {
+    AVT_STATE.entidades.forEach(e => { e._velocidadeLerp = null; });
+  }
   try {
     const painel = document.getElementById('avt-mestre-panel');
     if (painel && painel.style.display !== 'none' && typeof _avtMestrePainelRender === 'function') _avtMestrePainelRender();
