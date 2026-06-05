@@ -12052,6 +12052,20 @@ async function avtAbrirBau(bauId) {
 }
 window.avtAbrirBau = avtAbrirBau;
 
+// Receber notificação de baú aberto por outro jogador: marcar como aberto localmente
+function avtReceberBauAberto({ bauId, jogadorNome } = {}) {
+  try {
+    const rd = AVT_STATE.dungeon?.render_data;
+    if (!rd || !bauId) return;
+    const bau = (rd.objetos || []).find(o => o.id === bauId || String(o.id) === String(bauId));
+    if (bau) bau.aberto = true;
+    if (jogadorNome) {
+      try { mostrarToast(`📦 ${jogadorNome} abriu um baú!`, 'ok'); } catch(_) {}
+    }
+  } catch(_) {}
+}
+window.avtReceberBauAberto = avtReceberBauAberto;
+
 // ─── END PLAYER PANEL ─────────────────────────────────────────────────────────
 
 // ─── CATALOG IMPORT ───────────────────────────────────────────────────────────
