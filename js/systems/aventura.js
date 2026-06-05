@@ -12052,6 +12052,20 @@ async function avtAbrirBau(bauId) {
 }
 window.avtAbrirBau = avtAbrirBau;
 
+// Receber notificação de baú aberto por outro jogador: marcar como aberto localmente
+function avtReceberBauAberto({ bauId, jogadorNome } = {}) {
+  try {
+    const rd = AVT_STATE.dungeon?.render_data;
+    if (!rd || !bauId) return;
+    const bau = (rd.objetos || []).find(o => o.id === bauId || String(o.id) === String(bauId));
+    if (bau) bau.aberto = true;
+    if (jogadorNome) {
+      try { mostrarToast(`📦 ${jogadorNome} abriu um baú!`, 'ok'); } catch(_) {}
+    }
+  } catch(_) {}
+}
+window.avtReceberBauAberto = avtReceberBauAberto;
+
 // ─── END PLAYER PANEL ─────────────────────────────────────────────────────────
 
 // ─── CATALOG IMPORT ───────────────────────────────────────────────────────────
@@ -20367,8 +20381,8 @@ try{
 
   // ── Host eleito ─────────────────────────────────────────────────────────
   function _avtSouHostDe(npcId){
-    // Em P2P: o host RTNet controla todos os NPCs (sem lease individual)
-    if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') {
+    // Em qualquer modo RTNet (incluindo supabase sem peers), o host RTNet controla todos os NPCs
+    if (typeof RTNet !== 'undefined' && RTNet.initialized) {
       return RTNet.isHost();
     }
     const exp = AVT_STATE._npcHostLease && AVT_STATE._npcHostLease[npcId];

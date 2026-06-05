@@ -114,6 +114,9 @@ window.RTNet = (() => {
     avt_item_equipado:        'avtReceberItemEquipado',
     avt_item_desequipado:     'avtReceberItemDesequipado',
     avt_char_update:          'avtReceberCharUpdate',
+    // [RECURSOS + BAÚS]
+    avt_rsv_update:           'avtReceberRsvUpdate',
+    avt_bau_aberto:           'avtReceberBauAberto',
   };
 
   // opts padrão por tipo de evento (camada A/B/C conforme plano §5)
@@ -155,6 +158,8 @@ window.RTNet = (() => {
     avt_item_equipado:        { persist: 'never',     reliable: true  },
     avt_item_desequipado:     { persist: 'never',     reliable: true  },
     avt_char_update:          { persist: 'never',     reliable: true  },
+    // [RECURSOS + BAÚS]
+    avt_rsv_update:           { persist: 'never',     reliable: true  },
   };
 
   function _log(...a)  { try { console.log('[RTNet]',  ...a); } catch(_) {} }
@@ -186,8 +191,6 @@ window.RTNet = (() => {
           }
         } catch(_) {}
       }
-    } else if (tipo === 'avt_bau_aberto') {
-      try { if (typeof mostrarToast === 'function') mostrarToast((payload?.jogadorNome || 'Alguém') + ' abriu um baú!', 'ok'); } catch(_) {}
     }
   }
 
