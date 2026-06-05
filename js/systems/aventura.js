@@ -6810,6 +6810,9 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
           if (ef.tipo === 'silence')    alvoProcOoc._silenciado = true;
           if (ef.tipo === 'fantasma')   alvoProcOoc._fantasma   = true;
           if (ef.tipo === 'atravessar') alvoProcOoc._atravessar = true;
+          // Dominação imediata (OOC): necromante domina na hora em vez de esperar morte
+          if (ef.tipo === 'necromante' && alvoProcOoc.tipo === 'inimigo' && !alvoProcOoc._dominado)
+            _avtNecromanteDominar(alvoProcOoc, _oocEfPa, null);
         }
       });
     }
@@ -8539,7 +8542,12 @@ function _avtNpcMorreu(npcEnt, bat) {
   if (!npcEnt || npcEnt.escondido) return;
   // Se o NPC tem efeito Necromante ativo e ainda não está dominado, dominar em vez de matar
   if (!npcEnt._dominado) {
-    const efNecro = (npcEnt.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
+    let efNecro = (npcEnt.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
+    // Fallback: checar entrada de iniciativa (pode ter sido aplicado só lá antes de sincronizar)
+    if (!efNecro && bat) {
+      const _initFb = bat.iniciativa.find(e => e.id === npcEnt.id);
+      if (_initFb) efNecro = (_initFb.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
+    }
     if (efNecro) { _avtNecromanteDominar(npcEnt, efNecro, bat); return; }
   }
   // Se estava dominado, limpar registro de invocação antes da morte real
@@ -9682,6 +9690,12 @@ async function _avtExecutarAtaque() {
                     if (ef.tipo === 'atravessar') alvoProcEf._atravessar = true;
                     if (ef.tipo === 'dot')        _avtMostrarDotDrip(alvoProcEf);
                     if (ef.tipo === 'hot')        mostrarToast(`♻ ${alvoProcEf.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
+                    // Dominação imediata (área): necromante domina na hora em vez de esperar morte
+                    if (ef.tipo === 'necromante') {
+                      const _necroEntA = AVT_STATE.entidades.find(e => e.id === alvoProcEf.id) || alvoProcEf;
+                      if ((_necroEntA.tipo === 'inimigo' || alvoProcEf.tipo === 'inimigo') && !_necroEntA._dominado)
+                        _avtNecromanteDominar(_necroEntA, _efEntryA, b);
+                    }
                   }
                 }
               });
@@ -9760,6 +9774,12 @@ async function _avtExecutarAtaque() {
               if (ef.tipo === 'atravessar') { if (alvoProcEf) alvoProcEf._atravessar = true; }
               if (ef.tipo === 'dot')        _avtMostrarDotDrip(alvoProcEf);
               if (ef.tipo === 'hot')        mostrarToast(`♻ ${alvoProcEf.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
+              // Dominação imediata: necromante não espera a morte — domina na hora
+              if (ef.tipo === 'necromante') {
+                const _necroEnt = AVT_STATE.entidades.find(e => e.id === alvoProcEf.id) || alvoProcEf;
+                if ((_necroEnt.tipo === 'inimigo' || alvoProcEf.tipo === 'inimigo') && !_necroEnt._dominado)
+                  _avtNecromanteDominar(_necroEnt, _efEntry, b);
+              }
               _avtLog(`  ↳ ${ef.tipo} aplicado em ${alvoProcEf.nome} (${ef.duracao_turnos ?? 1}t)`, b.id);
             }
           });
@@ -10315,7 +10335,9 @@ function _avtTurnoAvancar(bat) {
     if (ini.hp <= 0 && ini.tipo === 'inimigo') {
       const _entNecPre = AVT_STATE.entidades.find(e => e.id === ini.id);
       if (_entNecPre && !_entNecPre._dominado && !_entNecPre.escondido) {
-        const _efNecPre = (_entNecPre.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
+        let _efNecPre = (_entNecPre.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
+        // Fallback: o efeito pode estar só na entrada de iniciativa
+        if (!_efNecPre) _efNecPre = (ini.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
         if (_efNecPre) _avtNecromanteDominar(_entNecPre, _efNecPre, bat);
       }
     }
