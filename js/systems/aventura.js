@@ -7904,7 +7904,7 @@ function _avtCriarBatalhaDePayload(payload) {
   if (typeof RTNet !== 'undefined' && RTNet.initialized &&
       typeof RTNet.isHost === 'function' && RTNet.isHost()) {
     const _ativoNovo = bat.iniciativa[bat.turnoIdx];
-    if (_ativoNovo?.tipo === 'inimigo') {
+    if (_ativoNovo?.tipo === 'inimigo' || _ativoNovo?.tipo === 'invocado') {
       _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
     }
   }
@@ -7930,7 +7930,8 @@ function _avtBroadcastBatalha(bat) {
       // Avatar fields
       _avatarDe: e._avatarDe, _hitsRestantes: e._hitsRestantes, _hitsMax: e._hitsMax,
       _turnosRestantes: e._turnosRestantes, cor: e.cor,
-      classe_aventura: e.classe_aventura, presetTipo: e.presetTipo
+      classe_aventura: e.classe_aventura, presetTipo: e.presetTipo,
+      _dominado: e._dominado ?? false
     })),
   };
   _avtBroadcast('avt_batalha_update', snapshot);
@@ -7962,6 +7963,10 @@ function avtReceberBatalhaUpdate(payload) {
         if (Array.isArray(snap.status_effects)) local.status_effects = snap.status_effects;
         if (snap._hitsRestantes != null) local._hitsRestantes = snap._hitsRestantes;
         if (snap._turnosRestantes != null) local._turnosRestantes = snap._turnosRestantes;
+        // Sincronizar tipo e flags de dominação para que a IA execute o caminho correto
+        if (snap.tipo != null) local.tipo = snap.tipo;
+        if (snap.cor != null) local.cor = snap.cor;
+        if (snap._dominado != null) local._dominado = snap._dominado;
       }
       const ent = AVT_STATE.entidades.find(e => e.id === snap.id);
       if (ent) {
@@ -7979,6 +7984,10 @@ function avtReceberBatalhaUpdate(payload) {
         }
         if (snap._hitsRestantes != null) ent._hitsRestantes = snap._hitsRestantes;
         if (snap._turnosRestantes != null) ent._turnosRestantes = snap._turnosRestantes;
+        // Sincronizar tipo e dominação na entidade também (evita IA de inimigo em dominados)
+        if (snap.tipo != null && snap.tipo !== ent.tipo) ent.tipo = snap.tipo;
+        if (snap._dominado != null) ent._dominado = snap._dominado;
+        if (snap.cor != null) ent.cor = snap.cor;
       }
     });
     // Remove entidades que saíram/morreram (não presentes no snapshot canônico do host)
@@ -11019,6 +11028,8 @@ async function _avtNpcTurno(bat) {
   if (!AVT_STATE.batalhas.some(b => b.id === bat.id)) return;
   const _npcAindaAtivo = bat.iniciativa[bat.turnoIdx]?.id === _npcIdAtThisCall;
   if (!_npcAindaAtivo) return;
+  // Re-verificar tipo após CAS: a dominação pode ter ocorrido durante o await
+  if (bat.iniciativa[bat.turnoIdx]?.tipo === 'invocado') { _avtNpcTurnoInvocado(bat); return; }
 
   // AI globally disabled — pass turn
   if (!AVT_STATE.npcIaAtiva) {
@@ -21196,7 +21207,7 @@ try{
             (AVT_STATE.batalhas || []).forEach(b => {
               if (b._npcWatchdog) { try { clearTimeout(b._npcWatchdog); } catch(_) {} b._npcWatchdog = null; }
               const ativo = b.iniciativa?.[b.turnoIdx];
-              if (ativo?.tipo === 'inimigo' && typeof _avtNpcTurno === 'function') {
+              if ((ativo?.tipo === 'inimigo' || ativo?.tipo === 'invocado') && typeof _avtNpcTurno === 'function') {
                 _avtNpcTurno(b);
               }
             });
