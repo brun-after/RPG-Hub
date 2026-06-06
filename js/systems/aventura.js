@@ -9237,6 +9237,7 @@ function avtCombateIniciar(inimigo_trigger, forcedId, opts) {
     raio,
     iniciador: jogadorIniciador?.nome || null,
     movimentoRestante: {},  // { entId: tilesLeft for this turn }
+    _engineToken: null,
   };
   AVT_STATE.batalhas.push(bat);
   document.getElementById('avt-banner-aceitar-combate')?.remove();
@@ -11451,9 +11452,13 @@ async function _avtNpcTurno(bat) {
   // Engine-token CAS: garante que apenas um cliente processa o turno do NPC.
   try {
     const novoToken = 'tk_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    const tokenAtual = bat._engineToken || '';
+    const tokenAtual = bat._engineToken || null;
+    // NULL no DB não é igual a '' no PostgREST — usa is.null quando o token ainda não foi gerado
+    const _tokenFilter = tokenAtual
+      ? `engine_token=eq.${encodeURIComponent(tokenAtual)}`
+      : `engine_token=is.null`;
     const _casPromise = _avtSb(
-      `batalhas?id=eq.${encodeURIComponent(bat.id)}&engine_token=eq.${encodeURIComponent(tokenAtual)}`,
+      `batalhas?id=eq.${encodeURIComponent(bat.id)}&${_tokenFilter}`,
       { method: 'PATCH', body: JSON.stringify({ engine_token: novoToken }) }
     );
     const _timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error('CAS_TIMEOUT')), 4000));
