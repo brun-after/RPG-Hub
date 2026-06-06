@@ -6352,18 +6352,22 @@ function _avtMoverJogador(dx, dy) {
     // A interpolação renderX/Y desliza suavemente; side-effects (broadcast,
     // proximidade, porta/saída, recuperação) rodam no callback por célula,
     // unificado com o pipeline de clique (_caminhoDestino).
-    const baseX = Math.round(jogador.renderX ?? jogador.x);
-    const baseY = Math.round(jogador.renderY ?? jogador.y);
+    AVT_STATE._caminhoDestino = null;
+    if (!Array.isArray(jogador._waypoints)) jogador._waypoints = [];
+    // Base: última célula comprometida na fila (evita zigzag ao mudar de direção);
+    // fallback para posição atual arredondada quando fila vazia.
+    const lastWp = jogador._waypoints.length ? jogador._waypoints[jogador._waypoints.length - 1] : null;
+    const baseX = lastWp ? lastWp.x : Math.round(jogador.renderX ?? jogador.x);
+    const baseY = lastWp ? lastWp.y : Math.round(jogador.renderY ?? jogador.y);
     const nx = baseX + dx, ny = baseY + dy;
     if (!jogador._atravessar && !_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
     if (!jogador._fantasma && _avtCelulaOcupada(nx, ny, jogador.id, jogador.tipo, false)) return;
     // Snap posição lógica para inteiro (em caso de estado fracionário legado)
-    if (jogador.x !== baseX || jogador.y !== baseY) {
-      jogador.x = baseX; jogador.y = baseY;
+    const snapX = Math.round(jogador.renderX ?? jogador.x);
+    const snapY = Math.round(jogador.renderY ?? jogador.y);
+    if (jogador.x !== snapX || jogador.y !== snapY) {
+      jogador.x = snapX; jogador.y = snapY;
     }
-    // Cancela path de clique em andamento (teclado/D-pad assume controle)
-    AVT_STATE._caminhoDestino = null;
-    if (!Array.isArray(jogador._waypoints)) jogador._waypoints = [];
     // Rate-limit natural: máx. 2 passos enfileirados (anti-buffer overflow do auto-repeat)
     if (jogador._waypoints.length >= 2) return;
     // Não duplica o mesmo destino consecutivo
