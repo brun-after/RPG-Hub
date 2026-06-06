@@ -28,14 +28,7 @@ var PIXI_STUDIO_STATE = {
 // ══ B — INIT & CRUD ══════════════════════════════════════════════════════════
 
 function pixiStudioInit() {
-  if (!RPG_DATA) return;
-  // Only master can use Studio
-  if (RPG_DATA.myRole !== 'mestre') {
-    const root = document.getElementById('ps-root');
-    if (root) root.innerHTML = '<div style="padding:40px;text-align:center;color:var(--suave);font-family:var(--fonte-d);font-size:0.85rem">Studio Pixi disponível apenas para o Mestre.</div>';
-    return;
-  }
-  PIXI_STUDIO_STATE.rpgId = RPG_DATA.rpgId;
+  if (!SESSION?.user?.id) return;
   psRenderShell();
   psCarregarLista();
 }
@@ -99,10 +92,10 @@ function psRenderShell() {
 }
 
 async function psCarregarLista() {
-  const rpgId = PIXI_STUDIO_STATE.rpgId;
-  if (!rpgId) return;
+  const uid = SESSION?.user?.id;
+  if (!uid) return;
   try {
-    const rows = await sb(`pixi_animations?or=(rpg_id.eq.${encodeURIComponent(rpgId)},global.eq.true)&order=criado_em.desc`);
+    const rows = await sb(`pixi_animations?or=(criado_por.eq.${encodeURIComponent(uid)},global.eq.true)&order=criado_em.desc`);
     PIXI_STUDIO_STATE.animacoes = rows || [];
   } catch (e) {
     PIXI_STUDIO_STATE.animacoes = [];
@@ -204,7 +197,7 @@ async function psSalvar() {
   }
 
   const body = {
-    rpg_id:      PIXI_STUDIO_STATE.rpgId,
+    rpg_id:      null,
     nome:        cur.nome || 'Animação',
     descricao:   cur.descricao || '',
     config_json: cur.config_json,

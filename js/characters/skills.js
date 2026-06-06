@@ -591,12 +591,10 @@ function skInvocacaoIlimitadoChange() {
 // ─── STUDIO PIXI — skill picker helpers ──────────────────────────────────────
 function skEscolherPixiStudio() {
   if (typeof psPickerAbrir !== 'function') {
-    mostrarToast('Studio Pixi não está carregado. Abra a aba Studio primeiro.', 'erro');
+    mostrarToast('Studio Pixi não está carregado.', 'erro');
     return;
   }
-  // Ensure animation list is fresh
-  if (typeof psCarregarLista === 'function' && PIXI_STUDIO_STATE?.rpgId !== RPG_DATA?.rpgId) {
-    if (typeof PIXI_STUDIO_STATE !== 'undefined') PIXI_STUDIO_STATE.rpgId = RPG_DATA?.rpgId;
+  if (typeof psCarregarLista === 'function' && !PIXI_STUDIO_STATE?.animacoes?.length) {
     psCarregarLista();
   }
   psPickerAbrir((id, nome) => {
