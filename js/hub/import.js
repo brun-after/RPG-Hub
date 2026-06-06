@@ -46,6 +46,23 @@ function fecharImport(){
   document.getElementById('app').classList.remove('visible');
   document.getElementById('hub').style.display='';
 }
+function abrirPixiStudio(){
+  document.getElementById('hub').style.display='none';
+  const scr=document.getElementById('pixi-studio-screen');
+  if(scr) scr.style.display='flex';
+  if(typeof pixiStudioInit==='function') pixiStudioInit();
+}
+function fecharPixiStudio(){
+  const scr=document.getElementById('pixi-studio-screen');
+  if(scr) scr.style.display='none';
+  if(typeof PIXI_STUDIO_STATE!=='undefined' && PIXI_STUDIO_STATE._origin==='aventura'){
+    PIXI_STUDIO_STATE._origin=null;
+    const menu=document.getElementById('avt-menu-screen');
+    if(menu) menu.style.display='flex';
+  } else {
+    document.getElementById('hub').style.display='';
+  }
+}
 
 
 function lerCSV(tipo,input){const f=input.files[0];if(!f)return;const st=document.getElementById('status-'+tipo),rd=new FileReader();rd.onload=e=>{try{const p=parseCSV(e.target.result);p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));IMPORT_CSVS[tipo]=p;st.textContent=`✓ ${p.length} linha(s)`;st.className='import-status ok';st.style.display='block';}catch(err){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
@@ -2679,7 +2696,6 @@ function abrirAba(id,btn){
     if(typeof renderFichasBtns==='function') renderFichasBtns();
     if(FICHAS_VIEW && typeof renderFichaView==='function') renderFichaView(FICHAS_VIEW);
   }
-  if(id==='pixi-studio' && typeof pixiStudioInit==='function') pixiStudioInit();
   if(RPG_DATA?.rpgId) salvarAba(RPG_DATA.rpgId, id);
 }
 function mostrarToast(msg,tipo){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(tipo||'');t.classList.add('visivel');setTimeout(()=>t.classList.remove('visivel'),2400);}
