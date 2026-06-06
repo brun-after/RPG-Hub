@@ -145,6 +145,11 @@ function abrirModalSkill(skillId, personagemNome) {
     if (invIlimEl) invIlimEl.checked = ilimitado;
     if (typeof skInvocacaoIlimitadoChange === 'function') skInvocacaoIlimitadoChange();
     skRenderEfeitosLista();
+    // Animação — Studio Pixi
+    const psId = document.getElementById('sk-pixi-studio-id');
+    const psNome = document.getElementById('sk-pixi-studio-nome');
+    if (psId) psId.value = s.animacao?.pixi_studio_id || '';
+    if (psNome) psNome.textContent = s.animacao?.pixi_studio_nome || 'Nenhuma selecionada';
     // Animação
     const anim = s.animacao || {};
     document.getElementById('sk-anim-tipo').value   = anim.tipo  || 'nenhuma';
@@ -228,6 +233,11 @@ function abrirModalSkill(skillId, personagemNome) {
     if (typeof skInvocacaoIlimitadoChange === 'function') skInvocacaoIlimitadoChange();
     // Habilidade reativa (nova habilidade — limpar)
     _skCarregarCamposReativos(null);
+    // Animação — limpar Studio Pixi
+    const _psIdEl = document.getElementById('sk-pixi-studio-id');
+    const _psNmEl = document.getElementById('sk-pixi-studio-nome');
+    if (_psIdEl) _psIdEl.value = '';
+    if (_psNmEl) _psNmEl.textContent = 'Nenhuma selecionada';
     // Animação
     document.getElementById('sk-anim-tipo').value    = 'nenhuma';
     document.getElementById('sk-anim-cor').value     = '#e74c3c';
@@ -395,6 +405,9 @@ async function salvarSkill() {
           return { posicao: spinePos, ...parsed };
         } catch(_) { return undefined; }
       })() : undefined,
+      // Studio Pixi
+      pixi_studio_id:   animTipo === 'pixi_studio' ? (document.getElementById('sk-pixi-studio-id')?.value || null) : undefined,
+      pixi_studio_nome: animTipo === 'pixi_studio' ? (document.getElementById('sk-pixi-studio-nome')?.textContent || null) : undefined,
     };
     // Limpar campos undefined
     Object.keys(body.animacao).forEach(k => body.animacao[k] === undefined && delete body.animacao[k]);
@@ -573,4 +586,30 @@ function skInvocacaoIlimitadoChange() {
   const infoIlim    = document.getElementById('sk-invocar-ilimitado-info');
   if (duracaoWrap) duracaoWrap.style.display = ilimitado ? 'none' : 'flex';
   if (infoIlim)    infoIlim.style.display    = ilimitado ? 'block' : 'none';
+}
+
+// ─── STUDIO PIXI — skill picker helpers ──────────────────────────────────────
+function skEscolherPixiStudio() {
+  if (typeof psPickerAbrir !== 'function') {
+    mostrarToast('Studio Pixi não está carregado. Abra a aba Studio primeiro.', 'erro');
+    return;
+  }
+  // Ensure animation list is fresh
+  if (typeof psCarregarLista === 'function' && PIXI_STUDIO_STATE?.rpgId !== RPG_DATA?.rpgId) {
+    if (typeof PIXI_STUDIO_STATE !== 'undefined') PIXI_STUDIO_STATE.rpgId = RPG_DATA?.rpgId;
+    psCarregarLista();
+  }
+  psPickerAbrir((id, nome) => {
+    const idEl   = document.getElementById('sk-pixi-studio-id');
+    const nomeEl = document.getElementById('sk-pixi-studio-nome');
+    if (idEl)   idEl.value = id;
+    if (nomeEl) nomeEl.textContent = nome || id;
+  });
+}
+
+function skLimparPixiStudio() {
+  const idEl   = document.getElementById('sk-pixi-studio-id');
+  const nomeEl = document.getElementById('sk-pixi-studio-nome');
+  if (idEl)   idEl.value = '';
+  if (nomeEl) nomeEl.textContent = 'Nenhuma selecionada';
 }

@@ -2679,6 +2679,7 @@ function abrirAba(id,btn){
     if(typeof renderFichasBtns==='function') renderFichasBtns();
     if(FICHAS_VIEW && typeof renderFichaView==='function') renderFichaView(FICHAS_VIEW);
   }
+  if(id==='pixi-studio' && typeof pixiStudioInit==='function') pixiStudioInit();
   if(RPG_DATA?.rpgId) salvarAba(RPG_DATA.rpgId, id);
 }
 function mostrarToast(msg,tipo){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(tipo||'');t.classList.add('visivel');setTimeout(()=>t.classList.remove('visivel'),2400);}

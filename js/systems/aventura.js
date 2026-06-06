@@ -2859,6 +2859,7 @@ function _avtCleanupListeners() {
   AVT_STATE._pendingTimeouts = [];
   if (AVT_STATE._resizeObs) { AVT_STATE._resizeObs.disconnect(); AVT_STATE._resizeObs = null; }
   avtDpadStop();
+  if (typeof avtPixiCleanupAll === 'function') avtPixiCleanupAll();
 }
 
 function _avtSetTimeout(fn, ms) {
@@ -12804,6 +12805,15 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
     _avtPixiSpineAnim(anim.spine_config, spx, spy);
     return 0;
   }
+
+  // Studio Pixi — play by animation ID
+  if ((tipo === 'pixi_studio' || anim.pixi_studio_id) && anim.pixi_studio_id) {
+    if (typeof avtPixiPlayAnimation === 'function') {
+      avtPixiPlayAnimation(anim.pixi_studio_id, atacanteEnt, alvoEnt, isAreaMode);
+    }
+    return 0;
+  }
+
   return 0;
 }
 
