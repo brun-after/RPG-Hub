@@ -12998,27 +12998,38 @@ function _avtEnsurePixiParticles() {
   });
 }
 
+// Cache de promises por filtro — evita que chamadas simultâneas adicionem o mesmo <script> duas vezes
+// (o que causaria SyntaxError: Identifier already declared nos .min.js minificados).
+const _avtPixiFilterPromises = {};
+
 // Lazy-load extra Pixi filter packages (glow, bloom, etc.) so the JSON can reference them.
 function _avtEnsurePixiFilter(name) {
   return _avtEnsurePixiCore().then(() => {
     PIXI.filters = PIXI.filters || {};
-  const map = {
-    glow:        { key: 'GlowFilter',       url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-glow@5/dist/filter-glow.min.js' },
-    bloom:       { key: 'AdvancedBloomFilter', url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-advanced-bloom@5/dist/filter-advanced-bloom.min.js' },
-    shockwave:   { key: 'ShockwaveFilter',  url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-shockwave@5/dist/filter-shockwave.min.js' },
-    godray:      { key: 'GodrayFilter',     url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-godray@5/dist/filter-godray.min.js' },
-    rgbsplit:    { key: 'RGBSplitFilter',   url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-rgb-split@5/dist/filter-rgb-split.min.js' },
-    outline:     { key: 'OutlineFilter',    url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-outline@5/dist/filter-outline.min.js' },
-    crt:         { key: 'CRTFilter',        url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-crt@5/dist/filter-crt.min.js' },
-  };
+    const map = {
+      glow:        { key: 'GlowFilter',         url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-glow@5/dist/filter-glow.min.js' },
+      bloom:       { key: 'AdvancedBloomFilter', url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-advanced-bloom@5/dist/filter-advanced-bloom.min.js' },
+      shockwave:   { key: 'ShockwaveFilter',     url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-shockwave@5/dist/filter-shockwave.min.js' },
+      godray:      { key: 'GodrayFilter',        url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-godray@5/dist/filter-godray.min.js' },
+      rgbsplit:    { key: 'RGBSplitFilter',      url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-rgb-split@5/dist/filter-rgb-split.min.js' },
+      outline:     { key: 'OutlineFilter',       url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-outline@5/dist/filter-outline.min.js' },
+      crt:         { key: 'CRTFilter',           url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-crt@5/dist/filter-crt.min.js' },
+    };
     const spec = map[name];
     if (!spec) return;
-    if (PIXI.filters[spec.key]) return;
-    return new Promise((res) => {
+    if (PIXI.filters[spec.key]) return;      // já carregado com sucesso
+    if (_avtPixiFilterPromises[name]) return _avtPixiFilterPromises[name]; // já em progresso
+    // Shim CommonJS para CDNs que injetam exports/module no escopo global
+    if (typeof window.exports === 'undefined') window.exports = {};
+    if (typeof window.module  === 'undefined') window.module  = { exports: {} };
+    _avtPixiFilterPromises[name] = new Promise((res) => {
       const s = document.createElement('script');
-      s.src = spec.url; s.onload = () => res(); s.onerror = () => res();
+      s.src = spec.url;
+      s.onload  = () => { _avtPixiFilterPromises[name] = null; res(); };
+      s.onerror = () => { _avtPixiFilterPromises[name] = null; res(); };
       document.head.appendChild(s);
     });
+    return _avtPixiFilterPromises[name];
   });
 }
 
@@ -13599,6 +13610,415 @@ var AVT_FX_PRESETS = {
                   maxParticles:200, spawnType:'circle', spawnCircle:{x:0,y:0,r:10} } },
     ],
   },
+
+  // ── NOVOS PRESETS ────────────────────────────────────────────────────────────
+
+  // Skill giratória: anel de lâminas girando ao redor do alvo
+  spin_slash: {
+    duration: 700,
+    camera: { shake:{amp:6,decay:0.9,freq:30}, hitstop:{ms:60,at:0.15} },
+    layers: [
+      { role:'ring', texture:'ring', blendMode:'add', z:1,
+        glow:{distance:12,outerStrength:1.5,color:'#88aaff'},
+        emitter:{
+          alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.7,time:0},{value:0.1,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'88aaff',time:1}]},
+          speed:{start:0,end:0}, rotationSpeed:{min:360,max:720},
+          startRotation:{min:0,max:360},
+          lifetime:{min:0.4,max:0.7}, frequency:0.018, maxParticles:24,
+          spawnType:'ring', spawnCircle:{x:0,y:0,r:40,minR:35} } },
+      { role:'blade', texture:'blade_slice', blendMode:'screen', z:2,
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:1.3,time:0},{value:0.3,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'aaccff',time:1}]},
+          speed:{start:90,end:10}, rotationSpeed:{min:250,max:500},
+          startRotation:{min:0,max:360},
+          lifetime:{min:0.2,max:0.4}, frequency:0.025, maxParticles:14,
+          spawnType:'ring', spawnCircle:{x:0,y:0,r:38,minR:28} } },
+      { role:'core_sparks', texture:'spark', blendMode:'add', z:3,
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.3,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'ccddff',time:1}]},
+          speed:{start:50,end:5}, startRotation:{min:0,max:360},
+          lifetime:{min:0.15,max:0.35}, frequency:0.01, maxParticles:20,
+          spawnType:'circle', spawnCircle:{x:0,y:0,r:5} } },
+    ],
+  },
+  spin_slash_epic: {
+    duration: 900,
+    lighting:{ bloom:{threshold:0.45,intensity:1.2,quality:5}, tone:'filmic' },
+    camera:{ shake:{amp:10,decay:0.88,freq:34}, hitstop:{ms:80,at:0.15}, flash:{color:'#aabbff',alpha:0.4,ms:100}, zoomPunch:{scale:1.04,ms:180} },
+    layers: [
+      { role:'ring_outer', texture:'ring', blendMode:'add', z:1,
+        glow:{distance:16,outerStrength:2,color:'#6688ff'},
+        emitter:{
+          alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+          scale:{list:[{value:1,time:0},{value:0.15,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'6688ff',time:1}]},
+          speed:{start:0,end:0}, rotationSpeed:{min:480,max:900},
+          startRotation:{min:0,max:360},
+          lifetime:{min:0.45,max:0.75}, frequency:0.012, maxParticles:36,
+          spawnType:'ring', spawnCircle:{x:0,y:0,r:55,minR:48} } },
+      { role:'blade', texture:'blade_slice', blendMode:'screen', z:2,
+        glow:{distance:8,outerStrength:1.2,color:'#ffffff'},
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:1.6,time:0},{value:0.4,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'88aaff',time:1}]},
+          speed:{start:110,end:15}, rotationSpeed:{min:300,max:600},
+          startRotation:{min:0,max:360},
+          lifetime:{min:0.25,max:0.5}, frequency:0.018, maxParticles:18,
+          spawnType:'ring', spawnCircle:{x:0,y:0,r:50,minR:38} } },
+      { role:'sparks', texture:'spark', blendMode:'add', z:3,
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.4,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'aabbff',time:1}]},
+          speed:{start:120,end:10}, startRotation:{min:0,max:360},
+          lifetime:{min:0.2,max:0.45}, frequency:0.008, maxParticles:35,
+          spawnType:'circle', spawnCircle:{x:0,y:0,r:8} } },
+    ],
+  },
+
+  // Redemoinho: espiral ascendente de vento e faíscas
+  tornado: {
+    duration: 900,
+    camera: { shake:{amp:8,decay:0.88,freq:28} },
+    layers: [
+      { role:'smoke', texture:'smoke', blendMode:'screen', z:1,
+        emitter:{
+          alpha:{list:[{value:0.6,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.4,time:0},{value:1.3,time:1}]},
+          color:{list:[{value:'aaddff',time:0},{value:'334455',time:1}]},
+          speed:{start:130,end:20}, acceleration:{x:0,y:-65},
+          rotationSpeed:{min:80,max:200}, startRotation:{min:0,max:360},
+          lifetime:{min:0.5,max:0.9}, frequency:0.014, maxParticles:40,
+          spawnType:'ring', spawnCircle:{x:0,y:0,r:20,minR:5} } },
+      { role:'sparks', texture:'spark', blendMode:'add', z:2,
+        glow:{distance:8,outerStrength:1.2,color:'#88ccff'},
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.3,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'88ccff',time:1}]},
+          speed:{start:170,end:40}, rotationSpeed:{min:200,max:500},
+          startRotation:{min:0,max:360},
+          lifetime:{min:0.2,max:0.5}, frequency:0.009, maxParticles:30,
+          spawnType:'ring', spawnCircle:{x:0,y:0,r:25,minR:10} } },
+      { role:'debris', texture:'ember', blendMode:'add', z:3,
+        emitter:{
+          alpha:{list:[{value:0.8,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.5,time:0},{value:0.1,time:1}]},
+          color:{list:[{value:'cceeff',time:0},{value:'667788',time:1}]},
+          speed:{start:90,end:10}, acceleration:{x:0,y:-40},
+          rotationSpeed:{min:60,max:180}, startRotation:{min:0,max:360},
+          lifetime:{min:0.4,max:0.8}, frequency:0.02, maxParticles:25,
+          spawnType:'ring', spawnCircle:{x:0,y:0,r:15,minR:3} } },
+    ],
+  },
+  tornado_epic: {
+    duration: 1200,
+    lighting:{ bloom:{threshold:0.5,intensity:1.0,quality:5} },
+    camera:{ shake:{amp:12,decay:0.86,freq:26}, hitstop:{ms:60,at:0.2}, zoomPunch:{scale:1.035,ms:200} },
+    layers: [
+      { role:'smoke', texture:'smoke', blendMode:'screen', z:1,
+        emitter:{
+          alpha:{list:[{value:0.7,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.6,time:0},{value:2,time:1}]},
+          color:{list:[{value:'88ccff',time:0},{value:'223344',time:1}]},
+          speed:{start:160,end:30}, acceleration:{x:0,y:-80},
+          rotationSpeed:{min:100,max:240}, startRotation:{min:0,max:360},
+          lifetime:{min:0.7,max:1.2}, frequency:0.01, maxParticles:60,
+          spawnType:'ring', spawnCircle:{x:0,y:0,r:25,minR:5} } },
+      { role:'sparks', texture:'spark', blendMode:'add', z:2,
+        glow:{distance:10,outerStrength:1.5,color:'#aaddff'},
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.4,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'aaddff',time:1}]},
+          speed:{start:200,end:50}, rotationSpeed:{min:300,max:700},
+          startRotation:{min:0,max:360},
+          lifetime:{min:0.3,max:0.6}, frequency:0.007, maxParticles:50,
+          spawnType:'ring', spawnCircle:{x:0,y:0,r:35,minR:15} } },
+      { role:'lightning', texture:'streak', blendMode:'add', z:3,
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.6,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'66aaff',time:1}]},
+          speed:{start:300,end:20}, rotationSpeed:{min:400,max:800},
+          startRotation:{min:0,max:360},
+          lifetime:{min:0.1,max:0.2}, frequency:0.01, maxParticles:20,
+          spawnType:'ring', spawnCircle:{x:0,y:0,r:30,minR:20} } },
+    ],
+  },
+
+  // Chicote: estria rápida de atacante → alvo com estalo no impacto
+  chicote: {
+    duration: 500,
+    camera:{
+      shake:{amp:9,decay:0.85,freq:45},
+      hitstop:{ms:80,at:0.12},
+      flash:{color:'#ffffff',alpha:0.65,ms:80},
+      chromaticAberration:{amount:8,ms:120},
+    },
+    layers: [
+      { role:'whip_body', texture:'streak', blendMode:'add', z:2,
+        trail:{length:14,fade:0.68},
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0.8,time:0.5},{value:0,time:1}]},
+          scale:{list:[{value:1.9,time:0},{value:0.3,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'ffdd88',time:0.5},{value:'ff8800',time:1}]},
+          speed:{start:320,end:15}, startRotation:{min:-8,max:8},
+          rotationSpeed:{min:0,max:0},
+          lifetime:{min:0.08,max:0.18}, frequency:0.007, maxParticles:22,
+          spawnType:'point' } },
+      { role:'crack_glow', texture:'glow', blendMode:'add', z:1,
+        emitter:{
+          alpha:{list:[{value:0.8,time:0},{value:0,time:1}]},
+          scale:{list:[{value:1.5,time:0},{value:0.5,time:1}]},
+          color:{list:[{value:'ffe8aa',time:0},{value:'ff8800',time:1}]},
+          speed:{start:0,end:0},
+          lifetime:{min:0.15,max:0.25}, frequency:0.012,
+          emitterLifetime:0.12, maxParticles:6,
+          spawnType:'point' } },
+      { role:'crack_impact', texture:'spark', blendMode:'add', z:3,
+        glow:{distance:20,outerStrength:3,color:'#ffcc44'},
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.5,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'ffcc44',time:1}]},
+          speed:{start:220,end:15}, startRotation:{min:0,max:360},
+          lifetime:{min:0.1,max:0.22}, frequency:0.004,
+          emitterLifetime:0.12, maxParticles:28,
+          spawnType:'point' } },
+    ],
+  },
+  chicote_epic: {
+    duration: 600,
+    lighting:{ bloom:{threshold:0.4,intensity:1.3,quality:5}, tone:'aces' },
+    camera:{
+      shake:{amp:14,decay:0.82,freq:50},
+      hitstop:{ms:100,at:0.1},
+      flash:{color:'#ffffff',alpha:0.8,ms:100},
+      chromaticAberration:{amount:14,ms:180},
+      zoomPunch:{scale:1.05,ms:220},
+    },
+    layers: [
+      { role:'whip_body', texture:'streak', blendMode:'add', z:2,
+        trail:{length:20,fade:0.6},
+        glow:{distance:10,outerStrength:1.5,color:'#ffcc44'},
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0.9,time:0.5},{value:0,time:1}]},
+          scale:{list:[{value:2.5,time:0},{value:0.4,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'ffee99',time:0.4},{value:'ff6600',time:1}]},
+          speed:{start:420,end:20}, startRotation:{min:-5,max:5},
+          rotationSpeed:{min:0,max:0},
+          lifetime:{min:0.06,max:0.15}, frequency:0.005, maxParticles:30,
+          spawnType:'point' } },
+      { role:'fire_trail', texture:'ember', blendMode:'add', z:1,
+        emitter:{
+          alpha:{list:[{value:0.7,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.6,time:0},{value:0.1,time:1}]},
+          color:{list:[{value:'ff8800',time:0},{value:'330000',time:1}]},
+          speed:{start:80,end:5}, acceleration:{x:0,y:-30},
+          startRotation:{min:0,max:360},
+          lifetime:{min:0.2,max:0.4}, frequency:0.009, maxParticles:25,
+          spawnType:'point' } },
+      { role:'crack_impact', texture:'spark', blendMode:'add', z:3,
+        glow:{distance:25,outerStrength:4,color:'#ffaa00'},
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.7,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'ffaa00',time:1}]},
+          speed:{start:300,end:20}, startRotation:{min:0,max:360},
+          lifetime:{min:0.12,max:0.28}, frequency:0.003,
+          emitterLifetime:0.15, maxParticles:45,
+          spawnType:'point' } },
+    ],
+  },
+
+  // Fissura do Vazio: implosão roxa com partículas puxadas para o centro
+  void_rift: {
+    duration: 800,
+    lighting:{ bloom:{threshold:0.45,intensity:1.1,quality:5} },
+    background:{ darken:0.08 },
+    camera:{ shake:{amp:7,decay:0.9,freq:25}, hitstop:{ms:70,at:0.2}, flash:{color:'#220033',alpha:0.5,ms:120} },
+    layers: [
+      { role:'implosion', texture:'glow', blendMode:'multiply', z:1,
+        emitter:{
+          alpha:{list:[{value:0.8,time:0},{value:0,time:1}]},
+          scale:{list:[{value:1.8,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'9900cc',time:0},{value:'110022',time:1}]},
+          speed:{start:-180,end:-20}, startRotation:{min:0,max:360},
+          lifetime:{min:0.4,max:0.8}, frequency:0.008, maxParticles:50,
+          spawnType:'circle', spawnCircle:{x:0,y:0,r:70} } },
+      { role:'void_sparks', texture:'spark', blendMode:'add', z:2,
+        glow:{distance:14,outerStrength:2,color:'#cc00ff'},
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.4,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'cc00ff',time:0.5},{value:'330044',time:1}]},
+          speed:{start:-220,end:-30}, startRotation:{min:0,max:360},
+          lifetime:{min:0.3,max:0.6}, frequency:0.006, maxParticles:40,
+          spawnType:'circle', spawnCircle:{x:0,y:0,r:90} } },
+      { role:'core', texture:'rune', blendMode:'add', z:3,
+        glow:{distance:20,outerStrength:2.5,color:'#9900cc'},
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:1.5,time:0},{value:0.3,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'aa00ee',time:1}]},
+          speed:{start:0,end:0}, rotationSpeed:{min:-120,max:120},
+          lifetime:{min:0.5,max:0.9}, frequency:0.015,
+          emitterLifetime:0.4, maxParticles:8,
+          spawnType:'circle', spawnCircle:{x:0,y:0,r:5} } },
+    ],
+  },
+  void_rift_epic: {
+    duration: 1100,
+    lighting:{ bloom:{threshold:0.35,intensity:1.5,quality:6}, tone:'filmic' },
+    background:{ darken:0.15, radialDim:true },
+    camera:{ shake:{amp:12,decay:0.87,freq:22}, hitstop:{ms:100,at:0.18}, flash:{color:'#110022',alpha:0.65,ms:150}, chromaticAberration:{amount:10,ms:200}, zoomPunch:{scale:1.04,ms:250} },
+    layers: [
+      { role:'singularity', texture:'glow', blendMode:'multiply', z:1,
+        emitter:{
+          alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+          scale:{list:[{value:3,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'660099',time:0},{value:'000011',time:1}]},
+          speed:{start:-250,end:-30}, startRotation:{min:0,max:360},
+          lifetime:{min:0.6,max:1.1}, frequency:0.005, maxParticles:80,
+          spawnType:'circle', spawnCircle:{x:0,y:0,r:120} } },
+      { role:'void_sparks', texture:'spark', blendMode:'add', z:2,
+        glow:{distance:18,outerStrength:2.5,color:'#dd00ff'},
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.5,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'dd00ff',time:0.4},{value:'220033',time:1}]},
+          speed:{start:-300,end:-40}, startRotation:{min:0,max:360},
+          lifetime:{min:0.4,max:0.8}, frequency:0.004, maxParticles:70,
+          spawnType:'circle', spawnCircle:{x:0,y:0,r:140} } },
+      { role:'runes', texture:'rune', blendMode:'add', z:3,
+        glow:{distance:22,outerStrength:3,color:'#aa00dd'},
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:2,time:0},{value:0.5,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'aa00dd',time:1}]},
+          speed:{start:0,end:0}, rotationSpeed:{min:-180,max:180},
+          lifetime:{min:0.7,max:1.2}, frequency:0.012,
+          emitterLifetime:0.6, maxParticles:12,
+          spawnType:'circle', spawnCircle:{x:0,y:0,r:10} } },
+    ],
+  },
+
+  // Chakram: projétil giratório — usar com posicao:'trajetoria'
+  chakram: {
+    duration: 600,
+    camera:{ shake:{amp:5,decay:0.9,freq:35}, hitstop:{ms:50,at:0.18} },
+    layers: [
+      { role:'chakram_ring', texture:'ring', blendMode:'add', z:2,
+        glow:{distance:14,outerStrength:1.8,color:'#44aaff'},
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.8,time:0},{value:0.6,time:0.6},{value:0.05,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'44aaff',time:0.5},{value:'0044aa',time:1}]},
+          speed:{start:0,end:0}, rotationSpeed:{min:600,max:1200},
+          startRotation:{min:0,max:360},
+          lifetime:{min:0.5,max:0.7}, frequency:0.025,
+          emitterLifetime:0.4, maxParticles:5,
+          spawnType:'point' } },
+      { role:'trail_sparks', texture:'spark', blendMode:'add', z:1,
+        trail:{length:10,fade:0.78},
+        emitter:{
+          alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.3,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'aaddff',time:0},{value:'0077cc',time:1}]},
+          speed:{start:60,end:5}, startRotation:{min:0,max:360},
+          lifetime:{min:0.15,max:0.3}, frequency:0.008, maxParticles:30,
+          spawnType:'circle', spawnCircle:{x:0,y:0,r:8,minR:4} } },
+      { role:'impact', texture:'spark', blendMode:'add', z:3,
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.4,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'44aaff',time:1}]},
+          speed:{start:180,end:20}, startRotation:{min:0,max:360},
+          lifetime:{min:0.1,max:0.25}, frequency:0.004,
+          emitterLifetime:0.12, maxParticles:25,
+          spawnType:'point' } },
+    ],
+  },
+
+  // Espiral arcana: runas convergindo para o alvo
+  arcane_spiral: {
+    duration: 750,
+    lighting:{ bloom:{threshold:0.5,intensity:0.9,quality:4} },
+    camera:{ shake:{amp:5,decay:0.92,freq:28}, hitstop:{ms:55,at:0.2} },
+    layers: [
+      { role:'rune_ring', texture:'rune', blendMode:'add', z:2,
+        glow:{distance:12,outerStrength:1.6,color:'#a978ff'},
+        emitter:{
+          alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.8,time:0},{value:0.2,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'a978ff',time:0.5},{value:'5520aa',time:1}]},
+          speed:{start:-80,end:-5}, rotationSpeed:{min:-180,max:180},
+          startRotation:{min:0,max:360},
+          lifetime:{min:0.5,max:0.8}, frequency:0.018, maxParticles:20,
+          spawnType:'ring', spawnCircle:{x:0,y:0,r:60,minR:50} } },
+      { role:'energy_motes', texture:'spark', blendMode:'add', z:1,
+        emitter:{
+          alpha:{list:[{value:0.8,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.35,time:0},{value:0.05,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'cc88ff',time:1}]},
+          speed:{start:-120,end:-10}, startRotation:{min:0,max:360},
+          lifetime:{min:0.4,max:0.7}, frequency:0.01, maxParticles:35,
+          spawnType:'ring', spawnCircle:{x:0,y:0,r:80,minR:60} } },
+      { role:'core_burst', texture:'glow', blendMode:'add', z:3,
+        emitter:{
+          alpha:{list:[{value:0,time:0},{value:0.8,time:0.7},{value:0,time:1}]},
+          scale:{list:[{value:0.5,time:0},{value:2.5,time:0.7},{value:3.5,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'aa66ff',time:1}]},
+          speed:{start:0,end:0},
+          lifetime:{min:0.7,max:0.9}, frequency:0.5,
+          emitterLifetime:0.2, maxParticles:2,
+          spawnType:'point' } },
+    ],
+  },
+
+  // Golpe sangrento: gotas vermelhas que caem com gravidade
+  blood_slash: {
+    duration: 650,
+    camera:{ shake:{amp:10,decay:0.87,freq:40}, hitstop:{ms:70,at:0.1}, flash:{color:'#220000',alpha:0.4,ms:90} },
+    layers: [
+      { role:'blood_drops', texture:'ember', blendMode:'normal', z:2,
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0.8,time:0.6},{value:0,time:1}]},
+          scale:{list:[{value:0.6,time:0},{value:0.3,time:1}]},
+          color:{list:[{value:'ff1111',time:0},{value:'880000',time:1}]},
+          speed:{start:180,end:40}, acceleration:{x:0,y:120},
+          startRotation:{min:0,max:360}, rotationSpeed:{min:-90,max:90},
+          lifetime:{min:0.4,max:0.8}, frequency:0.008, maxParticles:35,
+          spawnType:'circle', spawnCircle:{x:0,y:0,r:8} } },
+      { role:'splatter', texture:'smoke', blendMode:'multiply', z:1,
+        emitter:{
+          alpha:{list:[{value:0.7,time:0},{value:0,time:1}]},
+          scale:{list:[{value:0.3,time:0},{value:0.8,time:1}]},
+          color:{list:[{value:'cc0000',time:0},{value:'440000',time:1}]},
+          speed:{start:60,end:5}, acceleration:{x:0,y:60},
+          startRotation:{min:0,max:360},
+          lifetime:{min:0.3,max:0.6}, frequency:0.015, maxParticles:20,
+          spawnType:'circle', spawnCircle:{x:0,y:0,r:15} } },
+      { role:'slash_streak', texture:'blade_slice', blendMode:'screen', z:3,
+        emitter:{
+          alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+          scale:{list:[{value:1.5,time:0},{value:0.2,time:1}]},
+          color:{list:[{value:'ffffff',time:0},{value:'ff3333',time:1}]},
+          speed:{start:20,end:5}, rotationSpeed:{min:-30,max:30},
+          startRotation:{min:-20,max:20},
+          lifetime:{min:0.15,max:0.3}, frequency:0.02,
+          emitterLifetime:0.15, maxParticles:4,
+          spawnType:'point' } },
+    ],
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -13989,6 +14409,29 @@ function _avtHexToInt(h) {
   return parseInt(h, 16) || 0xffffff;
 }
 
+// ── Semáforo de instâncias PIXI.Application ───────────────────────────────────
+// Browsers limitam contextos WebGL simultâneos (~8-16). Limitar a 3 evita travamentos
+// quando skills são usadas rapidamente em sequência.
+let _avtPixiActiveApps = 0;
+const _AVT_PIXI_MAX_CONCURRENT = 3;
+const _avtPixiQueue = [];
+
+function _avtPixiRunOrQueue(fn) {
+  if (_avtPixiActiveApps < _AVT_PIXI_MAX_CONCURRENT) {
+    fn();
+  } else {
+    _avtPixiQueue.push(fn);
+  }
+}
+
+function _avtPixiDrainQueue() {
+  if (_avtPixiQueue.length && _avtPixiActiveApps < _AVT_PIXI_MAX_CONCURRENT) {
+    _avtPixiActiveApps++;
+    const fn = _avtPixiQueue.shift();
+    fn();
+  }
+}
+
 // ── Main entry point ─────────────────────────────────────────────────────────
 // ownerEl (optional): DOM element to track; emitters follow its screen position each frame.
 function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl) {
@@ -14045,6 +14488,8 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
     }
   } else if (posicao === 'trajetoria') {
     startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'travel';
+  } else if (posicao === 'espiral') {
+    startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'spiral';
   } else if (posicao === 'raio') {
     startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'beam';
   } else if (posicao === 'retorno') {
@@ -14086,6 +14531,14 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
     overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
     canvas.parentElement.style.position = 'relative';
     canvas.parentElement.appendChild(overlayCanvas);
+
+    // Limitar instâncias simultâneas: se já estamos no máximo, enfileira e sai
+    if (_avtPixiActiveApps >= _AVT_PIXI_MAX_CONCURRENT) {
+      overlayCanvas.remove();
+      _avtPixiQueue.push(() => _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl));
+      return;
+    }
+    _avtPixiActiveApps++;
 
     let app;
     try {
@@ -14132,7 +14585,7 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
         const lt = e.lifetime || (e.behaviors && e.behaviors.find(b=>b.type==='lifetime')?.config?.lifetime);
         return ((lt && lt.max) || 1.0) * 1000;
       };
-      const travelDur = mode === 'travel' ? 500 : mode === 'boomerang' ? 950 : mode === 'beam' ? 600 : mode === 'area' ? 0 : mode === 'emanation' ? 0 : 0;
+      const travelDur = mode === 'travel' ? 500 : mode === 'boomerang' ? 950 : mode === 'spiral' ? 700 : mode === 'beam' ? 600 : mode === 'area' ? 0 : mode === 'emanation' ? 0 : 0;
       const maxLayerLife = Math.max(0, ...layers.map(baseLifeOf));
       const totalDuration = (root.duration != null ? root.duration : Math.max(maxLayerLife, travelDur)) + 200;
 
@@ -14262,13 +14715,23 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
           if (AVT_STATE._fxFreezeUntil && performance.now() < AVT_STATE._fxFreezeUntil) return;
           elapsed += dt;
 
-          // Travel / boomerang positioning
+          // Travel / boomerang / spiral positioning
           let cx = startX, cy = startY;
           if (mode === 'travel' || mode === 'boomerang') {
             const t = Math.min(1, elapsed / travelDur);
             const k = mode === 'travel' ? t : (t < 0.5 ? t * 2 : (1 - t) * 2);
             cx = startX + (endX - startX) * k;
             cy = startY + (endY - startY) * k;
+          } else if (mode === 'spiral') {
+            // Trajetória espiral: projétil segue caminho helicoidal até o alvo
+            const t    = Math.min(1, elapsed / travelDur);
+            const lerp = (a, b, tt) => a + (b - a) * tt;
+            const spiralTurns  = root.spiralTurns  || 2;   // voltas completas
+            const spiralRadius = root.spiralRadius || 40;   // raio máx em px
+            const angle  = t * Math.PI * 2 * spiralTurns;
+            const radius = (1 - t) * spiralRadius;          // encolhe ao chegar
+            cx = lerp(startX, endX, t) + Math.cos(angle) * radius;
+            cy = lerp(startY, endY, t) + Math.sin(angle) * radius;
           }
 
           // updateOwnerPos: follow DOM token position each frame
@@ -14283,16 +14746,19 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
           }
 
           packs.forEach(p => {
-            if (mode === 'travel' || mode === 'boomerang') {
-              // Projétil move o emissor ao longo do caminho
+            if (mode === 'travel' || mode === 'boomerang' || mode === 'spiral') {
+              // Projétil move o emissor ao longo do caminho (incluindo trajetória espiral)
               p.emitters.forEach(em => setSpawn(em, cx, cy, p.offset));
             } else if (mode === 'emanation' && ownerEl) {
               // Emanação segue token do atacante
               p.emitters.forEach(em => setSpawn(em, cx, cy, p.offset));
             }
             // Modos estáticos (static, area, beam) mantêm posição inicial — emissores não se movem
-            // Update emitters
-            p.emitters.forEach(em => em.update(dt * 0.001));
+            // Update emitters — guard contra emitter destruído enquanto o ticker ainda roda
+            p.emitters.forEach(em => {
+              if (em._destroyed || em._owner === null) return;
+              try { em.update(dt * 0.001); } catch(_) {}
+            });
 
             // Track sub-emitter spawns on particle death + trails per active particle
             if (p.trailHosts || (p.subEmitters && p.subEmitters.length)) {
@@ -14368,20 +14834,30 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
         app.ticker.add(tickFn);
 
         // ── Cleanup ─────────────────────────────────────────────────────────
+        // Ordem importa:
+        //  1. Remover ticker ANTES de destruir emitters (evita TypeError null.time)
+        //  2. Remover overlayCanvas ANTES de app.destroy (garante que a tela não fique escura
+        //     mesmo se destroy() lançar exceção por contexto WebGL perdido)
         setTimeout(() => {
           try { app.ticker.remove(tickFn); } catch(_) {}
           try { cleanupCam(); } catch(_) {}
-          packs.forEach(p => p.emitters.forEach(em => { try { em.destroy(); } catch(_) {} }));
-          try { app.destroy(true); } catch(_) {}
+          packs.forEach(p => p.emitters.forEach(em => {
+            try { em.emit = false; em.destroy(); } catch(_) {}
+          }));
           overlayCanvas.remove();
+          try { app.destroy(true); } catch(_) {}
           AVT_STATE._fxFreezeUntil = 0;
+          _avtPixiActiveApps--;
+          _avtPixiDrainQueue();
         }, totalDuration + 1100);
       });
     } catch(e) {
       console.warn('[pixi-fx] erro ao iniciar:', e);
-      try { if (app) app.destroy(true); } catch(_) {}
       overlayCanvas.remove();
+      try { if (app) app.destroy(true); } catch(_) {}
       AVT_STATE._fxFreezeUntil = 0;
+      _avtPixiActiveApps--;
+      _avtPixiDrainQueue();
       _avtCanvasFlash(endX, endY, '#e74c3c', 'Impacto');
     }
   }).catch((err) => {
