@@ -841,9 +841,14 @@ async function psPreviewMount() {
   await _avtEnsurePixiParticles().catch(() => {});
   if (typeof PIXI === 'undefined') return;
   try {
+    const w = canvas.width  || 480;
+    const h = canvas.height || 300;
+    // Check WebGL availability — some envs return 0 for MAX_FRAGMENT_UNIFORM_VECTORS
+    const _testGl = (() => { try { const c = document.createElement('canvas'); const gl = c.getContext('webgl') || c.getContext('experimental-webgl'); return gl && gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) > 0; } catch(_){return false;} })();
     const app = new PIXI.Application({
-      view: canvas, width: canvas.width, height: canvas.height,
+      view: canvas, width: w, height: h,
       backgroundAlpha: 1, backgroundColor: 0x060a10, antialias: false,
+      forceCanvas: !_testGl,
     });
     app.ticker.stop(); // we drive updates via RAF, not PIXI ticker
     PIXI_STUDIO_STATE.previewApp = app;
@@ -852,7 +857,7 @@ async function psPreviewMount() {
     PIXI_STUDIO_STATE._worldRoot = worldRoot;
     // Enable stage interaction for drag
     app.stage.eventMode = 'static';
-    app.stage.hitArea = new PIXI.Rectangle(0, 0, canvas.width, canvas.height);
+    app.stage.hitArea = new PIXI.Rectangle(0, 0, w, h);
     app.stage.on('pointermove', _psDragMove);
     app.stage.on('pointerup', _psDragEnd);
     app.stage.on('pointerupoutside', _psDragEnd);
