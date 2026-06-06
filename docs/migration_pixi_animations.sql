@@ -5,7 +5,7 @@
 -- ── 1. Tabela pixi_animations ─────────────────────────────────────────────────
 create table if not exists pixi_animations (
   id          uuid primary key default gen_random_uuid(),
-  rpg_id      uuid references rpg_registry(rpg_id) on delete cascade,
+  rpg_id      text references rpg_registry(rpg_id) on delete cascade,
   criado_por  uuid references auth.users(id) on delete set null,
   global      boolean not null default false,
   nome        text not null default 'Animação',
