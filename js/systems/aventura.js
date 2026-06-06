@@ -10195,12 +10195,6 @@ async function _avtExecutarAtaque() {
                     if (ef.tipo === 'atravessar') alvoProcEf._atravessar = true;
                     if (ef.tipo === 'dot')        _avtMostrarDotDrip(alvoProcEf);
                     if (ef.tipo === 'hot')        mostrarToast(`♻ ${alvoProcEf.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
-                    // Dominação imediata (área): necromante domina na hora em vez de esperar morte
-                    if (ef.tipo === 'necromante') {
-                      const _necroEntA = AVT_STATE.entidades.find(e => e.id === alvoProcEf.id) || alvoProcEf;
-                      if ((_necroEntA.tipo === 'inimigo' || alvoProcEf.tipo === 'inimigo') && !_necroEntA._dominado)
-                        _avtNecromanteDominar(_necroEntA, _efEntryA, b);
-                    }
                   }
                 }
               });
@@ -10279,12 +10273,6 @@ async function _avtExecutarAtaque() {
               if (ef.tipo === 'atravessar') { if (alvoProcEf) alvoProcEf._atravessar = true; }
               if (ef.tipo === 'dot')        _avtMostrarDotDrip(alvoProcEf);
               if (ef.tipo === 'hot')        mostrarToast(`♻ ${alvoProcEf.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
-              // Dominação imediata: necromante não espera a morte — domina na hora
-              if (ef.tipo === 'necromante') {
-                const _necroEnt = AVT_STATE.entidades.find(e => e.id === alvoProcEf.id) || alvoProcEf;
-                if ((_necroEnt.tipo === 'inimigo' || alvoProcEf.tipo === 'inimigo') && !_necroEnt._dominado)
-                  _avtNecromanteDominar(_necroEnt, _efEntry, b);
-              }
               _avtLog(`  ↳ ${ef.tipo} aplicado em ${alvoProcEf.nome} (${ef.duracao_turnos ?? 1}t)`, b.id);
             }
           });
