@@ -382,6 +382,23 @@ class _AudioManager {
     try { sessionStorage.setItem(key, pick); } catch (_) {}
     return pick;
   }
+
+  // Preferência de música do jogador (definida no menu de início)
+  // pref = { mode: 'auto'|'master'|'custom', tracks: { exploracao_url, combate_url, boss_url } }
+  setPlayerPref(pref) {
+    if (!pref || pref.mode === 'auto') { this._playerPref = null; return; }
+    this._playerPref = pref;
+    if (pref.mode === 'custom' && pref.tracks) {
+      const overrides = {};
+      if (pref.tracks.exploracao_url) overrides.exploracao_url = pref.tracks.exploracao_url;
+      if (pref.tracks.combate_url)   overrides.combate_url    = pref.tracks.combate_url;
+      if (pref.tracks.boss_url)      overrides.boss_url       = pref.tracks.boss_url;
+      // Re-aplica fase atual com os overrides
+      if (this._phaseConfig) {
+        this.onEnterPhase({ audio: { ...this._phaseConfig, ...overrides } }, this._currentPhaseId);
+      }
+    }
+  }
 }
 
 window.AudioManager = new _AudioManager();

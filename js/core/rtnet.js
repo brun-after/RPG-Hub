@@ -117,6 +117,8 @@ window.RTNet = (() => {
     // [RECURSOS + BAÚS]
     avt_rsv_update:           'avtReceberRsvUpdate',
     avt_bau_aberto:           'avtReceberBauAberto',
+    // [FASES]
+    avt_fase_mudou:           'avtReceberFaseMudou',
   };
 
   // opts padrão por tipo de evento (camada A/B/C conforme plano §5)
