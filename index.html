@@ -635,6 +635,7 @@
 
    <button class="tab-btn" id="tab-btn-tabelas" onclick="abrirAba('tabelas',this)">Tabelas</button>
    <button class="tab-btn" onclick="abrirAba('config',this)">Config</button>
+  <button class="tab-btn" id="tab-btn-pixi-studio" onclick="abrirAba('pixi-studio',this)">Studio</button>
  </nav>
  <div id="tab-lore" class="tab-content active">
    <div class="lore-secao" id="lore-filtros"></div>
@@ -1701,6 +1702,11 @@ Resistência elemental:
   </div>
 </div>
 
+<!-- ── TAB PIXI STUDIO ──────────────────────────────────────── -->
+<div id="tab-pixi-studio" class="tab-content">
+  <div id="ps-root" style="display:grid;grid-template-columns:220px 1fr 280px;grid-template-rows:auto 1fr;height:calc(100dvh - 96px);overflow:hidden"></div>
+</div>
+
 <!-- ── MODAL SKILL (14C) ──────────────────────────────────────── -->
 <div id="modal-skill-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:flex-end;justify-content:center">
   <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
@@ -1710,6 +1716,7 @@ Resistência elemental:
     </div>
     <input type="hidden" id="modal-skill-id">
     <input type="hidden" id="modal-skill-personagem">
+    <input type="hidden" id="sk-pixi-studio-id">
 
     <!-- Nome + Custo -->
     <div class="form-group" style="margin-bottom:10px"><label>Nome da habilidade *</label><input type="text" id="sk-habilidade" placeholder="Ex: Ataque Flamejante" style="text-align:left"></div>
@@ -2102,7 +2109,19 @@ Resistência elemental:
           <optgroup label="Combo (todos os sistemas)">
             <option value="combo_total">🎆 Combo Completo — Pixi + GSAP + Esquelético</option>
           </optgroup>
+          <optgroup label="Studio Pixi">
+            <option value="pixi_studio">✦ Studio Pixi — Animação personalizada</option>
+          </optgroup>
         </select>
+      </div>
+      <!-- Campos Studio Pixi -->
+      <div id="sk-anim-campos-pixi-studio" style="display:none;padding:10px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:8px;margin-bottom:8px">
+        <div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--primario);margin-bottom:8px">✦ Animação do Studio Pixi</div>
+        <div id="sk-pixi-studio-nome" style="font-size:0.8rem;color:var(--texto);margin-bottom:8px;min-height:20px;font-style:italic">Nenhuma selecionada</div>
+        <div style="display:flex;gap:6px">
+          <button type="button" class="btn btn-primario" onclick="skEscolherPixiStudio()" style="font-size:0.72rem;padding:6px 12px">Escolher do Studio</button>
+          <button type="button" class="btn" onclick="skLimparPixiStudio()" style="font-size:0.72rem;padding:6px 10px;color:var(--perigo);border-color:var(--perigo)">✕ Limpar</button>
+        </div>
       </div>
       <!-- Campos canvas (projetil/onda/explosao/raio/aura) -->
       <div id="sk-anim-campos-canvas" style="display:none">
@@ -6116,6 +6135,10 @@ Resistência elemental:
 <!-- Tutorial & creative -->
 <script src="js/ui/tutorial.js"></script>
 <script src="js/systems/creative.js"></script>
+<!-- Studio Pixi -->
+<script src="js/systems/pixi-studio-presets.js"></script>
+<script src="js/systems/pixi-studio.js"></script>
+<script src="js/systems/pixi-studio-avt.js"></script>
 <!-- Market & VFX -->
 <script src="js/systems/market.js"></script>
 <script src="js/ui/modals.js"></script>

@@ -174,6 +174,9 @@ function skAnimTipoChange() {
   const isGSAP   = tipo === 'gsap' || tipo === 'gsap_pixi_spine';
   const isSpine  = tipo === 'pixi_spine' || tipo === 'gsap_pixi_spine';
 
+  const isPixiStudio = tipo === 'pixi_studio';
+  const camposPixiStudio = document.getElementById('sk-anim-campos-pixi-studio');
+  if (camposPixiStudio) camposPixiStudio.style.display = isPixiStudio ? '' : 'none';
   if (camposCanvas) camposCanvas.style.display = isCanvas ? '' : 'none';
   if (camposMidia)  camposMidia.style.display  = isMidia  ? '' : 'none';
   if (camposGSAP)   camposGSAP.style.display   = isGSAP   ? '' : 'none';
