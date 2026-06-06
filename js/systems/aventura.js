@@ -2625,9 +2625,16 @@ async function entrarAventura(rpgId) {
       if (!char.custom_attrs) char.custom_attrs = {};
       const atrs = char.custom_attrs.atributos || {};
       const _manaFaltava = atrs.Mana == null;
-      if (_manaFaltava) { atrs.ManaMax = _avtCalcManaMaxChar(char); atrs.Mana = atrs.ManaMax; }
+      const _novoManaMax = _avtCalcManaMaxChar(char);
+      if (_manaFaltava) {
+        atrs.ManaMax = _novoManaMax;
+        atrs.Mana = _novoManaMax;
+      } else if (_novoManaMax !== (atrs.ManaMax ?? 10)) {
+        atrs.ManaMax = _novoManaMax;
+        if (atrs.Mana > _novoManaMax) atrs.Mana = _novoManaMax;
+      }
       char.custom_attrs.atributos = atrs;
-      if (_manaFaltava && char.id) _manaToSeed.push(char);
+      if ((_manaFaltava || _novoManaMax !== (atrs.ManaMax ?? 10)) && char.id) _manaToSeed.push(char);
     });
     // Persistir defaults de Mana para chars que não tinham o campo
     _manaToSeed.forEach(char => {
@@ -18177,6 +18184,13 @@ async function _avtCharSalvarAttrs(entId) {
   };
   if (!dbChar?.id) { refreshBaseline(); mostrarToast('Salvo localmente', 'aviso'); _avtCharEditorRender(); return; }
   try {
+    // Recalcular ManaMax com base na Sabedoria atual antes de salvar
+    if (dbChar.custom_attrs?.atributos) {
+      const _novoMax = _avtCalcManaMaxChar(dbChar);
+      dbChar.custom_attrs.atributos.ManaMax = _novoMax;
+      if ((dbChar.custom_attrs.atributos.Mana ?? _novoMax) > _novoMax)
+        dbChar.custom_attrs.atributos.Mana = _novoMax;
+    }
     const pontosAttr = parseFloat(dbChar.custom_attrs?.pontos_attr) || 0;
     await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
       method:'PATCH',
@@ -18189,6 +18203,7 @@ async function _avtCharSalvarAttrs(entId) {
     });
     refreshBaseline();
     mostrarToast('Atributos salvos!', 'ok');
+    _avtRenderHpBar();
     // Propagar atributos atualizados para outros clientes (ex.: jogador distribuiu pontos de nível)
     if (ent && typeof RTNet !== 'undefined' && RTNet.initialized) {
       const novoHpMax = typeof _avtCalcHpJog === 'function' ? _avtCalcHpJog(dbChar) : ent.hpMax;
