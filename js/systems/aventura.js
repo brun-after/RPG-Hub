@@ -12037,10 +12037,11 @@ function _avtRecursosDoChar(char) {
     ALIASES.forEach(({ r, rMax, nome }) => {
       const k    = keys.find(k => r.test(k));
       const kMax = keys.find(k => rMax.test(k));
-      if (k && kMax) {
+      if (k) {
         const atual = parseFloat(atrs[k] ?? 0);
-        const max   = parseFloat(atrs[kMax] ?? 0);
-        if (max > 0) recursos.push({ nome: k, atual, max, maxAttr: kMax });
+        const maxRaw = kMax ? parseFloat(atrs[kMax] ?? 0) : 0;
+        const max = maxRaw > 0 ? maxRaw : (/^mana$/i.test(k) ? _avtCalcManaMaxChar(char) : 0);
+        if (max > 0) recursos.push({ nome: k, atual, max, maxAttr: kMax || null });
       }
     });
   }
@@ -12049,15 +12050,16 @@ function _avtRecursosDoChar(char) {
 
 // Deduz custo de recurso de uma skill no contexto de aventura (sem RPG_DATA)
 async function _avtDescontarCustoSkill(nomeChar, custo_rsv) {
-  if (!custo_rsv) custo_rsv = '2 Mana';
+  if (!custo_rsv) custo_rsv = '2';
   if (/^passiv/i.test(custo_rsv)) return true;
-  // Aceita "3 Mana", "3Mana", "3  mana" etc.
-  const match = custo_rsv.trim().match(/^(\d+(?:\.\d+)?)\s*(.+)$/);
+  // Aceita "3 Mana", "3Mana", "3  mana", ou apenas "3" (usa o primeiro recurso do personagem)
+  const match = custo_rsv.trim().match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
   if (!match) { mostrarToast(`❌ Custo inválido: "${custo_rsv}"`, 'erro'); return false; }
   const quantidade = parseFloat(match[1]);
-  const atributoSolicitado = match[2].trim();
   const char = AVT_STATE.chars.find(c => c.nome === nomeChar);
   if (!char) return false;
+  const _rsvPrimario = _avtRecursosDoChar(char)[0]?.nome ?? 'Mana';
+  const atributoSolicitado = (match[2] || '').trim() || _rsvPrimario;
   if (!char.custom_attrs) char.custom_attrs = {};
   const atrs = char.custom_attrs.atributos || (char.custom_attrs.atributos = {});
   // Lookup case/acento-insensitivo da chave do atributo
@@ -12353,13 +12355,19 @@ function avtJogadorPainelRender(targetEl, opts) {
         // Custo de recurso
         let custoHtml = '';
         if (s.custo_rsv && !/^passiv/i.test(s.custo_rsv)) {
-          const m = s.custo_rsv.trim().match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
-          if (m) {
-            const qtd  = parseFloat(m[1]);
-            const attr = m[2].trim();
-            const temRecurso = parseFloat(atrs[attr] ?? 0) >= qtd;
+          const _mc = s.custo_rsv.trim().match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+          if (_mc) {
+            const qtd = parseFloat(_mc[1]);
+            const _charAtrs = char?.custom_attrs?.atributos || {};
+            const _rsvList = char ? _avtRecursosDoChar(char) : [];
+            const _normC = s2 => (s2||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+            const _rsvNome = (_mc[2] || '').trim() || (_rsvList[0]?.nome ?? 'Mana');
+            const _rsvObj = _rsvList.find(r => _normC(r.nome) === _normC(_rsvNome));
+            const _attrKey = Object.keys(_charAtrs).find(k => _normC(k) === _normC(_rsvNome)) || _rsvNome;
+            const temRecurso = (_rsvObj ? _rsvObj.atual : parseFloat(_charAtrs[_attrKey] ?? 0)) >= qtd;
             const cor = temRecurso ? '#9b8fd4' : '#e74c3c';
-            custoHtml = `<span style="font-size:0.6rem;color:${cor};padding:1px 5px;border:1px solid ${cor}44;border-radius:3px">⚡${s.custo_rsv}</span>`;
+            const label = (_mc[2] || '').trim() ? s.custo_rsv : `${_mc[1]} ${_rsvNome}`;
+            custoHtml = `<span style="font-size:0.6rem;color:${cor};padding:1px 5px;border:1px solid ${cor}44;border-radius:3px">⚡${label}</span>`;
           }
         }
 
