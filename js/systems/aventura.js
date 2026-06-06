@@ -6356,6 +6356,24 @@ function _avtMoverJogador(dx, dy) {
     // unificado com o pipeline de clique (_caminhoDestino).
     AVT_STATE._caminhoDestino = null;
     if (!Array.isArray(jogador._waypoints)) jogador._waypoints = [];
+    // Cancelamento antecipado: se o personagem ainda não completou 50% da animação
+    // para a próxima célula, cancela e volta à célula de origem para responder
+    // imediatamente à nova direção.
+    if (jogador._waypoints.length > 0) {
+      const firstWp = jogador._waypoints[0];
+      const totalDist = Math.hypot(firstWp.x - jogador.x, firstWp.y - jogador.y);
+      if (totalDist > 0) {
+        const renderedDist = Math.hypot(
+          (jogador.renderX ?? jogador.x) - jogador.x,
+          (jogador.renderY ?? jogador.y) - jogador.y
+        );
+        if (renderedDist / totalDist < 0.5) {
+          jogador._waypoints.length = 0;
+          jogador.renderX = jogador.x;
+          jogador.renderY = jogador.y;
+        }
+      }
+    }
     // Base: última célula comprometida na fila (evita zigzag ao mudar de direção);
     // fallback para posição atual arredondada quando fila vazia.
     const lastWp = jogador._waypoints.length ? jogador._waypoints[jogador._waypoints.length - 1] : null;
