@@ -833,6 +833,41 @@ function psUpdateScaleStop(layerId, idx, value) {
 
 // ══ E — PREVIEW ENGINE ════════════════════════════════════════════════════════
 
+// Robust WebGL probe — covers webgl2 + webgl and validates the limits PIXI relies on.
+// Some headless/sandbox environments return 0 for MAX_FRAGMENT_UNIFORM_VECTORS or
+// MAX_VARYING_VECTORS, which makes PIXI throw "Invalid value of `0` passed to
+// checkMaxIfStatementsInShader" inside new PIXI.Application(...).
+function _psCheckWebGLOK() {
+  try {
+    const c = document.createElement('canvas');
+    const tryCtx = (name) => { try { return c.getContext(name); } catch (_) { return null; } };
+    const gl = tryCtx('webgl2') || tryCtx('webgl') || tryCtx('experimental-webgl');
+    if (!gl) return false;
+    const frag = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) || 0;
+    const vary = gl.getParameter(gl.MAX_VARYING_VECTORS) || 0;
+    const tex  = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) || 0;
+    return frag > 0 && vary > 0 && tex > 0;
+  } catch (_) { return false; }
+}
+
+function _psDrawUnsupportedMessage(canvas) {
+  try {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const w = canvas.width || 480, h = canvas.height || 300;
+    ctx.fillStyle = '#060a10';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#9aa4b2';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Preview indisponível neste ambiente', w / 2, h / 2 - 10);
+    ctx.fillStyle = '#5a6370';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillText('(sem GPU/WebGL compatível)', w / 2, h / 2 + 10);
+  } catch (_) {}
+}
+
 async function psPreviewMount() {
   const canvas = document.getElementById('ps-preview-canvas');
   if (!canvas) return;
@@ -840,16 +875,32 @@ async function psPreviewMount() {
   if (typeof _avtEnsurePixiParticles !== 'function') return;
   await _avtEnsurePixiParticles().catch(() => {});
   if (typeof PIXI === 'undefined') return;
+
+  const w = canvas.width  || 480;
+  const h = canvas.height || 300;
+  const glOk = _psCheckWebGLOK();
+
+  const buildApp = (forceCanvas) => new PIXI.Application({
+    view: canvas, width: w, height: h,
+    backgroundAlpha: 1, backgroundColor: 0x060a10, antialias: false,
+    forceCanvas: !!forceCanvas,
+  });
+
+  let app = null;
   try {
-    const w = canvas.width  || 480;
-    const h = canvas.height || 300;
-    // Check WebGL availability — some envs return 0 for MAX_FRAGMENT_UNIFORM_VECTORS
-    const _testGl = (() => { try { const c = document.createElement('canvas'); const gl = c.getContext('webgl') || c.getContext('experimental-webgl'); return gl && gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) > 0; } catch(_){return false;} })();
-    const app = new PIXI.Application({
-      view: canvas, width: w, height: h,
-      backgroundAlpha: 1, backgroundColor: 0x060a10, antialias: false,
-      forceCanvas: !_testGl,
-    });
+    app = buildApp(!glOk);
+  } catch (e) {
+    console.warn('[pixi-studio] WebGL init failed, retrying with Canvas2D fallback', e);
+    try {
+      app = buildApp(true);
+    } catch (e2) {
+      console.warn('[pixi-studio] preview mount failed', e2);
+      _psDrawUnsupportedMessage(canvas);
+      return;
+    }
+  }
+
+  try {
     app.ticker.stop(); // we drive updates via RAF, not PIXI ticker
     PIXI_STUDIO_STATE.previewApp = app;
     const worldRoot = new PIXI.Container();
@@ -866,7 +917,13 @@ async function psPreviewMount() {
     PIXI_STUDIO_STATE._lastTs = 0;
     cancelAnimationFrame(PIXI_STUDIO_STATE._rafId);
     PIXI_STUDIO_STATE._rafId = requestAnimationFrame(_psPreviewTick);
-  } catch (e) { console.warn('[pixi-studio] preview mount failed', e); }
+  } catch (e) {
+    console.warn('[pixi-studio] preview setup failed', e);
+    try { app.destroy(false, { children: true, texture: false }); } catch (_) {}
+    PIXI_STUDIO_STATE.previewApp = null;
+    PIXI_STUDIO_STATE._worldRoot = null;
+    _psDrawUnsupportedMessage(canvas);
+  }
 }
 
 function psPreviewUnmount() {
