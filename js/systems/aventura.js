@@ -7726,7 +7726,7 @@ function _avtTickEfeitosOOC(now) {
   const nowMs = Date.now();
   AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects.filter(rec => {
     const ent = AVT_STATE.entidades.find(e => e.id === rec.entId || (rec.entNome && e.nome === rec.entNome));
-    if (!ent) return false;
+    if (!ent || ent.escondido) return false;
     if (nowMs > rec.ef.expiry_ms) {
       // Efeito expirado: limpar flags, remover de status_effects e empurrar se atravessar
       if (rec.ef.tipo === 'atravessar') {
@@ -9017,6 +9017,8 @@ function _avtNpcMorreu(npcEnt, bat) {
     AVT_STATE.invocacoes_ativas = (AVT_STATE.invocacoes_ativas || []).filter(i => i.id !== npcEnt.id);
     npcEnt._dominado = false;
   }
+  // Limpar efeitos OOC pendentes para não deixar contagem em célula vazia
+  AVT_STATE._oocStatusEffects = (AVT_STATE._oocStatusEffects || []).filter(r => r.entId !== npcEnt.id);
   npcEnt.escondido = true;
   npcEnt.vezes_morto = (npcEnt.vezes_morto || 0) + 1;
   npcEnt.hp = 0;
@@ -9058,9 +9060,12 @@ function _avtNecromanteDominar(npcEnt, efNecro, bat) {
   npcEnt._donoNome     = donoNome;
   npcEnt.cor           = corDominado;
   npcEnt.tipo          = 'invocado';
-  // Clear pursuit and disable patience timer so dominated NPC stops chasing its captor
+  // Clear pursuit and remove NPC timer completely so dominated NPC stops chasing its captor
   _avtCancelarPerseguicao(npcEnt.id);
-  if (AVT_STATE.npcTimers[npcEnt.id]) AVT_STATE.npcTimers[npcEnt.id].ativo = false;
+  if (AVT_STATE.npcTimers?.[npcEnt.id]) {
+    AVT_STATE.npcTimers[npcEnt.id].ativo = false;
+    delete AVT_STATE.npcTimers[npcEnt.id];
+  }
   npcEnt._efeitosNecromante = efeitosPropagate;
   npcEnt.status_effects = [];
 
@@ -9079,6 +9084,8 @@ function _avtNecromanteDominar(npcEnt, efNecro, bat) {
   // Registro em _oocStatusEffects quando dominado fora de combate (exibe contagem em segundos)
   if (_necroOoc) {
     if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+    // Remover entrada pendente anterior (se houver) para evitar entrada dupla
+    AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects.filter(r => r.entId !== npcEnt.id);
     AVT_STATE._oocStatusEffects.push({
       entId: npcEnt.id, entNome: npcEnt.nome, lastTickAt: Date.now(),
       ef: { ...efDominado, _formulaAtaque: _necroFormula, _efeitosNecromante: efeitosPropagate },
@@ -10610,10 +10617,13 @@ function _avtProcessarStatusEffects(bat, ent) {
         if (entObj) entObj._atravessar = true;
         break;
       case 'necromante': {
-        // Ao expirar, inimigo dominado morre de vez
+        const isDominado = ent._dominado || (entObj && entObj._dominado);
+        // Efeito pendente: aguarda a morte do inimigo sem decrementar por turnos
+        if (!isDominado) return true;
+        // Efeito ativo: contar turnos de domínio restantes
         const _turnosRestNecro = (ef._turnos_restantes ?? ef.duracao_turnos ?? 1) - 1;
         ef._turnos_restantes = _turnosRestNecro;
-        if (_turnosRestNecro <= 0 && (ent._dominado || (entObj && entObj._dominado))) {
+        if (_turnosRestNecro <= 0) {
           const _entDom = entObj || ent;
           _avtLog(`☠ ${_entDom.nome} expirou o domínio e tombou.`, bat?.id);
           mostrarToast(`☠ ${_entDom.nome} voltou à morte.`, 'aviso', 3000);
