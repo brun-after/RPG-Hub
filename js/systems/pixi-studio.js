@@ -24,9 +24,60 @@ var PIXI_STUDIO_STATE = {
   _rafId:         0,
   _pickerCb:      null,
   _origin:        null,  // 'aventura' when opened from adventure menu
+  _drag:          null,  // { layerId, type, kfIdx, startX, startY, origX, origY, origScale, origRot, spX, spY }
+  _recording:     false,
+  _recordPoints:  [],
+  _recordStartTs: 0,
+  _history:       [],
+  _historyIdx:    -1,
 };
 
 // ══ B — INIT & CRUD ══════════════════════════════════════════════════════════
+
+function _psValidateEmitterCfg(cfg) {
+  if (!cfg || typeof cfg !== 'object') cfg = {};
+  if (!cfg.alpha?.list?.length)  cfg.alpha  = { list: [{value:0.8,time:0},{value:0,time:1}] };
+  if (!cfg.scale?.list?.length)  cfg.scale  = { list: [{value:0.5,time:0},{value:0.1,time:1}] };
+  if (!cfg.color?.list?.length)  cfg.color  = { list: [{value:'ffffff',time:0},{value:'ff8040',time:1}] };
+  if (!cfg.speed?.start && !cfg.speed?.list) cfg.speed = { start: 180, end: 40 };
+  if (typeof cfg.lifetime?.min !== 'number') cfg.lifetime = { min: 0.3, max: 0.8 };
+  if (!cfg.frequency || cfg.frequency <= 0) cfg.frequency = 0.02;
+  if (typeof cfg.maxParticles !== 'number' || cfg.maxParticles < 1) cfg.maxParticles = 50;
+  if (!cfg.spawnType) cfg.spawnType = 'circle';
+  if (!cfg.spawnCircle) cfg.spawnCircle = { x: 0, y: 0, r: 5 };
+  if (typeof cfg.emitterLifetime !== 'number') cfg.emitterLifetime = -1;
+  return cfg;
+}
+
+function _psPushHistory() {
+  const cur = PIXI_STUDIO_STATE.atual;
+  if (!cur) return;
+  const snap = JSON.stringify(cur.config_json);
+  const hist = PIXI_STUDIO_STATE._history;
+  if (PIXI_STUDIO_STATE._historyIdx < hist.length - 1)
+    hist.splice(PIXI_STUDIO_STATE._historyIdx + 1);
+  hist.push(snap);
+  if (hist.length > 30) hist.shift();
+  PIXI_STUDIO_STATE._historyIdx = hist.length - 1;
+}
+
+function psUndo() {
+  const hist = PIXI_STUDIO_STATE._history;
+  const cur = PIXI_STUDIO_STATE.atual;
+  if (!cur || PIXI_STUDIO_STATE._historyIdx <= 0) return;
+  PIXI_STUDIO_STATE._historyIdx--;
+  cur.config_json = JSON.parse(hist[PIXI_STUDIO_STATE._historyIdx]);
+  psPreviewRebuildAll(); _psRenderLayerList(); _psRenderPropsPanel(); psTimelineRender(); _psRenderBehaviorPanel();
+}
+
+function psRedo() {
+  const hist = PIXI_STUDIO_STATE._history;
+  const cur = PIXI_STUDIO_STATE.atual;
+  if (!cur || PIXI_STUDIO_STATE._historyIdx >= hist.length - 1) return;
+  PIXI_STUDIO_STATE._historyIdx++;
+  cur.config_json = JSON.parse(hist[PIXI_STUDIO_STATE._historyIdx]);
+  psPreviewRebuildAll(); _psRenderLayerList(); _psRenderPropsPanel(); psTimelineRender(); _psRenderBehaviorPanel();
+}
 
 function pixiStudioInit() {
   if (!SESSION?.user?.id) return;
@@ -47,6 +98,8 @@ function psRenderShell() {
   <button class="btn" style="font-size:0.7rem;padding:5px 12px" onclick="psExportarJson()">⬇ Export</button>
   <div style="flex:1"></div>
   <span id="ps-dirty-badge" style="display:none;font-size:0.65rem;color:#e8604c;font-family:var(--fonte-d)">● não salvo</span>
+  <button class="btn" style="font-size:0.7rem;padding:4px 8px" onclick="psUndo()" title="Desfazer (Ctrl+Z)">↩</button>
+  <button class="btn" style="font-size:0.7rem;padding:4px 8px" onclick="psRedo()" title="Refazer (Ctrl+Y)">↪</button>
   <button class="btn" style="font-size:0.65rem;padding:4px 10px;color:var(--perigo);border-color:var(--perigo)" onclick="psExcluirAtual()">🗑</button>
 </div>
 <div id="ps-left" style="background:var(--escuro);border-right:1px solid var(--borda);overflow-y:auto;display:flex;flex-direction:column">
@@ -78,6 +131,7 @@ function psRenderShell() {
     <button onclick="psPreviewPause()" title="Pause" style="background:none;border:none;color:var(--texto);font-size:1.1rem;cursor:pointer;padding:2px 6px">⏸</button>
     <button onclick="psPreviewStop()" title="Stop" style="background:none;border:none;color:var(--texto);font-size:1.1rem;cursor:pointer;padding:2px 6px">⏹</button>
     <button onclick="psPreviewToggleLoop()" id="ps-loop-btn" title="Loop" style="background:none;border:none;color:var(--suave);font-size:0.9rem;cursor:pointer;padding:2px 6px">↺</button>
+    <button id="ps-record-btn" onclick="psToggleGravar()" title="Gravar trajetória do emissor selecionado" style="background:none;border:1px solid var(--borda);border-radius:4px;color:var(--suave);font-size:0.72rem;cursor:pointer;padding:2px 8px">⏺ Gravar</button>
     <div style="flex:1"></div>
     <span id="ps-preview-time" style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave)">0.0s / 2.0s</span>
     <label style="font-size:0.68rem;color:var(--suave);display:flex;align-items:center;gap:4px">Zoom
@@ -86,7 +140,7 @@ function psRenderShell() {
   </div>
   <div id="ps-timeline" style="background:var(--escuro);border-top:1px solid var(--borda);padding:8px 12px;min-height:60px"></div>
 </div>
-<div id="ps-right" style="background:var(--escuro);border-left:1px solid var(--borda);overflow-y:auto;padding:12px">
+<div id="ps-right" style="background:var(--escuro);border-left:1px solid var(--borda);overflow-y:auto;padding:12px;min-width:300px;width:300px">
   <div id="ps-props-panel"><div style="padding:20px 0;text-align:center;color:var(--suave);font-size:0.8rem;font-style:italic">Selecione uma camada</div></div>
 </div>`;
   _psRenderAnimList();
@@ -791,16 +845,29 @@ async function psPreviewMount() {
       view: canvas, width: canvas.width, height: canvas.height,
       backgroundAlpha: 1, backgroundColor: 0x060a10, antialias: false,
     });
+    app.ticker.stop(); // we drive updates via RAF, not PIXI ticker
     PIXI_STUDIO_STATE.previewApp = app;
     const worldRoot = new PIXI.Container();
     app.stage.addChild(worldRoot);
     PIXI_STUDIO_STATE._worldRoot = worldRoot;
+    // Enable stage interaction for drag
+    app.stage.eventMode = 'static';
+    app.stage.hitArea = new PIXI.Rectangle(0, 0, canvas.width, canvas.height);
+    app.stage.on('pointermove', _psDragMove);
+    app.stage.on('pointerup', _psDragEnd);
+    app.stage.on('pointerupoutside', _psDragEnd);
     psPreviewRebuildAll();
+    // Start idle RAF loop immediately — emitters run even before Play is pressed
+    PIXI_STUDIO_STATE._lastTs = 0;
+    cancelAnimationFrame(PIXI_STUDIO_STATE._rafId);
+    PIXI_STUDIO_STATE._rafId = requestAnimationFrame(_psPreviewTick);
   } catch (e) { console.warn('[pixi-studio] preview mount failed', e); }
 }
 
 function psPreviewUnmount() {
-  psPreviewStop();
+  cancelAnimationFrame(PIXI_STUDIO_STATE._rafId);
+  PIXI_STUDIO_STATE.previewPlaying = false;
+  PIXI_STUDIO_STATE.previewTime = 0;
   _psDestroyAllEmitters();
   if (PIXI_STUDIO_STATE.previewApp) {
     try { PIXI_STUDIO_STATE.previewApp.destroy(false, { children: true, texture: false }); } catch (_) {}
@@ -810,30 +877,31 @@ function psPreviewUnmount() {
 }
 
 function psPreviewPlay() {
-  if (!PIXI_STUDIO_STATE.previewApp) psPreviewMount().then(_startPlay);
-  else _startPlay();
-  function _startPlay() {
-    PIXI_STUDIO_STATE.previewTime = 0;
-    PIXI_STUDIO_STATE.previewPlaying = true;
-    PIXI_STUDIO_STATE._lastTs = 0;
-    psPreviewRebuildAll();
-    cancelAnimationFrame(PIXI_STUDIO_STATE._rafId);
-    PIXI_STUDIO_STATE._rafId = requestAnimationFrame(_psPreviewTick);
-    const loopBtn = document.getElementById('ps-loop-btn');
-    if (loopBtn) loopBtn.style.color = PIXI_STUDIO_STATE.previewLooping ? 'var(--primario)' : 'var(--suave)';
+  if (!PIXI_STUDIO_STATE.previewApp) {
+    psPreviewMount().then(() => { _psDoPlay(); });
+  } else {
+    _psDoPlay();
   }
+}
+function _psDoPlay() {
+  PIXI_STUDIO_STATE.previewTime = 0;
+  PIXI_STUDIO_STATE.previewPlaying = true;
+  PIXI_STUDIO_STATE._lastTs = 0;
+  psPreviewRebuildAll();
+  const loopBtn = document.getElementById('ps-loop-btn');
+  if (loopBtn) loopBtn.style.color = PIXI_STUDIO_STATE.previewLooping ? 'var(--primario)' : 'var(--suave)';
 }
 
 function psPreviewPause() {
-  PIXI_STUDIO_STATE.previewPlaying = false;
-  cancelAnimationFrame(PIXI_STUDIO_STATE._rafId);
+  PIXI_STUDIO_STATE.previewPlaying = false; // RAF keeps running in idle mode
 }
 
 function psPreviewStop() {
   PIXI_STUDIO_STATE.previewPlaying = false;
   PIXI_STUDIO_STATE.previewTime = 0;
-  cancelAnimationFrame(PIXI_STUDIO_STATE._rafId);
   _psUpdateTimeDisplay(0);
+  // Reset sprites to t=0 visually
+  if (PIXI_STUDIO_STATE.previewApp) _psPreviewRenderFrame(0);
 }
 
 function psPreviewToggleLoop() {
@@ -849,33 +917,41 @@ function psPreviewZoom(val) {
 }
 
 function _psPreviewTick(ts) {
-  if (!PIXI_STUDIO_STATE.previewPlaying) return;
+  if (!PIXI_STUDIO_STATE.previewApp) return; // stop if app destroyed
   const last = PIXI_STUDIO_STATE._lastTs || ts;
   PIXI_STUDIO_STATE._lastTs = ts;
   const delta = Math.min(ts - last, 100);
   const dur = PIXI_STUDIO_STATE.atual?.config_json?.duracao_ms || 1000;
-  PIXI_STUDIO_STATE.previewTime += delta;
-  const t = Math.min(1, PIXI_STUDIO_STATE.previewTime / dur);
 
-  // Update emitters
-  for (const [, em] of PIXI_STUDIO_STATE._emitterMap) {
-    if (em && !em.destroyed) em.update(delta / 1000);
+  // Always update emitters (idle + playing) — no ticker.add needed
+  for (const [layerId, em] of PIXI_STUDIO_STATE._emitterMap) {
+    if (!em || em.destroyed) continue;
+    if (PIXI_STUDIO_STATE.previewPlaying) {
+      const t = Math.min(1, PIXI_STUDIO_STATE.previewTime / dur);
+      const layer = _psGetLayer(layerId);
+      if (layer?.spawn_path?.length) {
+        const sp = _psInterpKf(layer.spawn_path, t);
+        if (sp) em.updateSpawnPos(sp.x ?? 0, sp.y ?? 0);
+      }
+    }
+    em.update(delta / 1000);
   }
-  // Update sprites / shapes
-  _psPreviewRenderFrame(t);
 
-  _psUpdateTimeDisplay(t, dur);
-
-  if (t >= 1) {
-    if (PIXI_STUDIO_STATE.previewLooping) {
-      PIXI_STUDIO_STATE.previewTime = 0;
-      psPreviewRebuildAll();
-    } else {
-      PIXI_STUDIO_STATE.previewPlaying = false;
-      return;
+  if (PIXI_STUDIO_STATE.previewPlaying) {
+    PIXI_STUDIO_STATE.previewTime += delta;
+    const t = Math.min(1, PIXI_STUDIO_STATE.previewTime / dur);
+    _psPreviewRenderFrame(t);
+    _psUpdateTimeDisplay(t, dur);
+    if (t >= 1) {
+      if (PIXI_STUDIO_STATE.previewLooping) {
+        PIXI_STUDIO_STATE.previewTime = 0;
+        psPreviewRebuildAll();
+      } else {
+        PIXI_STUDIO_STATE.previewPlaying = false;
+      }
     }
   }
-  PIXI_STUDIO_STATE._rafId = requestAnimationFrame(_psPreviewTick);
+  PIXI_STUDIO_STATE._rafId = requestAnimationFrame(_psPreviewTick); // always re-request
 }
 
 function _psUpdateTimeDisplay(t, dur) {
@@ -898,15 +974,25 @@ function _psPreviewRenderFrame(t) {
     if (layer.tipo === 'sprite') {
       const sp = PIXI_STUDIO_STATE._spriteMap.get(layer.id);
       if (!sp) continue;
-      const kf = _psInterpKf(layer.keyframes, t);
-      if (kf) {
-        const bs = layer.base_scale ?? 1;
-        const sx = (kf.scale ?? 1) * bs * (layer.flip_x ? -1 : 1);
-        const sy = (kf.scale ?? 1) * bs * (layer.flip_y ? -1 : 1);
-        sp.x = kf.x ?? 0; sp.y = kf.y ?? 0;
-        sp.scale.set(sx, sy);
-        sp.alpha = kf.alpha ?? 1;
-        sp.rotation = (kf.rotation ?? 0) * Math.PI / 180;
+      if (!PIXI_STUDIO_STATE._drag || PIXI_STUDIO_STATE._drag.layerId !== layer.id) {
+        const kf = _psInterpKf(layer.keyframes, t);
+        if (kf) {
+          const bs = layer.base_scale ?? 1;
+          const sx = (kf.scale ?? 1) * bs * (layer.flip_x ? -1 : 1);
+          const sy = (kf.scale ?? 1) * bs * (layer.flip_y ? -1 : 1);
+          sp.x = kf.x ?? 0; sp.y = kf.y ?? 0;
+          sp.scale.set(sx, sy);
+          sp.alpha = kf.alpha ?? 1;
+          sp.rotation = (kf.rotation ?? 0) * Math.PI / 180;
+        }
+      }
+      // Update scale/rotate handles
+      if (layer.id === PIXI_STUDIO_STATE.layerSel && sp.parent) {
+        const scaleH = sp.parent.children.find(c => c.name === 'ps-scale-handle');
+        const rotH   = sp.parent.children.find(c => c.name === 'ps-rot-handle');
+        const hw = Math.abs(sp.width / 2) + 12, hh = Math.abs(sp.height / 2) + 12;
+        if (scaleH) { scaleH.x = sp.x + hw;  scaleH.y = sp.y + hh; }
+        if (rotH)   { rotH.x   = sp.x;        rotH.y   = sp.y - hh - 10; }
       }
     }
 
@@ -932,6 +1018,155 @@ function _psPreviewRenderFrame(t) {
     }
   }
 }
+
+// ══ DIRECT MANIPULATION ═══════════════════════════════════════════════════════
+
+function _psBeginDragSprite(layerId, e, type) {
+  psSelectLayer(layerId);
+  const sp = PIXI_STUDIO_STATE._spriteMap.get(layerId);
+  const layer = _psGetLayer(layerId);
+  if (!sp || !layer) return;
+  const dur = PIXI_STUDIO_STATE.atual?.config_json?.duracao_ms || 1000;
+  const t = Math.min(1, PIXI_STUDIO_STATE.previewTime / dur);
+  const kfs = layer.keyframes || [];
+  let kfIdx = 0;
+  if (kfs.length > 1) {
+    let minDist = Infinity;
+    kfs.forEach((kf, i) => { const d = Math.abs((kf.t ?? 0) - t); if (d < minDist) { minDist = d; kfIdx = i; } });
+  }
+  PIXI_STUDIO_STATE._drag = {
+    layerId, type, kfIdx,
+    startX: e.global.x, startY: e.global.y,
+    origX: kfs[kfIdx]?.x ?? 0,
+    origY: kfs[kfIdx]?.y ?? 0,
+    origScale: Math.abs(kfs[kfIdx]?.scale ?? 1),
+    origRot: kfs[kfIdx]?.rotation ?? 0,
+    spX: sp.x, spY: sp.y,
+  };
+}
+
+function _psDragMove(e) {
+  const drag = PIXI_STUDIO_STATE._drag;
+  if (!drag) return;
+  const layer = _psGetLayer(drag.layerId);
+  const sp = PIXI_STUDIO_STATE._spriteMap.get(drag.layerId);
+  if (!layer || !sp) return;
+  const zoom = PIXI_STUDIO_STATE._worldRoot?.scale?.x || 1;
+  const dx = e.global.x - drag.startX;
+  const dy = e.global.y - drag.startY;
+  if (drag.type === 'move') {
+    const nx = Math.round(drag.origX + dx / zoom);
+    const ny = Math.round(drag.origY + dy / zoom);
+    layer.keyframes[drag.kfIdx].x = nx;
+    layer.keyframes[drag.kfIdx].y = ny;
+    sp.x = nx; sp.y = ny;
+  } else if (drag.type === 'scale') {
+    const dist = (Math.abs(dx) + Math.abs(dy)) * (dx + dy > 0 ? 1 : -1);
+    const ns = Math.max(0.05, Math.round((drag.origScale + dist / 80 / zoom) * 100) / 100);
+    layer.keyframes[drag.kfIdx].scale = ns;
+    const bs = layer.base_scale ?? 1;
+    sp.scale.set(ns * bs * (layer.flip_x ? -1 : 1), ns * bs * (layer.flip_y ? -1 : 1));
+  } else if (drag.type === 'rotate') {
+    const app = PIXI_STUDIO_STATE.previewApp;
+    if (!app) return;
+    const cx = app.renderer.width / 2, cy = app.renderer.height / 2;
+    const a1 = Math.atan2(drag.startY - (drag.spY + cy), drag.startX - (drag.spX + cx));
+    const a2 = Math.atan2(e.global.y - (drag.spY + cy), e.global.x - (drag.spX + cx));
+    const nr = Math.round(drag.origRot + (a2 - a1) * 180 / Math.PI);
+    layer.keyframes[drag.kfIdx].rotation = nr;
+    sp.rotation = nr * Math.PI / 180;
+  }
+  _psSetDirty(true);
+}
+
+function _psDragEnd() {
+  if (!PIXI_STUDIO_STATE._drag) return;
+  PIXI_STUDIO_STATE._drag = null;
+  _psRenderPropsPanel();
+}
+
+// ══ TRAJECTORY RECORDING ══════════════════════════════════════════════════════
+
+function psToggleGravar() {
+  if (PIXI_STUDIO_STATE._recording) { _psRecordFinish(); return; }
+  const layer = _psGetLayer(PIXI_STUDIO_STATE.layerSel);
+  if (!layer || layer.tipo !== 'emitter') return mostrarToast('Selecione um emissor primeiro', 'aviso');
+  _psRecordStart();
+}
+
+function _psRecordStart() {
+  const canvas = document.getElementById('ps-preview-canvas');
+  if (!canvas) return;
+  PIXI_STUDIO_STATE._recording = true;
+  PIXI_STUDIO_STATE._recordPoints = [];
+  PIXI_STUDIO_STATE._recordStartTs = Date.now();
+  canvas.style.outline = '2px solid #e8604c';
+  canvas.addEventListener('pointermove', _psRecordPoint);
+  canvas.addEventListener('pointerup', _psRecordFinish);
+  const btn = document.getElementById('ps-record-btn');
+  if (btn) { btn.style.color = '#e8604c'; btn.style.borderColor = '#e8604c'; }
+  PIXI_STUDIO_STATE.previewTime = 0; PIXI_STUDIO_STATE.previewPlaying = true;
+  PIXI_STUDIO_STATE._lastTs = 0; psPreviewRebuildAll();
+  mostrarToast('Mova o mouse no canvas. Solte para finalizar.', 'aviso');
+}
+
+function _psRecordPoint(e) {
+  if (!PIXI_STUDIO_STATE._recording) return;
+  const rect = e.target.getBoundingClientRect();
+  const x = e.clientX - rect.left - rect.width / 2;
+  const y = e.clientY - rect.top - rect.height / 2;
+  const dur = PIXI_STUDIO_STATE.atual?.config_json?.duracao_ms || 1000;
+  const t = Math.min(1, (Date.now() - PIXI_STUDIO_STATE._recordStartTs) / dur);
+  PIXI_STUDIO_STATE._recordPoints.push({ x, y, t });
+}
+
+function _psRecordFinish() {
+  if (!PIXI_STUDIO_STATE._recording) return;
+  PIXI_STUDIO_STATE._recording = false;
+  PIXI_STUDIO_STATE.previewPlaying = false;
+  const canvas = document.getElementById('ps-preview-canvas');
+  if (canvas) { canvas.style.outline = ''; canvas.removeEventListener('pointermove', _psRecordPoint); canvas.removeEventListener('pointerup', _psRecordFinish); }
+  const btn = document.getElementById('ps-record-btn');
+  if (btn) { btn.style.color = ''; btn.style.borderColor = ''; }
+  const raw = PIXI_STUDIO_STATE._recordPoints;
+  if (raw.length < 3) return mostrarToast('Mova mais para gravar trajetória', 'aviso');
+  const smooth = _psSmoothPath(raw);
+  const layer = _psGetLayer(PIXI_STUDIO_STATE.layerSel);
+  if (layer && layer.tipo === 'emitter') {
+    layer.spawn_path = smooth; _psSetDirty(true); _psRenderPropsPanel();
+    mostrarToast(`Trajetória gravada (${smooth.length} pts)`, 'sucesso');
+  }
+}
+
+function _psSmoothPath(pts) {
+  if (!pts.length) return [];
+  pts = [...pts].sort((a, b) => a.t - b.t);
+  // Ramer-Douglas-Peucker
+  const rdp = (ps, eps) => {
+    if (ps.length < 3) return ps;
+    const [p0, pn] = [ps[0], ps[ps.length-1]];
+    const dx = pn.x-p0.x, dy = pn.y-p0.y, len = Math.sqrt(dx*dx+dy*dy) || 1;
+    let maxD = 0, maxI = 0;
+    for (let i = 1; i < ps.length-1; i++) {
+      const d = Math.abs(dy*ps[i].x - dx*ps[i].y + pn.x*p0.y - pn.y*p0.x) / len;
+      if (d > maxD) { maxD = d; maxI = i; }
+    }
+    if (maxD > eps) return [...rdp(ps.slice(0, maxI+1), eps).slice(0,-1), ...rdp(ps.slice(maxI), eps)];
+    return [p0, pn];
+  };
+  let reduced = rdp(pts, 5);
+  if (reduced.length < 2) reduced = [pts[0], pts[pts.length-1]];
+  // Gaussian smooth on x, y
+  const gSmooth = (arr, key) => arr.map((p, i) => {
+    const w = [0.06, 0.24, 0.40, 0.24, 0.06]; let v = 0, ws = 0;
+    w.forEach((wi, j) => { const idx = i+j-2; if (idx >= 0 && idx < arr.length) { v += wi*arr[idx][key]; ws += wi; } });
+    return ws ? v/ws : p[key];
+  });
+  const sx = gSmooth(reduced, 'x'), sy = gSmooth(reduced, 'y');
+  return reduced.map((p, i) => ({ x: Math.round(sx[i]*10)/10, y: Math.round(sy[i]*10)/10, t: Math.round(p.t*1000)/1000 }));
+}
+
+// ══ INTERPOLATION ══════════════════════════════════════════════════════════════
 
 function _psInterpKf(keyframes, t) {
   if (!keyframes || !keyframes.length) return null;
@@ -981,8 +1216,26 @@ function psPreviewRebuildAll() {
       const sp = new PIXI.Sprite(tex);
       sp.anchor.set(0.5);
       sp.blendMode = bm[layer.blendMode] ?? PIXI.BLEND_MODES.ADD;
+      sp.eventMode = 'static';
+      sp.cursor = 'grab';
+      sp.on('pointerdown', (e) => { e.stopPropagation(); _psBeginDragSprite(layer.id, e, 'move'); });
       container.addChild(sp);
       PIXI_STUDIO_STATE._spriteMap.set(layer.id, sp);
+      // Handles (scale + rotate) for selected layer
+      if (layer.id === PIXI_STUDIO_STATE.layerSel) {
+        const scaleH = new PIXI.Graphics();
+        scaleH.beginFill(0x4fa3d1, 0.9).drawCircle(0, 0, 7).endFill();
+        scaleH.lineStyle(1.5, 0xffffff, 0.8).drawCircle(0, 0, 7);
+        scaleH.name = 'ps-scale-handle'; scaleH.eventMode = 'static'; scaleH.cursor = 'nwse-resize';
+        scaleH.on('pointerdown', (e) => { e.stopPropagation(); _psBeginDragSprite(layer.id, e, 'scale'); });
+        container.addChild(scaleH);
+        const rotH = new PIXI.Graphics();
+        rotH.beginFill(0xc8a84b, 0.9).drawCircle(0, 0, 7).endFill();
+        rotH.lineStyle(1.5, 0xffffff, 0.8).drawCircle(0, 0, 7);
+        rotH.name = 'ps-rot-handle'; rotH.eventMode = 'static'; rotH.cursor = 'crosshair';
+        rotH.on('pointerdown', (e) => { e.stopPropagation(); _psBeginDragSprite(layer.id, e, 'rotate'); });
+        container.addChild(rotH);
+      }
     } else if (layer.tipo === 'shape') {
       const g = new PIXI.Graphics();
       container.addChild(g);
@@ -1000,22 +1253,20 @@ function psPreviewRebuildAll() {
 
 function _psCreateEmitter(layer, container, x, y) {
   if (!PIXI.particles?.Emitter) return;
-  let cfg = JSON.parse(JSON.stringify(layer.emitter));
+  let cfg = JSON.parse(JSON.stringify(layer.emitter || {}));
+  cfg = _psValidateEmitterCfg(cfg);
   const tex = layer.texture_url ? PIXI.Texture.from(layer.texture_url) : _avtProcTextures(layer.texture || 'spark');
   const texArr = [tex || PIXI.Texture.WHITE];
   if (PIXI.particles.upgradeConfig && !Array.isArray(cfg.behaviors)) {
-    try { cfg = PIXI.particles.upgradeConfig(cfg, texArr); } catch (_) {}
+    try { cfg = PIXI.particles.upgradeConfig(cfg, texArr); }
+    catch (e) { console.warn('[pixi-studio] upgradeConfig failed:', e); }
   }
   try {
     const em = new PIXI.particles.Emitter(container, cfg);
     em.updateSpawnPos(x, y);
     em.emit = true;
     PIXI_STUDIO_STATE._emitterMap.set(layer.id, em);
-    if (PIXI_STUDIO_STATE.previewApp) {
-      PIXI_STUDIO_STATE.previewApp.ticker.add((delta) => {
-        if (!em.destroyed) em.update(PIXI_STUDIO_STATE.previewApp.ticker.elapsedMS / 1000);
-      });
-    }
+    // Emitter is updated exclusively by _psPreviewTick RAF — no ticker.add here
   } catch (e) { console.warn('[pixi-studio] emitter create failed', e); }
 }
 
@@ -1038,7 +1289,7 @@ function _psDestroyAllEmitters() {
     try { if (!em.destroyed) em.destroy(); } catch (_) {}
   }
   PIXI_STUDIO_STATE._emitterMap.clear();
-  cancelAnimationFrame(PIXI_STUDIO_STATE._rafId);
+  // RAF is NOT cancelled here — managed by psPreviewMount/psPreviewUnmount
 }
 
 async function _psCaptureThumbnail() {
@@ -1275,15 +1526,17 @@ function psImportarJson(jsonStr) {
 
   let config;
   if (parsed.version === 2 && parsed.layers) {
-    // Full Studio config — use directly
+    // Full Studio config — validate emitter layers
     config = parsed;
+    (config.layers || []).forEach(l => {
+      if (l.tipo === 'emitter' && l.emitter) l.emitter = _psValidateEmitterCfg(l.emitter);
+    });
   } else {
-    // Assume raw pixi-particle-emitter config → wrap as single emitter layer
+    // Raw pixi-particle-emitter config → wrap as single emitter layer
     config = _psDefaultConfig();
-    config.layers[0].emitter = parsed;
+    config.layers[0].emitter = _psValidateEmitterCfg(parsed);
     config.layers[0].nome = 'Importado';
   }
-  // Ensure all layers have IDs
   (config.layers || []).forEach((l, i) => { if (!l.id) l.id = 'l_' + Date.now() + '_' + i; });
 
   if (!PIXI_STUDIO_STATE.atual) psNova();
@@ -1291,17 +1544,17 @@ function psImportarJson(jsonStr) {
   cur.config_json = config;
   cur.behavior = config.behavior || 'one-shot';
   cur.duracao_ms = config.duracao_ms || 1000;
-  PIXI_STUDIO_STATE.layerSel = null;
+  PIXI_STUDIO_STATE.layerSel = config.layers?.[0]?.id || null;
   _psSetDirty(true);
-  psPreviewStop();
-  psPreviewMount();
   _psRenderLayerList();
   _psRenderBehaviorPanel();
   _psRenderPropsPanel();
   psTimelineRender();
-  psPreviewRebuildAll();
   document.getElementById('ps-import-modal').style.display = 'none';
-  mostrarToast('JSON importado com sucesso!', 'sucesso');
+  const afterMount = () => { _psDoPlay(); };
+  if (!PIXI_STUDIO_STATE.previewApp) psPreviewMount().then(afterMount);
+  else { psPreviewRebuildAll(); afterMount(); }
+  mostrarToast('JSON importado — reproduzindo!', 'sucesso');
 }
 
 function psImportarArquivo(input) {
@@ -1461,3 +1714,16 @@ window.psUpdateScaleStop    = psUpdateScaleStop;
 window._psRenderLayerList   = _psRenderLayerList;
 window._psRenderPropsPanel  = _psRenderPropsPanel;
 window._psSetDirty          = _psSetDirty;
+window.psUndo               = psUndo;
+window.psRedo               = psRedo;
+window.psToggleGravar       = psToggleGravar;
+window._psRecordFinish      = _psRecordFinish;
+
+// Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo
+document.addEventListener('keydown', function(e) {
+  if (!document.getElementById('pixi-studio-screen') || document.getElementById('pixi-studio-screen').style.display === 'none') return;
+  if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+    if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); psUndo(); }
+    else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); psRedo(); }
+  }
+});
