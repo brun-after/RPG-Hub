@@ -279,6 +279,7 @@ function psAddLayer(tipo) {
     };
   } else if (tipo === 'sprite') {
     layer.texture_url = null; layer.blendMode = 'add';
+    layer.base_scale = 1; layer.flip_x = false; layer.flip_y = false;
     layer.keyframes = [
       { t: 0, x: 0, y: 0, scale: 1, alpha: 1, rotation: 0 },
       { t: 1, x: 0, y: 0, scale: 2, alpha: 0, rotation: 0 }
@@ -657,30 +658,49 @@ ${isShape ? `
     style="width:100%;padding:5px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem">
     ${['add','normal','multiply','screen'].map(m=>`<option value="${m}"${layer.blendMode===m?' selected':''}>${m}</option>`).join('')}
   </select></div>
+${!isShape ? `
+<div style="background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.18);border-radius:6px;padding:8px 10px;margin-bottom:8px">
+  <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--primario);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Transformação Base</div>
+  <div class="form-group" style="margin-bottom:6px">
+    <label style="font-size:0.66rem">Escala base: <b id="ps-bs-lbl-${layer.id}">${(layer.base_scale??1).toFixed(2)}×</b></label>
+    <input type="range" min="0.05" max="10" step="0.05" value="${layer.base_scale??1}"
+      oninput="psUpdateLayerProp('${layer.id}','base_scale',parseFloat(this.value));document.getElementById('ps-bs-lbl-${layer.id}').textContent=parseFloat(this.value).toFixed(2)+'×'"
+      style="width:100%">
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <label style="font-size:0.7rem;display:flex;align-items:center;gap:4px;cursor:pointer">
+      <input type="checkbox" ${layer.flip_x?'checked':''} onchange="psUpdateLayerProp('${layer.id}','flip_x',this.checked)"> Espelhar X
+    </label>
+    <label style="font-size:0.7rem;display:flex;align-items:center;gap:4px;cursor:pointer">
+      <input type="checkbox" ${layer.flip_y?'checked':''} onchange="psUpdateLayerProp('${layer.id}','flip_y',this.checked)"> Espelhar Y
+    </label>
+  </div>
+</div>` : ''}
 <div style="border-top:1px solid var(--borda);padding-top:10px;margin-top:6px">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
   <div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase">Keyframes</div>
   <button onclick="psAddKeyframe('${layer.id}',0.5)" style="background:none;border:1px solid var(--borda);border-radius:3px;color:var(--suave);font-size:0.6rem;cursor:pointer;padding:1px 6px">+ KF</button>
 </div>
-${kfs.length ? `<table style="width:100%;border-collapse:collapse;font-size:0.67rem">
+${kfs.length ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.67rem;min-width:${isShape?'160px':'220px'}">
 <thead><tr style="color:var(--suave)">${
   isShape
-    ? '<th>t</th><th>Raio</th><th>Cor</th><th>α</th><th></th>'
-    : '<th>t</th><th>x</th><th>y</th><th>sc</th><th>α</th><th></th>'
+    ? '<th style="padding:2px">t</th><th style="padding:2px">Raio</th><th style="padding:2px">Cor</th><th style="padding:2px">α</th><th></th>'
+    : '<th style="padding:2px">t</th><th style="padding:2px">x</th><th style="padding:2px">y</th><th style="padding:2px">sc</th><th style="padding:2px">rot°</th><th style="padding:2px">α</th><th></th>'
 }</tr></thead><tbody>
 ${kfs.map((k,i)=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)">${
   isShape
-    ? `<td><input type="number" min="0" max="1" step="0.01" value="${k.t}" onchange="psUpdateKeyframe('${layer.id}',${i},{t:parseFloat(this.value)})" style="width:36px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
-       <td><input type="number" value="${k.radius||0}" onchange="psUpdateKeyframe('${layer.id}',${i},{radius:parseFloat(this.value)})" style="width:36px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
+    ? `<td><input type="number" min="0" max="1" step="0.01" value="${k.t}" onchange="psUpdateKeyframe('${layer.id}',${i},{t:parseFloat(this.value)})" style="width:34px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
+       <td><input type="number" value="${k.radius||0}" onchange="psUpdateKeyframe('${layer.id}',${i},{radius:parseFloat(this.value)})" style="width:34px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
        <td><input type="color" value="${k.stroke_color||'#ffffff'}" onchange="psUpdateKeyframe('${layer.id}',${i},{stroke_color:this.value})" style="width:28px;height:22px;padding:1px;background:none;border:1px solid var(--borda);border-radius:2px;cursor:pointer"></td>
        <td><input type="number" min="0" max="1" step="0.05" value="${k.stroke_alpha||1}" onchange="psUpdateKeyframe('${layer.id}',${i},{stroke_alpha:parseFloat(this.value)})" style="width:32px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>`
-    : `<td><input type="number" min="0" max="1" step="0.01" value="${k.t}" onchange="psUpdateKeyframe('${layer.id}',${i},{t:parseFloat(this.value)})" style="width:36px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
-       <td><input type="number" value="${k.x||0}" onchange="psUpdateKeyframe('${layer.id}',${i},{x:parseFloat(this.value)})" style="width:32px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
-       <td><input type="number" value="${k.y||0}" onchange="psUpdateKeyframe('${layer.id}',${i},{y:parseFloat(this.value)})" style="width:32px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
-       <td><input type="number" min="0.01" max="10" step="0.1" value="${k.scale||1}" onchange="psUpdateKeyframe('${layer.id}',${i},{scale:parseFloat(this.value)})" style="width:32px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
-       <td><input type="number" min="0" max="1" step="0.05" value="${k.alpha||0}" onchange="psUpdateKeyframe('${layer.id}',${i},{alpha:parseFloat(this.value)})" style="width:32px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>`
+    : `<td><input type="number" min="0" max="1" step="0.01" value="${k.t}" onchange="psUpdateKeyframe('${layer.id}',${i},{t:parseFloat(this.value)})" style="width:32px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
+       <td><input type="number" value="${k.x||0}" onchange="psUpdateKeyframe('${layer.id}',${i},{x:parseFloat(this.value)})" style="width:30px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
+       <td><input type="number" value="${k.y||0}" onchange="psUpdateKeyframe('${layer.id}',${i},{y:parseFloat(this.value)})" style="width:30px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
+       <td><input type="number" min="0.01" max="20" step="0.05" value="${k.scale??1}" onchange="psUpdateKeyframe('${layer.id}',${i},{scale:parseFloat(this.value)})" style="width:30px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
+       <td><input type="number" min="-720" max="720" step="1" value="${k.rotation??0}" onchange="psUpdateKeyframe('${layer.id}',${i},{rotation:parseFloat(this.value)})" style="width:34px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>
+       <td><input type="number" min="0" max="1" step="0.05" value="${k.alpha??1}" onchange="psUpdateKeyframe('${layer.id}',${i},{alpha:parseFloat(this.value)})" style="width:30px;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.66rem;text-align:center"></td>`
 }<td><button onclick="psRemoveKeyframe('${layer.id}',${i})" style="background:none;border:none;color:var(--perigo);cursor:pointer;font-size:0.7rem">✕</button></td></tr>`).join('')}
-</tbody></table>` : '<div style="font-size:0.72rem;color:var(--suave);font-style:italic">Sem keyframes</div>'}
+</tbody></table></div>` : '<div style="font-size:0.72rem;color:var(--suave);font-style:italic">Sem keyframes</div>'}
 </div>`;
 }
 
@@ -879,7 +899,15 @@ function _psPreviewRenderFrame(t) {
       const sp = PIXI_STUDIO_STATE._spriteMap.get(layer.id);
       if (!sp) continue;
       const kf = _psInterpKf(layer.keyframes, t);
-      if (kf) { sp.x = kf.x ?? 0; sp.y = kf.y ?? 0; sp.scale.set(kf.scale ?? 1); sp.alpha = kf.alpha ?? 1; sp.rotation = (kf.rotation ?? 0) * Math.PI / 180; }
+      if (kf) {
+        const bs = layer.base_scale ?? 1;
+        const sx = (kf.scale ?? 1) * bs * (layer.flip_x ? -1 : 1);
+        const sy = (kf.scale ?? 1) * bs * (layer.flip_y ? -1 : 1);
+        sp.x = kf.x ?? 0; sp.y = kf.y ?? 0;
+        sp.scale.set(sx, sy);
+        sp.alpha = kf.alpha ?? 1;
+        sp.rotation = (kf.rotation ?? 0) * Math.PI / 180;
+      }
     }
 
     if (layer.tipo === 'shape') {
