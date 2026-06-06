@@ -8,6 +8,7 @@ var AVT_MENU_STATE = {
   rpgId: null,
   sessionData: null,
   _saveTimer: null,
+  configAba: 'menu',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,6 +73,7 @@ function sairAventura() {
   try { if (AVT_STATE._autoSaveTimer) { clearInterval(AVT_STATE._autoSaveTimer); AVT_STATE._autoSaveTimer = null; } } catch(_) {}
   try { if (typeof RTNet !== 'undefined' && RTNet.initialized) RTNet.shutdown(); } catch(_) {}
   try { if (typeof _avtNpcSyncShutdown === 'function') _avtNpcSyncShutdown(); } catch(_){}
+  try { const mm = document.getElementById('avt-minimap'); if (mm) mm.remove(); } catch(_) {}
   const avt = document.getElementById('aventura-screen');
   if (avt) avt.style.display = 'none';
   const menu = document.getElementById('avt-menu-screen');
@@ -94,6 +96,30 @@ function sairAventura() {
   if (typeof avtInvReset === 'function') avtInvReset();
 }
 window.sairAventura = sairAventura;
+
+async function voltarAoMenuDeJogo() {
+  _avtCleanupListeners();
+  try { if (AVT_STATE._autoSaveTimer) { clearInterval(AVT_STATE._autoSaveTimer); AVT_STATE._autoSaveTimer = null; } } catch(_) {}
+  try { if (typeof RTNet !== 'undefined' && RTNet.initialized) RTNet.shutdown(); } catch(_) {}
+  try { if (typeof _avtNpcSyncShutdown === 'function') _avtNpcSyncShutdown(); } catch(_){}
+  try { const mm = document.getElementById('avt-minimap'); if (mm) mm.remove(); } catch(_) {}
+  const avt = document.getElementById('aventura-screen');
+  if (avt) avt.style.display = 'none';
+  const rpgId = AVT_STATE.rpgId;
+  AVT_STATE.dungeon = null;
+  AVT_STATE.entidades = [];
+  AVT_STATE.batalhas = [];
+  AVT_STATE.mestreReposicionando = null;
+  AVT_STATE.aparencias = {};
+  AVT_STATE.entAnim = {};
+  AVT_STATE.npcTimers = {};
+  AVT_STATE.myCharNome = null;
+  AVT_STATE.membros = [];
+  AVT_STATE._lastFrameTs = 0;
+  if (typeof avtInvReset === 'function') avtInvReset();
+  await avtMenuAbrir(rpgId);
+}
+window.voltarAoMenuDeJogo = voltarAoMenuDeJogo;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BOTÕES DO MENU PRINCIPAL
@@ -239,6 +265,15 @@ window._avtMenuEntrarContinuarComChar = _avtMenuEntrarContinuarComChar;
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _avtMenuAbrirFase() {
+  if (AVT_STATE.isMestre) {
+    _avtMenuAbrirFaseMestre();
+  } else {
+    _avtMenuAbrirFaseJogador();
+  }
+}
+window._avtMenuAbrirFase = _avtMenuAbrirFase;
+
+function _avtMenuAbrirFaseJogador() {
   const fases = _avtMenuListarFases();
   const html = `
     <div style="display:flex;flex-direction:column;gap:8px">
@@ -252,7 +287,189 @@ function _avtMenuAbrirFase() {
   `;
   _avtMenuAbrirPanel(html, 'Escolher Fase');
 }
-window._avtMenuAbrirFase = _avtMenuAbrirFase;
+
+function _avtMenuAbrirFaseMestre() {
+  const extras = AVT_STATE.rpg?.theme_json?.fases_extras || [];
+
+  const lockIcon = lt => lt === 'chave' ? '🔑' : lt === 'combate' ? '⚔' : '🔓';
+
+  const html = `
+    <div style="display:flex;flex-direction:column;gap:10px">
+
+      <button onclick="_avtMenuNovaFaseComRefresh()"
+        style="background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.35);border-radius:8px;padding:11px 16px;cursor:pointer;color:#c8a84b;font-family:var(--fonte-d);font-size:0.72rem;letter-spacing:.06em;text-align:center;width:100%">
+        🚪 + Nova Fase
+      </button>
+
+      <div style="border-top:1px solid rgba(79,163,209,0.1);margin:4px 0"></div>
+
+      <!-- Fase principal -->
+      <div style="display:flex;align-items:center;gap:10px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:8px;padding:11px 14px">
+        <div style="flex:1;font-family:var(--fonte-d);font-size:0.78rem;color:#c8d8e8">🏰 Fase Principal</div>
+        <button onclick="_avtMenuSelecionarFase('principal')"
+          style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.6rem;padding:4px 10px;cursor:pointer">▶ Jogar</button>
+      </div>
+
+      ${extras.map(f => `
+        <div style="display:flex;align-items:center;gap:8px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.12);border-radius:8px;padding:10px 12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-family:var(--fonte-d);font-size:0.75rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lockIcon(f.porta?.lock_type)} ${f.nome||f.id}</div>
+            <div style="font-size:0.6rem;color:#7a92aa;margin-top:2px">Portal: col ${f.porta?.col??'?'}, row ${f.porta?.row??'?'}</div>
+          </div>
+          <button onclick="_avtMenuSelecionarFase('${f.id}')"
+            style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.6rem;padding:4px 9px;cursor:pointer;white-space:nowrap">▶ Jogar</button>
+          <button onclick="_avtMenuEditarFase('${f.id}')"
+            style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.6rem;padding:4px 9px;cursor:pointer">✏</button>
+          <button onclick="_avtMenuRemoverFaseComRefresh('${f.id}')"
+            style="background:rgba(232,96,76,0.08);border:1px solid rgba(232,96,76,0.25);border-radius:6px;color:#e8604c;font-family:var(--fonte-d);font-size:0.6rem;padding:4px 9px;cursor:pointer">✕</button>
+        </div>
+      `).join('')}
+
+      ${extras.length === 0 ? '<p style="font-size:0.68rem;color:#7a92aa;text-align:center;margin:8px 0">Nenhuma fase extra criada.</p>' : ''}
+    </div>
+  `;
+  _avtMenuAbrirPanel(html, '🗺 Fases');
+}
+window._avtMenuAbrirFaseMestre = _avtMenuAbrirFaseMestre;
+
+function _avtMenuNovaFaseComRefresh() {
+  if (typeof _avtMestreNovaFase !== 'function') {
+    mostrarToast('Entre na aventura para criar fases pelo mapa.', 'aviso');
+    return;
+  }
+  _avtMestreNovaFase();
+  const overlay = document.getElementById('avt-anim-import-overlay');
+  if (!overlay) return;
+  let _obs = new MutationObserver(() => {
+    if (overlay.style.display === 'none' || overlay.style.display === '') {
+      _obs.disconnect();
+      _obs = null;
+      _avtMenuAbrirFaseMestre();
+    }
+  });
+  _obs.observe(overlay, { attributes: true, attributeFilter: ['style'] });
+}
+window._avtMenuNovaFaseComRefresh = _avtMenuNovaFaseComRefresh;
+
+async function _avtMenuRemoverFaseComRefresh(faseId) {
+  if (!confirm('Remover esta fase permanentemente?')) return;
+  const theme = AVT_STATE.rpg.theme_json;
+  theme.fases_extras = (theme.fases_extras || []).filter(f => f.id !== faseId);
+  try {
+    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_MENU_STATE.rpgId)}`,
+      { method: 'PATCH', body: JSON.stringify({ theme_json: theme }) });
+    mostrarToast('Fase removida', 'ok');
+  } catch(e) {
+    mostrarToast('Erro ao remover: ' + (e?.message || e), 'erro');
+  }
+  _avtMenuAbrirFaseMestre();
+}
+window._avtMenuRemoverFaseComRefresh = _avtMenuRemoverFaseComRefresh;
+
+function _avtMenuEditarFase(faseId) {
+  const extras = AVT_STATE.rpg?.theme_json?.fases_extras || [];
+  const f = extras.find(x => x.id === faseId);
+  if (!f) return;
+
+  const lockTypes = [
+    { id: 'livre',   label: '🔓 Livre' },
+    { id: 'chave',   label: '🔑 Chave' },
+    { id: 'combate', label: '⚔ Combate' },
+  ];
+
+  const html = `
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Nome da fase</label>
+        <input id="avt-edit-fase-nome" type="text" value="${(f.nome||'').replace(/"/g,'&quot;')}"
+          style="width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;padding:7px 10px;font-family:inherit;box-sizing:border-box">
+      </div>
+
+      <div>
+        <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:6px">Tipo de lock da porta</label>
+        <div style="display:flex;gap:6px">
+          ${lockTypes.map(lt => `
+            <button onclick="_avtMenuSetEditFaseLock('${lt.id}')"
+              id="avt-edit-fase-lock-${lt.id}"
+              style="flex:1;padding:7px 6px;border-radius:7px;cursor:pointer;font-size:0.65rem;font-family:var(--fonte-d);
+                background:rgba(79,163,209,${(f.porta?.lock_type||'livre')===lt.id?'0.15':'0.04'});
+                border:1px solid rgba(79,163,209,${(f.porta?.lock_type||'livre')===lt.id?'0.5':'0.15'});
+                color:${(f.porta?.lock_type||'livre')===lt.id?'#4fa3d1':'#7a92aa'}">
+              ${lt.label}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <div style="flex:1">
+          <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Portal — Coluna</label>
+          <input id="avt-edit-fase-col" type="number" min="0" value="${f.porta?.col??0}"
+            style="width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;padding:7px 10px;box-sizing:border-box">
+        </div>
+        <div style="flex:1">
+          <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Portal — Linha</label>
+          <input id="avt-edit-fase-row" type="number" min="0" value="${f.porta?.row??0}"
+            style="width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;padding:7px 10px;box-sizing:border-box">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button onclick="_avtMenuAbrirFaseMestre()"
+          style="flex:1;padding:9px;border-radius:7px;cursor:pointer;font-family:var(--fonte-d);font-size:0.68rem;background:none;border:1px solid rgba(122,146,170,0.2);color:#7a92aa">
+          ← Cancelar
+        </button>
+        <button onclick="_avtMenuSalvarEditarFase('${faseId}')"
+          style="flex:1;padding:9px;border-radius:7px;cursor:pointer;font-family:var(--fonte-d);font-size:0.68rem;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.4);color:#4fa3d1">
+          ✓ Salvar
+        </button>
+      </div>
+    </div>
+  `;
+
+  window._avtEditFaseLockAtual = f.porta?.lock_type || 'livre';
+  _avtMenuAbrirPanel(html, `✏ Editar: ${f.nome||faseId}`);
+}
+window._avtMenuEditarFase = _avtMenuEditarFase;
+
+function _avtMenuSetEditFaseLock(lockType) {
+  window._avtEditFaseLockAtual = lockType;
+  ['livre','chave','combate'].forEach(lt => {
+    const btn = document.getElementById(`avt-edit-fase-lock-${lt}`);
+    if (!btn) return;
+    const ativo = lt === lockType;
+    btn.style.background = `rgba(79,163,209,${ativo?'0.15':'0.04'})`;
+    btn.style.borderColor = `rgba(79,163,209,${ativo?'0.5':'0.15'})`;
+    btn.style.color = ativo ? '#4fa3d1' : '#7a92aa';
+  });
+}
+window._avtMenuSetEditFaseLock = _avtMenuSetEditFaseLock;
+
+async function _avtMenuSalvarEditarFase(faseId) {
+  const nome = document.getElementById('avt-edit-fase-nome')?.value?.trim();
+  const col  = parseInt(document.getElementById('avt-edit-fase-col')?.value || '0', 10);
+  const row  = parseInt(document.getElementById('avt-edit-fase-row')?.value || '0', 10);
+  const lockType = window._avtEditFaseLockAtual || 'livre';
+
+  if (!nome) { mostrarToast('Nome obrigatório', 'aviso'); return; }
+
+  const theme = AVT_STATE.rpg.theme_json;
+  const fase = (theme.fases_extras || []).find(f => f.id === faseId);
+  if (!fase) return;
+
+  fase.nome = nome;
+  fase.porta = { ...(fase.porta || {}), lock_type: lockType, col, row };
+
+  try {
+    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_MENU_STATE.rpgId)}`,
+      { method: 'PATCH', body: JSON.stringify({ theme_json: theme }) });
+    mostrarToast('Fase atualizada!', 'ok');
+  } catch(e) {
+    mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
+  }
+  _avtMenuAbrirFaseMestre();
+}
+window._avtMenuSalvarEditarFase = _avtMenuSalvarEditarFase;
 
 function _avtMenuSelecionarFase(faseId) {
   _avtMenuAbrirPanel(_avtMenuHtmlSeletorChar('_avtMenuEntrarFaseComChar', faseId), 'Selecionar Personagem');
@@ -351,41 +568,98 @@ window._avtMenuCriarPersonagem = _avtMenuCriarPersonagem;
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _avtMenuAbrirConfig() {
-  const isMestre = AVT_STATE.isMestre;
+  if (AVT_STATE.isMestre) {
+    _avtMenuAbrirConfigMestre(AVT_MENU_STATE.configAba || 'menu');
+  } else {
+    _avtMenuAbrirPanel(_avtMenuHtmlConfigJogador(), '⚙ Configurações');
+    _avtMenuBindColorPicker();
+  }
+}
+window._avtMenuAbrirConfig = _avtMenuAbrirConfig;
+
+function _avtMenuAbrirConfigMestre(aba) {
+  AVT_MENU_STATE.configAba = aba;
+  const abas = [
+    { id: 'menu',          label: '🖼 Menu' },
+    { id: 'balanceamento', label: '⚖ Balanço' },
+    { id: 'campanha',      label: '🏰 Campanha' },
+    { id: 'jogadores',     label: '👥 Jogadores' },
+    { id: 'personagens',   label: '👤 Personagens' },
+    { id: 'jogador',       label: '🎮 Player' },
+  ];
+
+  const tabBar = `
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px">
+      ${abas.map(a => `
+        <button onclick="_avtMenuAbrirConfigMestre('${a.id}')"
+          style="padding:5px 10px;border-radius:6px;cursor:pointer;font-family:var(--fonte-d);font-size:0.6rem;letter-spacing:.05em;white-space:nowrap;
+            background:rgba(79,163,209,${aba===a.id?'0.15':'0.05'});
+            border:1px solid rgba(79,163,209,${aba===a.id?'0.5':'0.18'});
+            color:${aba===a.id?'#4fa3d1':'#7a92aa'}">
+          ${a.label}
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  const content = _avtMenuConfigConteudoAba(aba);
+  _avtMenuAbrirPanel(tabBar + content, '⚙ Configurações');
+
+  if (aba === 'menu') _avtMenuBindColorPicker();
+}
+window._avtMenuAbrirConfigMestre = _avtMenuAbrirConfigMestre;
+
+function _avtMenuConfigConteudoAba(aba) {
+  if (aba === 'menu') {
+    const t = AVT_STATE.rpg?.theme_json || {};
+    return `
+      <div style="margin-bottom:20px">
+        <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">⚙ Aparência do Menu</div>
+
+        <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Imagem de fundo (URL)</label>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <input id="avt-cfg-menu-img" type="url" placeholder="https://..." value="${t.menu_img_url||''}"
+            style="flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.7rem;padding:6px 10px;font-family:inherit">
+          <button onclick="_avtMenuUploadImagem()" style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#4fa3d1;font-size:0.65rem;padding:6px 10px;cursor:pointer;white-space:nowrap">📁 Upload</button>
+        </div>
+
+        <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Cor do tema</label>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <input id="avt-cfg-menu-color" type="color" value="${t.menu_theme_color||'#050810'}"
+            style="width:40px;height:32px;border:none;border-radius:6px;cursor:pointer;background:none">
+          <span id="avt-cfg-menu-color-val" style="font-size:0.68rem;color:#7a92aa">${t.menu_theme_color||'#050810'}</span>
+        </div>
+
+        <button onclick="_avtMenuSalvarConfigMestre()" style="background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.4);border-radius:7px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.7rem;padding:8px 20px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase;width:100%">Salvar</button>
+      </div>
+    `;
+  }
+
+  if (aba === 'jogador') {
+    return _avtMenuHtmlConfigJogador();
+  }
+
+  // Abas do painel do mestre: reutiliza _avtMpConteudoAba()
+  if (typeof _avtMpConteudoAba !== 'function') {
+    return '<p style="color:#7a92aa;font-size:0.72rem">Módulo do mestre não carregado.</p>';
+  }
+  const prevAba = AVT_STATE.mestrePainelAba;
+  AVT_STATE.mestrePainelAba = aba;
+  const html = _avtMpConteudoAba();
+  AVT_STATE.mestrePainelAba = prevAba;
+  return html;
+}
+window._avtMenuConfigConteudoAba = _avtMenuConfigConteudoAba;
+
+function _avtMenuHtmlConfigJogador() {
   const sd = AVT_MENU_STATE.sessionData || {};
   const mp = sd.music_pref || { mode: 'auto' };
   const mb = sd.mobile_pref || { tipo: 'dispositivo', posicao: 'centralizado' };
-  const t  = AVT_STATE.rpg?.theme_json || {};
-
-  const htmlMestre = isMestre ? `
-    <div style="margin-bottom:20px">
-      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">⚙ Configurações do Mestre</div>
-
-      <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Imagem de fundo do menu (URL)</label>
-      <div style="display:flex;gap:8px;margin-bottom:12px">
-        <input id="avt-cfg-menu-img" type="url" placeholder="https://..." value="${t.menu_img_url||''}"
-          style="flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.7rem;padding:6px 10px;font-family:inherit">
-        <button onclick="_avtMenuUploadImagem()" style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#4fa3d1;font-size:0.65rem;padding:6px 10px;cursor:pointer;white-space:nowrap">📁 Upload</button>
-      </div>
-
-      <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Cor do tema do menu</label>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <input id="avt-cfg-menu-color" type="color" value="${t.menu_theme_color||'#050810'}"
-          style="width:40px;height:32px;border:none;border-radius:6px;cursor:pointer;background:none">
-        <span id="avt-cfg-menu-color-val" style="font-size:0.68rem;color:#7a92aa">${t.menu_theme_color||'#050810'}</span>
-      </div>
-
-      <button onclick="_avtMenuSalvarConfigMestre()" style="background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.4);border-radius:7px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.7rem;padding:8px 20px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase;width:100%">Salvar config do Mestre</button>
-
-      <div style="border-top:1px solid rgba(79,163,209,0.1);margin:16px 0"></div>
-      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:rgba(79,163,209,0.5);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Config como Jogador</div>
-    </div>
-  ` : '';
 
   const modosMusica = [
-    { id: 'auto',      label: '🔀 Automático',              sub: 'Seleção automática do sistema' },
-    { id: 'master',    label: '🎵 Seguir Mestre',           sub: 'Usa a seleção definida pelo mestre' },
-    { id: 'custom',    label: '🎶 Personalizar',            sub: 'Escolha suas trilhas' },
+    { id: 'auto',   label: '🔀 Automático',    sub: 'Seleção automática do sistema' },
+    { id: 'master', label: '🎵 Seguir Mestre',  sub: 'Usa a seleção definida pelo mestre' },
+    { id: 'custom', label: '🎶 Personalizar',   sub: 'Escolha suas trilhas' },
   ];
 
   const trilhasCustom = `
@@ -406,7 +680,7 @@ function _avtMenuAbrirConfig() {
     </div>
   `;
 
-  const htmlJogador = `
+  return `
     <div style="margin-bottom:20px">
       <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(79,163,209,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">🎵 Música</div>
       <div style="display:flex;flex-direction:column;gap:6px" id="avt-cfg-musica-opts">
@@ -465,10 +739,9 @@ function _avtMenuAbrirConfig() {
 
     <button onclick="_avtMenuSalvarConfigJogador()" style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.35);border-radius:7px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.7rem;padding:8px 20px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase;width:100%">Salvar Configurações</button>
   `;
+}
 
-  _avtMenuAbrirPanel(htmlMestre + htmlJogador, '⚙ Configurações');
-
-  // Listener para color picker
+function _avtMenuBindColorPicker() {
   setTimeout(() => {
     const colorInp = document.getElementById('avt-cfg-menu-color');
     if (colorInp) {
@@ -479,7 +752,6 @@ function _avtMenuAbrirConfig() {
     }
   }, 50);
 }
-window._avtMenuAbrirConfig = _avtMenuAbrirConfig;
 
 function _avtMenuSelecionarMusicaMode(modo) {
   const sd = AVT_MENU_STATE.sessionData || {};
