@@ -3651,9 +3651,12 @@ function _avtRenderFrame() {
     // Mostrar lista de skills para o jogador local se inimigo estiver próximo
     // (a própria função redireciona ao auto-ataque quando aplicável — ver _avtCheckPrimeiroAtaque)
     try { _avtCheckPrimeiroAtaque(); } catch(_) {}
-    // Auto-ataque básico periódico para jogador parado (complementa o trigger por movimento)
+  }
+  // Auto-ataque básico com intervalo próprio (250ms) — reage mais rápido que o check de 1s
+  if (_agoraVerif - (AVT_STATE._ultimaAutoAtaqueVerif || 0) >= 250) {
+    AVT_STATE._ultimaAutoAtaqueVerif = _agoraVerif;
     const _jLocalAuto = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
-    if (_jLocalAuto && !_avtMinhaBatalha()) {
+    if (_jLocalAuto && !_avtMinhaBatalha() && !AVT_STATE._primeiroAtaqueModoAlvo) {
       try { _avtVerificarAutoAtaqueBasico(_jLocalAuto); } catch(_) {}
     }
   }
@@ -6473,7 +6476,9 @@ window._avtDefaultAtaqueBasico = _avtDefaultAtaqueBasico;
 function _avtVerificarAutoAtaqueBasico(jogador) {
   if (!jogador) return;
   if (_avtMinhaBatalha()) return; // não em combate
-  if (AVT_STATE._primeiroAtaqueAberto) return; // já escolhendo ataque
+  // Bloquear auto-ataque apenas se o overlay DOM estiver visível (não basta o flag sozinho,
+  // pois no modo controle o flag fica true sem abrir overlay, bloqueando o auto-ataque)
+  if (AVT_STATE._primeiroAtaqueAberto && document.getElementById('avt-skill-overlay')) return;
   if (AVT_STATE._primeiroAtaqueModoAlvo) return; // já em modo alvo
 
   const dbChar = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
@@ -6695,8 +6700,9 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
     return `<div onclick="_avtPrimeiroAtaqueSelecionarSkill('${sk.id}')"
       class="avt-skill-overlay-item" ${disabled}
       data-sk-alcance="${alcance}"
+      data-cdkey="${cdKey}"
       title="${(sk.efeito||'').replace(/"/g,'&quot;')}">
-      <span>${sk.habilidade}${cdStr}</span>
+      <span>${sk.habilidade}<span class="avt-cd-label">${cdStr}</span></span>
       <span style="font-size:0.58rem;color:#7a92aa">${sk.formula_dano||'1d6'} · ⟷${alcance}c</span>
     </div>`;
   }).join('');
@@ -6704,8 +6710,9 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
   overlay.innerHTML = `
     <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.65rem;margin-bottom:4px">${tituloModal}</div>
     <div style="font-size:0.62rem;color:#c8d8e8;margin-bottom:6px">Selecione uma habilidade</div>
-    <div class="avt-skill-overlay-item" onclick="_avtPrimeiroAtaqueSelecionarSkill(null)" ${_abDisabled}>
-      <span>${_abNome}${_abCdStr}</span><span style="font-size:0.58rem;color:#7a92aa">${_abForm} · ⟷${_abAlc}c</span>
+    <div class="avt-skill-overlay-item" onclick="_avtPrimeiroAtaqueSelecionarSkill(null)" ${_abDisabled}
+      data-cdkey="${_abKey}">
+      <span>${_abNome}<span class="avt-cd-label">${_abCdStr}</span></span><span style="font-size:0.58rem;color:#7a92aa">${_abForm} · ⟷${_abAlc}c</span>
     </div>
     ${skillItemsWithCd}
     ${algumPerseguindoDentroDoRange ? `
@@ -6718,6 +6725,29 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
   document.body.appendChild(overlay);
 
   const maxAlcanceModal = _avtMaxAlcanceJogador(jogador);
+
+  // Atualiza cooldowns do overlay a cada 500ms enquanto estiver aberto
+  const _ovCdTimer = setInterval(() => {
+    const _ov = document.getElementById('avt-skill-overlay');
+    if (!_ov) { clearInterval(_ovCdTimer); return; }
+    const _jOv = _avtMeuJogador();
+    if (!_jOv) return;
+    _ov.querySelectorAll('[data-cdkey]').forEach(el => {
+      const key = el.getAttribute('data-cdkey');
+      const cdMs = (AVT_STATE._oocCooldowns[key] || 0) - Date.now();
+      const cdEl = el.querySelector('.avt-cd-label');
+      if (!cdEl) return;
+      if (cdMs > 0) {
+        cdEl.textContent = ` ⏳${Math.ceil(cdMs/1000)}s`;
+        el.style.opacity = '0.45';
+        el.style.pointerEvents = 'none';
+      } else {
+        cdEl.textContent = '';
+        el.style.opacity = '';
+        el.style.pointerEvents = '';
+      }
+    });
+  }, 500);
 }
 
 function _avtFecharPrimeiroAtaqueModal(_byIgnore) {
@@ -6748,6 +6778,11 @@ function _avtFecharPrimeiroAtaqueModal(_byIgnore) {
 
 // Chamada quando o jogador seleciona uma skill no picker de primeiro ataque
 async function _avtPrimeiroAtaqueSelecionarSkill(skId) {
+  // Guard: checar cooldown antes de qualquer ação (evita duplo-disparo mesmo que a UI falhe)
+  const _jogCd = _avtMeuJogador();
+  const _cdGuardKey = (_jogCd?.id || _jogCd?.nome) + '_' + (skId || 'basico');
+  if ((AVT_STATE._oocCooldowns[_cdGuardKey] || 0) > Date.now()) return;
+
   document.getElementById('avt-skill-overlay')?.remove();
   AVT_STATE._primeiroAtaqueAberto = false;
   const jogador = _avtMeuJogador();
@@ -7108,7 +7143,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   const isCrit   = critMult > 1;
   const isFumble = critMult === 0;
 
-  // Escalonamento multiplicativo para ataque básico e skills
+  // Escalonamento de atributo para ataque básico (aditivo) e skills (legado multiplicativo)
   const myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
   const atrsJog = myChar?.custom_attrs?.atributos || {};
   let atributoVal = 0, multInfo = null;
@@ -7116,20 +7151,31 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     const _normA = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
     const _classeJog = jogador.classe_aventura || myChar?.custom_attrs?.classe_aventura || 'guerreiro';
     const _attrPorClasse = /mago/i.test(_classeJog) ? 'Inteligência' : 'Força';
-    // Ataque básico: atributo SEMPRE fixo pela classe (ignora _abCfg.atributo_base).
-    // Skills: usam sk.atributo_base; cai no atributo da classe se não definido.
     const atributoBase = sk ? (sk.atributo_base || _attrPorClasse) : _attrPorClasse;
     const chave = Object.keys(atrsJog).find(k => _normA(k) === _normA(atributoBase));
     if (chave) atributoVal = parseFloat(atrsJog[chave] || 0);
-    const mult = sk
-      ? (sk.mod_atributo_mult ?? sk.mod_atributo_pct ?? 1.0)
-      : (_abCfg?.mod_atributo_mult ?? _abCfg?.mod_atributo_pct ?? 1.0);
-    const _effAttr = atributoVal > 0 ? atributoVal : 1;
-    const _effMult = mult || 1;
-    danoTotal = Math.ceil(danoTotal * _effAttr * _effMult);
-    if (_effAttr !== 1 || _effMult !== 1) {
-      atributoVal = _effAttr;
-      multInfo = { atributoVal: _effAttr, danoFinal: danoTotal * critMult };
+
+    if (!sk) {
+      // Ataque básico: fórmula aditiva — dano = dados + floor(Força × mult)
+      const _globalMult = AVT_STATE.rpg?.theme_json?.level_config?.ataque_basico_forca_mult ?? 0.5;
+      const _perCharMult = _abCfg?.mod_atributo_mult !== undefined && _abCfg?.mod_atributo_mult !== null
+        ? _abCfg.mod_atributo_mult : null;
+      const _effMult = _perCharMult !== null ? _perCharMult : _globalMult;
+      const _forcaBonus = atributoVal > 0 ? Math.floor(atributoVal * _effMult) : 0;
+      if (_forcaBonus > 0) {
+        danoTotal = danoTotal + _forcaBonus;
+        multInfo = { atributoVal, forcaBonus: _forcaBonus, danoFinal: danoTotal * critMult };
+      }
+    } else {
+      // Skills: mantém fórmula multiplicativa legada
+      const mult = sk.mod_atributo_mult ?? sk.mod_atributo_pct ?? 1.0;
+      const _effAttr = atributoVal > 0 ? atributoVal : 1;
+      const _effMult = mult || 1;
+      danoTotal = Math.ceil(danoTotal * _effAttr * _effMult);
+      if (_effAttr !== 1 || _effMult !== 1) {
+        atributoVal = _effAttr;
+        multInfo = { atributoVal: _effAttr, danoFinal: danoTotal * critMult };
+      }
     }
   }
 
@@ -7218,9 +7264,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
           if (ef.tipo === 'silence')    alvoProcOoc._silenciado = true;
           if (ef.tipo === 'fantasma')   alvoProcOoc._fantasma   = true;
           if (ef.tipo === 'atravessar') alvoProcOoc._atravessar = true;
-          // Dominação imediata (OOC): necromante domina na hora em vez de esperar morte
-          if (ef.tipo === 'necromante' && alvoProcOoc.tipo === 'inimigo' && !alvoProcOoc._dominado)
-            _avtNecromanteDominar(alvoProcOoc, _oocEfPa, null);
+          // Necromante: NÃO dominar imediatamente — a dominação só ocorre quando o inimigo
+          // tiver HP <= 0 (via _avtNpcMorreu → _avtNecromanteDominar)
         }
       });
     }
@@ -7721,8 +7766,8 @@ function _avtTickEfeitosOOC(now) {
         }
       }
       if (rec.ef.tipo === 'necromante') {
-        // Dominação OOC expirou: matar o dominado de vez
         if (ent._dominado) {
+          // Dominação OOC expirou: matar o dominado de vez
           AVT_STATE.invocacoes_ativas = (AVT_STATE.invocacoes_ativas || []).filter(i => i.id !== ent.id);
           ent._dominado = false;
           ent.tipo = 'inimigo';
@@ -7730,6 +7775,10 @@ function _avtTickEfeitosOOC(now) {
           if (ent.status_effects) ent.status_effects = ent.status_effects.filter(e => e.tipo !== 'necromante');
           _avtNpcMorreu(ent, null);
           mostrarToast(`☠ ${ent.nome} voltou à morte.`, 'aviso', 3000);
+        } else {
+          // Efeito expirou sem o inimigo ter morrido: apenas limpar o efeito pendente
+          if (ent.status_effects)
+            ent.status_effects = ent.status_effects.filter(e => e.tipo !== 'necromante');
         }
         return false;
       }
@@ -9936,7 +9985,7 @@ async function _avtExecutarAtaque() {
     }
   }
 
-  // Escalonamento multiplicativo de atributo
+  // Escalonamento de atributo (aditivo p/ ataque básico, multiplicativo legado p/ skills)
   const danoBase = danoTotal;
   let atributoValAtk = 0, multInfoAtk = null;
   {
@@ -9945,18 +9994,31 @@ async function _avtExecutarAtaque() {
     const atrsAtivo = dbAtivo2?.custom_attrs?.atributos || {};
     const _classeAtk = ativo.classe_aventura || dbAtivo2?.custom_attrs?.classe_aventura || 'guerreiro';
     const _attrDefaultAtk = /mago/i.test(_classeAtk) ? 'Inteligência' : 'Força';
-    // Para ataque básico, atributo e multiplicador também vêm de _abCfgExec (config per-char).
-    // Simétrico ao caminho OOC em _avtExecutarAtaqueOoc (linha ~5337-5347).
-    const _atributoBaseAtk = sk?.atributo_base || _abCfgExec?.atributo_base || _attrDefaultAtk;
+    const _atributoBaseAtk = sk?.atributo_base || _attrDefaultAtk;
     const chaveAttr = Object.keys(atrsAtivo).find(k => _normA3(k) === _normA3(_atributoBaseAtk));
     if (chaveAttr) atributoValAtk = parseFloat(atrsAtivo[chaveAttr] || 0);
-    const mult = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? _abCfgExec?.mod_atributo_pct ?? _abCfgExec?.mod_atributo_mult ?? 1.0;
-    const _effAttrA = atributoValAtk > 0 ? atributoValAtk : 1;
-    const _effMultA = mult || 1;
-    danoTotal = Math.ceil(danoTotal * _effAttrA * _effMultA);
-    if (_effAttrA !== 1 || _effMultA !== 1) {
-      atributoValAtk = _effAttrA;
-      multInfoAtk = { atributoVal: _effAttrA, danoFinal: danoTotal };
+
+    if (!sk) {
+      // Ataque básico em combate: fórmula aditiva idêntica ao caminho OOC
+      const _globalMultCbt = AVT_STATE.rpg?.theme_json?.level_config?.ataque_basico_forca_mult ?? 0.5;
+      const _perCharMultCbt = _abCfgExec?.mod_atributo_mult !== undefined && _abCfgExec?.mod_atributo_mult !== null
+        ? _abCfgExec.mod_atributo_mult : null;
+      const _effMultCbt = _perCharMultCbt !== null ? _perCharMultCbt : _globalMultCbt;
+      const _forcaBonusCbt = atributoValAtk > 0 ? Math.floor(atributoValAtk * _effMultCbt) : 0;
+      if (_forcaBonusCbt > 0) {
+        danoTotal = danoTotal + _forcaBonusCbt;
+        multInfoAtk = { atributoVal: atributoValAtk, forcaBonus: _forcaBonusCbt, danoFinal: danoTotal };
+      }
+    } else {
+      // Skills: mantém fórmula multiplicativa legada
+      const mult = sk.mod_atributo_mult ?? sk.mod_atributo_pct ?? 1.0;
+      const _effAttrA = atributoValAtk > 0 ? atributoValAtk : 1;
+      const _effMultA = mult || 1;
+      danoTotal = Math.ceil(danoTotal * _effAttrA * _effMultA);
+      if (_effAttrA !== 1 || _effMultA !== 1) {
+        atributoValAtk = _effAttrA;
+        multInfoAtk = { atributoVal: _effAttrA, danoFinal: danoTotal };
+      }
     }
   }
 
@@ -10590,14 +10652,25 @@ function _avtProcessarStatusEffects(bat, ent) {
     }
     ef._turnos_restantes = (ef._turnos_restantes ?? ef.duracao_turnos ?? 1) - 1;
     const mantido = ef._turnos_restantes > 0;
-    // Ao expirar 'atravessar': empurrar para tile válido se necessário
+    // Ao expirar 'atravessar': empurrar para tile válido via BFS (suporta paredes espessas)
     if (!mantido && ef.tipo === 'atravessar' && entObj) {
       delete entObj._atravessar;
       const ex = Math.round(entObj.x), ey = Math.round(entObj.y);
       if (!_avtTilePassavel(ex, ey, AVT_STATE.dungeon)) {
-        const _pushDirs = [[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
-        const valid = _pushDirs.map(([ddx,ddy]) => ({x:ex+ddx, y:ey+ddy}))
-          .find(p => _avtTilePassavel(p.x, p.y, AVT_STATE.dungeon));
+        let valid = null;
+        const _bfsVisited = new Set([`${ex},${ey}`]);
+        const _bfsQueue = [[ex, ey]];
+        while (_bfsQueue.length && !valid) {
+          const [qx, qy] = _bfsQueue.shift();
+          for (const [ddx, ddy] of [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]]) {
+            const nx = qx+ddx, ny = qy+ddy;
+            const key = `${nx},${ny}`;
+            if (_bfsVisited.has(key)) continue;
+            _bfsVisited.add(key);
+            if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) { valid = {x:nx, y:ny}; break; }
+            if (_bfsVisited.size < 200) _bfsQueue.push([nx, ny]);
+          }
+        }
         if (valid) {
           entObj.x = valid.x; entObj.y = valid.y;
           AVT_STATE.batalhas.forEach(b => { const bi=b.iniciativa.find(e=>e.id===entObj.id); if(bi){bi.x=valid.x;bi.y=valid.y;} });
@@ -15712,6 +15785,16 @@ function _avtMpConteudoAba() {
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarAtaqueBasicoCooldown()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">⚔ Multiplicador de Força no Ataque Básico (×)</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Bônus de dano fixo adicionado ao ataque básico = Força × multiplicador. Ex: 0.5 com Força 14 = +7 de dano. Use 0 para desabilitar o escalonamento. Pode ser sobrescrito individualmente no editor do personagem.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-ab-forca-mult" min="0" max="10" step="0.1" value="${lc.ataque_basico_forca_mult ?? 0.5}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">× por ponto de Força/Inteligência</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarAtaqueBasicoForcaMult()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-label">⚡ Duração do cooldown de Efeitos</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">Intervalo em ms entre ticks de efeitos fora de combate (DOT, HOT, Stun, etc.). Também define a duração de cada "turno" configurado nos efeitos.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -16456,6 +16539,19 @@ async function _avtSalvarAtaqueBasicoCooldown() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Cooldown do ataque básico: ${val} turno(s)`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarAtaqueBasicoForcaMult() {
+  const val = Math.max(0, Math.min(10, parseFloat(document.getElementById('avt-mp-ab-forca-mult')?.value) ?? 0.5));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.ataque_basico_forca_mult = val;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`Multiplicador de Força no ataque básico: ×${val}`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
@@ -20213,6 +20309,11 @@ function _avtAbrirModalAtaqueBasico(entId) {
           </select></div>
         <div><div class="avt-sk-label">Alcance (células)</div>
           <input id="avt-ab-alcance" type="number" min="1" max="20" value="${ab.alcance_celulas??1}" style="${inpSt}"></div>
+        <div style="grid-column:span 2"><div class="avt-sk-label">Mult. Força (× — vazio = usar global)</div>
+          <input id="avt-ab-forca-mult" type="number" min="0" max="10" step="0.1"
+            value="${ab.mod_atributo_mult !== undefined && ab.mod_atributo_mult !== null ? ab.mod_atributo_mult : ''}"
+            placeholder="global (${AVT_STATE.rpg?.theme_json?.level_config?.ataque_basico_forca_mult ?? 0.5})"
+            style="${inpSt}"></div>
       </div>
 
       <div style="font-family:var(--fonte-d);font-size:0.65rem;color:#4fa3d1;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;margin-top:4px">Animação</div>
@@ -20244,12 +20345,15 @@ async function _avtSalvarAtaqueBasico(entId) {
   const cor   = document.getElementById('avt-ab-anim-cor')?.value  || '#c8a84b';
   const icone = document.getElementById('avt-ab-anim-icone')?.value || '';
   if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  const _multRaw = document.getElementById('avt-ab-forca-mult')?.value;
+  const _multVal = _multRaw !== '' && _multRaw !== undefined ? parseFloat(_multRaw) : null;
   dbChar.custom_attrs.ataque_basico = {
     nome:           document.getElementById('avt-ab-nome')?.value.trim() || 'Ataque básico',
     formula_dano:   document.getElementById('avt-ab-formula')?.value.trim() || '1d8',
     tipo_dano:      document.getElementById('avt-ab-tipo-dano')?.value || 'fisico',
     alcance_celulas: parseInt(document.getElementById('avt-ab-alcance')?.value) || 1,
     animacao:       tipo === 'nenhuma' ? null : { tipo, cor, icone },
+    ...(_multVal !== null && !isNaN(_multVal) ? { mod_atributo_mult: _multVal } : {}),
   };
   dbChar.custom_attrs.ataque_basico_animacao = dbChar.custom_attrs.ataque_basico.animacao;
   document.getElementById('avt-modal-ab-overlay')?.remove();
