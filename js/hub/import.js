@@ -341,19 +341,18 @@ Deixe velocidade_base e velocidade_fator em branco para usar os padrões (4 e 4)
 // Salvo em: tabela characters
 // nome, hp_atual, nivel, hp_max → colunas diretas
 // tipo, cor, img_url, background, equipamentos, companheiro → custom_attrs jsonb
-// atributos_json → custom_attrs.atributos (objeto com valores dos attr_defs)
 characters:`⚠️ TRANSCREVA APENAS personagens que JÁ EXISTEM no material. NÃO invente, NÃO crie exemplos. Campo sem informação → deixe em BRANCO.
 
-Colunas: nome,nivel,hp_max,hp_atual,tipo,cor,img_retrato,img_full,img_url,background,equipamentos,companheiro,atributos_json
+Colunas: nome,nivel,hp_max,hp_atual,tipo,cor,img_retrato,img_full,img_url,background,equipamentos,companheiro
 
 ⛔ REGRA CRÍTICA DE COLUNAS — LEIA ANTES DE GERAR:
-Toda linha DEVE ter exatamente 11 campos separados por vírgula. Campos vazios NÃO podem ser omitidos.
+Toda linha DEVE ter exatamente 12 campos separados por vírgula. Campos vazios NÃO podem ser omitidos.
 Estrutura obrigatória do final de cada linha:
-  → COM equipamentos, SEM companheiro:  ,"item1, item2",,{"Força":10}
-  → SEM equipamentos, COM companheiro:  ,,Nome do Companheiro,{"Força":10}
-  → SEM os dois:                        ,,,{"Força":10}
-  → COM os dois:                        ,"item1, item2",Nome Companheiro,{"Força":10}
-Omitir a vírgula do campo vazio é o erro mais comum — resulta em atributos importados no campo errado.
+  → COM equipamentos, SEM companheiro:  ,"item1, item2",
+  → SEM equipamentos, COM companheiro:  ,,Nome do Companheiro
+  → SEM os dois:                        ,,
+  → COM os dois:                        ,"item1, item2",Nome Companheiro
+Omitir a vírgula do campo vazio é o erro mais comum.
 
 nome — Nome exato do personagem. Cada linha = um personagem único.
 
@@ -376,25 +375,17 @@ img_url     — Legado; equivale a img_retrato se não preenchido.
 cor — Cor hexadecimal do token no mapa. Escolha que represente o personagem.
   Ex: guerreiro → "#e8604c" | mago → "#7b2fbe" | aliado → "#4fa3d1" | criatura → "#c0392b"
 
-img_url — URL da imagem do personagem. Pode ser Google Drive (formato direto) ou qualquer URL pública. Deixe vazio se não houver.
-
 background — História, motivações, personalidade do personagem. Use \\n para parágrafos.
 
 equipamentos — Lista de itens separados por vírgula. Ex: "Espada longa, Escudo de carvalho, Poção de cura ×2"
   Se o personagem não tem equipamentos, deixe o campo vazio — mas MANTENHA A VÍRGULA separadora.
 
 companheiro — Nome de um companheiro/familiar do personagem, se houver. Vazio se não houver.
-  ⚠️ NUNCA omita esta coluna mesmo quando vazia. A vírgula separadora é obrigatória antes de atributos_json.
-
-atributos_json — JSON com os valores dos atributos deste personagem. As CHAVES devem ser EXATAMENTE os nomes definidos em attr_defs (mesmas maiúsculas, acentos, espaços).
-  Ex: {"Força":14,"Destreza":12,"Constituição":10,"Mana":8,"HP Máximo":30}
-  Use "" para aspas internas no CSV: "{""Força"":14,""Destreza"":12}"
-  Se o personagem não tem atributos definidos ainda, deixe vazio.
 
 EXEMPLOS CORRETOS (conte as vírgulas antes de gerar!):
-  Goblin,1,30,30,criatura,#8b3a1e,,Goblin comum de floresta.,,,"{"Força":8,"Destreza":10}"
-  Aragorn,5,120,80,jogador,#4fa3d1,,Ranger habilidoso.,"Espada longa, Arco élfico",,"{""Força"":16,""Destreza"":14}"
-  Gandalf,10,100,100,npc,#c8a84b,,Mago cinzento.,Bordão,Balrog,,"{""Força"":10,""Sabedoria"":20}"`,
+  Goblin,1,30,30,criatura,#8b3a1e,,Goblin comum de floresta.,,
+  Aragorn,5,120,80,jogador,#4fa3d1,,Ranger habilidoso.,"Espada longa, Arco élfico",
+  Gandalf,10,100,100,npc,#c8a84b,,Mago cinzento.,Bordão,Balrog`,
 
 
 // ─── #SECTION:skills ──────────────────────────────────────────

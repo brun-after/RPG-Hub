@@ -259,7 +259,6 @@ O campo raiz "nome" é OBRIGATÓRIO — título curto da aventura em português 
     {
       "nome": "Nome do Personagem",
       "hp_max": 70,
-      "atributos": {"forca": 14, "destreza": 10, "constituicao": 12, "inteligencia": 8},
       "habilidades": [
         {"nome": "Golpe Pesado", "formula_dano": "1d8+3", "tipo_dano": "fisico", "cooldown_turnos": 1, "alcance_celulas": 1, "descricao": "Pancada brutal com a arma"},
         {"nome": "Escudo da Fé", "formula_dano": "0", "tipo_dano": "cura", "cooldown_turnos": 3, "alcance_celulas": 0, "descricao": "Cura 1d6 PV do alvo"}
@@ -309,7 +308,7 @@ O campo raiz "nome" é OBRIGATÓRIO — título curto da aventura em português 
 - HP balanceado entre 40–120 conforme classe e descrição
 - Cada personagem deve ter 2–4 habilidades com fórmulas de dano balanceadas
 - "aparencia_tipo": npc_generico, guerreiro, mago, goblin, esqueleto, orc, troll, vampiro, cultista, boss
-- "classe_aventura": guerreiro, mago
+- "classe_aventura": guerreiro | mago
 
 ══ DESIGN DE DUNGEON — PENSE COMO LEVEL DESIGNER E ARTISTA ══
 Você está criando uma dungeon com intenção artística. Cada decisão de layout deve contar uma história.

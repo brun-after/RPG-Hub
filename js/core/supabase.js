@@ -327,20 +327,6 @@ async function insertSection(rpgId,section,rows,levelConfig){
    if(equipamentos)ca.equipamentos=equipamentos;
    if(companheiro) ca.companheiro =companheiro;
 
-   // ── Auto-correção: atributos_json no campo errado ────────────────────────
-   // Erro comum: coluna companheiro recebe o JSON de atributos quando um campo vazio está faltando.
-   // Se atributos_json está vazio e companheiro começa com '{', é o JSON de atributos.
-   let atribRaw = c.atributos_json || c.custom_attrs;
-   if(!atribRaw && companheiro && companheiro.trim().startsWith('{')) {
-     console.warn(`[import] Auto-fix: atributos_json detectado em "companheiro" para "${c.nome}"`);
-     atribRaw = companheiro;
-     ca.companheiro = ''; // limpar o campo incorreto
-   }
-   // Suporta campo novo (atributos_json) e campo antigo (custom_attrs) para compatibilidade
-   if(atribRaw){try{ca.atributos=typeof atribRaw==='string'?JSON.parse(atribRaw):atribRaw;}catch(e){
-     console.warn(`[import] JSON de atributos inválido para "${c.nome}":`, e.message);
-   }}
-
    // Level fields
    const nivel = parseInt(c.nivel)||1;
    const lc = levelConfig||{};
