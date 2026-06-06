@@ -55,7 +55,13 @@ function abrirPixiStudio(){
 function fecharPixiStudio(){
   const scr=document.getElementById('pixi-studio-screen');
   if(scr) scr.style.display='none';
-  document.getElementById('hub').style.display='';
+  if(typeof PIXI_STUDIO_STATE!=='undefined' && PIXI_STUDIO_STATE._origin==='aventura'){
+    PIXI_STUDIO_STATE._origin=null;
+    const menu=document.getElementById('avt-menu-screen');
+    if(menu) menu.style.display='flex';
+  } else {
+    document.getElementById('hub').style.display='';
+  }
 }
 
 

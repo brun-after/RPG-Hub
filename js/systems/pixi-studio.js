@@ -23,6 +23,7 @@ var PIXI_STUDIO_STATE = {
   _lastTs:        0,
   _rafId:         0,
   _pickerCb:      null,
+  _origin:        null,  // 'aventura' when opened from adventure menu
 };
 
 // ══ B — INIT & CRUD ══════════════════════════════════════════════════════════

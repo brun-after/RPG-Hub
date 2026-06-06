@@ -163,6 +163,13 @@ function _avtMenuRenderBotoes() {
     },
   ];
 
+  if (AVT_STATE.isMestre) {
+    botoes.push({
+      id: 'pixi-studio', label: '🎨 Studio', sub: 'Animações de skill',
+      cor: '#4fa3d1', fn: '_avtMenuAbrirPixiStudio()',
+    });
+  }
+
   cont.innerHTML = botoes.map(b => `
     <button
       id="avt-menu-btn-${b.id}"
@@ -889,6 +896,20 @@ function _avtMenuAbrirGuia() {
   _avtMenuAbrirPanel(html, '📖 Guia do Jogo');
 }
 window._avtMenuAbrirGuia = _avtMenuAbrirGuia;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STUDIO PIXI
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _avtMenuAbrirPixiStudio() {
+  const menu = document.getElementById('avt-menu-screen');
+  if (menu) menu.style.display = 'none';
+  const scr = document.getElementById('pixi-studio-screen');
+  if (scr) scr.style.display = 'flex';
+  if (typeof PIXI_STUDIO_STATE !== 'undefined') PIXI_STUDIO_STATE._origin = 'aventura';
+  if (typeof pixiStudioInit === 'function') pixiStudioInit();
+}
+window._avtMenuAbrirPixiStudio = _avtMenuAbrirPixiStudio;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRAR NO JOGO
