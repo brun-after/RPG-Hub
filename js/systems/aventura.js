@@ -2597,196 +2597,185 @@ async function _avtRemoverMembro(playerId) {
   } catch(e) { mostrarToast('Erro ao remover: ' + (e?.message||e), 'erro'); }
 }
 
-async function entrarAventura(rpgId) {
-  // Cancel any existing render loop and event listeners before starting
-  _avtCleanupListeners();
+// ─── HELPERS EXTRAÍDOS: carregamento, RTNet, canvas e tela ─────────────────
 
-  mostrarLoading('Carregando dungeon…');
-  try {
-    const [rpgs, chars, skills, itemCatalog, attrDefs] = await Promise.all([
-      _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
-      _avtSb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=nome`),
-      _avtSb(`skills?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
-      _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus&order=id`).catch(()=>[]),
-      _avtSb(`attr_defs?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=ordem`).catch(()=>[])
-    ]);
+async function _avtCarregarDados(rpgId) {
+  const [rpgs, chars, skills, itemCatalog, attrDefs] = await Promise.all([
+    _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
+    _avtSb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=nome`),
+    _avtSb(`skills?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
+    _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus&order=id`).catch(()=>[]),
+    _avtSb(`attr_defs?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=ordem`).catch(()=>[])
+  ]);
 
-    AVT_STATE.rpgId      = rpgId;
-    AVT_STATE.rpg        = rpgs?.[0] || { rpg_id: rpgId, name: 'Dungeon' };
-    _avtDetectarMestre();
-    AVT_STATE.chars      = chars || [];
-    const _manaToSeed = [];
-    AVT_STATE.chars.forEach(char => {
-      if (!char.custom_attrs) char.custom_attrs = {};
-      const atrs = char.custom_attrs.atributos || {};
-      const _manaFaltava = atrs.Mana == null;
-      const _novoManaMax = _avtCalcManaMaxChar(char);
-      if (_manaFaltava) {
-        atrs.ManaMax = _novoManaMax;
-        atrs.Mana = _novoManaMax;
-      } else if (_novoManaMax !== (atrs.ManaMax ?? 10)) {
-        atrs.ManaMax = _novoManaMax;
-        if (atrs.Mana > _novoManaMax) atrs.Mana = _novoManaMax;
-      }
-      char.custom_attrs.atributos = atrs;
-      if ((_manaFaltava || _novoManaMax !== (atrs.ManaMax ?? 10)) && char.id) _manaToSeed.push(char);
-    });
-    // Persistir defaults de Mana para chars que não tinham o campo
-    _manaToSeed.forEach(char => {
-      _avtSb('characters?id=eq.' + encodeURIComponent(char.id), {
-        method: 'PATCH', body: JSON.stringify({ custom_attrs: char.custom_attrs })
-      }).catch(() => {});
-    });
-    AVT_STATE.skills     = skills || [];
-    AVT_STATE.itemCatalog = itemCatalog || [];
-    AVT_STATE.attrDefs   = attrDefs  || [];
-    AVT_STATE.entidades = [];
-    AVT_STATE.npcTimers = {};
-    AVT_STATE._lastFrameTs = 0;
-    AVT_STATE.batalhas = [];
-
-    // Load player assignment (which character this user controls)
-    await _avtCarregarAtribuicaoJogador(rpgId);
-
-    // Load or generate dungeon
-    const t = AVT_STATE.rpg.theme_json || {};
-    if (t.dungeon_data?.tiles) {
-      AVT_STATE.dungeon = t.dungeon_data;
-    } else {
-      AVT_STATE.dungeon = _avtGerarDungeon(60, 40, 8);
+  AVT_STATE.rpgId      = rpgId;
+  AVT_STATE.rpg        = rpgs?.[0] || { rpg_id: rpgId, name: 'Dungeon' };
+  _avtDetectarMestre();
+  AVT_STATE.chars      = chars || [];
+  const _manaToSeed = [];
+  AVT_STATE.chars.forEach(char => {
+    if (!char.custom_attrs) char.custom_attrs = {};
+    const atrs = char.custom_attrs.atributos || {};
+    const _manaFaltava = atrs.Mana == null;
+    const _novoManaMax = _avtCalcManaMaxChar(char);
+    if (_manaFaltava) {
+      atrs.ManaMax = _novoManaMax;
+      atrs.Mana = _novoManaMax;
+    } else if (_novoManaMax !== (atrs.ManaMax ?? 10)) {
+      atrs.ManaMax = _novoManaMax;
+      if (atrs.Mana > _novoManaMax) atrs.Mana = _novoManaMax;
     }
-    _avtBausPreDungeonParaMapa();
-    AVT_STATE._tilesetConfig   = AVT_STATE.dungeon.tileset_config  || null;
-    AVT_STATE._tilesetImgUrl   = AVT_STATE.dungeon.tileset_img_url || null;
-    AVT_STATE._tilesetLoaded   = false;
-    AVT_STATE._tilesetTextures = {};
-    _avtPopularEntidades();
-    _avtAplicarEstadoInimigosPersistido();
-    // Inicializar buffer de HP (prevenção de flood de PATCH em modo P2P)
-    AVT_STATE._charHpBuffer = {};
-    AVT_STATE._charHpFlushTimer = null;
-    // [NPC-SYNC] NPC sync roda via WebRTC; chamada adiada para depois do RTNet.init() para
-    // que o modo P2P já esteja definido. Fallback abaixo para quando RTNet não existe.
-    _avtCarregarTodasAparencias();
-    // Restaura combates em andamento (persistência)
-    _avtCarregarBatalhasAtivas().catch(()=>{});
-    // Carregar catálogo e inventário via módulo de aventura (sem fluxo VTT)
-    if (typeof avtInvInit === 'function') avtInvInit(rpgId).catch(() => {});
+    char.custom_attrs.atributos = atrs;
+    if ((_manaFaltava || _novoManaMax !== (atrs.ManaMax ?? 10)) && char.id) _manaToSeed.push(char);
+  });
+  _manaToSeed.forEach(char => {
+    _avtSb('characters?id=eq.' + encodeURIComponent(char.id), {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: char.custom_attrs })
+    }).catch(() => {});
+  });
+  AVT_STATE.skills     = skills || [];
+  AVT_STATE.itemCatalog = itemCatalog || [];
+  AVT_STATE.attrDefs   = attrDefs  || [];
+  AVT_STATE.entidades = [];
+  AVT_STATE.npcTimers = {};
+  AVT_STATE._lastFrameTs = 0;
+  AVT_STATE.batalhas = [];
 
-    // Connect realtime for multiplayer sync
-    window.CURRENT_RPG = rpgId;
-    if (typeof iniciarRealtime === 'function') iniciarRealtime(rpgId);
+  await _avtCarregarAtribuicaoJogador(rpgId);
 
-    // Iniciar camada P2P (RTNet) — host election + snapshot + WebRTC quando disponível
-    if (typeof RTNet !== 'undefined') {
-      const _uid = SESSION?.user?.id || ('anon-' + Math.random().toString(36).slice(2));
-      RTNet.init({ rpgId, userId: _uid, isAventura: true }).then(() => {
-        RTNet.registrarSnapshotProvider(() => ({
-          // Exclui estado transitório de animação para reduzir tamanho do snapshot
-          entidades: (AVT_STATE.entidades || []).map(
-            ({ _waypoints, _lerpTo, _patrolDir, _patrolNext, _recent, _npcLastTick,
-               _onWaypointReached, _wpCallbackOwner, ...rest }) => rest
-          ),
-          batalhas:           AVT_STATE.batalhas,
-          globalLog:          (AVT_STATE.globalLog || []).slice(-20),
-          npcTimers:          AVT_STATE.npcTimers,
-          _fleeTracker:       AVT_STATE._fleeTracker,
-          _oocCooldowns:      AVT_STATE._oocCooldowns,
-          _oocStatusEffects:  AVT_STATE._oocStatusEffects,
-          batalhaAutoSuspensa:AVT_STATE.batalhaAutoSuspensa,
-        }));
-        // Timer de segurança: flush de HP buffered a cada 90s
-        if (AVT_STATE._charHpFlushTimer) clearInterval(AVT_STATE._charHpFlushTimer);
-        AVT_STATE._charHpFlushTimer = setInterval(() => {
-          try { if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('heartbeat-90s').catch(()=>{}); } catch(_) {}
-        }, 90_000);
-        // Auto-save a cada 10 minutos
-        if (AVT_STATE._autoSaveTimer) clearInterval(AVT_STATE._autoSaveTimer);
-        AVT_STATE._autoSaveTimer = setInterval(() => {
-          try { if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('autosave-10min').catch(()=>{}); } catch(_) {}
-          try { if (RTNet.isHost() && typeof _avtPersistirEstadoInimigos === 'function') _avtPersistirEstadoInimigos(); } catch(_) {}
-        }, 600_000);
-        // Save imediato quando um peer desconecta (host persiste estado do personagem daquele peer)
-        RTNet.onPeerLeave(userId => {
-          try {
-            if (!RTNet.isHost()) return;
-            const ent = (AVT_STATE.entidades || []).find(e => e.tipo === 'jogador' && (e.userId === userId || e.peerId === userId));
-            if (ent && ent.dbId && typeof ent.hp === 'number') {
-              AVT_STATE._charHpBuffer = AVT_STATE._charHpBuffer || {};
-              AVT_STATE._charHpBuffer[ent.dbId] = { hp: ent.hp };
-              if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('peer-leave').catch(()=>{});
-            }
-            if (typeof _avtPersistirEstadoInimigos === 'function') _avtPersistirEstadoInimigos();
-          } catch(_) {}
-        });
-        // [NPC-SYNC] iniciado aqui para que RTNet.mode já esteja definido ao entrar na função
-        try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
-        // Sala de espera: aguarda host eleito antes de iniciar o canvas
-        _avtSalaEspera(AVT_STATE.rpg.name, _iniciarCanvas);
-      }).catch(e => {
-        console.warn('[AVT] RTNet.init falhou:', e);
-        _iniciarCanvas(); // fallback: inicia canvas mesmo sem RTNet
-      });
-    } else {
-      // Sem RTNet: iniciar NPC-SYNC em modo Supabase e canvas diretamente
-      try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
-      _iniciarCanvas();
-    }
+  const t = AVT_STATE.rpg.theme_json || {};
+  if (t.dungeon_data?.tiles) {
+    AVT_STATE.dungeon = t.dungeon_data;
+  } else {
+    AVT_STATE.dungeon = _avtGerarDungeon(60, 40, 8);
+  }
+  _avtBausPreDungeonParaMapa();
+  AVT_STATE._tilesetConfig   = AVT_STATE.dungeon.tileset_config  || null;
+  AVT_STATE._tilesetImgUrl   = AVT_STATE.dungeon.tileset_img_url || null;
+  AVT_STATE._tilesetLoaded   = false;
+  AVT_STATE._tilesetTextures = {};
+  _avtPopularEntidades();
+  _avtAplicarEstadoInimigosPersistido();
+  AVT_STATE._charHpBuffer = {};
+  AVT_STATE._charHpFlushTimer = null;
+  _avtCarregarTodasAparencias();
+  _avtCarregarBatalhasAtivas().catch(()=>{});
+  if (typeof avtInvInit === 'function') avtInvInit(rpgId).catch(() => {});
+}
+window._avtCarregarDados = _avtCarregarDados;
 
-    // Carregar configurações de colisão persistidas
-    { const _lcCols = AVT_STATE.rpg?.theme_json?.level_config || {};
-      AVT_STATE.colisaoJogJog = _lcCols.colisao_jog_jog ?? false;
-      AVT_STATE.colisaoJogNpc = _lcCols.colisao_jog_npc ?? false; }
-
-    // Iniciar áudio da fase principal
-    if (typeof AudioManager !== 'undefined') {
-      const principalAudio = AVT_STATE.rpg?.theme_json?.audio || {};
-      AudioManager.onEnterPhase({ audio: principalAudio });
-    }
-
-    // Show screen — must happen BEFORE canvas init
-    document.getElementById('hub').style.display = 'none';
-    const screen = document.getElementById('aventura-screen');
-    if (!screen) throw new Error('Elemento #aventura-screen não encontrado');
-    screen.style.display = 'flex';
-
-    // Update header
-    document.getElementById('avt-nome').textContent = AVT_STATE.rpg.name;
-    document.getElementById('avt-nome').style.color = t.destaque || '#c8a84b';
-
-    // Exibe sala de espera enquanto aguarda eleição de host.
-    // Inicia fade-out do loading para que o overlay fique visível.
+function _avtIniciarCanvas() {
+  const seEl = document.getElementById('avt-sala-espera');
+  if (seEl) seEl.style.display = 'none';
+  // Double-RAF: aguarda reflow antes de medir dimensões do canvas
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    _avtCanvasInit();
+    _avtRenderLoop();
+    _avtRenderHpBar();
+    if (typeof _avtEnsurePixiParticles === 'function') _avtEnsurePixiParticles().catch(() => {});
     ocultarLoading();
-    const _seNomeEl = document.getElementById('avt-sala-nome');
-    if (_seNomeEl) _seNomeEl.textContent = AVT_STATE.rpg.name || '';
+    if (AVT_STATE._tilesetConfig && AVT_STATE._tilesetImgUrl) {
+      _avtCarregarTileset(AVT_STATE._tilesetImgUrl, AVT_STATE._tilesetConfig)
+        .catch(e => console.warn('[tileset] load failed:', e));
+    }
+  }));
+}
+window._avtIniciarCanvas = _avtIniciarCanvas;
 
-    // Função que inicia o canvas após o host ser eleito
-    const _iniciarCanvas = () => {
-      const seEl = document.getElementById('avt-sala-espera');
-      if (seEl) seEl.style.display = 'none';
-      // Double-RAF: wait for browser reflow before measuring canvas dimensions
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        _avtCanvasInit();
-        _avtRenderLoop();
-        _avtRenderHpBar();
-        // Pre-warm particle emitter so first battle animation starts immediately
-        if (typeof _avtEnsurePixiParticles === 'function') _avtEnsurePixiParticles().catch(() => {});
-        ocultarLoading();
-        if (AVT_STATE._tilesetConfig && AVT_STATE._tilesetImgUrl) {
-          _avtCarregarTileset(AVT_STATE._tilesetImgUrl, AVT_STATE._tilesetConfig)
-            .catch(e => console.warn('[tileset] load failed:', e));
-        }
+function _avtIniciarRTNet(rpgId, onHostElected) {
+  window.CURRENT_RPG = rpgId;
+  if (typeof iniciarRealtime === 'function') iniciarRealtime(rpgId);
+
+  if (typeof RTNet !== 'undefined') {
+    const _uid = SESSION?.user?.id || ('anon-' + Math.random().toString(36).slice(2));
+    RTNet.init({ rpgId, userId: _uid, isAventura: true }).then(() => {
+      RTNet.registrarSnapshotProvider(() => ({
+        entidades: (AVT_STATE.entidades || []).map(
+          ({ _waypoints, _lerpTo, _patrolDir, _patrolNext, _recent, _npcLastTick,
+             _onWaypointReached, _wpCallbackOwner, ...rest }) => rest
+        ),
+        batalhas:           AVT_STATE.batalhas,
+        globalLog:          (AVT_STATE.globalLog || []).slice(-20),
+        npcTimers:          AVT_STATE.npcTimers,
+        _fleeTracker:       AVT_STATE._fleeTracker,
+        _oocCooldowns:      AVT_STATE._oocCooldowns,
+        _oocStatusEffects:  AVT_STATE._oocStatusEffects,
+        batalhaAutoSuspensa:AVT_STATE.batalhaAutoSuspensa,
       }));
-    };
+      if (AVT_STATE._charHpFlushTimer) clearInterval(AVT_STATE._charHpFlushTimer);
+      AVT_STATE._charHpFlushTimer = setInterval(() => {
+        try { if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('heartbeat-90s').catch(()=>{}); } catch(_) {}
+      }, 90_000);
+      if (AVT_STATE._autoSaveTimer) clearInterval(AVT_STATE._autoSaveTimer);
+      AVT_STATE._autoSaveTimer = setInterval(() => {
+        try { if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('autosave-10min').catch(()=>{}); } catch(_) {}
+        try { if (RTNet.isHost() && typeof _avtPersistirEstadoInimigos === 'function') _avtPersistirEstadoInimigos(); } catch(_) {}
+      }, 600_000);
+      RTNet.onPeerLeave(uid => {
+        try {
+          if (!RTNet.isHost()) return;
+          const ent = (AVT_STATE.entidades || []).find(e => e.tipo === 'jogador' && (e.userId === uid || e.peerId === uid));
+          if (ent && ent.dbId && typeof ent.hp === 'number') {
+            AVT_STATE._charHpBuffer = AVT_STATE._charHpBuffer || {};
+            AVT_STATE._charHpBuffer[ent.dbId] = { hp: ent.hp };
+            if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('peer-leave').catch(()=>{});
+          }
+          if (typeof _avtPersistirEstadoInimigos === 'function') _avtPersistirEstadoInimigos();
+        } catch(_) {}
+      });
+      try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
+      _avtSalaEspera(AVT_STATE.rpg.name, onHostElected);
+    }).catch(e => {
+      console.warn('[AVT] RTNet.init falhou:', e);
+      onHostElected();
+    });
+  } else {
+    try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
+    onHostElected();
+  }
+}
+window._avtIniciarRTNet = _avtIniciarRTNet;
 
-    salvarNav('rpg', rpgId);
-  } catch(e) {
-    ocultarLoading();
-    mostrarToast('Erro ao carregar dungeon: ' + (e?.message || e), 'erro');
-    // Ensure hub is visible on error
-    const screen = document.getElementById('aventura-screen');
-    if (screen) screen.style.display = 'none';
-    document.getElementById('hub').style.display = 'block';
+function _avtMostrarAventuraScreen() {
+  const t = AVT_STATE.rpg?.theme_json || {};
+  const _lcCols = t.level_config || {};
+  AVT_STATE.colisaoJogJog = _lcCols.colisao_jog_jog ?? false;
+  AVT_STATE.colisaoJogNpc = _lcCols.colisao_jog_npc ?? false;
+  if (typeof AudioManager !== 'undefined' && typeof window._avtMenuPlayerMusicPref === 'undefined') {
+    AudioManager.onEnterPhase({ audio: t.audio || {} });
+  }
+  document.getElementById('hub').style.display = 'none';
+  const menuSc = document.getElementById('avt-menu-screen');
+  if (menuSc) menuSc.style.display = 'none';
+  const screen = document.getElementById('aventura-screen');
+  if (!screen) throw new Error('Elemento #aventura-screen não encontrado');
+  screen.style.display = 'flex';
+  document.getElementById('avt-nome').textContent = AVT_STATE.rpg.name;
+  document.getElementById('avt-nome').style.color = t.destaque || '#c8a84b';
+  ocultarLoading();
+  const _seNomeEl = document.getElementById('avt-sala-nome');
+  if (_seNomeEl) _seNomeEl.textContent = AVT_STATE.rpg.name || '';
+  salvarNav('rpg', AVT_STATE.rpgId);
+}
+window._avtMostrarAventuraScreen = _avtMostrarAventuraScreen;
+
+async function entrarAventura(rpgId) {
+  _avtCleanupListeners();
+  if (typeof avtMenuAbrir === 'function') {
+    await avtMenuAbrir(rpgId);
+  } else {
+    mostrarLoading('Carregando dungeon…');
+    try {
+      await _avtCarregarDados(rpgId);
+      _avtMostrarAventuraScreen();
+      _avtIniciarRTNet(rpgId, _avtIniciarCanvas);
+    } catch(e) {
+      ocultarLoading();
+      mostrarToast('Erro ao carregar dungeon: ' + (e?.message || e), 'erro');
+      const screen = document.getElementById('aventura-screen');
+      if (screen) screen.style.display = 'none';
+      document.getElementById('hub').style.display = 'block';
+    }
   }
 }
 
@@ -11925,7 +11914,21 @@ function _avtAtualizarUiPorRole() {
   const btnC = document.getElementById('avt-btn-combate');
   if (btnC) btnC.style.display = ehMestre ? 'inline-flex' : 'none';
 
-  // Garante existência do toggle de modo jogador para o mestre
+  // Atualiza indicador de host no header (evita topbar duplicada)
+  const hostInd = document.getElementById('avt-host-indicator');
+  if (hostInd) {
+    const rtAtivo = typeof RTNet !== 'undefined' && RTNet.initialized;
+    const euHost  = rtAtivo && RTNet.isHost();
+    hostInd.style.display = rtAtivo ? '' : 'none';
+    hostInd.textContent   = euHost ? '👑 Host' : '◯ Peer';
+    hostInd.style.color   = euHost ? '#c8a84b' : '#7a92aa';
+    hostInd.style.cursor  = euHost ? 'pointer' : 'default';
+    hostInd.onclick = euHost
+      ? () => { if (typeof window._avtAbrirModalTransferirHost === 'function') window._avtAbrirModalTransferirHost(); }
+      : null;
+  }
+
+  // Garante existência do toggle de modo jogador para o mestre (no header, não na topbar)
   let tog = document.getElementById('avt-btn-mestre-toggle');
   if (AVT_STATE.isMestre) {
     if (!tog) {
@@ -11944,21 +11947,12 @@ function _avtAtualizarUiPorRole() {
       tog.onmouseout  = () => { tog.style.opacity = '.85'; };
       tog.onclick = _avtToggleModoJogador;
     }
-    // Coloca o botão na topbar, à direita do botão Host (lado a lado)
-    const _topbar = document.getElementById('avt-topbar');
-    if (_topbar) {
-      if (tog.parentElement !== _topbar) _topbar.appendChild(tog);
-    } else {
-      // Fallback: tenta montar topbar primeiro
-      try { if (typeof window._avtRenderTopbar === 'function') window._avtRenderTopbar(); } catch(_) {}
-      const _tb2 = document.getElementById('avt-topbar');
-      if (_tb2) {
-        if (tog.parentElement !== _tb2) _tb2.appendChild(tog);
-      } else {
-        // Topbar ainda não existe — não criar o botão agora (será re-criado quando topbar existir)
-        if (tog.parentElement) tog.remove();
-        return;
-      }
+    // Coloca o botão no header (antes do host indicator)
+    const _header = document.getElementById('avt-header');
+    if (_header && tog.parentElement !== _header) {
+      const _hi = document.getElementById('avt-host-indicator');
+      if (_hi) _header.insertBefore(tog, _hi);
+      else _header.appendChild(tog);
     }
     tog.style.display = 'inline-flex';
     tog.textContent = AVT_STATE.mestreComoJogador
@@ -17760,7 +17754,34 @@ async function _avtEntrarFaseExtra(fase) {
   _avtLog(`🚪 Entrando: ${fase.nome}`);
   _avtCameraUpdate();
   _avtMestrePainelRender();
+  _avtPhaseHostCheck(fase.id);
 }
+
+function _avtPhaseHostCheck(faseId) {
+  try {
+    if (typeof RTNet === 'undefined' || !RTNet.initialized) return;
+    const jogadores = (AVT_STATE.membros || []).filter(m => m.role !== 'mestre');
+    if (jogadores.length === 0) return;
+    _avtBroadcast('avt_fase_mudou', { faseId });
+    _avtSalaEsperaFase(faseId);
+  } catch(_) {}
+}
+window._avtPhaseHostCheck = _avtPhaseHostCheck;
+
+function _avtSalaEsperaFase(faseId) {
+  const seEl = document.getElementById('avt-sala-espera');
+  if (!seEl) return;
+  const nomeEl = document.getElementById('avt-sala-nome');
+  if (nomeEl) {
+    const fase = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === faseId);
+    nomeEl.textContent = fase?.nome ? `Fase: ${fase.nome}` : 'Nova Fase';
+  }
+  seEl.style.display = 'flex';
+  _avtSalaEspera(nomeEl?.textContent || 'Nova Fase', () => {
+    if (seEl) seEl.style.display = 'none';
+  });
+}
+window._avtSalaEsperaFase = _avtSalaEsperaFase;
 
 function _avtVerificarSaida(x, y) {
   if (!AVT_STATE._faseAnterior) return;
@@ -22123,53 +22144,8 @@ try{
     document.head.appendChild(style);
   }
 
-  window._avtRenderTopbar = function() {
-    const wrap = document.getElementById('avt-canvas')?.parentElement;
-    if (!wrap) return false;
-    _ensureTopbarStyles();
-    if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
-
-    let bar = document.getElementById('avt-topbar');
-    if (!bar) {
-      bar = document.createElement('div');
-      bar.id = 'avt-topbar';
-      bar.innerHTML = `
-        <span id="avt-host-indicator">◯</span>
-        <span id="avt-p2p-indicator" style="display:none">🔴</span>
-      `;
-      wrap.appendChild(bar);
-      bar.querySelector('#avt-host-indicator').onclick = () => {
-        if (typeof _isHost === 'function' && _isHost()) window._avtAbrirModalTransferirHost();
-      };
-    }
-
-    // Banner de host morto
-    let banner = document.getElementById('avt-host-dead-banner');
-    if (!banner) {
-      banner = document.createElement('div');
-      banner.id = 'avt-host-dead-banner';
-      banner.innerHTML = `
-        <div style="font-weight:700">⚠ Host desconectado</div>
-        <div style="font-size:.85rem;opacity:.9">A aventura está pausada até alguém assumir o host.</div>
-        <button id="avt-host-assumir-btn">Assumir host</button>
-      `;
-      wrap.appendChild(banner);
-      banner.querySelector('#avt-host-assumir-btn').onclick = () => {
-        if (typeof RTNet !== 'undefined' && typeof RTNet.assumirHost === 'function') RTNet.assumirHost();
-      };
-    }
-
-    // Atualiza cursor/title do indicador conforme status de host
-    const ind = bar.querySelector('#avt-host-indicator');
-    if (ind) {
-      const eu = _isHost();
-      ind.style.cursor = eu ? 'pointer' : 'default';
-      ind.title = eu ? 'Clique para transferir o host' : 'Apenas o host pode transferir';
-    }
-    // Estado pausado
-    if (banner) banner.style.display = _isPaused() ? 'flex' : 'none';
-    return true;
-  };
+  // Topbar dinâmica desativada — indicador de host agora vive em #avt-header (index.html)
+  window._avtRenderTopbar = function() { return false; };
 
   window._avtAbrirModalTransferirHost = function() {
     if (typeof RTNet === 'undefined' || !RTNet.isHost()) return;
@@ -22212,10 +22188,10 @@ try{
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
   };
 
-  // ── Eventos do RTNet → re-render topbar ────────────────────────────────
+  // ── Eventos do RTNet → atualizar indicador de host no header ──────────
   try {
-    window.addEventListener('rtnet:hostchange', () => window._avtRenderTopbar());
-    window.addEventListener('rtnet:hostlost',   () => window._avtRenderTopbar());
+    window.addEventListener('rtnet:hostchange', () => { try { _avtAtualizarUiPorRole(); } catch(_){} });
+    window.addEventListener('rtnet:hostlost',   () => { try { _avtAtualizarUiPorRole(); } catch(_){} });
   } catch(_) {}
 
   // Auto-mount: aguarda canvas existir (até 30s) e refresca a cada 3s
