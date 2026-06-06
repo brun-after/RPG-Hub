@@ -6357,20 +6357,24 @@ function _avtMoverJogador(dx, dy) {
     AVT_STATE._caminhoDestino = null;
     if (!Array.isArray(jogador._waypoints)) jogador._waypoints = [];
     // Cancelamento antecipado: se o personagem ainda não completou 50% da animação
-    // para a próxima célula, cancela e volta à célula de origem para responder
-    // imediatamente à nova direção.
+    // para a próxima célula E está mudando de direção, cancela e volta à célula de
+    // origem para responder imediatamente. Mesma direção: não cancela (evita tremido).
     if (jogador._waypoints.length > 0) {
       const firstWp = jogador._waypoints[0];
-      const totalDist = Math.hypot(firstWp.x - jogador.x, firstWp.y - jogador.y);
-      if (totalDist > 0) {
-        const renderedDist = Math.hypot(
-          (jogador.renderX ?? jogador.x) - jogador.x,
-          (jogador.renderY ?? jogador.y) - jogador.y
-        );
-        if (renderedDist / totalDist < 0.5) {
-          jogador._waypoints.length = 0;
-          jogador.renderX = jogador.x;
-          jogador.renderY = jogador.y;
+      const animDx = firstWp.x - jogador.x;
+      const animDy = firstWp.y - jogador.y;
+      if (animDx !== dx || animDy !== dy) {
+        const totalDist = Math.hypot(animDx, animDy);
+        if (totalDist > 0) {
+          const renderedDist = Math.hypot(
+            (jogador.renderX ?? jogador.x) - jogador.x,
+            (jogador.renderY ?? jogador.y) - jogador.y
+          );
+          if (renderedDist / totalDist < 0.5) {
+            jogador._waypoints.length = 0;
+            jogador.renderX = jogador.x;
+            jogador.renderY = jogador.y;
+          }
         }
       }
     }
