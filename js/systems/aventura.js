@@ -1840,7 +1840,6 @@ Retorne APENAS um array JSON válido (sem markdown, sem explicações), com este
   {
     "nome": "Nome do personagem",
     "hp_max": 60,
-    "atributos": {"forca": 12, "destreza": 10, "constituicao": 12, "inteligencia": 8},
     "habilidades": [
       {"nome": "Golpe Pesado", "formula_dano": "1d8+2", "tipo_dano": "fisico", "cooldown_turnos": 1, "alcance_celulas": 1, "descricao": "Golpe poderoso com arma"},
       {"nome": "Escudo de Fé", "formula_dano": "0", "tipo_dano": "cura", "cooldown_turnos": 3, "alcance_celulas": 0, "descricao": "Cura 1d6 HP"}
@@ -1851,7 +1850,7 @@ Retorne APENAS um array JSON válido (sem markdown, sem explicações), com este
   }
 ]
 
-Regras de movimento: movimentoMax é quantas células o personagem pode se mover por turno (base 3). Personagens ágeis (destreza alta) devem ter movimentoMax maior (ex: ladino destreza 16 = movimentoMax 5). Tanques com destreza baixa podem ter movimentoMax 2. Balanceie o HP dos personagens considerando que precisam sobreviver ao dungeon. Cada personagem deve ter 2-3 habilidades.
+Regras de movimento: movimentoMax é quantas células o personagem pode se mover por turno (base 3). Guerreiros ágeis (ladino, ranger) devem ter movimentoMax maior (4–5). Tanques pesados podem ter movimentoMax 2. Balanceie o HP dos personagens considerando que precisam sobreviver ao dungeon. Cada personagem deve ter 2-3 habilidades.
 
 Pedidos dos jogadores:
 ${chars.map((p, i) => `Jogador ${i+1} (${p.nome || 'Sem nome'}): ${p.descricao || 'guerreiro genérico'}`).join('\n')}`;
@@ -1908,7 +1907,6 @@ async function _avtGerarPersonagensComIA() {
         if (g.nome && !p.nome) p.nome = g.nome;
         if (g.classe_aventura) p.classe_aventura = g.classe_aventura;
         if (g.aparencia_tipo) p.aparencia_tipo = g.aparencia_tipo;
-        p._atributosIA = g.atributos || {};
         p._habilidadesIA = g.habilidades || [];
       }
     });
@@ -1955,7 +1953,6 @@ function _avtAplicarPersonagensIA(gerados) {
       if (g.classe_aventura) p.classe_aventura = g.classe_aventura;
       if (g.aparencia_tipo) p.aparencia_tipo = g.aparencia_tipo;
       if (g.movimentoMax) p._movimentoMaxIA = g.movimentoMax;
-      p._atributosIA  = g.atributos   || {};
       p._habilidadesIA = g.habilidades || [];
     }
   });
@@ -2062,14 +2059,13 @@ async function aventuraCriarSubmit() {
           if (g.nome) chars[i].nome = g.nome;
           if (g.classe_aventura) chars[i].classe_aventura = g.classe_aventura;
           if (g.aparencia_tipo) chars[i].aparencia_tipo = g.aparencia_tipo;
-          chars[i]._atributosIA  = g.atributos   || {};
           chars[i]._habilidadesIA = g.habilidades || [];
         } else {
           chars.push({
             nome: g.nome || `Personagem ${i+1}`,
             cor: '#4fa3d1', classe_aventura: g.classe_aventura || 'guerreiro',
             aparencia_tipo: g.aparencia_tipo || 'npc_generico',
-            _atributosIA: g.atributos || {}, _habilidadesIA: g.habilidades || []
+            _habilidadesIA: g.habilidades || []
           });
         }
       });
@@ -2121,11 +2117,10 @@ async function aventuraCriarSubmit() {
     const cores = ['#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e8604c'];
     for (let i = 0; i < chars.length; i++) {
       const p = chars[i];
-      const atributosIA = p._atributosIA || {};
-      // Atributos: configuração manual > IA > vazio (sistema aplica defaults ao entrar)
+      // Atributos: apenas configuração manual via wizard; sistema aplica defaults ao entrar
       const atributosFinais = Object.keys(p._atributos||{}).length
-        ? { ...atributosIA, ...p._atributos, ...(p._recursos||{}) }
-        : (Object.keys(atributosIA).length ? atributosIA : {});
+        ? { ...p._atributos, ...(p._recursos||{}) }
+        : {};
       // Aparência configurada manualmente
       const aparenciaFinal = (p._aparencia?.img_frente || p._aparencia?.img_iso)
         ? { modo: 'imagem', img_frente: p._aparencia.img_frente || '', img_iso: p._aparencia.img_iso || '' }
@@ -12212,14 +12207,6 @@ function avtJogadorPainelRender(targetEl, opts) {
         </div>
       </div>
     </div>`;
-  } else {
-    html += `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0 6px;border-bottom:1px solid rgba(79,163,209,0.08);margin-bottom:2px">
-      <span style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa">${atMaxNivel ? `Nv ${nivel} <span style="color:#c8a84b">(MAX)</span>` : `Nv ${nivel} · ${xp}/${xpProximo} XP`}</span>
-      <div style="width:80px;height:4px;background:rgba(200,168,75,0.12);border-radius:2px;overflow:hidden">
-        <div style="height:100%;width:${xpPct}%;background:${atMaxNivel ? '#c8a84b' : 'linear-gradient(90deg,#b8922b,#ffe066,#c8a84b)'};border-radius:2px;transition:width .5s ease"></div>
-      </div>
-    </div>`;
   }
 
   // ── 2. Barras de recurso (Mana, Stamina, etc.) ─────────────────
@@ -12261,43 +12248,6 @@ function avtJogadorPainelRender(targetEl, opts) {
           <span style="font-family:monospace;font-size:0.65rem;color:${ef.cor};font-weight:700">${ef.label}</span>
         </div>`).join('')}
       </div>
-    </div>`;
-  }
-
-  // ── 4. Mini-painel de atributos (colapsável) ───────────────────
-  const atrs = char?.custom_attrs?.atributos || {};
-  const recursosNomes = new Set(recursos.flatMap(r => [r.nome, r.maxAttr]));
-  const atrsKeys = Object.keys(atrs).filter(k => !recursosNomes.has(k)).slice(0, 8);
-  const buffsAtivos = (char?.buffs || char?.custom_attrs?.buffs || []).filter(b => (b.turnos_restantes || 0) > 0);
-  const attrsAberto = AVT_STATE._ppAttrsOpen || false;
-
-  if (atrsKeys.length) {
-    html += `
-    <div style="border:1px solid rgba(79,163,209,0.1);border-radius:8px;overflow:hidden">
-      <div onclick="AVT_STATE._ppAttrsOpen=!AVT_STATE._ppAttrsOpen;avtJogadorPainelRender()"
-        style="padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:rgba(79,163,209,0.04)">
-        <span style="font-family:var(--fonte-d);font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em">📊 Atributos</span>
-        <span style="font-size:0.7rem;color:#7a92aa">${attrsAberto ? '▴' : '▾'}</span>
-      </div>
-      ${attrsAberto ? `
-      <div style="padding:10px 12px;display:flex;flex-direction:column;gap:0">
-        ${atrsKeys.map(k => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(79,163,209,0.05)">
-          <span style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa">${k}</span>
-          <span style="font-family:var(--fonte-d);font-size:0.72rem;color:#c8d8e8">${Math.round(parseFloat(atrs[k]) || 0)}</span>
-        </div>`).join('')}
-        ${buffsAtivos.length ? `
-        <div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(79,163,209,0.08)">
-          <div style="font-family:var(--fonte-d);font-size:0.52rem;color:#7a92aa;text-transform:uppercase;margin-bottom:3px">Efeitos Ativos</div>
-          ${buffsAtivos.map(b => {
-            const cor = b.tipo === 'debuff' || b.negativo ? '#e74c3c' : '#5ee09a';
-            return `<div style="display:flex;justify-content:space-between;font-family:var(--fonte-d);font-size:0.6rem;padding:2px 0">
-              <span style="color:${cor}">${b.tipo === 'debuff' ? '☠' : '✨'} ${b.nome}</span>
-              <span style="color:#7a92aa">${b.turnos_restantes}t</span>
-            </div>`;
-          }).join('')}
-        </div>` : ''}
-      </div>` : ''}
     </div>`;
   }
 
@@ -17353,7 +17303,6 @@ function _avtMestreAplicarPersonagensExterno() {
         deteccaoRaio: g.deteccaoRaio ?? 3,
         xpBase: isBoss ? 50 : 10,
         presetTipo: g.aparencia_tipo || 'npc_generico',
-        _atributosIA: g.atributos || {},
         _habilidadesIA: g.habilidades || []
       };
       AVT_STATE.entidades.push(ent);
