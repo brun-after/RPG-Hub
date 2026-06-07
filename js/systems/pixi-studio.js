@@ -1,6 +1,10 @@
 // ─── Studio Pixi — Visual Particle Animation Editor ──────────────────────────
 // Depends on: pixi-studio-presets.js, pixi-studio-avt.js, aventura.js (lazy)
 
+// Reference positions for attacker/target in preview canvas (relative to center)
+const PS_ATAC_REF = { x: -160, y: 40 };
+const PS_ALVO_REF = { x:  160, y: -20 };
+
 // ══ A — STATE ═════════════════════════════════════════════════════════════════
 var PIXI_STUDIO_STATE = {
   rpgId:          null,
@@ -20,6 +24,8 @@ var PIXI_STUDIO_STATE = {
   _worldRoot:     null,
   _scrubbing:     false,
   _kfDrag:        null,
+  _spDrag:        null,        // { layerId, ptIdx } spawn_path point drag
+  _layerDrag:     null,        // { layerId, edge, startX, origSt, origEt } timeline layer drag
   _lastTs:        0,
   _rafId:         0,
   _pickerCb:      null,
@@ -999,8 +1005,12 @@ function _psPreviewTick(ts) {
     if (PIXI_STUDIO_STATE.previewPlaying) {
       const t = Math.min(1, PIXI_STUDIO_STATE.previewTime / dur);
       const layer = _psGetLayer(layerId);
-      if (layer?.spawn_path?.length) {
-        const sp = _psInterpKf(layer.spawn_path, t);
+      const st = layer?.start_t ?? 0, et = layer?.end_t ?? 1;
+      const inRange = t >= st && t <= et;
+      em.emit = inRange;
+      if (inRange && layer?.spawn_path?.length) {
+        const tRel = et > st ? (t - st) / (et - st) : 0;
+        const sp = _psInterpKf(layer.spawn_path, tRel);
         if (sp) em.updateSpawnPos(sp.x ?? 0, sp.y ?? 0);
       }
     }
@@ -1044,8 +1054,11 @@ function _psPreviewRenderFrame(t) {
     if (layer.tipo === 'sprite') {
       const sp = PIXI_STUDIO_STATE._spriteMap.get(layer.id);
       if (!sp) continue;
+      const sst = layer.start_t ?? 0, set_ = layer.end_t ?? 1;
+      sp.visible = (t >= sst && t <= set_);
       if (!PIXI_STUDIO_STATE._drag || PIXI_STUDIO_STATE._drag.layerId !== layer.id) {
-        const kf = _psInterpKf(layer.keyframes, t);
+        const tRel = set_ > sst ? Math.max(0, Math.min(1, (t - sst) / (set_ - sst))) : 0;
+        const kf = _psInterpKf(layer.keyframes, tRel);
         if (kf) {
           const bs = layer.base_scale ?? 1;
           const sx = (kf.scale ?? 1) * bs * (layer.flip_x ? -1 : 1);
@@ -1271,6 +1284,26 @@ function psPreviewRebuildAll() {
   const bm = { add: PIXI.BLEND_MODES.ADD, normal: PIXI.BLEND_MODES.NORMAL, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY };
   const sorted = [...(cfg.layers || [])].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
 
+  // Attacker/target reference markers for path-based effects
+  const hasPath = (cfg.layers || []).some(l => l.spawn_path?.length);
+  if (hasPath) {
+    const refLine = new PIXI.Graphics();
+    refLine.lineStyle(1, 0xffffff, 0.07);
+    refLine.moveTo(cx + PS_ATAC_REF.x, cy + PS_ATAC_REF.y);
+    refLine.lineTo(cx + PS_ALVO_REF.x, cy + PS_ALVO_REF.y);
+    worldRoot.addChildAt(refLine, 0);
+    const atacTxt = new PIXI.Text('⚔', { fontSize: 16, fill: 0x4fa3d1, resolution: 2 });
+    atacTxt.anchor.set(0.5);
+    atacTxt.position.set(cx + PS_ATAC_REF.x, cy + PS_ATAC_REF.y);
+    atacTxt.alpha = 0.55;
+    worldRoot.addChild(atacTxt);
+    const alvoTxt = new PIXI.Text('👹', { fontSize: 16, fill: 0xe74c3c, resolution: 2 });
+    alvoTxt.anchor.set(0.5);
+    alvoTxt.position.set(cx + PS_ALVO_REF.x, cy + PS_ALVO_REF.y);
+    alvoTxt.alpha = 0.55;
+    worldRoot.addChild(alvoTxt);
+  }
+
   for (const layer of sorted) {
     if (!layer.visivel) continue;
     const container = new PIXI.Container();
@@ -1396,15 +1429,33 @@ function psTimelineRender() {
     <span style="position:absolute;left:${p*100}%;top:2px;font-size:0.55rem;color:var(--suave);transform:translateX(-50%)">${(p*dur/1000).toFixed(1)}s</span>`).join('')}
 </div>
 <div id="ps-tl-lanes">${layers.map(l => {
-  const kfDiamonds = (l.keyframes||[]).map((k,i) =>
-    `<div title="t=${k.t}" style="position:absolute;left:${k.t*100}%;top:50%;width:8px;height:8px;
-      background:${tipoColor[l.tipo]||'#fff'};transform:translate(-50%,-50%) rotate(45deg);cursor:ew-resize;z-index:2"
-      onmousedown="event.stopPropagation();psTimelineKfDragStart('${l.id}',${i},event)"></div>`).join('');
+  const st = l.start_t ?? 0, et = l.end_t ?? 1;
+  const leftPct  = (st * 100).toFixed(2) + '%';
+  const widthPct = ((et - st) * 100).toFixed(2) + '%';
+  const col = tipoColor[l.tipo] || '#fff';
+  const kfDiamonds = (l.keyframes||[]).map((k,i) => {
+    const kfPos = (st + k.t * (et - st)) * 100;
+    return `<div title="t=${k.t}" style="position:absolute;left:${kfPos}%;top:50%;width:8px;height:8px;
+      background:${col};transform:translate(-50%,-50%) rotate(45deg);cursor:ew-resize;z-index:4"
+      onmousedown="event.stopPropagation();psTimelineKfDragStart('${l.id}',${i},event)"></div>`;
+  }).join('');
+  const spTriangles = (l.spawn_path||[]).map((pt,i) => {
+    const ptPos = (st + pt.t * (et - st)) * 100;
+    return `<div title="${Math.round((st + pt.t*(et-st)) * dur)}ms" style="position:absolute;left:${ptPos}%;bottom:1px;width:0;height:0;
+      border-left:4px solid transparent;border-right:4px solid transparent;border-top:7px solid #f39c12;
+      transform:translateX(-50%);cursor:ew-resize;z-index:5"
+      onmousedown="event.stopPropagation();psTimelineSpawnPathDragStart('${l.id}',${i},event)"></div>`;
+  }).join('');
   return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
     <div style="min-width:70px;font-size:0.62rem;color:var(--suave);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.nome}</div>
     <div style="flex:1;position:relative;height:16px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:visible">
-      <div style="position:absolute;inset:0;background:${tipoColor[l.tipo]||'#444'};opacity:0.35;border-radius:3px"></div>
-      ${kfDiamonds}
+      <div style="position:absolute;left:${leftPct};width:${widthPct};top:0;bottom:0;background:${col};opacity:0.35;border-radius:3px;cursor:grab"
+        onmousedown="event.stopPropagation();psTimelineLayerDragStart('${l.id}','move',event)"></div>
+      <div style="position:absolute;left:${leftPct};width:6px;top:0;bottom:0;background:${col};opacity:0.7;border-radius:3px 0 0 3px;cursor:w-resize;transform:translateX(-2px);z-index:3"
+        onmousedown="event.stopPropagation();psTimelineLayerDragStart('${l.id}','start',event)"></div>
+      <div style="position:absolute;left:calc(${leftPct} + ${widthPct});width:6px;top:0;bottom:0;background:${col};opacity:0.7;border-radius:0 3px 3px 0;cursor:e-resize;transform:translateX(-4px);z-index:3"
+        onmousedown="event.stopPropagation();psTimelineLayerDragStart('${l.id}','end',event)"></div>
+      ${kfDiamonds}${spTriangles}
     </div>
   </div>`;
 }).join('')}</div>`;
@@ -1458,6 +1509,77 @@ function _psKfDragEnd() {
   PIXI_STUDIO_STATE._kfDrag = null;
   document.removeEventListener('mousemove', _psKfDragMove);
   document.removeEventListener('mouseup', _psKfDragEnd);
+}
+
+// ── Layer timeline drag (move block / resize start / resize end) ─────────────
+function psTimelineLayerDragStart(layerId, edge, e) {
+  const ruler = document.getElementById('ps-tl-ruler');
+  const rect  = ruler?.getBoundingClientRect();
+  if (!rect) return;
+  const layer = _psGetLayer(layerId);
+  if (!layer) return;
+  PIXI_STUDIO_STATE._layerDrag = {
+    layerId, edge,
+    startX: e.clientX,
+    rulerW: rect.width,
+    origSt: layer.start_t ?? 0,
+    origEt: layer.end_t   ?? 1,
+  };
+  document.addEventListener('mousemove', _psLayerDragMove);
+  document.addEventListener('mouseup',   _psLayerDragEnd);
+}
+function _psLayerDragMove(e) {
+  const d = PIXI_STUDIO_STATE._layerDrag;
+  if (!d) return;
+  const layer = _psGetLayer(d.layerId);
+  if (!layer) return;
+  const dt = (e.clientX - d.startX) / d.rulerW;
+  if (d.edge === 'move') {
+    const dur = d.origEt - d.origSt;
+    const newSt = Math.max(0, Math.min(1 - dur, d.origSt + dt));
+    layer.start_t = Math.round(newSt * 1000) / 1000;
+    layer.end_t   = Math.round((newSt + dur) * 1000) / 1000;
+  } else if (d.edge === 'start') {
+    layer.start_t = Math.round(Math.max(0, Math.min(d.origEt - 0.05, d.origSt + dt)) * 1000) / 1000;
+  } else if (d.edge === 'end') {
+    layer.end_t   = Math.round(Math.min(1, Math.max(d.origSt + 0.05, d.origEt + dt)) * 1000) / 1000;
+  }
+  _psSetDirty(true);
+  psTimelineRender();
+}
+function _psLayerDragEnd() {
+  PIXI_STUDIO_STATE._layerDrag = null;
+  document.removeEventListener('mousemove', _psLayerDragMove);
+  document.removeEventListener('mouseup',   _psLayerDragEnd);
+}
+
+// ── Spawn_path point timing drag ─────────────────────────────────────────────
+function psTimelineSpawnPathDragStart(layerId, ptIdx, e) {
+  PIXI_STUDIO_STATE._spDrag = { layerId, ptIdx };
+  document.addEventListener('mousemove', _psSpawnPathDragMove);
+  document.addEventListener('mouseup',   _psSpawnPathDragEnd);
+}
+function _psSpawnPathDragMove(e) {
+  const d = PIXI_STUDIO_STATE._spDrag;
+  if (!d) return;
+  const ruler = document.getElementById('ps-tl-ruler');
+  const rect  = ruler?.getBoundingClientRect();
+  if (!rect) return;
+  const tAbs  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  const layer = _psGetLayer(d.layerId);
+  const st = layer?.start_t ?? 0, et = layer?.end_t ?? 1;
+  const range = et - st;
+  if (range > 0 && layer?.spawn_path?.[d.ptIdx]) {
+    const tRel = Math.max(0, Math.min(1, (tAbs - st) / range));
+    layer.spawn_path[d.ptIdx].t = Math.round(tRel * 1000) / 1000;
+    _psSetDirty(true);
+    psTimelineRender();
+  }
+}
+function _psSpawnPathDragEnd() {
+  PIXI_STUDIO_STATE._spDrag = null;
+  document.removeEventListener('mousemove', _psSpawnPathDragMove);
+  document.removeEventListener('mouseup',   _psSpawnPathDragEnd);
 }
 
 // ══ G — BEHAVIOR PANEL ════════════════════════════════════════════════════════
