@@ -265,8 +265,11 @@ class _AudioManager {
         src:    [url],
         volume: vol,
         html5:  true,
-        onloaderror: (_id, err) => console.warn('[SFX] Falha ao carregar:', url, err),
-        onplayerror:  (_id, err) => console.warn('[SFX] Falha ao tocar:',    url, err),
+        onloaderror: (_id, err) => {
+          console.warn('[SFX] Falha ao carregar:', url, err);
+          try { mostrarToast('Falha ao carregar áudio. Verifique se a URL é um link direto para .mp3, .wav ou .ogg.', 'aviso'); } catch (_) {}
+        },
+        onplayerror:  (_id, err) => console.warn('[SFX] Falha ao tocar:', url, err),
       });
       this._sfxCache[url] = howl;
     }

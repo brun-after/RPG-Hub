@@ -20172,7 +20172,7 @@ async function _avtAbrirModalSkill(skId, entId) {
               <option value="">— Automático —</option>
               ${_sfxOptsHTML(_isCastUrl ? '' : _audCast)}
             </select>
-            <input id="avt-skm-audio-cast-url" type="url" placeholder="URL personalizada"
+            <input id="avt-skm-audio-cast-url" type="url" placeholder="URL direta (.mp3, .wav ou .ogg)"
               value="${_isCastUrl ? _audCast.replace(/"/g,'&quot;') : ''}" style="${inpSt}">
           </div>
           <div>
@@ -20181,7 +20181,7 @@ async function _avtAbrirModalSkill(skId, entId) {
               <option value="">— Automático —</option>
               ${_sfxOptsHTML(_isImpactUrl ? '' : _audImpact)}
             </select>
-            <input id="avt-skm-audio-impact-url" type="url" placeholder="URL personalizada"
+            <input id="avt-skm-audio-impact-url" type="url" placeholder="URL direta (.mp3, .wav ou .ogg)"
               value="${_isImpactUrl ? _audImpact.replace(/"/g,'&quot;') : ''}" style="${inpSt}">
           </div>
         </div>
@@ -20335,13 +20335,23 @@ function _avtPixiStudioSelecionar(skId, animId, animNome) {
   if (searchEl) searchEl.value = animNome || '';
 }
 
+function _isSfxUrlDireta(url) {
+  return /\.(mp3|wav|ogg|m4a|aac|flac)(\?[^#]*)?$/i.test(url.split('#')[0]);
+}
+
 function _avtSkTestarSfx(tipo) {
   if (typeof AudioManager === 'undefined') { mostrarToast('AudioManager não disponível', 'aviso'); return; }
   const vol    = parseFloat(document.getElementById('avt-skm-audio-volume')?.value) || 0.75;
   const urlEl  = document.getElementById(`avt-skm-audio-${tipo}-url`);
   const selEl  = document.getElementById(`avt-skm-audio-${tipo}-sel`);
   const sfxId  = urlEl?.value.trim() || selEl?.value || '';
-  if (sfxId) { AudioManager.playSFX(sfxId, { volume: vol }); return; }
+  if (sfxId) {
+    if (sfxId.startsWith('http') && !_isSfxUrlDireta(sfxId)) {
+      mostrarToast('Use uma URL direta para o arquivo de áudio (.mp3, .wav ou .ogg). Links de páginas como Epidemic Sound não funcionam — baixe o arquivo e faça upload.', 'aviso');
+      return;
+    }
+    AudioManager.playSFX(sfxId, { volume: vol }); return;
+  }
   // Auto-detectar pelo tipo de animação atual
   const animTipo = document.getElementById('avt-skm-anim-tipo')?.value || '';
   const tipoDano = document.getElementById('avt-skm-tipo-dano')?.value || '';
@@ -20381,8 +20391,10 @@ async function _avtSfxBibliotecaUpload() {
   const statusEl = document.getElementById('avt-sfx-up-status');
   if (!file) return;
   if (!nome) { mostrarToast('Informe um nome para o som', 'aviso'); return; }
-  const tiposPermitidos = ['audio/mpeg','audio/wav','audio/ogg','audio/x-wav','audio/wave'];
-  if (!tiposPermitidos.includes(file.type) && !/\.(mp3|wav|ogg)$/i.test(file.name)) {
+  const tiposPermitidos = ['audio/mpeg','audio/mp3','audio/mpeg3','audio/x-mpeg','audio/x-mpeg-3',
+                           'audio/wav','audio/ogg','audio/x-wav','audio/wave','audio/x-ogg',
+                           'audio/aac','audio/m4a','audio/x-m4a','audio/flac','audio/x-flac',''];
+  if (!tiposPermitidos.includes(file.type) && !/\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(file.name)) {
     mostrarToast('Formato não suportado. Use .mp3, .wav ou .ogg', 'erro'); return;
   }
   if (file.size > 8 * 1024 * 1024) { mostrarToast('Arquivo muito grande (máx. 8 MB)', 'erro'); return; }
@@ -20390,7 +20402,9 @@ async function _avtSfxBibliotecaUpload() {
   _show('Enviando…', '#7ec8f0');
   try {
     const userId = SESSION?.user?.id || 'anon';
-    const url = await uploadToStorage(file, `sfx/${userId}`);
+    // Envia como octet-stream para contornar restrições de MIME type do bucket
+    const uploadFile = new File([file], file.name, { type: 'application/octet-stream' });
+    const url = await uploadToStorage(uploadFile, `sfx/${userId}`);
     const id  = 'usr_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,6);
     const bib = [...(AudioManager._userSfxBiblioteca || []), { id, nome, url, cat }];
     await sfxBibliotecaSalvar(bib);
@@ -20478,6 +20492,11 @@ async function _avtModalSkillSalvar() {
     const _aI = document.getElementById('avt-skm-audio-impact-url')?.value.trim()
               || document.getElementById('avt-skm-audio-impact-sel')?.value || '';
     const _aV = parseFloat(document.getElementById('avt-skm-audio-volume')?.value) || 0.75;
+    // Avisar se URL parece ser página web e não arquivo de áudio direto
+    [_aC, _aI].forEach(u => {
+      if (u && u.startsWith('http') && typeof _isSfxUrlDireta === 'function' && !_isSfxUrlDireta(u))
+        mostrarToast('Aviso: a URL de áudio não parece apontar para um arquivo direto (.mp3, .wav, .ogg). O som pode não funcionar.', 'aviso');
+    });
     if (_aC || _aI) {
       animacao.audio = {};
       if (_aC) animacao.audio.cast   = _aC;
