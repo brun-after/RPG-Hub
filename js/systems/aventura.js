@@ -2921,16 +2921,20 @@ function _avtGerarDungeonProcedural() {
 
 // Registra timer de paciência para um inimigo
 function _avtInitNpcTimer(ent) {
+  const _baseSecs = (AVT_STATE.rpg?.theme_json?.level_config?.paciencia_base_s ?? 10);
+  const maxMs = _baseSecs * 1000;
   AVT_STATE.npcTimers[ent.id] = {
-    patience: ent.pacienciaSecs * 1000,
-    maxPatience: ent.pacienciaSecs * 1000,
+    patience: maxMs,
+    maxPatience: maxMs,
     ativo: false,
     isPursuing: false,
     targetId: null,
     tentativeTargetId: null,
     pursuitStepTimer: 0,
     inactionTimer: 0,
-    attackCooldownTimer: 0
+    attackCooldownTimer: 0,
+    desistirCheckTimer: 0,
+    _pacienciaRolada: false,
   };
 }
 
@@ -7380,12 +7384,7 @@ function _avtCheckProximidadeInimigos(jogadorMovendo) {
     const raio = ini.deteccaoRaio ?? 3;
     const emRaio = Math.abs(jogadorMovendo.x - ini.x) + Math.abs(jogadorMovendo.y - ini.y) <= raio;
     if (!AVT_STATE.npcTimers[ini.id]) {
-      const _charJog = AVT_STATE.chars.find(c => c.nome === jogadorMovendo.nome || c.id === jogadorMovendo.dbId);
-      const _normCarJ = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-      const _carismaKeyJ = Object.keys(_charJog?.custom_attrs?.atributos || {}).find(k => _normCarJ(k) === 'carisma');
-      const _carismaJog = parseFloat(_carismaKeyJ ? _charJog.custom_attrs.atributos[_carismaKeyJ] : 10) || 10;
-      const maxMs = _avtRolarPacienciaNpc(_carismaJog) * 1000;
-      AVT_STATE.npcTimers[ini.id] = { patience: maxMs, maxPatience: maxMs, ativo: false, isPursuing: false, targetId: null, tentativeTargetId: null, pursuitStepTimer: 0, inactionTimer: 0, attackCooldownTimer: 0, desistirCheckTimer: 0 };
+      _avtInitNpcTimer(ini);
     }
     const timer = AVT_STATE.npcTimers[ini.id];
     if (timer.isPursuing) {
@@ -7396,17 +7395,30 @@ function _avtCheckProximidadeInimigos(jogadorMovendo) {
         timer.tentativeTargetId = jogadorMovendo.id;
       } else if (timer.tentativeTargetId === jogadorMovendo.id) {
         timer.ativo = false;
-        timer.patience = timer.maxPatience;
         timer.tentativeTargetId = null;
       }
       return;
     }
     if (emRaio) {
+      // Rolar paciência pela primeira vez (com carisma do jogador) quando ele entra no raio
+      if (!timer._pacienciaRolada) {
+        const _charJog = AVT_STATE.chars.find(c => c.nome === jogadorMovendo.nome || c.id === jogadorMovendo.dbId);
+        const _normCarJ = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+        const _carismaKeyJ = Object.keys(_charJog?.custom_attrs?.atributos || {}).find(k => _normCarJ(k) === 'carisma');
+        const _carismaJog = parseFloat(_carismaKeyJ ? _charJog?.custom_attrs?.atributos[_carismaKeyJ] : 10) || 10;
+        const maxMs = _avtRolarPacienciaNpc(_carismaJog) * 1000;
+        timer.patience = maxMs;
+        timer.maxPatience = maxMs;
+        timer._pacienciaRolada = true;
+      }
       timer.ativo = true;
       timer.targetId = jogadorMovendo.id;
-    } else {
+    } else if (!timer.targetId || timer.targetId === jogadorMovendo.id) {
+      // Só zera se quem saiu do raio é o alvo atual (ignora outros jogadores do grupo fora do raio)
       timer.ativo = false;
       timer.patience = timer.maxPatience;
+      timer.targetId = null;
+      timer._pacienciaRolada = false; // nova rolagem na próxima aproximação
     }
   });
 }
