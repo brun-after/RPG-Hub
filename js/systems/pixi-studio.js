@@ -878,40 +878,48 @@ async function psPreviewMount() {
 
   const w = canvas.width  || 480;
   const h = canvas.height || 300;
-  const glOk = _psCheckWebGLOK();
 
-  const buildApp = (forceCanvas) => new PIXI.Application({
-    view: canvas, width: w, height: h,
-    backgroundAlpha: 1, backgroundColor: 0x060a10, antialias: false,
-    forceCanvas: !!forceCanvas,
-  });
+  // Hard pre-check: PIXI v7 removed the Canvas2D renderer, so a broken WebGL
+  // context (sandbox/headless returning 0 for shader limits) makes
+  // `new PIXI.Application(...)` throw "Invalid value of `0` passed to
+  // checkMaxIfStatementsInShader". There is no `forceCanvas` fallback anymore —
+  // we just paint a friendly message and bail out.
+  if (!_psCheckWebGLOK()) {
+    console.warn('[pixi-studio] WebGL not usable in this environment — preview disabled');
+    _psDrawUnsupportedMessage(canvas);
+    return;
+  }
 
   let app = null;
   try {
-    app = buildApp(!glOk);
+    app = new PIXI.Application({
+      view: canvas, width: w, height: h,
+      backgroundAlpha: 1, backgroundColor: 0x060a10, antialias: false,
+    });
   } catch (e) {
-    console.warn('[pixi-studio] WebGL init failed, retrying with Canvas2D fallback', e);
-    try {
-      app = buildApp(true);
-    } catch (e2) {
-      console.warn('[pixi-studio] preview mount failed', e2);
-      _psDrawUnsupportedMessage(canvas);
-      return;
-    }
+    console.warn('[pixi-studio] preview mount failed', e);
+    _psDrawUnsupportedMessage(canvas);
+    return;
   }
 
   try {
-    app.ticker.stop(); // we drive updates via RAF, not PIXI ticker
     PIXI_STUDIO_STATE.previewApp = app;
     const worldRoot = new PIXI.Container();
     app.stage.addChild(worldRoot);
     PIXI_STUDIO_STATE._worldRoot = worldRoot;
-    // Enable stage interaction for drag
-    app.stage.eventMode = 'static';
-    app.stage.hitArea = new PIXI.Rectangle(0, 0, w, h);
-    app.stage.on('pointermove', _psDragMove);
-    app.stage.on('pointerup', _psDragEnd);
-    app.stage.on('pointerupoutside', _psDragEnd);
+
+    // Enable stage interaction for drag — done AFTER the renderer is built.
+    // Guarded so a missing eventMode/hitArea API (older PIXI) does not abort mount.
+    try {
+      app.stage.eventMode = 'static';
+      app.stage.hitArea = new PIXI.Rectangle(0, 0, w, h);
+      app.stage.on('pointermove', _psDragMove);
+      app.stage.on('pointerup', _psDragEnd);
+      app.stage.on('pointerupoutside', _psDragEnd);
+    } catch (eEvt) {
+      console.warn('[pixi-studio] stage events disabled', eEvt);
+    }
+
     psPreviewRebuildAll();
     // Start idle RAF loop immediately — emitters run even before Play is pressed
     PIXI_STUDIO_STATE._lastTs = 0;
