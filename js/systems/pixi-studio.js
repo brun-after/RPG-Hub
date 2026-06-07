@@ -26,7 +26,6 @@ var PIXI_STUDIO_STATE = {
   _kfDrag:        null,
   _spDrag:        null,        // { layerId, ptIdx } spawn_path point drag
   _layerDrag:     null,        // { layerId, edge, startX, origSt, origEt } timeline layer drag
-  _resizeObserver: null,
   _lastTs:        0,
   _rafId:         0,
   _pickerCb:      null,
@@ -876,10 +875,6 @@ function _psDrawUnsupportedMessage(canvas) {
 }
 
 let _psResizeTimer = null;
-function _psOnResize() {
-  clearTimeout(_psResizeTimer);
-  _psResizeTimer = setTimeout(() => { if (PIXI_STUDIO_STATE.previewApp) psPreviewMount(); }, 150);
-}
 
 async function psPreviewMount() {
   const canvas = document.getElementById('ps-preview-canvas');
@@ -894,15 +889,6 @@ async function psPreviewMount() {
   const h = canvas.offsetHeight || 300;
   canvas.width  = w;
   canvas.height = h;
-
-  // Watch for container size changes and remount
-  if (!PIXI_STUDIO_STATE._resizeObserver) {
-    const wrap = document.getElementById('ps-preview-wrap');
-    if (wrap && typeof ResizeObserver !== 'undefined') {
-      PIXI_STUDIO_STATE._resizeObserver = new ResizeObserver(_psOnResize);
-      PIXI_STUDIO_STATE._resizeObserver.observe(wrap);
-    }
-  }
 
   // Hard pre-check: PIXI v7 removed the Canvas2D renderer, so a broken WebGL
   // context (sandbox/headless returning 0 for shader limits) makes
@@ -929,6 +915,8 @@ async function psPreviewMount() {
 
   try {
     PIXI_STUDIO_STATE.previewApp = app;
+    // PIXI sets inline width/height styles — restore CSS fill
+    canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:6px;border:1px solid var(--borda)';
     const worldRoot = new PIXI.Container();
     app.stage.addChild(worldRoot);
     PIXI_STUDIO_STATE._worldRoot = worldRoot;
@@ -964,10 +952,6 @@ function psPreviewUnmount() {
   PIXI_STUDIO_STATE.previewPlaying = false;
   PIXI_STUDIO_STATE.previewTime = 0;
   _psDestroyAllEmitters();
-  if (PIXI_STUDIO_STATE._resizeObserver) {
-    PIXI_STUDIO_STATE._resizeObserver.disconnect();
-    PIXI_STUDIO_STATE._resizeObserver = null;
-  }
   if (PIXI_STUDIO_STATE.previewApp) {
     try { PIXI_STUDIO_STATE.previewApp.destroy(false, { children: true, texture: false }); } catch (_) {}
     PIXI_STUDIO_STATE.previewApp = null;
