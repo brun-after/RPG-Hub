@@ -65,6 +65,116 @@ function _psAvtToScreen(ent) {
   };
 }
 
+// ── Interpolate keyframes at time t ───────────────────────────────────────
+function _psAvtInterpKf(kfs, t) {
+  if (!kfs || !kfs.length) return null;
+  if (t <= kfs[0].t) return Object.assign({}, kfs[0]);
+  if (t >= kfs[kfs.length - 1].t) return Object.assign({}, kfs[kfs.length - 1]);
+  for (let i = 0; i < kfs.length - 1; i++) {
+    if (t >= kfs[i].t && t <= kfs[i + 1].t) {
+      const f = (t - kfs[i].t) / (kfs[i + 1].t - kfs[i].t);
+      const lerp = (a, b) => a + (b - a) * f;
+      return {
+        x:        lerp(kfs[i].x        ?? 0, kfs[i + 1].x        ?? 0),
+        y:        lerp(kfs[i].y        ?? 0, kfs[i + 1].y        ?? 0),
+        alpha:    lerp(kfs[i].alpha    ?? 1, kfs[i + 1].alpha    ?? 1),
+        scale:    lerp(kfs[i].scale    ?? 1, kfs[i + 1].scale    ?? 1),
+        rotation: lerp(kfs[i].rotation ?? 0, kfs[i + 1].rotation ?? 0),
+      };
+    }
+  }
+  return null;
+}
+
+// ── Render sprite layers (tipo:'sprite') as animated PIXI sprites ──────────
+// behavior: 'projectile' → sprite travels startScr→endScr over durMs
+//           other        → sprite anchors at startScr + keyframe offsets
+async function _psAvtRenderSprites(cfg, startScr, endScr, behavior) {
+  const spriteLayers = (cfg.layers || []).filter(l => l.visivel && l.tipo === 'sprite' && l.texture_url);
+  if (!spriteLayers.length) return;
+
+  await _avtEnsurePixiParticles();
+  if (typeof PIXI === 'undefined') return;
+
+  const canvas = AVT_STATE.canvas;
+  if (!canvas) return;
+
+  const durMs = cfg.duracao_ms || 1000;
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.width  = canvas.width;
+  overlayCanvas.height = canvas.height;
+  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
+  canvas.parentElement?.appendChild(overlayCanvas);
+
+  let app;
+  try {
+    app = new PIXI.Application({
+      view: overlayCanvas,
+      width: overlayCanvas.width,
+      height: overlayCanvas.height,
+      backgroundAlpha: 0,
+      antialias: false,
+    });
+  } catch (e) {
+    overlayCanvas.remove();
+    return;
+  }
+
+  const bmMap = {
+    add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN,
+    multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL,
+  };
+
+  const sprites = [];
+  for (const l of spriteLayers) {
+    try {
+      const tex = PIXI.Texture.from(l.texture_url);
+      const sp = new PIXI.Sprite(tex);
+      sp.anchor.set(0.5);
+      sp.blendMode = bmMap[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
+      app.stage.addChild(sp);
+      sprites.push({ sp, layer: l });
+    } catch (e) {
+      console.warn('[pixi-studio-avt] Sprite texture error', l.texture_url, e);
+    }
+  }
+
+  const isProjectile = behavior === 'projectile';
+  const startMs = performance.now();
+
+  const tick = () => {
+    const elapsed = performance.now() - startMs;
+    const t = Math.min(elapsed / durMs, 1);
+    for (const { sp, layer } of sprites) {
+      const bs = layer.base_scale ?? 1;
+      const kf = _psAvtInterpKf(layer.keyframes, t);
+      if (!kf) continue;
+
+      if (isProjectile) {
+        sp.x = startScr.x + (endScr.x - startScr.x) * t;
+        sp.y = startScr.y + (endScr.y - startScr.y) * t;
+      } else {
+        sp.x = startScr.x + (kf.x ?? 0);
+        sp.y = startScr.y + (kf.y ?? 0);
+      }
+
+      const sv = (kf.scale ?? 1) * bs;
+      sp.scale.x = sv * (layer.flip_x ? -1 : 1);
+      sp.scale.y = sv * (layer.flip_y ? -1 : 1);
+      sp.alpha    = kf.alpha    ?? 1;
+      sp.rotation = ((kf.rotation ?? 0) * Math.PI) / 180;
+    }
+  };
+
+  app.ticker.add(tick);
+
+  setTimeout(() => {
+    app.ticker.remove(tick);
+    try { app.destroy(true, { children: true }); } catch (_) {}
+    overlayCanvas.remove();
+  }, durMs + 200);
+}
+
 // ── Main public entry point ────────────────────────────────────────────────
 // Returns: delay in ms (travel time for projectile behavior, else 0)
 async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
@@ -107,6 +217,7 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
       if (avtCfg && typeof _avtPixiParticleAnim === 'function') {
         _avtPixiParticleAnim(avtCfg, atacScr, alvoScr, posicao);
       }
+      _psAvtRenderSprites(cfg, atacScr, alvoScr, behavior);
       return 0;
   }
 }
@@ -130,6 +241,9 @@ function _psAvtProjectile(cfg, atacScr, alvoScr) {
       _avtPixiParticleAnim(avtCfg, atacScr, alvoScr, 'alvo');
     }
   }, speedMs);
+
+  // Sprite layers travel from attacker to target over the full duration
+  _psAvtRenderSprites(cfg, atacScr, alvoScr, 'projectile');
 
   return speedMs;
 }
@@ -182,23 +296,41 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
     const startScr = _psAvtToScreen(targetEnt);
 
     for (const l of (cfg.layers || [])) {
-      if (!l.visivel || l.tipo !== 'emitter' || !l.emitter) continue;
-      const container = new PIXI.Container();
-      container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
-      worldRoot.addChild(container);
+      if (!l.visivel) continue;
+      if (l.tipo === 'emitter' && l.emitter) {
+        const container = new PIXI.Container();
+        container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
+        worldRoot.addChild(container);
 
-      let emitCfg = Object.assign({}, l.emitter);
-      const tex = l.texture_url
-        ? PIXI.Texture.from(l.texture_url)
-        : _avtProcTextures(l.texture || 'spark');
-      const texArr = [tex || PIXI.Texture.WHITE];
-      if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) {
-        try { emitCfg = PIXI.particles.upgradeConfig(emitCfg, texArr); } catch (_) {}
+        let emitCfg = Object.assign({}, l.emitter);
+        const tex = l.texture_url
+          ? PIXI.Texture.from(l.texture_url)
+          : _avtProcTextures(l.texture || 'spark');
+        const texArr = [tex || PIXI.Texture.WHITE];
+        if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) {
+          try { emitCfg = PIXI.particles.upgradeConfig(emitCfg, texArr); } catch (_) {}
+        }
+        const em = new PIXI.particles.Emitter(container, emitCfg);
+        em.updateSpawnPos(startScr.x, startScr.y);
+        em.emit = true;
+        emitters.push(em);
+      } else if (l.tipo === 'sprite' && l.texture_url) {
+        try {
+          const tex = PIXI.Texture.from(l.texture_url);
+          const sp = new PIXI.Sprite(tex);
+          sp.anchor.set(0.5);
+          sp.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
+          const bs = l.base_scale ?? 1;
+          sp.scale.x = bs * (l.flip_x ? -1 : 1);
+          sp.scale.y = bs * (l.flip_y ? -1 : 1);
+          sp.x = startScr.x;
+          sp.y = startScr.y;
+          worldRoot.addChild(sp);
+          emitters.push({ _isSprite: true, sp, layer: l, startMs: performance.now(), durMs });
+        } catch (e) {
+          console.warn('[pixi-studio-avt] Follow sprite texture error', l.texture_url, e);
+        }
       }
-      const em = new PIXI.particles.Emitter(container, emitCfg);
-      em.updateSpawnPos(startScr.x, startScr.y);
-      em.emit = true;
-      emitters.push(em);
     }
 
     let lastTs = performance.now();
@@ -208,7 +340,22 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
       lastTs = now;
       const scr = _psAvtToScreen(targetEnt);
       for (const em of emitters) {
-        if (!em.destroyed) { em.updateSpawnPos(scr.x, scr.y); em.update(delta); }
+        if (em._isSprite) {
+          const t = Math.min((now - em.startMs) / em.durMs, 1);
+          const kf = _psAvtInterpKf(em.layer.keyframes, t);
+          if (kf) {
+            const bs = em.layer.base_scale ?? 1;
+            em.sp.x = scr.x + (kf.x ?? 0);
+            em.sp.y = scr.y + (kf.y ?? 0);
+            const sv = (kf.scale ?? 1) * bs;
+            em.sp.scale.x = sv * (em.layer.flip_x ? -1 : 1);
+            em.sp.scale.y = sv * (em.layer.flip_y ? -1 : 1);
+            em.sp.alpha    = kf.alpha    ?? 1;
+            em.sp.rotation = ((kf.rotation ?? 0) * Math.PI) / 180;
+          }
+        } else {
+          if (!em.destroyed) { em.updateSpawnPos(scr.x, scr.y); em.update(delta); }
+        }
       }
     };
 
@@ -217,6 +364,7 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
     const cleanup = () => {
       app.ticker.remove(trackFn);
       for (const em of emitters) {
+        if (em._isSprite) continue;
         try { if (!em.destroyed) em.destroy(); } catch (_) {}
       }
       try { app.destroy(true, { children: true }); } catch (_) {}
@@ -249,6 +397,7 @@ function avtPixiCleanupAll() {
     if (entry.app) {
       if (entry.trackFn && entry.app.ticker) entry.app.ticker.remove(entry.trackFn);
       for (const em of (entry.emitters || [])) {
+        if (em._isSprite) continue;
         try { if (!em.destroyed) em.destroy(); } catch (_) {}
       }
       try { entry.app.destroy(true, { children: true }); } catch (_) {}

@@ -19794,6 +19794,30 @@ function _avtSkmAnimCfgHTML(anim, skId) {
     </div>`;
   }
 
+  if (tipo === 'pixi_studio') {
+    const sel  = anim.pixi_studio_id   || '';
+    const nome = anim.pixi_studio_nome || '';
+    const inpStFull = inpSt + ';width:100%;box-sizing:border-box';
+    return `<div>
+      <div style="margin-bottom:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:0.72rem;color:#c8d8e8;font-weight:600">🎬 Efeito do Pixi Studio</span>
+          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtPixiStudioCarregar('${skId}')">↻ Carregar lista</button>
+        </div>
+        <input id="avt-pixi-studio-search-${skId.replace(/[^a-z0-9]/gi,'_')}" type="text"
+          placeholder="Pesquisar por nome do efeito..."
+          oninput="_avtPixiStudioFiltrar('${skId}', this.value)"
+          style="${inpStFull};margin-bottom:4px" />
+        <div id="avt-pixi-studio-lista-${skId.replace(/[^a-z0-9]/gi,'_')}"
+          style="max-height:180px;overflow-y:auto;background:#050810;border:1px solid rgba(79,163,209,0.2);border-radius:5px;display:none"></div>
+        <div id="avt-pixi-studio-sel-${skId.replace(/[^a-z0-9]/gi,'_')}"
+          style="margin-top:6px;padding:6px 8px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.18);border-radius:5px;font-size:0.72rem;color:${sel?'#7ec8f0':'#7a92aa'}">
+          ${sel ? `✓ <strong>${nome || sel}</strong>` : 'Nenhum efeito selecionado'}
+        </div>
+      </div>
+    </div>`;
+  }
+
   return '';
 }
 
@@ -19938,6 +19962,7 @@ async function _avtAbrirModalSkill(skId, entId) {
             <optgroup label="Pixi">
               <option value="pixi_particulas" ${(anim.tipo||'')==='pixi_particulas'?'selected':''}>✨ Partículas Pixi</option>
               <option value="pixi_spine" ${(anim.tipo||'')==='pixi_spine'?'selected':''}>🦴 Skeleton Spine</option>
+              <option value="pixi_studio" ${(anim.tipo||'')==='pixi_studio'?'selected':''}>🎬 Efeito do Studio</option>
             </optgroup>
           </select></div>
         <div id="avt-skm-anim-cor-wrap">${label('Cor principal')}
@@ -20065,6 +20090,85 @@ function _avtSkmAnimTipoChange() {
   const skNow = AVT_STATE.skills.find(s => s.id === _AVT_SK_MODAL.skId);
   if (skNow) { if (!skNow.animacao) skNow.animacao = {}; skNow.animacao.tipo = tipo; }
   if (extra) extra.innerHTML = _avtSkmAnimCfgHTML(skNow?.animacao || { tipo }, _AVT_SK_MODAL.skId);
+  // Auto-carregar lista quando muda para pixi_studio
+  if (tipo === 'pixi_studio' && skNow) setTimeout(() => _avtPixiStudioCarregar(skNow.id), 80);
+}
+
+// ── Pixi Studio effect selector helpers ───────────────────────────────────
+var _AVT_PIXI_STUDIO_CACHE = null;
+
+async function _avtPixiStudioCarregar(skId) {
+  const sid = skId.replace(/[^a-z0-9]/gi, '_');
+  const listaEl = document.getElementById('avt-pixi-studio-lista-' + sid);
+  if (!listaEl) return;
+  listaEl.innerHTML = '<div style="padding:8px;font-size:0.7rem;color:#7a92aa">Carregando...</div>';
+  listaEl.style.display = 'block';
+  try {
+    if (!_AVT_PIXI_STUDIO_CACHE) {
+      const rpgId = AVT_STATE.rpgId || '';
+      const q = rpgId
+        ? `pixi_animations?or=(global.eq.true,rpg_id.eq.${encodeURIComponent(rpgId)})&select=id,nome,behavior,duracao_ms,global,preview_url&order=nome`
+        : `pixi_animations?global=eq.true&select=id,nome,behavior,duracao_ms,global,preview_url&order=nome`;
+      _AVT_PIXI_STUDIO_CACHE = await _avtSb(q) || [];
+      setTimeout(() => { _AVT_PIXI_STUDIO_CACHE = null; }, 60000);
+    }
+    _avtPixiStudioRenderLista(skId, _AVT_PIXI_STUDIO_CACHE, '');
+  } catch (e) {
+    listaEl.innerHTML = '<div style="padding:8px;font-size:0.7rem;color:#e74c3c">Erro ao carregar efeitos.</div>';
+  }
+}
+
+function _avtPixiStudioFiltrar(skId, query) {
+  if (!_AVT_PIXI_STUDIO_CACHE) { _avtPixiStudioCarregar(skId); return; }
+  const sid = skId.replace(/[^a-z0-9]/gi, '_');
+  const listaEl = document.getElementById('avt-pixi-studio-lista-' + sid);
+  if (listaEl) listaEl.style.display = 'block';
+  _avtPixiStudioRenderLista(skId, _AVT_PIXI_STUDIO_CACHE, query);
+}
+
+function _avtPixiStudioRenderLista(skId, rows, query) {
+  const sid = skId.replace(/[^a-z0-9]/gi, '_');
+  const listaEl = document.getElementById('avt-pixi-studio-lista-' + sid);
+  if (!listaEl) return;
+  const q = (query || '').toLowerCase().trim();
+  const filtrados = q ? rows.filter(r => (r.nome || '').toLowerCase().includes(q)) : rows;
+  if (!filtrados.length) {
+    listaEl.innerHTML = '<div style="padding:8px;font-size:0.7rem;color:#7a92aa">Nenhum efeito encontrado.</div>';
+    return;
+  }
+  listaEl.innerHTML = filtrados.map(r => {
+    const globTag = r.global ? '<span style="font-size:0.58rem;background:rgba(169,120,255,0.15);color:#a978ff;border-radius:3px;padding:1px 4px;margin-left:4px">global</span>' : '';
+    const beh = r.behavior ? `<span style="font-size:0.6rem;color:#4a7a9a;margin-left:4px">${r.behavior}</span>` : '';
+    const dur = r.duracao_ms ? `<span style="font-size:0.6rem;color:#4a7a9a"> · ${r.duracao_ms}ms</span>` : '';
+    const thumb = r.preview_url ? `<img src="${r.preview_url}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;flex-shrink:0;background:#000">` : '<div style="width:32px;height:32px;background:rgba(79,163,209,0.08);border-radius:3px;flex-shrink:0"></div>';
+    const nomeEsc = (r.nome || 'Sem nome').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    const idEsc   = (r.id || '').replace(/"/g, '&quot;');
+    return `<div data-anim-id="${idEsc}" data-anim-nome="${nomeEsc}" data-sk-id="${skId.replace(/"/g,'&quot;')}"
+      onclick="_avtPixiStudioSelecionar(this.dataset.skId, this.dataset.animId, this.dataset.animNome)"
+      style="display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;border-bottom:1px solid rgba(79,163,209,0.08)"
+      onmouseover="this.style.background='rgba(79,163,209,0.08)'" onmouseout="this.style.background=''">
+      ${thumb}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.72rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeEsc}${globTag}</div>
+        <div>${beh}${dur}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _avtPixiStudioSelecionar(skId, animId, animNome) {
+  _avtSkillAnimField(skId, 'pixi_studio_id', animId);
+  _avtSkillAnimField(skId, 'pixi_studio_nome', animNome);
+  const sid = skId.replace(/[^a-z0-9]/gi, '_');
+  const selEl = document.getElementById('avt-pixi-studio-sel-' + sid);
+  if (selEl) {
+    selEl.style.color = '#7ec8f0';
+    selEl.innerHTML = `✓ <strong>${(animNome || animId).replace(/</g, '&lt;')}</strong>`;
+  }
+  const listaEl = document.getElementById('avt-pixi-studio-lista-' + sid);
+  if (listaEl) listaEl.style.display = 'none';
+  const searchEl = document.getElementById('avt-pixi-studio-search-' + sid);
+  if (searchEl) searchEl.value = animNome || '';
 }
 
 function _avtSkTestarSfx(tipo) {
