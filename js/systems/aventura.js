@@ -7606,6 +7606,9 @@ function _avtAtualizarPerseguicoes(dt) {
       if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon) &&
           !_avtCelulaOcupada(nx, ny, ini.id, ini.tipo, false)) {
         ini.x = nx; ini.y = ny;
+        // Keep renderX/renderY in sync so the smooth-movement loop slides the token
+        // from the previous position to the new one (rather than starting mid-air).
+        if (ini.renderX == null) { ini.renderX = ini.x; ini.renderY = ini.y; }
         timer.inactionTimer = 0; // reset ao mover com sucesso — evita desistência falsa
         // Histórico para fallback anti-pingpong
         if (!Array.isArray(timer._recent)) timer._recent = [];
@@ -12706,9 +12709,12 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const toScreen = (ent) => {
     const live = _avtEntViva(ent);
+    // Use logical x/y (game-state position), not renderX/renderY (visual interpolation).
+    // renderX can lag behind x when positions are updated directly (combat NPC movement),
+    // causing animations to target stale cells.
     return {
-      x: Math.round((live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + SZ / 2),
-      y: Math.round((live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + SZ / 2),
+      x: Math.round(live.x * SZ - AVT_STATE.camera.x + SZ / 2),
+      y: Math.round(live.y * SZ - AVT_STATE.camera.y + SZ / 2),
     };
   };
 

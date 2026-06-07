@@ -80,12 +80,14 @@ async function _psAvtLoadCfg(animId) {
 // ── Build screen coordinates from entity (mirrors _avtPlaySkillAnim) ───────
 function _psAvtToScreen(ent) {
   const canvas = AVT_STATE.canvas;
-  if (!canvas) return { x: canvas ? canvas.width / 2 : 400, y: canvas ? canvas.height / 2 : 300 };
+  if (!canvas) return { x: 400, y: 300 };
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const live = typeof _avtEntViva === 'function' ? _avtEntViva(ent) : ent;
+  // Use logical x/y — renderX/renderY can lag behind when positions are set
+  // directly in combat (ini.x = nx without updating renderX).
   return {
-    x: Math.round((live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + SZ / 2),
-    y: Math.round((live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + SZ / 2),
+    x: Math.round(live.x * SZ - AVT_STATE.camera.x + SZ / 2),
+    y: Math.round(live.y * SZ - AVT_STATE.camera.y + SZ / 2),
   };
 }
 
