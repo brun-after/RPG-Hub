@@ -5,6 +5,27 @@
 
 var _PS_AVT_ACTIVE = [];  // { app, overlayCanvas, emitters, trackFn, timerId }
 
+// Reference positions matching pixi-studio.js PS_ATAC_REF / PS_ALVO_REF
+const _PS_ATAC_REF = { x: -160, y: 40 };
+const _PS_ALVO_REF = { x:  160, y: -20 };
+
+// ── Transform studio-space coordinates to adventure screen-space ─────────────
+function _psStudioToScreen(px, py, atacScr, alvoScr) {
+  const dx_s = _PS_ALVO_REF.x - _PS_ATAC_REF.x;  // 320
+  const dy_s = _PS_ALVO_REF.y - _PS_ATAC_REF.y;  // -60
+  const dx_a = alvoScr.x - atacScr.x;
+  const dy_a = alvoScr.y - atacScr.y;
+  const lenS = Math.sqrt(dx_s * dx_s + dy_s * dy_s);
+  const lenA = Math.sqrt(dx_a * dx_a + dy_a * dy_a);
+  const scale = lenS > 0 ? lenA / lenS : 1;
+  const angle = Math.atan2(dy_a, dx_a) - Math.atan2(dy_s, dx_s);
+  const relX  = px - _PS_ATAC_REF.x;
+  const relY  = py - _PS_ATAC_REF.y;
+  const rotX  = relX * Math.cos(angle) - relY * Math.sin(angle);
+  const rotY  = relX * Math.sin(angle) + relY * Math.cos(angle);
+  return { x: atacScr.x + rotX * scale, y: atacScr.y + rotY * scale };
+}
+
 // ── Convert Studio config_json layers → AVT particle config format ─────────
 function _psToAvtConfig(cfg) {
   if (!cfg) return null;
@@ -20,14 +41,17 @@ function _psToAvtConfig(cfg) {
     if (!l.visivel) continue;
     if (l.tipo === 'emitter' && l.emitter) {
       avt.layers.push({
-        role:      l.nome || 'layer',
-        texture:   l.texture_url ? null : (l.texture || 'spark'),
-        textures:  l.texture_url ? [l.texture_url] : undefined,
-        blendMode: l.blendMode || 'add',
-        z:         l.z ?? 3,
-        glow:      l.glow || null,
-        trail:     l.trail_config || null,
-        emitter:   l.emitter,
+        role:       l.nome || 'layer',
+        texture:    l.texture_url ? null : (l.texture || 'spark'),
+        textures:   l.texture_url ? [l.texture_url] : undefined,
+        blendMode:  l.blendMode || 'add',
+        z:          l.z ?? 3,
+        glow:       l.glow || null,
+        trail:      l.trail_config || null,
+        emitter:    l.emitter,
+        spawn_path: l.spawn_path || null,
+        start_t:    l.start_t    ?? 0,
+        end_t:      l.end_t      ?? 1,
       });
     }
   }
@@ -175,6 +199,105 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior) {
   }, durMs + 200);
 }
 
+// ── Render emitter layers following their recorded spawn_path ─────────────────
+// Uses a similarity transform to map studio-space → screen-space.
+async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr) {
+  const layers = (cfg.layers || []).filter(l => l.emitter);
+  if (!layers.length) return;
+
+  await _avtEnsurePixiParticles();
+  if (typeof PIXI === 'undefined') return;
+
+  const canvas = AVT_STATE.canvas;
+  if (!canvas) return;
+
+  const durMs = cfg.duracao_ms || 1000;
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.width  = canvas.width;
+  overlayCanvas.height = canvas.height;
+  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
+  canvas.parentElement?.appendChild(overlayCanvas);
+
+  let app;
+  try {
+    app = new PIXI.Application({
+      view: overlayCanvas,
+      width: overlayCanvas.width, height: overlayCanvas.height,
+      backgroundAlpha: 0, antialias: false,
+    });
+  } catch (e) { overlayCanvas.remove(); return; }
+
+  const bm = {
+    add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN,
+    multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL,
+  };
+
+  const emitters = [];
+  for (const l of layers) {
+    const container = new PIXI.Container();
+    container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
+    app.stage.addChild(container);
+
+    let emitCfg = Object.assign({}, l.emitter);
+    const tex = l.texture_url
+      ? PIXI.Texture.from(l.texture_url)
+      : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
+    const texArr = [tex || PIXI.Texture.WHITE];
+    if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) {
+      try { emitCfg = PIXI.particles.upgradeConfig(emitCfg, texArr); } catch (_) {}
+    }
+    try {
+      const em = new PIXI.particles.Emitter(container, emitCfg);
+      // Initial position: start of spawn_path or attacker
+      const initPos = l.spawn_path?.length
+        ? _psStudioToScreen(l.spawn_path[0].x ?? 0, l.spawn_path[0].y ?? 0, atacScr, alvoScr)
+        : alvoScr;
+      em.updateSpawnPos(initPos.x, initPos.y);
+      em.emit = false;
+      emitters.push({ em, layer: l });
+    } catch (_) {}
+  }
+
+  const startMs = performance.now();
+  let lastTs = startMs;
+
+  const tick = () => {
+    const now = performance.now();
+    const delta = (now - lastTs) / 1000;
+    lastTs = now;
+    const t = Math.min((now - startMs) / durMs, 1);
+
+    for (const { em, layer } of emitters) {
+      if (em.destroyed) continue;
+      const st = layer.start_t ?? 0, et = layer.end_t ?? 1;
+      const inRange = t >= st && t <= et;
+      em.emit = inRange;
+      if (inRange && layer.spawn_path?.length) {
+        const tRel = et > st ? (t - st) / (et - st) : 0;
+        const sp = _psAvtInterpKf(layer.spawn_path, tRel);
+        if (sp) {
+          const pos = _psStudioToScreen(sp.x ?? 0, sp.y ?? 0, atacScr, alvoScr);
+          em.updateSpawnPos(pos.x, pos.y);
+        }
+      } else if (inRange) {
+        em.updateSpawnPos(alvoScr.x, alvoScr.y);
+      }
+      em.update(delta);
+    }
+  };
+
+  app.ticker.add(tick);
+
+  setTimeout(() => {
+    app.ticker.remove(tick);
+    for (const { em } of emitters) {
+      try { if (!em.destroyed) em.destroy(); } catch (_) {}
+    }
+    try { app.destroy(true, { children: true }); } catch (_) {}
+    overlayCanvas.remove();
+  }, durMs + 300);
+}
+
 // ── Main public entry point ────────────────────────────────────────────────
 // Returns: delay in ms (travel time for projectile behavior, else 0)
 async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
@@ -211,19 +334,34 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
     case 'chain':
       _psAvtChain(cfg, atacanteEnt, alvoEnt, isAreaMode);
       return 0;
-    default:
-      // one-shot, loop, aoe — route through existing pipeline
-      const avtCfg = _psToAvtConfig(cfg);
-      if (avtCfg && typeof _avtPixiParticleAnim === 'function') {
-        _avtPixiParticleAnim(avtCfg, atacScr, alvoScr, posicao);
+    default: {
+      // one-shot, loop, aoe — prefer spawn_path if present, else existing pipeline
+      const hasPath = (cfg.layers || []).some(l => l.tipo === 'emitter' && l.spawn_path?.length);
+      if (hasPath) {
+        _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr);
+      } else {
+        const avtCfg = _psToAvtConfig(cfg);
+        if (avtCfg && typeof _avtPixiParticleAnim === 'function') {
+          _avtPixiParticleAnim(avtCfg, atacScr, alvoScr, posicao);
+        }
       }
       _psAvtRenderSprites(cfg, atacScr, alvoScr, behavior);
       return 0;
+    }
   }
 }
 
 // ── Projectile: emitter travels from caster to target ─────────────────────
 function _psAvtProjectile(cfg, atacScr, alvoScr) {
+  const hasSpawnPath = (cfg.layers || []).some(l => l.tipo === 'emitter' && l.spawn_path?.length);
+
+  // If any emitter layer has a recorded spawn_path, respect it exactly
+  if (hasSpawnPath) {
+    _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr);
+    _psAvtRenderSprites(cfg, atacScr, alvoScr, 'projectile');
+    return cfg.duracao_ms || 1000;
+  }
+
   const speedMs = cfg.behavior_config?.projectile_speed_ms || 500;
   const dur     = cfg.duracao_ms || 1200;
   const avtCfg  = _psToAvtConfig(cfg);
