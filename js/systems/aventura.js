@@ -12161,7 +12161,8 @@ function _avtRecuperarPorMovimento(jogador, celulas) {
   jogador.hp     = hpDepois;
 
   _avtRecursosDoChar(char).forEach(r => {
-    atrs[r.nome] = Math.min(r.max, r.atual + celulas);
+    const manaPorPasso = lc.mana_regen_por_passo ?? 1;
+    atrs[r.nome] = Math.min(r.max, r.atual + celulas * manaPorPasso);
   });
   ca.atributos  = atrs;
   char.custom_attrs = ca;
@@ -16023,16 +16024,21 @@ function _avtMpConteudoAba() {
       </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-label">🔷 Recuperação de Mana Fora de Combate</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">Mana recuperada a cada X segundos fora de combate (padrão: 1 a cada 5s). Use 0 em qualquer campo para desabilitar.</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Recuperação de mana por tempo e por célula andada. Os três modos são independentes e acumuláveis. Use 0 para desabilitar individualmente.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <input type="number" id="avt-mp-mana-regen-qtd" min="0" max="9999" step="1" value="${lc.mana_regen_quantidade ?? 1}"
             style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
           <span style="font-size:0.7rem;color:#7a92aa">mana por intervalo (0 = desabilitado)</span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <input type="number" id="avt-mp-mana-regen-intv" min="1" max="300" step="1" value="${lc.mana_regen_intervalo_s ?? 5}"
             style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
           <span style="font-size:0.7rem;color:#7a92aa">segundos entre recuperações</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-mana-regen-passo" min="0" max="9999" step="0.1" value="${lc.mana_regen_por_passo ?? 1}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">mana por passo (célula andada, 0 = desabilitado)</span>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarManaRegenOoc()" style="width:100%">💾 Salvar</button>
       </div>
@@ -16674,18 +16680,21 @@ async function _avtSalvarManaRegenTurno() {
 }
 
 async function _avtSalvarManaRegenOoc() {
-  const qtd  = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-mana-regen-qtd')?.value)  ?? 1));
-  const intv = Math.max(1, Math.min(300,  parseInt(document.getElementById('avt-mp-mana-regen-intv')?.value) ?? 5));
+  const qtd   = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-mana-regen-qtd')?.value)   ?? 1));
+  const intv  = Math.max(1, Math.min(300,  parseInt(document.getElementById('avt-mp-mana-regen-intv')?.value)  ?? 5));
+  const passo = Math.max(0, Math.min(9999, parseFloat(document.getElementById('avt-mp-mana-regen-passo')?.value) ?? 1));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
   rpg.theme_json.level_config.mana_regen_quantidade  = qtd;
   rpg.theme_json.level_config.mana_regen_intervalo_s = intv;
+  rpg.theme_json.level_config.mana_regen_por_passo   = passo;
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
-    mostrarToast(`Regen de Mana OOC: ${qtd} a cada ${intv}s`, 'sucesso');
+    mostrarToast(`Regen Mana OOC: ${qtd} a cada ${intv}s · ${passo}/passo`, 'sucesso');
     if (typeof _avtPararRegenManaPorSegundo === 'function') { _avtPararRegenManaPorSegundo(); _avtIniciarRegenManaPorSegundo(); }
+    try { _avtBroadcast('avt_level_config_update', { config: { mana_regen_quantidade: qtd, mana_regen_intervalo_s: intv, mana_regen_por_passo: passo } }); } catch(_) {}
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
