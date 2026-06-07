@@ -7101,10 +7101,33 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
 
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
 
-  // Deduzir custo de recurso (mana) para skills de ataque OOC
+  // Deduzir custo de recurso (mana) para skills de ataque OOC (síncrono — não bloqueia ataque)
   if (sk?.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
-    const _okMana = await _avtDescontarCustoSkill(jogador.nome, sk.custo_rsv);
-    if (!_okMana) return;
+    const _custoParsedOoc = sk.custo_rsv.trim().match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+    if (_custoParsedOoc) {
+      const _custoQtdOoc = parseFloat(_custoParsedOoc[1]);
+      const _charManaOoc = AVT_STATE.chars.find(c => c.nome === jogador.nome);
+      if (_charManaOoc) {
+        if (!_charManaOoc.custom_attrs) _charManaOoc.custom_attrs = {};
+        const _atrsMOoc = _charManaOoc.custom_attrs.atributos || (_charManaOoc.custom_attrs.atributos = {});
+        const _normMOoc = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+        const _rsvPrimOoc = (typeof _avtRecursosDoChar === 'function' ? _avtRecursosDoChar(_charManaOoc)[0]?.nome : null) ?? 'Mana';
+        const _rsvNomeOoc = (_custoParsedOoc[2] || '').trim() || _rsvPrimOoc;
+        const _chaveMOoc = Object.keys(_atrsMOoc).find(k => _normMOoc(k) === _normMOoc(_rsvNomeOoc)) || _rsvNomeOoc;
+        const _atualMOoc = parseFloat(_atrsMOoc[_chaveMOoc] ?? 0) || 0;
+        if (_atualMOoc < _custoQtdOoc) {
+          mostrarToast(`❌ ${_chaveMOoc} insuficiente (${_atualMOoc}/${_custoQtdOoc})`, 'erro');
+          return;
+        }
+        _atrsMOoc[_chaveMOoc] = Math.max(0, _atualMOoc - _custoQtdOoc);
+        mostrarToast(`−${_custoQtdOoc} ${_chaveMOoc}`, '');
+        try { _avtBroadcast('avt_rsv_update', { nome: jogador.nome, atributos: { ..._atrsMOoc } }); } catch(_) {}
+        _avtSb(`characters?id=eq.${encodeURIComponent(_charManaOoc.id)}`,
+          { method: 'PATCH', body: JSON.stringify({ custom_attrs: _charManaOoc.custom_attrs }) }
+        ).catch(() => {});
+        try { avtJogadorPainelRender(); } catch(_) {}
+      }
+    }
   }
 
   const _myCharAB2 = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
@@ -7396,8 +7419,8 @@ function _avtAtualizarPaciencias(dt) {
     // Pausa paciência enquanto menu do personagem ou painel do mestre estiver aberto
     // (desde que o inimigo ainda não esteja perseguindo ativamente)
     if (AVT_STATE._menuJogadorAberto && !timer.isPursuing) continue;
-    // [NPC-SYNC] Só o host eleito atualiza o relógio de paciência do NPC.
-    if (AVT_STATE.npcSyncEnabled && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
+    // [NPC-SYNC] Só o host eleito atualiza o relógio de paciência do NPC (apenas em modo RTNet ativo).
+    if (AVT_STATE.npcSyncEnabled && typeof RTNet !== 'undefined' && RTNet?.initialized && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
     // Skip if this enemy is already in a combat
     if (_avtBatalhaDeEnt(id)) { timer.ativo = false; continue; }
     timer.patience = Math.max(0, timer.patience - dt);
@@ -7611,7 +7634,7 @@ function _avtAtualizarPerseguicoes(dt) {
   for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
     if (!timer.isPursuing) continue;
     // [NPC-SYNC] Só o host eleito do NPC simula sua IA (evita travamento e divergência).
-    if (AVT_STATE.npcSyncEnabled && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
+    if (AVT_STATE.npcSyncEnabled && typeof RTNet !== 'undefined' && RTNet?.initialized && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
     if (_avtBatalhaDeEnt(id)) { _avtCancelarPerseguicao(id); continue; }
     const ini = AVT_STATE.entidades.find(e => e.id === id);
     if (!ini || ini.hp <= 0) { _avtCancelarPerseguicao(id); continue; }
