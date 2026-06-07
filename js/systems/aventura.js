@@ -20105,10 +20105,16 @@ async function _avtPixiStudioCarregar(skId) {
   listaEl.style.display = 'block';
   try {
     if (!_AVT_PIXI_STUDIO_CACHE) {
+      const uid   = SESSION?.user?.id;
       const rpgId = AVT_STATE.rpgId || '';
-      const q = rpgId
-        ? `pixi_animations?or=(global.eq.true,rpg_id.eq.${encodeURIComponent(rpgId)})&select=id,nome,behavior,duracao_ms,global,preview_url&order=nome`
-        : `pixi_animations?global=eq.true&select=id,nome,behavior,duracao_ms,global,preview_url&order=nome`;
+      let q;
+      if (uid && rpgId) {
+        q = `pixi_animations?or=(criado_por.eq.${encodeURIComponent(uid)},global.eq.true,rpg_id.eq.${encodeURIComponent(rpgId)})&select=id,nome,behavior,duracao_ms,global,preview_url&order=nome`;
+      } else if (uid) {
+        q = `pixi_animations?or=(criado_por.eq.${encodeURIComponent(uid)},global.eq.true)&select=id,nome,behavior,duracao_ms,global,preview_url&order=nome`;
+      } else {
+        q = `pixi_animations?global=eq.true&select=id,nome,behavior,duracao_ms,global,preview_url&order=nome`;
+      }
       _AVT_PIXI_STUDIO_CACHE = await _avtSb(q) || [];
       setTimeout(() => { _AVT_PIXI_STUDIO_CACHE = null; }, 60000);
     }
