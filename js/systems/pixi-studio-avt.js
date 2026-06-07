@@ -30,7 +30,7 @@ function _psStudioToScreen(px, py, atacScr, alvoScr) {
 function _psToAvtConfig(cfg) {
   if (!cfg) return null;
   const avt = {
-    duration:   cfg.duracao_ms   || 1000,
+    duration:   cfg.duracao_ms || cfg.duration || 1000,
     lighting:   cfg.lighting     || {},
     camera:     cfg.camera       || {},
     background: cfg.background   || {},
@@ -123,7 +123,7 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior) {
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
 
-  const durMs = cfg.duracao_ms || 1000;
+  const durMs = cfg.duracao_ms || cfg.duration || 1000;
   const overlayCanvas = document.createElement('canvas');
   overlayCanvas.width  = canvas.width;
   overlayCanvas.height = canvas.height;
@@ -229,7 +229,7 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr) {
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
 
-  const durMs = cfg.duracao_ms || 1000;
+  const durMs = cfg.duracao_ms || cfg.duration || 1000;
   const overlayCanvas = document.createElement('canvas');
   overlayCanvas.width  = canvas.width;
   overlayCanvas.height = canvas.height;
@@ -327,7 +327,7 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
   const alvoScr   = _psAvtToScreen(alvoEnt || atacanteEnt);
   const atacScr   = atacanteEnt ? _psAvtToScreen(atacanteEnt) : alvoScr;
   const behavior  = cfg.behavior || 'one-shot';
-  const durMs     = cfg.duracao_ms || 1000;
+  const durMs     = cfg.duracao_ms || cfg.duration || 1000;
   const posicao   = isAreaMode ? 'area' : (cfg.posicao || 'alvo');
 
   // Play audio if present
@@ -379,11 +379,11 @@ function _psAvtProjectile(cfg, atacScr, alvoScr) {
   if (hasSpawnPath) {
     _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr);
     _psAvtRenderSprites(cfg, atacScr, alvoScr, 'projectile');
-    return cfg.duracao_ms || 1000;
+    return cfg.duracao_ms || cfg.duration || 1000;
   }
 
   const speedMs = cfg.behavior_config?.projectile_speed_ms || 500;
-  const dur     = cfg.duracao_ms || 1200;
+  const dur     = cfg.duracao_ms || cfg.duration || 1200;
   const avtCfg  = _psToAvtConfig(cfg);
   if (!avtCfg) return 0;
 
