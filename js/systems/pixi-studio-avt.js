@@ -257,6 +257,8 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr) {
     app.stage.addChild(container);
 
     let emitCfg = Object.assign({}, l.emitter);
+    // We control emission timing manually; override auto-stop from emitterLifetime
+    if (!Array.isArray(emitCfg.behaviors)) emitCfg.emitterLifetime = -1;
     const tex = l.texture_url
       ? PIXI.Texture.from(l.texture_url)
       : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
@@ -459,6 +461,7 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
         worldRoot.addChild(container);
 
         let emitCfg = Object.assign({}, l.emitter);
+        if (!Array.isArray(emitCfg.behaviors)) emitCfg.emitterLifetime = -1;
         const tex = l.texture_url
           ? PIXI.Texture.from(l.texture_url)
           : _avtProcTextures(l.texture || 'spark');
