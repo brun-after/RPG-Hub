@@ -26,6 +26,7 @@ var PIXI_STUDIO_STATE = {
   _kfDrag:        null,
   _spDrag:        null,        // { layerId, ptIdx } spawn_path point drag
   _layerDrag:     null,        // { layerId, edge, startX, origSt, origEt } timeline layer drag
+  _resizeObserver: null,
   _lastTs:        0,
   _rafId:         0,
   _pickerCb:      null,
@@ -129,8 +130,8 @@ function psRenderShell() {
   </div>
 </div>
 <div id="ps-center" style="display:flex;flex-direction:column;background:var(--preto);overflow:hidden">
-  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:16px;min-height:200px">
-    <canvas id="ps-preview-canvas" width="480" height="300" style="border-radius:6px;border:1px solid var(--borda);max-width:100%"></canvas>
+  <div id="ps-preview-wrap" style="position:relative;flex:1;min-height:200px">
+    <canvas id="ps-preview-canvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:6px;border:1px solid var(--borda)"></canvas>
   </div>
   <div style="padding:8px 12px;background:var(--escuro);border-top:1px solid var(--borda);display:flex;align-items:center;gap:10px">
     <button onclick="psPreviewPlay()" title="Play" style="background:none;border:none;color:var(--texto);font-size:1.1rem;cursor:pointer;padding:2px 6px">▶</button>
@@ -874,6 +875,12 @@ function _psDrawUnsupportedMessage(canvas) {
   } catch (_) {}
 }
 
+let _psResizeTimer = null;
+function _psOnResize() {
+  clearTimeout(_psResizeTimer);
+  _psResizeTimer = setTimeout(() => { if (PIXI_STUDIO_STATE.previewApp) psPreviewMount(); }, 150);
+}
+
 async function psPreviewMount() {
   const canvas = document.getElementById('ps-preview-canvas');
   if (!canvas) return;
@@ -882,8 +889,20 @@ async function psPreviewMount() {
   await _avtEnsurePixiParticles().catch(() => {});
   if (typeof PIXI === 'undefined') return;
 
-  const w = canvas.width  || 480;
-  const h = canvas.height || 300;
+  // Use the canvas's rendered CSS size so it fills the container
+  const w = canvas.offsetWidth  || 480;
+  const h = canvas.offsetHeight || 300;
+  canvas.width  = w;
+  canvas.height = h;
+
+  // Watch for container size changes and remount
+  if (!PIXI_STUDIO_STATE._resizeObserver) {
+    const wrap = document.getElementById('ps-preview-wrap');
+    if (wrap && typeof ResizeObserver !== 'undefined') {
+      PIXI_STUDIO_STATE._resizeObserver = new ResizeObserver(_psOnResize);
+      PIXI_STUDIO_STATE._resizeObserver.observe(wrap);
+    }
+  }
 
   // Hard pre-check: PIXI v7 removed the Canvas2D renderer, so a broken WebGL
   // context (sandbox/headless returning 0 for shader limits) makes
@@ -945,6 +964,10 @@ function psPreviewUnmount() {
   PIXI_STUDIO_STATE.previewPlaying = false;
   PIXI_STUDIO_STATE.previewTime = 0;
   _psDestroyAllEmitters();
+  if (PIXI_STUDIO_STATE._resizeObserver) {
+    PIXI_STUDIO_STATE._resizeObserver.disconnect();
+    PIXI_STUDIO_STATE._resizeObserver = null;
+  }
   if (PIXI_STUDIO_STATE.previewApp) {
     try { PIXI_STUDIO_STATE.previewApp.destroy(false, { children: true, texture: false }); } catch (_) {}
     PIXI_STUDIO_STATE.previewApp = null;
