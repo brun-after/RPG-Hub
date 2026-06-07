@@ -6,8 +6,8 @@
 var _PS_AVT_ACTIVE = [];  // { app, overlayCanvas, emitters, trackFn, timerId }
 
 // Reference positions matching pixi-studio.js PS_ATAC_REF / PS_ALVO_REF
-const _PS_ATAC_REF = { x: -160, y: 40 };
-const _PS_ALVO_REF = { x:  160, y: -20 };
+const _PS_ATAC_REF = { x: -160, y: 0 };
+const _PS_ALVO_REF = { x:  160, y: 0 };
 
 // ── Transform studio-space coordinates to adventure screen-space ─────────────
 function _psStudioToScreen(px, py, atacScr, alvoScr) {
@@ -164,19 +164,37 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior) {
   }
 
   const isProjectile = behavior === 'projectile';
+
+  // Precompute rotation offset: angle of adventure travel minus angle of studio reference axis
+  const dx_s = _PS_ALVO_REF.x - _PS_ATAC_REF.x;
+  const dy_s = _PS_ALVO_REF.y - _PS_ATAC_REF.y;
+  const dx_a = endScr.x - startScr.x;
+  const dy_a = endScr.y - startScr.y;
+  const rotOffset = isProjectile
+    ? Math.atan2(dy_a, dx_a) - Math.atan2(dy_s, dx_s)
+    : 0;
+
   const startMs = performance.now();
 
   const tick = () => {
     const elapsed = performance.now() - startMs;
     const t = Math.min(elapsed / durMs, 1);
     for (const { sp, layer } of sprites) {
+      const st = layer.start_t ?? 0;
+      const et = layer.end_t   ?? 1;
+      sp.visible = (t >= st && t <= et);
+      if (!sp.visible) continue;
+      const tRel = et > st ? (t - st) / (et - st) : t;
+
       const bs = layer.base_scale ?? 1;
-      const kf = _psAvtInterpKf(layer.keyframes, t);
+      const kf = _psAvtInterpKf(layer.keyframes, tRel);
       if (!kf) continue;
 
       if (isProjectile) {
-        sp.x = startScr.x + (endScr.x - startScr.x) * t;
-        sp.y = startScr.y + (endScr.y - startScr.y) * t;
+        // Map studio-space keyframe position → screen-space via similarity transform
+        const scrPos = _psStudioToScreen(kf.x ?? 0, kf.y ?? 0, startScr, endScr);
+        sp.x = scrPos.x;
+        sp.y = scrPos.y;
       } else {
         sp.x = startScr.x + (kf.x ?? 0);
         sp.y = startScr.y + (kf.y ?? 0);
@@ -186,7 +204,7 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior) {
       sp.scale.x = sv * (layer.flip_x ? -1 : 1);
       sp.scale.y = sv * (layer.flip_y ? -1 : 1);
       sp.alpha    = kf.alpha    ?? 1;
-      sp.rotation = ((kf.rotation ?? 0) * Math.PI) / 180;
+      sp.rotation = ((kf.rotation ?? 0) * Math.PI) / 180 + rotOffset;
     }
   };
 

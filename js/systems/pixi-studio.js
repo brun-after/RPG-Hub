@@ -2,8 +2,8 @@
 // Depends on: pixi-studio-presets.js, pixi-studio-avt.js, aventura.js (lazy)
 
 // Reference positions for attacker/target in preview canvas (relative to center)
-const PS_ATAC_REF = { x: -160, y: 40 };
-const PS_ALVO_REF = { x:  160, y: -20 };
+const PS_ATAC_REF = { x: -160, y: 0 };
+const PS_ALVO_REF = { x:  160, y: 0 };
 
 // ══ A — STATE ═════════════════════════════════════════════════════════════════
 var PIXI_STUDIO_STATE = {
@@ -1291,24 +1291,48 @@ function psPreviewRebuildAll() {
   const bm = { add: PIXI.BLEND_MODES.ADD, normal: PIXI.BLEND_MODES.NORMAL, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY };
   const sorted = [...(cfg.layers || [])].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
 
-  // Attacker/target reference markers for path-based effects
-  const hasPath = (cfg.layers || []).some(l => l.spawn_path?.length);
-  if (hasPath) {
-    const refLine = new PIXI.Graphics();
-    refLine.lineStyle(1, 0xffffff, 0.07);
-    refLine.moveTo(cx + PS_ATAC_REF.x, cy + PS_ATAC_REF.y);
-    refLine.lineTo(cx + PS_ALVO_REF.x, cy + PS_ALVO_REF.y);
-    worldRoot.addChildAt(refLine, 0);
-    const atacTxt = new PIXI.Text('⚔', { fontSize: 16, fill: 0x4fa3d1, resolution: 2 });
-    atacTxt.anchor.set(0.5);
-    atacTxt.position.set(cx + PS_ATAC_REF.x, cy + PS_ATAC_REF.y);
-    atacTxt.alpha = 0.55;
-    worldRoot.addChild(atacTxt);
-    const alvoTxt = new PIXI.Text('👹', { fontSize: 16, fill: 0xe74c3c, resolution: 2 });
-    alvoTxt.anchor.set(0.5);
-    alvoTxt.position.set(cx + PS_ALVO_REF.x, cy + PS_ALVO_REF.y);
-    alvoTxt.alpha = 0.55;
-    worldRoot.addChild(alvoTxt);
+  // Contextual reference markers based on effect posicao
+  {
+    const posicao = cfg.posicao || 'trajetoria';
+    const mkTxt = (ch, color, ox, oy) => {
+      const t = new PIXI.Text(ch, { fontSize: 16, fill: color, resolution: 2 });
+      t.anchor.set(0.5);
+      t.position.set(cx + ox, cy + oy);
+      t.alpha = 0.6;
+      worldRoot.addChild(t);
+    };
+    const mkLine = (x0, y0, x1, y1) => {
+      const g = new PIXI.Graphics();
+      g.lineStyle(1, 0xffffff, 0.07);
+      g.moveTo(x0, y0);
+      g.lineTo(x1, y1);
+      worldRoot.addChildAt(g, 0);
+    };
+    const mkCircle = (r) => {
+      const g = new PIXI.Graphics();
+      g.lineStyle(1, 0xe74c3c, 0.18);
+      g.drawCircle(cx, cy, r);
+      worldRoot.addChildAt(g, 0);
+    };
+
+    if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno') {
+      mkLine(cx + PS_ATAC_REF.x, cy, cx + PS_ALVO_REF.x, cy);
+      mkTxt('⚔', 0x4fa3d1,  PS_ATAC_REF.x, 0);
+      mkTxt('👹', 0xe74c3c, PS_ALVO_REF.x, 0);
+    } else if (posicao === 'alvo') {
+      mkTxt('👹', 0xe74c3c, 0, 0);
+    } else if (posicao === 'atacante') {
+      mkTxt('⚔', 0x4fa3d1, 0, 0);
+    } else if (posicao === 'meio') {
+      mkTxt('✦', 0xf0c040, 0, 0);
+    } else if (posicao === 'area') {
+      mkCircle(80);
+      mkTxt('👹', 0xe74c3c, 0, 0);
+    } else {
+      mkLine(cx + PS_ATAC_REF.x, cy, cx + PS_ALVO_REF.x, cy);
+      mkTxt('⚔', 0x4fa3d1,  PS_ATAC_REF.x, 0);
+      mkTxt('👹', 0xe74c3c, PS_ALVO_REF.x, 0);
+    }
   }
 
   for (const layer of sorted) {
