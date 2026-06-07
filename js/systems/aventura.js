@@ -7100,6 +7100,13 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   }
 
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+
+  // Deduzir custo de recurso (mana) para skills de ataque OOC
+  if (sk?.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
+    const _okMana = await _avtDescontarCustoSkill(jogador.nome, sk.custo_rsv);
+    if (!_okMana) return;
+  }
+
   const _myCharAB2 = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
   const _abCfg = !sk ? (_myCharAB2?.custom_attrs?.ataque_basico || null) : null;
   const _defAbCore = _avtDefaultAtaqueBasico(jogador.classe_aventura);
@@ -7127,15 +7134,29 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     }
   }
 
-  const hitRoll  = Math.floor(Math.random()*20)+1;
+  let hitRoll  = Math.floor(Math.random()*20)+1;
   const _danoBase0 = dadosRolados.reduce((s,d)=>s+d.val, 0);
-  const critMult = _avtCritMultFromD20(hitRoll);
-  const isCrit   = critMult > 1;
-  const isFumble = critMult === 0;
 
   // Escalonamento de atributo para ataque básico (aditivo) e skills (legado multiplicativo)
   const myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
   const atrsJog = myChar?.custom_attrs?.atributos || {};
+
+  // Bônus de crítico por carisma: cada ponto acima de 10 acumula chance de transformar qualquer rolagem em 20
+  const _normCarK = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const _carismaKey = Object.keys(atrsJog).find(k => _normCarK(k) === 'carisma');
+  const _carismaVal = parseFloat(_carismaKey ? atrsJog[_carismaKey] : 10) || 10;
+  const _chanceCritCar = _avtCarismaChanceCriticoD20(_carismaVal);
+  let _criticoCarismaAtivado = false;
+  if (_chanceCritCar > 0 && hitRoll < 20 && Math.random() * 100 < _chanceCritCar) {
+    _criticoCarismaAtivado = true;
+    const _hitOriginal = hitRoll;
+    hitRoll = 20;
+    setTimeout(() => _avtMostrarAnimacaoCarismaCritico(_hitOriginal), 50);
+  }
+
+  const critMult = _avtCritMultFromD20(hitRoll);
+  const isCrit   = critMult > 1;
+  const isFumble = critMult === 0;
   let atributoVal = 0, multInfo = null;
   {
     const _normA = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
@@ -7190,9 +7211,9 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: ini.nome, animacao: animFinal, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
   }
 
-  // Aplicar cooldown OOC
+  // Aplicar cooldown OOC (multiplica turnos pelo tempo por turno)
   const _oocKey = (jogador.id || jogador.nome) + '_' + (skId || 'basico');
-  const _oocMs = _avtGetSecsPerTurno() * 1000;
+  const _oocMs = (sk?.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000;
   AVT_STATE._oocCooldowns[_oocKey] = Date.now() + _oocMs;
 
   setTimeout(() => {
@@ -7336,7 +7357,11 @@ function _avtCheckProximidadeInimigos(jogadorMovendo) {
     const raio = ini.deteccaoRaio ?? 3;
     const emRaio = Math.abs(jogadorMovendo.x - ini.x) + Math.abs(jogadorMovendo.y - ini.y) <= raio;
     if (!AVT_STATE.npcTimers[ini.id]) {
-      const maxMs = (ini.pacienciaSecs ?? 5) * 1000;
+      const _charJog = AVT_STATE.chars.find(c => c.nome === jogadorMovendo.nome || c.id === jogadorMovendo.dbId);
+      const _normCarJ = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+      const _carismaKeyJ = Object.keys(_charJog?.custom_attrs?.atributos || {}).find(k => _normCarJ(k) === 'carisma');
+      const _carismaJog = parseFloat(_carismaKeyJ ? _charJog.custom_attrs.atributos[_carismaKeyJ] : 10) || 10;
+      const maxMs = _avtRolarPacienciaNpc(_carismaJog) * 1000;
       AVT_STATE.npcTimers[ini.id] = { patience: maxMs, maxPatience: maxMs, ativo: false, isPursuing: false, targetId: null, tentativeTargetId: null, pursuitStepTimer: 0, inactionTimer: 0, attackCooldownTimer: 0, desistirCheckTimer: 0 };
     }
     const timer = AVT_STATE.npcTimers[ini.id];
@@ -7397,6 +7422,56 @@ function _avtAtualizarPaciencias(dt) {
       timer.ativo = false;
     }
   }
+}
+
+// ─── PACIÊNCIA NPC: SORTEIO COM REDUÇÃO POR CARISMA ──────────────────────────
+// Padrão: base 10s, 50% chance de 7s, 30% de 5s, 10% de 2s.
+// Cada ponto de carisma acima de 10 reduz as chances em 10% do valor restante
+// (arredondado: <0,5 desce, ≥0,5 sobe).
+function _avtRolarPacienciaNpc(carismaJogador) {
+  const lc  = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const base = lc.paciencia_base_s    ?? 10;
+  const t1   = lc.paciencia_tempo_7s  ?? 7;
+  const t2   = lc.paciencia_tempo_5s  ?? 5;
+  const t3   = lc.paciencia_tempo_2s  ?? 2;
+  let p1 = lc.paciencia_chance_7s ?? 50;
+  let p2 = lc.paciencia_chance_5s ?? 30;
+  let p3 = lc.paciencia_chance_2s ?? 10;
+  const extras = Math.max(0, Math.floor((carismaJogador || 10) - 10));
+  const arred  = v => { const d = v - Math.floor(v); return d < 0.5 ? Math.floor(v) : Math.ceil(v); };
+  for (let i = 0; i < extras; i++) {
+    p1 = arred(p1 * 0.9);
+    p2 = arred(p2 * 0.9);
+    p3 = arred(p3 * 0.9);
+  }
+  const r = Math.random() * 100;
+  if (r < p3)           return t3;
+  if (r < p3 + p2)      return t2;
+  if (r < p3 + p2 + p1) return t1;
+  return base;
+}
+
+async function _avtSalvarPacienciaConfig() {
+  const vals = {
+    paciencia_base_s:    parseFloat(document.getElementById('avt-mp-pac-base')?.value),
+    paciencia_chance_7s: parseFloat(document.getElementById('avt-mp-pac-c7')?.value),
+    paciencia_tempo_7s:  parseFloat(document.getElementById('avt-mp-pac-t7')?.value),
+    paciencia_chance_5s: parseFloat(document.getElementById('avt-mp-pac-c5')?.value),
+    paciencia_tempo_5s:  parseFloat(document.getElementById('avt-mp-pac-t5')?.value),
+    paciencia_chance_2s: parseFloat(document.getElementById('avt-mp-pac-c2')?.value),
+    paciencia_tempo_2s:  parseFloat(document.getElementById('avt-mp-pac-t2')?.value),
+  };
+  if (Object.values(vals).some(v => isNaN(v))) { mostrarToast('Valores inválidos', 'erro'); return; }
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  Object.assign(rpg.theme_json.level_config, vals);
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    try { _avtBroadcast('avt_level_config_update', { config: vals }); } catch(_) {}
+    mostrarToast(`⏳ Paciência NPC salva (base: ${vals.paciencia_base_s}s)`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
 }
 
 function _avtGetVelocidadePerseguicao() {
@@ -15403,6 +15478,36 @@ function _avtMpConteudoAba() {
             style="width:50px;padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;text-align:center">
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtSalvarAtaqueBasicoNpc()">💾 Salvar e Aplicar aos NPCs</button>
+      </div>
+      <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
+        <div class="avt-mp-label">⏳ Paciência dos Inimigos Comuns</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Tempo base de paciência antes do inimigo perseguir. Pode cair aleatoriamente para tempos menores. O atributo Carisma do jogador detectado reduz as chances em 10% por ponto acima de 10.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:0.72rem;color:#c8d8e8;flex:1">⏱ Tempo base (s)</span>
+          <input type="number" id="avt-mp-pac-base" min="1" max="120" step="1" value="${lc.paciencia_base_s ?? 10}"
+            style="width:70px;padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr auto auto;gap:4px 6px;align-items:center;margin-bottom:6px">
+          <span style="font-size:0.68rem;color:#7a92aa">Chance (%)</span>
+          <span style="font-size:0.68rem;color:#7a92aa;text-align:center">Tempo (s)</span>
+          <span></span>
+          <input type="number" id="avt-mp-pac-c7" min="0" max="100" step="1" value="${lc.paciencia_chance_7s ?? 50}"
+            style="padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+          <input type="number" id="avt-mp-pac-t7" min="1" max="120" step="1" value="${lc.paciencia_tempo_7s ?? 7}"
+            style="padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+          <span style="font-size:0.65rem;color:#7a92aa">médio</span>
+          <input type="number" id="avt-mp-pac-c5" min="0" max="100" step="1" value="${lc.paciencia_chance_5s ?? 30}"
+            style="padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+          <input type="number" id="avt-mp-pac-t5" min="1" max="120" step="1" value="${lc.paciencia_tempo_5s ?? 5}"
+            style="padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+          <span style="font-size:0.65rem;color:#7a92aa">baixo</span>
+          <input type="number" id="avt-mp-pac-c2" min="0" max="100" step="1" value="${lc.paciencia_chance_2s ?? 10}"
+            style="padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+          <input type="number" id="avt-mp-pac-t2" min="1" max="120" step="1" value="${lc.paciencia_tempo_2s ?? 2}"
+            style="padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+          <span style="font-size:0.65rem;color:#7a92aa">mínimo</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtSalvarPacienciaConfig()">💾 Salvar paciência</button>
       </div>`;
 
     case 'personagens': return `
@@ -15894,6 +15999,23 @@ function _avtMpConteudoAba() {
           <span style="font-size:0.7rem;color:#7a92aa">segundos entre recuperações</span>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarManaRegenOoc()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">✨ Bônus de Crítico por Carisma</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Cada ponto de Carisma acima de 10 acumula chance de transformar qualquer rolagem do d20 em 20 (acerto crítico). A chance do 1º ponto extra é a <em>base</em>; cada ponto adicional soma <em>base + (i-1)×progressão</em>. Ex: base=1%, prog=0,5% → ponto 1=1%, ponto 2=1,5%, ponto 3=2%...</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:0.72rem;color:#c8d8e8;flex:1">Base (% no 1º ponto)</span>
+          <input type="number" id="avt-mp-car-crit-base" min="0" max="50" step="0.1" value="${lc.carisma_crit_base_pct ?? 1}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.65rem;color:#7a92aa">%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:0.72rem;color:#c8d8e8;flex:1">Progressão (% por ponto)</span>
+          <input type="number" id="avt-mp-car-crit-prog" min="0" max="20" step="0.1" value="${lc.carisma_crit_progressao ?? 0.5}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.65rem;color:#7a92aa">%</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarCarismaCritConfig()" style="width:100%">💾 Salvar</button>
       </div>`;
     }
 
@@ -20403,6 +20525,73 @@ function _avtCritMultFromD20(hitRoll) {
   return 2;
 }
 window._avtCritMultFromD20 = _avtCritMultFromD20;
+
+// ─── CARISMA: BÔNUS DE CHANCE DE CRÍTICO NO D20 ──────────────────────────────
+// Cada ponto de carisma acima de 10 acumula chance de converter qualquer rolagem em 20.
+// Padrão: 1º ponto = 1%, 2º = 1,5%, progressão de 0,5% por ponto adicional.
+function _avtCarismaChanceCriticoD20(carisma) {
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const basePct = lc.carisma_crit_base_pct  ?? 1;
+  const prog    = lc.carisma_crit_progressao ?? 0.5;
+  const extras  = Math.max(0, Math.floor((carisma || 10) - 10));
+  let total = 0;
+  for (let i = 0; i < extras; i++) total += basePct + i * prog;
+  return total;
+}
+
+// Animação: d20 original "gira" e vira 20 por bônus de carisma
+function _avtMostrarAnimacaoCarismaCritico(hitOriginal) {
+  if (!document.getElementById('css-carisma-crit')) {
+    const s = document.createElement('style');
+    s.id = 'css-carisma-crit';
+    s.textContent = `
+      @keyframes avtCarismaGiro {
+        0%   { transform: rotate(0deg)   scale(1);    opacity: 1; }
+        40%  { transform: rotate(180deg) scale(1.35); opacity: 0.7; }
+        70%  { transform: rotate(340deg) scale(1.5);  opacity: 1; }
+        100% { transform: rotate(360deg) scale(1);    opacity: 1; }
+      }
+      .avt-carisma-crit-overlay {
+        position: fixed; left: 50%; top: 38%; transform: translateX(-50%);
+        z-index: 9200; pointer-events: none; text-align: center;
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+      }
+      .avt-carisma-crit-die {
+        font-family: var(--fonte-d, monospace); font-size: 2.8rem; font-weight: 700;
+        color: #ffd700; text-shadow: 0 0 18px #ffd700, 0 0 6px #ff9900, 2px 2px 0 rgba(0,0,0,0.8);
+        animation: avtCarismaGiro 0.7s ease-in-out forwards;
+        display: inline-block;
+      }
+      .avt-carisma-crit-label {
+        font-family: var(--fonte-d, monospace); font-size: 0.78rem; color: #ffd700;
+        text-shadow: 0 0 8px #ffd700; letter-spacing: 0.08em; opacity: 0.9;
+      }
+    `;
+    document.head.appendChild(s);
+  }
+  const el = document.createElement('div');
+  el.className = 'avt-carisma-crit-overlay';
+  el.innerHTML = `<div class="avt-carisma-crit-die">${hitOriginal} → 20</div><div class="avt-carisma-crit-label">✨ Carisma!</div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1800);
+}
+
+async function _avtSalvarCarismaCritConfig() {
+  const basePct = parseFloat(document.getElementById('avt-mp-car-crit-base')?.value);
+  const prog    = parseFloat(document.getElementById('avt-mp-car-crit-prog')?.value);
+  if (isNaN(basePct) || isNaN(prog)) { mostrarToast('Valores inválidos', 'erro'); return; }
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.carisma_crit_base_pct  = basePct;
+  rpg.theme_json.level_config.carisma_crit_progressao = prog;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    try { _avtBroadcast('avt_level_config_update', { config: { carisma_crit_base_pct: basePct, carisma_crit_progressao: prog } }); } catch(_) {}
+    mostrarToast(`✨ Carisma crítico: base=${basePct}%, progressão=${prog}%`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
+}
 
 function _avtTokenTremer(ent) {
   if (!ent) return;

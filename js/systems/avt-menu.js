@@ -589,6 +589,7 @@ function _avtMenuAbrirConfigMestre(aba) {
   const abas = [
     { id: 'menu',          label: '🖼 Menu' },
     { id: 'balanceamento', label: '⚖ Balanço' },
+    { id: 'npcs',          label: '🤖 NPCs' },
     { id: 'campanha',      label: '🏰 Campanha' },
     { id: 'jogadores',     label: '👥 Jogadores' },
     { id: 'personagens',   label: '👤 Personagens' },
