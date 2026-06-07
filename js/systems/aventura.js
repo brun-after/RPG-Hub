@@ -4821,7 +4821,8 @@ function _avtGetVelocidadeMovimento(ent) {
   const pct = _avtGetDestrezaVelPct();
   const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
   const dex  = dbChar?.custom_attrs?.atributos?.destreza ?? ent.atributos?.destreza ?? 10;
-  const mult = Math.max(0.2, 1 + ((dex - 10) * pct) / 100);
+  let mult = Math.max(0.2, 1 + ((dex - 10) * pct) / 100);
+  if (ent?._dominado) mult *= 1.3;
   return Math.max(0.3, (1000 / ms) * mult);
 }
 
@@ -23208,14 +23209,17 @@ function _avtNpcTurnoInvocado(bat) {
   if (!bat.movimentoRestante) bat.movimentoRestante = {};
   let movRestante = _avtGetMovimentoMax ? _avtGetMovimentoMax(entInv) : 3;
   bat.movimentoRestante[entInv.id] = movRestante;
+  let _invMoved = false;
   while (movRestante > 0) {
     const dir = _avtNpcMelhorDirecao(entInv, alvo, 1);
     if (!dir) break;
     entInv.x += dir[0]; entInv.y += dir[1];
     inv.x = entInv.x; inv.y = entInv.y;
     movRestante--;
+    _invMoved = true;
   }
   _avtBcastTokenMove({ nome: entInv.nome, id: entInv.id, x: entInv.x, y: entInv.y });
+  if (_invMoved) _avtSetEntState(entInv.id, 'walk');
 
   // Ataque se adjacente
   const dist = Math.max(Math.abs(entInv.x - alvo.x), Math.abs(entInv.y - alvo.y));
@@ -23259,6 +23263,9 @@ function _avtNpcTurnoInvocado(bat) {
       }
     }
 
+    // Estado de ataque (aciona sprite/som de ataque do token)
+    _avtSetEntState(entInv.id, 'attack');
+
     // Broadcast de skill selecionada
     _avtBroadcast('avt_skill_selecionada', {
       atacanteNome: inv.nome, skillId: _skUsada?.id || null, skillNome: _skNome, alvoNome: alvo.nome
@@ -23278,6 +23285,19 @@ function _avtNpcTurnoInvocado(bat) {
         }
       } else { _danoTotalInv += parseInt(part) || 0; }
     });
+
+    // Aplicar modificador de atributo (Força/Inteligência) — igual ao NPC vivo
+    {
+      const _normA = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const _tipoInvClasse = entInv?.tipoClasse || entInv?.classe_aventura || 'guerreiro';
+      const _attrNomeInv = _skUsada?.atributo_base || (/mago/i.test(_tipoInvClasse) ? 'Inteligência' : 'Força');
+      const _atrsInv = entInv?.atributos || {};
+      const _chaveInv = Object.keys(_atrsInv).find(k => _normA(k) === _normA(_attrNomeInv));
+      const _attrValInv = _chaveInv ? (parseFloat(_atrsInv[_chaveInv] || 0) || 1) : 1;
+      const _multInv = (_skUsada?.mod_atributo_mult ?? _skUsada?.mod_atributo_pct ?? 1.0) || 1;
+      _danoTotalInv = Math.ceil(_danoTotalInv * _attrValInv * _multInv);
+    }
+
     const _hitRollInv = Math.floor(Math.random() * 20) + 1;
     const _critMultInv = _avtCritMultFromD20(_hitRollInv);
     const _isCritInv = _critMultInv > 1;
@@ -23286,7 +23306,13 @@ function _avtNpcTurnoInvocado(bat) {
     // Animação de dados acima da cabeça do dominado
     const _resultInv = { dados: _dadosInv.map(d => ({ faces: d.faces, valor: d.val })), total: _danoTotalInv };
     _avtMostrarDadosAcimaDaHeadCompleto(entInv, _resultInv, _skNome, _isCritInv ? 'critico_maior' : _isFumbleInv ? 'erro' : 'normal');
+    _avtMostrarRollInimigo(entInv, _resultInv, _isCritInv);
     _avtMostrarD20AbaixoDaHead(entInv, _hitRollInv, _critMultInv);
+    _avtBroadcast('avt_dado_rolado', {
+      atacanteNome: inv.nome, alvoNome: alvo.nome, skillNome: _skNome,
+      dados: _dadosInv.map(d => ({ faces: d.faces, valor: d.val })),
+      total: _danoTotalInv, isCrit: _isCritInv, isFumble: _isFumbleInv, critMult: _critMultInv,
+    });
 
     // Animação de ataque (placeholder ou da skill)
     const _animInv = _avtAnimacaoPlaceholder(entInv, _skUsada);
