@@ -259,9 +259,12 @@ class _AudioManager {
     const vol = Math.min(1, Math.max(0, volume ?? this.volume.sfx));
     let howl = this._sfxCache[url];
     if (!howl) {
+      // html5:true avoids CORS issues with cross-origin audio URLs (Web Audio API requires
+      // proper CORS headers; HTML5 <audio> element does not for basic playback)
       howl = new Howl({
-        src: [url],
+        src:    [url],
         volume: vol,
+        html5:  true,
         onloaderror: (_id, err) => console.warn('[SFX] Falha ao carregar:', url, err),
         onplayerror:  (_id, err) => console.warn('[SFX] Falha ao tocar:',    url, err),
       });
@@ -280,7 +283,7 @@ class _AudioManager {
     ids.forEach(id => {
       const url = this._resolveId(id);
       if (url && !this._sfxCache[url]) {
-        this._sfxCache[url] = new Howl({ src: [url], preload: true });
+        this._sfxCache[url] = new Howl({ src: [url], preload: true, html5: true });
       }
     });
   }
