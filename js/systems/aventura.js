@@ -516,6 +516,14 @@ window._avtBulkAparState = window._avtBulkAparState || {
 
 async function _avtSb(path, opts) { return sb(path, opts); }
 
+// Escapa texto controlado pelo usuário (nome de aventura/personagem) antes de injetar em
+// innerHTML — evita quebra de layout/injeção de markup por `<`, `"`, etc.
+function _avtEsc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+window._avtEsc = _avtEsc;
+
 async function aventuraCarregarLista() {
   try {
     const all = await _avtSb('rpg_registry?select=*&order=name');
@@ -546,7 +554,7 @@ async function avtHubRenderSection() {
         <path d="M13 3 L21 7 L21 19 L13 23 L5 19 L5 7Z" stroke="${cor}" stroke-width="1.2" fill="none"/>
         <path d="M9 13 L17 13 M13 9 L13 17" stroke="${cor}" stroke-width="1.5"/></svg></div>
       <div class="avt-card-info">
-        <div class="avt-card-nome" style="color:${cor}">${r.name}</div>
+        <div class="avt-card-nome" style="color:${cor}">${_avtEsc(r.name)}</div>
         <div class="avt-card-sub">Dungeon</div>
       </div>
       <div class="avt-card-arr">→</div>
@@ -638,7 +646,7 @@ function _avtCriarRenderIdentidade(body) {
     <div class="etapa-desc">Nome e cor do seu dungeon.</div>
     <div class="criar-field">
       <label>Nome *</label>
-      <input class="criar-input" id="avt-c-nome" value="${c.nome}" placeholder="Ex: A Cripta Esquecida" maxlength="60">
+      <input class="criar-input" id="avt-c-nome" value="${_avtEsc(c.nome)}" placeholder="Ex: A Cripta Esquecida" maxlength="60">
     </div>
     <div class="criar-field">
       <label>Cor principal</label>
@@ -6303,6 +6311,9 @@ function _avtMoverJogador(dx, dy) {
   }
   if (!jogador) jogador = _avtEntidadeControlada();
   if (!jogador) return;
+  // Entidade morta não se move (cobre desktop + d-pad mobile, que roteiam por aqui).
+  // Evita enfileirar waypoints/gastar movimento antes de _avtProcessarMorteJogador concluir.
+  if (jogador.hp <= 0) return;
   if (minhaBat?.moverModo) {
     // Combate: movimento célula inteira (snap posição fracionária de exploração para inteiro)
     const baseX = Math.round(jogador.x), baseY = Math.round(jogador.y);
@@ -6466,6 +6477,18 @@ function _avtDefaultAtaqueBasico(classeAventura) {
   };
 }
 window._avtDefaultAtaqueBasico = _avtDefaultAtaqueBasico;
+
+// Alcance básico de ataque do NPC derivado da config VIVA (Painel do Mestre), por classe.
+// Não usa ini.alcance_celulas, que pode estar defasado (default de criação/preset/import) e
+// fazer o NPC atacar fora de combate de mais longe do que o configurado no painel.
+function _avtAlcanceBasicoNpc(ini) {
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const ehMago = /mago/i.test(ini?.tipoClasse || ini?.classe_aventura || '');
+  return ehMago
+    ? (lc.ataque_basico_npc?.mago?.alcance_celulas ?? lc.alcance_basico_mago ?? 4)
+    : (lc.ataque_basico_npc?.guerreiro?.alcance_celulas ?? lc.alcance_basico_guerreiro ?? 2);
+}
+window._avtAlcanceBasicoNpc = _avtAlcanceBasicoNpc;
 
 // Auto ataque básico fora de combate ao entrar no alcance de inimigo em perseguição
 function _avtVerificarAutoAtaqueBasico(jogador) {
@@ -7701,7 +7724,9 @@ function _avtAtualizarPerseguicoes(dt) {
 
     // Verificar se já está no alcance de ataque (Chebyshev — consistente com range do jogador)
     const dist = Math.max(Math.abs(ini.x - alvo.x), Math.abs(ini.y - alvo.y));
-    const alcanceAtaque = ini.alcance_celulas ?? 1;
+    // Usa o alcance básico CONFIGURADO (Painel do Mestre) por classe, não o ini.alcance_celulas
+    // possivelmente defasado — corrige ranged atacando OOC de mais longe que o configurado.
+    const alcanceAtaque = _avtAlcanceBasicoNpc(ini);
     if (dist <= alcanceAtaque) {
       // Silenciado: não pode atacar, mas continua se aproximando
       if (ini._silenciado) continue;
@@ -7848,6 +7873,9 @@ function _avtTickEfeitosOOC(now) {
           let valid = null;
           const visited = new Set([`${ex},${ey}`]);
           const queue = [[ex, ey, 0]];
+          // Teto = tamanho da dungeon (antes era fixo em 200, que falhava em mapas grandes,
+          // ex.: 60×40 = 2400 células, deixando a entidade presa dentro da parede).
+          const _bfsCap = AVT_STATE.dungeon ? (AVT_STATE.dungeon.w * AVT_STATE.dungeon.h + 1) : 4000;
           while (queue.length && !valid) {
             const [qx, qy] = queue.shift();
             for (const [ddx, ddy] of [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]]) {
@@ -7856,7 +7884,7 @@ function _avtTickEfeitosOOC(now) {
               if (visited.has(key)) continue;
               visited.add(key);
               if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) { valid = {x: nx, y: ny}; break; }
-              if (visited.size < 200) queue.push([nx, ny]);
+              if (visited.size < _bfsCap) queue.push([nx, ny]);
             }
           }
           if (valid) {
@@ -8249,6 +8277,16 @@ function _avtAceitarConviteCombate(batId) {
   if (!bat || !jogador) return;
   const entJog = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
   if (bat.envolvidos.includes(entJog.id)) return;
+  // Validar o convite: precisa existir, apontar para ESTA batalha e não estar expirado.
+  // (_convitesCombate era escrito com expiry mas nunca checado no aceite — sem isso, um clique
+  //  tardio entrava em batalha encerrada/recriada com o mesmo id determinístico.)
+  const _convite = AVT_STATE._convitesCombate[entJog.id];
+  if (!_convite || _convite.batId !== batId || Date.now() > _convite.expiry) {
+    delete AVT_STATE._convitesCombate[entJog.id];
+    mostrarToast('⏱ Convite de combate expirado', 'aviso', 1800);
+    return;
+  }
+  delete AVT_STATE._convitesCombate[entJog.id]; // consumir o convite
   const initRoll = Math.floor(Math.random() * 20) + 1;
   bat.iniciativa.push({ ...entJog, initRoll });
   bat.envolvidos.push(entJog.id);
@@ -11572,7 +11610,9 @@ function _avtNpcAtualizarPerseguicao(entNpc, nearest) {
 
 // Retorna a melhor direção de 1 tile para o NPC, levando em conta seu tipoClasse e o do alvo
 function _avtNpcMelhorDirecao(entNpc, alvo, skillAlcance) {
-  const dist = Math.max(Math.abs(entNpc.x - alvo.x), Math.abs(entNpc.y - alvo.y)); // Chebyshev
+  const ax = Math.round(alvo.x),   ay = Math.round(alvo.y);
+  const sx = Math.round(entNpc.x), sy = Math.round(entNpc.y);
+  const cheb = (x, y) => Math.max(Math.abs(x - ax), Math.abs(y - ay)); // Chebyshev (= range de ataque)
   const tipoNpc  = entNpc.tipoClasse || 'guerreiro';
   // Inferir tipo do alvo: se tem skills ranged (alcance >= 2) ou campo tipoClasse
   const tipoAlvo = alvo.tipoClasse || (() => {
@@ -11592,20 +11632,49 @@ function _avtNpcMelhorDirecao(entNpc, alvo, skillAlcance) {
     wantDist = 1;
   }
 
-  const needApproach = dist > wantDist;
-  const needRetreat  = dist < wantDist;
-  if (!needApproach && !needRetreat) return null; // já em posição ideal
+  // Já em posição ideal — não mexe (deixa atacar).
+  const startScore = Math.abs(cheb(sx, sy) - wantDist);
+  if (startScore === 0) return null;
 
-  let bestDir = null, bestScore = needApproach ? Infinity : -Infinity;
-  [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
-    const nx = entNpc.x + dx, ny = entNpc.y + dy;
-    if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
-    if (AVT_STATE.entidades.some(e2 => e2.id !== entNpc.id && e2.x === nx && e2.y === ny)) return;
-    const nd = Math.abs(alvo.x - nx) + Math.abs(alvo.y - ny);
-    if (needApproach && nd < bestScore) { bestScore = nd; bestDir = [dx, dy]; }
-    if (needRetreat  && nd > bestScore) { bestScore = nd; bestDir = [dx, dy]; }
-  });
-  return bestDir;
+  // Pathfinding BFS (mesmas regras de parede/ocupação do _avtBFS) guardando o pai de cada
+  // célula, para reconstruir o PRIMEIRO passo rumo à melhor posição de tiro/corpo-a-corpo.
+  // Substitui o passo guloso anterior, que ficava preso em paredes/cantos/aliados e fazia o
+  // NPC passar o turno parado em vez de se aproximar ou recuar (kite).
+  const RAIO = 20, CAP = 600;
+  const visited = new Map();
+  visited.set(`${sx},${sy}`, { x: sx, y: sy, px: null, py: null });
+  const queue = [{ x: sx, y: sy, dist: 0 }];
+  let best = null, bestScore = Infinity, bestDist = Infinity;
+  while (queue.length) {
+    const cur = queue.shift();
+    if (cur.dist > 0) {
+      const score = Math.abs(cheb(cur.x, cur.y) - wantDist); // proximidade da distância ideal
+      if (score < bestScore || (score === bestScore && cur.dist < bestDist)) {
+        bestScore = score; bestDist = cur.dist; best = cur;
+      }
+    }
+    if (cur.dist >= RAIO || visited.size >= CAP) continue;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = cur.x + dx, ny = cur.y + dy, key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) continue;
+      if (_avtCelulaOcupada(nx, ny, entNpc.id, entNpc.tipo, true)) continue;
+      visited.set(key, { x: nx, y: ny, px: cur.x, py: cur.y });
+      queue.push({ x: nx, y: ny, dist: cur.dist + 1 });
+    }
+  }
+  if (!best) return null;                 // cercado — sem movimento possível
+  if (bestScore >= startScore) return null; // nenhuma célula alcançável melhora — fica e age
+
+  // Reconstrói o primeiro passo do caminho NPC → melhor célula.
+  let node = visited.get(`${best.x},${best.y}`);
+  while (node && node.px !== null && !(node.px === sx && node.py === sy)) {
+    node = visited.get(`${node.px},${node.py}`);
+  }
+  if (!node) return null;
+  const stepX = node.x - sx, stepY = node.y - sy;
+  if (stepX === 0 && stepY === 0) return null;
+  return [stepX, stepY];
 }
 
 // Dano médio esperado de uma fórmula (ex: "2d6+3" → 10). Usado para ordenar skills por potência.
