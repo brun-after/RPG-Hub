@@ -781,19 +781,34 @@ window.__avtFlushPendingBroadcasts = function(){
   const _origRB = window.realtimeBroadcast;
   if (typeof _origRB !== 'function') return;
   let _lastHpTs = 0; let _pendingHp = null; let _hpTimer = null;
+  const _flushHp = () => {
+    if (_hpTimer) { clearTimeout(_hpTimer); _hpTimer = null; }
+    if (_pendingHp == null) return;
+    _lastHpTs = Date.now();
+    const p = _pendingHp; _pendingHp = null;
+    try { _origRB.call(window, 'avt_player_hp', p); } catch(_){}
+  };
   window.realtimeBroadcast = function(tipo, payload){
     if (tipo === 'avt_player_hp') {
       _pendingHp = payload;
+      // Morte/transição crítica: enviar IMEDIATAMENTE (bypass do coalescing de 60ms) para que
+      // hp<=0 não seja sobrescrito por um update seguinte nem perdido se a aba fechar na janela.
+      // Como este canal já é por-jogador, não há risco de volume de wipe de AoE (HP de NPC usa outro canal).
+      if ((payload?.hp ?? 1) <= 0) { _flushHp(); return; }
       if (_hpTimer) return;
       const now = Date.now();
       const wait = Math.max(0, 60 - (now - _lastHpTs));
-      _hpTimer = setTimeout(() => {
-        _hpTimer = null; _lastHpTs = Date.now();
-        try { _origRB.call(this, 'avt_player_hp', _pendingHp); } catch(_){}
-        _pendingHp = null;
-      }, wait);
+      _hpTimer = setTimeout(_flushHp, wait);
       return;
     }
     return _origRB.apply(this, arguments);
   };
+  // Flush do HP pendente ao esconder/fechar a aba — antes não havia teardown, então um HP
+  // pendente (inclusive a morte) se perdia se a aba fechasse dentro dos 60ms de coalescing.
+  try {
+    window.addEventListener('pagehide', _flushHp);
+    window.addEventListener('visibilitychange', () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') _flushHp();
+    });
+  } catch(_){}
 })();
