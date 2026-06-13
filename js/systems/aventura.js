@@ -3021,9 +3021,87 @@ function _avtInitNpcTimer(ent) {
 }
 
 // Popula só os inimigos de um dungeon (usado na entrada de fases extras)
+// ── Progressão de NPC por nível ──────────────────────────────────────────────
+// 3 pontos/nível: 2 Con+1 For ou 2 For+1 Con. A partir do lv 3 também ganha
+// 1-2 Inteligência; lv 7+ Destreza; lv 10+ Sabedoria (mana). Retorna NOVO objeto.
+function _avtNivelarNpc(base, nivel, isBoss) {
+  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const atrs = { ...(base || {}) };
+  const find = nome => Object.keys(atrs).find(k => _norm(k) === _norm(nome)) || nome;
+  const add = (nome, qtd) => { const k = find(nome); atrs[k] = (parseFloat(atrs[k]) || 0) + qtd; };
+  for (let lv = 2; lv <= (nivel || 1); lv++) {
+    if (Math.random() < 0.5) { add('Constituição', 2); add('Força', 1); }
+    else                     { add('Força', 2); add('Constituição', 1); }
+    if (lv >= 3)  add('Inteligência', Math.random() < 0.5 ? 1 : 2);
+    if (lv >= 7)  add('Destreza', 1);
+    if (lv >= 10) add('Sabedoria', 1);
+  }
+  return atrs;
+}
+window._avtNivelarNpc = _avtNivelarNpc;
+
+// Hash simples e estável de uma string → inteiro (para seed determinístico por fase).
+function _avtSeedFromStr(str) {
+  let h = 2166136261;
+  const s = String(str || 'principal');
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return Math.abs(h);
+}
+
+// Gera uma config de partículas Pixi (envelope cast/impact) determinística por fase.
+// Sem rede/IA — reusa os presets de AVT_FX_PRESETS, variando cor/forma por seed.
+function _avtGerarParticleConfigFase(seed) {
+  const s = (typeof seed === 'number') ? seed : _avtSeedFromStr(seed);
+  const hue = (s * 47) % 360;
+  // HSL→hex (sat 70%, light 60%)
+  const h = hue / 360, sat = 0.70, lig = 0.60;
+  const hue2rgb = (p, q, t) => { if (t<0) t+=1; if (t>1) t-=1;
+    if (t<1/6) return p+(q-p)*6*t; if (t<1/2) return q;
+    if (t<2/3) return p+(q-p)*(2/3-t)*6; return p; };
+  const q = lig < 0.5 ? lig*(1+sat) : lig+sat-lig*sat;
+  const p = 2*lig - q;
+  const toHex = v => Math.round(v*255).toString(16).padStart(2,'0');
+  const cor = '#' + toHex(hue2rgb(p,q,h+1/3)) + toHex(hue2rgb(p,q,h)) + toHex(hue2rgb(p,q,h-1/3));
+  const castPool   = ['arcane_lance','whisper_bolt','silent_dart'];
+  const impactPool = ['fire_impact','ice_shatter','lightning_strike','holy_burst','dark_implosion','precise_strike'];
+  const intensPool = ['suave','equilibrado','intenso'];
+  return {
+    cor,
+    intensidade: intensPool[s % intensPool.length],
+    cast:   { ms: 300, preset: castPool[s % castPool.length] },
+    impact: { ms: 350, preset: impactPool[s % impactPool.length] },
+  };
+}
+window._avtGerarParticleConfigFase = _avtGerarParticleConfigFase;
+
+// Skill de mago auto-gerada por fase (NPCs nível ≥3, comuns e boss). Cooldown 5,
+// scaling Inteligência 0.5. Gerada uma vez por dungeon e persistida.
+function _avtFaseMageSkill(d) {
+  if (!d) return null;
+  if (d._faseMageSkill) return d._faseMageSkill;
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const seed = d._faseSeed ?? _avtSeedFromStr(d._faseId || AVT_STATE._faseAtualId || 'principal');
+  d._faseMageSkill = {
+    id: 'auto_mage_' + seed,
+    habilidade: 'Projétil Arcano',
+    formula_dano: lc.npc_mage_formula || '1d8',
+    cooldown_turnos: lc.npc_skill_cooldown ?? 5,
+    tipo_dano: 'magico',
+    atributo_base: 'Inteligência',
+    mod_atributo_mult: lc.npc_skill_int_scaling ?? 0.5,
+    alcance_celulas: lc.alcance_basico_mago ?? 4,
+    alvo_tipo: 'inimigo',
+    _autoNpc: true,
+    animacao: { tipo: 'pixi_particulas', duracao: 650, particle_config: _avtGerarParticleConfigFase(seed) },
+  };
+  return d._faseMageSkill;
+}
+window._avtFaseMageSkill = _avtFaseMageSkill;
+
 function _avtPopularEntidadesInimigos(dungeon) {
   const d = dungeon || AVT_STATE.dungeon;
   if (!d?.tiles) return;
+  const _npcNivel = Math.max(1, parseInt(d._npcLevel) || 1);
   const rooms = d.rooms?.length ? d.rooms : _avtDetectarSalas(d);
   const inimigosJson = d._inimigosJson || [];
 
@@ -3045,7 +3123,11 @@ function _avtPopularEntidadesInimigos(dungeon) {
       const tipoClasse = ini.tipoClasse || (ini.isBoss ? 'guerreiro' : (Math.random() < 0.5 ? 'guerreiro' : 'mago'));
       const _lcAlc = AVT_STATE.rpg?.theme_json?.level_config || {};
       const alcancePadrao = tipoClasse === 'mago' ? (_lcAlc.alcance_basico_mago ?? 4) : (_lcAlc.alcance_basico_guerreiro ?? 2);
-      const _atrsIni = ini.atributos || {};
+      // atributos já vêm leveled no JSON; se vier sem nível mas a fase tem, nivelar.
+      const _nivelIni = ini.nivel ?? _npcNivel;
+      const _atrsIni = (ini.nivel != null || _npcNivel <= 1)
+        ? (ini.atributos || {})
+        : _avtNivelarNpc(ini.atributos || {}, _npcNivel, ini.isBoss);
       const _hpMaxIni = _calcHpNpc(_atrsIni);
       const ent = {
         id: 'ini_' + i, nome: ini.nome || `Inimigo ${i+1}`, tipo: 'inimigo',
@@ -3059,6 +3141,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
         tipoClasse, alcance_celulas: ini.alcance_celulas ?? alcancePadrao,
         classe_aventura: tipoClasse,
         atributos: _atrsIni,
+        nivel: _nivelIni, skill_slots: 1 + Math.floor(_nivelIni / 3),
       };
       AVT_STATE.entidades.push(ent);
       _avtInitNpcTimer(ent);
@@ -3076,7 +3159,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
       };
       if (isBossRoom) {
         const bPreset = AVT_NPC_PRESETS.boss;
-        const _atrsB = { 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 };
+        const _atrsB = _avtNivelarNpc({ 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 }, _npcNivel, true);
         const _hpMaxB = _calcHpNpc(_atrsB);
         const ent = {
           id: 'ini_boss_fase', nome: 'Boss', tipo: 'inimigo',
@@ -3087,6 +3170,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
           isBoss: true, xpBase: bPreset.xpBase, presetTipo: 'boss',
           tipoClasse: 'guerreiro', alcance_celulas: (AVT_STATE.rpg?.theme_json?.level_config?.alcance_basico_guerreiro ?? 2), classe_aventura: 'guerreiro',
           atributos: _atrsB,
+          nivel: _npcNivel, skill_slots: 1 + Math.floor(_npcNivel / 3),
         };
         AVT_STATE.entidades.push(ent);
         _avtInitNpcTimer(ent);
@@ -3098,7 +3182,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
           const tipoClasse = Math.random() < 0.5 ? 'guerreiro' : 'mago';
           const _lcAlc2 = AVT_STATE.rpg?.theme_json?.level_config || {};
           const alcancePadrao = tipoClasse === 'mago' ? (_lcAlc2.alcance_basico_mago ?? 4) : (_lcAlc2.alcance_basico_guerreiro ?? 2);
-          const _atrsE = { ..._attrsPorClasse[tipoClasse] };
+          const _atrsE = _avtNivelarNpc({ ..._attrsPorClasse[tipoClasse] }, _npcNivel, false);
           const _hpMaxE = _calcHpNpc(_atrsE);
           const ent = {
             id: 'ini_fase_' + uid, nome: `${preset.nome} ${uid+1}`, tipo: 'inimigo',
@@ -3110,6 +3194,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
             isBoss: false, xpBase: preset.xpBase, presetTipo: presetKey,
             tipoClasse, alcance_celulas: alcancePadrao, classe_aventura: tipoClasse,
             atributos: _atrsE,
+            nivel: _npcNivel, skill_slots: 1 + Math.floor(_npcNivel / 3),
           };
           AVT_STATE.entidades.push(ent);
           _avtInitNpcTimer(ent);
@@ -3126,7 +3211,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
         pacienciaSecs: e.pacienciaSecs, deteccaoRaio: e.deteccaoRaio,
         xpBase: e.xpBase, aparencia_tipo: e.presetTipo,
         tipoClasse: e.tipoClasse, alcance_celulas: e.alcance_celulas,
-        atributos: e.atributos,
+        atributos: e.atributos, nivel: e.nivel,
       }));
     _avtSalvarDungeon();
   }
@@ -11370,15 +11455,21 @@ function _avtGetMovimentoMax(ent) {
 function _avtNpcEscolherSkill(npcEnt, alvo, bat) {
   if (!npcEnt) return null;
   const batCds = (bat || _avtBatalhaDeEnt(npcEnt.id))?._cooldowns || {};
-  const npcSkills = AVT_STATE.skills.filter(sk => {
+  // Candidatas: skills atribuídas ao NPC + skill de mago auto-gerada da fase (nível ≥3).
+  let candidatas = AVT_STATE.skills.filter(sk => {
     if (!sk.personagem && !sk.character_id) return false;
     const byNome = sk.personagem === npcEnt.nome;
     const byId   = sk.character_id && sk.character_id === npcEnt.dbId;
-    if (!byNome && !byId) return false;
-    // Check cooldown usando cooldowns da batalha (fix P5)
+    return byNome || byId;
+  });
+  const mageSk = (npcEnt.nivel >= 3) ? _avtFaseMageSkill(AVT_STATE.dungeon) : null;
+  if (mageSk && !candidatas.some(s => s.id === mageSk.id)) candidatas = candidatas.concat([mageSk]);
+  // Limitar pelo nº de slots do NPC (ordem estável por id)
+  const slots = npcEnt.skill_slots ?? (1 + Math.floor((npcEnt.nivel || 1) / 3));
+  candidatas = candidatas.slice().sort((a, b) => String(a.id).localeCompare(String(b.id))).slice(0, Math.max(1, slots));
+  const npcSkills = candidatas.filter(sk => {
     const cdKey = npcEnt.id + '_' + sk.id;
     if ((batCds[cdKey] || 0) > 0) return false;
-    // Check range
     if (sk.alcance_celulas != null) {
       const dist = Math.abs(npcEnt.x - alvo.x) + Math.abs(npcEnt.y - alvo.y);
       if (dist > sk.alcance_celulas) return false;
@@ -15945,6 +16036,37 @@ function _avtMpConteudoAba() {
         </div>
       </div>
       <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
+        <div class="avt-mp-label">🪄 Skills de NPCs em Massa</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Configura de uma vez as skills atribuídas aos NPCs e a skill de mago auto-gerada das fases (NPCs nível ≥3). Deixe um campo vazio para não alterá-lo.</div>
+        <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+          <input id="avt-mp-npcsk-formula" placeholder="Fórmula (ex 1d8)" value="${lc.npc_mage_formula ?? '1d8'}"
+            style="flex:1;min-width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+          <input type="number" id="avt-mp-npcsk-cd" placeholder="CD" min="0" max="20" value="${lc.npc_skill_cooldown ?? 5}"
+            style="width:60px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+          <input type="number" id="avt-mp-npcsk-mult" step="0.1" min="0" max="10" placeholder="Escala Int" value="${lc.npc_skill_int_scaling ?? 0.5}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+          <select id="avt-mp-npcsk-tipo" style="flex:1;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem">
+            <option value="">— tipo de dano —</option>
+            <option value="magico">Mágico</option><option value="fisico">Físico</option>
+            <option value="fogo">Fogo</option><option value="gelo">Gelo</option>
+            <option value="veneno">Veneno</option><option value="psiquico">Psíquico</option>
+          </select>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtBulkNpcSkillAplicar()">🪄 Aplicar a todos os NPCs</button>
+      </div>
+      <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
+        <div class="avt-mp-label">🌀 NPC cruza portas internas</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Chance (%) de um inimigo atravessar uma porta interna de teleporte ao pisar nela. 0 = nunca, 100 = sempre.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-npc-porta-chance" min="0" max="100" step="5" value="${lc.npc_porta_chance_pct ?? 50}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">% de chance</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtSalvarNpcPortaChance()">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
         <div class="avt-mp-label">🎨 Aparência em Massa</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">Aplica token + foto de perfil com variação de cor a todos os inimigos da classe.</div>
         ${_avtBulkAparSecao('guerreiro')}
@@ -17419,6 +17541,80 @@ function _avtBulkAttrAplicar(filtro) {
   mostrarToast(`${inimigos.length} inimigo(s) atualizados: ${attrKey} = ${val}`, 'sucesso');
 }
 
+// Config em massa das skills de NPC (atribuídas + skill de mago auto-gerada das fases).
+function _avtBulkNpcSkillAplicar() {
+  const formula = document.getElementById('avt-mp-npcsk-formula')?.value.trim();
+  const cdRaw   = document.getElementById('avt-mp-npcsk-cd')?.value;
+  const multRaw = document.getElementById('avt-mp-npcsk-mult')?.value;
+  const tipo    = document.getElementById('avt-mp-npcsk-tipo')?.value;
+  const cd   = cdRaw   !== '' ? Math.max(0, parseInt(cdRaw)) : null;
+  const mult = multRaw !== '' ? Math.max(0, parseFloat(multRaw)) : null;
+
+  // Defaults para skills de mago auto-geradas (futuras fases) ficam em level_config.
+  const rpg = AVT_STATE.rpg;
+  if (rpg) {
+    if (!rpg.theme_json) rpg.theme_json = {};
+    if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+    const lc = rpg.theme_json.level_config;
+    if (formula) lc.npc_mage_formula = formula;
+    if (cd != null) lc.npc_skill_cooldown = cd;
+    if (mult != null) lc.npc_skill_int_scaling = mult;
+  }
+
+  // Aplicar a skills NPC já carregadas (com id no banco) + skill sintética da dungeon atual.
+  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const chars = AVT_STATE.chars || [];
+  const ehNpc = sk => {
+    const c = chars.find(c => (sk.character_id && c.id === sk.character_id) || c.nome === sk.personagem);
+    const ca = c?.custom_attrs || {};
+    return ca.tipo_personagem === 'npc' || ca.tipo === 'npc' || ca.npc_generico === true;
+  };
+  const npcSkills = (AVT_STATE.skills || []).filter(s => (s.personagem || s.character_id) && ehNpc(s));
+  let nDb = 0;
+  npcSkills.forEach(s => {
+    const body = {};
+    if (formula) body.formula_dano = formula;
+    if (cd != null) body.cooldown_turnos = cd;
+    if (tipo) body.tipo_dano = tipo;
+    if (mult != null) body.mod_atributo_pct = mult; // skills do editor usam pct/mult
+    if (!Object.keys(body).length) return;
+    Object.assign(s, body);
+    if (s.id != null) {
+      nDb++;
+      _avtSb(`skills?id=eq.${encodeURIComponent(s.id)}`, { method:'PATCH', body: JSON.stringify(body) }).catch(()=>{});
+    }
+  });
+
+  // Skill sintética da dungeon atual (será re-gerada com novos defaults nas próximas fases)
+  const ms = AVT_STATE.dungeon?._faseMageSkill;
+  if (ms) {
+    if (formula) ms.formula_dano = formula;
+    if (cd != null) ms.cooldown_turnos = cd;
+    if (mult != null) ms.mod_atributo_mult = mult;
+    if (tipo) ms.tipo_dano = tipo;
+  }
+
+  _avtSalvarThemeJson();
+  _avtSalvarDungeon();
+  mostrarToast(`Skills de NPC atualizadas (${nDb} no banco + defaults de fase).`, 'sucesso');
+}
+window._avtBulkNpcSkillAplicar = _avtBulkNpcSkillAplicar;
+
+async function _avtSalvarNpcPortaChance() {
+  const raw = document.getElementById('avt-mp-npc-porta-chance')?.value ?? 50;
+  const val = Math.max(0, Math.min(100, parseInt(raw) || 0));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.npc_porta_chance_pct = val;
+  try {
+    await _avtSalvarThemeJson();
+    mostrarToast(`Chance de NPC cruzar portas: ${val}%`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
+}
+window._avtSalvarNpcPortaChance = _avtSalvarNpcPortaChance;
+
 async function _avtMestreExcluirCampanha() {
   const nome = AVT_STATE.rpg?.name || 'esta campanha';
   if (!confirm(`Excluir "${nome}"? Esta ação não pode ser desfeita.`)) return;
@@ -18404,6 +18600,10 @@ async function _avtEntrarFaseExtra(fase) {
 
   // Trocar dungeon
   AVT_STATE.dungeon = fase.dungeon_data;
+  // Metadados de progressão/animação por fase (nível dos NPCs, seed do gerador Pixi).
+  fase.dungeon_data._npcLevel = fase.npc_level ?? 1;
+  fase.dungeon_data._faseId   = fase.id;
+  if (fase.dungeon_data._faseSeed == null) fase.dungeon_data._faseSeed = _avtSeedFromStr(fase.id);
   AVT_STATE._faseAtualId = fase.id;
   if (typeof AudioManager !== 'undefined') AudioManager.onEnterPhase(fase);
 
