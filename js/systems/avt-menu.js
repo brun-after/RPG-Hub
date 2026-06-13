@@ -1179,26 +1179,22 @@ async function _avtMenuSalvarSessionData(patch) {
 }
 window._avtMenuSalvarSessionData = _avtMenuSalvarSessionData;
 
-// Handler global para avt_fase_mudou (usado pelo AVT_HANDLER_MAP do rtnet.js via Supabase fallback)
-window.avtReceberFaseMudou = function(payload) {
-  try {
-    if (payload?.faseId && typeof _avtSalaEsperaFase === 'function') {
-      _avtSalaEsperaFase(payload.faseId);
-    }
-  } catch(_) {}
-};
+// Handler global para avt_fase_mudou — DESATIVADO: trocar de fase é local e não deve
+// arrastar outros jogadores nem forçá-los a uma sala de espera (isolamento por fase).
+window.avtReceberFaseMudou = function(_payload) { /* no-op: fases são por jogador */ };
 
-// Handler de avt_fase_mudou recebido de outro peer via RTNet
-// Registrado quando RTNet já está disponível ou aguarda até estar
+// Presença leve: registra em que fase cada jogador está (apenas informativo).
 function _avtMenuBindFaseMudouHandler() {
   if (typeof RTNet === 'undefined' || typeof RTNet.on !== 'function') {
     setTimeout(_avtMenuBindFaseMudouHandler, 600);
     return;
   }
-  RTNet.on('avt_fase_mudou', (payload) => {
+  RTNet.on('avt_fase_presenca', (payload) => {
     try {
-      if (payload?.faseId && typeof _avtSalaEsperaFase === 'function') {
-        _avtSalaEsperaFase(payload.faseId);
+      if (!payload?.nome) return;
+      if (typeof AVT_STATE !== 'undefined') {
+        AVT_STATE._fasePresenca = AVT_STATE._fasePresenca || {};
+        AVT_STATE._fasePresenca[payload.nome] = payload.faseId || 'principal';
       }
     } catch(_) {}
   });

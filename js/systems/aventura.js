@@ -127,6 +127,8 @@ function _avtBcastTokenMove(payload){
       window._avtTokenSeq[nome] = next;
       payload = Object.assign({}, payload, { seq: next, ts: Date.now() });
     }
+    // Escopo por fase: jogadores em fases diferentes não interferem uns nos outros.
+    if (payload.faseId == null) payload = Object.assign({}, payload, { faseId: AVT_STATE._faseAtualId || 'principal' });
     _avtBroadcast('avt_token_move', payload);
   }catch(e){
     try{ console.warn('[AVT] _avtBcastTokenMove falhou:', e); }catch(_){}
@@ -8713,7 +8715,9 @@ function _avtToggleDpad() {
 // resultando em movimento contínuo no observador, em vez de teleporte.
 function avtReceberMovimento(_payload) {
   // Anti-eco: descartar pacotes avt_token_move fora de ordem (seq monotônico por nome).
-  const { nome, x, y, rx, ry, id, seq, ts } = (_payload || {});
+  const { nome, x, y, rx, ry, id, seq, ts, faseId } = (_payload || {});
+  // Isolamento por fase: ignorar movimento de quem está noutra fase.
+  if (faseId != null && faseId !== (AVT_STATE._faseAtualId || 'principal')) return;
   try{
     if(nome && (seq != null || ts != null)){
       const _dedupeKey = id || nome;
@@ -18682,7 +18686,7 @@ function _avtVerificarPortaFase(x, y) {
     const tem = chaves.some(c => (typeof c === 'string' ? c : c.chave_palavra) === p.chave_palavra);
     if (!tem) { mostrarToast(`Precisas de: ${p.chave_palavra}`, 'aviso'); return; }
   }
-  _avtEntrarFaseExtra(fase);
+  _avtPromptFase(`Avançar para ${fase.nome || 'a próxima fase'}?`, 'Avançar', () => _avtEntrarFaseExtra(fase));
 }
 
 async function _avtEntrarFaseExtra(fase) {
@@ -18785,13 +18789,13 @@ async function _avtEntrarFaseExtra(fase) {
   _avtPhaseHostCheck(fase.id);
 }
 
+// Entrar numa fase é uma ação LOCAL: não arrasta os outros jogadores nem os força
+// a uma sala de espera. Apenas anuncia presença (leve) para o painel do mestre.
 function _avtPhaseHostCheck(faseId) {
   try {
     if (typeof RTNet === 'undefined' || !RTNet.initialized) return;
-    const jogadores = (AVT_STATE.membros || []).filter(m => m.role !== 'mestre');
-    if (jogadores.length === 0) return;
-    _avtBroadcast('avt_fase_mudou', { faseId });
-    _avtSalaEsperaFase(faseId);
+    const jog = _avtMeuJogador();
+    _avtBroadcast('avt_fase_presenca', { faseId, nome: jog?.nome || null });
   } catch(_) {}
 }
 window._avtPhaseHostCheck = _avtPhaseHostCheck;
@@ -18815,9 +18819,35 @@ function _avtVerificarSaida(x, y) {
   if (!AVT_STATE._faseAnterior) return;
   const tile = AVT_STATE.dungeon?.tiles?.[y]?.[x];
   if (tile === AVT_T.SAIDA) {
-    if (confirm('🚪 Sair desta fase e voltar ao mapa anterior?')) _avtVoltarFaseAnterior();
+    _avtPromptFase('Voltar ao mapa anterior?', '← Voltar', () => _avtVoltarFaseAnterior());
   }
 }
+
+// Prompt instantâneo (sem confirm() nem sala de espera) ao pisar numa porta de fase.
+// onAdvance: callback ao confirmar; "Ficar" apenas fecha (jogador permanece na fase).
+function _avtPromptFase(titulo, labelAvancar, onAdvance) {
+  if (AVT_STATE._promptFaseAberto) return;
+  AVT_STATE._promptFaseAberto = true;
+  let ov = document.getElementById('avt-prompt-fase');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'avt-prompt-fase';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45)';
+    document.body.appendChild(ov);
+  }
+  const fechar = () => { AVT_STATE._promptFaseAberto = false; ov.remove(); };
+  ov.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(79,163,209,0.3);border-radius:12px;padding:20px;max-width:340px;width:90%;text-align:center">
+      <div style="font-family:var(--fonte-d, sans-serif);font-size:0.95rem;color:#c8d8e8;margin-bottom:16px">🚪 ${titulo}</div>
+      <div style="display:flex;gap:8px">
+        <button id="avt-prompt-fase-no" style="flex:1;padding:10px;border-radius:8px;cursor:pointer;background:none;border:1px solid rgba(122,146,170,0.3);color:#7a92aa;font-family:var(--fonte-d, sans-serif);font-size:0.72rem">Ficar</button>
+        <button id="avt-prompt-fase-yes" style="flex:1;padding:10px;border-radius:8px;cursor:pointer;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.5);color:#4fa3d1;font-family:var(--fonte-d, sans-serif);font-size:0.72rem">${labelAvancar || 'Avançar'}</button>
+      </div>
+    </div>`;
+  ov.querySelector('#avt-prompt-fase-no').onclick = fechar;
+  ov.querySelector('#avt-prompt-fase-yes').onclick = () => { fechar(); try { onAdvance && onAdvance(); } catch(e) { mostrarToast('Erro: '+(e?.message||e),'erro'); } };
+}
+window._avtPromptFase = _avtPromptFase;
 
 function _avtVoltarFaseAnterior() {
   if (!AVT_STATE._faseAnterior) return;
