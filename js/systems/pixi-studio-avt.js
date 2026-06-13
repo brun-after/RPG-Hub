@@ -29,17 +29,22 @@ function _psStudioToScreen(px, py, atacScr, alvoScr) {
 // ── Convert Studio config_json layers → AVT particle config format ─────────
 function _psToAvtConfig(cfg) {
   if (!cfg) return null;
+  const low = cfg.quality === 'baixo';   // mobile/low quality: lighter particles, no bloom/trails
   const avt = {
     duration:   cfg.duracao_ms || cfg.duration || 1000,
-    lighting:   cfg.lighting     || {},
+    lighting:   low ? Object.assign({}, cfg.lighting, { bloom: null }) : (cfg.lighting || {}),
     camera:     cfg.camera       || {},
     background: cfg.background   || {},
+    filters:    cfg.filters      || [],
+    travel:     cfg.travel       || null,
     layers: [],
   };
   const layers = cfg.layers || [];
   for (const l of layers) {
     if (!l.visivel) continue;
     if (l.tipo === 'emitter' && l.emitter) {
+      let emitter = l.emitter;
+      if (low) emitter = Object.assign({}, l.emitter, { maxParticles: Math.max(1, Math.ceil((l.emitter.maxParticles || 50) * 0.5)) });
       avt.layers.push({
         role:       l.nome || 'layer',
         texture:    l.texture_url ? null : (l.texture || 'spark'),
@@ -47,8 +52,14 @@ function _psToAvtConfig(cfg) {
         blendMode:  l.blendMode || 'add',
         z:          l.z ?? 3,
         glow:       l.glow || null,
-        trail:      l.trail_config || null,
-        emitter:    l.emitter,
+        trail:      low ? null : (l.trail || l.trail_config || null),
+        tint:       l.tint || null,
+        parallax:   l.parallax || 0,
+        lightCast:  l.lightCast || null,
+        subEmitters: l.subEmitters || undefined,
+        filters:    l.filters || undefined,
+        offset:     l.offset || null,
+        emitter,
         spawn_path: l.spawn_path || null,
         start_t:    l.start_t    ?? 0,
         end_t:      l.end_t      ?? 1,
@@ -96,7 +107,10 @@ function _psAvtInterpKf(kfs, t) {
   if (t >= kfs[kfs.length - 1].t) return Object.assign({}, kfs[kfs.length - 1]);
   for (let i = 0; i < kfs.length - 1; i++) {
     if (t >= kfs[i].t && t <= kfs[i + 1].t) {
-      const f = (t - kfs[i].t) / (kfs[i + 1].t - kfs[i].t);
+      const fRaw = (t - kfs[i].t) / (kfs[i + 1].t - kfs[i].t);
+      // Apply per-keyframe easing (owned by the outgoing keyframe). Default linear.
+      const f = (typeof window !== 'undefined' && window._psEase)
+        ? window._psEase(kfs[i].ease || 'linear', fRaw) : fRaw;
       const lerp = (a, b) => a + (b - a) * f;
       return {
         x:        lerp(kfs[i].x        ?? 0, kfs[i + 1].x        ?? 0),
@@ -217,6 +231,104 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior) {
   }, durMs + 200);
 }
 
+// Generic keyframe interpolation (handles shape/light fields + easing)
+function _psAvtInterpGeneric(kfs, t) {
+  if (!kfs || !kfs.length) return null;
+  const s = [...kfs].sort((a, b) => a.t - b.t);
+  if (t <= s[0].t) return Object.assign({}, s[0]);
+  if (t >= s[s.length - 1].t) return Object.assign({}, s[s.length - 1]);
+  let lo = s[0], hi = s[1];
+  for (let i = 0; i < s.length - 1; i++) { if (t >= s[i].t && t <= s[i + 1].t) { lo = s[i]; hi = s[i + 1]; break; } }
+  let f = (hi.t - lo.t) ? (t - lo.t) / (hi.t - lo.t) : 0;
+  if (typeof window !== 'undefined' && window._psEase) f = window._psEase(lo.ease || 'linear', f);
+  const out = {};
+  new Set([...Object.keys(lo), ...Object.keys(hi)]).forEach(k => {
+    if (k === 't' || k === 'ease') return;
+    const a = lo[k], b = hi[k];
+    out[k] = (typeof a === 'number' && typeof b === 'number') ? a + (b - a) * f : a;
+  });
+  return out;
+}
+
+// ── Render shape + light layers in combat (parity with the studio preview) ────
+async function _psAvtRenderShapes(cfg, startScr, endScr, behavior) {
+  const layers = (cfg.layers || []).filter(l => l.visivel && (l.tipo === 'shape' || l.tipo === 'light'));
+  if (!layers.length) return;
+  await _avtEnsurePixiParticles();
+  if (typeof PIXI === 'undefined') return;
+  const canvas = AVT_STATE.canvas;
+  if (!canvas) return;
+
+  const durMs = cfg.duracao_ms || cfg.duration || 1000;
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
+  canvas.parentElement?.appendChild(overlayCanvas);
+
+  let app;
+  try {
+    app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false });
+  } catch (e) { overlayCanvas.remove(); return; }
+
+  const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
+  const hexInt = (c) => { if (typeof c === 'number') return c; const n = parseInt(String(c).replace('#', ''), 16); return isNaN(n) ? 0xffffff : n; };
+  const isProj = behavior === 'projectile';
+  const items = [];
+  for (const l of layers) {
+    if (l.tipo === 'shape') {
+      const g = new PIXI.Graphics();
+      g.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
+      app.stage.addChild(g); items.push({ g, layer: l });
+    } else {
+      const sp = new PIXI.Sprite(typeof _avtProcTextures === 'function' ? _avtProcTextures('glow') : PIXI.Texture.WHITE);
+      sp.anchor.set(0.5); sp.blendMode = PIXI.BLEND_MODES.ADD;
+      app.stage.addChild(sp); items.push({ sp, layer: l });
+    }
+  }
+
+  const startMs = performance.now();
+  const tick = () => {
+    const t = Math.min((performance.now() - startMs) / durMs, 1);
+    const anchorX = isProj ? startScr.x + (endScr.x - startScr.x) * t : endScr.x;
+    const anchorY = isProj ? startScr.y + (endScr.y - startScr.y) * t : endScr.y;
+    for (const it of items) {
+      const l = it.layer;
+      const st = l.start_t ?? 0, et = l.end_t ?? 1;
+      const vis = t >= st && t <= et;
+      const tRel = et > st ? (t - st) / (et - st) : t;
+      const kf = _psAvtInterpGeneric(l.keyframes, tRel);
+      if (it.g) {
+        const g = it.g; g.visible = vis; if (!vis || !kf) continue;
+        g.clear();
+        g.position.set(anchorX + (kf.x || 0), anchorY + (kf.y || 0));
+        const sw = kf.stroke_width ?? 2, sa = kf.stroke_alpha ?? 1, fa = kf.fill_alpha ?? 0, r = kf.radius ?? 20;
+        if (sa > 0) g.lineStyle(sw, hexInt(kf.stroke_color || '#ffffff'), sa);
+        if (fa > 0) g.beginFill(hexInt(kf.fill_color || '#ffffff'), fa);
+        if (l.shape_type === 'rect') g.drawRect(-r, -r, r * 2, r * 2);
+        else if (l.shape_type === 'polygon') {
+          const sides = Math.max(3, l.sides || 6), pts = [];
+          for (let i = 0; i < sides; i++) { const a = -Math.PI / 2 + i * 2 * Math.PI / sides; pts.push(Math.cos(a) * r, Math.sin(a) * r); }
+          g.drawPolygon(pts);
+        } else g.drawCircle(0, 0, r);
+        if (fa > 0) g.endFill();
+      } else {
+        const sp = it.sp; sp.visible = vis; if (!vis || !kf) continue;
+        const r = kf.radius ?? 60;
+        sp.width = sp.height = r * 2;
+        sp.position.set(anchorX + (kf.x || 0), anchorY + (kf.y || 0));
+        sp.alpha = kf.alpha ?? 0.7;
+        sp.tint = hexInt(kf.color || l.color || '#ffffff');
+      }
+    }
+  };
+  app.ticker.add(tick);
+  setTimeout(() => {
+    app.ticker.remove(tick);
+    try { app.destroy(true, { children: true }); } catch (_) {}
+    overlayCanvas.remove();
+  }, durMs + 200);
+}
+
 // ── Render emitter layers following their recorded spawn_path ─────────────────
 // Uses a similarity transform to map studio-space → screen-space.
 async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr) {
@@ -300,7 +412,8 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr) {
           em.updateSpawnPos(pos.x, pos.y);
         }
       } else if (inRange) {
-        em.updateSpawnPos(alvoScr.x, alvoScr.y);
+        const ox = layer.offset?.x || 0, oy = layer.offset?.y || 0;
+        em.updateSpawnPos(alvoScr.x + ox, alvoScr.y + oy);
       }
       em.update(delta);
     }
@@ -343,7 +456,7 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
 
   switch (behavior) {
     case 'projectile':
-      return _psAvtProjectile(cfg, atacScr, alvoScr);
+      return _psAvtProjectile(cfg, atacScr, alvoScr, alvoEnt);
     case 'follow-caster':
     case 'channel':
       _psAvtFollow(cfg, atacanteEnt, durMs);
@@ -366,19 +479,114 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
         }
       }
       _psAvtRenderSprites(cfg, atacScr, alvoScr, behavior);
+      _psAvtRenderShapes(cfg, atacScr, alvoScr, behavior);
       return 0;
     }
   }
 }
 
+// ── Compute a point along a travel path between two screen points ──────────
+function _psAvtPathPos(path, atac, alvo, t) {
+  const x = atac.x + (alvo.x - atac.x) * t;
+  const y = atac.y + (alvo.y - atac.y) * t;
+  if (path === 'arc' || path === 'spiral') {
+    const dx = alvo.x - atac.x, dy = alvo.y - atac.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;            // unit perpendicular
+    if (path === 'arc') {
+      const off = Math.sin(Math.PI * t) * Math.min(160, len * 0.35);
+      return { x: x + nx * off, y: y + ny * off };
+    }
+    // spiral: shrinking corkscrew around the straight line
+    const r = Math.sin(Math.PI * t) * 26, ang = t * Math.PI * 6;
+    return { x: x + nx * Math.cos(ang) * r, y: y + ny * Math.cos(ang) * r - Math.sin(ang) * r };
+  }
+  return { x, y };  // linear / homing → straight toward the (possibly live) target
+}
+
+// ── Emitter projectile that follows a travel path (arc/spiral/homing) ──────
+async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt) {
+  const layers = (cfg.layers || []).filter(l => l.visivel && l.tipo === 'emitter' && l.emitter);
+  if (!layers.length) return;
+  await _avtEnsurePixiParticles();
+  if (typeof PIXI === 'undefined') return;
+  const canvas = AVT_STATE.canvas;
+  if (!canvas) return;
+
+  const durMs = cfg.duracao_ms || cfg.duration || 1000;
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
+  canvas.parentElement?.appendChild(overlayCanvas);
+
+  let app;
+  try { app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false }); }
+  catch (e) { overlayCanvas.remove(); return; }
+
+  const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
+  const emitters = [];
+  for (const l of layers) {
+    const container = new PIXI.Container();
+    container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
+    app.stage.addChild(container);
+    let emitCfg = Object.assign({}, l.emitter);
+    if (!Array.isArray(emitCfg.behaviors)) emitCfg.emitterLifetime = -1;
+    const tex = l.texture_url ? PIXI.Texture.from(l.texture_url) : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
+    const texArr = [tex || PIXI.Texture.WHITE];
+    if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) { try { emitCfg = PIXI.particles.upgradeConfig(emitCfg, texArr); } catch (_) {} }
+    try {
+      const em = new PIXI.particles.Emitter(container, emitCfg);
+      em.updateSpawnPos(atacScr.x, atacScr.y);
+      em.emit = false;
+      emitters.push({ em, layer: l });
+    } catch (_) {}
+  }
+
+  const startMs = performance.now();
+  let lastTs = startMs;
+  const tick = () => {
+    const now = performance.now();
+    const delta = (now - lastTs) / 1000; lastTs = now;
+    const t = Math.min((now - startMs) / durMs, 1);
+    // Homing re-acquires the (possibly moving) target each frame
+    const alvo = (path === 'homing' && alvoEnt) ? _psAvtToScreen(alvoEnt) : alvoScr;
+    const pos = _psAvtPathPos(path, atacScr, alvo, t);
+    for (const { em, layer } of emitters) {
+      if (em.destroyed) continue;
+      const st = layer.start_t ?? 0, et = layer.end_t ?? 1;
+      const inRange = t >= st && t <= et;
+      em.emit = inRange;
+      if (inRange) em.updateSpawnPos(pos.x, pos.y);
+      em.update(delta);
+    }
+  };
+  app.ticker.add(tick);
+  setTimeout(() => {
+    app.ticker.remove(tick);
+    for (const { em } of emitters) { try { if (!em.destroyed) em.destroy(); } catch (_) {} }
+    try { app.destroy(true, { children: true }); } catch (_) {}
+    overlayCanvas.remove();
+  }, durMs + 300);
+}
+
 // ── Projectile: emitter travels from caster to target ─────────────────────
-function _psAvtProjectile(cfg, atacScr, alvoScr) {
+function _psAvtProjectile(cfg, atacScr, alvoScr, alvoEnt) {
   const hasSpawnPath = (cfg.layers || []).some(l => l.tipo === 'emitter' && l.spawn_path?.length);
 
   // If any emitter layer has a recorded spawn_path, respect it exactly
   if (hasSpawnPath) {
     _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr);
     _psAvtRenderSprites(cfg, atacScr, alvoScr, 'projectile');
+    _psAvtRenderShapes(cfg, atacScr, alvoScr, 'projectile');
+    return cfg.duracao_ms || cfg.duration || 1000;
+  }
+
+  // Curved travel (arc/spiral/homing): emitters fly along the computed path
+  const path = cfg.travel?.path;
+  if (path && path !== 'linear') {
+    _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt);
+    _psAvtRenderSprites(cfg, atacScr, alvoScr, 'projectile');
+    _psAvtRenderShapes(cfg, atacScr, alvoScr, 'projectile');
     return cfg.duracao_ms || cfg.duration || 1000;
   }
 
@@ -402,6 +610,7 @@ function _psAvtProjectile(cfg, atacScr, alvoScr) {
 
   // Sprite layers travel from attacker to target over the full duration
   _psAvtRenderSprites(cfg, atacScr, alvoScr, 'projectile');
+  _psAvtRenderShapes(cfg, atacScr, alvoScr, 'projectile');
 
   return speedMs;
 }
