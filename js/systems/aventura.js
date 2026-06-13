@@ -4288,6 +4288,27 @@ function _avtRenderFrame() {
       ctx.restore();
     }
 
+    // Contaminação (variante de DOT): tinge o token de verde enquanto o efeito estiver ativo
+    const _contamEf = e.status_effects?.find(ef => ef.tipo === 'dot' && ef.dot_variante === 'contaminacao' && ((ef._turnos_restantes ?? 0) > 0 || ef._ooc));
+    if (_contamEf) {
+      const _contamPulse = 0.30 + 0.16 * Math.sin(performance.now() / 360);
+      ctx.save();
+      ctx.globalAlpha = _contamPulse;
+      ctx.fillStyle = '#27ae60';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = _contamPulse * 0.85;
+      ctx.shadowColor = '#2ecc71';
+      ctx.shadowBlur  = Math.round(SZ * 0.3);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
+      ctx.strokeStyle = '#2ecc71';
+      ctx.lineWidth   = Math.max(1.5, Math.round(SZ * 0.05));
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Atravessar sparkles: purpurina azul orbitando o token do jogador
     if (e._atravessar) {
       const _spT   = performance.now();
@@ -5053,15 +5074,49 @@ function _avtMostrarCuraAcimaDaHead(ent, valor) {
   setTimeout(() => el.remove(), 1500);
 }
 
-function _avtMostrarDotDrip(ent) {
+// Partícula de DOT por turno. `variante` controla apenas o visual:
+//   'sangramento' (padrão) → pingo de sangue;  'queimacao' → fagulhas + fumaça;
+//   'contaminacao' → bolhas tóxicas verdes (o tom verde no token é feito no render).
+function _avtMostrarDotDrip(ent, variante) {
   const overlay = document.getElementById('avt-dados-overlay');
   if (!overlay || !ent) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const px = Math.round((ent.renderX ?? ent.x) * SZ - AVT_STATE.camera.x + SZ / 2);
   const py = Math.round((ent.renderY ?? ent.y) * SZ - AVT_STATE.camera.y + SZ * 0.6);
+  const _v = variante || 'sangramento';
+  const _jitter = () => px + Math.round((Math.random() - 0.5) * SZ * 0.5);
+
+  if (_v === 'queimacao') {
+    for (let i = 0; i < 3; i++) {
+      const sp = document.createElement('div');
+      sp.className = 'avt-dot-fx avt-dot-spark';
+      sp.style.cssText = `left:${_jitter()}px;top:${py}px;animation-delay:${i * 90}ms`;
+      overlay.appendChild(sp);
+      setTimeout(() => sp.remove(), 1100 + i * 90);
+    }
+    const smoke = document.createElement('div');
+    smoke.className = 'avt-dot-fx avt-dot-smoke';
+    smoke.style.cssText = `left:${px}px;top:${py - Math.round(SZ * 0.2)}px`;
+    overlay.appendChild(smoke);
+    setTimeout(() => smoke.remove(), 1400);
+    return;
+  }
+
+  if (_v === 'contaminacao') {
+    for (let i = 0; i < 2; i++) {
+      const bub = document.createElement('div');
+      bub.className = 'avt-dot-fx avt-dot-toxic';
+      bub.style.cssText = `left:${_jitter()}px;top:${py}px;animation-delay:${i * 120}ms`;
+      overlay.appendChild(bub);
+      setTimeout(() => bub.remove(), 1300 + i * 120);
+    }
+    return;
+  }
+
+  // sangramento (padrão)
   const el = document.createElement('div');
-  el.className = 'avt-dot-drip';
-  el.style.cssText = `left:${px + Math.round((Math.random() - 0.5) * SZ * 0.4)}px;top:${py}px`;
+  el.className = 'avt-dot-drip avt-dot-sangramento';
+  el.style.cssText = `left:${_jitter()}px;top:${py}px`;
   overlay.appendChild(el);
   setTimeout(() => el.remove(), 1350);
 }
@@ -5096,6 +5151,43 @@ const AVT_SLOT_MACHINE_MS = 12 * 42; // 504ms — duração da animação de sor
       0%   { opacity:1; transform:translateX(-50%) translateY(0)    scaleY(1);   }
       50%  { opacity:1; transform:translateX(-50%) translateY(14px) scaleY(1.3); }
       100% { opacity:0; transform:translateX(-50%) translateY(34px) scaleY(0.6); }
+    }
+    /* Variantes de DOT — só o visual muda (Sangramento usa .avt-dot-drip acima) */
+    .avt-dot-fx { position:absolute; transform:translateX(-50%); pointer-events:none; z-index:37; }
+    /* Queimação — fagulhas */
+    .avt-dot-spark {
+      width:4px; height:4px; border-radius:50%;
+      background:#ffd24a;
+      box-shadow:0 0 6px rgba(255,140,0,0.9), 0 0 10px rgba(255,80,0,0.6);
+      animation: avtDotSpark 1s ease-out forwards;
+    }
+    @keyframes avtDotSpark {
+      0%   { opacity:1;   transform:translateX(-50%) translateY(0)     scale(1);   }
+      70%  { opacity:0.9; }
+      100% { opacity:0;   transform:translateX(-50%) translateY(-26px) scale(0.3); }
+    }
+    /* Queimação — fumaça */
+    .avt-dot-smoke {
+      width:12px; height:12px; border-radius:50%;
+      background:rgba(110,110,110,0.55);
+      filter:blur(2px);
+      animation: avtDotSmoke 1.4s ease-out forwards;
+    }
+    @keyframes avtDotSmoke {
+      0%   { opacity:0.55; transform:translateX(-50%) translateY(0)     scale(0.6); }
+      100% { opacity:0;    transform:translateX(-50%) translateY(-30px) scale(1.8); }
+    }
+    /* Contaminação — bolhas tóxicas verdes */
+    .avt-dot-toxic {
+      width:7px; height:7px; border-radius:50%;
+      background:#27ae60;
+      box-shadow:0 0 6px rgba(46,204,113,0.85), inset 0 0 3px rgba(200,255,200,0.5);
+      animation: avtDotToxic 1.3s ease-out forwards;
+    }
+    @keyframes avtDotToxic {
+      0%   { opacity:1;   transform:translateX(-50%) translateY(0)     scale(0.7); }
+      60%  { opacity:0.8; transform:translateX(-50%) translateY(-12px) scale(1.2); }
+      100% { opacity:0;   transform:translateX(-50%) translateY(-22px) scale(1.6); }
     }
   `;
   document.head.appendChild(s);
@@ -7719,16 +7811,13 @@ function _avtAtualizarPerseguicoes(dt) {
     if (timer.pursuitStepTimer > 0) continue;
     timer.pursuitStepTimer = _avtGetVelocidadePerseguicaoNpc(ini);
 
-    // Stunado: não move nem ataca
-    if (ini._stunned) continue;
-
     // Verificar se já está no alcance de ataque (Chebyshev — consistente com range do jogador)
     const dist = Math.max(Math.abs(ini.x - alvo.x), Math.abs(ini.y - alvo.y));
     // Usa o alcance básico CONFIGURADO (Painel do Mestre) por classe, não o ini.alcance_celulas
     // possivelmente defasado — corrige ranged atacando OOC de mais longe que o configurado.
     const alcanceAtaque = _avtAlcanceBasicoNpc(ini);
     if (dist <= alcanceAtaque) {
-      // Silenciado: não pode atacar, mas continua se aproximando
+      // Silence bloqueia ataque; stun NÃO bloqueia ataque (só movimento)
       if (ini._silenciado) continue;
       if ((timer.attackCooldownTimer ?? 0) <= 0) {
         _avtPerseguicaoAtaqueNpc(id, timer.targetId);
@@ -7736,6 +7825,9 @@ function _avtAtualizarPerseguicoes(dt) {
       }
       continue;
     }
+
+    // Fora de alcance: aproximar-se. Stun bloqueia movimento; silence NÃO bloqueia movimento.
+    if (ini._stunned) continue;
 
     const _moverNpc = (dx, dy) => {
       const nx = ini.x + dx, ny = ini.y + dy;
@@ -8002,16 +8094,17 @@ function _avtTickEfeitosOOC(now) {
                   _casterNome:   _invAtivaOoc?.dono_char_nome || ef._casterNome,
                   _skillEfeitos: _efNecroList,
                   _formulaAtaque: _invAtivaOoc?._formulaAtaqueBasico || ef._formulaAtaque || '1d6',
+                  _geracao: ((_invAtivaOoc?._geracaoNecro ?? ef._geracaoNecro ?? 0) + 1), // profundidade da cascata
                 };
                 if (!_alvoDom.status_effects) _alvoDom.status_effects = [];
                 _alvoDom.status_effects.push(_efNecroOocEntry);
                 if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
                 AVT_STATE._oocStatusEffects.push({ entId: _alvoDom.id, entNome: _alvoDom.nome, ef: {..._efNecroOocEntry}, lastTickAt: Date.now() });
-                if (efP.tipo === 'dot') _avtMostrarDotDrip(_alvoDom);
+                if (efP.tipo === 'dot') _avtMostrarDotDrip(_alvoDom, efP.dot_variante);
               });
 
               try { _avtBroadcast('avt_hp_update', { nome: _alvoDom.nome, hp: _alvoDom.hp, hpMax: _alvoDom.hpMax }); } catch(_) {}
-              if (_alvoDom.hp <= 0) _avtNpcMorreu(_alvoDom, null);
+              if (_alvoDom.hp <= 0) _avtNpcMorreu(_alvoDom, null, { creditoNome: _invAtivaOoc?.dono_char_nome || ef._casterNome });
             }
           } else {
             const _dxDom = _alvoDom.x > ent.x ? 1 : _alvoDom.x < ent.x ? -1 : 0;
@@ -8043,11 +8136,19 @@ function _avtTickEfeitosOOC(now) {
           try { _avtRTBroadcastPlayerDamage(ent.nome, dano, 'dot'); } catch(_) {}
         }
         _avtMostrarDanoAbaixoHp(ent, dano, false);
-        _avtMostrarDotDrip(ent);
+        _avtMostrarDotDrip(ent, ef.dot_variante);
         try { _avtBroadcast('avt_hp_update', { nome: ent.nome, hp: ent.hp, hpMax: ent.hpMax }); } catch(_) {}
-        if (_hpAntes > 0 && ent.hp <= 0 && ent.tipo === 'jogador') {
-          const _eMeuChar = ent.nome === AVT_STATE.myCharNome;
-          if (_eMeuChar) _avtProcessarMorteJogador(ent, _avtBatalhaDeEnt(ent.id));
+        if (_hpAntes > 0 && ent.hp <= 0) {
+          if (ent.tipo === 'jogador') {
+            const _eMeuChar = ent.nome === AVT_STATE.myCharNome;
+            if (_eMeuChar) _avtProcessarMorteJogador(ent, _avtBatalhaDeEnt(ent.id));
+          } else if (ent.tipo === 'inimigo') {
+            // Inimigo morto por DOT fora de combate: registra a morte e credita o autor do
+            // DOT (corrige XP/abate OOC). _avtNpcMorreu trata dominação Necromante se houver.
+            _avtNpcMorreu(ent, _avtBatalhaDeEnt(ent.id) || null, { creditoNome: ef._casterNome, creditoId: ef._casterId });
+            _avtRenderHpBar();
+            return false; // remove o registro de DOT — inimigo morto/dominado
+          }
         }
       } else if (ef.tipo === 'hot' && ef.hot_formula) {
         const cura = _avtRolarFormula(ef.hot_formula);
@@ -8185,7 +8286,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
           if (ef.tipo === 'silence')    _entAlvoNpc._silenciado = true;
           if (ef.tipo === 'fantasma')   _entAlvoNpc._fantasma   = true;
           if (ef.tipo === 'atravessar') _entAlvoNpc._atravessar = true;
-          if (ef.tipo === 'dot')        _avtMostrarDotDrip(_entAlvoNpc);
+          if (ef.tipo === 'dot')        _avtMostrarDotDrip(_entAlvoNpc, ef.dot_variante);
         }
       });
     }
@@ -9058,16 +9159,22 @@ function avtRespawnNpc(npcId) {
 }
 window.avtRespawnNpc = avtRespawnNpc;
 
-// Distribute XP from a killed NPC to all players in its combat
-function _avtDistribuirXpNpc(npcEnt, bat) {
+// Distribute XP from a killed NPC to all players in its combat.
+// opts.creditoNome: autor do abate (ex.: quem aplicou o DOT) — recebe crédito mesmo fora
+// de combate (quando não há batalha) ou quando não está na iniciativa da batalha.
+function _avtDistribuirXpNpc(npcEnt, bat, opts = {}) {
   const xpBase = npcEnt.xpBase ?? 0;
-  if (!xpBase || !bat) return;
+  if (!xpBase) return;
   const vezesMorto = npcEnt.vezes_morto || 0;
   const xpFinal = Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)));
-  const jogadoresNaBat = bat.iniciativa.filter(e => e.tipo === 'jogador');
-  if (!jogadoresNaBat.length) return;
-  const xpPorJog = Math.max(1, Math.round(xpFinal / jogadoresNaBat.length));
-  const ganhos = jogadoresNaBat.map(j => ({ nome: j.nome, xp: xpPorJog }));
+  // Destinatários: jogadores presentes na batalha; quando não há batalha (ex.: morte por
+  // DOT fora de combate), credita diretamente o autor do abate.
+  const destinatarios = bat ? bat.iniciativa.filter(e => e.tipo === 'jogador').map(j => j.nome) : [];
+  const creditoNome = opts.creditoNome || null;
+  if (creditoNome && !destinatarios.includes(creditoNome)) destinatarios.push(creditoNome);
+  if (!destinatarios.length) return;
+  const xpPorJog = Math.max(1, Math.round(xpFinal / destinatarios.length));
+  const ganhos = destinatarios.map(nome => ({ nome, xp: xpPorJog }));
 
   ganhos.forEach(({ nome, xp }) => {
     const char = AVT_STATE.chars.find(c => c.nome === nome);
@@ -9148,8 +9255,9 @@ async function _avtAutoLevelUp(char) {
   }
 }
 
-// Handle NPC death: hide from map, maybe drop item, schedule respawn, give XP
-function _avtNpcMorreu(npcEnt, bat) {
+// Handle NPC death: hide from map, maybe drop item, schedule respawn, give XP.
+// opts.creditoNome/creditoId: autor do abate (DOT, minion etc.) p/ crédito de XP.
+function _avtNpcMorreu(npcEnt, bat, opts = {}) {
   if (!npcEnt || npcEnt.escondido) return;
   // Se o NPC tem efeito Necromante ativo e ainda não está dominado, dominar em vez de matar
   if (!npcEnt._dominado) {
@@ -9159,7 +9267,7 @@ function _avtNpcMorreu(npcEnt, bat) {
       const _initFb = bat.iniciativa.find(e => e.id === npcEnt.id);
       if (_initFb) efNecro = (_initFb.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
     }
-    if (efNecro) { _avtNecromanteDominar(npcEnt, efNecro, bat); return; }
+    if (efNecro) { if (_avtNecromanteDominar(npcEnt, efNecro, bat)) return; }
   }
   // Se estava dominado, limpar registro de invocação antes da morte real
   if (npcEnt._dominado) {
@@ -9181,17 +9289,27 @@ function _avtNpcMorreu(npcEnt, bat) {
     _avtGerarDropNpc(npcEnt);
   }
 
-  // XP distribution
-  _avtDistribuirXpNpc(npcEnt, bat);
+  // XP distribution (credita o autor do abate quando informado — ex.: DOT)
+  _avtDistribuirXpNpc(npcEnt, bat, opts);
 
   // Schedule respawn
   _avtAgendarRespawnNpc(npcEnt);
 }
 
+// Retorna true se o inimigo foi revivido/dominado; false se não (ex.: limite de cascata),
+// para que o chamador (_avtNpcMorreu) prossiga com a morte normal.
 function _avtNecromanteDominar(npcEnt, efNecro, bat) {
+  // Limite de cascata configurável (0/ausente = ilimitado). _geracao conta a profundidade.
+  const cascataMax = efNecro.cascata_max ?? 0;
+  const geracao    = efNecro._geracao ?? 0;
+  if (cascataMax > 0 && geracao >= cascataMax) {
+    _avtLog(`☠ ${npcEnt.nome}: limite de cascata (${cascataMax}) atingido — não revive.`, bat?.id);
+    return false;
+  }
   const corDominado  = efNecro.cor_dominado || '#8e44ad';
   const duracaoT     = efNecro.duracao_turnos ?? 3;
-  const hpNecro      = Math.max(1, Math.floor((npcEnt.hpMax || npcEnt.hp || 10) / 10));
+  // HP do revivido = % configurável do HP máximo (padrão 50%)
+  const hpNecro      = Math.max(1, Math.floor((npcEnt.hpMax || npcEnt.hp || 10) * (efNecro.hp_revive_pct ?? 0.5)));
   const donoNome     = efNecro._casterNome || '';
 
   // Todos os efeitos da skill original são propagados nos ataques (incluindo necromante → cascata)
@@ -9216,6 +9334,9 @@ function _avtNecromanteDominar(npcEnt, efNecro, bat) {
     delete AVT_STATE.npcTimers[npcEnt.id];
   }
   npcEnt._efeitosNecromante = efeitosPropagate;
+  // Geração/limite desta corrente de cascata — usados ao propagar nos ataques do dominado
+  npcEnt._geracaoNecro = geracao;
+  npcEnt._cascataMax   = cascataMax;
   npcEnt.status_effects = [];
 
   const _necroFormula = efNecro._formulaAtaque || '1d6';
@@ -9237,7 +9358,7 @@ function _avtNecromanteDominar(npcEnt, efNecro, bat) {
     AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects.filter(r => r.entId !== npcEnt.id);
     AVT_STATE._oocStatusEffects.push({
       entId: npcEnt.id, entNome: npcEnt.nome, lastTickAt: Date.now(),
-      ef: { ...efDominado, _formulaAtaque: _necroFormula, _efeitosNecromante: efeitosPropagate },
+      ef: { ...efDominado, _formulaAtaque: _necroFormula, _efeitosNecromante: efeitosPropagate, _geracaoNecro: geracao, _cascataMax: cascataMax },
     });
   }
 
@@ -9260,6 +9381,8 @@ function _avtNecromanteDominar(npcEnt, efNecro, bat) {
     _cooldowns: {},
     _efeitosNecromante: efeitosPropagate,
     _ehNecromante: true,
+    _geracaoNecro: geracao,
+    _cascataMax:   cascataMax,
     // Dados do NPC original para usar skills reais
     _npcNome:  npcEnt.nome,
     _npcDbId:  npcEnt.dbId || null,
@@ -9293,6 +9416,7 @@ function _avtNecromanteDominar(npcEnt, efNecro, bat) {
   try { _avtBroadcast('avt_hp_update', { nome: npcEnt.nome, hp: hpNecro, hpMax: hpNecro }); } catch(_) {}
   _avtLog(`☠ ${npcEnt.nome} dominado por Necromante! HP:${hpNecro} Dur:${duracaoT}t dono:${donoNome}`, bat?.id);
   mostrarToast(`☠ ${npcEnt.nome} ressuscitado como aliado! (${hpNecro} HP, ${duracaoT}t)`, 'ok');
+  return true;
 }
 
 // Generate a loot drop at NPC's position
@@ -9801,7 +9925,7 @@ async function _avtSkillOverlaySel(skId) {
           if (ef.tipo === 'atravessar') casterEnt._atravessar = true;
           if (ef.tipo === 'stun')       casterEnt._stunned    = true;
           if (ef.tipo === 'silence')    casterEnt._silenciado = true;
-          if (ef.tipo === 'dot')        _avtMostrarDotDrip(casterEnt);
+          if (ef.tipo === 'dot')        _avtMostrarDotDrip(casterEnt, ef.dot_variante);
           if (ef.tipo === 'hot')        mostrarToast(`♻ ${casterEnt.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
         }
       });
@@ -9895,6 +10019,27 @@ function _avtSelecionarAlvoComSkill(alvoId) {
   AVT_STATE.alvoSelecionado = alvoId;
   const sel = document.getElementById('avt-hud-alvo');
   if (sel) sel.value = alvoId;
+  // Skills de área (quadrado/linha): no fluxo mobile/TV (lista de alvos), a seleção manual
+  // do centro no mapa pode não estar disponível — então centra a área no alvo escolhido.
+  const _skSelArea = AVT_STATE._pendingSkillId ? AVT_STATE.skills.find(s => s.id === AVT_STATE._pendingSkillId) : null;
+  const _alvoEnt = AVT_STATE.entidades.find(e => e.id === alvoId);
+  if (_skSelArea && _alvoEnt) {
+    if (_skSelArea.tipo_area === 'quadrado') {
+      AVT_STATE._areaCentro = { x: Math.round(_alvoEnt.x), y: Math.round(_alvoEnt.y), tamanho: _skSelArea.tamanho_area || 1 };
+    } else if (_skSelArea.tipo_area === 'linha') {
+      const _ativoSel = _avtAtivo();
+      if (_ativoSel) {
+        const _ax = Math.round(_ativoSel.x), _ay = Math.round(_ativoSel.y);
+        const _tx = Math.round(_alvoEnt.x), _ty = Math.round(_alvoEnt.y);
+        const _dx = _tx === _ax ? 0 : (_tx > _ax ? 1 : -1);
+        const _dy = _ty === _ay ? 0 : (_ty > _ay ? 1 : -1);
+        const _alc = _skSelArea.alcance_celulas ?? 1;
+        const _cells = [];
+        for (let i = 1; i <= _alc; i++) _cells.push({ x: _ax + _dx * i, y: _ay + _dy * i });
+        AVT_STATE._areaLinha = { dx: _dx, dy: _dy, cells: _cells };
+      }
+    }
+  }
   _avtMostrarBotaoRolar();
 }
 
@@ -9976,6 +10121,14 @@ async function _avtExecutarAtaque() {
   const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
   if (!b || !ativo || (ativo.tipo !== 'jogador' && ativo.tipo !== 'invocado')) return;
+
+  // Silence bloqueia ataque básico E skills (mas permite movimento). Stun NÃO bloqueia
+  // ataque — apenas zera o movimento — então não é checado aqui.
+  const _ativoSilEnt = AVT_STATE.entidades.find(e => e.id === ativo.id);
+  if (_ativoSilEnt?._silenciado) {
+    mostrarToast('🔇 Silenciado! Não pode atacar nem usar habilidades.', 'aviso');
+    return;
+  }
 
   // Para invocações: resolve o nome do dono para dedução de recursos
   const _nomeParaCusto = ativo.tipo === 'invocado'
@@ -10339,7 +10492,7 @@ async function _avtExecutarAtaque() {
                     if (ef.tipo === 'silence')    alvoProcEf._silenciado = true;
                     if (ef.tipo === 'fantasma')   alvoProcEf._fantasma   = true;
                     if (ef.tipo === 'atravessar') alvoProcEf._atravessar = true;
-                    if (ef.tipo === 'dot')        _avtMostrarDotDrip(alvoProcEf);
+                    if (ef.tipo === 'dot')        _avtMostrarDotDrip(alvoProcEf, ef.dot_variante);
                     if (ef.tipo === 'hot')        mostrarToast(`♻ ${alvoProcEf.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
                   }
                 }
@@ -10417,7 +10570,7 @@ async function _avtExecutarAtaque() {
               if (ef.tipo === 'silence')    { if (alvoProcEf) alvoProcEf._silenciado = true; }
               if (ef.tipo === 'fantasma')   { if (alvoProcEf) alvoProcEf._fantasma   = true; }
               if (ef.tipo === 'atravessar') { if (alvoProcEf) alvoProcEf._atravessar = true; }
-              if (ef.tipo === 'dot')        _avtMostrarDotDrip(alvoProcEf);
+              if (ef.tipo === 'dot')        _avtMostrarDotDrip(alvoProcEf, ef.dot_variante);
               if (ef.tipo === 'hot')        mostrarToast(`♻ ${alvoProcEf.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
               _avtLog(`  ↳ ${ef.tipo} aplicado em ${alvoProcEf.nome} (${ef.duracao_turnos ?? 1}t)`, b.id);
             }
@@ -10726,13 +10879,17 @@ function _avtProcessarStatusEffects(bat, ent) {
           ent.hp = Math.max(0, ent.hp - dano);
           if (entObj) entObj.hp = ent.hp;
           _avtMostrarDanoAbaixoHp(entObj || ent, dano, false);
-          _avtMostrarDotDrip(entObj || ent);
+          _avtMostrarDotDrip(entObj || ent, ef.dot_variante);
           _avtBroadcast('avt_dano_visual', {alvoNome:ent.nome, dano, isCrit:false});
           _avtBroadcast('avt_hp_update', {nome:ent.nome, hp:ent.hp, hpMax:ent.hpMax});
           _avtLog(`🔥 DOT: ${ent.nome} sofre ${dano} (${(ef._turnos_restantes??1)-1} restantes)`, bat?.id);
           if (ent.hp <= 0) {
             _avtLog(`💀 ${ent.nome} morreu por DOT!`, bat?.id);
-            if (ent.tipo === 'inimigo' && bat) { _avtNpcMorreu(entObj||ent, bat); _avtCheckVitoria(bat); }
+            if (ent.tipo === 'inimigo' && bat) {
+              // Crédito de abate ao autor do DOT (corrige kill/XP do DOT)
+              _avtNpcMorreu(entObj||ent, bat, { creditoNome: ef._casterNome, creditoId: ef._casterId });
+              _avtCheckVitoria(bat);
+            }
             else if (bat) _avtCheckDerrota(bat);
           }
         }
@@ -11242,6 +11399,95 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         _avtLog(`💨 ${npc.nome} errou! (d20: ${hitRoll})`, bat.id);
       } else {
         let real = Math.ceil(danoTotal * critMult);
+
+        // ── Ataque em área do NPC: aplica dano a TODOS os alvos na área ─────────
+        const _npcTipoArea = sk?.tipo_area || null;
+        const _npcTodos    = sk?.alvo_tipo === 'todos_inimigos';
+        if (_npcTipoArea === 'quadrado' || _npcTipoArea === 'linha' || _npcTodos) {
+          // Alvos do NPC = jogadores e aliados dos jogadores (avatares/dominados)
+          const _ehAlvoNpc = e => (e.tipo === 'jogador' || e.tipo === 'avatar' || e.tipo === 'invocado') && e.hp > 0;
+          const _cx = Math.round(skillAlvo.x), _cy = Math.round(skillAlvo.y);
+          let _alvosNpcArea;
+          if (_npcTodos) {
+            _alvosNpcArea = bat.iniciativa.filter(_ehAlvoNpc);
+          } else if (_npcTipoArea === 'quadrado') {
+            const _t = sk?.tamanho_area || 1;
+            _alvosNpcArea = bat.iniciativa.filter(e => _ehAlvoNpc(e) &&
+              Math.max(Math.abs(Math.round(e.x) - _cx), Math.abs(Math.round(e.y) - _cy)) <= _t);
+          } else { // linha: do NPC em direção ao alvo primário
+            const _ax = Math.round(entNpc.x), _ay = Math.round(entNpc.y);
+            const _dxL = _cx === _ax ? 0 : (_cx > _ax ? 1 : -1);
+            const _dyL = _cy === _ay ? 0 : (_cy > _ay ? 1 : -1);
+            const _cells = [];
+            for (let i = 1; i <= (skillAlcance || 1); i++) _cells.push({ x: _ax + _dxL * i, y: _ay + _dyL * i });
+            _alvosNpcArea = bat.iniciativa.filter(e => _ehAlvoNpc(e) &&
+              _cells.some(c => c.x === Math.round(e.x) && c.y === Math.round(e.y)));
+          }
+          // Garantir que o alvo primário esteja incluído
+          if (skillAlvo.hp > 0 && !_alvosNpcArea.some(e => e.id === skillAlvo.id)) _alvosNpcArea.push(skillAlvo);
+
+          const _areaLabelNpc = _npcTipoArea === 'linha' ? '▬ Linha' : '◼ Área';
+          _avtLog(`👹 ${npc.nome} usa ${skillNome} [${_areaLabelNpc}] → ${_alvosNpcArea.length} alvo(s)`, bat.id);
+          mostrarToast(`👹 ${npc.nome} usa ${skillNome} e atinge ${_alvosNpcArea.length} alvo(s)!`, 'aviso');
+          const _delayMorteNpcArea = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entNpc), _avtEntViva(entNpc), true) : 0;
+          if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:_areaLabelNpc }); } catch(_) {} }
+
+          _alvosNpcArea.forEach((alvA, idxA) => {
+            const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id) || alvA;
+            const initA   = bat.iniciativa.find(e => e.id === alvA.id);
+            setTimeout(() => {
+              if (alvA.hp <= 0) return;
+              // Avatar: conta hit, não aplica dano em HP
+              if (entAlvA?.tipo === 'avatar') {
+                entAlvA._hitsRestantes = (entAlvA._hitsRestantes ?? 1) - 1;
+                _avtLog(`👥 Avatar atingido (${Math.max(0, entAlvA._hitsRestantes)} hits restantes)`, bat.id);
+                if (entAlvA._hitsRestantes <= 0) _avtDestruirAvatar(entAlvA.id, bat);
+                _avtRenderHpBar();
+                return;
+              }
+              if (alvA.tipo === 'jogador') {
+                try { _avtRTBroadcastPlayerDamage(alvA.nome, real, npc.nome); } catch(_) {}
+              } else {
+                alvA.hp = Math.max(0, alvA.hp - real);
+                if (entAlvA) { entAlvA.hp = alvA.hp; _avtAplicarDanoPersistir(entAlvA, entAlvA.hp); }
+                if (initA) initA.hp = alvA.hp;
+                try { _avtBroadcast('avt_hp_update', { nome: alvA.nome, hp: alvA.hp, hpMax: alvA.hpMax }); } catch(_) {}
+              }
+              if (isCrit) _avtTokenTremer(entAlvA);
+              _avtMostrarDanoAbaixoHp(entAlvA, real, isCrit);
+              _avtBroadcast('avt_dano_visual', { alvoNome: alvA.nome, dano: real, isCrit, critMult });
+              _avtLog(`  ↳ ${alvA.nome}: ${real} ${tipoDano}${isCrit ? ' ✦ CRÍTICO' : ''}`, bat.id);
+              // Efeitos de skill por alvo (ignora efeitos self/único como cura/avatar/teleporte_alvo)
+              if (sk?.efeitos_bonus?.length) {
+                sk.efeitos_bonus.forEach(ef => {
+                  if (['teleporte_alvo','avatar','cura'].includes(ef.tipo)) return;
+                  if (!entAlvA.status_effects) entAlvA.status_effects = [];
+                  const _efEntryNpcA = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
+                    expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs()};
+                  entAlvA.status_effects.push(_efEntryNpcA);
+                  if (initA) { if (!initA.status_effects) initA.status_effects = []; initA.status_effects.push({..._efEntryNpcA}); }
+                  if (ef.tipo === 'stun')    entAlvA._stunned    = true;
+                  if (ef.tipo === 'silence') entAlvA._silenciado = true;
+                  if (ef.tipo === 'dot')     _avtMostrarDotDrip(entAlvA, ef.dot_variante);
+                });
+              }
+              if (alvA.hp <= 0) {
+                _avtLog(`💀 ${alvA.nome} caiu!`, bat.id);
+                if (alvA._dominado || entAlvA._dominado) {
+                  setTimeout(() => { _avtNpcMorreu(entAlvA, bat); _avtCheckVitoria(bat); }, _delayMorteNpcArea);
+                } else if (alvA.tipo === 'jogador') {
+                  setTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(alvA, bat); }, _delayMorteNpcArea);
+                }
+              }
+              _avtRenderHpBar();
+            }, idxA * 80);
+          });
+
+          setTimeout(() => { _avtBroadcastBatalha(bat); }, (_alvosNpcArea.length * 80) + 100);
+          setTimeout(() => _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat)), (_alvosNpcArea.length * 80) + 150);
+          return;
+        }
+
         const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
         if (skillAlvo.tipo === 'jogador') {
           try { _avtRTBroadcastPlayerDamage(skillAlvo.nome, real, npc.nome); } catch(_) {}
@@ -19819,13 +20065,25 @@ function _avtSkmRenderEfeitos() {
         <button onclick="_AVT_SK_MODAL.efeitos.splice(${i},1);_avtSkmRenderEfeitos()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.9rem;padding:0;line-height:1;flex-shrink:0">✕</button>
       </div>
       ${ef.tipo==='dot' ? _avtSkmMiniDiceBuilderHTML(i,'dot','🩸 Dano por turno (fórmula de dados)') : ''}
+      ${ef.tipo==='dot' ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+        <span style="font-size:0.65rem;color:#c0392b">Variante visual:</span>
+        <select onchange="_AVT_SK_MODAL.efeitos[${i}].dot_variante=this.value;_avtSkmRenderEfeitos()" style="${inpSt};flex:1">
+          ${[['sangramento','🩸 Sangramento'],['queimacao','🔥 Queimação'],['contaminacao','🧪 Contaminação']].map(([v,l])=>`<option value="${v}" ${(ef.dot_variante||'sangramento')===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+      </div>` : ''}
       ${ef.tipo==='hot' ? _avtSkmMiniDiceBuilderHTML(i,'hot','💚 Cura por turno (fórmula de dados)') : ''}
       ${ef.tipo==='cura' ? _avtSkmMiniDiceBuilderHTML(i,'cura','✨ Cura instântanea (fórmula de dados)') : ''}
       ${ef.tipo==='avatar' ? _avtSkmMiniDiceBuilderHTML(i,'avatar','👥 Hits para destruir o avatar (fórmula de dados)') : ''}
-      ${ef.tipo==='necromante' ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-        <span style="font-size:0.65rem;color:#8e44ad">Cor do dominado:</span>
-        <input type="color" value="${ef.cor_dominado||'#8e44ad'}" oninput="_AVT_SK_MODAL.efeitos[${i}].cor_dominado=this.value"
-          style="width:32px;height:22px;padding:1px;border:1px solid rgba(142,68,173,0.4);border-radius:3px;background:#0a0f18;cursor:pointer">
+      ${ef.tipo==='necromante' ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#8e44ad">Cor do dominado:
+          <input type="color" value="${ef.cor_dominado||'#8e44ad'}" oninput="_AVT_SK_MODAL.efeitos[${i}].cor_dominado=this.value"
+            style="width:32px;height:22px;padding:1px;border:1px solid rgba(142,68,173,0.4);border-radius:3px;background:#0a0f18;cursor:pointer"></label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#8e44ad" title="% do HP máximo com que o inimigo revive como aliado">HP revive %:
+          <input type="number" min="1" max="100" value="${ef.hp_revive_pct!=null?Math.round(ef.hp_revive_pct*100):50}" oninput="_AVT_SK_MODAL.efeitos[${i}].hp_revive_pct=Math.max(0.01,Math.min(1,(+this.value||50)/100))"
+            style="width:48px;${inpSt};text-align:center"></label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#8e44ad" title="Limite de gerações da cascata (0 = ilimitado)">Cascata máx:
+          <input type="number" min="0" max="99" value="${ef.cascata_max??0}" oninput="_AVT_SK_MODAL.efeitos[${i}].cascata_max=+this.value"
+            style="width:48px;${inpSt};text-align:center"></label>
       </div>` : ''}
     </div>`;
   }).join('') || '<div style="font-size:0.72rem;color:#7a92aa;font-style:italic">Nenhum efeito.</div>';
@@ -23506,7 +23764,7 @@ function _avtNpcTurnoInvocado(bat) {
           if (!_entAlvoEf.status_effects) _entAlvoEf.status_effects = [];
           _entAlvoEf.status_effects.push(_efBEntry);
           if (_alvoBatEf) { if (!_alvoBatEf.status_effects) _alvoBatEf.status_effects = []; _alvoBatEf.status_effects.push({..._efBEntry}); }
-          if (efB.tipo === 'dot') _avtMostrarDotDrip(_entAlvoEf);
+          if (efB.tipo === 'dot') _avtMostrarDotDrip(_entAlvoEf, efB.dot_variante);
         });
       }
 
@@ -23540,13 +23798,14 @@ function _avtNpcTurnoInvocado(bat) {
             _casterId:     null,
             _skillEfeitos: _invAtiva._efeitosNecromante,
             _formulaAtaque: _invAtiva._formulaAtaqueBasico || invDef.dano_formula || '1d6',
+            _geracao: (_invAtiva._geracaoNecro ?? 0) + 1, // profundidade da cascata
           };
           _entAlvoNecro.status_effects.push(_efNecroEntry);
           if (_alvoBatNecro) {
             if (!_alvoBatNecro.status_effects) _alvoBatNecro.status_effects = [];
             _alvoBatNecro.status_effects.push({..._efNecroEntry});
           }
-          if (efP.tipo === 'dot') _avtMostrarDotDrip(_entAlvoNecro);
+          if (efP.tipo === 'dot') _avtMostrarDotDrip(_entAlvoNecro, efP.dot_variante);
           _avtLog(`  ↳ [Necromante] ${efP.tipo} aplicado em ${alvo.nome}`, bat.id);
         });
       }
@@ -23556,7 +23815,7 @@ function _avtNpcTurnoInvocado(bat) {
       if (_entAlvoAggro) { _entAlvoAggro._alvoAtual = entInv.nome; _entAlvoAggro._alvoId = entInv.id; }
       if (alvo._alvoAtual !== undefined) { alvo._alvoAtual = entInv.nome; alvo._alvoId = entInv.id; }
 
-      if (alvo.hp <= 0 && alvo.tipo === 'inimigo') { _avtNpcMorreu(alvo, bat); _avtCheckVitoria(bat); }
+      if (alvo.hp <= 0 && alvo.tipo === 'inimigo') { _avtNpcMorreu(alvo, bat, { creditoNome: _invAtiva?.dono_char_nome }); _avtCheckVitoria(bat); }
 
       _avtBroadcastBatalha(bat);
       _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
