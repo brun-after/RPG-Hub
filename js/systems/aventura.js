@@ -2989,8 +2989,48 @@ function _avtGerarDungeon(w, h, maxRooms) {
       if (tiles[y]?.[b.cx] !== undefined) tiles[y][b.cx] = AVT_T.PISO;
   }
 
-  return { tiles, w, h, rooms };
+  const portasInternas = _avtGerarPortasInternas(rooms);
+  return { tiles, w, h, rooms, _portasInternas: portasInternas };
 }
+
+// Cria pares de portas de teleporte na MESMA fase: 1 par por 10 salas, com os dois
+// extremos a ≥20 células de distância (Chebyshev). Numeradas a partir de 2 (Porta 2↔2).
+function _avtGerarPortasInternas(rooms) {
+  const pares = [];
+  if (!rooms || rooms.length < 2) return pares;
+  const cheb = (a, b) => Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row));
+  const nPares = Math.floor(rooms.length / 10);
+  const usados = new Set();
+  const centro = r => ({ col: r.cx != null ? r.cx : r.x, row: r.cy != null ? r.cy : r.y });
+  for (let n = 0; n < nPares; n++) {
+    const numero = n + 2;
+    // Escolher 'a' numa sala livre
+    let aRoomIdx = -1;
+    for (let t = 0; t < rooms.length * 2; t++) {
+      const idx = Math.floor(Math.random() * rooms.length);
+      if (!usados.has(idx)) { aRoomIdx = idx; break; }
+    }
+    if (aRoomIdx < 0) break;
+    const a = centro(rooms[aRoomIdx]);
+    // Encontrar 'b' com distância suficiente (relaxa o mínimo se mapa for pequeno)
+    let bRoomIdx = -1, melhorDist = -1, melhorIdx = -1;
+    for (const minDist of [20, 15, 10]) {
+      for (let idx = 0; idx < rooms.length; idx++) {
+        if (idx === aRoomIdx || usados.has(idx)) continue;
+        const d = cheb(a, centro(rooms[idx]));
+        if (d > melhorDist) { melhorDist = d; melhorIdx = idx; }
+        if (d >= minDist) { bRoomIdx = idx; break; }
+      }
+      if (bRoomIdx >= 0) break;
+    }
+    if (bRoomIdx < 0) bRoomIdx = melhorIdx;
+    if (bRoomIdx < 0) break;
+    usados.add(aRoomIdx); usados.add(bRoomIdx);
+    pares.push({ numero, nome: 'Porta ' + numero, a, b: centro(rooms[bRoomIdx]) });
+  }
+  return pares;
+}
+window._avtGerarPortasInternas = _avtGerarPortasInternas;
 
 function _avtGerarDungeonProcedural() {
   const salas = AVT_STATE._criando?._procSalas || 8;
@@ -3857,8 +3897,10 @@ function _avtRenderFrame() {
         if (fimDoCaminho) {
           _jPlayer.x = Math.round(_jPlayer.x); _jPlayer.y = Math.round(_jPlayer.y);
           _avtDebounceSalvarPosicao(_jPlayer);
-          _avtVerificarPortaFase(cell.x, cell.y);
-          _avtVerificarSaida(cell.x, cell.y);
+          if (!_avtVerificarPortaInterna(_jPlayer, cell.x, cell.y)) {
+            _avtVerificarPortaFase(cell.x, cell.y);
+            _avtVerificarSaida(cell.x, cell.y);
+          }
         }
       };
     }
@@ -4061,6 +4103,45 @@ function _avtRenderFrame() {
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillStyle = 'rgba(200,168,75,0.9)';
         ctx.fillText('🚪', fpx + SZ / 2, fpy + SZ / 2);
+      }
+      // Nome da fase de destino acima da porta
+      if (_fase.nome) {
+        ctx.font = `${Math.round(SZ * 0.26)}px var(--fonte-d, sans-serif)`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        const _lbl = _fase.nome, _lw = ctx.measureText(_lbl).width;
+        ctx.fillStyle = 'rgba(10,15,24,0.75)';
+        ctx.fillRect(fpx + SZ/2 - _lw/2 - 4, fpy - Math.round(SZ*0.34), _lw + 8, Math.round(SZ*0.30));
+        ctx.fillStyle = '#e8d28a';
+        ctx.fillText(_lbl, fpx + SZ/2, fpy - 4);
+      }
+    }
+  }
+
+  // Portas internas de teleporte (mesma fase) — desenhadas em ambos os extremos
+  const _portasInt = AVT_STATE.dungeon?._portasInternas || [];
+  for (const _pi of _portasInt) {
+    for (const _ep of [_pi.a, _pi.b]) {
+      const epx = Math.round(_ep.col * SZ - camera.x);
+      const epy = Math.round(_ep.row * SZ - camera.y);
+      if (epx + SZ < 0 || epx > canvas.width || epy + SZ < 0 || epy > canvas.height) continue;
+      ctx.fillStyle = 'rgba(123,47,190,0.18)';
+      ctx.fillRect(epx + 2, epy + 2, SZ - 4, SZ - 4);
+      ctx.strokeStyle = 'rgba(168,120,255,0.8)';
+      ctx.lineWidth = 2; ctx.setLineDash([]);
+      ctx.strokeRect(epx + 2, epy + 2, SZ - 4, SZ - 4);
+      ctx.font = `${Math.round(SZ * 0.55)}px serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(200,180,255,0.95)';
+      ctx.fillText('🌀', epx + SZ / 2, epy + SZ / 2);
+      // Nome da porta acima
+      if (_pi.nome) {
+        ctx.font = `${Math.round(SZ * 0.24)}px var(--fonte-d, sans-serif)`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        const _lw2 = ctx.measureText(_pi.nome).width;
+        ctx.fillStyle = 'rgba(10,15,24,0.7)';
+        ctx.fillRect(epx + SZ/2 - _lw2/2 - 3, epy - Math.round(SZ*0.30), _lw2 + 6, Math.round(SZ*0.26));
+        ctx.fillStyle = '#c8a8ff';
+        ctx.fillText(_pi.nome, epx + SZ / 2, epy - 4);
       }
     }
   }
@@ -6691,8 +6772,14 @@ function _avtMoverJogador(dx, dy) {
         }
         if (jogador.tipo === 'jogador') _avtDebounceSalvarPosicao(jogador);
         else if (typeof _avtDebounceSalvarPosicaoNpc === 'function') _avtDebounceSalvarPosicaoNpc(jogador);
-        _avtVerificarPortaFase(cell.x, cell.y);
-        _avtVerificarSaida(cell.x, cell.y);
+        if (jogador.tipo === 'inimigo') {
+          // NPC cruza porta interna com chance configurável.
+          const _chance = AVT_STATE.rpg?.theme_json?.level_config?.npc_porta_chance_pct ?? 50;
+          if (Math.random() * 100 < _chance) _avtVerificarPortaInterna(jogador, cell.x, cell.y);
+        } else if (!_avtVerificarPortaInterna(jogador, cell.x, cell.y)) {
+          _avtVerificarPortaFase(cell.x, cell.y);
+          _avtVerificarSaida(cell.x, cell.y);
+        }
         _avtRecuperarPorMovimento(jogador, 1);
         _avtCameraUpdate();
       };
@@ -10995,6 +11082,39 @@ function _avtTeleportarParaAlvo(caster, alvo, delayMs, bat) {
     if (batAtual) _avtBroadcastBatalha(batAtual);
   }, delayMs || 1000);
 }
+
+// Teleporte instantâneo por porta interna (mesma fase). Faz o token "desaparecer
+// e reaparecer" na porta irmã, sem arrastar pelo mapa. Vale para jogadores e NPCs.
+function _avtVerificarPortaInterna(ent, x, y) {
+  if (!ent) return false;
+  if (ent._portaCooldownUntil && Date.now() < ent._portaCooldownUntil) return false;
+  const pares = AVT_STATE.dungeon?._portasInternas;
+  if (!pares?.length) return false;
+  const par = pares.find(p => (p.a.col === x && p.a.row === y) || (p.b.col === x && p.b.row === y));
+  if (!par) return false;
+  const origemA = (par.a.col === x && par.a.row === y);
+  let destino = origemA ? par.b : par.a;
+  // Se o destino estiver ocupado/inválido, procurar vizinho passável.
+  const ocupado = p => AVT_STATE.entidades.some(e => e.id !== ent.id && Math.round(e.x) === p.col && Math.round(e.y) === p.row && (e.hp == null || e.hp > 0));
+  if (!_avtTilePassavel(destino.col, destino.row, AVT_STATE.dungeon) || ocupado(destino)) {
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+    const alt = dirs.map(([dx,dy]) => ({ col: destino.col+dx, row: destino.row+dy }))
+      .find(p => _avtTilePassavel(p.col, p.row, AVT_STATE.dungeon) && !ocupado(p));
+    if (alt) destino = alt;
+  }
+  // Salto instantâneo (sem waypoints/lerp)
+  ent._waypoints = [];
+  ent.x = destino.col; ent.y = destino.row;
+  ent.renderX = destino.col; ent.renderY = destino.row;
+  ent._portaCooldownUntil = Date.now() + 800;
+  try {
+    (AVT_STATE.batalhas || []).forEach(b => { const bi = b.iniciativa?.find(e => e.id === ent.id); if (bi) { bi.x = destino.col; bi.y = destino.row; } });
+  } catch(_){}
+  try { _avtBcastTokenMove({ nome: ent.nome, x: destino.col, y: destino.row }); } catch(_){}
+  if (ent.tipo === 'jogador') _avtCameraUpdate();
+  return true;
+}
+window._avtVerificarPortaInterna = _avtVerificarPortaInterna;
 
 // ── Sistema de Avatar ──────────────────────────────────────────────────────────
 function _avtCriarAvatar(caster, ef, bat) {
