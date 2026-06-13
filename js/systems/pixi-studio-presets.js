@@ -440,6 +440,112 @@ var PIXI_STUDIO_PRESETS = {
     ],
   },
 
+  // ─── Showcase presets (glow + trilha + bloom + travel + easing + luz) ──────
+  meteoro_flamejante: {
+    version: 2, behavior: 'projectile', duracao_ms: 1100, posicao: 'trajetoria',
+    behavior_config: { projectile_speed_ms: 700 }, travel: { path: 'arc', rotate: 'velocity' },
+    camera: { shake: { amp: 6, decay: 0.9, freq: 36 }, hitstop: { ms: 60, at: 0.62 } },
+    lighting: { bloom: { threshold: 0.5, intensity: 1.1, quality: 6 }, tone: 'filmic' },
+    background: { darken: 0.12 }, audio: { cast: 'fire_cast', impact: 'fire_burst', volume: 0.8 }, global: false,
+    layers: [
+      { id: 'l0', tipo: 'emitter', nome: 'Núcleo', visivel: true, z: 3, blendMode: 'add', texture: 'ember', texture_url: null,
+        glow: { distance: 14, outerStrength: 1.8, innerStrength: 0, color: '#ff8a2a' }, trail: { length: 14, fade: 0.7 },
+        emitter: { alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.7, time: 0 }, { value: 0.1, time: 1 }] },
+          color: { list: [{ value: 'fff1c2', time: 0 }, { value: 'ff6a1c', time: 1 }] }, speed: { start: 60, end: 10 },
+          startRotation: { min: 0, max: 360 }, lifetime: { min: 0.3, max: 0.6 }, frequency: 0.006, emitterLifetime: -1, maxParticles: 120,
+          spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 6 } }, keyframes: [] },
+      { id: 'l1', tipo: 'emitter', nome: 'Fagulhas', visivel: true, z: 4, blendMode: 'add', texture: 'spark', texture_url: null, glow: null,
+        emitter: { alpha: { list: [{ value: 0.9, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.3, time: 0 }, { value: 0.02, time: 1 }] },
+          color: { list: [{ value: 'ffe6a0', time: 0 }, { value: 'ff7a1c', time: 1 }] }, speed: { start: 160, end: 30 }, acceleration: { x: 0, y: 120 },
+          lifetime: { min: 0.3, max: 0.7 }, frequency: 0.012, emitterLifetime: -1, maxParticles: 50, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 5 } }, keyframes: [] },
+      { id: 'l2', tipo: 'light', nome: 'Clarão', visivel: true, z: 5, blendMode: 'add', color: '#ffb347',
+        keyframes: [{ t: 0.55, x: 0, y: 0, radius: 20, alpha: 0, color: '#fff0c0' }, { t: 0.66, x: 0, y: 0, radius: 150, alpha: 0.9, color: '#ffb347', ease: 'easeOutCubic' }, { t: 1, x: 0, y: 0, radius: 90, alpha: 0, color: '#ff7a1c' }] },
+    ],
+  },
+
+  lanca_estelar: {
+    version: 2, behavior: 'projectile', duracao_ms: 850, posicao: 'trajetoria',
+    behavior_config: { projectile_speed_ms: 520 }, travel: { path: 'homing', rotate: 'velocity' },
+    camera: { shake: { amp: 4, decay: 0.92, freq: 34 } },
+    lighting: { bloom: { threshold: 0.55, intensity: 1.0, quality: 5 }, tone: 'filmic' },
+    background: { darken: 0.08 }, audio: { cast: 'magic_cast', impact: 'magic_hit', volume: 0.75 }, global: false,
+    layers: [
+      { id: 'l0', tipo: 'emitter', nome: 'Feixe', visivel: true, z: 3, blendMode: 'add', texture: 'streak', texture_url: null,
+        glow: { distance: 12, outerStrength: 1.6, innerStrength: 0, color: '#9fe6ff' }, trail: { length: 12, fade: 0.72 },
+        emitter: { alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.55, time: 0 }, { value: 0.08, time: 1 }] },
+          color: { list: [{ value: 'ffffff', time: 0 }, { value: '7fd0ff', time: 1 }] }, speed: { start: 40, end: 5 },
+          lifetime: { min: 0.25, max: 0.5 }, frequency: 0.006, emitterLifetime: -1, maxParticles: 90, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 3 } }, keyframes: [] },
+      { id: 'l1', tipo: 'emitter', nome: 'Estrelas', visivel: true, z: 4, blendMode: 'add', texture: 'sparkle', texture_url: null, tint: '#bfefff',
+        emitter: { alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.25, time: 0 }, { value: 0.02, time: 1 }] },
+          color: { list: [{ value: 'ffffff', time: 0 }, { value: 'a8e6ff', time: 1 }] }, speed: { start: 120, end: 20 }, startRotation: { min: 0, max: 360 },
+          lifetime: { min: 0.3, max: 0.6 }, frequency: 0.02, emitterLifetime: -1, maxParticles: 30, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 4 } }, keyframes: [] },
+    ],
+  },
+
+  explosao_sagrada: {
+    version: 2, behavior: 'one-shot', duracao_ms: 950, posicao: 'alvo',
+    camera: { shake: { amp: 8, decay: 0.9, freq: 40 }, hitstop: { ms: 70, at: 0.12 } },
+    lighting: { bloom: { threshold: 0.45, intensity: 1.4, quality: 6 }, tone: 'aces' },
+    background: { darken: 0.16 }, filters: [{ type: 'shockwave', amplitude: 30, wavelength: 170, speed: 650, brightness: 1 }],
+    audio: { cast: 'holy_shine', impact: 'holy_impact', volume: 0.8 }, global: false,
+    layers: [
+      { id: 'l0', tipo: 'light', nome: 'Clarão', visivel: true, z: 1, blendMode: 'add', color: '#fff0c0',
+        keyframes: [{ t: 0, x: 0, y: 0, radius: 30, alpha: 0, color: '#ffffff' }, { t: 0.14, x: 0, y: 0, radius: 180, alpha: 1, color: '#fff0c0', ease: 'easeOutCubic' }, { t: 1, x: 0, y: 0, radius: 110, alpha: 0, color: '#ffd47a' }] },
+      { id: 'l1', tipo: 'emitter', nome: 'Raios', visivel: true, z: 3, blendMode: 'add', texture: 'spark', texture_url: null,
+        glow: { distance: 12, outerStrength: 1.5, innerStrength: 0, color: '#ffe08a' },
+        emitter: { alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.6, time: 0 }, { value: 0.05, time: 1 }] },
+          color: { list: [{ value: 'ffffff', time: 0 }, { value: 'ffcf66', time: 1 }] }, speed: { start: 320, end: 60 },
+          lifetime: { min: 0.3, max: 0.55 }, frequency: 0.006, emitterLifetime: 0.25, maxParticles: 80, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 6 } }, keyframes: [] },
+      { id: 'l2', tipo: 'shape', nome: 'Anel', visivel: true, z: 4, blendMode: 'add', shape_type: 'circle',
+        keyframes: [{ t: 0, radius: 8, stroke_color: '#fff3c0', stroke_alpha: 1, stroke_width: 4, fill_alpha: 0, ease: 'easeOutCubic' }, { t: 1, radius: 120, stroke_color: '#ffcf66', stroke_alpha: 0, stroke_width: 1, fill_alpha: 0 }] },
+    ],
+  },
+
+  vortex_sombrio: {
+    version: 2, behavior: 'follow-target', duracao_ms: 1600, posicao: 'alvo',
+    camera: { shake: { amp: 3, decay: 0.95, freq: 22 } },
+    lighting: { bloom: { threshold: 0.55, intensity: 0.9, quality: 5 }, tone: 'filmic' },
+    background: { darken: 0.2 }, audio: { cast: 'dark_whoosh', impact: 'dark_impact', volume: 0.75 }, global: false,
+    layers: [
+      { id: 'l0', tipo: 'emitter', nome: 'Vórtex', visivel: true, z: 3, blendMode: 'add', texture: 'swirl', texture_url: null,
+        glow: { distance: 12, outerStrength: 1.4, innerStrength: 0, color: '#a020f0' }, trail: { length: 10, fade: 0.78 },
+        emitter: { alpha: { list: [{ value: 0.9, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.4, time: 0 }, { value: 0.05, time: 1 }] },
+          color: { list: [{ value: 'd9a0ff', time: 0 }, { value: '4a1070', time: 1 }] }, speed: { start: 30, end: 120 }, rotationSpeed: { min: 180, max: 320 },
+          startRotation: { min: 0, max: 360 }, lifetime: { min: 0.5, max: 0.9 }, frequency: 0.01, emitterLifetime: -1, maxParticles: 70, spawnType: 'ring', spawnCircle: { x: 0, y: 0, r: 40 } }, keyframes: [] },
+    ],
+  },
+
+  chuva_arcana: {
+    version: 2, behavior: 'aoe', duracao_ms: 1400, posicao: 'area',
+    camera: { shake: { amp: 4, decay: 0.94, freq: 26 } },
+    lighting: { bloom: { threshold: 0.5, intensity: 1.0, quality: 5 }, tone: 'filmic' },
+    background: { darken: 0.14 }, filters: [{ type: 'rgbsplit', rx: -4, ry: 0, bx: 4, by: 0 }],
+    audio: { cast: 'magic_charge', impact: 'magic_hit', volume: 0.75 }, global: false,
+    layers: [
+      { id: 'l0', tipo: 'emitter', nome: 'Chuva', visivel: true, z: 3, blendMode: 'add', texture: 'shard', texture_url: null,
+        glow: { distance: 8, outerStrength: 1.2, innerStrength: 0, color: '#8ab4ff' },
+        emitter: { alpha: { list: [{ value: 0.9, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.35, time: 0 }, { value: 0.1, time: 1 }] },
+          color: { list: [{ value: 'd6e6ff', time: 0 }, { value: '6a8cff', time: 1 }] }, speed: { start: 260, end: 200 }, acceleration: { x: 0, y: 300 },
+          startRotation: { min: 80, max: 100 }, lifetime: { min: 0.5, max: 0.9 }, frequency: 0.01, emitterLifetime: 0.9, maxParticles: 80, spawnType: 'rect', spawnRect: { x: -120, y: -90, w: 240, h: 20 } }, keyframes: [] },
+    ],
+  },
+
+  cura_radiante: {
+    version: 2, behavior: 'follow-target', duracao_ms: 1500, posicao: 'alvo',
+    camera: { shake: { amp: 0, decay: 1, freq: 0 } },
+    lighting: { bloom: { threshold: 0.6, intensity: 0.8, quality: 5 }, tone: 'filmic' },
+    background: { darken: 0 }, audio: { cast: 'heal_chime', impact: 'heal_glow', volume: 0.7 }, global: false,
+    layers: [
+      { id: 'l0', tipo: 'emitter', nome: 'Fagulhas', visivel: true, z: 3, blendMode: 'add', texture: 'sparkle', texture_url: null,
+        glow: { distance: 10, outerStrength: 1.3, innerStrength: 0, color: '#8fffa8' }, trail: { length: 6, fade: 0.8 },
+        emitter: { alpha: { list: [{ value: 0, time: 0 }, { value: 0.9, time: 0.2 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.1, time: 0 }, { value: 0.28, time: 0.5 }, { value: 0.04, time: 1 }] },
+          color: { list: [{ value: 'eaffe0', time: 0 }, { value: '6fe89a', time: 1 }] }, speed: { start: 30, end: 80 }, acceleration: { x: 0, y: -120 },
+          startRotation: { min: 250, max: 290 }, lifetime: { min: 0.7, max: 1.2 }, frequency: 0.02, emitterLifetime: -1, maxParticles: 50, spawnType: 'circle', spawnCircle: { x: 0, y: 20, r: 22 } }, keyframes: [] },
+      { id: 'l1', tipo: 'light', nome: 'Aura', visivel: true, z: 2, blendMode: 'add', color: '#9fffb0',
+        keyframes: [{ t: 0, x: 0, y: 0, radius: 30, alpha: 0, color: '#d0ffd8' }, { t: 0.3, x: 0, y: 0, radius: 90, alpha: 0.6, color: '#9fffb0', ease: 'easeOutQuad' }, { t: 1, x: 0, y: 0, radius: 70, alpha: 0, color: '#6fe89a' }] },
+    ],
+  },
+
 };
 
 // Display metadata for the presets library (nome PT-BR + categoria)
@@ -461,4 +567,10 @@ var PIXI_STUDIO_PRESET_META = {
   feixe_energia:    { nome: 'Feixe de Energia',        categoria: 'Fogo',    cor: '#ff8040' },
   arcano_preciso:   { nome: 'Arcano — Preciso',        categoria: 'Arcano',  cor: '#a978ff' },
   aura_persistente: { nome: 'Aura Persistente',        categoria: 'Buff',    cor: '#c8a84b' },
+  meteoro_flamejante: { nome: 'Meteoro Flamejante',    categoria: 'Fogo',    cor: '#ff8a2a' },
+  lanca_estelar:    { nome: 'Lança Estelar',           categoria: 'Arcano',  cor: '#7fd0ff' },
+  explosao_sagrada: { nome: 'Explosão Sagrada',        categoria: 'Sagrado', cor: '#ffd47a' },
+  vortex_sombrio:   { nome: 'Vórtex Sombrio',          categoria: 'Sombra',  cor: '#a020f0' },
+  chuva_arcana:     { nome: 'Chuva Arcana',            categoria: 'Arcano',  cor: '#6a8cff' },
+  cura_radiante:    { nome: 'Cura Radiante',           categoria: 'Cura',    cor: '#6fe89a' },
 };

@@ -13486,6 +13486,69 @@ function _avtProcTextures(name) {
       g.lineWidth = 10;
       g.beginPath(); g.arc(cx, cy, r, Math.PI*1.1, Math.PI*1.9); g.stroke();
     });
+    case 'sparkle': return make(64, (g,s) => {
+      // estrela de 4 pontas + núcleo
+      const r = s/2;
+      const core = g.createRadialGradient(r,r,0,r,r,r*0.35);
+      core.addColorStop(0,'rgba(255,255,255,1)'); core.addColorStop(1,'rgba(255,255,255,0)');
+      g.fillStyle = core; g.beginPath(); g.arc(r,r,r*0.35,0,Math.PI*2); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.95)';
+      const spike = (w) => { g.beginPath(); g.moveTo(r,0); g.lineTo(r+w,r); g.lineTo(r,s); g.lineTo(r-w,r); g.closePath(); g.fill(); };
+      spike(r*0.18);
+      g.save(); g.translate(r,r); g.rotate(Math.PI/2); g.translate(-r,-r); spike(r*0.18); g.restore();
+    });
+    case 'shard': return make(64, (g,s) => {
+      // estilhaço/cristal alongado
+      g.fillStyle = 'rgba(255,255,255,1)';
+      g.beginPath(); g.moveTo(s*0.5,s*0.02); g.lineTo(s*0.66,s*0.45); g.lineTo(s*0.5,s*0.98); g.lineTo(s*0.34,s*0.45); g.closePath(); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.45)'; g.fillRect(s*0.47,s*0.05,s*0.06,s*0.9);
+    });
+    case 'crescent': return make(80, (g,s) => {
+      // meia-lua / arco
+      const r = s/2;
+      g.fillStyle = 'rgba(255,255,255,1)';
+      g.beginPath(); g.arc(r,r,r*0.85,0,Math.PI*2); g.fill();
+      g.globalCompositeOperation = 'destination-out';
+      g.beginPath(); g.arc(r*1.25,r*0.8,r*0.8,0,Math.PI*2); g.fill();
+    });
+    case 'swirl': return make(96, (g,s) => {
+      // espiral fina
+      const r = s/2;
+      g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 3; g.lineCap = 'round';
+      g.beginPath();
+      for (let a=0; a<Math.PI*3.2; a+=0.18) { const rad = (a/(Math.PI*3.2))*r*0.9; const x=r+Math.cos(a)*rad, y=r+Math.sin(a)*rad; a===0?g.moveTo(x,y):g.lineTo(x,y); }
+      g.stroke();
+    });
+    case 'bolt': return make(64, (g,s) => {
+      // raio em ziguezague
+      g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 4; g.lineJoin = 'round'; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(s*0.55,s*0.05); g.lineTo(s*0.38,s*0.45); g.lineTo(s*0.56,s*0.5); g.lineTo(s*0.4,s*0.95); g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 9;
+      g.beginPath(); g.moveTo(s*0.55,s*0.05); g.lineTo(s*0.38,s*0.45); g.lineTo(s*0.56,s*0.5); g.lineTo(s*0.4,s*0.95); g.stroke();
+    });
+    case 'petal': return make(64, (g,s) => {
+      // pétala / gota
+      const r = s/2;
+      const grd = g.createRadialGradient(r,r*0.7,0,r,r*0.7,r*0.7);
+      grd.addColorStop(0,'rgba(255,255,255,1)'); grd.addColorStop(1,'rgba(255,255,255,0.1)');
+      g.fillStyle = grd;
+      g.beginPath(); g.moveTo(r,s*0.05); g.bezierCurveTo(s*0.95,s*0.4,s*0.75,s*0.95,r,s*0.95); g.bezierCurveTo(s*0.25,s*0.95,s*0.05,s*0.4,r,s*0.05); g.fill();
+    });
+    case 'hexagon': return make(72, (g,s) => {
+      const r = s/2;
+      g.fillStyle = 'rgba(255,255,255,0.9)';
+      g.beginPath(); for (let i=0;i<6;i++){ const a=-Math.PI/2+i*Math.PI/3; const x=r+Math.cos(a)*r*0.82, y=r+Math.sin(a)*r*0.82; i===0?g.moveTo(x,y):g.lineTo(x,y); } g.closePath(); g.fill();
+    });
+    case 'snowflake': return make(72, (g,s) => {
+      const r = s/2;
+      g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 2.5; g.lineCap = 'round';
+      for (let i=0;i<6;i++){ const a=i*Math.PI/3; const ex=r+Math.cos(a)*r*0.85, ey=r+Math.sin(a)*r*0.85;
+        g.beginPath(); g.moveTo(r,r); g.lineTo(ex,ey); g.stroke();
+        const bx=r+Math.cos(a)*r*0.5, by=r+Math.sin(a)*r*0.5;
+        g.beginPath(); g.moveTo(bx,by); g.lineTo(bx+Math.cos(a+0.5)*r*0.22, by+Math.sin(a+0.5)*r*0.22); g.stroke();
+        g.beginPath(); g.moveTo(bx,by); g.lineTo(bx+Math.cos(a-0.5)*r*0.22, by+Math.sin(a-0.5)*r*0.22); g.stroke();
+      }
+    });
     default: return PIXI.Texture.WHITE;
   }
 }
