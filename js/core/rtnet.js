@@ -119,6 +119,7 @@ window.RTNet = (() => {
     avt_bau_aberto:           'avtReceberBauAberto',
     // [FASES]
     avt_fase_mudou:           'avtReceberFaseMudou',
+    avt_porta_proxima:        'avtReceberPortaProxima',
   };
 
   // opts padrão por tipo de evento (camada A/B/C conforme plano §5)

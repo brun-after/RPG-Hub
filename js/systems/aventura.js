@@ -4018,6 +4018,10 @@ function _avtRenderFrame() {
   // Estilo da grade configurável pelo mestre (cor + opacidade, persistido em theme_json)
   const _gridStyle = _avtGridStyle();
 
+  // Variação de cor por fase: aplica hue-rotate aos tiles (reset após o loop).
+  const _hue = AVT_STATE._faseHueShift || 0;
+  const _hueOn = _hue && AVT_STATE._tilesetLoaded && ('filter' in ctx);
+  if (_hueOn) ctx.filter = `hue-rotate(${_hue}deg)`;
   for (let y = 0; y < dungeon.h; y++) {
     for (let x = 0; x < dungeon.w; x++) {
       const t  = dungeon.tiles[y]?.[x];
@@ -4065,6 +4069,7 @@ function _avtRenderFrame() {
       }
     }
   }
+  if (_hueOn) ctx.filter = 'none';
 
   // Overlay de grade suave nos tilesets (linhas finas e translúcidas)
   if (AVT_STATE._tilesetLoaded && _gridStyle.op > 0) {
@@ -4144,6 +4149,34 @@ function _avtRenderFrame() {
         ctx.fillRect(epx + SZ/2 - _lw2/2 - 3, epy - Math.round(SZ*0.30), _lw2 + 6, Math.round(SZ*0.26));
         ctx.fillStyle = '#c8a8ff';
         ctx.fillText(_pi.nome, epx + SZ / 2, epy - 4);
+      }
+    }
+  }
+
+  // Porta temporária da próxima fase (aberta ao matar o boss)
+  const _pp = AVT_STATE._portaProximaFase;
+  if (_pp && (AVT_STATE._faseAtualId || 'principal') === (_pp._faseOrigem || (AVT_STATE._faseAtualId || 'principal'))) {
+    const ppx = Math.round(_pp.col * SZ - camera.x);
+    const ppy = Math.round(_pp.row * SZ - camera.y);
+    if (!(ppx + SZ < 0 || ppx > canvas.width || ppy + SZ < 0 || ppy > canvas.height)) {
+      const _pulse = 0.5 + 0.4 * Math.abs(Math.sin(Date.now() / 400));
+      ctx.fillStyle = `rgba(79,220,140,${0.15 * _pulse + 0.1})`;
+      ctx.fillRect(ppx + 2, ppy + 2, SZ - 4, SZ - 4);
+      ctx.strokeStyle = `rgba(79,220,140,${_pulse})`;
+      ctx.lineWidth = 2.5; ctx.setLineDash([]);
+      ctx.strokeRect(ppx + 2, ppy + 2, SZ - 4, SZ - 4);
+      ctx.font = `${Math.round(SZ * 0.55)}px serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(120,255,180,0.95)';
+      ctx.fillText('🚪', ppx + SZ / 2, ppy + SZ / 2);
+      if (_pp.nome) {
+        ctx.font = `${Math.round(SZ * 0.26)}px var(--fonte-d, sans-serif)`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        const _lw3 = ctx.measureText(_pp.nome).width;
+        ctx.fillStyle = 'rgba(10,15,24,0.75)';
+        ctx.fillRect(ppx + SZ/2 - _lw3/2 - 4, ppy - Math.round(SZ*0.34), _lw3 + 8, Math.round(SZ*0.30));
+        ctx.fillStyle = '#7effb4';
+        ctx.fillText(_pp.nome, ppx + SZ / 2, ppy - 4);
       }
     }
   }
@@ -9555,6 +9588,9 @@ function _avtNpcMorreu(npcEnt, bat, opts = {}) {
 
   // XP distribution (credita o autor do abate quando informado — ex.: DOT)
   _avtDistribuirXpNpc(npcEnt, bat, opts);
+
+  // Boss morto → abre/destranca a porta para a próxima fase
+  if (npcEnt.isBoss) { try { _avtOnBossMorto(npcEnt, bat); } catch(_){} }
 
   // Schedule respawn
   _avtAgendarRespawnNpc(npcEnt);
@@ -16615,6 +16651,24 @@ function _avtMpConteudoAba() {
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarSkillScalingAttrs()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">💀 Porta após derrota do Boss</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Ao matar o boss: <strong>Abrir porta</strong> faz surgir uma porta para a próxima fase por X segundos (depois de aberta, qualquer um passa sem limite). <strong>Liberar chave</strong> apenas destranca a porta de fase já existente.</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <label style="flex:1;display:flex;align-items:center;gap:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;padding:6px 8px;font-size:0.7rem;color:#c8d8e8;cursor:pointer">
+            <input type="radio" name="avt-boss-door-mode" value="spawn_door" ${(lc.boss_door_mode||'spawn_door')==='spawn_door'?'checked':''}> Abrir porta
+          </label>
+          <label style="flex:1;display:flex;align-items:center;gap:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;padding:6px 8px;font-size:0.7rem;color:#c8d8e8;cursor:pointer">
+            <input type="radio" name="avt-boss-door-mode" value="release_key" ${(lc.boss_door_mode)==='release_key'?'checked':''}> Liberar chave
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-boss-door-segs" min="0" max="3600" step="5" value="${lc.boss_door_segundos ?? 30}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">segundos que a porta aparece</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarBossDoorConfig()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-label">❤ HP Base e Escala por Constituição</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">HP inicial dos personagens. Fórmula: <strong>HP = hp_base + Atributo × multiplicador</strong>. Aplica a jogadores e NPCs criados via IA.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -17048,6 +17102,22 @@ async function avtMestreSalvarMapaEditado() {
     mostrarToast('Mapa atualizado localmente (erro ao persistir: ' + (e?.message||e) + ')', 'aviso');
   }
 }
+
+async function _avtSalvarBossDoorConfig() {
+  const modo = document.querySelector('input[name="avt-boss-door-mode"]:checked')?.value || 'spawn_door';
+  const segs = Math.max(0, Math.min(3600, parseInt(document.getElementById('avt-mp-boss-door-segs')?.value) || 30));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.boss_door_mode = modo;
+  rpg.theme_json.level_config.boss_door_segundos = segs;
+  try {
+    await _avtSalvarThemeJson();
+    mostrarToast('Configuração da porta do boss salva', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
+}
+window._avtSalvarBossDoorConfig = _avtSalvarBossDoorConfig;
 
 async function _avtSalvarSkillScalingAttrs() {
   const cbs = Array.from(document.querySelectorAll('.avt-mp-skill-scaling-cb'));
@@ -18625,11 +18695,16 @@ async function _avtMestreSalvarNovaFase() {
     } catch(e) { mostrarToast('Aviso: erro ao enviar tileset da fase (continuando sem ele)', 'aviso'); }
   }
 
+  const _ordensExistentes = (AVT_STATE.rpg.theme_json?.fases_extras || []).map(f => f.ordem ?? 0);
+  const _proxOrdem = (_ordensExistentes.length ? Math.max(..._ordensExistentes) : 0) + 1;
   const fase = {
     id: Date.now().toString(),
     nome,
     dungeon_data: dungeonData,
     tileset_img_url: faseTilesetUrl || null,
+    ordem: w.ordem ?? _proxOrdem,
+    npc_level: w.npc_level ?? (_proxOrdem + 1),
+    tint_hue: (_proxOrdem * 28) % 360,
     porta: { col: w.porta_col, row: w.porta_row, lock_type: w.lock_type, chave_palavra: w.chave_palavra, npc_boss_id: w.npc_boss_id }
   };
 
@@ -18666,8 +18741,125 @@ async function _avtMestreRemoverFase(faseId) {
   }
 }
 
+// ─── Ordem das fases / progressão ────────────────────────────────────────────
+function _avtFasesOrdenadas() {
+  const extras = (AVT_STATE.rpg?.theme_json?.fases_extras || []).slice();
+  return extras.sort((a, b) => (a.ordem ?? 9999) - (b.ordem ?? 9999) || String(a.id).localeCompare(String(b.id)));
+}
+window._avtFasesOrdenadas = _avtFasesOrdenadas;
+
+// Descritor da fase atual (objeto da fase extra, ou sintético para a principal).
+function _avtFaseAtualObj() {
+  const id = AVT_STATE._faseAtualId || 'principal';
+  if (id === 'principal') {
+    return { id: 'principal', ordem: 0, npc_level: 1,
+      tileset_img_url: AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_img_url || AVT_STATE._tilesetImgUrl || null,
+      dungeon_data: AVT_STATE.rpg?.theme_json?.dungeon_data || AVT_STATE.dungeon, tint_hue: 0 };
+  }
+  return (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === id) || null;
+}
+
+// Próxima fase por ordem após a atual; null se não houver.
+function _avtProximaFase(faseAtualId) {
+  const atual = _avtFaseAtualObj();
+  const ordAtual = atual?.ordem ?? 0;
+  const ord = _avtFasesOrdenadas().filter(f => (f.ordem ?? 9999) > ordAtual);
+  return ord[0] || null;
+}
+window._avtProximaFase = _avtProximaFase;
+
+// Gera proceduralmente a próxima fase quando não existe uma criada.
+// Mais salas (de preferência) que a anterior, mesmo tileset com leve variação de cor.
+async function _avtGerarProximaFaseAuto() {
+  const prev = _avtFaseAtualObj() || { ordem: 0, npc_level: 1 };
+  const prevSalas = (prev.dungeon_data?.rooms?.length) || 8;
+  const salas = prevSalas + Math.floor(Math.random() * 4); // 0..3 a mais (viés p/ cima)
+  const area = Math.max(22*16, salas*60);
+  const ww = Math.ceil(Math.sqrt(area*(22/16))); const hh = Math.ceil(area/ww);
+  const dungeonData = _avtGerarDungeon(ww, hh, salas);
+  // SAIDA na última sala
+  if (dungeonData.rooms?.length > 0) {
+    const lr = dungeonData.rooms[dungeonData.rooms.length - 1];
+    const sx = lr.cx ?? lr.x, sy = lr.cy ?? lr.y;
+    if (dungeonData.tiles[sy]?.[sx] !== undefined) dungeonData.tiles[sy][sx] = AVT_T.SAIDA;
+  }
+  const ordem = (prev.ordem ?? 0) + 1;
+  const npcLvl = (prev.npc_level ?? 1) + 1;
+  dungeonData._npcLevel = npcLvl;
+  dungeonData._faseSeed = _avtSeedFromStr('auto_' + ordem + '_' + Date.now());
+  const fase = {
+    id: Date.now().toString(),
+    nome: `Fase ${ordem + 1}`,
+    dungeon_data: dungeonData,
+    tileset_img_url: prev.tileset_img_url || null,
+    ordem, npc_level: npcLvl,
+    tint_hue: ((prev.tint_hue ?? 0) + 28) % 360,
+    porta: { col: 0, row: 0, lock_type: 'livre' },
+    _autoGerada: true,
+  };
+  if (!AVT_STATE.rpg.theme_json) AVT_STATE.rpg.theme_json = {};
+  AVT_STATE.rpg.theme_json.fases_extras = [...(AVT_STATE.rpg.theme_json.fases_extras || []), fase];
+  await _avtSalvarThemeJson();
+  return fase;
+}
+window._avtGerarProximaFaseAuto = _avtGerarProximaFaseAuto;
+
+// ─── Morte do boss → porta para a próxima fase ────────────────────────────────
+async function _avtOnBossMorto(boss, bat) {
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const modo = lc.boss_door_mode || 'spawn_door';
+  let prox = _avtProximaFase(AVT_STATE._faseAtualId);
+  if (!prox) {
+    try { prox = await _avtGerarProximaFaseAuto(); } catch(_) { prox = null; }
+  }
+  if (!prox) return;
+
+  if (modo === 'release_key') {
+    // Destrancar a porta de fase já existente (a procedural com lock chave/combate).
+    const palavra = prox.porta?.chave_palavra;
+    if (prox.porta) {
+      if (palavra) {
+        AVT_STATE.entidades.filter(e => e.tipo === 'jogador').forEach(j => {
+          const ca = j.custom_attrs || (j.custom_attrs = {});
+          ca.chaves_coletadas = ca.chaves_coletadas || [];
+          if (!ca.chaves_coletadas.includes(palavra)) ca.chaves_coletadas.push(palavra);
+        });
+        mostrarToast(`🔑 Chave liberada: ${palavra}`, 'ok');
+      } else {
+        prox.porta.lock_type = 'livre';
+        _avtSalvarThemeJson();
+        mostrarToast('🔓 A porta da próxima fase foi destrancada!', 'ok');
+      }
+    }
+  } else {
+    // spawn_door: criar uma porta temporária junto ao boss para a próxima fase.
+    const segs = lc.boss_door_segundos ?? 30;
+    let col = Math.round(boss?.x ?? 1), row = Math.round(boss?.y ?? 1);
+    if (!_avtTilePassavel(col, row, AVT_STATE.dungeon)) {
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+      const alt = dirs.map(([dx,dy]) => ({x:col+dx,y:row+dy})).find(p => _avtTilePassavel(p.x,p.y,AVT_STATE.dungeon));
+      if (alt) { col = alt.x; row = alt.y; }
+    }
+    AVT_STATE._portaProximaFase = { faseId: prox.id, nome: prox.nome, col, row, abertaEm: Date.now(), _faseOrigem: AVT_STATE._faseAtualId || 'principal' };
+    try { _avtBroadcast('avt_porta_proxima', AVT_STATE._portaProximaFase); } catch(_){}
+    mostrarToast(`🚪 Porta para ${prox.nome} aberta por ${segs}s!`, 'ok');
+    // Após a janela, a porta para de "aparecer" (mas se já foi aberta segue usável):
+    // marcamos apenas que a janela fechou; a entrada continua permitida.
+    _avtSetTimeout(() => { if (AVT_STATE._portaProximaFase) AVT_STATE._portaProximaFase._janelaFechada = true; }, segs * 1000);
+  }
+}
+window._avtOnBossMorto = _avtOnBossMorto;
+// Recebe abertura de porta da próxima fase de outro cliente
+window.avtReceberPortaProxima = function(p) { try { if (p?.faseId) AVT_STATE._portaProximaFase = p; } catch(_){} };
+
 // ─── Verificação de porta ao mover ───────────────────────────────────────────
 function _avtVerificarPortaFase(x, y) {
+  // Porta temporária da próxima fase (aberta ao matar o boss)
+  const pp = AVT_STATE._portaProximaFase;
+  if (pp && pp.col === x && pp.row === y) {
+    const prox = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === pp.faseId);
+    if (prox) { _avtPromptFase(`Avançar para ${prox.nome || 'a próxima fase'}?`, 'Avançar', () => _avtEntrarFaseExtra(prox)); return; }
+  }
   // Se já estou dentro de uma fase extra, ignorar portas (só SAIDA volta).
   // Evita pular entre fases extras e quebrar a pilha _faseAnterior.
   if (AVT_STATE._faseAtualId && AVT_STATE._faseAtualId !== 'principal') return;
@@ -18728,6 +18920,7 @@ async function _avtEntrarFaseExtra(fase) {
   fase.dungeon_data._npcLevel = fase.npc_level ?? 1;
   fase.dungeon_data._faseId   = fase.id;
   if (fase.dungeon_data._faseSeed == null) fase.dungeon_data._faseSeed = _avtSeedFromStr(fase.id);
+  AVT_STATE._faseHueShift = fase.tint_hue || 0; // variação de cor por fase (Pixi/canvas)
   AVT_STATE._faseAtualId = fase.id;
   if (typeof AudioManager !== 'undefined') AudioManager.onEnterPhase(fase);
 
@@ -18872,6 +19065,9 @@ function _avtVoltarFaseAnterior() {
   AVT_STATE.entidades  = AVT_STATE._faseAnterior.entidades.map(e => _avtDeepClone(e));
   AVT_STATE.npcTimers  = _avtDeepClone(AVT_STATE._faseAnterior.npcTimers);
   AVT_STATE._faseAtualId = AVT_STATE._faseAnterior.faseId || 'principal';
+  // Restaurar tint da fase de destino (principal = sem variação)
+  const _faseDest = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === AVT_STATE._faseAtualId);
+  AVT_STATE._faseHueShift = _faseDest?.tint_hue || 0;
   // Restaurar tileset da fase principal se a fase extra tinha um diferente
   if (AVT_STATE._faseAnterior.tilesetImgUrl != null) {
     AVT_STATE._tilesetImgUrl   = AVT_STATE._faseAnterior.tilesetImgUrl;
