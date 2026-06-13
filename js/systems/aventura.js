@@ -18393,8 +18393,8 @@ async function _avtEntrarFaseExtra(fase) {
   const jogador = _avtMeuJogador();
   AVT_STATE._faseAnterior = {
     dungeon:          AVT_STATE.dungeon,
-    entidades:        AVT_STATE.entidades.map(e => ({ ...e })),
-    npcTimers:        { ...AVT_STATE.npcTimers },
+    entidades:        AVT_STATE.entidades.map(e => _avtDeepClone(e)),
+    npcTimers:        _avtDeepClone(AVT_STATE.npcTimers),
     faseId:           AVT_STATE._faseAtualId || 'principal',
     tilesetImgUrl:    AVT_STATE._tilesetImgUrl || null,
     tilesetConfig:    AVT_STATE._tilesetConfig || null,
@@ -18425,7 +18425,7 @@ async function _avtEntrarFaseExtra(fase) {
   }
 
   // Na nova fase: apenas o jogador que cruzou a porta + inimigos próprios da fase
-  const jogadorNaFase = jogador ? { ...jogador } : null;
+  const jogadorNaFase = jogador ? _avtDeepClone(jogador) : null;
   AVT_STATE.entidades = [];
   AVT_STATE.npcTimers = {};
 
@@ -18443,8 +18443,20 @@ async function _avtEntrarFaseExtra(fase) {
     AVT_STATE.entidades.push(jogadorNaFase);
   }
 
-  // Inimigos próprios desta fase
-  _avtPopularEntidadesInimigos(fase.dungeon_data);
+  // Inimigos próprios desta fase.
+  // Se já visitámos esta fase, restaurar o snapshot (preserva mortes/posições dos NPCs)
+  // em vez de repopular — evita a sensação de "mesmos NPCs reposicionados".
+  if (!AVT_STATE._faseSnapshots) AVT_STATE._faseSnapshots = {};
+  const _snap = AVT_STATE._faseSnapshots[fase.id];
+  if (_snap?.entidades?.length) {
+    _snap.entidades.forEach(e => {
+      const ent = _avtDeepClone(e);
+      AVT_STATE.entidades.push(ent);
+      AVT_STATE.npcTimers[ent.id] = _avtDeepClone(_snap.npcTimers?.[ent.id]) || (_avtInitNpcTimer(ent), AVT_STATE.npcTimers[ent.id]);
+    });
+  } else {
+    _avtPopularEntidadesInimigos(fase.dungeon_data);
+  }
 
   mostrarToast(`Entrando: ${fase.nome}`, 'ok');
   _avtLog(`🚪 Entrando: ${fase.nome}`);
@@ -18495,10 +18507,20 @@ function _avtVoltarFaseAnterior() {
   // Salvar o id da fase extra antes de restaurar _faseAtualId (usado para encontrar a porta)
   const faseExtrasId = AVT_STATE._faseAtualId;
 
+  // Snapshot dos NPCs desta fase extra para preservar mortes/posições ao reentrar.
+  if (faseExtrasId && faseExtrasId !== 'principal') {
+    if (!AVT_STATE._faseSnapshots) AVT_STATE._faseSnapshots = {};
+    const _npcs = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo');
+    AVT_STATE._faseSnapshots[faseExtrasId] = {
+      entidades: _npcs.map(e => _avtDeepClone(e)),
+      npcTimers: _avtDeepClone(AVT_STATE.npcTimers) || {}
+    };
+  }
+
   // Restaurar estado da fase anterior
   AVT_STATE.dungeon    = AVT_STATE._faseAnterior.dungeon;
-  AVT_STATE.entidades  = AVT_STATE._faseAnterior.entidades.map(e => ({ ...e }));
-  AVT_STATE.npcTimers  = { ...AVT_STATE._faseAnterior.npcTimers };
+  AVT_STATE.entidades  = AVT_STATE._faseAnterior.entidades.map(e => _avtDeepClone(e));
+  AVT_STATE.npcTimers  = _avtDeepClone(AVT_STATE._faseAnterior.npcTimers);
   AVT_STATE._faseAtualId = AVT_STATE._faseAnterior.faseId || 'principal';
   // Restaurar tileset da fase principal se a fase extra tinha um diferente
   if (AVT_STATE._faseAnterior.tilesetImgUrl != null) {
