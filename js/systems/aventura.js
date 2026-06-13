@@ -3945,6 +3945,7 @@ function _avtRenderFrame() {
           if (typeof e._onWaypointReached === 'function') {
             try { e._onWaypointReached(tgt, e._waypoints.length); } catch (_) {}
           }
+          if (e.tipo === 'inimigo') _avtNpcTentarPorta(e, tgt.x, tgt.y);
           continue;
         }
         break;
@@ -3959,6 +3960,7 @@ function _avtRenderFrame() {
           if (typeof e._onWaypointReached === 'function') {
             try { e._onWaypointReached(tgt, e._waypoints.length); } catch (_) {}
           }
+          if (e.tipo === 'inimigo') _avtNpcTentarPorta(e, tgt.x, tgt.y);
         } else {
           break;
         }
@@ -6807,11 +6809,9 @@ function _avtMoverJogador(dx, dy) {
         }
         if (jogador.tipo === 'jogador') _avtDebounceSalvarPosicao(jogador);
         else if (typeof _avtDebounceSalvarPosicaoNpc === 'function') _avtDebounceSalvarPosicaoNpc(jogador);
-        if (jogador.tipo === 'inimigo') {
-          // NPC cruza porta interna com chance configurável.
-          const _chance = AVT_STATE.rpg?.theme_json?.level_config?.npc_porta_chance_pct ?? 50;
-          if (Math.random() * 100 < _chance) _avtVerificarPortaInterna(jogador, cell.x, cell.y);
-        } else if (!_avtVerificarPortaInterna(jogador, cell.x, cell.y)) {
+        // Jogador: teleporte por porta interna ou prompt de troca de fase.
+        // (NPCs autônomos/controlados cruzam portas via o lerp central — _avtNpcTentarPorta.)
+        if (jogador.tipo === 'jogador' && !_avtVerificarPortaInterna(jogador, cell.x, cell.y)) {
           _avtVerificarPortaFase(cell.x, cell.y);
           _avtVerificarSaida(cell.x, cell.y);
         }
@@ -11155,6 +11155,17 @@ function _avtVerificarPortaInterna(ent, x, y) {
   return true;
 }
 window._avtVerificarPortaInterna = _avtVerificarPortaInterna;
+
+// NPC autônomo tenta cruzar uma porta interna ao pisar nela (chance configurável).
+// Só o host decide, para não duplicar teleportes entre clientes.
+function _avtNpcTentarPorta(ent, x, y) {
+  if (!ent || ent.tipo !== 'inimigo') return false;
+  if (typeof _isHost === 'function' && typeof _isRTNet === 'function' && _isRTNet() && !_isHost()) return false;
+  const chance = AVT_STATE.rpg?.theme_json?.level_config?.npc_porta_chance_pct ?? 50;
+  if (Math.random() * 100 >= chance) return false;
+  return _avtVerificarPortaInterna(ent, x, y);
+}
+window._avtNpcTentarPorta = _avtNpcTentarPorta;
 
 // ── Sistema de Avatar ──────────────────────────────────────────────────────────
 function _avtCriarAvatar(caster, ef, bat) {
