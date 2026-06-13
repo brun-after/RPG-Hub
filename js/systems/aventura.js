@@ -2568,6 +2568,71 @@ async function _avtSalvarDungeon() {
   } catch(e) { mostrarToast('Erro ao salvar dungeon: ' + (e?.message||e), 'aviso'); }
 }
 
+// Persiste o theme_json inteiro (level_config, fases_extras, etc.)
+async function _avtSalvarThemeJson() {
+  if (!AVT_STATE.rpgId || !AVT_STATE.rpg) return;
+  const t = AVT_STATE.rpg.theme_json || (AVT_STATE.rpg.theme_json = {});
+  try {
+    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
+      method:'PATCH', body:JSON.stringify({ theme_json: t })
+    });
+  } catch(e) { mostrarToast('Erro ao salvar configuração: ' + (e?.message||e), 'aviso'); }
+}
+window._avtSalvarThemeJson = _avtSalvarThemeJson;
+
+// Clonagem profunda segura (entidades/timers/dungeons são JSON-safe).
+function _avtDeepClone(obj) {
+  if (obj == null) return obj;
+  try { return JSON.parse(JSON.stringify(obj)); } catch(_) { return obj; }
+}
+window._avtDeepClone = _avtDeepClone;
+
+// Atributo de escala de skills liberados (padrão: só Inteligência).
+function _avtSkillScalingAttrs() {
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const arr = lc.skill_scaling_attrs;
+  return (Array.isArray(arr) && arr.length) ? arr : ['Inteligência'];
+}
+window._avtSkillScalingAttrs = _avtSkillScalingAttrs;
+
+// Migração one-time: skills de JOGADORES com scaling fora dos liberados → Inteligência.
+// Roda apenas uma vez (flag theme_json._migracoes.skills_int_only) para nunca sobrescrever
+// ajustes futuros do mestre. Só o mestre executa.
+async function _migrarSkillsIntOnly() {
+  if (!AVT_STATE.isMestre) return;
+  const theme = AVT_STATE.rpg?.theme_json;
+  if (!theme) return;
+  if (theme._migracoes?.skills_int_only) return;
+
+  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  const permitidosNorm = new Set(_avtSkillScalingAttrs().map(_norm));
+  // Mapa de personagem (nome/id) → é NPC?
+  const chars = AVT_STATE.chars || RPG_DATA?.characters || [];
+  const ehNpc = (skill) => {
+    const c = chars.find(c => (skill.character_id && c.id === skill.character_id) || c.nome === skill.personagem);
+    const ca = c?.custom_attrs || {};
+    return ca.tipo_personagem === 'npc' || ca.tipo === 'npc' || ca.npc_generico === true;
+  };
+
+  const skills = AVT_STATE.skills || RPG_DATA?.skills || [];
+  const alvo = skills.filter(s => s.atributo_base && !permitidosNorm.has(_norm(s.atributo_base)) && !ehNpc(s));
+
+  try {
+    for (const s of alvo) {
+      await _avtSb(`skills?id=eq.${encodeURIComponent(s.id)}`, {
+        method:'PATCH', body:JSON.stringify({ atributo_base: 'Inteligência' })
+      });
+      s.atributo_base = 'Inteligência';
+      const rs = (RPG_DATA?.skills || []).find(x => x.id === s.id);
+      if (rs) rs.atributo_base = 'Inteligência';
+    }
+    theme._migracoes = { ...(theme._migracoes || {}), skills_int_only: true };
+    await _avtSalvarThemeJson();
+    if (alvo.length) _avtLog(`🔧 Migração: ${alvo.length} skill(s) de jogador ajustada(s) para Inteligência.`);
+  } catch(e) { console.warn('[migracao skills_int_only]', e); }
+}
+window._migrarSkillsIntOnly = _migrarSkillsIntOnly;
+
 async function _avtAdicionarMembro(input) {
   input = (input || '').trim().toLowerCase();
   if (!input) { mostrarToast('Digite o nome de usuário', 'aviso'); return; }
@@ -2644,6 +2709,15 @@ async function _avtCarregarDados(rpgId) {
   AVT_STATE.skills     = skills || [];
   AVT_STATE.itemCatalog = itemCatalog || [];
   AVT_STATE.attrDefs   = attrDefs  || [];
+
+  // Semear config padrão de atributos de escala de skills (só Inteligência) + migração one-time.
+  if (AVT_STATE.rpg.theme_json) {
+    const lc0 = AVT_STATE.rpg.theme_json.level_config || (AVT_STATE.rpg.theme_json.level_config = {});
+    if (!Array.isArray(lc0.skill_scaling_attrs) || !lc0.skill_scaling_attrs.length) {
+      lc0.skill_scaling_attrs = ['Inteligência'];
+    }
+    _migrarSkillsIntOnly().catch(()=>{});
+  }
   AVT_STATE.entidades = [];
   AVT_STATE.npcTimers = {};
   AVT_STATE._lastFrameTs = 0;
@@ -16274,6 +16348,27 @@ function _avtMpConteudoAba() {
           style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">🧠 Atributos de escala de habilidades (jogadores)</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Quais atributos os jogadores podem usar para escalar o dano de suas habilidades. Por padrão só <strong>Inteligência</strong>. Libere outros (ex: Constituição para skills defensivas) quando quiser. Não afeta NPCs.</div>
+        <div id="avt-mp-skill-scaling-grid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+          ${(() => {
+            const liber = new Set(_avtSkillScalingAttrs().map(s=>(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')));
+            const _n = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+            const nums = attrDefs.filter(a => !a.tipo || a.tipo === 'number' || a.tipo === 'numero');
+            const lista = nums.length ? nums : [{nome:'Inteligência'},{nome:'Força'},{nome:'Constituição'},{nome:'Destreza'},{nome:'Sabedoria'}];
+            return lista.map(a => {
+              const isInt = _n(a.nome) === _n('Inteligência');
+              const checked = isInt || liber.has(_n(a.nome));
+              return `<label style="display:inline-flex;align-items:center;gap:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;padding:4px 9px;font-size:0.72rem;color:#c8d8e8;cursor:${isInt?'default':'pointer'}">
+                <input type="checkbox" class="avt-mp-skill-scaling-cb" value="${(a.nome||'').replace(/"/g,'&quot;')}" ${checked?'checked':''} ${isInt?'disabled':''}>
+                ${a.nome}${isInt?' 🔒':''}
+              </label>`;
+            }).join('');
+          })()}
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarSkillScalingAttrs()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-label">❤ HP Base e Escala por Constituição</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">HP inicial dos personagens. Fórmula: <strong>HP = hp_base + Atributo × multiplicador</strong>. Aplica a jogadores e NPCs criados via IA.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -16707,6 +16802,28 @@ async function avtMestreSalvarMapaEditado() {
     mostrarToast('Mapa atualizado localmente (erro ao persistir: ' + (e?.message||e) + ')', 'aviso');
   }
 }
+
+async function _avtSalvarSkillScalingAttrs() {
+  const cbs = Array.from(document.querySelectorAll('.avt-mp-skill-scaling-cb'));
+  const sel = cbs.filter(cb => cb.checked).map(cb => cb.value);
+  // Inteligência é sempre permitida (checkbox desabilitado não conta no querySelectorAll de checked? conta)
+  if (!sel.some(s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'') === 'inteligencia')) {
+    sel.unshift('Inteligência');
+  }
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.skill_scaling_attrs = sel;
+  try {
+    await _avtSalvarThemeJson();
+    mostrarToast(`Atributos de escala salvos: ${sel.join(', ')}`, 'sucesso');
+    if (typeof skPopularAtributos === 'function') try { skPopularAtributos(); } catch(_){}
+  } catch(e) {
+    mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
+  }
+}
+window._avtSalvarSkillScalingAttrs = _avtSalvarSkillScalingAttrs;
 
 // ─── Excluir campanha ────────────────────────────────────────────────────────
 async function _avtSalvarPontosAttrPorNivel() {
