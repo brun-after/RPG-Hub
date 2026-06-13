@@ -3589,6 +3589,15 @@ function _avtRenderLoop() {
   AVT_STATE.animFrame = requestAnimationFrame(frame);
 }
 
+// Estilo das linhas de grade do mapa, configurável pelo mestre (theme_json).
+// op=0 → grade invisível; defaults reproduzem o visual original (branco, 0.09).
+function _avtGridStyle() {
+  const t = AVT_STATE.rpg?.theme_json || {};
+  const op = (typeof t.grid_opacidade === 'number') ? t.grid_opacidade : 0.09;
+  const rgb = _hexToRgb(t.grid_cor || '#ffffff'); // _hexToRgb global (avt-menu.js)
+  return { op, stroke: `rgba(${rgb},${op})` };
+}
+
 function _avtRenderFrame() {
   const { canvas, ctx, dungeon, entidades, camera } = AVT_STATE;
   if (!ctx || !dungeon || !canvas.width) return;
@@ -3803,6 +3812,9 @@ function _avtRenderFrame() {
   ctx.fillStyle = '#050810';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // Estilo da grade configurável pelo mestre (cor + opacidade, persistido em theme_json)
+  const _gridStyle = _avtGridStyle();
+
   for (let y = 0; y < dungeon.h; y++) {
     for (let x = 0; x < dungeon.w; x++) {
       const t  = dungeon.tiles[y]?.[x];
@@ -3836,9 +3848,11 @@ function _avtRenderFrame() {
       } else if (t === AVT_T.PISO || (typeof t === 'string' && _avtTilePassavel(x, y, dungeon))) {
         ctx.fillStyle = '#101520';
         ctx.fillRect(px, py, SZ, SZ);
-        ctx.strokeStyle = 'rgba(79,163,209,0.07)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(px+0.5, py+0.5, SZ-1, SZ-1);
+        if (_gridStyle.op > 0) {
+          ctx.strokeStyle = _gridStyle.stroke;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px+0.5, py+0.5, SZ-1, SZ-1);
+        }
       } else {
         ctx.fillStyle = '#0a0c14';
         ctx.fillRect(px, py, SZ, SZ);
@@ -3850,8 +3864,8 @@ function _avtRenderFrame() {
   }
 
   // Overlay de grade suave nos tilesets (linhas finas e translúcidas)
-  if (AVT_STATE._tilesetLoaded) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+  if (AVT_STATE._tilesetLoaded && _gridStyle.op > 0) {
+    ctx.strokeStyle = _gridStyle.stroke;
     ctx.lineWidth = 0.5;
     ctx.setLineDash([]);
     for (let gx = 0; gx <= dungeon.w; gx++) {

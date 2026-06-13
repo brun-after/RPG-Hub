@@ -638,6 +638,23 @@ function _avtMenuConfigConteudoAba(aba) {
           <span id="avt-cfg-menu-color-val" style="font-size:0.68rem;color:#7a92aa">${t.menu_theme_color||'#050810'}</span>
         </div>
 
+        <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin:18px 0 12px;border-top:1px solid rgba(79,163,209,0.12);padding-top:14px">🗺 Grade do Mapa</div>
+
+        <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Cor das linhas</label>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <input id="avt-cfg-grid-color" type="color" value="${t.grid_cor||'#ffffff'}"
+            style="width:40px;height:32px;border:none;border-radius:6px;cursor:pointer;background:none">
+          <span id="avt-cfg-grid-color-val" style="font-size:0.68rem;color:#7a92aa">${t.grid_cor||'#ffffff'}</span>
+        </div>
+
+        <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Opacidade das linhas</label>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+          <input id="avt-cfg-grid-op" type="range" min="0" max="0.5" step="0.01" value="${t.grid_opacidade ?? 0.09}"
+            style="flex:1;cursor:pointer;accent-color:#c8a84b">
+          <span id="avt-cfg-grid-op-val" style="font-size:0.68rem;color:#7a92aa;min-width:34px;text-align:right">${(t.grid_opacidade ?? 0.09).toFixed(2)}</span>
+        </div>
+        <div style="font-size:0.62rem;color:#5a6b7a;margin-bottom:16px">Opacidade 0 = grade invisível (campo sem separação por células).</div>
+
         <button onclick="_avtMenuSalvarConfigMestre()" style="background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.4);border-radius:7px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.7rem;padding:8px 20px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase;width:100%">Salvar</button>
       </div>
     `;
@@ -758,6 +775,20 @@ function _avtMenuBindColorPicker() {
         if (val) val.textContent = colorInp.value;
       });
     }
+    const gridColorInp = document.getElementById('avt-cfg-grid-color');
+    if (gridColorInp) {
+      gridColorInp.addEventListener('input', () => {
+        const val = document.getElementById('avt-cfg-grid-color-val');
+        if (val) val.textContent = gridColorInp.value;
+      });
+    }
+    const gridOpInp = document.getElementById('avt-cfg-grid-op');
+    if (gridOpInp) {
+      gridOpInp.addEventListener('input', () => {
+        const val = document.getElementById('avt-cfg-grid-op-val');
+        if (val) val.textContent = parseFloat(gridOpInp.value).toFixed(2);
+      });
+    }
   }, 50);
 }
 
@@ -800,9 +831,12 @@ async function _avtMenuSalvarConfigMestre() {
   if (!AVT_STATE.isMestre) return;
   const imgUrl   = document.getElementById('avt-cfg-menu-img')?.value || '';
   const color    = document.getElementById('avt-cfg-menu-color')?.value || '';
+  const gridCor  = document.getElementById('avt-cfg-grid-color')?.value || '#ffffff';
+  const gridOpEl = document.getElementById('avt-cfg-grid-op');
+  const gridOp   = gridOpEl ? parseFloat(gridOpEl.value) : 0.09;
   try {
     const themeAtual = AVT_STATE.rpg?.theme_json || {};
-    const novoTheme = { ...themeAtual, menu_img_url: imgUrl, menu_theme_color: color };
+    const novoTheme = { ...themeAtual, menu_img_url: imgUrl, menu_theme_color: color, grid_cor: gridCor, grid_opacidade: gridOp };
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_MENU_STATE.rpgId)}`,
       { method: 'PATCH', body: JSON.stringify({ theme_json: novoTheme }) });
     AVT_STATE.rpg.theme_json = novoTheme;
