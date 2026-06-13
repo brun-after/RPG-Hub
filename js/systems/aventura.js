@@ -127,6 +127,8 @@ function _avtBcastTokenMove(payload){
       window._avtTokenSeq[nome] = next;
       payload = Object.assign({}, payload, { seq: next, ts: Date.now() });
     }
+    // Escopo por fase: jogadores em fases diferentes não interferem uns nos outros.
+    if (payload.faseId == null) payload = Object.assign({}, payload, { faseId: AVT_STATE._faseAtualId || 'principal' });
     _avtBroadcast('avt_token_move', payload);
   }catch(e){
     try{ console.warn('[AVT] _avtBcastTokenMove falhou:', e); }catch(_){}
@@ -2568,6 +2570,71 @@ async function _avtSalvarDungeon() {
   } catch(e) { mostrarToast('Erro ao salvar dungeon: ' + (e?.message||e), 'aviso'); }
 }
 
+// Persiste o theme_json inteiro (level_config, fases_extras, etc.)
+async function _avtSalvarThemeJson() {
+  if (!AVT_STATE.rpgId || !AVT_STATE.rpg) return;
+  const t = AVT_STATE.rpg.theme_json || (AVT_STATE.rpg.theme_json = {});
+  try {
+    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
+      method:'PATCH', body:JSON.stringify({ theme_json: t })
+    });
+  } catch(e) { mostrarToast('Erro ao salvar configuração: ' + (e?.message||e), 'aviso'); }
+}
+window._avtSalvarThemeJson = _avtSalvarThemeJson;
+
+// Clonagem profunda segura (entidades/timers/dungeons são JSON-safe).
+function _avtDeepClone(obj) {
+  if (obj == null) return obj;
+  try { return JSON.parse(JSON.stringify(obj)); } catch(_) { return obj; }
+}
+window._avtDeepClone = _avtDeepClone;
+
+// Atributo de escala de skills liberados (padrão: só Inteligência).
+function _avtSkillScalingAttrs() {
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const arr = lc.skill_scaling_attrs;
+  return (Array.isArray(arr) && arr.length) ? arr : ['Inteligência'];
+}
+window._avtSkillScalingAttrs = _avtSkillScalingAttrs;
+
+// Migração one-time: skills de JOGADORES com scaling fora dos liberados → Inteligência.
+// Roda apenas uma vez (flag theme_json._migracoes.skills_int_only) para nunca sobrescrever
+// ajustes futuros do mestre. Só o mestre executa.
+async function _migrarSkillsIntOnly() {
+  if (!AVT_STATE.isMestre) return;
+  const theme = AVT_STATE.rpg?.theme_json;
+  if (!theme) return;
+  if (theme._migracoes?.skills_int_only) return;
+
+  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  const permitidosNorm = new Set(_avtSkillScalingAttrs().map(_norm));
+  // Mapa de personagem (nome/id) → é NPC?
+  const chars = AVT_STATE.chars || RPG_DATA?.characters || [];
+  const ehNpc = (skill) => {
+    const c = chars.find(c => (skill.character_id && c.id === skill.character_id) || c.nome === skill.personagem);
+    const ca = c?.custom_attrs || {};
+    return ca.tipo_personagem === 'npc' || ca.tipo === 'npc' || ca.npc_generico === true;
+  };
+
+  const skills = AVT_STATE.skills || RPG_DATA?.skills || [];
+  const alvo = skills.filter(s => s.atributo_base && !permitidosNorm.has(_norm(s.atributo_base)) && !ehNpc(s));
+
+  try {
+    for (const s of alvo) {
+      await _avtSb(`skills?id=eq.${encodeURIComponent(s.id)}`, {
+        method:'PATCH', body:JSON.stringify({ atributo_base: 'Inteligência' })
+      });
+      s.atributo_base = 'Inteligência';
+      const rs = (RPG_DATA?.skills || []).find(x => x.id === s.id);
+      if (rs) rs.atributo_base = 'Inteligência';
+    }
+    theme._migracoes = { ...(theme._migracoes || {}), skills_int_only: true };
+    await _avtSalvarThemeJson();
+    if (alvo.length) _avtLog(`🔧 Migração: ${alvo.length} skill(s) de jogador ajustada(s) para Inteligência.`);
+  } catch(e) { console.warn('[migracao skills_int_only]', e); }
+}
+window._migrarSkillsIntOnly = _migrarSkillsIntOnly;
+
 async function _avtAdicionarMembro(input) {
   input = (input || '').trim().toLowerCase();
   if (!input) { mostrarToast('Digite o nome de usuário', 'aviso'); return; }
@@ -2644,6 +2711,15 @@ async function _avtCarregarDados(rpgId) {
   AVT_STATE.skills     = skills || [];
   AVT_STATE.itemCatalog = itemCatalog || [];
   AVT_STATE.attrDefs   = attrDefs  || [];
+
+  // Semear config padrão de atributos de escala de skills (só Inteligência) + migração one-time.
+  if (AVT_STATE.rpg.theme_json) {
+    const lc0 = AVT_STATE.rpg.theme_json.level_config || (AVT_STATE.rpg.theme_json.level_config = {});
+    if (!Array.isArray(lc0.skill_scaling_attrs) || !lc0.skill_scaling_attrs.length) {
+      lc0.skill_scaling_attrs = ['Inteligência'];
+    }
+    _migrarSkillsIntOnly().catch(()=>{});
+  }
   AVT_STATE.entidades = [];
   AVT_STATE.npcTimers = {};
   AVT_STATE._lastFrameTs = 0;
@@ -2915,8 +2991,48 @@ function _avtGerarDungeon(w, h, maxRooms) {
       if (tiles[y]?.[b.cx] !== undefined) tiles[y][b.cx] = AVT_T.PISO;
   }
 
-  return { tiles, w, h, rooms };
+  const portasInternas = _avtGerarPortasInternas(rooms);
+  return { tiles, w, h, rooms, _portasInternas: portasInternas };
 }
+
+// Cria pares de portas de teleporte na MESMA fase: 1 par por 10 salas, com os dois
+// extremos a ≥20 células de distância (Chebyshev). Numeradas a partir de 2 (Porta 2↔2).
+function _avtGerarPortasInternas(rooms) {
+  const pares = [];
+  if (!rooms || rooms.length < 2) return pares;
+  const cheb = (a, b) => Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row));
+  const nPares = Math.floor(rooms.length / 10);
+  const usados = new Set();
+  const centro = r => ({ col: r.cx != null ? r.cx : r.x, row: r.cy != null ? r.cy : r.y });
+  for (let n = 0; n < nPares; n++) {
+    const numero = n + 2;
+    // Escolher 'a' numa sala livre
+    let aRoomIdx = -1;
+    for (let t = 0; t < rooms.length * 2; t++) {
+      const idx = Math.floor(Math.random() * rooms.length);
+      if (!usados.has(idx)) { aRoomIdx = idx; break; }
+    }
+    if (aRoomIdx < 0) break;
+    const a = centro(rooms[aRoomIdx]);
+    // Encontrar 'b' com distância suficiente (relaxa o mínimo se mapa for pequeno)
+    let bRoomIdx = -1, melhorDist = -1, melhorIdx = -1;
+    for (const minDist of [20, 15, 10]) {
+      for (let idx = 0; idx < rooms.length; idx++) {
+        if (idx === aRoomIdx || usados.has(idx)) continue;
+        const d = cheb(a, centro(rooms[idx]));
+        if (d > melhorDist) { melhorDist = d; melhorIdx = idx; }
+        if (d >= minDist) { bRoomIdx = idx; break; }
+      }
+      if (bRoomIdx >= 0) break;
+    }
+    if (bRoomIdx < 0) bRoomIdx = melhorIdx;
+    if (bRoomIdx < 0) break;
+    usados.add(aRoomIdx); usados.add(bRoomIdx);
+    pares.push({ numero, nome: 'Porta ' + numero, a, b: centro(rooms[bRoomIdx]) });
+  }
+  return pares;
+}
+window._avtGerarPortasInternas = _avtGerarPortasInternas;
 
 function _avtGerarDungeonProcedural() {
   const salas = AVT_STATE._criando?._procSalas || 8;
@@ -2947,9 +3063,87 @@ function _avtInitNpcTimer(ent) {
 }
 
 // Popula só os inimigos de um dungeon (usado na entrada de fases extras)
+// ── Progressão de NPC por nível ──────────────────────────────────────────────
+// 3 pontos/nível: 2 Con+1 For ou 2 For+1 Con. A partir do lv 3 também ganha
+// 1-2 Inteligência; lv 7+ Destreza; lv 10+ Sabedoria (mana). Retorna NOVO objeto.
+function _avtNivelarNpc(base, nivel, isBoss) {
+  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const atrs = { ...(base || {}) };
+  const find = nome => Object.keys(atrs).find(k => _norm(k) === _norm(nome)) || nome;
+  const add = (nome, qtd) => { const k = find(nome); atrs[k] = (parseFloat(atrs[k]) || 0) + qtd; };
+  for (let lv = 2; lv <= (nivel || 1); lv++) {
+    if (Math.random() < 0.5) { add('Constituição', 2); add('Força', 1); }
+    else                     { add('Força', 2); add('Constituição', 1); }
+    if (lv >= 3)  add('Inteligência', Math.random() < 0.5 ? 1 : 2);
+    if (lv >= 7)  add('Destreza', 1);
+    if (lv >= 10) add('Sabedoria', 1);
+  }
+  return atrs;
+}
+window._avtNivelarNpc = _avtNivelarNpc;
+
+// Hash simples e estável de uma string → inteiro (para seed determinístico por fase).
+function _avtSeedFromStr(str) {
+  let h = 2166136261;
+  const s = String(str || 'principal');
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return Math.abs(h);
+}
+
+// Gera uma config de partículas Pixi (envelope cast/impact) determinística por fase.
+// Sem rede/IA — reusa os presets de AVT_FX_PRESETS, variando cor/forma por seed.
+function _avtGerarParticleConfigFase(seed) {
+  const s = (typeof seed === 'number') ? seed : _avtSeedFromStr(seed);
+  const hue = (s * 47) % 360;
+  // HSL→hex (sat 70%, light 60%)
+  const h = hue / 360, sat = 0.70, lig = 0.60;
+  const hue2rgb = (p, q, t) => { if (t<0) t+=1; if (t>1) t-=1;
+    if (t<1/6) return p+(q-p)*6*t; if (t<1/2) return q;
+    if (t<2/3) return p+(q-p)*(2/3-t)*6; return p; };
+  const q = lig < 0.5 ? lig*(1+sat) : lig+sat-lig*sat;
+  const p = 2*lig - q;
+  const toHex = v => Math.round(v*255).toString(16).padStart(2,'0');
+  const cor = '#' + toHex(hue2rgb(p,q,h+1/3)) + toHex(hue2rgb(p,q,h)) + toHex(hue2rgb(p,q,h-1/3));
+  const castPool   = ['arcane_lance','whisper_bolt','silent_dart'];
+  const impactPool = ['fire_impact','ice_shatter','lightning_strike','holy_burst','dark_implosion','precise_strike'];
+  const intensPool = ['suave','equilibrado','intenso'];
+  return {
+    cor,
+    intensidade: intensPool[s % intensPool.length],
+    cast:   { ms: 300, preset: castPool[s % castPool.length] },
+    impact: { ms: 350, preset: impactPool[s % impactPool.length] },
+  };
+}
+window._avtGerarParticleConfigFase = _avtGerarParticleConfigFase;
+
+// Skill de mago auto-gerada por fase (NPCs nível ≥3, comuns e boss). Cooldown 5,
+// scaling Inteligência 0.5. Gerada uma vez por dungeon e persistida.
+function _avtFaseMageSkill(d) {
+  if (!d) return null;
+  if (d._faseMageSkill) return d._faseMageSkill;
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const seed = d._faseSeed ?? _avtSeedFromStr(d._faseId || AVT_STATE._faseAtualId || 'principal');
+  d._faseMageSkill = {
+    id: 'auto_mage_' + seed,
+    habilidade: 'Projétil Arcano',
+    formula_dano: lc.npc_mage_formula || '1d8',
+    cooldown_turnos: lc.npc_skill_cooldown ?? 5,
+    tipo_dano: 'magico',
+    atributo_base: 'Inteligência',
+    mod_atributo_mult: lc.npc_skill_int_scaling ?? 0.5,
+    alcance_celulas: lc.alcance_basico_mago ?? 4,
+    alvo_tipo: 'inimigo',
+    _autoNpc: true,
+    animacao: { tipo: 'pixi_particulas', duracao: 650, particle_config: _avtGerarParticleConfigFase(seed) },
+  };
+  return d._faseMageSkill;
+}
+window._avtFaseMageSkill = _avtFaseMageSkill;
+
 function _avtPopularEntidadesInimigos(dungeon) {
   const d = dungeon || AVT_STATE.dungeon;
   if (!d?.tiles) return;
+  const _npcNivel = Math.max(1, parseInt(d._npcLevel) || 1);
   const rooms = d.rooms?.length ? d.rooms : _avtDetectarSalas(d);
   const inimigosJson = d._inimigosJson || [];
 
@@ -2971,7 +3165,11 @@ function _avtPopularEntidadesInimigos(dungeon) {
       const tipoClasse = ini.tipoClasse || (ini.isBoss ? 'guerreiro' : (Math.random() < 0.5 ? 'guerreiro' : 'mago'));
       const _lcAlc = AVT_STATE.rpg?.theme_json?.level_config || {};
       const alcancePadrao = tipoClasse === 'mago' ? (_lcAlc.alcance_basico_mago ?? 4) : (_lcAlc.alcance_basico_guerreiro ?? 2);
-      const _atrsIni = ini.atributos || {};
+      // atributos já vêm leveled no JSON; se vier sem nível mas a fase tem, nivelar.
+      const _nivelIni = ini.nivel ?? _npcNivel;
+      const _atrsIni = (ini.nivel != null || _npcNivel <= 1)
+        ? (ini.atributos || {})
+        : _avtNivelarNpc(ini.atributos || {}, _npcNivel, ini.isBoss);
       const _hpMaxIni = _calcHpNpc(_atrsIni);
       const ent = {
         id: 'ini_' + i, nome: ini.nome || `Inimigo ${i+1}`, tipo: 'inimigo',
@@ -2985,6 +3183,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
         tipoClasse, alcance_celulas: ini.alcance_celulas ?? alcancePadrao,
         classe_aventura: tipoClasse,
         atributos: _atrsIni,
+        nivel: _nivelIni, skill_slots: 1 + Math.floor(_nivelIni / 3),
       };
       AVT_STATE.entidades.push(ent);
       _avtInitNpcTimer(ent);
@@ -3002,7 +3201,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
       };
       if (isBossRoom) {
         const bPreset = AVT_NPC_PRESETS.boss;
-        const _atrsB = { 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 };
+        const _atrsB = _avtNivelarNpc({ 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 }, _npcNivel, true);
         const _hpMaxB = _calcHpNpc(_atrsB);
         const ent = {
           id: 'ini_boss_fase', nome: 'Boss', tipo: 'inimigo',
@@ -3013,6 +3212,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
           isBoss: true, xpBase: bPreset.xpBase, presetTipo: 'boss',
           tipoClasse: 'guerreiro', alcance_celulas: (AVT_STATE.rpg?.theme_json?.level_config?.alcance_basico_guerreiro ?? 2), classe_aventura: 'guerreiro',
           atributos: _atrsB,
+          nivel: _npcNivel, skill_slots: 1 + Math.floor(_npcNivel / 3),
         };
         AVT_STATE.entidades.push(ent);
         _avtInitNpcTimer(ent);
@@ -3024,7 +3224,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
           const tipoClasse = Math.random() < 0.5 ? 'guerreiro' : 'mago';
           const _lcAlc2 = AVT_STATE.rpg?.theme_json?.level_config || {};
           const alcancePadrao = tipoClasse === 'mago' ? (_lcAlc2.alcance_basico_mago ?? 4) : (_lcAlc2.alcance_basico_guerreiro ?? 2);
-          const _atrsE = { ..._attrsPorClasse[tipoClasse] };
+          const _atrsE = _avtNivelarNpc({ ..._attrsPorClasse[tipoClasse] }, _npcNivel, false);
           const _hpMaxE = _calcHpNpc(_atrsE);
           const ent = {
             id: 'ini_fase_' + uid, nome: `${preset.nome} ${uid+1}`, tipo: 'inimigo',
@@ -3036,6 +3236,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
             isBoss: false, xpBase: preset.xpBase, presetTipo: presetKey,
             tipoClasse, alcance_celulas: alcancePadrao, classe_aventura: tipoClasse,
             atributos: _atrsE,
+            nivel: _npcNivel, skill_slots: 1 + Math.floor(_npcNivel / 3),
           };
           AVT_STATE.entidades.push(ent);
           _avtInitNpcTimer(ent);
@@ -3052,7 +3253,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
         pacienciaSecs: e.pacienciaSecs, deteccaoRaio: e.deteccaoRaio,
         xpBase: e.xpBase, aparencia_tipo: e.presetTipo,
         tipoClasse: e.tipoClasse, alcance_celulas: e.alcance_celulas,
-        atributos: e.atributos,
+        atributos: e.atributos, nivel: e.nivel,
       }));
     _avtSalvarDungeon();
   }
@@ -3698,8 +3899,10 @@ function _avtRenderFrame() {
         if (fimDoCaminho) {
           _jPlayer.x = Math.round(_jPlayer.x); _jPlayer.y = Math.round(_jPlayer.y);
           _avtDebounceSalvarPosicao(_jPlayer);
-          _avtVerificarPortaFase(cell.x, cell.y);
-          _avtVerificarSaida(cell.x, cell.y);
+          if (!_avtVerificarPortaInterna(_jPlayer, cell.x, cell.y)) {
+            _avtVerificarPortaFase(cell.x, cell.y);
+            _avtVerificarSaida(cell.x, cell.y);
+          }
         }
       };
     }
@@ -3742,6 +3945,7 @@ function _avtRenderFrame() {
           if (typeof e._onWaypointReached === 'function') {
             try { e._onWaypointReached(tgt, e._waypoints.length); } catch (_) {}
           }
+          if (e.tipo === 'inimigo') _avtNpcTentarPorta(e, tgt.x, tgt.y);
           continue;
         }
         break;
@@ -3756,6 +3960,7 @@ function _avtRenderFrame() {
           if (typeof e._onWaypointReached === 'function') {
             try { e._onWaypointReached(tgt, e._waypoints.length); } catch (_) {}
           }
+          if (e.tipo === 'inimigo') _avtNpcTentarPorta(e, tgt.x, tgt.y);
         } else {
           break;
         }
@@ -3815,6 +4020,10 @@ function _avtRenderFrame() {
   // Estilo da grade configurável pelo mestre (cor + opacidade, persistido em theme_json)
   const _gridStyle = _avtGridStyle();
 
+  // Variação de cor por fase: aplica hue-rotate aos tiles (reset após o loop).
+  const _hue = AVT_STATE._faseHueShift || 0;
+  const _hueOn = _hue && AVT_STATE._tilesetLoaded && ('filter' in ctx);
+  if (_hueOn) ctx.filter = `hue-rotate(${_hue}deg)`;
   for (let y = 0; y < dungeon.h; y++) {
     for (let x = 0; x < dungeon.w; x++) {
       const t  = dungeon.tiles[y]?.[x];
@@ -3862,6 +4071,7 @@ function _avtRenderFrame() {
       }
     }
   }
+  if (_hueOn) ctx.filter = 'none';
 
   // Overlay de grade suave nos tilesets (linhas finas e translúcidas)
   if (AVT_STATE._tilesetLoaded && _gridStyle.op > 0) {
@@ -3902,6 +4112,73 @@ function _avtRenderFrame() {
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillStyle = 'rgba(200,168,75,0.9)';
         ctx.fillText('🚪', fpx + SZ / 2, fpy + SZ / 2);
+      }
+      // Nome da fase de destino acima da porta
+      if (_fase.nome) {
+        ctx.font = `${Math.round(SZ * 0.26)}px var(--fonte-d, sans-serif)`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        const _lbl = _fase.nome, _lw = ctx.measureText(_lbl).width;
+        ctx.fillStyle = 'rgba(10,15,24,0.75)';
+        ctx.fillRect(fpx + SZ/2 - _lw/2 - 4, fpy - Math.round(SZ*0.34), _lw + 8, Math.round(SZ*0.30));
+        ctx.fillStyle = '#e8d28a';
+        ctx.fillText(_lbl, fpx + SZ/2, fpy - 4);
+      }
+    }
+  }
+
+  // Portas internas de teleporte (mesma fase) — desenhadas em ambos os extremos
+  const _portasInt = AVT_STATE.dungeon?._portasInternas || [];
+  for (const _pi of _portasInt) {
+    for (const _ep of [_pi.a, _pi.b]) {
+      const epx = Math.round(_ep.col * SZ - camera.x);
+      const epy = Math.round(_ep.row * SZ - camera.y);
+      if (epx + SZ < 0 || epx > canvas.width || epy + SZ < 0 || epy > canvas.height) continue;
+      ctx.fillStyle = 'rgba(123,47,190,0.18)';
+      ctx.fillRect(epx + 2, epy + 2, SZ - 4, SZ - 4);
+      ctx.strokeStyle = 'rgba(168,120,255,0.8)';
+      ctx.lineWidth = 2; ctx.setLineDash([]);
+      ctx.strokeRect(epx + 2, epy + 2, SZ - 4, SZ - 4);
+      ctx.font = `${Math.round(SZ * 0.55)}px serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(200,180,255,0.95)';
+      ctx.fillText('🌀', epx + SZ / 2, epy + SZ / 2);
+      // Nome da porta acima
+      if (_pi.nome) {
+        ctx.font = `${Math.round(SZ * 0.24)}px var(--fonte-d, sans-serif)`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        const _lw2 = ctx.measureText(_pi.nome).width;
+        ctx.fillStyle = 'rgba(10,15,24,0.7)';
+        ctx.fillRect(epx + SZ/2 - _lw2/2 - 3, epy - Math.round(SZ*0.30), _lw2 + 6, Math.round(SZ*0.26));
+        ctx.fillStyle = '#c8a8ff';
+        ctx.fillText(_pi.nome, epx + SZ / 2, epy - 4);
+      }
+    }
+  }
+
+  // Porta temporária da próxima fase (aberta ao matar o boss)
+  const _pp = AVT_STATE._portaProximaFase;
+  if (_pp && (AVT_STATE._faseAtualId || 'principal') === (_pp._faseOrigem || (AVT_STATE._faseAtualId || 'principal'))) {
+    const ppx = Math.round(_pp.col * SZ - camera.x);
+    const ppy = Math.round(_pp.row * SZ - camera.y);
+    if (!(ppx + SZ < 0 || ppx > canvas.width || ppy + SZ < 0 || ppy > canvas.height)) {
+      const _pulse = 0.5 + 0.4 * Math.abs(Math.sin(Date.now() / 400));
+      ctx.fillStyle = `rgba(79,220,140,${0.15 * _pulse + 0.1})`;
+      ctx.fillRect(ppx + 2, ppy + 2, SZ - 4, SZ - 4);
+      ctx.strokeStyle = `rgba(79,220,140,${_pulse})`;
+      ctx.lineWidth = 2.5; ctx.setLineDash([]);
+      ctx.strokeRect(ppx + 2, ppy + 2, SZ - 4, SZ - 4);
+      ctx.font = `${Math.round(SZ * 0.55)}px serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(120,255,180,0.95)';
+      ctx.fillText('🚪', ppx + SZ / 2, ppy + SZ / 2);
+      if (_pp.nome) {
+        ctx.font = `${Math.round(SZ * 0.26)}px var(--fonte-d, sans-serif)`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        const _lw3 = ctx.measureText(_pp.nome).width;
+        ctx.fillStyle = 'rgba(10,15,24,0.75)';
+        ctx.fillRect(ppx + SZ/2 - _lw3/2 - 4, ppy - Math.round(SZ*0.34), _lw3 + 8, Math.round(SZ*0.30));
+        ctx.fillStyle = '#7effb4';
+        ctx.fillText(_pp.nome, ppx + SZ / 2, ppy - 4);
       }
     }
   }
@@ -6532,8 +6809,12 @@ function _avtMoverJogador(dx, dy) {
         }
         if (jogador.tipo === 'jogador') _avtDebounceSalvarPosicao(jogador);
         else if (typeof _avtDebounceSalvarPosicaoNpc === 'function') _avtDebounceSalvarPosicaoNpc(jogador);
-        _avtVerificarPortaFase(cell.x, cell.y);
-        _avtVerificarSaida(cell.x, cell.y);
+        // Jogador: teleporte por porta interna ou prompt de troca de fase.
+        // (NPCs autônomos/controlados cruzam portas via o lerp central — _avtNpcTentarPorta.)
+        if (jogador.tipo === 'jogador' && !_avtVerificarPortaInterna(jogador, cell.x, cell.y)) {
+          _avtVerificarPortaFase(cell.x, cell.y);
+          _avtVerificarSaida(cell.x, cell.y);
+        }
         _avtRecuperarPorMovimento(jogador, 1);
         _avtCameraUpdate();
       };
@@ -8467,7 +8748,9 @@ function _avtToggleDpad() {
 // resultando em movimento contínuo no observador, em vez de teleporte.
 function avtReceberMovimento(_payload) {
   // Anti-eco: descartar pacotes avt_token_move fora de ordem (seq monotônico por nome).
-  const { nome, x, y, rx, ry, id, seq, ts } = (_payload || {});
+  const { nome, x, y, rx, ry, id, seq, ts, faseId } = (_payload || {});
+  // Isolamento por fase: ignorar movimento de quem está noutra fase.
+  if (faseId != null && faseId !== (AVT_STATE._faseAtualId || 'principal')) return;
   try{
     if(nome && (seq != null || ts != null)){
       const _dedupeKey = id || nome;
@@ -9305,6 +9588,9 @@ function _avtNpcMorreu(npcEnt, bat, opts = {}) {
 
   // XP distribution (credita o autor do abate quando informado — ex.: DOT)
   _avtDistribuirXpNpc(npcEnt, bat, opts);
+
+  // Boss morto → abre/destranca a porta para a próxima fase
+  if (npcEnt.isBoss) { try { _avtOnBossMorto(npcEnt, bat); } catch(_){} }
 
   // Schedule respawn
   _avtAgendarRespawnNpc(npcEnt);
@@ -10837,6 +11123,50 @@ function _avtTeleportarParaAlvo(caster, alvo, delayMs, bat) {
   }, delayMs || 1000);
 }
 
+// Teleporte instantâneo por porta interna (mesma fase). Faz o token "desaparecer
+// e reaparecer" na porta irmã, sem arrastar pelo mapa. Vale para jogadores e NPCs.
+function _avtVerificarPortaInterna(ent, x, y) {
+  if (!ent) return false;
+  if (ent._portaCooldownUntil && Date.now() < ent._portaCooldownUntil) return false;
+  const pares = AVT_STATE.dungeon?._portasInternas;
+  if (!pares?.length) return false;
+  const par = pares.find(p => (p.a.col === x && p.a.row === y) || (p.b.col === x && p.b.row === y));
+  if (!par) return false;
+  const origemA = (par.a.col === x && par.a.row === y);
+  let destino = origemA ? par.b : par.a;
+  // Se o destino estiver ocupado/inválido, procurar vizinho passável.
+  const ocupado = p => AVT_STATE.entidades.some(e => e.id !== ent.id && Math.round(e.x) === p.col && Math.round(e.y) === p.row && (e.hp == null || e.hp > 0));
+  if (!_avtTilePassavel(destino.col, destino.row, AVT_STATE.dungeon) || ocupado(destino)) {
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+    const alt = dirs.map(([dx,dy]) => ({ col: destino.col+dx, row: destino.row+dy }))
+      .find(p => _avtTilePassavel(p.col, p.row, AVT_STATE.dungeon) && !ocupado(p));
+    if (alt) destino = alt;
+  }
+  // Salto instantâneo (sem waypoints/lerp)
+  ent._waypoints = [];
+  ent.x = destino.col; ent.y = destino.row;
+  ent.renderX = destino.col; ent.renderY = destino.row;
+  ent._portaCooldownUntil = Date.now() + 800;
+  try {
+    (AVT_STATE.batalhas || []).forEach(b => { const bi = b.iniciativa?.find(e => e.id === ent.id); if (bi) { bi.x = destino.col; bi.y = destino.row; } });
+  } catch(_){}
+  try { _avtBcastTokenMove({ nome: ent.nome, x: destino.col, y: destino.row }); } catch(_){}
+  if (ent.tipo === 'jogador') _avtCameraUpdate();
+  return true;
+}
+window._avtVerificarPortaInterna = _avtVerificarPortaInterna;
+
+// NPC autônomo tenta cruzar uma porta interna ao pisar nela (chance configurável).
+// Só o host decide, para não duplicar teleportes entre clientes.
+function _avtNpcTentarPorta(ent, x, y) {
+  if (!ent || ent.tipo !== 'inimigo') return false;
+  if (typeof _isHost === 'function' && typeof _isRTNet === 'function' && _isRTNet() && !_isHost()) return false;
+  const chance = AVT_STATE.rpg?.theme_json?.level_config?.npc_porta_chance_pct ?? 50;
+  if (Math.random() * 100 >= chance) return false;
+  return _avtVerificarPortaInterna(ent, x, y);
+}
+window._avtNpcTentarPorta = _avtNpcTentarPorta;
+
 // ── Sistema de Avatar ──────────────────────────────────────────────────────────
 function _avtCriarAvatar(caster, ef, bat) {
   const hitsMax = _avtRolarFormula(ef.avatar_formula || '1d4');
@@ -11296,15 +11626,21 @@ function _avtGetMovimentoMax(ent) {
 function _avtNpcEscolherSkill(npcEnt, alvo, bat) {
   if (!npcEnt) return null;
   const batCds = (bat || _avtBatalhaDeEnt(npcEnt.id))?._cooldowns || {};
-  const npcSkills = AVT_STATE.skills.filter(sk => {
+  // Candidatas: skills atribuídas ao NPC + skill de mago auto-gerada da fase (nível ≥3).
+  let candidatas = AVT_STATE.skills.filter(sk => {
     if (!sk.personagem && !sk.character_id) return false;
     const byNome = sk.personagem === npcEnt.nome;
     const byId   = sk.character_id && sk.character_id === npcEnt.dbId;
-    if (!byNome && !byId) return false;
-    // Check cooldown usando cooldowns da batalha (fix P5)
+    return byNome || byId;
+  });
+  const mageSk = (npcEnt.nivel >= 3) ? _avtFaseMageSkill(AVT_STATE.dungeon) : null;
+  if (mageSk && !candidatas.some(s => s.id === mageSk.id)) candidatas = candidatas.concat([mageSk]);
+  // Limitar pelo nº de slots do NPC (ordem estável por id)
+  const slots = npcEnt.skill_slots ?? (1 + Math.floor((npcEnt.nivel || 1) / 3));
+  candidatas = candidatas.slice().sort((a, b) => String(a.id).localeCompare(String(b.id))).slice(0, Math.max(1, slots));
+  const npcSkills = candidatas.filter(sk => {
     const cdKey = npcEnt.id + '_' + sk.id;
     if ((batCds[cdKey] || 0) > 0) return false;
-    // Check range
     if (sk.alcance_celulas != null) {
       const dist = Math.abs(npcEnt.x - alvo.x) + Math.abs(npcEnt.y - alvo.y);
       if (dist > sk.alcance_celulas) return false;
@@ -15871,6 +16207,37 @@ function _avtMpConteudoAba() {
         </div>
       </div>
       <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
+        <div class="avt-mp-label">🪄 Skills de NPCs em Massa</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Configura de uma vez as skills atribuídas aos NPCs e a skill de mago auto-gerada das fases (NPCs nível ≥3). Deixe um campo vazio para não alterá-lo.</div>
+        <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+          <input id="avt-mp-npcsk-formula" placeholder="Fórmula (ex 1d8)" value="${lc.npc_mage_formula ?? '1d8'}"
+            style="flex:1;min-width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+          <input type="number" id="avt-mp-npcsk-cd" placeholder="CD" min="0" max="20" value="${lc.npc_skill_cooldown ?? 5}"
+            style="width:60px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+          <input type="number" id="avt-mp-npcsk-mult" step="0.1" min="0" max="10" placeholder="Escala Int" value="${lc.npc_skill_int_scaling ?? 0.5}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+          <select id="avt-mp-npcsk-tipo" style="flex:1;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem">
+            <option value="">— tipo de dano —</option>
+            <option value="magico">Mágico</option><option value="fisico">Físico</option>
+            <option value="fogo">Fogo</option><option value="gelo">Gelo</option>
+            <option value="veneno">Veneno</option><option value="psiquico">Psíquico</option>
+          </select>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtBulkNpcSkillAplicar()">🪄 Aplicar a todos os NPCs</button>
+      </div>
+      <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
+        <div class="avt-mp-label">🌀 NPC cruza portas internas</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Chance (%) de um inimigo atravessar uma porta interna de teleporte ao pisar nela. 0 = nunca, 100 = sempre.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-npc-porta-chance" min="0" max="100" step="5" value="${lc.npc_porta_chance_pct ?? 50}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">% de chance</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtSalvarNpcPortaChance()">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
         <div class="avt-mp-label">🎨 Aparência em Massa</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">Aplica token + foto de perfil com variação de cor a todos os inimigos da classe.</div>
         ${_avtBulkAparSecao('guerreiro')}
@@ -16272,6 +16639,45 @@ function _avtMpConteudoAba() {
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarPontosAttrPorNivel()"
           style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🧠 Atributos de escala de habilidades (jogadores)</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Quais atributos os jogadores podem usar para escalar o dano de suas habilidades. Por padrão só <strong>Inteligência</strong>. Libere outros (ex: Constituição para skills defensivas) quando quiser. Não afeta NPCs.</div>
+        <div id="avt-mp-skill-scaling-grid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+          ${(() => {
+            const liber = new Set(_avtSkillScalingAttrs().map(s=>(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')));
+            const _n = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+            const nums = attrDefs.filter(a => !a.tipo || a.tipo === 'number' || a.tipo === 'numero');
+            const lista = nums.length ? nums : [{nome:'Inteligência'},{nome:'Força'},{nome:'Constituição'},{nome:'Destreza'},{nome:'Sabedoria'}];
+            return lista.map(a => {
+              const isInt = _n(a.nome) === _n('Inteligência');
+              const checked = isInt || liber.has(_n(a.nome));
+              return `<label style="display:inline-flex;align-items:center;gap:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;padding:4px 9px;font-size:0.72rem;color:#c8d8e8;cursor:${isInt?'default':'pointer'}">
+                <input type="checkbox" class="avt-mp-skill-scaling-cb" value="${(a.nome||'').replace(/"/g,'&quot;')}" ${checked?'checked':''} ${isInt?'disabled':''}>
+                ${a.nome}${isInt?' 🔒':''}
+              </label>`;
+            }).join('');
+          })()}
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarSkillScalingAttrs()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">💀 Porta após derrota do Boss</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Ao matar o boss: <strong>Abrir porta</strong> faz surgir uma porta para a próxima fase por X segundos (depois de aberta, qualquer um passa sem limite). <strong>Liberar chave</strong> apenas destranca a porta de fase já existente.</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <label style="flex:1;display:flex;align-items:center;gap:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;padding:6px 8px;font-size:0.7rem;color:#c8d8e8;cursor:pointer">
+            <input type="radio" name="avt-boss-door-mode" value="spawn_door" ${(lc.boss_door_mode||'spawn_door')==='spawn_door'?'checked':''}> Abrir porta
+          </label>
+          <label style="flex:1;display:flex;align-items:center;gap:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;padding:6px 8px;font-size:0.7rem;color:#c8d8e8;cursor:pointer">
+            <input type="radio" name="avt-boss-door-mode" value="release_key" ${(lc.boss_door_mode)==='release_key'?'checked':''}> Liberar chave
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-boss-door-segs" min="0" max="3600" step="5" value="${lc.boss_door_segundos ?? 30}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">segundos que a porta aparece</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarBossDoorConfig()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-label">❤ HP Base e Escala por Constituição</div>
@@ -16707,6 +17113,44 @@ async function avtMestreSalvarMapaEditado() {
     mostrarToast('Mapa atualizado localmente (erro ao persistir: ' + (e?.message||e) + ')', 'aviso');
   }
 }
+
+async function _avtSalvarBossDoorConfig() {
+  const modo = document.querySelector('input[name="avt-boss-door-mode"]:checked')?.value || 'spawn_door';
+  const segs = Math.max(0, Math.min(3600, parseInt(document.getElementById('avt-mp-boss-door-segs')?.value) || 30));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.boss_door_mode = modo;
+  rpg.theme_json.level_config.boss_door_segundos = segs;
+  try {
+    await _avtSalvarThemeJson();
+    mostrarToast('Configuração da porta do boss salva', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
+}
+window._avtSalvarBossDoorConfig = _avtSalvarBossDoorConfig;
+
+async function _avtSalvarSkillScalingAttrs() {
+  const cbs = Array.from(document.querySelectorAll('.avt-mp-skill-scaling-cb'));
+  const sel = cbs.filter(cb => cb.checked).map(cb => cb.value);
+  // Inteligência é sempre permitida (checkbox desabilitado não conta no querySelectorAll de checked? conta)
+  if (!sel.some(s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'') === 'inteligencia')) {
+    sel.unshift('Inteligência');
+  }
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.skill_scaling_attrs = sel;
+  try {
+    await _avtSalvarThemeJson();
+    mostrarToast(`Atributos de escala salvos: ${sel.join(', ')}`, 'sucesso');
+    if (typeof skPopularAtributos === 'function') try { skPopularAtributos(); } catch(_){}
+  } catch(e) {
+    mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
+  }
+}
+window._avtSalvarSkillScalingAttrs = _avtSalvarSkillScalingAttrs;
 
 // ─── Excluir campanha ────────────────────────────────────────────────────────
 async function _avtSalvarPontosAttrPorNivel() {
@@ -17301,6 +17745,80 @@ function _avtBulkAttrAplicar(filtro) {
   _avtMestrePainelRender();
   mostrarToast(`${inimigos.length} inimigo(s) atualizados: ${attrKey} = ${val}`, 'sucesso');
 }
+
+// Config em massa das skills de NPC (atribuídas + skill de mago auto-gerada das fases).
+function _avtBulkNpcSkillAplicar() {
+  const formula = document.getElementById('avt-mp-npcsk-formula')?.value.trim();
+  const cdRaw   = document.getElementById('avt-mp-npcsk-cd')?.value;
+  const multRaw = document.getElementById('avt-mp-npcsk-mult')?.value;
+  const tipo    = document.getElementById('avt-mp-npcsk-tipo')?.value;
+  const cd   = cdRaw   !== '' ? Math.max(0, parseInt(cdRaw)) : null;
+  const mult = multRaw !== '' ? Math.max(0, parseFloat(multRaw)) : null;
+
+  // Defaults para skills de mago auto-geradas (futuras fases) ficam em level_config.
+  const rpg = AVT_STATE.rpg;
+  if (rpg) {
+    if (!rpg.theme_json) rpg.theme_json = {};
+    if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+    const lc = rpg.theme_json.level_config;
+    if (formula) lc.npc_mage_formula = formula;
+    if (cd != null) lc.npc_skill_cooldown = cd;
+    if (mult != null) lc.npc_skill_int_scaling = mult;
+  }
+
+  // Aplicar a skills NPC já carregadas (com id no banco) + skill sintética da dungeon atual.
+  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const chars = AVT_STATE.chars || [];
+  const ehNpc = sk => {
+    const c = chars.find(c => (sk.character_id && c.id === sk.character_id) || c.nome === sk.personagem);
+    const ca = c?.custom_attrs || {};
+    return ca.tipo_personagem === 'npc' || ca.tipo === 'npc' || ca.npc_generico === true;
+  };
+  const npcSkills = (AVT_STATE.skills || []).filter(s => (s.personagem || s.character_id) && ehNpc(s));
+  let nDb = 0;
+  npcSkills.forEach(s => {
+    const body = {};
+    if (formula) body.formula_dano = formula;
+    if (cd != null) body.cooldown_turnos = cd;
+    if (tipo) body.tipo_dano = tipo;
+    if (mult != null) body.mod_atributo_pct = mult; // skills do editor usam pct/mult
+    if (!Object.keys(body).length) return;
+    Object.assign(s, body);
+    if (s.id != null) {
+      nDb++;
+      _avtSb(`skills?id=eq.${encodeURIComponent(s.id)}`, { method:'PATCH', body: JSON.stringify(body) }).catch(()=>{});
+    }
+  });
+
+  // Skill sintética da dungeon atual (será re-gerada com novos defaults nas próximas fases)
+  const ms = AVT_STATE.dungeon?._faseMageSkill;
+  if (ms) {
+    if (formula) ms.formula_dano = formula;
+    if (cd != null) ms.cooldown_turnos = cd;
+    if (mult != null) ms.mod_atributo_mult = mult;
+    if (tipo) ms.tipo_dano = tipo;
+  }
+
+  _avtSalvarThemeJson();
+  _avtSalvarDungeon();
+  mostrarToast(`Skills de NPC atualizadas (${nDb} no banco + defaults de fase).`, 'sucesso');
+}
+window._avtBulkNpcSkillAplicar = _avtBulkNpcSkillAplicar;
+
+async function _avtSalvarNpcPortaChance() {
+  const raw = document.getElementById('avt-mp-npc-porta-chance')?.value ?? 50;
+  const val = Math.max(0, Math.min(100, parseInt(raw) || 0));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.npc_porta_chance_pct = val;
+  try {
+    await _avtSalvarThemeJson();
+    mostrarToast(`Chance de NPC cruzar portas: ${val}%`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
+}
+window._avtSalvarNpcPortaChance = _avtSalvarNpcPortaChance;
 
 async function _avtMestreExcluirCampanha() {
   const nome = AVT_STATE.rpg?.name || 'esta campanha';
@@ -18188,11 +18706,16 @@ async function _avtMestreSalvarNovaFase() {
     } catch(e) { mostrarToast('Aviso: erro ao enviar tileset da fase (continuando sem ele)', 'aviso'); }
   }
 
+  const _ordensExistentes = (AVT_STATE.rpg.theme_json?.fases_extras || []).map(f => f.ordem ?? 0);
+  const _proxOrdem = (_ordensExistentes.length ? Math.max(..._ordensExistentes) : 0) + 1;
   const fase = {
     id: Date.now().toString(),
     nome,
     dungeon_data: dungeonData,
     tileset_img_url: faseTilesetUrl || null,
+    ordem: w.ordem ?? _proxOrdem,
+    npc_level: w.npc_level ?? (_proxOrdem + 1),
+    tint_hue: (_proxOrdem * 28) % 360,
     porta: { col: w.porta_col, row: w.porta_row, lock_type: w.lock_type, chave_palavra: w.chave_palavra, npc_boss_id: w.npc_boss_id }
   };
 
@@ -18229,8 +18752,125 @@ async function _avtMestreRemoverFase(faseId) {
   }
 }
 
+// ─── Ordem das fases / progressão ────────────────────────────────────────────
+function _avtFasesOrdenadas() {
+  const extras = (AVT_STATE.rpg?.theme_json?.fases_extras || []).slice();
+  return extras.sort((a, b) => (a.ordem ?? 9999) - (b.ordem ?? 9999) || String(a.id).localeCompare(String(b.id)));
+}
+window._avtFasesOrdenadas = _avtFasesOrdenadas;
+
+// Descritor da fase atual (objeto da fase extra, ou sintético para a principal).
+function _avtFaseAtualObj() {
+  const id = AVT_STATE._faseAtualId || 'principal';
+  if (id === 'principal') {
+    return { id: 'principal', ordem: 0, npc_level: 1,
+      tileset_img_url: AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_img_url || AVT_STATE._tilesetImgUrl || null,
+      dungeon_data: AVT_STATE.rpg?.theme_json?.dungeon_data || AVT_STATE.dungeon, tint_hue: 0 };
+  }
+  return (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === id) || null;
+}
+
+// Próxima fase por ordem após a atual; null se não houver.
+function _avtProximaFase(faseAtualId) {
+  const atual = _avtFaseAtualObj();
+  const ordAtual = atual?.ordem ?? 0;
+  const ord = _avtFasesOrdenadas().filter(f => (f.ordem ?? 9999) > ordAtual);
+  return ord[0] || null;
+}
+window._avtProximaFase = _avtProximaFase;
+
+// Gera proceduralmente a próxima fase quando não existe uma criada.
+// Mais salas (de preferência) que a anterior, mesmo tileset com leve variação de cor.
+async function _avtGerarProximaFaseAuto() {
+  const prev = _avtFaseAtualObj() || { ordem: 0, npc_level: 1 };
+  const prevSalas = (prev.dungeon_data?.rooms?.length) || 8;
+  const salas = prevSalas + Math.floor(Math.random() * 4); // 0..3 a mais (viés p/ cima)
+  const area = Math.max(22*16, salas*60);
+  const ww = Math.ceil(Math.sqrt(area*(22/16))); const hh = Math.ceil(area/ww);
+  const dungeonData = _avtGerarDungeon(ww, hh, salas);
+  // SAIDA na última sala
+  if (dungeonData.rooms?.length > 0) {
+    const lr = dungeonData.rooms[dungeonData.rooms.length - 1];
+    const sx = lr.cx ?? lr.x, sy = lr.cy ?? lr.y;
+    if (dungeonData.tiles[sy]?.[sx] !== undefined) dungeonData.tiles[sy][sx] = AVT_T.SAIDA;
+  }
+  const ordem = (prev.ordem ?? 0) + 1;
+  const npcLvl = (prev.npc_level ?? 1) + 1;
+  dungeonData._npcLevel = npcLvl;
+  dungeonData._faseSeed = _avtSeedFromStr('auto_' + ordem + '_' + Date.now());
+  const fase = {
+    id: Date.now().toString(),
+    nome: `Fase ${ordem + 1}`,
+    dungeon_data: dungeonData,
+    tileset_img_url: prev.tileset_img_url || null,
+    ordem, npc_level: npcLvl,
+    tint_hue: ((prev.tint_hue ?? 0) + 28) % 360,
+    porta: { col: 0, row: 0, lock_type: 'livre' },
+    _autoGerada: true,
+  };
+  if (!AVT_STATE.rpg.theme_json) AVT_STATE.rpg.theme_json = {};
+  AVT_STATE.rpg.theme_json.fases_extras = [...(AVT_STATE.rpg.theme_json.fases_extras || []), fase];
+  await _avtSalvarThemeJson();
+  return fase;
+}
+window._avtGerarProximaFaseAuto = _avtGerarProximaFaseAuto;
+
+// ─── Morte do boss → porta para a próxima fase ────────────────────────────────
+async function _avtOnBossMorto(boss, bat) {
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const modo = lc.boss_door_mode || 'spawn_door';
+  let prox = _avtProximaFase(AVT_STATE._faseAtualId);
+  if (!prox) {
+    try { prox = await _avtGerarProximaFaseAuto(); } catch(_) { prox = null; }
+  }
+  if (!prox) return;
+
+  if (modo === 'release_key') {
+    // Destrancar a porta de fase já existente (a procedural com lock chave/combate).
+    const palavra = prox.porta?.chave_palavra;
+    if (prox.porta) {
+      if (palavra) {
+        AVT_STATE.entidades.filter(e => e.tipo === 'jogador').forEach(j => {
+          const ca = j.custom_attrs || (j.custom_attrs = {});
+          ca.chaves_coletadas = ca.chaves_coletadas || [];
+          if (!ca.chaves_coletadas.includes(palavra)) ca.chaves_coletadas.push(palavra);
+        });
+        mostrarToast(`🔑 Chave liberada: ${palavra}`, 'ok');
+      } else {
+        prox.porta.lock_type = 'livre';
+        _avtSalvarThemeJson();
+        mostrarToast('🔓 A porta da próxima fase foi destrancada!', 'ok');
+      }
+    }
+  } else {
+    // spawn_door: criar uma porta temporária junto ao boss para a próxima fase.
+    const segs = lc.boss_door_segundos ?? 30;
+    let col = Math.round(boss?.x ?? 1), row = Math.round(boss?.y ?? 1);
+    if (!_avtTilePassavel(col, row, AVT_STATE.dungeon)) {
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+      const alt = dirs.map(([dx,dy]) => ({x:col+dx,y:row+dy})).find(p => _avtTilePassavel(p.x,p.y,AVT_STATE.dungeon));
+      if (alt) { col = alt.x; row = alt.y; }
+    }
+    AVT_STATE._portaProximaFase = { faseId: prox.id, nome: prox.nome, col, row, abertaEm: Date.now(), _faseOrigem: AVT_STATE._faseAtualId || 'principal' };
+    try { _avtBroadcast('avt_porta_proxima', AVT_STATE._portaProximaFase); } catch(_){}
+    mostrarToast(`🚪 Porta para ${prox.nome} aberta por ${segs}s!`, 'ok');
+    // Após a janela, a porta para de "aparecer" (mas se já foi aberta segue usável):
+    // marcamos apenas que a janela fechou; a entrada continua permitida.
+    _avtSetTimeout(() => { if (AVT_STATE._portaProximaFase) AVT_STATE._portaProximaFase._janelaFechada = true; }, segs * 1000);
+  }
+}
+window._avtOnBossMorto = _avtOnBossMorto;
+// Recebe abertura de porta da próxima fase de outro cliente
+window.avtReceberPortaProxima = function(p) { try { if (p?.faseId) AVT_STATE._portaProximaFase = p; } catch(_){} };
+
 // ─── Verificação de porta ao mover ───────────────────────────────────────────
 function _avtVerificarPortaFase(x, y) {
+  // Porta temporária da próxima fase (aberta ao matar o boss)
+  const pp = AVT_STATE._portaProximaFase;
+  if (pp && pp.col === x && pp.row === y) {
+    const prox = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === pp.faseId);
+    if (prox) { _avtPromptFase(`Avançar para ${prox.nome || 'a próxima fase'}?`, 'Avançar', () => _avtEntrarFaseExtra(prox)); return; }
+  }
   // Se já estou dentro de uma fase extra, ignorar portas (só SAIDA volta).
   // Evita pular entre fases extras e quebrar a pilha _faseAnterior.
   if (AVT_STATE._faseAtualId && AVT_STATE._faseAtualId !== 'principal') return;
@@ -18249,7 +18889,7 @@ function _avtVerificarPortaFase(x, y) {
     const tem = chaves.some(c => (typeof c === 'string' ? c : c.chave_palavra) === p.chave_palavra);
     if (!tem) { mostrarToast(`Precisas de: ${p.chave_palavra}`, 'aviso'); return; }
   }
-  _avtEntrarFaseExtra(fase);
+  _avtPromptFase(`Avançar para ${fase.nome || 'a próxima fase'}?`, 'Avançar', () => _avtEntrarFaseExtra(fase));
 }
 
 async function _avtEntrarFaseExtra(fase) {
@@ -18276,8 +18916,8 @@ async function _avtEntrarFaseExtra(fase) {
   const jogador = _avtMeuJogador();
   AVT_STATE._faseAnterior = {
     dungeon:          AVT_STATE.dungeon,
-    entidades:        AVT_STATE.entidades.map(e => ({ ...e })),
-    npcTimers:        { ...AVT_STATE.npcTimers },
+    entidades:        AVT_STATE.entidades.map(e => _avtDeepClone(e)),
+    npcTimers:        _avtDeepClone(AVT_STATE.npcTimers),
     faseId:           AVT_STATE._faseAtualId || 'principal',
     tilesetImgUrl:    AVT_STATE._tilesetImgUrl || null,
     tilesetConfig:    AVT_STATE._tilesetConfig || null,
@@ -18287,6 +18927,11 @@ async function _avtEntrarFaseExtra(fase) {
 
   // Trocar dungeon
   AVT_STATE.dungeon = fase.dungeon_data;
+  // Metadados de progressão/animação por fase (nível dos NPCs, seed do gerador Pixi).
+  fase.dungeon_data._npcLevel = fase.npc_level ?? 1;
+  fase.dungeon_data._faseId   = fase.id;
+  if (fase.dungeon_data._faseSeed == null) fase.dungeon_data._faseSeed = _avtSeedFromStr(fase.id);
+  AVT_STATE._faseHueShift = fase.tint_hue || 0; // variação de cor por fase (Pixi/canvas)
   AVT_STATE._faseAtualId = fase.id;
   if (typeof AudioManager !== 'undefined') AudioManager.onEnterPhase(fase);
 
@@ -18308,7 +18953,7 @@ async function _avtEntrarFaseExtra(fase) {
   }
 
   // Na nova fase: apenas o jogador que cruzou a porta + inimigos próprios da fase
-  const jogadorNaFase = jogador ? { ...jogador } : null;
+  const jogadorNaFase = jogador ? _avtDeepClone(jogador) : null;
   AVT_STATE.entidades = [];
   AVT_STATE.npcTimers = {};
 
@@ -18326,8 +18971,20 @@ async function _avtEntrarFaseExtra(fase) {
     AVT_STATE.entidades.push(jogadorNaFase);
   }
 
-  // Inimigos próprios desta fase
-  _avtPopularEntidadesInimigos(fase.dungeon_data);
+  // Inimigos próprios desta fase.
+  // Se já visitámos esta fase, restaurar o snapshot (preserva mortes/posições dos NPCs)
+  // em vez de repopular — evita a sensação de "mesmos NPCs reposicionados".
+  if (!AVT_STATE._faseSnapshots) AVT_STATE._faseSnapshots = {};
+  const _snap = AVT_STATE._faseSnapshots[fase.id];
+  if (_snap?.entidades?.length) {
+    _snap.entidades.forEach(e => {
+      const ent = _avtDeepClone(e);
+      AVT_STATE.entidades.push(ent);
+      AVT_STATE.npcTimers[ent.id] = _avtDeepClone(_snap.npcTimers?.[ent.id]) || (_avtInitNpcTimer(ent), AVT_STATE.npcTimers[ent.id]);
+    });
+  } else {
+    _avtPopularEntidadesInimigos(fase.dungeon_data);
+  }
 
   mostrarToast(`Entrando: ${fase.nome}`, 'ok');
   _avtLog(`🚪 Entrando: ${fase.nome}`);
@@ -18336,13 +18993,13 @@ async function _avtEntrarFaseExtra(fase) {
   _avtPhaseHostCheck(fase.id);
 }
 
+// Entrar numa fase é uma ação LOCAL: não arrasta os outros jogadores nem os força
+// a uma sala de espera. Apenas anuncia presença (leve) para o painel do mestre.
 function _avtPhaseHostCheck(faseId) {
   try {
     if (typeof RTNet === 'undefined' || !RTNet.initialized) return;
-    const jogadores = (AVT_STATE.membros || []).filter(m => m.role !== 'mestre');
-    if (jogadores.length === 0) return;
-    _avtBroadcast('avt_fase_mudou', { faseId });
-    _avtSalaEsperaFase(faseId);
+    const jog = _avtMeuJogador();
+    _avtBroadcast('avt_fase_presenca', { faseId, nome: jog?.nome || null });
   } catch(_) {}
 }
 window._avtPhaseHostCheck = _avtPhaseHostCheck;
@@ -18366,9 +19023,35 @@ function _avtVerificarSaida(x, y) {
   if (!AVT_STATE._faseAnterior) return;
   const tile = AVT_STATE.dungeon?.tiles?.[y]?.[x];
   if (tile === AVT_T.SAIDA) {
-    if (confirm('🚪 Sair desta fase e voltar ao mapa anterior?')) _avtVoltarFaseAnterior();
+    _avtPromptFase('Voltar ao mapa anterior?', '← Voltar', () => _avtVoltarFaseAnterior());
   }
 }
+
+// Prompt instantâneo (sem confirm() nem sala de espera) ao pisar numa porta de fase.
+// onAdvance: callback ao confirmar; "Ficar" apenas fecha (jogador permanece na fase).
+function _avtPromptFase(titulo, labelAvancar, onAdvance) {
+  if (AVT_STATE._promptFaseAberto) return;
+  AVT_STATE._promptFaseAberto = true;
+  let ov = document.getElementById('avt-prompt-fase');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'avt-prompt-fase';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45)';
+    document.body.appendChild(ov);
+  }
+  const fechar = () => { AVT_STATE._promptFaseAberto = false; ov.remove(); };
+  ov.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(79,163,209,0.3);border-radius:12px;padding:20px;max-width:340px;width:90%;text-align:center">
+      <div style="font-family:var(--fonte-d, sans-serif);font-size:0.95rem;color:#c8d8e8;margin-bottom:16px">🚪 ${titulo}</div>
+      <div style="display:flex;gap:8px">
+        <button id="avt-prompt-fase-no" style="flex:1;padding:10px;border-radius:8px;cursor:pointer;background:none;border:1px solid rgba(122,146,170,0.3);color:#7a92aa;font-family:var(--fonte-d, sans-serif);font-size:0.72rem">Ficar</button>
+        <button id="avt-prompt-fase-yes" style="flex:1;padding:10px;border-radius:8px;cursor:pointer;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.5);color:#4fa3d1;font-family:var(--fonte-d, sans-serif);font-size:0.72rem">${labelAvancar || 'Avançar'}</button>
+      </div>
+    </div>`;
+  ov.querySelector('#avt-prompt-fase-no').onclick = fechar;
+  ov.querySelector('#avt-prompt-fase-yes').onclick = () => { fechar(); try { onAdvance && onAdvance(); } catch(e) { mostrarToast('Erro: '+(e?.message||e),'erro'); } };
+}
+window._avtPromptFase = _avtPromptFase;
 
 function _avtVoltarFaseAnterior() {
   if (!AVT_STATE._faseAnterior) return;
@@ -18378,11 +19061,24 @@ function _avtVoltarFaseAnterior() {
   // Salvar o id da fase extra antes de restaurar _faseAtualId (usado para encontrar a porta)
   const faseExtrasId = AVT_STATE._faseAtualId;
 
+  // Snapshot dos NPCs desta fase extra para preservar mortes/posições ao reentrar.
+  if (faseExtrasId && faseExtrasId !== 'principal') {
+    if (!AVT_STATE._faseSnapshots) AVT_STATE._faseSnapshots = {};
+    const _npcs = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo');
+    AVT_STATE._faseSnapshots[faseExtrasId] = {
+      entidades: _npcs.map(e => _avtDeepClone(e)),
+      npcTimers: _avtDeepClone(AVT_STATE.npcTimers) || {}
+    };
+  }
+
   // Restaurar estado da fase anterior
   AVT_STATE.dungeon    = AVT_STATE._faseAnterior.dungeon;
-  AVT_STATE.entidades  = AVT_STATE._faseAnterior.entidades.map(e => ({ ...e }));
-  AVT_STATE.npcTimers  = { ...AVT_STATE._faseAnterior.npcTimers };
+  AVT_STATE.entidades  = AVT_STATE._faseAnterior.entidades.map(e => _avtDeepClone(e));
+  AVT_STATE.npcTimers  = _avtDeepClone(AVT_STATE._faseAnterior.npcTimers);
   AVT_STATE._faseAtualId = AVT_STATE._faseAnterior.faseId || 'principal';
+  // Restaurar tint da fase de destino (principal = sem variação)
+  const _faseDest = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === AVT_STATE._faseAtualId);
+  AVT_STATE._faseHueShift = _faseDest?.tint_hue || 0;
   // Restaurar tileset da fase principal se a fase extra tinha um diferente
   if (AVT_STATE._faseAnterior.tilesetImgUrl != null) {
     AVT_STATE._tilesetImgUrl   = AVT_STATE._faseAnterior.tilesetImgUrl;

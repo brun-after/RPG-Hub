@@ -421,6 +421,44 @@ function _avtMenuEditarFase(faseId) {
         </div>
       </div>
 
+      <div style="display:flex;gap:10px">
+        <div style="flex:1">
+          <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Ordem na campanha</label>
+          <input id="avt-edit-fase-ordem" type="number" min="0" value="${f.ordem ?? 1}"
+            style="width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;padding:7px 10px;box-sizing:border-box">
+        </div>
+        <div style="flex:1">
+          <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Nível dos NPCs</label>
+          <input id="avt-edit-fase-npclvl" type="number" min="1" value="${f.npc_level ?? 1}"
+            style="width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;padding:7px 10px;box-sizing:border-box">
+        </div>
+      </div>
+
+      <div>
+        <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:6px">🌀 Portas internas (teleporte na mesma fase)</label>
+        ${(() => {
+          const portas = f.dungeon_data?._portasInternas;
+          if (!f.dungeon_data) return `<div style="font-size:0.62rem;color:#7a92aa;font-style:italic">Entre na fase uma vez para gerar o mapa antes de editar portas internas.</div>`;
+          let h = '';
+          (portas || []).forEach((p, i) => {
+            h += `<div style="display:flex;gap:5px;align-items:center;margin-bottom:5px">
+              <input id="avt-pi-nome-${i}" value="${(p.nome||('Porta '+(p.numero??i+2))).replace(/"/g,'&quot;')}" placeholder="Nome"
+                style="flex:1;min-width:50px;background:rgba(255,255,255,0.04);border:1px solid rgba(168,120,255,0.25);border-radius:5px;color:#c8b8e8;font-size:0.66rem;padding:5px 7px;box-sizing:border-box">
+              <input id="avt-pi-acol-${i}" type="number" value="${p.a?.col??0}" title="A coluna" style="width:46px;background:rgba(255,255,255,0.04);border:1px solid rgba(168,120,255,0.25);border-radius:5px;color:#c8b8e8;font-size:0.66rem;padding:5px 4px;text-align:center">
+              <input id="avt-pi-arow-${i}" type="number" value="${p.a?.row??0}" title="A linha" style="width:46px;background:rgba(255,255,255,0.04);border:1px solid rgba(168,120,255,0.25);border-radius:5px;color:#c8b8e8;font-size:0.66rem;padding:5px 4px;text-align:center">
+              <span style="color:#a878ff;font-size:0.7rem">↔</span>
+              <input id="avt-pi-bcol-${i}" type="number" value="${p.b?.col??0}" title="B coluna" style="width:46px;background:rgba(255,255,255,0.04);border:1px solid rgba(168,120,255,0.25);border-radius:5px;color:#c8b8e8;font-size:0.66rem;padding:5px 4px;text-align:center">
+              <input id="avt-pi-brow-${i}" type="number" value="${p.b?.row??0}" title="B linha" style="width:46px;background:rgba(255,255,255,0.04);border:1px solid rgba(168,120,255,0.25);border-radius:5px;color:#c8b8e8;font-size:0.66rem;padding:5px 4px;text-align:center">
+              <button onclick="_avtMenuRemovePortaInterna('${faseId}',${i})" style="background:rgba(232,96,76,0.1);border:1px solid rgba(232,96,76,0.3);border-radius:5px;color:#e8604c;font-size:0.7rem;padding:3px 7px;cursor:pointer">✕</button>
+            </div>`;
+          });
+          if (!(portas||[]).length) h += `<div style="font-size:0.62rem;color:#7a92aa;font-style:italic;margin-bottom:5px">Nenhuma porta interna.</div>`;
+          h += `<button onclick="_avtMenuAddPortaInterna('${faseId}')" style="width:100%;background:rgba(168,120,255,0.1);border:1px solid rgba(168,120,255,0.3);border-radius:6px;color:#a878ff;font-size:0.64rem;padding:6px;cursor:pointer;font-family:var(--fonte-d)">＋ Adicionar porta interna</button>`;
+          return h;
+        })()}
+        <div style="font-size:0.58rem;color:#7a92aa;margin-top:4px">O nome é único por par e se aplica às duas pontas (porta irmã).</div>
+      </div>
+
       <div style="display:flex;gap:8px;margin-top:4px">
         <button onclick="_avtMenuAbrirFaseMestre()"
           style="flex:1;padding:9px;border-radius:7px;cursor:pointer;font-family:var(--fonte-d);font-size:0.68rem;background:none;border:1px solid rgba(122,146,170,0.2);color:#7a92aa">
@@ -452,10 +490,56 @@ function _avtMenuSetEditFaseLock(lockType) {
 }
 window._avtMenuSetEditFaseLock = _avtMenuSetEditFaseLock;
 
+// Lê as portas internas atualmente nos inputs do editor para o array da fase.
+function _avtMenuLerPortasInternasEditor(fase) {
+  if (!fase?.dungeon_data) return;
+  const arr = [];
+  for (let i = 0; ; i++) {
+    const nomeEl = document.getElementById('avt-pi-nome-' + i);
+    if (!nomeEl) break;
+    const num = i + 2;
+    arr.push({
+      numero: num,
+      nome: (nomeEl.value || ('Porta ' + num)).trim(),
+      a: { col: parseInt(document.getElementById('avt-pi-acol-'+i)?.value||'0',10), row: parseInt(document.getElementById('avt-pi-arow-'+i)?.value||'0',10) },
+      b: { col: parseInt(document.getElementById('avt-pi-bcol-'+i)?.value||'0',10), row: parseInt(document.getElementById('avt-pi-brow-'+i)?.value||'0',10) },
+    });
+  }
+  fase.dungeon_data._portasInternas = arr;
+}
+
+function _avtMenuAddPortaInterna(faseId) {
+  const fase = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === faseId);
+  if (!fase?.dungeon_data) { mostrarToast('Entre na fase uma vez para gerar o mapa.', 'aviso'); return; }
+  _avtMenuLerPortasInternasEditor(fase);
+  if (!Array.isArray(fase.dungeon_data._portasInternas)) fase.dungeon_data._portasInternas = [];
+  const num = fase.dungeon_data._portasInternas.length + 2;
+  fase.dungeon_data._portasInternas.push({ numero: num, nome: 'Porta ' + num, a: { col: 1, row: 1 }, b: { col: 2, row: 2 } });
+  _avtMenuEditarFase(faseId);
+}
+window._avtMenuAddPortaInterna = _avtMenuAddPortaInterna;
+
+function _avtMenuRemovePortaInterna(faseId, idx) {
+  const fase = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === faseId);
+  if (!fase?.dungeon_data) return;
+  _avtMenuLerPortasInternasEditor(fase);
+  (fase.dungeon_data._portasInternas || []).splice(idx, 1);
+  // Renumerar de 2 em diante
+  (fase.dungeon_data._portasInternas || []).forEach((p, i) => {
+    const oldName = p.nome, defName = 'Porta ' + (p.numero ?? i+2);
+    p.numero = i + 2;
+    if (!oldName || oldName === defName) p.nome = 'Porta ' + p.numero;
+  });
+  _avtMenuEditarFase(faseId);
+}
+window._avtMenuRemovePortaInterna = _avtMenuRemovePortaInterna;
+
 async function _avtMenuSalvarEditarFase(faseId) {
   const nome = document.getElementById('avt-edit-fase-nome')?.value?.trim();
   const col  = parseInt(document.getElementById('avt-edit-fase-col')?.value || '0', 10);
   const row  = parseInt(document.getElementById('avt-edit-fase-row')?.value || '0', 10);
+  const ordem = parseInt(document.getElementById('avt-edit-fase-ordem')?.value || '1', 10);
+  const npcLvl = Math.max(1, parseInt(document.getElementById('avt-edit-fase-npclvl')?.value || '1', 10));
   const lockType = window._avtEditFaseLockAtual || 'livre';
 
   if (!nome) { mostrarToast('Nome obrigatório', 'aviso'); return; }
@@ -465,7 +549,11 @@ async function _avtMenuSalvarEditarFase(faseId) {
   if (!fase) return;
 
   fase.nome = nome;
+  fase.ordem = ordem;
+  fase.npc_level = npcLvl;
   fase.porta = { ...(fase.porta || {}), lock_type: lockType, col, row };
+  _avtMenuLerPortasInternasEditor(fase);
+  if (fase.dungeon_data) fase.dungeon_data._npcLevel = npcLvl;
 
   try {
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_MENU_STATE.rpgId)}`,
@@ -1091,26 +1179,22 @@ async function _avtMenuSalvarSessionData(patch) {
 }
 window._avtMenuSalvarSessionData = _avtMenuSalvarSessionData;
 
-// Handler global para avt_fase_mudou (usado pelo AVT_HANDLER_MAP do rtnet.js via Supabase fallback)
-window.avtReceberFaseMudou = function(payload) {
-  try {
-    if (payload?.faseId && typeof _avtSalaEsperaFase === 'function') {
-      _avtSalaEsperaFase(payload.faseId);
-    }
-  } catch(_) {}
-};
+// Handler global para avt_fase_mudou — DESATIVADO: trocar de fase é local e não deve
+// arrastar outros jogadores nem forçá-los a uma sala de espera (isolamento por fase).
+window.avtReceberFaseMudou = function(_payload) { /* no-op: fases são por jogador */ };
 
-// Handler de avt_fase_mudou recebido de outro peer via RTNet
-// Registrado quando RTNet já está disponível ou aguarda até estar
+// Presença leve: registra em que fase cada jogador está (apenas informativo).
 function _avtMenuBindFaseMudouHandler() {
   if (typeof RTNet === 'undefined' || typeof RTNet.on !== 'function') {
     setTimeout(_avtMenuBindFaseMudouHandler, 600);
     return;
   }
-  RTNet.on('avt_fase_mudou', (payload) => {
+  RTNet.on('avt_fase_presenca', (payload) => {
     try {
-      if (payload?.faseId && typeof _avtSalaEsperaFase === 'function') {
-        _avtSalaEsperaFase(payload.faseId);
+      if (!payload?.nome) return;
+      if (typeof AVT_STATE !== 'undefined') {
+        AVT_STATE._fasePresenca = AVT_STATE._fasePresenca || {};
+        AVT_STATE._fasePresenca[payload.nome] = payload.faseId || 'principal';
       }
     } catch(_) {}
   });

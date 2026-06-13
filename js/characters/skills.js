@@ -102,8 +102,22 @@ function skPopularAtributos() {
   const atual = sel.value;
   const defs = RPG_DATA?.attrDefs || [];
   const catLabel = {basico:'🔷',especial:'✨',status:'📊',resistencia:'🛡'};
+  // Atributos liberados pelo mestre para escala de skills (padrão: só Inteligência).
+  // Configurável no painel Balanceamento → level_config.skill_scaling_attrs.
+  const _lc = (typeof AVT_STATE !== 'undefined' && AVT_STATE?.rpg?.theme_json?.level_config)
+            || RPG_DATA?.rpg?.theme_json?.level_config || {};
+  const liberados = _lc.skill_scaling_attrs;
+  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  const permitidos = (Array.isArray(liberados) && liberados.length) ? liberados : ['Inteligência'];
+  const permitidosNorm = new Set(permitidos.map(_norm));
+  // Filtra atributos numéricos pelos liberados; sempre preserva o valor já salvo (atual),
+  // mesmo que fora da lista — evita derrubar o scaling de skills antigas antes da migração.
+  let opts = defs.filter(a => a.tipo === 'number' && (permitidosNorm.has(_norm(a.nome)) || a.nome === atual));
+  if (atual && !opts.some(a => a.nome === atual) && !defs.some(a => a.nome === atual)) {
+    opts = opts.concat([{ nome: atual, categoria: 'basico' }]);
+  }
   sel.innerHTML = '<option value="">— Nenhum —</option>'
-    + defs.filter(a=>a.tipo==='number').map(a=>`<option value="${a.nome}"${a.nome===atual?' selected':''}>${catLabel[a.categoria]||'🔷'} ${a.nome}</option>`).join('');
+    + opts.map(a=>`<option value="${a.nome}"${a.nome===atual?' selected':''}>${catLabel[a.categoria]||'🔷'} ${a.nome}</option>`).join('');
 }
 
 // ── 14C: SKILLS ───────────────────────────────────────────────
