@@ -2086,6 +2086,10 @@ function skToggleAtkFields()   { document.getElementById('sef-atk-fields').style
 function skToggleDebFields()   { document.getElementById('sef-deb-fields').style.display   = document.getElementById('sef-deb-on').checked   ? 'block' : 'none'; }
 function skToggleSefFields(tipo) { const el = document.getElementById('sef-' + tipo + '-fields'); const cb = document.getElementById('sef-' + tipo + '-on'); if (el && cb) el.style.display = cb.checked ? 'block' : 'none'; }
 function skToggleNecroFields() { const el = document.getElementById('sef-necro-fields'); if (el) el.style.display = document.getElementById('sef-necro-on').checked ? 'block' : 'none'; }
+function skToggleRastroFields() {
+  const p = document.getElementById('sef-rastro-persona-fields'); if (p) p.style.display = document.getElementById('sef-rastro-persona-on')?.checked ? 'block' : 'none';
+  const a = document.getElementById('sef-rastro-anima-fields');   if (a) a.style.display = document.getElementById('sef-rastro-anima-on')?.checked   ? 'block' : 'none';
+}
 
 function skAlvoTipoChange() {
   const v = document.getElementById('sk-alvo-tipo').value;
@@ -2159,8 +2163,8 @@ function skAbrirFormEfeito() {
     if (lastBtn && lastBtn.parentNode) lastBtn.parentNode.insertBefore(divU, lastBtn);
     else form.appendChild(divU);
   }
-  const fields = ['sef-stun-fields','sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields','sef-imune-fields','sef-delayed-fields','sef-necro-fields'];
-  const checks = ['sef-stun-on','sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-imune-on','sef-delayed-on','sef-alvo-usuario','sef-necro-on'];
+  const fields = ['sef-stun-fields','sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields','sef-imune-fields','sef-delayed-fields','sef-necro-fields','sef-rastro-persona-fields','sef-rastro-anima-fields'];
+  const checks = ['sef-stun-on','sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-imune-on','sef-delayed-on','sef-alvo-usuario','sef-necro-on','sef-rastro-persona-on','sef-rastro-anima-on'];
   const inputs = ['sef-nome','sef-dot-formula','sef-hot-formula','sef-rec-atributo','sef-rec-formula'];
   fields.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
   checks.forEach(id => { const el = document.getElementById(id); if(el) el.checked=false; });
@@ -2179,6 +2183,10 @@ function skAbrirFormEfeito() {
   document.getElementById('sef-deb-turnos').value  = 2;
   const _sefNecroTurnos = document.getElementById('sef-necro-turnos'); if (_sefNecroTurnos) _sefNecroTurnos.value = 3;
   const _sefNecroCor = document.getElementById('sef-necro-cor'); if (_sefNecroCor) _sefNecroCor.value = '#8e44ad';
+  const _sefRpForm = document.getElementById('sef-rastro-persona-formula'); if (_sefRpForm) _sefRpForm.value = '';
+  const _sefRpTurnos = document.getElementById('sef-rastro-persona-turnos'); if (_sefRpTurnos) _sefRpTurnos.value = 3;
+  const _sefRaForm = document.getElementById('sef-rastro-anima-formula'); if (_sefRaForm) _sefRaForm.value = '';
+  const _sefRaTurnos = document.getElementById('sef-rastro-anima-turnos'); if (_sefRaTurnos) _sefRaTurnos.value = 3;
   document.getElementById('sk-efeito-form').style.display = 'block';
 }
 
@@ -2284,6 +2292,18 @@ function skConfirmarEfeito() {
     efeito.duracao_turnos = parseInt(document.getElementById('sef-necro-turnos')?.value) || 3;
     efeito.cor_dominado  = document.getElementById('sef-necro-cor')?.value || '#8e44ad';
   }
+  // Rastro Persona — células por onde o personagem anda ficam contaminadas
+  if (document.getElementById('sef-rastro-persona-on')?.checked) {
+    efeito.tipo           = 'rastro_persona';
+    efeito.rastro_formula = document.getElementById('sef-rastro-persona-formula')?.value.trim() || '1d6';
+    efeito.duracao_turnos = parseInt(document.getElementById('sef-rastro-persona-turnos')?.value) || 3;
+  }
+  // Rastro Anima — células por onde a animação de ataque passa ficam contaminadas
+  if (document.getElementById('sef-rastro-anima-on')?.checked) {
+    efeito.tipo           = 'rastro_anima';
+    efeito.rastro_formula = document.getElementById('sef-rastro-anima-formula')?.value.trim() || '1d6';
+    efeito.duracao_turnos = parseInt(document.getElementById('sef-rastro-anima-turnos')?.value) || 3;
+  }
   SK_EFEITOS_TEMP.push(efeito);
   skRenderEfeitosLista();
   document.getElementById('sk-efeito-form').style.display = 'none';
@@ -2319,6 +2339,8 @@ function skRenderEfeitosLista() {
     if (ef.rec_atributo)      tags.push({ txt: `🔷 ${ef.rec_atributo} ${ef.rec_formula}${ef.rec_modo==='turno'?'×'+ef.rec_turnos+'t':' (imediato)'}`, cor: '#b07ef0' });
     if (ef.imune_dano)        tags.push({ txt: `🛡 Imune ${ef.imune_dano_turnos}t`, cor: '#f0cc6a' });
     if (ef.tipo === 'necromante') tags.push({ txt: `☠ Necromante ${ef.duracao_turnos}t`, cor: ef.cor_dominado || '#8e44ad' });
+    if (ef.tipo === 'rastro_persona') tags.push({ txt: `🐾 Rastro Persona ${ef.rastro_formula}×${ef.duracao_turnos}t`, cor: '#5ee09a' });
+    if (ef.tipo === 'rastro_anima')   tags.push({ txt: `✨ Rastro Anima ${ef.rastro_formula}×${ef.duracao_turnos}t`, cor: '#5ee09a' });
     if (ef.tipo === 'mover_usuario') {
       const destLbl = { escolha_livre:'clique no mapa', adjacente_alvo:'adj. ao alvo', trocar_com_alvo:'troca c/ alvo' }[ef.mover_destino] || ef.mover_destino;
       tags.push({ txt: `🌀 Move usuário: ${destLbl}${ef.mover_destino === 'escolha_livre' ? ' ('+ef.mover_distancia+'cel)' : ''}`, cor: '#7ec8f0' });

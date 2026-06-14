@@ -335,6 +335,8 @@ const AVT_STATUS_COLORS = {
   teleporte:    '#a29bfe',
   invocacao:    '#b07ef0',
   necromante:   '#8e44ad',
+  rastro_persona: '#5ee09a',
+  rastro_anima:   '#5ee09a',
 };
 
 function _avtHexRgb(hex) {
@@ -385,6 +387,131 @@ function _avtEfetosAtivosEnt(ent) {
     });
 
   return results;
+}
+
+// ══ Rastros contaminados (Rastro Persona / Rastro Anima) ═════════════════════
+// Células contaminadas que causam dano a inimigos que passarem por elas. Cada célula
+// fere cada inimigo apenas 1× (hitSet). Vivem em AVT_STATE._rastroCells.
+
+// Marca uma célula como contaminada pelo caster. Mescla células iguais do mesmo caster.
+function _avtRastroMarcarCelula(caster, x, y, formula, duracaoTurnos) {
+  if (!caster || formula == null) return;
+  const tx = Math.round(x), ty = Math.round(y);
+  if (typeof _avtTilePassavel === 'function' && !_avtTilePassavel(tx, ty, AVT_STATE.dungeon)) return;
+  if (!AVT_STATE._rastroCells) AVT_STATE._rastroCells = [];
+  const dur = Math.max(1, duracaoTurnos || 3);
+  const expiry = Date.now() + dur * _avtGetEfeitoCooldownMs();
+  const casterNome = typeof caster === 'string' ? caster : caster.nome;
+  const casterId = typeof caster === 'object' ? (caster.id || null) : null;
+  const ex = AVT_STATE._rastroCells.find(c => c.x === tx && c.y === ty && c.caster === casterNome);
+  if (ex) { ex.expiry_ms = Math.max(ex.expiry_ms, expiry); ex.formula = formula; return; }
+  AVT_STATE._rastroCells.push({ x: tx, y: ty, formula, expiry_ms: expiry, caster: casterNome, casterId, cor: '#5ee09a', hitSet: new Set() });
+}
+
+// Predicado: entidade hostil ao jogador (inimigo ou invocação inimiga; nunca jogador/aliado/dominado/invocação do jogador)
+function _avtRastroEhHostil(e) {
+  if (!e || e.hp <= 0 || e.escondido || e._dominado) return false;
+  if (e.tipo === 'inimigo') return true;
+  if (e.tipo === 'invocado') return !(AVT_STATE.invocacoes_ativas || []).some(i => i.id === e.id);
+  return false;
+}
+
+// Aplica dano de rastro quando uma entidade hostil entra/está numa célula contaminada.
+function _avtRastroChecarEntrada(ent, x, y) {
+  const cells = AVT_STATE._rastroCells;
+  if (!cells || !cells.length || !_avtRastroEhHostil(ent)) return;
+  const tx = Math.round(x), ty = Math.round(y), now = Date.now();
+  for (const cell of cells) {
+    if (now >= cell.expiry_ms || cell.x !== tx || cell.y !== ty) continue;
+    if (cell.hitSet.has(ent.id)) continue;
+    cell.hitSet.add(ent.id);
+    const dano = _avtRolarFormula(cell.formula || '1d6');
+    if (dano <= 0) continue;
+    ent.hp = Math.max(0, ent.hp - dano);
+    try { _avtAplicarDanoPersistir(ent, ent.hp); } catch(_) {}
+    try { _avtMostrarDanoAbaixoHp(ent, dano, false); } catch(_) {}
+    try { _avtMostrarDotDrip(ent, 'contaminacao'); } catch(_) {}
+    try { _avtBroadcast('avt_hp_update', { nome: ent.nome, hp: ent.hp, hpMax: ent.hpMax }); } catch(_) {}
+    const _batR = (typeof _avtBatalhaDeEnt === 'function') ? _avtBatalhaDeEnt(ent.id) : null;
+    _avtLog(`🟢 ${ent.nome} sofre ${dano} de rastro contaminado`, _batR?.id);
+    if (ent.hp <= 0) { _avtNpcMorreu(ent, _batR || null, { creditoNome: cell.caster }); if (_batR) _avtCheckVitoria(_batR); }
+  }
+}
+
+// Células de uma trajetória reta (Bresenham inteiro) entre dois tiles.
+function _avtRastroCelulasTrajetoria(ax, ay, bx, by) {
+  ax = Math.round(ax); ay = Math.round(ay); bx = Math.round(bx); by = Math.round(by);
+  const cells = [];
+  const dx = Math.abs(bx - ax), dy = Math.abs(by - ay);
+  const sx = ax < bx ? 1 : -1, sy = ay < by ? 1 : -1;
+  let err = dx - dy, x = ax, y = ay, guard = 0;
+  while (guard++ < 256) {
+    cells.push({ x, y });
+    if (x === bx && y === by) break;
+    const e2 = 2 * err;
+    if (e2 > -dy) { err -= dy; x += sx; }
+    if (e2 <  dx) { err += dx; y += sy; }
+  }
+  return cells;
+}
+
+// Efeito rastro_persona ativo no caster (para marcar células durante o movimento).
+function _avtRastroPersonaAtivo(ent) {
+  if (!ent || !ent.status_effects) return null;
+  const now = Date.now();
+  return ent.status_effects.find(e => e.tipo === 'rastro_persona' &&
+    (e._turnos_restantes ?? 0) > 0 && (!e.expiry_ms || now < e.expiry_ms)) || null;
+}
+
+// Aplica um efeito de rastro no momento do lançamento da skill (no caster).
+function _avtAplicarRastroEfeito(ef, casterEnt, alvoEnt) {
+  if (!casterEnt || !ef) return;
+  const dur = ef.duracao_turnos ?? 3;
+  const formula = ef.rastro_formula || '1d6';
+  if (ef.tipo === 'rastro_persona') {
+    // Buff no caster: enquanto ativo, células pisadas ficam contaminadas
+    if (!casterEnt.status_effects) casterEnt.status_effects = [];
+    if (!casterEnt.status_effects.some(e => e.tipo === 'rastro_persona' && (e._turnos_restantes ?? 0) > 0)) {
+      const inBat = (typeof _avtBatalhaDeEnt === 'function') && !!_avtBatalhaDeEnt(casterEnt.id);
+      const entry = { ...ef, nome: ef.nome || 'Rastro Persona', _turnos_restantes: dur,
+        expiry_ms: Date.now() + dur * _avtGetEfeitoCooldownMs() };
+      if (!inBat) entry._ooc = true;
+      casterEnt.status_effects.push(entry);
+      if (!inBat) (AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects || []).push({ entId: casterEnt.id, entNome: casterEnt.nome, ef: { ...entry }, lastTickAt: Date.now() });
+    }
+    _avtRastroMarcarCelula(casterEnt, casterEnt.x, casterEnt.y, formula, dur);
+  } else if (ef.tipo === 'rastro_anima') {
+    if (alvoEnt) {
+      _avtRastroCelulasTrajetoria(casterEnt.x, casterEnt.y, alvoEnt.x, alvoEnt.y)
+        .forEach(c => _avtRastroMarcarCelula(casterEnt, c.x, c.y, formula, dur));
+    }
+  }
+}
+
+// Remove células de rastro expiradas (chamado periodicamente).
+function _avtRastroPrune() {
+  if (!AVT_STATE._rastroCells || !AVT_STATE._rastroCells.length) return;
+  const now = Date.now();
+  AVT_STATE._rastroCells = AVT_STATE._rastroCells.filter(c => now < c.expiry_ms);
+}
+
+// Desenha as células contaminadas no grid (pulso translúcido).
+function _avtRenderRastroCells(ctx, camera, SZ, canvas) {
+  const cells = AVT_STATE._rastroCells;
+  if (!cells || !cells.length) return;
+  const now = Date.now();
+  const pulse = 0.10 + 0.06 * (0.5 + 0.5 * Math.sin(now / 350));
+  for (const cell of cells) {
+    if (now >= cell.expiry_ms) continue;
+    const px = Math.round(cell.x * SZ - camera.x);
+    const py = Math.round(cell.y * SZ - camera.y);
+    if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
+    ctx.fillStyle = `rgba(94,224,154,${pulse.toFixed(3)})`;
+    ctx.fillRect(px, py, SZ, SZ);
+    ctx.strokeStyle = 'rgba(94,224,154,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px + 1.5, py + 1.5, SZ - 3, SZ - 3);
+  }
 }
 
 // ── Sprites pixel art por classe (SVG 16×16 escalado para canvas) ─────────────
@@ -682,6 +809,7 @@ function _avtCriarRenderPersonagens(body) {
         ${campanhas.map(r => `<option value="${r.rpg_id}" ${c.importCampanhaId===r.rpg_id?'selected':''}>${r.name}</option>`).join('')}
       </select>
     </div>` : ''}
+    <div id="avt-import-aventuras" style="margin-bottom:16px"></div>
     <div id="avt-chars-lista">${_avtCriarRenderCharsLista()}</div>
     <button onclick="avtCriarAddChar()"
       style="margin-top:8px;padding:6px 14px;border-radius:6px;border:1px dashed rgba(255,255,255,0.2);background:transparent;color:#7a92aa;cursor:pointer;font-size:0.78rem">
@@ -721,6 +849,137 @@ function _avtCriarRenderPersonagens(body) {
         <div id="avt-chars-ia-status" style="margin-top:6px;font-size:0.72rem;color:#7a92aa"></div>
       </div>
     </div>`;
+  // Carregar (assíncrono) a lista de outras aventuras do mestre para importação individual
+  setTimeout(() => { try { _avtCriarCarregarAventurasImport(); } catch(_) {} }, 0);
+}
+
+// ── Importar personagens individuais de outras aventuras do mestre ────────────
+async function _avtCriarCarregarAventurasImport() {
+  const cont = document.getElementById('avt-import-aventuras');
+  if (!cont) return;
+  const c = AVT_STATE._criando;
+  if (!c._aventurasDisponiveis) {
+    cont.innerHTML = '<div style="font-size:0.72rem;color:#7a92aa;padding:4px 0">Carregando aventuras…</div>';
+    try {
+      const todas = await aventuraCarregarLista();
+      const meuId = (typeof SESSION !== 'undefined' && SESSION?.user?.id) || null;
+      c._aventurasDisponiveis = (todas || []).filter(r =>
+        (meuId && r.owner_id) ? r.owner_id === meuId : true)
+        .filter(r => r.rpg_id !== c._editingRpgId);
+    } catch(_) { c._aventurasDisponiveis = []; }
+  }
+  _avtCriarRenderAventurasImport();
+}
+
+function _avtCriarRenderAventurasImport() {
+  const cont = document.getElementById('avt-import-aventuras');
+  if (!cont) return;
+  const c = AVT_STATE._criando;
+  const advs = c._aventurasDisponiveis || [];
+  if (!advs.length) { cont.innerHTML = ''; return; }
+  c._advExpandidas = c._advExpandidas || new Set();
+  c._charsImportSel = c._charsImportSel || new Set();
+  const selCount = c._charsImportSel.size;
+  cont.innerHTML = `
+    <div class="criar-field">
+      <label>Importar personagens de outras aventuras (opcional)</label>
+      <div style="border:1px solid var(--borda);border-radius:6px;background:#0a0f18;max-height:220px;overflow:auto">
+        ${advs.map(a => {
+          const exp = c._advExpandidas.has(a.rpg_id);
+          const chars = c._advCharsCache?.[a.rpg_id];
+          return `
+          <div style="border-bottom:1px solid rgba(255,255,255,0.06)">
+            <div onclick="_avtCriarToggleAventuraExpand('${a.rpg_id}')" style="display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer">
+              <span style="color:#7a92aa;width:10px">${exp?'▾':'▸'}</span>
+              <span style="flex:1;color:#c8d8e8;font-size:0.8rem">${a.name||a.rpg_id}</span>
+            </div>
+            ${exp ? `<div style="padding:2px 10px 8px 28px">${
+              chars == null ? '<div style="font-size:0.7rem;color:#7a92aa">Carregando…</div>'
+              : (!chars.length ? '<div style="font-size:0.7rem;color:#7a92aa">Nenhum personagem</div>'
+              : chars.map(ch => {
+                  const key = a.rpg_id + '::' + ch.id;
+                  const checked = c._charsImportSel.has(key);
+                  return `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:0.76rem;color:#c8d8e8;cursor:pointer">
+                    <input type="checkbox" ${checked?'checked':''} onchange="_avtCriarToggleCharSelecao('${a.rpg_id}','${ch.id}')">
+                    ${ch.nome}
+                  </label>`;
+                }).join(''))
+            }</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      ${selCount ? `<button onclick="_avtCriarConfirmarImportIndividual()"
+        style="margin-top:8px;padding:6px 14px;border-radius:6px;border:1px solid rgba(94,224,154,0.4);background:rgba(94,224,154,0.1);color:#5ee09a;cursor:pointer;font-size:0.78rem">+ Importar ${selCount} selecionado(s)</button>` : ''}
+    </div>`;
+}
+
+async function _avtCriarToggleAventuraExpand(advId) {
+  const c = AVT_STATE._criando;
+  c._advExpandidas = c._advExpandidas || new Set();
+  if (c._advExpandidas.has(advId)) { c._advExpandidas.delete(advId); _avtCriarRenderAventurasImport(); return; }
+  c._advExpandidas.add(advId);
+  c._advCharsCache = c._advCharsCache || {};
+  if (c._advCharsCache[advId] == null) {
+    _avtCriarRenderAventurasImport(); // mostra "Carregando…"
+    try {
+      const chars = await _avtSb(`characters?rpg_id=eq.${encodeURIComponent(advId)}&select=id,nome,hp_max,custom_attrs&order=nome`);
+      c._advCharsCache[advId] = (chars || []).filter(ch => ch.custom_attrs?.tipo_personagem !== 'npc');
+    } catch(_) { c._advCharsCache[advId] = []; }
+  }
+  _avtCriarRenderAventurasImport();
+}
+
+function _avtCriarToggleCharSelecao(advId, charId) {
+  const c = AVT_STATE._criando;
+  c._charsImportSel = c._charsImportSel || new Set();
+  const key = advId + '::' + charId;
+  if (c._charsImportSel.has(key)) c._charsImportSel.delete(key); else c._charsImportSel.add(key);
+  _avtCriarRenderAventurasImport();
+}
+
+async function _avtCriarConfirmarImportIndividual() {
+  const c = AVT_STATE._criando;
+  const sel = Array.from(c._charsImportSel || []);
+  if (!sel.length) return;
+  const cores = ['#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e8604c'];
+  // Buscar skills 1× por aventura envolvida
+  const advIds = [...new Set(sel.map(k => k.split('::')[0]))];
+  const skillsByAdv = {};
+  await Promise.all(advIds.map(async advId => {
+    try { skillsByAdv[advId] = await _avtSb(`skills?rpg_id=eq.${encodeURIComponent(advId)}&select=*`) || []; }
+    catch(_) { skillsByAdv[advId] = []; }
+  }));
+  let added = 0;
+  sel.forEach(key => {
+    const sepIdx = key.indexOf('::');
+    const advId = key.slice(0, sepIdx), charId = key.slice(sepIdx + 2);
+    const ch = (c._advCharsCache?.[advId] || []).find(x => String(x.id) === String(charId));
+    if (!ch) return;
+    if (c.personagens.some(p => p._importSrcRpgId === advId && String(p._importSrcCharId) === String(ch.id))) return;
+    const skillsDoChar = (skillsByAdv[advId] || []).filter(s => s.personagem === ch.nome || s.character_id === ch.id);
+    c.personagens.push({
+      nome: ch.nome,
+      cor: ch.custom_attrs?.cor || cores[(c.personagens.length + added) % cores.length],
+      descricao: '',
+      classe_aventura: ch.custom_attrs?.classe_aventura || 'guerreiro',
+      _importedCustomAttrs: ch.custom_attrs || {},
+      _importedHpMax: ch.hp_max,
+      _importedSkills: skillsDoChar,
+      _importSrcRpgId: advId,
+      _importSrcCharId: ch.id,
+    });
+    added++;
+  });
+  // Remover entrada placeholder vazia inicial, se houver
+  if (added) {
+    const idx0 = c.personagens.findIndex(p => !p.nome && !p._importedCustomAttrs && !p._atributos);
+    if (idx0 >= 0 && c.personagens.length > added) c.personagens.splice(idx0, 1);
+  }
+  c._charsImportSel = new Set();
+  mostrarToast(`${added} personagem(ns) importado(s)`, 'ok');
+  const lista = document.getElementById('avt-chars-lista');
+  if (lista) lista.innerHTML = _avtCriarRenderCharsLista();
+  _avtCriarRenderAventurasImport();
 }
 
 function _avtCriarRenderCharsLista() {
@@ -2135,17 +2394,29 @@ async function aventuraCriarSubmit() {
       const aparenciaFinal = (p._aparencia?.img_frente || p._aparencia?.img_iso)
         ? { modo: 'imagem', img_frente: p._aparencia.img_frente || '', img_iso: p._aparencia.img_iso || '' }
         : undefined;
-      const custom_attrs = {
-        cor: p.cor || cores[i % cores.length],
-        tipo_personagem: 'jogador',
-        classe_aventura: p.classe_aventura || 'guerreiro',
-        ...(Object.keys(atributosFinais).length ? { atributos: atributosFinais } : {}),
-        ...(p._movimentoMaxIA != null ? { movimentoMax: p._movimentoMaxIA } : {}),
-        ...(aparenciaFinal ? { aparencia: aparenciaFinal } : {})
-      };
-      // HP via fórmula do mestre (hp_base + atributo × multiplicador). Se a campanha
-      // ainda não configurou level_config, _avtCalcHpJog cai em hp_base=100 default.
-      const hpMax = _avtCalcHpJog({ custom_attrs });
+      let custom_attrs;
+      if (p._importedCustomAttrs && Object.keys(p._importedCustomAttrs).length) {
+        // Personagem importado de outra aventura: preservar atributos/recursos/aparência originais
+        custom_attrs = {
+          ...p._importedCustomAttrs,
+          cor: p.cor || p._importedCustomAttrs.cor || cores[i % cores.length],
+          tipo_personagem: 'jogador',
+          classe_aventura: p.classe_aventura || p._importedCustomAttrs.classe_aventura || 'guerreiro',
+        };
+      } else {
+        custom_attrs = {
+          cor: p.cor || cores[i % cores.length],
+          tipo_personagem: 'jogador',
+          classe_aventura: p.classe_aventura || 'guerreiro',
+          ...(Object.keys(atributosFinais).length ? { atributos: atributosFinais } : {}),
+          ...(p._movimentoMaxIA != null ? { movimentoMax: p._movimentoMaxIA } : {}),
+          ...(aparenciaFinal ? { aparencia: aparenciaFinal } : {})
+        };
+      }
+      // HP: preserva o do personagem importado; senão fórmula do mestre (hp_base + atributo ×
+      // multiplicador). Sem level_config, _avtCalcHpJog cai em hp_base=100 default.
+      const hpMax = (p._importedHpMax != null && p._importedHpMax > 0)
+        ? p._importedHpMax : _avtCalcHpJog({ custom_attrs });
       await _avtSb('characters', { method: 'POST', body: JSON.stringify({
         rpg_id: rpgId, nome: p.nome.trim(), hp_max: hpMax, hp_atual: hpMax,
         xp: 0, nivel: 1, custom_attrs
@@ -2164,6 +2435,16 @@ async function aventuraCriarSubmit() {
         try {
           await _avtSb('skills', { method: 'POST', body: JSON.stringify(skillsBody) });
         } catch(e) { mostrarToast('Aviso: habilidades de personagem não importadas', 'aviso', 3000); }
+      }
+      // Importar skills de personagem trazido de outra aventura (re-vinculadas por nome)
+      if (p._importedSkills?.length) {
+        const skillsImport = p._importedSkills.map(sk => ({
+          ...sk, id: undefined, rpg_id: rpgId,
+          personagem: p.nome.trim(), character_id: undefined
+        }));
+        try {
+          await _avtSb('skills', { method: 'POST', body: JSON.stringify(skillsImport) });
+        } catch(e) { mostrarToast('Aviso: habilidades importadas não trazidas', 'aviso', 3000); }
       }
     }
 
@@ -3853,6 +4134,13 @@ function _avtRenderFrame() {
   const _agoraVerif = Date.now();
   if (_agoraVerif - (AVT_STATE._ultimaVerifProxGlobal || 0) >= 1000) {
     AVT_STATE._ultimaVerifProxGlobal = _agoraVerif;
+    // Rastros: limpar células expiradas e ferir hostis parados sobre células contaminadas
+    try {
+      _avtRastroPrune();
+      if (AVT_STATE._rastroCells?.length) {
+        AVT_STATE.entidades.forEach(e => { try { _avtRastroChecarEntrada(e, e.x, e.y); } catch(_) {} });
+      }
+    } catch(_) {}
     // Checa todos os jogadores vivos fora de combate (útil no host p/ jogadores remotos)
     AVT_STATE.entidades
       .filter(e => e.tipo === 'jogador' && e.hp > 0 && !_avtBatalhaDeEnt(e.id))
@@ -3892,6 +4180,9 @@ function _avtRenderFrame() {
         _avtCheckProximidadeInimigos(_jPlayer);
         _avtCheckEntradaCombateAtivo(_jPlayer);
         try { _avtBcastTokenMove({ nome: _jPlayer.nome, x: cell.x, y: cell.y }); } catch (_) {}
+        // Rastro Persona: contaminar a célula em que o jogador pisou
+        const _rpWp = _avtRastroPersonaAtivo(_jPlayer);
+        if (_rpWp) _avtRastroMarcarCelula(_jPlayer, cell.x, cell.y, _rpWp.rastro_formula || '1d6', _rpWp.duracao_turnos ?? 3);
         _avtRecuperarPorMovimento(_jPlayer, 1);
         _avtCameraUpdate();
         const fimDoCaminho = restantes === 0 &&
@@ -3946,6 +4237,7 @@ function _avtRenderFrame() {
             try { e._onWaypointReached(tgt, e._waypoints.length); } catch (_) {}
           }
           if (e.tipo === 'inimigo') _avtNpcTentarPorta(e, tgt.x, tgt.y);
+          try { _avtRastroChecarEntrada(e, tgt.x, tgt.y); } catch (_) {}
           continue;
         }
         break;
@@ -3961,6 +4253,7 @@ function _avtRenderFrame() {
             try { e._onWaypointReached(tgt, e._waypoints.length); } catch (_) {}
           }
           if (e.tipo === 'inimigo') _avtNpcTentarPorta(e, tgt.x, tgt.y);
+          try { _avtRastroChecarEntrada(e, tgt.x, tgt.y); } catch (_) {}
         } else {
           break;
         }
@@ -4072,6 +4365,9 @@ function _avtRenderFrame() {
     }
   }
   if (_hueOn) ctx.filter = 'none';
+
+  // Rastros contaminados (Rastro Persona / Rastro Anima)
+  try { _avtRenderRastroCells(ctx, camera, SZ, canvas); } catch(_) {}
 
   // Overlay de grade suave nos tilesets (linhas finas e translúcidas)
   if (AVT_STATE._tilesetLoaded && _gridStyle.op > 0) {
@@ -6737,6 +7033,9 @@ function _avtMoverJogador(dx, dy) {
       } else {
         _avtBcastTokenMove({ nome: ativo.nome, x: nx, y: ny });
       }
+      // Rastro Persona: contaminar a célula em que o jogador pisou (combate)
+      const _rpMv = _avtRastroPersonaAtivo(jogador);
+      if (_rpMv) _avtRastroMarcarCelula(jogador, nx, ny, _rpMv.rastro_formula || '1d6', _rpMv.duracao_turnos ?? 3);
       _avtBroadcastBatalha(minhaBat); // sincroniza movimentoRestante com todos os clientes
       if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
       else _avtDebounceSalvarPosicaoNpc(ativo);
@@ -6809,6 +7108,9 @@ function _avtMoverJogador(dx, dy) {
         }
         if (jogador.tipo === 'jogador') _avtDebounceSalvarPosicao(jogador);
         else if (typeof _avtDebounceSalvarPosicaoNpc === 'function') _avtDebounceSalvarPosicaoNpc(jogador);
+        // Rastro Persona: contaminar a célula em que o jogador pisou (exploração)
+        const _rpStep = _avtRastroPersonaAtivo(jogador);
+        if (_rpStep) _avtRastroMarcarCelula(jogador, cell.x, cell.y, _rpStep.rastro_formula || '1d6', _rpStep.duracao_turnos ?? 3);
         // Jogador: teleporte por porta interna ou prompt de troca de fase.
         // (NPCs autônomos/controlados cruzam portas via o lerp central — _avtNpcTentarPorta.)
         if (jogador.tipo === 'jogador' && !_avtVerificarPortaInterna(jogador, cell.x, cell.y)) {
@@ -7696,6 +7998,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
           _avtAplicarDanoPersistir(alvoProcOoc, alvoProcOoc.hp);
           _avtMostrarCuraAcimaDaHead(alvoProcOoc, valorCura);
           try { _avtBroadcast('avt_hp_update', { nome: alvoProcOoc.nome, hp: alvoProcOoc.hp, hpMax: alvoProcOoc.hpMax }); } catch(_) {}
+        } else if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') {
+          _avtAplicarRastroEfeito(ef, entJogOoc, entIniOoc);
         } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar','necromante'].includes(ef.tipo)) {
           if (!alvoProcOoc.status_effects) alvoProcOoc.status_effects = [];
           const _oocEfPa = {...ef, _turnos_restantes: ef.duracao_turnos??1,
@@ -7729,8 +8033,11 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
 
     if (ini.hp <= 0) {
       // Inimigo morreu no primeiro ataque — sem combate
+      // Resolver a entidade real (o efeito foi aplicado em AVT_STATE.entidades, que pode ser
+      // uma referência diferente de `ini`) para detectar a dominação por Necromante.
+      const _iniMorte = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
       // Verificar se será dominado pelo Necromante antes de conceder XP/toast de morte
-      const _efNecroOoc = (ini.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
+      const _efNecroOoc = (_iniMorte.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
       if (!_efNecroOoc) {
         _avtLog(`💀 ${ini.nome} abatido antes do combate começar!`);
         mostrarToast(`✦ ${ini.nome} derrotado! XP concedido.`, 'sucesso');
@@ -7750,7 +8057,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
           _avtAutoLevelUp(myChar);
         }
       }
-      _avtNpcMorreu(ini, null); // escondido ou dominado por necromante
+      _avtNpcMorreu(_iniMorte, null); // escondido ou dominado por necromante
       _avtCancelarPerseguicao(ini.id);
     } else {
       // Sobreviveu — colocar em perseguição (não inicia combate diretamente)
@@ -8330,8 +8637,10 @@ function _avtTickEfeitosOOC(now) {
         if (_alvosDom.length) {
           const _perseguindoOoc = _alvosDom.filter(e => AVT_STATE.npcTimers?.[e.id]?.isPursuing);
           const _poolAlvosDom = _perseguindoOoc.length ? _perseguindoOoc : _alvosDom;
+          // Preferir inimigo de menor vida; empate por distância (igual ao ramo de combate).
+          const _distOoc = e => Math.abs(e.x-ent.x)+Math.abs(e.y-ent.y);
           const _alvoDom = _poolAlvosDom.reduce((a, b) =>
-            (Math.abs(a.x-ent.x)+Math.abs(a.y-ent.y)) <= (Math.abs(b.x-ent.x)+Math.abs(b.y-ent.y)) ? a : b
+            a.hp !== b.hp ? (a.hp < b.hp ? a : b) : (_distOoc(a) <= _distOoc(b) ? a : b)
           );
           const _distDom = Math.abs(_alvoDom.x - ent.x) + Math.abs(_alvoDom.y - ent.y);
           if (_distDom <= 1) {
@@ -8351,30 +8660,93 @@ function _avtTickEfeitosOOC(now) {
               : null;
 
             let _danoOoc = 0;
+            let _dadosOoc = [];
+            let _skUsadaOoc = null;
+            let _skNomeOoc = 'Ataque básico';
+            let _formulaOoc = _invAtivaOoc?._formulaAtaqueBasico || ef._formulaAtaque || '1d6';
+            let _atacouOoc = false;
             if (_skOoc) {
+              _atacouOoc = true;
+              _skUsadaOoc = _skOoc;
+              _skNomeOoc  = _skOoc.habilidade || 'Habilidade';
+              _formulaOoc = _skOoc.formula_dano || '1d6';
               if ((_skOoc.cooldown_turnos || 0) > 0 && _invAtivaOoc?._cooldowns)
                 _invAtivaOoc._cooldowns[_skOoc.id] = _skOoc.cooldown_turnos;
-              _danoOoc = _avtRolarFormula(_skOoc.formula_dano || '1d6');
-              // Efeitos_bonus da skill (registrar em OOC para contagem em segundos)
-              if (_skOoc.efeitos_bonus?.length) {
-                _skOoc.efeitos_bonus.forEach(efB => {
-                  if (efB.tipo === 'cura') return;
-                  const _efBEntry = { ...efB, _turnos_restantes: efB.duracao_turnos ?? 1,
-                    expiry_ms: Date.now() + (efB.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs(), _ooc: true };
-                  if (!_alvoDom.status_effects) _alvoDom.status_effects = [];
-                  _alvoDom.status_effects.push(_efBEntry);
-                  if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
-                  AVT_STATE._oocStatusEffects.push({ entId: _alvoDom.id, entNome: _alvoDom.nome, ef: {..._efBEntry}, lastTickAt: Date.now() });
-                });
-              }
             } else if (_basicOocDispo) {
+              _atacouOoc = true;
               if (_invAtivaOoc?._cooldowns) _invAtivaOoc._cooldowns[_basicOocKey] = _avtGetAtaqueBasicoCooldown();
-              _danoOoc = _avtRolarFormula(_invAtivaOoc?._formulaAtaqueBasico || ef._formulaAtaque || '1d6');
+            }
+
+            // Rolagem com dados individuais + modificador de atributo + crítico — igual ao NPC vivo
+            let _critMultOoc = 1;
+            if (_atacouOoc) {
+              String(_formulaOoc).toLowerCase().split('+').forEach(part => {
+                part = part.trim();
+                const m = part.match(/^(\d*)d(\d+)$/);
+                if (m) {
+                  const n = parseInt(m[1]) || 1, faces = parseInt(m[2]) || 6;
+                  for (let i = 0; i < n; i++) { const val = Math.floor(Math.random() * faces) + 1; _dadosOoc.push({ val, faces }); _danoOoc += val; }
+                } else { _danoOoc += parseInt(part) || 0; }
+              });
+              {
+                const _normAOoc = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+                const _tipoClasseOoc = ent?.tipoClasse || ent?.classe_aventura || 'guerreiro';
+                const _attrNomeOoc = _skUsadaOoc?.atributo_base || (/mago/i.test(_tipoClasseOoc) ? 'Inteligência' : 'Força');
+                const _atrsOoc = ent?.atributos || {};
+                const _chaveOoc = Object.keys(_atrsOoc).find(k => _normAOoc(k) === _normAOoc(_attrNomeOoc));
+                const _attrValOoc = _chaveOoc ? (parseFloat(_atrsOoc[_chaveOoc] || 0) || 1) : 1;
+                const _multOoc = (_skUsadaOoc?.mod_atributo_mult ?? _skUsadaOoc?.mod_atributo_pct ?? 1.0) || 1;
+                _danoOoc = Math.ceil(_danoOoc * _attrValOoc * _multOoc);
+              }
+              const _hitRollOoc = Math.floor(Math.random() * 20) + 1;
+              _critMultOoc = _avtCritMultFromD20(_hitRollOoc);
+              const _isCritOoc = _critMultOoc > 1, _isFumbleOoc = _critMultOoc === 0;
+
+              // Exibir rolagem + d20 sobre a cabeça do dominado, e tocar animação de ataque
+              const _resultOoc = { dados: _dadosOoc.map(d => ({ faces: d.faces, valor: d.val })), total: _danoOoc };
+              try {
+                _avtSetEntState(ent.id, 'attack');
+                _avtMostrarDadosAcimaDaHeadCompleto(ent, _resultOoc, _skNomeOoc, _isCritOoc ? 'critico_maior' : _isFumbleOoc ? 'erro' : 'normal');
+                _avtMostrarRollInimigo(ent, _resultOoc, _isCritOoc);
+                _avtMostrarD20AbaixoDaHead(ent, _hitRollOoc, _critMultOoc);
+                _avtBroadcast('avt_dado_rolado', { atacanteNome: ent.nome, alvoNome: _alvoDom.nome, skillNome: _skNomeOoc, dados: _resultOoc.dados, total: _danoOoc, isCrit: _isCritOoc, isFumble: _isFumbleOoc, critMult: _critMultOoc });
+              } catch(_) {}
+              try {
+                const _animOoc = _avtAnimacaoPlaceholder(ent, _skUsadaOoc);
+                if (_animOoc && typeof animarAtaque === 'function') {
+                  const _atacElOoc = _avtElPosicaoCanvas(ent);
+                  const _alvoElOoc = _avtElPosicaoCanvas(_alvoDom);
+                  if (_atacElOoc && _alvoElOoc) setTimeout(() => animarAtaque({ atacEl: _atacElOoc, alvoEl: _alvoElOoc, animacao: _animOoc, dano: 0 }), AVT_SLOT_MACHINE_MS);
+                  try { _avtBroadcast('avt_attack_anim', { atacanteNome: ent.nome, alvoNome: _alvoDom.nome, animacao: _animOoc, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+                }
+                if (_skUsadaOoc && typeof _avtPlaySkillAnim === 'function') {
+                  _avtPlaySkillAnim(_skUsadaOoc, _alvoDom, ent);
+                  try { _avtBroadcast('avt_skill_anim', { skillId: _skUsadaOoc.id || null, animacao: _skUsadaOoc.animacao || null, atacanteNome: ent.nome, alvoNome: _alvoDom.nome }); } catch(_) {}
+                }
+              } catch(_) {}
+
+              if (_isFumbleOoc) {
+                _danoOoc = 0; _atacouOoc = false; // errou — sem dano nem efeitos
+              } else {
+                _danoOoc = Math.max(1, Math.ceil(_danoOoc * _critMultOoc));
+                // Efeitos_bonus da skill (somente em acerto; registrar em OOC p/ contagem em segundos)
+                if (_skUsadaOoc?.efeitos_bonus?.length) {
+                  _skUsadaOoc.efeitos_bonus.forEach(efB => {
+                    if (efB.tipo === 'cura') return;
+                    const _efBEntry = { ...efB, _turnos_restantes: efB.duracao_turnos ?? 1,
+                      expiry_ms: Date.now() + (efB.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs(), _ooc: true };
+                    if (!_alvoDom.status_effects) _alvoDom.status_effects = [];
+                    _alvoDom.status_effects.push(_efBEntry);
+                    if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+                    AVT_STATE._oocStatusEffects.push({ entId: _alvoDom.id, entNome: _alvoDom.nome, ef: {..._efBEntry}, lastTickAt: Date.now() });
+                  });
+                }
+              }
             }
 
             if (_danoOoc > 0) {
               _alvoDom.hp = Math.max(0, _alvoDom.hp - _danoOoc);
-              _avtMostrarDanoAbaixoHp(_alvoDom, _danoOoc, false);
+              _avtMostrarDanoAbaixoHp(_alvoDom, _danoOoc, _critMultOoc > 1);
               _alvoDom._alvoAtual = ent.nome;
               _alvoDom._alvoId    = ent.id;
 
@@ -9556,9 +9928,27 @@ async function _avtAutoLevelUp(char) {
 // opts.creditoNome/creditoId: autor do abate (DOT, minion etc.) p/ crédito de XP.
 function _avtNpcMorreu(npcEnt, bat, opts = {}) {
   if (!npcEnt || npcEnt.escondido) return;
+  // Resolver a entidade canônica em AVT_STATE.entidades — o chamador pode ter passado uma
+  // referência de iniciativa, enquanto o efeito Necromante vive no objeto de entidades.
+  if (npcEnt.id) {
+    const _canon = AVT_STATE.entidades.find(e => e.id === npcEnt.id);
+    if (_canon && _canon !== npcEnt) {
+      // Preservar HP já zerado pelo chamador
+      _canon.hp = npcEnt.hp;
+      npcEnt = _canon;
+    }
+  }
   // Se o NPC tem efeito Necromante ativo e ainda não está dominado, dominar em vez de matar
   if (!npcEnt._dominado) {
     let efNecro = (npcEnt.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
+    // Fallback OOC: o efeito pode ter sido registrado apenas em _oocStatusEffects
+    if (!efNecro) {
+      const _oocRec = (AVT_STATE._oocStatusEffects || []).find(r =>
+        (r.entId === npcEnt.id || (npcEnt.nome && r.entNome === npcEnt.nome)) &&
+        r.ef?.tipo === 'necromante' && (r.ef._turnos_restantes ?? 1) > 0
+      );
+      if (_oocRec) efNecro = _oocRec.ef;
+    }
     // Fallback: checar entrada de iniciativa (pode ter sido aplicado só lá antes de sincronizar)
     if (!efNecro && bat) {
       const _initFb = bat.iniciativa.find(e => e.id === npcEnt.id);
@@ -10774,6 +11164,8 @@ async function _avtExecutarAtaque() {
                     _avtLog(`  ↳ Cura (área): ${_alvoCuraObj.nome} recupera ${valorCuraArea} HP`, b.id);
                     if (_selfApply) _curaSelfAppliedArea = true;
                   }
+                } else if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') {
+                  _avtAplicarRastroEfeito(ef, entCasterAoe, entAlvA || alvA);
                 } else if (!['teleporte_alvo','avatar'].includes(ef.tipo)) {
                   if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
                   const _efEntryA = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
@@ -10851,6 +11243,8 @@ async function _avtExecutarAtaque() {
               _avtMostrarCuraAcimaDaHead(alvoObjCura, valorCura);
               try { _avtBroadcast('avt_hp_update', { nome: alvoObjCura.nome, hp: alvoObjCura.hp, hpMax: alvoObjCura.hpMax }); } catch(_) {}
               _avtLog(`  ↳ Cura: ${alvoProcEf.nome} recupera ${valorCura} HP`, b.id);
+            } else if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') {
+              _avtAplicarRastroEfeito(ef, entCaster, entAlvo || alvo);
             } else {
               if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
               const _efEntry = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
@@ -20759,10 +21153,11 @@ function _avtSkmRenderEfeitos() {
     {v:'teleporte_alvo',l:'🎯 Teleporte ao Alvo'},{v:'avatar',l:'👥 Avatar'},
     {v:'fantasma',l:'👻 Fantasma'},{v:'atravessar',l:'🧱 Atravessar'},
     {v:'necromante',l:'☠ Necromante'},
+    {v:'rastro_persona',l:'🐾 Rastro Persona'},{v:'rastro_anima',l:'✨ Rastro Anima'},
   ];
   const inpSt = 'padding:3px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem';
   cont.innerHTML = _AVT_SK_MODAL.efeitos.map((ef,i)=>{
-    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar','fantasma','atravessar','necromante'].includes(ef.tipo);
+    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar','fantasma','atravessar','necromante','rastro_persona','rastro_anima'].includes(ef.tipo);
     return `<div style="padding:7px 8px;margin-bottom:6px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:6px">
       <div style="display:flex;gap:5px;align-items:center;margin-bottom:2px">
         <select onchange="_AVT_SK_MODAL.efeitos[${i}].tipo=this.value;_avtSkmRenderEfeitos()" style="${inpSt};flex:1">
@@ -20784,6 +21179,7 @@ function _avtSkmRenderEfeitos() {
       ${ef.tipo==='hot' ? _avtSkmMiniDiceBuilderHTML(i,'hot','💚 Cura por turno (fórmula de dados)') : ''}
       ${ef.tipo==='cura' ? _avtSkmMiniDiceBuilderHTML(i,'cura','✨ Cura instântanea (fórmula de dados)') : ''}
       ${ef.tipo==='avatar' ? _avtSkmMiniDiceBuilderHTML(i,'avatar','👥 Hits para destruir o avatar (fórmula de dados)') : ''}
+      ${(ef.tipo==='rastro_persona'||ef.tipo==='rastro_anima') ? _avtSkmMiniDiceBuilderHTML(i,'rastro',(ef.tipo==='rastro_persona'?'🐾':'✨')+' Dano da célula contaminada (fórmula de dados)') : ''}
       ${ef.tipo==='necromante' ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:4px">
         <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#8e44ad">Cor do dominado:
           <input type="color" value="${ef.cor_dominado||'#8e44ad'}" oninput="_AVT_SK_MODAL.efeitos[${i}].cor_dominado=this.value"
@@ -20809,6 +21205,11 @@ function _avtSkmRenderEfeitos() {
           if (ef.tipo === key) _avtEfFBAtualizarUI(i, key);
         }
       });
+      // Rastro Persona/Anima usam a chave de builder 'rastro' → ef.rastro_formula
+      if (ef.tipo==='rastro_persona' || ef.tipo==='rastro_anima') {
+        if (ef.rastro_formula && !ef.rastro_fb?.length) ef.rastro_fb = _avtEfFBParseFormula(ef.rastro_formula);
+        _avtEfFBAtualizarUI(i, 'rastro');
+      }
     });
   }, 0);
 }
@@ -24276,6 +24677,15 @@ function _avtNpcTurnoInvocado(bat) {
 
   let alvo = null;
 
+  // Dominado por Necromante: prioriza inimigos em perseguição ao jogador, preferindo o de
+  // menor vida (empate por distância); sem perseguidores, o inimigo mais próximo no geral.
+  if (entInv._invAtiva?._ehNecromante && inimigos.length) {
+    const _perseguindoN = inimigos.filter(e => AVT_STATE.npcTimers?.[e.id]?.isPursuing);
+    const _poolN = _perseguindoN.length ? _perseguindoN : inimigos;
+    alvo = _poolN.reduce((a, b) =>
+      a.hp !== b.hp ? (a.hp < b.hp ? a : b) : (_invDist(entInv, a) <= _invDist(entInv, b) ? a : b)
+    , _poolN[0]);
+  } else
   switch (invDef.comportamento) {
     case 'agressivo': {
       const _perseguindo = inimigos.filter(e => AVT_STATE.npcTimers?.[e.id]?.isPursuing);
