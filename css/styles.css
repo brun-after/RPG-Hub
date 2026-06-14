@@ -1597,6 +1597,16 @@ body.mesa-ativa.nav-peek .nav-tabs {
   border-color: rgba(79,163,209,0.5) !important;
   color: #4fa3d1 !important;
 }
+/* Toolbar do editor de mapa unificado — botões agrupados que não esticam */
+.avt-ed-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+.avt-ed-toolbar .avt-ed-group {
+  display: flex; gap: 4px; padding: 3px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+}
+.avt-ed-toolbar .avt-ed-tool { flex: 0 0 auto; min-width: auto; padding: 6px 10px; }
+.avt-ed-toolbar .avt-ed-spacer { flex: 1 1 auto; }
 .avt-mp-btn-warn {
   background: rgba(200,168,75,0.08);
   border-color: rgba(200,168,75,0.25);

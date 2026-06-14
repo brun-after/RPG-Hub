@@ -683,7 +683,28 @@ function _avtTipoParede(N, S, E, W, NE, NW, SE, SW, blocos) {
   if (N && !S) return 'parede_S';
   if (E && !W) return 'parede_O';
   if (W && !E) return 'parede_L';
+
+  // Vértices externos: nenhum cardinal é piso, apenas uma diagonal.
+  // Sem este caso o canto da sala fica vazio (null) — usa o canto convexo correspondente.
+  if (SE && !NE && !NW && !SW) return 'canto_NO';
+  if (SW && !NE && !NW && !SE) return 'canto_NE';
+  if (NE && !NW && !SE && !SW) return 'canto_SO';
+  if (NW && !NE && !SE && !SW) return 'canto_SE';
   return null;
+}
+
+// Conjunto canônico de chaves semânticas que representam parede/canto (tile sólido).
+const _AVT_CHAVES_PAREDE = new Set([
+  'parede_N','parede_S','parede_O','parede_L','parede_int',
+  'canto_NO','canto_NE','canto_SO','canto_SE',
+  'canto_int_NO','canto_int_NE','canto_int_SO','canto_int_SE',
+]);
+
+// Classifica uma célula (chave string OU número AVT_T) como parede sólida.
+function _avtChaveEhParede(cell) {
+  if (cell === null || cell === undefined) return true;            // void = sólido
+  if (typeof cell === 'number') return cell === AVT_T.PAREDE;      // 0 = parede
+  return _AVT_CHAVES_PAREDE.has(cell) || cell === 'parede';        // 'parede' legado
 }
 
 // ── Verificar se tile é passável (para colisão) ───────────────────────────────
