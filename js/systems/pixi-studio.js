@@ -257,8 +257,8 @@ function psDuplicarAnimacao() {
   PIXI_STUDIO_STATE.layerSel = null;
   _psSetDirty(true);
   _psRenderAnimList();
-  psPreviewStop(); psPreviewMount();
-  _psRenderLayerList(); _psRenderBehaviorPanel(); _psRenderPropsPanel(); psTimelineRender(); psPreviewRebuildAll();
+  psPreviewStop();
+  _psRenderLayerList(); _psRenderBehaviorPanel(); _psRenderPropsPanel(); psTimelineRender(); _psRemountOrRebuild();
   mostrarToast('Animação duplicada — salve para persistir', 'sucesso');
 }
 
@@ -271,12 +271,11 @@ async function psCarregarAnimacao(id) {
   PIXI_STUDIO_STATE.layerSel = null;
   _psRenderAnimList();
   psPreviewStop();
-  psPreviewMount();
   _psRenderLayerList();
   _psRenderBehaviorPanel();
   _psRenderPropsPanel();
   psTimelineRender();
-  psPreviewRebuildAll();
+  _psRemountOrRebuild();
 }
 
 function psNova() {
@@ -288,12 +287,11 @@ function psNova() {
   PIXI_STUDIO_STATE.layerSel = null;
   _psRenderAnimList();
   psPreviewStop();
-  psPreviewMount();
   _psRenderLayerList();
   _psRenderBehaviorPanel();
   _psRenderPropsPanel();
   psTimelineRender();
-  psPreviewRebuildAll();
+  _psRemountOrRebuild();
   _psSetDirty(true);
 }
 
@@ -1493,6 +1491,24 @@ function psPreviewUnmount() {
   }
 }
 
+// Destroy filter objects attached to a display node and clear its `filters` ref.
+// Filters hold GPU render-textures/framebuffers that PIXI does NOT free when the
+// node is removed/destroyed — they must be destroyed explicitly to avoid a leak.
+function _psDestroyFilters(node) {
+  const fs = node && node.filters;
+  if (Array.isArray(fs)) fs.forEach(f => { try { f && f.destroy && f.destroy(); } catch (_) {} });
+  if (node) node.filters = null;
+}
+
+// Reuse the existing PIXI.Application when switching effects/presets instead of
+// tearing down + recreating it on the same canvas (which churns the WebGL context
+// and eventually corrupts it → gray preview). Mirrors psImportarJson's pattern.
+function _psRemountOrRebuild() {
+  if (!PIXI_STUDIO_STATE.previewApp) return psPreviewMount();
+  psPreviewRebuildAll();
+  return Promise.resolve();
+}
+
 function psPreviewPlay() {
   if (!PIXI_STUDIO_STATE.previewApp) {
     psPreviewMount().then(() => { _psDoPlay(); });
@@ -1906,7 +1922,13 @@ function psPreviewRebuildAll() {
   const app = PIXI_STUDIO_STATE.previewApp;
   const worldRoot = PIXI_STUDIO_STATE._worldRoot;
   if (!app || !worldRoot || typeof PIXI === 'undefined') return;
-  worldRoot.removeChildren();
+  // Free GPU resources from the previous build: filters (render-textures/framebuffers)
+  // are NOT released by removeChildren()/destroy() and would leak across rebuilds → gray.
+  _psDestroyFilters(worldRoot);
+  worldRoot.removeChildren().forEach(c => {
+    _psDestroyFilters(c);
+    try { c.destroy({ children: true, texture: false }); } catch (_) {}
+  });
   PIXI_STUDIO_STATE._spriteMap.clear();
   PIXI_STUDIO_STATE._shapeMap.clear();
   if (!PIXI_STUDIO_STATE._layerContainers) PIXI_STUDIO_STATE._layerContainers = new Map();
@@ -2291,6 +2313,15 @@ function psPreviewSyncEmitter(layerId) {
   const em = PIXI_STUDIO_STATE._emitterMap.get(layerId);
   if (em && !em.destroyed) { try { em.destroy(); } catch (_) {} }
   PIXI_STUDIO_STATE._emitterMap.delete(layerId);
+  // Tear down the layer's previous container (+ its filters) so repeated edits don't
+  // orphan containers/filters on the GPU → gray preview.
+  if (!PIXI_STUDIO_STATE._layerContainers) PIXI_STUDIO_STATE._layerContainers = new Map();
+  const prev = PIXI_STUDIO_STATE._layerContainers.get(layerId);
+  if (prev) {
+    _psDestroyFilters(prev);
+    try { prev.destroy({ children: true, texture: false }); } catch (_) {}
+    PIXI_STUDIO_STATE._layerContainers.delete(layerId);
+  }
   const layer = _psGetLayer(layerId);
   if (!layer || !layer.emitter || !PIXI_STUDIO_STATE._worldRoot) return;
   const app = PIXI_STUDIO_STATE.previewApp;
@@ -2300,6 +2331,7 @@ function psPreviewSyncEmitter(layerId) {
   container.position.set(app.renderer.width / 2, app.renderer.height / 2);
   container.blendMode = bm[layer.blendMode] ?? PIXI.BLEND_MODES.ADD;
   PIXI_STUDIO_STATE._worldRoot.addChild(container);
+  PIXI_STUDIO_STATE._layerContainers.set(layerId, container);
   _psCreateEmitter(layer, container, layer.offset?.x || 0, layer.offset?.y || 0);
   if (PIXI_STUDIO_STATE._fxEnabled !== false) _psApplyContainerFilters(container, layer);
 }
@@ -2647,12 +2679,11 @@ function psLoadPreset(key) {
   PIXI_STUDIO_STATE.layerSel = null;
   _psSetDirty(true);
   psPreviewStop();
-  psPreviewMount();
   _psRenderLayerList();
   _psRenderBehaviorPanel();
   _psRenderPropsPanel();
   psTimelineRender();
-  psPreviewRebuildAll();
+  _psRemountOrRebuild();
   mostrarToast(`Preset "${meta.nome||key}" carregado`, 'sucesso');
 }
 
