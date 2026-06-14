@@ -601,6 +601,22 @@ const AVT_PRESET_TO_CREATURE = {
   boss: 'demonio', npc_generico: 'npc_generico'
 };
 
+// Retorna as classes de NPC configuráveis (do theme_json.npc_classes, ou padrões se não existir).
+// As chaves de npc_classes incluem os presets hardcoded + classes criadas pelo mestre.
+function _avtGetNpcClasses() {
+  const rpg = AVT_STATE.rpg;
+  if (rpg?.theme_json?.npc_classes) return rpg.theme_json.npc_classes;
+  const defaults = {};
+  Object.entries(AVT_NPC_PRESETS).forEach(([k, v]) => {
+    defaults[k] = { ...v, respawnDelay: v.isBoss ? 300 : 60, respawnTipo: 'timer', ataqueBasico: null };
+  });
+  if (!rpg) return defaults;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  rpg.theme_json.npc_classes = defaults;
+  return defaults;
+}
+window._avtGetNpcClasses = _avtGetNpcClasses;
+
 // Varia levemente a cor em ±15 por semente determinística
 function _hexVary(hex, seed) {
   const parse = (s, o) => parseInt(s.slice(o, o+2), 16);
@@ -3452,6 +3468,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
         ? (ini.atributos || {})
         : _avtNivelarNpc(ini.atributos || {}, _npcNivel, ini.isBoss);
       const _hpMaxIni = _calcHpNpc(_atrsIni);
+      const defaultRespawnDelay = ini.isBoss ? 300 : 60;
       const ent = {
         id: 'ini_' + i, nome: ini.nome || `Inimigo ${i+1}`, tipo: 'inimigo',
         x: ini.x, y: ini.y, hp: Math.min(ini.hp || _hpMaxIni, _hpMaxIni), hpMax: _hpMaxIni,
@@ -3465,13 +3482,16 @@ function _avtPopularEntidadesInimigos(dungeon) {
         classe_aventura: tipoClasse,
         atributos: _atrsIni,
         nivel: _nivelIni, skill_slots: 1 + Math.floor(_nivelIni / 3),
+        respawnDelay: ini.respawnDelay ?? defaultRespawnDelay,
+        respawnTipo: ini.respawnTipo ?? 'timer',
       };
       AVT_STATE.entidades.push(ent);
       _avtInitNpcTimer(ent);
     });
   } else {
     let uid = 0;
-    const presetKeys = Object.keys(AVT_NPC_PRESETS).filter(k => k !== 'boss');
+    const npcClasses = _avtGetNpcClasses();
+    const presetKeys = Object.keys(npcClasses).filter(k => !npcClasses[k].isBoss);
     const bossRoomIdx = rooms.length - 1;
     for (let i = 1; i < rooms.length; i++) {
       const r = rooms[i];
@@ -3481,11 +3501,11 @@ function _avtPopularEntidadesInimigos(dungeon) {
         mago:      { 'Força': 8,  'Destreza': 12, 'Constituição': 8,  'Inteligência': 15, 'Sabedoria': 14 },
       };
       if (isBossRoom) {
-        const bPreset = AVT_NPC_PRESETS.boss;
+        const bPreset = npcClasses.boss || AVT_NPC_PRESETS.boss;
         const _atrsB = _avtNivelarNpc({ 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 }, _npcNivel, true);
         const _hpMaxB = _calcHpNpc(_atrsB);
         const ent = {
-          id: 'ini_boss_fase', nome: 'Boss', tipo: 'inimigo',
+          id: 'ini_boss_fase', nome: bPreset.nome || 'Boss', tipo: 'inimigo',
           x: r.x + Math.floor(r.w/2), y: r.y + Math.floor(r.h/2),
           hp: _hpMaxB, hpMax: _hpMaxB,
           cor: bPreset.cor, icone: bPreset.icone, _semNome: true,
@@ -3494,14 +3514,16 @@ function _avtPopularEntidadesInimigos(dungeon) {
           tipoClasse: 'guerreiro', alcance_celulas: (AVT_STATE.rpg?.theme_json?.level_config?.alcance_basico_guerreiro ?? 2), classe_aventura: 'guerreiro',
           atributos: _atrsB,
           nivel: _npcNivel, skill_slots: 1 + Math.floor(_npcNivel / 3),
+          respawnDelay: bPreset.respawnDelay ?? 300,
+          respawnTipo: bPreset.respawnTipo ?? 'timer',
         };
         AVT_STATE.entidades.push(ent);
         _avtInitNpcTimer(ent);
       } else {
         const count = 1 + Math.floor(Math.random() * Math.min(3, Math.floor(r.w * r.h / 8)));
         for (let j = 0; j < count; j++) {
-          const presetKey = presetKeys[uid % presetKeys.length];
-          const preset = AVT_NPC_PRESETS[presetKey];
+          const presetKey = presetKeys.length ? presetKeys[uid % presetKeys.length] : 'goblin';
+          const preset = npcClasses[presetKey] || AVT_NPC_PRESETS[presetKey] || AVT_NPC_PRESETS.goblin;
           const tipoClasse = Math.random() < 0.5 ? 'guerreiro' : 'mago';
           const _lcAlc2 = AVT_STATE.rpg?.theme_json?.level_config || {};
           const alcancePadrao = tipoClasse === 'mago' ? (_lcAlc2.alcance_basico_mago ?? 4) : (_lcAlc2.alcance_basico_guerreiro ?? 2);
@@ -3518,6 +3540,8 @@ function _avtPopularEntidadesInimigos(dungeon) {
             tipoClasse, alcance_celulas: alcancePadrao, classe_aventura: tipoClasse,
             atributos: _atrsE,
             nivel: _npcNivel, skill_slots: 1 + Math.floor(_npcNivel / 3),
+            respawnDelay: preset.respawnDelay ?? 60,
+            respawnTipo: preset.respawnTipo ?? 'timer',
           };
           AVT_STATE.entidades.push(ent);
           _avtInitNpcTimer(ent);
@@ -3535,6 +3559,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
         xpBase: e.xpBase, aparencia_tipo: e.presetTipo,
         tipoClasse: e.tipoClasse, alcance_celulas: e.alcance_celulas,
         atributos: e.atributos, nivel: e.nivel,
+        respawnDelay: e.respawnDelay, respawnTipo: e.respawnTipo,
       }));
     _avtSalvarDungeon();
   }
@@ -7171,6 +7196,9 @@ window._avtDefaultAtaqueBasico = _avtDefaultAtaqueBasico;
 // Não usa ini.alcance_celulas, que pode estar defasado (default de criação/preset/import) e
 // fazer o NPC atacar fora de combate de mais longe do que o configurado no painel.
 function _avtAlcanceBasicoNpc(ini) {
+  // Checa override por preset primeiro (config específica de Goblin, Esqueleto, etc.)
+  const presetCfg = ini?.presetTipo ? _avtGetNpcClasses()?.[ini.presetTipo]?.ataqueBasico : null;
+  if (presetCfg?.alcance_celulas != null) return presetCfg.alcance_celulas;
   const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
   const ehMago = /mago/i.test(ini?.tipoClasse || ini?.classe_aventura || '');
   return ehMago
@@ -7178,6 +7206,15 @@ function _avtAlcanceBasicoNpc(ini) {
     : (lc.ataque_basico_npc?.guerreiro?.alcance_celulas ?? lc.alcance_basico_guerreiro ?? 2);
 }
 window._avtAlcanceBasicoNpc = _avtAlcanceBasicoNpc;
+
+// Retorna {formula_dano, alcance_celulas} efetivo para um NPC inimigo,
+// respeitando: preset-específico > classe (guerreiro/mago) > padrão hardcoded.
+function _avtAtaqueBasicoEfetivo(ent) {
+  const presetCfg = ent?.presetTipo ? _avtGetNpcClasses()?.[ent.presetTipo]?.ataqueBasico : null;
+  if (presetCfg?.formula_dano) return { ...presetCfg };
+  return _avtDefaultAtaqueBasico(ent?.classe_aventura || ent?.tipoClasse);
+}
+window._avtAtaqueBasicoEfetivo = _avtAtaqueBasicoEfetivo;
 
 // Auto ataque básico fora de combate ao entrar no alcance de inimigo em perseguição
 function _avtVerificarAutoAtaqueBasico(jogador) {
@@ -9807,9 +9844,11 @@ function _avtLevelUpParticleEffect(charNome, novoNivel) {
 
 // NPC respawn: schedule timer-based respawn after death
 function _avtAgendarRespawnNpc(ent) {
-  const delay = (ent.respawnDelay ?? 60) * 1000;
-  if (!ent.respawnTipo || ent.respawnTipo === 'nunca') return;
-  if (ent.respawnTipo === 'timer') {
+  const defaultDelay = ent.isBoss ? 300 : 60;
+  const delay = (ent.respawnDelay ?? defaultDelay) * 1000;
+  const tipo = ent.respawnTipo ?? 'timer'; // default: timer (antes nunca agendava sem respawnTipo)
+  if (tipo === 'nunca') return;
+  if (tipo === 'timer') {
     _avtSetTimeout(() => avtRespawnNpc(ent.id), delay);
   }
   // 'manual' respawn is handled by master via panel button
@@ -9827,6 +9866,35 @@ function avtRespawnNpc(npcId) {
   _avtBroadcastNpcRespawn(npcId, ent.x, ent.y, ent.hp);
 }
 window.avtRespawnNpc = avtRespawnNpc;
+
+// Recarrega todos os NPCs inimigos: recalcula hpMax, restaura hp atual, reinicia timers.
+// Útil após alterar atributos ou configurações para sincronizar HP e estado.
+function _avtRecarregarNpcs() {
+  const inimigos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo');
+  if (!inimigos.length) { mostrarToast('Nenhum NPC na cena', 'aviso'); return; }
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const hpBase = lc.hp_base ?? 100;
+  const hpAttrNome = lc.hp_attr ?? 'Constituição';
+  const hpMult = lc.hp_attr_mult ?? 4;
+  const normStr = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  inimigos.forEach(ent => {
+    const atrs = ent.atributos || {};
+    const attrKey = Object.keys(atrs).find(k => normStr(k) === normStr(hpAttrNome));
+    const novoHpMax = Math.max(1, Math.round(hpBase + (attrKey ? parseFloat(atrs[attrKey] || 0) : 0) * hpMult));
+    ent.hpMax = novoHpMax;
+    ent.hp = novoHpMax;
+    ent.escondido = false;
+    delete AVT_STATE.npcTimers[ent.id];
+    _avtInitNpcTimer(ent);
+    const snap = (AVT_STATE.dungeon?._inimigosJson || []).find(x => x.id === ent.id);
+    if (snap) { snap.hp = novoHpMax; delete snap._morto; }
+    _avtBroadcastNpcRespawn(ent.id, ent.x, ent.y, ent.hp);
+  });
+  _avtSalvarDungeon();
+  _avtMestrePainelRender();
+  mostrarToast(`${inimigos.length} NPC(s) recarregados com atributos atualizados!`, 'sucesso');
+}
+window._avtRecarregarNpcs = _avtRecarregarNpcs;
 
 // Distribute XP from a killed NPC to all players in its combat.
 // opts.creditoNome: autor do abate (ex.: quem aplicou o DOT) — recebe crédito mesmo fora
@@ -16433,6 +16501,11 @@ function _avtMestrePainelRender() {
   if (!_avtSouMestre()) { panel.style.display = 'none'; return; }
   // Só re-renderiza se já estiver aberto; nunca força abertura.
   if (panel.style.display === 'none' || !panel.style.display) return;
+  // Garantir entradas de _avtBulkAparState para todos os presets conhecidos
+  Object.keys(_avtGetNpcClasses()).forEach(k => {
+    if (!window._avtBulkAparState[k])
+      window._avtBulkAparState[k] = { tokenFile: null, fichaFile: null, facing: 'down', coords: '' };
+  });
   const membros = AVT_STATE.membros.filter(m => m.role !== 'mestre');
   const aba = AVT_STATE.mestrePainelAba;
 
@@ -16578,7 +16651,10 @@ function _avtMpConteudoAba() {
               <button class="avt-mp-btn avt-mp-btn-ok" onclick="avtRespawnNpc('${e.id}');_avtMestrePainelRender()">↺ Respawnar</button>
             </div>`).join('')}` : `<div class="avt-mp-hint" style="margin-top:6px">Nenhum NPC no momento.</div>`;
         })()}
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-top:8px" onclick="_avtRecarregarNpcs()">🔄 Recarregar NPCs (atualizar atributos e HP)</button>
+        <div class="avt-mp-hint" style="margin-top:3px">Respawna todos os NPCs com HP e atributos atualizados. Use após alterar Constituição ou HP Máximo.</div>
       </div>
+      ${_avtNpcClassesSecao()}
       <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
         <div class="avt-mp-label">⚙ Atributos em Massa</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">Aplica um valor de atributo a todos os inimigos no mapa (ou por classe).</div>
@@ -19642,10 +19718,10 @@ function _avtMestreAddInimigo() {
       <div class="avt-modal-body" style="display:flex;flex-direction:column;gap:10px">
         <div style="font-size:0.7rem;color:#7a92aa">Escolha um tipo ou personalize abaixo:</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px" id="avt-npc-presets">
-          ${Object.entries(AVT_NPC_PRESETS).map(([k,p])=>`
+          ${Object.entries(_avtGetNpcClasses()).map(([k,p])=>`
             <button onclick="_avtNpcPresetSel('${k}')"
               style="padding:6px 10px;border-radius:6px;border:1px solid ${p.isBoss?'rgba(231,76,60,0.4)':'rgba(79,163,209,0.2)'};background:rgba(255,255,255,0.03);color:#c8d8e8;cursor:pointer;font-size:0.72rem;font-family:var(--fonte-d)">
-              ${p.icone} ${p.nome}${p.isBoss?' 👑':''}
+              ${p.icone || k[0].toUpperCase()} ${p.nome}${p.isBoss?' 👑':''}
             </button>`).join('')}
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -19672,12 +19748,18 @@ function _avtMestreAddInimigo() {
     </div>`;
 }
 
+// Chave do preset selecionado no modal de adicionar NPC
+window._avtNpcAddPresetKey = window._avtNpcAddPresetKey || null;
+
 function _avtNpcPresetSel(key) {
-  const p = AVT_NPC_PRESETS[key]; if (!p) return;
+  const npcClasses = _avtGetNpcClasses();
+  const p = npcClasses[key] || AVT_NPC_PRESETS[key]; if (!p) return;
+  window._avtNpcAddPresetKey = key;
   const n = document.getElementById('avt-npc-nome'); if (n) n.value = p.nome;
-  const h = document.getElementById('avt-npc-hp'); if (h) h.value = p.hpBase;
+  const h = document.getElementById('avt-npc-hp'); if (h) h.value = p.hpBase || '';
   const pa = document.getElementById('avt-npc-pac'); if (pa) pa.value = p.pacienciaSecs;
   const r = document.getElementById('avt-npc-raio'); if (r) r.value = p.deteccaoRaio;
+  const co = document.getElementById('avt-npc-cor'); if (co) co.value = p.cor || '#7a5c00';
   const b = document.getElementById('avt-npc-boss'); if (b) b.checked = !!p.isBoss;
 }
 
@@ -19695,11 +19777,20 @@ function _avtNpcConfirmarAdd() {
   const raio = parseInt(document.getElementById('avt-npc-raio')?.value) || 3;
   const cor  = document.getElementById('avt-npc-cor')?.value || '#7a5c00';
   const isBoss = document.getElementById('avt-npc-boss')?.checked || false;
+  const presetKey = window._avtNpcAddPresetKey || (isBoss ? 'boss' : null);
+  const npcClasses = _avtGetNpcClasses();
+  const preset = presetKey ? (npcClasses[presetKey] || null) : null;
   const id = 'npc_' + Date.now();
-  const ent = { id, nome, tipo:'inimigo', x:pos.x, y:pos.y, hp, hpMax:hp, cor, isBoss,
-    pacienciaSecs:pac, deteccaoRaio:raio };
+  const ent = {
+    id, nome, tipo:'inimigo', x:pos.x, y:pos.y, hp, hpMax:hp, cor, isBoss,
+    pacienciaSecs:pac, deteccaoRaio:raio,
+    presetTipo: presetKey || (isBoss ? 'boss' : 'npc_generico'),
+    respawnDelay: preset?.respawnDelay ?? (isBoss ? 300 : 60),
+    respawnTipo:  preset?.respawnTipo  ?? 'timer',
+  };
   AVT_STATE.entidades.push(ent);
-  AVT_STATE.npcTimers[id] = { patience:pac*1000, maxPatience:pac*1000, ativo:false };
+  _avtInitNpcTimer(ent);
+  window._avtNpcAddPresetKey = null;
   document.getElementById('avt-anim-import-overlay').style.display = 'none';
   mostrarToast(`${nome} adicionado!`, 'ok');
 }
@@ -23080,6 +23171,295 @@ async function _avtTopdownIaSalvar(entId) {
 window._avtTopdownIaSalvar = _avtTopdownIaSalvar;
 window._avtAparTabSwitch   = _avtAparTabSwitch;
 window._avtTdPreviewImagem = _avtTdPreviewImagem;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLASSES DE NPCs — edição, criação e configuração por preset
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Estado da aba de edição de classe expandida no painel
+window._avtNpcClasseEditando = window._avtNpcClasseEditando || null;
+window._avtNpcClasseNovaForm = window._avtNpcClasseNovaForm || false;
+
+// Renderiza a seção "Classes de NPCs" no painel do mestre
+function _avtNpcClassesSecao() {
+  const npcClasses = _avtGetNpcClasses();
+  const S = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const inimigos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo');
+  const inputSt = 'padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.7rem';
+
+  let html = `<div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
+    <div class="avt-mp-label">📋 Classes de NPCs</div>
+    <div class="avt-mp-hint" style="margin-bottom:8px">Edite, crie classes e configure respawn, aparência e ataques por tipo.</div>`;
+
+  // Contador geral
+  const countByPreset = {};
+  inimigos.forEach(e => { countByPreset[e.presetTipo] = (countByPreset[e.presetTipo] || 0) + 1; });
+  const resumo = Object.entries(countByPreset).map(([k, n]) => {
+    const cl = npcClasses[k];
+    return `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,0.05);font-size:0.65rem;color:#c8d8e8">${S(cl?.icone || k)} ${S(cl?.nome || k)} ×${n}</span>`;
+  }).join('');
+  if (resumo) html += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${resumo}</div>`;
+
+  // Lista de classes
+  Object.entries(npcClasses).forEach(([key, cls]) => {
+    const cnt = countByPreset[key] || 0;
+    const isEditando = window._avtNpcClasseEditando === key;
+    const bossTag = cls.isBoss ? ' 👑' : '';
+    html += `<div style="border:1px solid rgba(79,163,209,0.15);border-radius:7px;margin-bottom:6px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:rgba(255,255,255,0.03);cursor:pointer"
+        onclick="window._avtNpcClasseEditando=(window._avtNpcClasseEditando==='${S(key)}'?null:'${S(key)}');_avtMestrePainelRender()">
+        <span style="width:22px;height:22px;border-radius:50%;background:${S(cls.cor)};display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;color:#fff;flex-shrink:0">${S(cls.icone || key[0].toUpperCase())}</span>
+        <span style="flex:1;font-size:0.72rem;color:#c8d8e8;font-weight:bold">${S(cls.nome)}${bossTag}</span>
+        <span style="font-size:0.62rem;color:#7a92aa">${cnt ? cnt + ' na cena' : 'nenhum'}</span>
+        <span style="color:#7a92aa;font-size:0.8rem">${isEditando ? '▲' : '▼'}</span>
+      </div>`;
+
+    if (isEditando) {
+      const kSafe = key.replace(/[^a-zA-Z0-9_]/g,'_');
+      html += `<div style="padding:8px;border-top:1px solid rgba(79,163,209,0.1)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+          <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:2px">Nome</label>
+            <input id="npc-cls-nome-${kSafe}" value="${S(cls.nome)}" style="width:100%;box-sizing:border-box;${inputSt}"></div>
+          <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:2px">Ícone</label>
+            <input id="npc-cls-icone-${kSafe}" value="${S(cls.icone || '')}" maxlength="3" style="width:100%;box-sizing:border-box;${inputSt}"></div>
+          <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:2px">Cor</label>
+            <input type="color" id="npc-cls-cor-${kSafe}" value="${S(cls.cor || '#7a5c00')}" style="width:100%;height:28px;border:1px solid rgba(79,163,209,0.2);border-radius:5px;background:#0a0f18;cursor:pointer"></div>
+          <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:2px">HP Base</label>
+            <input type="number" id="npc-cls-hp-${kSafe}" value="${cls.hpBase ?? 40}" min="1" style="width:100%;box-sizing:border-box;${inputSt}"></div>
+          <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:2px">Paciência (s)</label>
+            <input type="number" id="npc-cls-pac-${kSafe}" value="${cls.pacienciaSecs ?? 5}" min="0.5" step="0.5" style="width:100%;box-sizing:border-box;${inputSt}"></div>
+          <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:2px">Raio Detecção</label>
+            <input type="number" id="npc-cls-raio-${kSafe}" value="${cls.deteccaoRaio ?? 3}" min="1" max="20" style="width:100%;box-sizing:border-box;${inputSt}"></div>
+          <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:2px">XP Recompensa</label>
+            <input type="number" id="npc-cls-xp-${kSafe}" value="${cls.xpBase ?? 10}" min="0" style="width:100%;box-sizing:border-box;${inputSt}"></div>
+          <div style="display:flex;align-items:center;gap:6px;padding-top:16px">
+            <input type="checkbox" id="npc-cls-boss-${kSafe}" ${cls.isBoss ? 'checked' : ''} style="cursor:pointer">
+            <label for="npc-cls-boss-${kSafe}" style="font-size:0.7rem;color:#c8d8e8;cursor:pointer">Boss 👑</label>
+          </div>
+        </div>
+        <div style="margin-bottom:6px">
+          <label style="font-size:0.62rem;color:#c8a84b;display:block;margin-bottom:4px">⏱ Respawn</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="number" id="npc-cls-rspd-${kSafe}" value="${cls.respawnDelay ?? (cls.isBoss ? 300 : 60)}" min="1" style="width:80px;${inputSt}">
+            <span style="font-size:0.65rem;color:#7a92aa">seg</span>
+            <select id="npc-cls-rspt-${kSafe}" style="flex:1;${inputSt}">
+              <option value="timer" ${(cls.respawnTipo ?? 'timer') === 'timer' ? 'selected' : ''}>⏲ Automático</option>
+              <option value="manual" ${cls.respawnTipo === 'manual' ? 'selected' : ''}>🖱 Manual</option>
+              <option value="nunca" ${cls.respawnTipo === 'nunca' ? 'selected' : ''}>🚫 Nunca</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:6px">
+          <label style="font-size:0.62rem;color:#c8a84b;display:block;margin-bottom:4px">⚔ Ataque Básico (deixe vazio p/ usar padrão da classe)</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="npc-cls-abf-${kSafe}" placeholder="Ex: 1d8" value="${S(cls.ataqueBasico?.formula_dano || '')}" style="flex:1;${inputSt}">
+            <span style="font-size:0.65rem;color:#7a92aa">Alcance</span>
+            <input type="number" id="npc-cls-aba-${kSafe}" placeholder="auto" value="${cls.ataqueBasico?.alcance_celulas ?? ''}" min="1" max="20" style="width:55px;${inputSt}">
+          </div>
+        </div>
+        <div style="margin-bottom:8px">
+          <label style="font-size:0.62rem;color:#c8a84b;display:block;margin-bottom:4px">🎨 Aparência em Massa para ${S(cls.nome)}</label>
+          ${_avtBulkAparSecaoPreset(key)}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtSalvarNpcClasse('${S(key)}')">💾 Salvar Classe</button>
+          ${key !== 'boss' && !AVT_NPC_PRESETS[key] ? `<button class="avt-mp-btn avt-mp-btn-danger" style="flex:0 0 auto" onclick="_avtExcluirNpcClasse('${S(key)}')">🗑</button>` : ''}
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  });
+
+  // Formulário de nova classe
+  if (window._avtNpcClasseNovaForm) {
+    const classKeys = Object.keys(npcClasses);
+    html += `<div style="padding:8px;border:1px solid rgba(200,168,75,0.3);border-radius:7px;margin-top:4px">
+      <div style="font-size:0.72rem;color:#c8a84b;font-weight:bold;margin-bottom:6px">➕ Nova Classe</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+        <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:2px">Nome</label>
+          <input id="npc-nova-nome" placeholder="Ex: Lobisomem" style="width:100%;box-sizing:border-box;${inputSt}"></div>
+        <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:2px">Ícone</label>
+          <input id="npc-nova-icone" placeholder="L" maxlength="3" style="width:100%;box-sizing:border-box;${inputSt}"></div>
+        <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:2px">Cor</label>
+          <input type="color" id="npc-nova-cor" value="#5a3a7a" style="width:100%;height:28px;border:1px solid rgba(79,163,209,0.2);border-radius:5px;background:#0a0f18;cursor:pointer"></div>
+        <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:2px">Baseada em</label>
+          <select id="npc-nova-base" style="width:100%;box-sizing:border-box;${inputSt}">
+            ${classKeys.map(k => `<option value="${S(k)}">${S(npcClasses[k].nome)}</option>`).join('')}
+          </select></div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtCriarNpcClasse()">✓ Criar</button>
+        <button class="avt-mp-btn" onclick="window._avtNpcClasseNovaForm=false;_avtMestrePainelRender()">✕</button>
+      </div>
+    </div>`;
+  } else {
+    html += `<button class="avt-mp-btn" style="width:100%;margin-top:4px" onclick="window._avtNpcClasseNovaForm=true;_avtMestrePainelRender()">➕ Nova Classe</button>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+window._avtNpcClassesSecao = _avtNpcClassesSecao;
+
+async function _avtSalvarNpcClasse(key) {
+  const kSafe = key.replace(/[^a-zA-Z0-9_]/g,'_');
+  const get = id => document.getElementById(id);
+  const nome    = get(`npc-cls-nome-${kSafe}`)?.value?.trim();
+  const icone   = get(`npc-cls-icone-${kSafe}`)?.value?.trim();
+  const cor     = get(`npc-cls-cor-${kSafe}`)?.value || '#7a5c00';
+  const hpBase  = parseInt(get(`npc-cls-hp-${kSafe}`)?.value) || 40;
+  const pac     = parseFloat(get(`npc-cls-pac-${kSafe}`)?.value) || 5;
+  const raio    = parseInt(get(`npc-cls-raio-${kSafe}`)?.value) || 3;
+  const xp      = parseInt(get(`npc-cls-xp-${kSafe}`)?.value) || 10;
+  const isBoss  = get(`npc-cls-boss-${kSafe}`)?.checked || false;
+  const rspDelay= parseInt(get(`npc-cls-rspd-${kSafe}`)?.value) || (isBoss ? 300 : 60);
+  const rspTipo = get(`npc-cls-rspt-${kSafe}`)?.value || 'timer';
+  const abFormula = (get(`npc-cls-abf-${kSafe}`)?.value || '').trim();
+  const abAlcance = parseInt(get(`npc-cls-aba-${kSafe}`)?.value) || null;
+
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.npc_classes) rpg.theme_json.npc_classes = {};
+  const cls = rpg.theme_json.npc_classes[key] || {};
+  if (nome)  cls.nome  = nome;
+  if (icone) cls.icone = icone;
+  cls.cor = cor; cls.hpBase = hpBase; cls.pacienciaSecs = pac;
+  cls.deteccaoRaio = raio; cls.xpBase = xp; cls.isBoss = isBoss;
+  cls.respawnDelay = rspDelay; cls.respawnTipo = rspTipo;
+  cls.ataqueBasico = abFormula ? { formula_dano: abFormula, alcance_celulas: abAlcance || (isBoss ? 2 : 2) } : null;
+  rpg.theme_json.npc_classes[key] = cls;
+
+  // Aplicar respawnDelay/respawnTipo e nome às entidades com este presetTipo
+  AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.presetTipo === key).forEach(e => {
+    if (nome) e.nome = nome.includes(' ') ? nome : e.nome; // preserva numeração
+    e.respawnDelay = rspDelay;
+    e.respawnTipo  = rspTipo;
+    if (cls.ataqueBasico) e.alcance_celulas = cls.ataqueBasico.alcance_celulas;
+    const snap = (AVT_STATE.dungeon?._inimigosJson || []).find(x => x.id === e.id);
+    if (snap) { snap.respawnDelay = rspDelay; snap.respawnTipo = rspTipo; }
+  });
+
+  try {
+    await _avtSalvarThemeJson();
+    _avtSalvarDungeon();
+    window._avtNpcClasseEditando = null;
+    _avtMestrePainelRender();
+    mostrarToast(`Classe "${nome || key}" salva!`, 'sucesso');
+  } catch(err) { mostrarToast('Erro ao salvar: ' + (err?.message || err), 'erro'); }
+}
+window._avtSalvarNpcClasse = _avtSalvarNpcClasse;
+
+async function _avtCriarNpcClasse() {
+  const nome  = document.getElementById('npc-nova-nome')?.value?.trim();
+  const icone = document.getElementById('npc-nova-icone')?.value?.trim() || nome?.[0]?.toUpperCase() || '?';
+  const cor   = document.getElementById('npc-nova-cor')?.value || '#5a3a7a';
+  const base  = document.getElementById('npc-nova-base')?.value;
+  if (!nome) { mostrarToast('Informe um nome para a classe', 'aviso'); return; }
+  const slug = nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  const npcClasses = _avtGetNpcClasses();
+  if (npcClasses[slug]) { mostrarToast('Já existe uma classe com esse nome', 'aviso'); return; }
+  const baseClasse = npcClasses[base] || AVT_NPC_PRESETS[base] || AVT_NPC_PRESETS.goblin;
+  npcClasses[slug] = { ...baseClasse, nome, icone, cor, ataqueBasico: null };
+  try {
+    await _avtSalvarThemeJson();
+    window._avtNpcClasseNovaForm = false;
+    window._avtNpcClasseEditando = slug;
+    _avtMestrePainelRender();
+    mostrarToast(`Classe "${nome}" criada!`, 'sucesso');
+  } catch(err) { mostrarToast('Erro ao criar: ' + (err?.message || err), 'erro'); }
+}
+window._avtCriarNpcClasse = _avtCriarNpcClasse;
+
+async function _avtExcluirNpcClasse(key) {
+  const npcClasses = _avtGetNpcClasses();
+  const cls = npcClasses[key];
+  if (!cls) return;
+  if (!confirm(`Excluir classe "${cls.nome}"? NPCs existentes com este tipo não serão removidos.`)) return;
+  delete npcClasses[key];
+  await _avtSalvarThemeJson();
+  window._avtNpcClasseEditando = null;
+  _avtMestrePainelRender();
+  mostrarToast(`Classe "${cls.nome}" excluída.`, 'ok');
+}
+window._avtExcluirNpcClasse = _avtExcluirNpcClasse;
+
+// Seção de aparência em massa filtrada por presetTipo
+function _avtBulkAparSecaoPreset(key) {
+  if (!window._avtBulkAparState[key]) {
+    window._avtBulkAparState[key] = { tokenFile: null, fichaFile: null, facing: 'down', coords: '' };
+  }
+  const npcClasses = _avtGetNpcClasses();
+  const cls = npcClasses[key] || {};
+  const st = window._avtBulkAparState[key];
+  const count = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.presetTipo === key).length;
+  const inputSt = 'width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.7rem';
+  const tokenPreview = st.tokenFile ? `<img src="${URL.createObjectURL(st.tokenFile)}" style="max-width:36px;max-height:36px;object-fit:contain;border-radius:4px;border:1px solid rgba(79,163,209,0.3);vertical-align:middle;margin-left:6px">` : '';
+  const kSafe = key.replace(/[^a-zA-Z0-9_]/g,'_');
+  const saveField = (field) => `(function(el){window._avtBulkAparState['${key}'].${field}=el.files?.[0]||null;_avtMestrePainelRender()})(this)`;
+  return `<div style="padding:6px;border-radius:6px;border:1px solid rgba(79,163,209,0.1);background:rgba(79,163,209,0.02)">
+    <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">① Token do mapa (PNG transparente)</div>
+    <div style="display:flex;align-items:center;margin-bottom:4px">
+      <input type="file" accept="image/png,image/webp" onchange="${saveField('tokenFile')}" style="font-size:0.65rem;color:#c8d8e8;flex:1">${tokenPreview}
+    </div>
+    <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">② JSON de coordenadas da IA</div>
+    <textarea id="npc-cls-coords-${kSafe}" rows="2" placeholder='{"body_cx":0.5,"body_cy":0.55,"body_r":0.3,...}'
+      oninput="window._avtBulkAparState['${key}'].coords=this.value"
+      style="${inputSt};resize:vertical;font-family:monospace;font-size:0.6rem;margin-bottom:4px">${(st.coords||'').replace(/</g,'&lt;')}</textarea>
+    <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">③ Orientação base</div>
+    <select id="npc-cls-facing-${kSafe}" style="${inputSt};margin-bottom:6px">
+      <option value="down" ${st.facing==='down'?'selected':''}>Baixo (padrão)</option>
+      <option value="up" ${st.facing==='up'?'selected':''}>Cima</option>
+      <option value="right" ${st.facing==='right'?'selected':''}>Direita</option>
+      <option value="left" ${st.facing==='left'?'selected':''}>Esquerda</option>
+    </select>
+    <button onclick="_avtBulkAplicarAparenciaPreset('${key}')"
+      style="width:100%;padding:5px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;cursor:pointer;font-size:0.7rem">
+      🎨 Aplicar a todos ${cls.nome || key} (${count})
+    </button>
+  </div>`;
+}
+window._avtBulkAparSecaoPreset = _avtBulkAparSecaoPreset;
+
+async function _avtBulkAplicarAparenciaPreset(key) {
+  const kSafe = key.replace(/[^a-zA-Z0-9_]/g,'_');
+  const st = window._avtBulkAparState[key] || {};
+  const facingEl = document.getElementById(`npc-cls-facing-${kSafe}`);
+  if (facingEl) st.facing = facingEl.value;
+  const coordsEl = document.getElementById(`npc-cls-coords-${kSafe}`);
+  if (coordsEl) st.coords = coordsEl.value;
+  const facing = st.facing || 'down';
+  const coordsText = (st.coords || '').trim();
+  if (!st.tokenFile) { mostrarToast('Selecione a imagem do token', 'aviso'); return; }
+  if (!coordsText)   { mostrarToast('Cole o JSON de coordenadas', 'aviso'); return; }
+  let coords;
+  try { coords = JSON.parse(coordsText); } catch(e) { mostrarToast('JSON inválido: ' + e.message, 'aviso'); return; }
+  const alvos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.presetTipo === key);
+  if (!alvos.length) { mostrarToast('Nenhum NPC com este preset na cena', 'aviso'); return; }
+  mostrarToast(`Aplicando aparência a ${alvos.length} NPC(s)…`, '');
+  let ok = 0, erros = 0;
+  for (let i = 0; i < alvos.length; i++) {
+    const ent = alvos[i];
+    const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
+    if (!dbChar?.id) { erros++; continue; }
+    const maskCor = AVT_BULK_MASK_CORES[i % AVT_BULK_MASK_CORES.length];
+    try {
+      const maskedToken = await _avtBulkMaskPng(st.tokenFile, maskCor);
+      const tokenUrl    = await _avtBulkUpload(maskedToken, ent.id, 'map');
+      const newAttrs = { ...(dbChar.custom_attrs || {}), topdown_ia: { img_url: tokenUrl, coords, base_facing: facing } };
+      await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), { method:'PATCH', body: JSON.stringify({ custom_attrs: newAttrs }) });
+      dbChar.custom_attrs = newAttrs;
+      delete AVT_STATE.aparencias?.[ent.id];
+      if (typeof _avtCarregarAparencia === 'function') _avtCarregarAparencia(ent);
+      ok++;
+    } catch(err) { console.error('_avtBulkAplicarAparenciaPreset:', ent.nome, err); erros++; }
+  }
+  mostrarToast(`✓ ${ok} atualizado(s)${erros ? ', ' + erros + ' erro(s)' : ''}`, ok ? 'ok' : 'aviso');
+}
+window._avtBulkAplicarAparenciaPreset = _avtBulkAplicarAparenciaPreset;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APARÊNCIA EM MASSA
