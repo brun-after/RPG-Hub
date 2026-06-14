@@ -8376,6 +8376,39 @@ function _avtCancelarPerseguicao(enemyId) {
   }
 }
 
+// Inimigo atacado OOC por um NPC dominado passa a persegui-lo — a menos que já
+// esteja perseguindo um jogador (prioridade do jogador é preservada). Jogador que
+// ataque ou esgote a paciência depois reassume o alvo pelos fluxos existentes
+// (_avtExecutarPrimeiroAtaqueCore / _avtAtualizarPaciencias).
+function _avtInimigoReageADominado(alvoEnt, dominadoEnt) {
+  if (!alvoEnt || !dominadoEnt) return;
+  if (alvoEnt.tipo !== 'inimigo' || alvoEnt.hp <= 0) return;
+  // Já em batalha por turnos: a IA de combate cuida do alvo.
+  if (typeof _avtBatalhaDeEnt === 'function' && _avtBatalhaDeEnt(alvoEnt.id)) return;
+  // [NPC-SYNC] Só o host eleito do alvo muta o timer/persegue (evita divergência).
+  if (AVT_STATE.npcSyncEnabled && typeof RTNet !== 'undefined' && RTNet?.initialized &&
+      typeof _avtSouHostDe === 'function' && !_avtSouHostDe(alvoEnt.id)) return;
+
+  if (!AVT_STATE.npcTimers[alvoEnt.id]) _avtInitNpcTimer(alvoEnt);
+  const timer = AVT_STATE.npcTimers[alvoEnt.id];
+
+  if (timer.isPursuing) {
+    // Prioridade do jogador: se já persegue um jogador, não desviar para o dominado.
+    const alvoAtual = timer.targetId ? AVT_STATE.entidades.find(e => e.id === timer.targetId) : null;
+    if (alvoAtual?.tipo === 'jogador') return;
+    if (timer.targetId === dominadoEnt.id) return; // já mira este dominado
+  }
+
+  timer.targetId = dominadoEnt.id;
+  timer._path = null;
+  timer._pathGoal = null;
+  if (!timer.isPursuing) {
+    _avtIniciarPerseguicao(alvoEnt.id); // targetId já setado; também emite avt_npc_perseguindo
+  } else {
+    try { _avtBroadcastNpc('avt_npc_perseguindo', { id: alvoEnt.id, targetId: timer.targetId }); } catch(_) {}
+  }
+}
+
 function _avtAtualizarPerseguicoes(dt) {
   if (!dt) return;
   if (AVT_STATE._jogoAutoSuspenso) return;
@@ -8777,7 +8810,8 @@ function _avtTickEfeitosOOC(now) {
       rec.lastTickAt = nowMs;
       const ef = rec.ef;
       if (ef.tipo === 'necromante' && ent._dominado) {
-        const _invAtivaOoc = ent._invAtiva;
+        const _invAtivaOoc = ent._invAtiva
+          || (AVT_STATE.invocacoes_ativas || []).find(i => i.id === ent.id);
         // Decremento manual de CDs OOC (1 CD por tick de ~cdMs)
         if (_invAtivaOoc?._cooldowns) {
           Object.keys(_invAtivaOoc._cooldowns).forEach(k => {
@@ -8904,6 +8938,9 @@ function _avtTickEfeitosOOC(now) {
               _avtMostrarDanoAbaixoHp(_alvoDom, _danoOoc, _critMultOoc > 1);
               _alvoDom._alvoAtual = ent.nome;
               _alvoDom._alvoId    = ent.id;
+
+              // Inimigo atacado OOC pelo dominado passa a persegui-lo (prioridade do jogador preservada).
+              if (_alvoDom.hp > 0) _avtInimigoReageADominado(_alvoDom, ent);
 
               // Propagar TODOS os efeitosNecromante (incluindo necromante → cascata OOC)
               const _efNecroList = _invAtivaOoc?._efeitosNecromante || ef._efeitosNecromante || [];
@@ -10178,8 +10215,8 @@ function _avtNecromanteDominar(npcEnt, efNecro, bat) {
   }
   const corDominado  = efNecro.cor_dominado || '#8e44ad';
   const duracaoT     = efNecro.duracao_turnos ?? 3;
-  // HP do revivido = % configurável do HP máximo (padrão 50%)
-  const hpNecro      = Math.max(1, Math.floor((npcEnt.hpMax || npcEnt.hp || 10) * (efNecro.hp_revive_pct ?? 0.5)));
+  // HP do revivido = % configurável do HP máximo (padrão 30%)
+  const hpNecro      = Math.max(1, Math.floor((npcEnt.hpMax || npcEnt.hp || 10) * (efNecro.hp_revive_pct ?? 0.3)));
   const donoNome     = efNecro._casterNome || '';
 
   // Todos os efeitos da skill original são propagados nos ataques (incluindo necromante → cascata)
@@ -10508,6 +10545,7 @@ function avtCombateEncerrar(batalhaId) {
         expiry_ms: Date.now() + _durMs,
         _formulaAtaque: inv._formulaAtaqueBasico || '1d6',
         _efeitosNecromante: inv._efeitosNecromante || [],
+        _casterNome: inv.dono_char_nome || '',
       };
       if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
       AVT_STATE._oocStatusEffects.push({ entId: entDom.id, entNome: entDom.nome, lastTickAt: Date.now(), ef: _oocEfDom });
@@ -21388,7 +21426,7 @@ function _avtSkmRenderEfeitos() {
           <input type="color" value="${ef.cor_dominado||'#8e44ad'}" oninput="_AVT_SK_MODAL.efeitos[${i}].cor_dominado=this.value"
             style="width:32px;height:22px;padding:1px;border:1px solid rgba(142,68,173,0.4);border-radius:3px;background:#0a0f18;cursor:pointer"></label>
         <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#8e44ad" title="% do HP máximo com que o inimigo revive como aliado">HP revive %:
-          <input type="number" min="1" max="100" value="${ef.hp_revive_pct!=null?Math.round(ef.hp_revive_pct*100):50}" oninput="_AVT_SK_MODAL.efeitos[${i}].hp_revive_pct=Math.max(0.01,Math.min(1,(+this.value||50)/100))"
+          <input type="number" min="1" max="100" value="${ef.hp_revive_pct!=null?Math.round(ef.hp_revive_pct*100):30}" oninput="_AVT_SK_MODAL.efeitos[${i}].hp_revive_pct=Math.max(0.01,Math.min(1,(+this.value||30)/100))"
             style="width:48px;${inpSt};text-align:center"></label>
         <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#8e44ad" title="Limite de gerações da cascata (0 = ilimitado)">Cascata máx:
           <input type="number" min="0" max="99" value="${ef.cascata_max??0}" oninput="_AVT_SK_MODAL.efeitos[${i}].cascata_max=+this.value"
