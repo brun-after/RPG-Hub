@@ -394,18 +394,19 @@ function _avtEfetosAtivosEnt(ent) {
 // fere cada inimigo apenas 1× (hitSet). Vivem em AVT_STATE._rastroCells.
 
 // Marca uma célula como contaminada pelo caster. Mescla células iguais do mesmo caster.
-function _avtRastroMarcarCelula(caster, x, y, formula, duracaoTurnos) {
+function _avtRastroMarcarCelula(caster, x, y, formula, duracaoTurnos, cor) {
   if (!caster || formula == null) return;
   const tx = Math.round(x), ty = Math.round(y);
   if (typeof _avtTilePassavel === 'function' && !_avtTilePassavel(tx, ty, AVT_STATE.dungeon)) return;
   if (!AVT_STATE._rastroCells) AVT_STATE._rastroCells = [];
   const dur = Math.max(1, duracaoTurnos || 3);
+  const corCel = cor || '#5ee09a';
   const expiry = Date.now() + dur * _avtGetEfeitoCooldownMs();
   const casterNome = typeof caster === 'string' ? caster : caster.nome;
   const casterId = typeof caster === 'object' ? (caster.id || null) : null;
   const ex = AVT_STATE._rastroCells.find(c => c.x === tx && c.y === ty && c.caster === casterNome);
-  if (ex) { ex.expiry_ms = Math.max(ex.expiry_ms, expiry); ex.formula = formula; return; }
-  AVT_STATE._rastroCells.push({ x: tx, y: ty, formula, expiry_ms: expiry, caster: casterNome, casterId, cor: '#5ee09a', hitSet: new Set() });
+  if (ex) { ex.expiry_ms = Math.max(ex.expiry_ms, expiry); ex.formula = formula; ex.cor = corCel; return; }
+  AVT_STATE._rastroCells.push({ x: tx, y: ty, formula, expiry_ms: expiry, caster: casterNome, casterId, cor: corCel, hitSet: new Set() });
 }
 
 // Predicado: entidade hostil ao jogador (inimigo ou invocação inimiga; nunca jogador/aliado/dominado/invocação do jogador)
@@ -468,6 +469,7 @@ function _avtAplicarRastroEfeito(ef, casterEnt, alvoEnt) {
   if (!casterEnt || !ef) return;
   const dur = ef.duracao_turnos ?? 3;
   const formula = ef.rastro_formula || '1d6';
+  const cor = ef.rastro_cor || '#5ee09a';
   if (ef.tipo === 'rastro_persona') {
     // Buff no caster: enquanto ativo, células pisadas ficam contaminadas
     if (!casterEnt.status_effects) casterEnt.status_effects = [];
@@ -479,11 +481,11 @@ function _avtAplicarRastroEfeito(ef, casterEnt, alvoEnt) {
       casterEnt.status_effects.push(entry);
       if (!inBat) (AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects || []).push({ entId: casterEnt.id, entNome: casterEnt.nome, ef: { ...entry }, lastTickAt: Date.now() });
     }
-    _avtRastroMarcarCelula(casterEnt, casterEnt.x, casterEnt.y, formula, dur);
+    _avtRastroMarcarCelula(casterEnt, casterEnt.x, casterEnt.y, formula, dur, cor);
   } else if (ef.tipo === 'rastro_anima') {
     if (alvoEnt) {
       _avtRastroCelulasTrajetoria(casterEnt.x, casterEnt.y, alvoEnt.x, alvoEnt.y)
-        .forEach(c => _avtRastroMarcarCelula(casterEnt, c.x, c.y, formula, dur));
+        .forEach(c => _avtRastroMarcarCelula(casterEnt, c.x, c.y, formula, dur, cor));
     }
   }
 }
@@ -506,9 +508,10 @@ function _avtRenderRastroCells(ctx, camera, SZ, canvas) {
     const px = Math.round(cell.x * SZ - camera.x);
     const py = Math.round(cell.y * SZ - camera.y);
     if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
-    ctx.fillStyle = `rgba(94,224,154,${pulse.toFixed(3)})`;
+    const rgb = _avtHexRgb(cell.cor || '#5ee09a');
+    ctx.fillStyle = `rgba(${rgb},${pulse.toFixed(3)})`;
     ctx.fillRect(px, py, SZ, SZ);
-    ctx.strokeStyle = 'rgba(94,224,154,0.5)';
+    ctx.strokeStyle = `rgba(${rgb},0.5)`;
     ctx.lineWidth = 1;
     ctx.strokeRect(px + 1.5, py + 1.5, SZ - 3, SZ - 3);
   }
@@ -4346,7 +4349,7 @@ function _avtRenderFrame() {
         try { _avtBcastTokenMove({ nome: _jPlayer.nome, x: cell.x, y: cell.y }); } catch (_) {}
         // Rastro Persona: contaminar a célula em que o jogador pisou
         const _rpWp = _avtRastroPersonaAtivo(_jPlayer);
-        if (_rpWp) _avtRastroMarcarCelula(_jPlayer, cell.x, cell.y, _rpWp.rastro_formula || '1d6', _rpWp.duracao_turnos ?? 3);
+        if (_rpWp) _avtRastroMarcarCelula(_jPlayer, cell.x, cell.y, _rpWp.rastro_formula || '1d6', _rpWp.duracao_turnos ?? 3, _rpWp.rastro_cor);
         _avtRecuperarPorMovimento(_jPlayer, 1);
         _avtCameraUpdate();
         const fimDoCaminho = restantes === 0 &&
@@ -7199,7 +7202,7 @@ function _avtMoverJogador(dx, dy) {
       }
       // Rastro Persona: contaminar a célula em que o jogador pisou (combate)
       const _rpMv = _avtRastroPersonaAtivo(jogador);
-      if (_rpMv) _avtRastroMarcarCelula(jogador, nx, ny, _rpMv.rastro_formula || '1d6', _rpMv.duracao_turnos ?? 3);
+      if (_rpMv) _avtRastroMarcarCelula(jogador, nx, ny, _rpMv.rastro_formula || '1d6', _rpMv.duracao_turnos ?? 3, _rpMv.rastro_cor);
       _avtBroadcastBatalha(minhaBat); // sincroniza movimentoRestante com todos os clientes
       if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
       else _avtDebounceSalvarPosicaoNpc(ativo);
@@ -7274,7 +7277,7 @@ function _avtMoverJogador(dx, dy) {
         else if (typeof _avtDebounceSalvarPosicaoNpc === 'function') _avtDebounceSalvarPosicaoNpc(jogador);
         // Rastro Persona: contaminar a célula em que o jogador pisou (exploração)
         const _rpStep = _avtRastroPersonaAtivo(jogador);
-        if (_rpStep) _avtRastroMarcarCelula(jogador, cell.x, cell.y, _rpStep.rastro_formula || '1d6', _rpStep.duracao_turnos ?? 3);
+        if (_rpStep) _avtRastroMarcarCelula(jogador, cell.x, cell.y, _rpStep.rastro_formula || '1d6', _rpStep.duracao_turnos ?? 3, _rpStep.rastro_cor);
         // Jogador: teleporte por porta interna ou prompt de troca de fase.
         // (NPCs autônomos/controlados cruzam portas via o lerp central — _avtNpcTentarPorta.)
         if (jogador.tipo === 'jogador' && !_avtVerificarPortaInterna(jogador, cell.x, cell.y)) {
@@ -21559,6 +21562,11 @@ function _avtSkmRenderEfeitos() {
       ${ef.tipo==='cura' ? _avtSkmMiniDiceBuilderHTML(i,'cura','✨ Cura instântanea (fórmula de dados)') : ''}
       ${ef.tipo==='avatar' ? _avtSkmMiniDiceBuilderHTML(i,'avatar','👥 Hits para destruir o avatar (fórmula de dados)') : ''}
       ${(ef.tipo==='rastro_persona'||ef.tipo==='rastro_anima') ? _avtSkmMiniDiceBuilderHTML(i,'rastro',(ef.tipo==='rastro_persona'?'🐾':'✨')+' Dano da célula contaminada (fórmula de dados)') : ''}
+      ${(ef.tipo==='rastro_persona'||ef.tipo==='rastro_anima') ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#5ee09a">Cor do rastro:
+          <input type="color" value="${ef.rastro_cor||'#5ee09a'}" oninput="_AVT_SK_MODAL.efeitos[${i}].rastro_cor=this.value"
+            style="width:32px;height:22px;padding:1px;border:1px solid rgba(94,224,154,0.4);border-radius:3px;background:#0a0f18;cursor:pointer"></label>
+      </div>` : ''}
       ${ef.tipo==='necromante' ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:4px">
         <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#8e44ad">Cor do dominado:
           <input type="color" value="${ef.cor_dominado||'#8e44ad'}" oninput="_AVT_SK_MODAL.efeitos[${i}].cor_dominado=this.value"
