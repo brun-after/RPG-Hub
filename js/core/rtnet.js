@@ -120,6 +120,7 @@ window.RTNet = (() => {
     // [FASES]
     avt_fase_mudou:           'avtReceberFaseMudou',
     avt_porta_proxima:        'avtReceberPortaProxima',
+    avt_dungeon_update:       'avtReceberDungeonUpdate',
   };
 
   // opts padrão por tipo de evento (camada A/B/C conforme plano §5)
@@ -163,6 +164,8 @@ window.RTNet = (() => {
     avt_char_update:          { persist: 'never',     reliable: true  },
     // [RECURSOS + BAÚS]
     avt_rsv_update:           { persist: 'never',     reliable: true  },
+    // [MAPA] edição de mapa ao vivo pelo mestre (já persistido via theme_json)
+    avt_dungeon_update:       { persist: 'never',     reliable: true  },
   };
 
   function _log(...a)  { try { console.log('[RTNet]',  ...a); } catch(_) {} }

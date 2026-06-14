@@ -3253,10 +3253,16 @@ function _avtSetTimeout(fn, ms) {
 // DUNGEON GENERATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _avtGerarDungeon(w, h, maxRooms) {
+function _avtGerarDungeon(w, h, maxRooms, styleProfile) {
   maxRooms = maxRooms || 8;
   const tiles = Array.from({length: h}, () => Array(w).fill(AVT_T.PAREDE));
   const rooms = [];
+
+  // Ranges de tamanho de sala: enviesados pelo perfil aprendido, se houver.
+  const st = styleProfile?.stats || null;
+  const wMin = st?.room_w_min ?? 4, wMax = st?.room_w_max ?? 10;
+  const hMin = st?.room_h_min ?? 3, hMax = st?.room_h_max ?? 8;
+  const doorRatio = st?.door_ratio ?? 10;
 
   const _carveRoom = (rx, ry, rw, rh) => {
     for (let y = ry; y < ry + rh; y++)
@@ -3269,8 +3275,8 @@ function _avtGerarDungeon(w, h, maxRooms) {
   // Mais tentativas para dungeons maiores
   const maxAttempts = maxRooms * 20;
   for (let attempt = 0; attempt < maxAttempts && rooms.length < maxRooms; attempt++) {
-    const rw = 4 + Math.floor(Math.random() * 7);
-    const rh = 3 + Math.floor(Math.random() * 6);
+    const rw = wMin + Math.floor(Math.random() * Math.max(1, wMax - wMin + 1));
+    const rh = hMin + Math.floor(Math.random() * Math.max(1, hMax - hMin + 1));
     if (rw >= w - 2 || rh >= h - 2) continue;
     const rx = 1 + Math.floor(Math.random() * (w - rw - 2));
     const ry = 1 + Math.floor(Math.random() * (h - rh - 2));
@@ -3288,17 +3294,17 @@ function _avtGerarDungeon(w, h, maxRooms) {
       if (tiles[y]?.[b.cx] !== undefined) tiles[y][b.cx] = AVT_T.PISO;
   }
 
-  const portasInternas = _avtGerarPortasInternas(rooms);
+  const portasInternas = _avtGerarPortasInternas(rooms, doorRatio);
   return { tiles, w, h, rooms, _portasInternas: portasInternas };
 }
 
 // Cria pares de portas de teleporte na MESMA fase: 1 par por 10 salas, com os dois
 // extremos a ≥20 células de distância (Chebyshev). Numeradas a partir de 2 (Porta 2↔2).
-function _avtGerarPortasInternas(rooms) {
+function _avtGerarPortasInternas(rooms, doorRatio) {
   const pares = [];
   if (!rooms || rooms.length < 2) return pares;
   const cheb = (a, b) => Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row));
-  const nPares = Math.floor(rooms.length / 10);
+  const nPares = Math.floor(rooms.length / Math.max(2, doorRatio || 10));
   const usados = new Set();
   const centro = r => ({ col: r.cx != null ? r.cx : r.x, row: r.cy != null ? r.cy : r.y });
   for (let n = 0; n < nPares; n++) {
@@ -3330,6 +3336,138 @@ function _avtGerarPortasInternas(rooms) {
   return pares;
 }
 window._avtGerarPortasInternas = _avtGerarPortasInternas;
+
+// ════════════════════════════════════════════════════════════════════════════
+// Aprendizado contextual de estilo + biasing da geração procedural
+// O mestre edita uma fase; as escolhas relativas (vértices, peças de piso etc.)
+// viram regras por assinatura de vizinhança e estatísticas agregadas, persistidas
+// em theme_json.generation_style_profile e reaplicadas nas próximas fases.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Classifica uma chave semântica em 'wall' | 'floor' | 'door'.
+function _avtBlocoFuncao(key) {
+  if (!key || typeof key !== 'string') return 'floor';
+  if (key === 'porta' || key === 'porta_fase') return 'door';
+  if (_avtChaveEhParede(key)) return 'wall';
+  return 'floor'; // piso_*, objeto_*, bau
+}
+
+// Dado (coluna,linha) de um bloco no spritesheet, devolve a chave semântica canônica.
+function _avtBlocoChavePorCelula(tc, tr) {
+  const blocos = AVT_STATE._tilesetConfig?.blocos
+    || AVT_STATE.dungeon?.tileset_config?.blocos || {};
+  const alvo = `bloco_${tc}_${tr}`;
+  for (const [k, v] of Object.entries(blocos)) if (v === alvo) return k;
+  return null;
+}
+
+// Classe de uma célula para a assinatura de vizinhança: P(arede) / F(piso) / D(porta).
+function _avtClasseCelula(cell) {
+  if (cell === null || cell === undefined) return 'P';
+  if (typeof cell === 'number') return cell === AVT_T.PAREDE ? 'P' : 'F';
+  if (cell === 'porta' || cell === 'porta_fase') return 'D';
+  return _avtChaveEhParede(cell) ? 'P' : 'F';
+}
+
+// Assinatura 3×3 dos 8 vizinhos (ordem N,NE,E,SE,S,SW,W,NW) — chave das regras de posição.
+const _AVT_VIZ_DIRS = [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]];
+function _avtAssinaturaVizinhanca(tiles, x, y) {
+  let s = '';
+  for (const [dx, dy] of _AVT_VIZ_DIRS) s += _avtClasseCelula(tiles[y + dy]?.[x + dx]);
+  return s;
+}
+
+// Aprende regras a partir do diff baseline×editado (mutável: recebe/atualiza `rules`).
+function _avtAprenderPlacements(baseline, edited, w, h, rules) {
+  rules = rules || {};
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const after  = edited[y]?.[x];
+      const before = baseline?.[y]?.[x];
+      const mudou     = after !== before;
+      const pecaExata = typeof after === 'string';
+      if (!mudou && !pecaExata) continue;
+      let val;
+      if (typeof after === 'string') val = after;        // peça semântica exata
+      else if (after === AVT_T.PISO)   val = 'PISO';
+      else if (after === AVT_T.PAREDE) val = 'PAREDE';
+      else continue;                                     // SAIDA/null não viram regra
+      const sig = _avtAssinaturaVizinhanca(edited, x, y);
+      if (sig === 'PPPPPPPP') continue;                  // célula totalmente cercada = ruído
+      const r = rules[sig] || (rules[sig] = { keys: {} });
+      r.keys[val] = (r.keys[val] || 0) + 1;
+    }
+  }
+  return rules;
+}
+
+// Estatísticas agregadas leves do mapa (enviesam ranges de geração).
+function _avtDerivarStats(dungeon) {
+  const tiles = dungeon.tiles || [];
+  const h = tiles.length, w = tiles[0]?.length || 0;
+  let piso = 0, total = 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    total++;
+    const c = tiles[y]?.[x];
+    if (c != null && !_avtChaveEhParede(c)) piso++;
+  }
+  const rooms  = dungeon.rooms || [];
+  const portas = dungeon._portasInternas || [];
+  const ws = rooms.map(r => r.w).filter(v => v > 0);
+  const hs = rooms.map(r => r.h).filter(v => v > 0);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  return {
+    floor_density: total ? +(piso / total).toFixed(3) : 0,
+    room_count: rooms.length,
+    room_w_min: ws.length ? clamp(Math.round(Math.min(...ws)), 3, 18) : 4,
+    room_w_max: ws.length ? clamp(Math.round(Math.max(...ws)), 4, 20) : 10,
+    room_h_min: hs.length ? clamp(Math.round(Math.min(...hs)), 2, 16) : 3,
+    room_h_max: hs.length ? clamp(Math.round(Math.max(...hs)), 3, 18) : 8,
+    door_ratio: (portas.length && rooms.length) ? clamp(Math.round(rooms.length / portas.length), 2, 30) : 10,
+  };
+}
+
+// Mescla novas observações no perfil (EMA p/ stats; regras acumuladas).
+function _avtMesclarPerfilEstilo(profile, novoStats, rulesAtualizadas) {
+  profile = profile || {};
+  const alpha = 0.4;
+  if (!profile.stats) profile.stats = novoStats;
+  else {
+    for (const k of Object.keys(novoStats)) {
+      const o = profile.stats[k], n = novoStats[k];
+      profile.stats[k] = (typeof o === 'number' && typeof n === 'number')
+        ? o * (1 - alpha) + n * alpha : n;
+    }
+    ['room_w_min','room_w_max','room_h_min','room_h_max','room_count','door_ratio']
+      .forEach(k => { if (profile.stats[k] != null) profile.stats[k] = Math.round(profile.stats[k]); });
+  }
+  profile.placement_rules = rulesAtualizadas;
+  profile.samples = (profile.samples || 0) + 1;
+  return profile;
+}
+
+// Passe de pós-geração: aplica as regras aprendidas ao dungeon recém-gerado.
+function _avtAplicarRegrasEstilo(dungeon, profile) {
+  const rules = profile?.placement_rules;
+  if (!rules || !dungeon?.tiles) return;
+  const LIMIAR = 1;
+  const tiles = dungeon.tiles;
+  const h = tiles.length, w = tiles[0]?.length || 0;
+  const orig = tiles.map(r => [...r]); // assinaturas calculadas sobre o grid original
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (tiles[y][x] === AVT_T.SAIDA) continue;
+      const r = rules[_avtAssinaturaVizinhanca(orig, x, y)];
+      if (!r || !r.keys) continue;
+      let best = null, bestN = -1;
+      for (const [k, n] of Object.entries(r.keys)) if (n > bestN) { best = k; bestN = n; }
+      if (best == null || bestN < LIMIAR) continue;
+      if (best === 'PISO') tiles[y][x] = AVT_T.PISO;
+      else if (best === 'PAREDE') tiles[y][x] = AVT_T.PAREDE;
+      else tiles[y][x] = best; // peça semântica exata (canto_*, piso_2, …)
+    }
+  }
+}
 
 function _avtGerarDungeonProcedural() {
   const salas = AVT_STATE._criando?._procSalas || 8;
@@ -5008,7 +5146,7 @@ function _avtRenderMinimap() {
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const t = dungeon.tiles[y]?.[x];
-      const passavel = t === AVT_T.PISO || t === AVT_T.SAIDA || (typeof t === 'string' && t !== 'parede');
+      const passavel = t === AVT_T.SAIDA || (!_avtChaveEhParede(t) && t !== null && t !== undefined);
       if (!passavel) continue;
       ctx.fillStyle = t === AVT_T.SAIDA ? 'rgba(46,204,113,0.55)' : 'rgba(30,58,95,0.75)';
       ctx.fillRect(
@@ -17009,8 +17147,7 @@ function _avtMpConteudoAba() {
         <div class="avt-mp-label">Editar mapa</div>
         <div class="avt-mp-row" style="flex-wrap:wrap;gap:6px">
           <button class="avt-mp-btn" onclick="_avtMestreAddInimigo()">👹 + NPC/Boss</button>
-          <button class="avt-mp-btn" onclick="avtMestreAbrirEditor()">✏ Editar Manual</button>
-          <button class="avt-mp-btn" onclick="_avtMestreAbrirEditorTileset()">🎨 Editar com Tileset</button>
+          <button class="avt-mp-btn" onclick="_avtMestreAbrirEditorUnificado()">🗺 Editar mapa</button>
         </div>
       </div>
       ${AVT_STATE._faseAnterior ? `
@@ -17617,11 +17754,18 @@ function _avtMpConteudoAba() {
   }
 }
 
-function avtMestreAbrirEditor() {
+// ════════════════════════════════════════════════════════════════════════════
+// EDITOR DE MAPA UNIFICADO (in-session) — autoritativo sobre dungeon.tiles
+// Ferramentas: Piso / Parede (numéricas, autotiladas) · peça exata via picker de
+// tileset (string semântica) · Porta (interna/fase, com destino) · Apagar.
+// Aprende as edições e re-renderiza ao vivo + broadcast ao salvar.
+// ════════════════════════════════════════════════════════════════════════════
+const _AVT_ED_SZ = 14;
+
+function _avtMestreAbrirEditorUnificado() {
   const dungeon = AVT_STATE.dungeon;
   if (!dungeon) { mostrarToast('Nenhum mapa carregado', 'aviso'); return; }
 
-  // Build editor overlay
   let overlay = document.getElementById('avt-mestre-map-editor-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -17631,108 +17775,392 @@ function avtMestreAbrirEditor() {
   }
   overlay.style.display = 'flex';
 
-  const EDSZ = 14;
+  const EDSZ = _AVT_ED_SZ;
   const W = dungeon.w, H = dungeon.h;
 
-  // Copy tiles for editing
-  _avtEd.tiles = dungeon.tiles.map(row => [...row]);
-  _avtEd.w = W;
-  _avtEd.h = H;
+  // Estado de edição
+  _avtEd.tiles         = dungeon.tiles.map(r => [...r]);
+  _avtEd.tilesBaseline = dungeon.tiles.map(r => [...r]);   // p/ o diff de aprendizado
+  _avtEd.w = W; _avtEd.h = H;
+  _avtEd.tool = 'wall';
+  _avtEd.tsBrush = null;
+  _avtEd.pendingDoorAnchor = null;
+  _avtEd.portasInternas = (dungeon._portasInternas || []).map(p => JSON.parse(JSON.stringify(p)));
+  _avtEd.fasesExtras    = (AVT_STATE.rpg?.theme_json?.fases_extras || []).map(f => JSON.parse(JSON.stringify(f)));
+
+  // Migração: tileset_paints é morto (nunca renderizado) — limpa no próximo save.
+  if (AVT_STATE.rpg?.theme_json?.tileset_paints) delete AVT_STATE.rpg.theme_json.tileset_paints;
+
+  const tilesetUrl = AVT_STATE.rpg?.theme_json?.tileset_img_url || dungeon.tileset_img_url || null;
+  const tsCfg = AVT_STATE._tilesetConfig || dungeon.tileset_config || null;
+  const TS_COLS = tsCfg?.cols || 4, TS_ROWS = tsCfg?.rows || 4;
+  const dentroFaseExtra = (AVT_STATE._faseAtualId && AVT_STATE._faseAtualId !== 'principal');
+
+  const toolBtn = (id, label) => `<button id="avt-ed-tool-${id}" class="avt-mp-btn avt-ed-tool ${_avtEd.tool===id?'avt-mp-btn-ativo':''}" onclick="_avtEdSetTool('${id}')">${label}</button>`;
 
   overlay.innerHTML = `
-    <div style="width:100%;max-width:900px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8d8e8">✏ Editor de Mapa</div>
-        <div style="display:flex;gap:8px">
-          <button class="avt-mp-btn avt-mp-btn-ok" onclick="avtMestreSalvarMapaEditado()">💾 Salvar</button>
-          <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
+    <div style="width:100%;max-width:1100px">
+      <div class="avt-ed-toolbar">
+        <div class="avt-ed-group">
+          ${toolBtn('floor','🟫 Piso')}${toolBtn('wall','🔲 Parede')}
+        </div>
+        <div class="avt-ed-group">${toolBtn('door','🚪 Porta')}</div>
+        <div class="avt-ed-group">${toolBtn('erase','🧽 Apagar')}</div>
+        <span class="avt-ed-spacer"></span>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtMestreSalvarMapaUnificado()">💾 Salvar</button>
+        <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
+      </div>
+      <div id="avt-ed-status" style="font-size:0.66rem;color:#7a92aa;margin-bottom:8px">Ferramenta: Parede · clique/arraste para pintar.</div>
+      ${dentroFaseExtra ? `<div style="font-size:0.64rem;color:#f0cc6a;margin-bottom:8px">⚠ Você está numa fase extra. Portas de fase só funcionam editando a partir da fase inicial.</div>` : ''}
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        ${tilesetUrl ? `
+        <div style="flex:0 0 auto">
+          <div style="font-size:0.62rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Tileset — clique p/ a peça exata</div>
+          <div id="avt-ts-picker" style="border:1px solid rgba(79,163,209,0.2);border-radius:6px;overflow:hidden;cursor:crosshair;position:relative">
+            <img id="avt-ts-img" src="${tilesetUrl}" style="display:block;image-rendering:pixelated;max-width:256px">
+            <canvas id="avt-ts-overlay" style="position:absolute;top:0;left:0;pointer-events:none"></canvas>
+          </div>
+          <div id="avt-ts-brush-info" style="font-size:0.6rem;color:#4fa3d1;margin-top:4px">Nenhuma peça selecionada</div>
+        </div>` : `
+        <div style="flex:0 0 auto;max-width:200px;font-size:0.64rem;color:#7a92aa;line-height:1.5">
+          Este dungeon não tem tileset. Pinte com Piso/Parede ou
+          <button onclick="_avtMestreToggleTrocaTileset()" style="background:none;border:none;color:#4fa3d1;cursor:pointer;text-decoration:underline;padding:0;font-size:0.64rem">carregue um tileset</button>.
+          <div id="avt-ts-troca-painel" style="display:none;margin-top:8px">
+            <div style="display:flex;gap:6px;margin-bottom:6px">
+              <input id="avt-mp-ts-cols" type="number" value="4" min="4" max="10" style="width:48px;padding:4px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8">
+              <input id="avt-mp-ts-rows" type="number" value="4" min="4" max="10" style="width:48px;padding:4px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8">
+            </div>
+            <label style="display:inline-block;padding:5px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:5px;color:#4fa3d1;font-size:0.62rem;cursor:pointer">📁 Imagem<input type="file" accept="image/*" style="display:none" onchange="_avtMestreHandleTilesetUpload(this)"></label>
+            <span id="avt-mp-ts-nome" style="font-size:0.6rem;color:#7a92aa"></span>
+            <img id="avt-mp-ts-preview" style="display:none;max-width:100%;max-height:100px;margin-top:6px;border:1px solid rgba(79,163,209,0.2);border-radius:4px;image-rendering:pixelated">
+            <button onclick="_avtMestreAplicarTilesetUpload()" style="display:block;margin-top:6px;padding:6px 10px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.3);border-radius:5px;color:#27ae60;font-size:0.64rem;cursor:pointer">✓ Aplicar</button>
+          </div>
+        </div>`}
+        <div style="flex:1;min-width:260px">
+          <div style="overflow:auto;max-height:66vh;border:1px solid rgba(255,255,255,0.1);border-radius:8px">
+            <canvas id="avt-ed-canvas-mestre" style="display:block;image-rendering:pixelated"></canvas>
+          </div>
+          <div style="margin-top:6px;font-size:0.62rem;color:#7a92aa">Piso/Parede criam ou removem colisão · peça do tileset fixa o desenho exato · a aparência atualiza ao salvar.</div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        ${[
-          ['piso','🟫 Piso'],['parede','🔲 Parede'],['entrada','🚪 Entrada'],['saida','🟢 Saída'],
-          ['agua','💧 Água'],['armadilha','⚠ Armadilha']
-        ].map(([v,l]) => `<button class="avt-mp-btn ${_avtEd.acao===v?'avt-mp-btn-ativo':''}"
-          onclick="document.querySelectorAll('#avt-mestre-map-editor-overlay .avt-mp-btn').forEach(b=>b.classList.remove('avt-mp-btn-ativo'));this.classList.add('avt-mp-btn-ativo');_avtEd.acao='${v}'">${l}</button>`).join('')}
-      </div>
-      <div style="overflow:auto;max-height:60vh;border:1px solid rgba(255,255,255,0.1);border-radius:8px">
-        <canvas id="avt-ed-canvas-mestre" style="display:block;image-rendering:pixelated"></canvas>
-      </div>
-      <div style="margin-top:8px;font-size:0.68rem;color:#7a92aa">Clique/arraste para pintar tiles. A câmera da sessão será atualizada ao salvar.</div>
     </div>`;
 
   const canvas = document.getElementById('avt-ed-canvas-mestre');
   if (!canvas) return;
-  canvas.width = W * EDSZ;
-  canvas.height = H * EDSZ;
-  canvas.style.width = (W * EDSZ) + 'px';
-  canvas.style.height = (H * EDSZ) + 'px';
+  canvas.width = W * EDSZ; canvas.height = H * EDSZ;
+  canvas.style.width = (W * EDSZ) + 'px'; canvas.style.height = (H * EDSZ) + 'px';
 
-  function renderMestreEditor() {
+  // Render WYSIWYG (espelha o render loop ao vivo: tileset + autotiler)
+  _avtEd._render = function() {
     const ctx = canvas.getContext('2d');
-    const TILE_COLORS = { piso:'#2a1f14', parede:'#0a0a0a', entrada:'#1a3a1a', saida:'#1a3a1a', agua:'#0a1a2a', armadilha:'#2a0a0a', null:'#050810' };
-    const BORDER_COLORS = { piso:'#3a2a18', parede:'#222', entrada:'#27ae60', saida:'#2ecc71', agua:'#1a4a6a', armadilha:'#8e2020' };
+    const view = { w: W, h: H, tiles: _avtEd.tiles, _chestPositions: dungeon._chestPositions };
+    ctx.imageSmoothingEnabled = false;
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const t = _avtEd.tiles[y]?.[x];
-        ctx.fillStyle = TILE_COLORS[t] || TILE_COLORS['null'];
-        ctx.fillRect(x * EDSZ, y * EDSZ, EDSZ, EDSZ);
-        ctx.strokeStyle = BORDER_COLORS[t] || '#111';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(x * EDSZ + 0.5, y * EDSZ + 0.5, EDSZ - 1, EDSZ - 1);
+        const px = x * EDSZ, py = y * EDSZ;
+        let drawn = false;
+        if (AVT_STATE._tilesetLoaded && AVT_STATE._tilesetTextures) {
+          const key = typeof t === 'string' ? t : _avtGetTileSemanticKey(x, y, view);
+          const img = key ? AVT_STATE._tilesetTextures[key] : null;
+          if (img) { ctx.drawImage(img, px, py, EDSZ, EDSZ); drawn = true; }
+        }
+        if (!drawn) {
+          ctx.fillStyle = (t === AVT_T.SAIDA) ? '#1a3a1a' : _avtChaveEhParede(t) ? '#0a0c14' : '#101520';
+          ctx.fillRect(px, py, EDSZ, EDSZ);
+          ctx.strokeStyle = '#1b2536'; ctx.lineWidth = 0.5;
+          ctx.strokeRect(px + 0.5, py + 0.5, EDSZ - 1, EDSZ - 1);
+        }
       }
     }
-    // Draw entities
+    ctx.font = `${Math.round(EDSZ * 0.8)}px serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    (_avtEd.portasInternas || []).forEach(p => [p.a, p.b].forEach(ep => {
+      if (!ep) return;
+      ctx.fillStyle = 'rgba(168,120,255,0.95)';
+      ctx.fillText('🌀', ep.col * EDSZ + EDSZ / 2, ep.row * EDSZ + EDSZ / 2);
+    }));
+    (_avtEd.fasesExtras || []).forEach(f => {
+      const pr = f.porta; if (!pr) return;
+      ctx.fillStyle = 'rgba(200,168,75,0.95)';
+      ctx.fillText('🚪', pr.col * EDSZ + EDSZ / 2, pr.row * EDSZ + EDSZ / 2);
+    });
+    if (_avtEd.pendingDoorAnchor) {
+      const a = _avtEd.pendingDoorAnchor;
+      ctx.strokeStyle = '#a878ff'; ctx.lineWidth = 2;
+      ctx.strokeRect(a.col * EDSZ + 1, a.row * EDSZ + 1, EDSZ - 2, EDSZ - 2);
+    }
     AVT_STATE.entidades.forEach(ent => {
       if (ent.x < 0 || ent.x >= W || ent.y < 0 || ent.y >= H) return;
       ctx.fillStyle = ent.cor || (ent.tipo === 'jogador' ? '#4fa3d1' : '#e74c3c');
       ctx.beginPath();
-      ctx.arc(ent.x * EDSZ + EDSZ/2, ent.y * EDSZ + EDSZ/2, EDSZ/2 - 1, 0, Math.PI * 2);
+      ctx.arc(ent.x * EDSZ + EDSZ / 2, ent.y * EDSZ + EDSZ / 2, EDSZ / 2 - 1, 0, Math.PI * 2);
       ctx.fill();
     });
-  }
-  renderMestreEditor();
+  };
+  _avtEd._render();
 
-  let painting = false;
-  function paintTile(e) {
+  const coords = (e) => {
     const rect = canvas.getBoundingClientRect();
-    const scaleX = W * EDSZ / rect.width;
-    const scaleY = H * EDSZ / rect.height;
     const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
     const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    const tx = Math.floor(cx * scaleX / EDSZ);
-    const ty = Math.floor(cy * scaleY / EDSZ);
-    if (tx < 0 || tx >= W || ty < 0 || ty >= H) return;
-    if (!_avtEd.tiles[ty]) _avtEd.tiles[ty] = [];
-    _avtEd.tiles[ty][tx] = _avtEd.acao;
-    renderMestreEditor();
-  }
-  canvas.addEventListener('mousedown', e => { painting = true; paintTile(e); });
-  canvas.addEventListener('mousemove', e => { if (painting) paintTile(e); });
+    return { tx: Math.floor(cx / rect.width * W), ty: Math.floor(cy / rect.height * H) };
+  };
+  let painting = false;
+  // Ferramentas de "clique único" (abrem modal/criam par) não devem repetir no arraste.
+  const isClickTool = () => _avtEd.tool === 'door' ||
+    (_avtEd.tool === 'tileset' && _avtEd.tsBrush?.fn === 'door');
+  const onDown = (e) => {
+    e.preventDefault();
+    const { tx, ty } = coords(e);
+    _avtEdAplicarTool(tx, ty);
+    painting = !isClickTool();
+  };
+  const onMove = (e) => { if (!painting) return; e.preventDefault(); const { tx, ty } = coords(e); _avtEdAplicarTool(tx, ty); };
+  canvas.addEventListener('mousedown', onDown);
+  canvas.addEventListener('mousemove', onMove);
   canvas.addEventListener('mouseup', () => { painting = false; });
-  canvas.addEventListener('touchstart', e => { e.preventDefault(); painting = true; paintTile(e); });
-  canvas.addEventListener('touchmove', e => { e.preventDefault(); if (painting) paintTile(e); });
+  canvas.addEventListener('touchstart', onDown);
+  canvas.addEventListener('touchmove', onMove);
   canvas.addEventListener('touchend', () => { painting = false; });
+
+  // Picker de blocos do tileset
+  const tsImg = document.getElementById('avt-ts-img');
+  const tsOverlay = document.getElementById('avt-ts-overlay');
+  if (tsImg && tsOverlay) {
+    const picker = document.getElementById('avt-ts-picker');
+    picker.addEventListener('click', e => {
+      const rect = tsImg.getBoundingClientRect();
+      const cellW = rect.width / TS_COLS, cellH = rect.height / TS_ROWS;
+      const tc = Math.floor((e.clientX - rect.left) / cellW);
+      const tr = Math.floor((e.clientY - rect.top) / cellH);
+      const key = _avtBlocoChavePorCelula(tc, tr);
+      const fn = _avtBlocoFuncao(key);
+      _avtEd.tsBrush = { tc, tr, key, fn };
+      _avtEd.tool = 'tileset';
+      _avtEdAtualizarBotoes();
+      const fnLabel = fn === 'wall' ? 'Parede' : fn === 'door' ? 'Porta' : 'Piso';
+      const info = document.getElementById('avt-ts-brush-info');
+      if (info) info.textContent = key ? `Peça: ${key} (${fnLabel})` : `Bloco (${tc},${tr}) — ${fnLabel}`;
+      _avtEdStatus(`Peça do tileset: ${key || (tc + ',' + tr)} → ${fnLabel}`);
+      const oc = tsOverlay.getContext('2d');
+      tsOverlay.style.width = rect.width + 'px'; tsOverlay.style.height = rect.height + 'px';
+      tsOverlay.width = rect.width; tsOverlay.height = rect.height;
+      oc.clearRect(0, 0, tsOverlay.width, tsOverlay.height);
+      oc.strokeStyle = '#4fa3d1'; oc.lineWidth = 2;
+      oc.strokeRect(tc * cellW + 1, tr * cellH + 1, cellW - 2, cellH - 2);
+    });
+  }
 }
 
-async function avtMestreSalvarMapaEditado() {
+function _avtEdStatus(msg) {
+  const el = document.getElementById('avt-ed-status');
+  if (el) el.textContent = msg;
+}
+
+function _avtEdAtualizarBotoes() {
+  document.querySelectorAll('#avt-mestre-map-editor-overlay .avt-ed-tool')
+    .forEach(b => b.classList.remove('avt-mp-btn-ativo'));
+  const btn = document.getElementById('avt-ed-tool-' + _avtEd.tool);
+  if (btn) btn.classList.add('avt-mp-btn-ativo');
+}
+
+function _avtEdSetTool(tool) {
+  _avtEd.tool = tool;
+  if (tool !== 'tileset') _avtEd.tsBrush = null;
+  if (tool !== 'door') _avtEd.pendingDoorAnchor = null;
+  _avtEdAtualizarBotoes();
+  const labels = { floor: 'Piso', wall: 'Parede', door: 'Porta', erase: 'Apagar' };
+  _avtEdStatus('Ferramenta: ' + (labels[tool] || tool));
+  _avtEd._render?.();
+}
+
+// Dispatcher de pintura
+function _avtEdAplicarTool(tx, ty) {
+  if (!_avtEd.tiles || tx < 0 || ty < 0 || tx >= _avtEd.w || ty >= _avtEd.h) return;
+  if (!_avtEd.tiles[ty]) _avtEd.tiles[ty] = [];
+  const tool = _avtEd.tool;
+  if (tool === 'floor') {
+    _avtEd.tiles[ty][tx] = AVT_T.PISO;
+  } else if (tool === 'wall') {
+    _avtEd.tiles[ty][tx] = AVT_T.PAREDE;
+  } else if (tool === 'erase') {
+    _avtEdApagar(tx, ty); return;
+  } else if (tool === 'door' || (tool === 'tileset' && _avtEd.tsBrush?.fn === 'door')) {
+    if (_avtEd.pendingDoorAnchor) { _avtEdCompletarPortaInterna(tx, ty); }
+    else { _avtEdAbrirConfigPorta(tx, ty); }
+    return;
+  } else if (tool === 'tileset' && _avtEd.tsBrush?.key) {
+    _avtEd.tiles[ty][tx] = _avtEd.tsBrush.key;   // peça semântica exata (string)
+  }
+  _avtEd._render?.();
+}
+
+function _avtEdApagar(col, row) {
+  // Remove par interno (par inteiro) e porta de fase nesta célula.
+  const antes = _avtEd.portasInternas.length;
+  _avtEd.portasInternas = _avtEd.portasInternas.filter(p =>
+    !((p.a && p.a.col === col && p.a.row === row) || (p.b && p.b.col === col && p.b.row === row)));
+  if (_avtEd.portasInternas.length !== antes) mostrarToast('Porta interna removida', 'ok');
+  _avtEd.fasesExtras.forEach(f => {
+    if (f.porta && f.porta.col === col && f.porta.row === row) { f.porta = null; mostrarToast('Porta de fase removida', 'ok'); }
+  });
+  _avtEd.tiles[row][col] = AVT_T.PAREDE;   // volta a parede/void
+  _avtEd._render?.();
+}
+
+// ── Portas no editor ─────────────────────────────────────────────────────────
+function _avtEdAbrirConfigPorta(col, row) {
+  _avtEd._portaCfgCell = { col, row };
+  let modal = document.getElementById('avt-ed-porta-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'avt-ed-porta-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9600;display:flex;align-items:center;justify-content:center';
+    document.body.appendChild(modal);
+  }
+  const fases = _avtEd.fasesExtras || [];
+  modal.innerHTML = `
+    <div style="background:#0d1320;border:1px solid rgba(79,163,209,0.3);border-radius:10px;padding:18px;width:320px;max-width:92vw">
+      <div style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8d8e8;margin-bottom:12px">🚪 Posicionar porta (${col},${row})</div>
+      <label style="display:block;font-size:0.72rem;color:#c8d8e8;margin-bottom:6px"><input type="radio" name="avt-ed-porta-tipo" value="interna" checked> 🌀 Porta interna (teleporte)</label>
+      <label style="display:block;font-size:0.72rem;color:#c8d8e8;margin-bottom:10px"><input type="radio" name="avt-ed-porta-tipo" value="fase"> 🚪 Porta de fase</label>
+      <div id="avt-ed-porta-fase-cfg" style="display:none;border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;margin-bottom:10px">
+        ${fases.length ? `
+        <label style="display:block;font-size:0.64rem;color:#7a92aa;margin-bottom:4px">Leva à fase</label>
+        <select id="avt-ed-porta-fase-sel" style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;margin-bottom:8px">
+          ${fases.map(f => `<option value="${f.id}">${f.nome}</option>`).join('')}
+        </select>
+        <label style="display:block;font-size:0.64rem;color:#7a92aa;margin-bottom:4px">Tranca</label>
+        <select id="avt-ed-porta-lock" style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem">
+          <option value="livre">🔓 Livre</option>
+          <option value="chave">🔑 Chave</option>
+          <option value="npc">⚔ Derrotar NPC/Boss</option>
+        </select>` : `<div style="font-size:0.66rem;color:#f0cc6a">Nenhuma fase extra criada. Use "🚪 + Nova Fase" antes de ligar uma porta de fase.</div>`}
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-ed-porta-modal').style.display='none'">Cancelar</button>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtEdConfirmarPorta()">Confirmar</button>
+      </div>
+    </div>`;
+  modal.style.display = 'flex';
+  modal.querySelectorAll('input[name="avt-ed-porta-tipo"]').forEach(r =>
+    r.addEventListener('change', () => {
+      const tipo = document.querySelector('input[name="avt-ed-porta-tipo"]:checked')?.value;
+      const cfg = document.getElementById('avt-ed-porta-fase-cfg');
+      if (cfg) cfg.style.display = tipo === 'fase' ? 'block' : 'none';
+    }));
+}
+
+function _avtEdConfirmarPorta() {
+  const cell = _avtEd._portaCfgCell;
+  if (!cell) return;
+  const tipo = document.querySelector('input[name="avt-ed-porta-tipo"]:checked')?.value || 'interna';
+  document.getElementById('avt-ed-porta-modal').style.display = 'none';
+  if (tipo === 'interna') {
+    _avtEd.pendingDoorAnchor = { col: cell.col, row: cell.row };
+    _avtEd.tiles[cell.row][cell.col] = AVT_T.PISO; // passável
+    _avtEdStatus('Porta interna: clique na célula de destino (teleporte).');
+    mostrarToast('Clique no destino da porta interna', 'ok');
+  } else {
+    const faseId = document.getElementById('avt-ed-porta-fase-sel')?.value;
+    if (!faseId) { mostrarToast('Crie uma fase antes', 'aviso'); return; }
+    const lock = document.getElementById('avt-ed-porta-lock')?.value || 'livre';
+    const fase = _avtEd.fasesExtras.find(f => f.id === faseId);
+    if (fase) {
+      fase.porta = { col: cell.col, row: cell.row, lock_type: lock,
+        chave_palavra: fase.porta?.chave_palavra || '', npc_boss_id: fase.porta?.npc_boss_id || '' };
+      _avtEd.tiles[cell.row][cell.col] = AVT_T.PISO;
+      mostrarToast('Porta de fase posicionada', 'ok');
+    }
+  }
+  _avtEd._render?.();
+}
+
+function _avtEdCompletarPortaInterna(col, row) {
+  const a = _avtEd.pendingDoorAnchor;
+  _avtEd.pendingDoorAnchor = null;
+  if (!a) return;
+  if (a.col === col && a.row === row) { mostrarToast('Destino deve ser outra célula', 'aviso'); return; }
+  const maxNum = _avtEd.portasInternas.reduce((m, p) => Math.max(m, p.numero || 0), 1);
+  const numero = maxNum + 1;
+  _avtEd.portasInternas.push({ numero, nome: 'Porta ' + numero, a: { col: a.col, row: a.row }, b: { col, row } });
+  _avtEd.tiles[row][col] = AVT_T.PISO;
+  _avtEdStatus('Porta interna criada.');
+  mostrarToast('Porta interna criada', 'ok');
+  _avtEd._render?.();
+}
+
+async function _avtMestreSalvarMapaUnificado() {
   if (!_avtEd.tiles || !AVT_STATE.dungeon) return;
-  AVT_STATE.dungeon.tiles = _avtEd.tiles.map(row => [...row]);
+  // Aprendizado: diff baseline×editado + estatísticas → perfil de estilo
+  try {
+    const tj = AVT_STATE.rpg.theme_json = AVT_STATE.rpg.theme_json || {};
+    const profile = tj.generation_style_profile || {};
+    const rules = _avtAprenderPlacements(_avtEd.tilesBaseline, _avtEd.tiles, _avtEd.w, _avtEd.h, profile.placement_rules || {});
+    // dungeon temporário p/ stats (com as portas e tiles editados)
+    const dungeonStats = { tiles: _avtEd.tiles, rooms: AVT_STATE.dungeon.rooms, _portasInternas: _avtEd.portasInternas };
+    tj.generation_style_profile = _avtMesclarPerfilEstilo(profile, _avtDerivarStats(dungeonStats), rules);
+  } catch(e) { console.warn('[avt] aprendizado de estilo falhou:', e); }
+
+  // Aplicar ao dungeon ativo
+  AVT_STATE.dungeon.tiles = _avtEd.tiles.map(r => [...r]);
+  AVT_STATE.dungeon._portasInternas = _avtEd.portasInternas;
+
+  // Persistir estado da fase atual no lugar certo (principal vs fase extra)
+  const tj = AVT_STATE.rpg.theme_json;
+  const faseId = AVT_STATE._faseAtualId || 'principal';
+  if (faseId === 'principal') {
+    tj.dungeon_data = AVT_STATE.dungeon;
+  } else {
+    const fa = (tj.fases_extras || []).find(f => f.id === faseId);
+    if (fa) fa.dungeon_data = AVT_STATE.dungeon;
+  }
+  // Portas de fase editadas (merge das coords) — mantém objetos das fases já existentes
+  if (_avtEd.fasesExtras && tj.fases_extras) {
+    tj.fases_extras.forEach(f => {
+      const ed = _avtEd.fasesExtras.find(x => x.id === f.id);
+      if (ed) f.porta = ed.porta;
+    });
+  }
+  if (tj.tileset_paints) delete tj.tileset_paints;
+
   const overlay = document.getElementById('avt-mestre-map-editor-overlay');
   if (overlay) overlay.style.display = 'none';
-  // Persist to DB
   try {
-    const themeJson = AVT_STATE.rpg?.theme_json || {};
-    const newTheme = { ...themeJson, dungeon_data: AVT_STATE.dungeon };
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ theme_json: newTheme })
+      method: 'PATCH', body: JSON.stringify({ theme_json: tj })
     });
     mostrarToast('Mapa salvo!', 'ok');
   } catch(e) {
-    mostrarToast('Mapa atualizado localmente (erro ao persistir: ' + (e?.message||e) + ')', 'aviso');
+    mostrarToast('Mapa atualizado localmente (erro ao persistir: ' + (e?.message || e) + ')', 'aviso');
   }
+  // Broadcast p/ os outros clientes (escopo por fase)
+  try {
+    _avtBroadcast?.('avt_dungeon_update', {
+      faseId,
+      dungeon: AVT_STATE.dungeon,
+      fases_extras: tj.fases_extras || []
+    });
+  } catch(_) {}
 }
+
+// Recebe atualização de mapa de outro cliente (mestre editou ao vivo)
+function avtReceberDungeonUpdate(p) {
+  if (!p) return;
+  const minhaFase = AVT_STATE._faseAtualId || 'principal';
+  // Sempre sincroniza as portas de fase do registro
+  if (AVT_STATE.rpg?.theme_json && Array.isArray(p.fases_extras)) {
+    AVT_STATE.rpg.theme_json.fases_extras = p.fases_extras;
+  }
+  if (p.faseId !== minhaFase || !p.dungeon) return;
+  AVT_STATE.dungeon = p.dungeon;
+  AVT_STATE.dungeon._portasInternas = p.dungeon._portasInternas || [];
+  AVT_STATE._tilesetConfig = AVT_STATE.dungeon.tileset_config || AVT_STATE._tilesetConfig;
+  mostrarToast?.('🗺 O mestre atualizou o mapa', 'ok');
+}
+window.avtReceberDungeonUpdate = avtReceberDungeonUpdate;
+window._avtMestreAbrirEditorUnificado = _avtMestreAbrirEditorUnificado;
 
 async function _avtSalvarBossDoorConfig() {
   const modo = document.querySelector('input[name="avt-boss-door-mode"]:checked')?.value || 'spawn_door';
@@ -18547,287 +18975,6 @@ async function _avtPackageRemover(pkgId) {
 }
 window._avtPackageRemover = _avtPackageRemover;
 
-// ─── Editor com Tileset ───────────────────────────────────────────────────────
-function _avtAutoDistribuirTilesetPaintsCalc(dungeon, tsConfig) {
-  const blocos = tsConfig?.blocos;
-  if (!blocos) return {};
-  const paints = {};
-  const W = dungeon.w, H = dungeon.h;
-  const prev = AVT_STATE._tilesetConfig;
-  AVT_STATE._tilesetConfig = tsConfig;
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const cell = dungeon.tiles[y]?.[x];
-      if (cell === null || cell === undefined) continue;
-      let key;
-      if (typeof cell === 'string') {
-        key = cell;
-      } else {
-        key = _avtGetTileSemanticKey(x, y, dungeon);
-      }
-      if (!key) continue;
-      const blocoRef = blocos[key];
-      if (!blocoRef) continue;
-      const m = String(blocoRef).match(/^bloco_(\d+)_(\d+)$/);
-      if (!m) continue;
-      paints[`${x}_${y}`] = { tc: +m[1], tr: +m[2] };
-    }
-  }
-  AVT_STATE._tilesetConfig = prev;
-  return paints;
-}
-
-function _avtMestreAutoDistribuirTileset() {
-  const dungeon = AVT_STATE.dungeon;
-  const tsConfig = dungeon?.tileset_config
-    || AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_config;
-  if (!tsConfig?.blocos) { mostrarToast('Tileset sem configuração de blocos', 'aviso'); return; }
-  _avtEd.tilesetPaints = _avtAutoDistribuirTilesetPaintsCalc(dungeon, tsConfig);
-  _avtMestreAbrirEditorTileset();
-}
-
-function _avtMestreAbrirEditorTileset() {
-  const dungeon = AVT_STATE.dungeon;
-  if (!dungeon) { mostrarToast('Nenhum mapa carregado', 'aviso'); return; }
-  const tilesetUrl = AVT_STATE.rpg?.theme_json?.tileset_img_url;
-  const tsConfig = dungeon.tileset_config
-    || AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_config
-    || null;
-
-  let overlay = document.getElementById('avt-mestre-map-editor-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'avt-mestre-map-editor-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px;overflow:auto';
-    document.body.appendChild(overlay);
-  }
-  overlay.style.display = 'flex';
-
-  const EDSZ = 14;
-  const W = dungeon.w, H = dungeon.h;
-  _avtEd.tiles = dungeon.tiles.map(row => [...row]);
-  _avtEd.w = W; _avtEd.h = H;
-  if (!_avtEd.tilesetPaints) {
-    _avtEd.tilesetPaints = Object.assign({}, AVT_STATE.rpg?.theme_json?.tileset_paints || {});
-    // Auto-distribuir na primeira abertura se não há tiles pintados
-    if (!Object.keys(_avtEd.tilesetPaints).length && tsConfig?.blocos) {
-      _avtEd.tilesetPaints = _avtAutoDistribuirTilesetPaintsCalc(dungeon, tsConfig);
-    }
-  }
-  _avtEd.tsBrush = null;
-  const TS_COLS = tsConfig?.cols || 4;
-  const TS_ROWS = tsConfig?.rows || 4;
-
-  if (!tilesetUrl) {
-    overlay.innerHTML = `
-      <div style="width:100%;max-width:900px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8d8e8">🎨 Editor com Tileset</div>
-          <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
-        </div>
-        <div style="color:#f0cc6a;font-size:0.8rem;padding:16px;border:1px solid rgba(240,204,106,0.3);border-radius:8px;background:rgba(240,204,106,0.06);margin-bottom:12px">
-          ⚠ Este dungeon não possui tileset. Você pode carregar um agora ou usar o editor manual.
-        </div>
-        <div style="background:rgba(0,0,0,0.4);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px">
-          <div style="font-size:0.72rem;color:#c8a84b;font-weight:600">📁 Carregar tileset para este dungeon</div>
-          <div style="font-size:0.67rem;color:#7a92aa;line-height:1.5">Gere uma imagem com IA (Midjourney, DALL-E…) e carregue aqui. O sistema usará o layout canônico fixo para mapear os tiles.</div>
-          <button onclick="_avtMestreCopiarPromptTileset()"
-            style="padding:7px 14px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
-            📋 Copiar prompt de imagem do tileset
-          </button>
-          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-            <div style="min-width:56px">
-              <label style="display:block;font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Colunas</label>
-              <input id="avt-mp-ts-cols" type="number" value="4" min="4" max="10"
-                style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem">
-            </div>
-            <div style="min-width:56px">
-              <label style="display:block;font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Linhas</label>
-              <input id="avt-mp-ts-rows" type="number" value="4" min="4" max="10"
-                style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem">
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <label style="display:inline-block;padding:6px 12px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">
-              📁 Escolher imagem
-              <input type="file" accept="image/*" style="display:none" onchange="_avtMestreHandleTilesetUpload(this)">
-            </label>
-            <span id="avt-mp-ts-nome" style="font-size:0.67rem;color:#7a92aa"></span>
-          </div>
-          <img id="avt-mp-ts-preview" style="display:none;max-width:100%;max-height:120px;border:1px solid rgba(200,168,75,0.2);border-radius:4px;image-rendering:pixelated">
-          <div style="display:flex;gap:8px">
-            <button onclick="_avtMestreAplicarTilesetUpload()"
-              style="flex:1;padding:8px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.3);border-radius:6px;color:#27ae60;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
-              ✓ Aplicar tileset ao dungeon
-            </button>
-            <button onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none';avtMestreAbrirEditor()"
-              style="padding:8px 14px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
-              ✏ Editor manual
-            </button>
-          </div>
-        </div>
-      </div>`;
-    return;
-  }
-
-  overlay.innerHTML = `
-    <div style="width:100%;max-width:1100px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8d8e8">🎨 Editor com Tileset</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="avt-mp-btn" onclick="_avtMestreAutoDistribuirTileset()"
-            style="background:rgba(200,168,75,0.1);border-color:rgba(200,168,75,0.35);color:#c8a84b">
-            ✦ Distribuir automaticamente
-          </button>
-          <button class="avt-mp-btn" onclick="_avtMestreToggleTrocaTileset()"
-            style="background:rgba(79,163,209,0.08);border-color:rgba(79,163,209,0.3);color:#4fa3d1">
-            🔄 Trocar imagem
-          </button>
-          <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtMestreSalvarTilesetPaints()">💾 Salvar</button>
-          <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
-        </div>
-      </div>
-      <div id="avt-ts-troca-painel" style="display:none;background:rgba(0,0,0,0.4);border:1px solid rgba(79,163,209,0.2);border-radius:8px;padding:12px;margin-bottom:10px">
-        <div style="font-size:0.7rem;color:#4fa3d1;margin-bottom:8px">📁 Escolher nova imagem de tileset</div>
-        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px">
-          <div style="min-width:56px">
-            <label style="display:block;font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Colunas</label>
-            <input id="avt-mp-ts-cols" type="number" value="${TS_COLS}" min="4" max="10"
-              style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem">
-          </div>
-          <div style="min-width:56px">
-            <label style="display:block;font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Linhas</label>
-            <input id="avt-mp-ts-rows" type="number" value="${TS_ROWS}" min="4" max="10"
-              style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem">
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <label style="display:inline-block;padding:6px 12px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:5px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">
-            📁 Escolher imagem
-            <input type="file" accept="image/*" style="display:none" onchange="_avtMestreHandleTilesetUpload(this)">
-          </label>
-          <span id="avt-mp-ts-nome" style="font-size:0.67rem;color:#7a92aa"></span>
-        </div>
-        <img id="avt-mp-ts-preview" style="display:none;max-width:100%;max-height:100px;border:1px solid rgba(79,163,209,0.2);border-radius:4px;image-rendering:pixelated;margin-top:6px">
-        <div style="margin-top:8px">
-          <button onclick="_avtMestreAplicarTilesetUpload()"
-            style="padding:7px 14px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.3);border-radius:6px;color:#27ae60;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
-            ✓ Aplicar nova imagem
-          </button>
-        </div>
-      </div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap">
-        <div style="flex:0 0 auto">
-          <div style="font-size:0.64rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Tileset — clique para selecionar bloco</div>
-          <div id="avt-ts-picker" style="border:1px solid rgba(79,163,209,0.2);border-radius:6px;overflow:hidden;cursor:crosshair;position:relative">
-            <img id="avt-ts-img" src="${tilesetUrl}" style="display:block;image-rendering:pixelated;max-width:256px">
-            <canvas id="avt-ts-overlay" style="position:absolute;top:0;left:0;pointer-events:none"></canvas>
-          </div>
-          <div id="avt-ts-brush-info" style="font-size:0.62rem;color:#4fa3d1;margin-top:4px">Nenhum bloco selecionado</div>
-        </div>
-        <div style="flex:1;min-width:260px">
-          <div style="font-size:0.64rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Mapa — clique/arraste para pintar</div>
-          <div style="overflow:auto;max-height:65vh;border:1px solid rgba(255,255,255,0.1);border-radius:8px">
-            <canvas id="avt-ed-canvas-mestre" style="display:block;image-rendering:pixelated"></canvas>
-          </div>
-          <div style="margin-top:6px;font-size:0.62rem;color:#7a92aa">Clique com brush selecionado para pintar. Clique sem brush para apagar decoração.</div>
-        </div>
-      </div>
-    </div>`;
-
-  const canvas = document.getElementById('avt-ed-canvas-mestre');
-  canvas.width = W * EDSZ; canvas.height = H * EDSZ;
-  canvas.style.width = (W * EDSZ) + 'px'; canvas.style.height = (H * EDSZ) + 'px';
-
-  const tsImg = document.getElementById('avt-ts-img');
-  const tsPicker = document.getElementById('avt-ts-picker');
-  const tsOverlay = document.getElementById('avt-ts-overlay');
-
-  function renderTsEditor() {
-    const ctx = canvas.getContext('2d');
-    const TILE_COLORS = { piso:'#2a1f14', parede:'#0a0a0a', entrada:'#1a3a1a', saida:'#1a3a1a', agua:'#0a1a2a', armadilha:'#2a0a0a', null:'#050810' };
-    const BORDER_COLORS = { piso:'#3a2a18', parede:'#222', entrada:'#27ae60', saida:'#2ecc71', agua:'#1a4a6a', armadilha:'#8e2020' };
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const t = _avtEd.tiles[y]?.[x];
-        ctx.fillStyle = TILE_COLORS[t] || TILE_COLORS['null'];
-        ctx.fillRect(x * EDSZ, y * EDSZ, EDSZ, EDSZ);
-        ctx.strokeStyle = BORDER_COLORS[t] || '#111';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(x * EDSZ + 0.5, y * EDSZ + 0.5, EDSZ - 1, EDSZ - 1);
-      }
-    }
-    // Draw tileset paints
-    if (tsImg.complete && tsImg.naturalWidth) {
-      const tcSz = tsImg.naturalWidth / TS_COLS;
-      const trSz = tsImg.naturalHeight / TS_ROWS;
-      Object.entries(_avtEd.tilesetPaints).forEach(([key, p]) => {
-        const [px, py] = key.split('_').map(Number);
-        if (px < 0 || px >= W || py < 0 || py >= H) return;
-        ctx.drawImage(tsImg, p.tc * tcSz, p.tr * trSz, tcSz, trSz,
-          px * EDSZ, py * EDSZ, EDSZ, EDSZ);
-      });
-    }
-    // Draw entities
-    AVT_STATE.entidades.forEach(ent => {
-      if (ent.x < 0 || ent.x >= W || ent.y < 0 || ent.y >= H) return;
-      ctx.fillStyle = ent.cor || (ent.tipo === 'jogador' ? '#4fa3d1' : '#e74c3c');
-      ctx.beginPath();
-      ctx.arc(ent.x * EDSZ + EDSZ/2, ent.y * EDSZ + EDSZ/2, EDSZ/2 - 1, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  }
-
-  tsImg.onload = () => {
-    tsOverlay.width = tsImg.offsetWidth || tsImg.naturalWidth;
-    tsOverlay.height = tsImg.offsetHeight || tsImg.naturalHeight;
-    renderTsEditor();
-  };
-  if (tsImg.complete) { tsImg.onload(); }
-
-  tsPicker.addEventListener('click', e => {
-    const rect = tsImg.getBoundingClientRect();
-    const x = e.clientX - rect.left, y = e.clientY - rect.top;
-    const cellW = rect.width / TS_COLS;
-    const cellH = rect.height / TS_ROWS;
-    const tc = Math.floor(x / cellW), tr = Math.floor(y / cellH);
-    _avtEd.tsBrush = { tc, tr };
-    document.getElementById('avt-ts-brush-info').textContent = `Bloco selecionado: coluna ${tc}, linha ${tr}`;
-    const oc = tsOverlay.getContext('2d');
-    tsOverlay.style.width = rect.width + 'px';
-    tsOverlay.style.height = rect.height + 'px';
-    tsOverlay.width = rect.width;
-    tsOverlay.height = rect.height;
-    oc.clearRect(0, 0, tsOverlay.width, tsOverlay.height);
-    oc.strokeStyle = '#4fa3d1';
-    oc.lineWidth = 2;
-    oc.strokeRect(tc * cellW + 1, tr * cellH + 1, cellW - 2, cellH - 2);
-  });
-
-  let painting = false;
-  function paintTs(e) {
-    const rect = canvas.getBoundingClientRect();
-    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    const tx = Math.floor(cx * W * EDSZ / rect.width / EDSZ);
-    const ty = Math.floor(cy * H * EDSZ / rect.height / EDSZ);
-    if (tx < 0 || tx >= W || ty < 0 || ty >= H) return;
-    const key = `${tx}_${ty}`;
-    if (_avtEd.tsBrush) {
-      _avtEd.tilesetPaints[key] = { tc: _avtEd.tsBrush.tc, tr: _avtEd.tsBrush.tr };
-    } else {
-      delete _avtEd.tilesetPaints[key];
-    }
-    renderTsEditor();
-  }
-  canvas.addEventListener('mousedown', e => { painting = true; paintTs(e); });
-  canvas.addEventListener('mousemove', e => { if (painting) paintTs(e); });
-  canvas.addEventListener('mouseup', () => { painting = false; });
-  canvas.addEventListener('touchstart', e => { e.preventDefault(); painting = true; paintTs(e); });
-  canvas.addEventListener('touchmove', e => { e.preventDefault(); if (painting) paintTs(e); });
-  canvas.addEventListener('touchend', () => { painting = false; });
-}
-
 // ── Upload de tileset no editor do mestre (quando dungeon não tem tileset) ────
 let _avtMpTilesetFile = null;
 
@@ -18892,24 +19039,9 @@ async function _avtMestreAplicarTilesetUpload() {
     });
     mostrarToast('Tileset aplicado!', 'ok');
     document.getElementById('avt-mestre-map-editor-overlay').style.display = 'none';
-    setTimeout(_avtMestreAbrirEditorTileset, 200);
+    setTimeout(_avtMestreAbrirEditorUnificado, 200);
   } catch(e) {
     mostrarToast('Erro: ' + (e?.message || e), 'erro');
-  }
-}
-
-async function _avtMestreSalvarTilesetPaints() {
-  if (!AVT_STATE.rpg) return;
-  try {
-    const newTheme = { ...(AVT_STATE.rpg.theme_json || {}), tileset_paints: _avtEd.tilesetPaints };
-    AVT_STATE.rpg.theme_json = newTheme;
-    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
-      method: 'PATCH', body: JSON.stringify({ theme_json: newTheme })
-    });
-    document.getElementById('avt-mestre-map-editor-overlay').style.display = 'none';
-    mostrarToast('Tileset salvo!', 'ok');
-  } catch(e) {
-    mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
   }
 }
 
@@ -19133,7 +19265,9 @@ function _avtNfGerarProcedural() {
   const area = Math.max(22 * 16, salas * 60);
   const ww = Math.ceil(Math.sqrt(area * (22 / 16)));
   const hh = Math.ceil(area / ww);
-  w.dungeon = _avtGerarDungeon(ww, hh, salas);
+  const prof = AVT_STATE.rpg?.theme_json?.generation_style_profile || null;
+  w.dungeon = _avtGerarDungeon(ww, hh, salas, prof);
+  _avtAplicarRegrasEstilo(w.dungeon, prof);
   const el = document.querySelector('#avt-nf-mapa-sub');
   if (el) {
     const st = document.createElement('div');
@@ -19304,7 +19438,9 @@ async function _avtMestreSalvarNovaFase() {
       const salas = w._procSalas || 8;
       const area = Math.max(22*16, salas*60);
       const ww = Math.ceil(Math.sqrt(area*(22/16))); const hh = Math.ceil(area/ww);
-      dungeonData = _avtGerarDungeon(ww, hh, salas);
+      const prof = AVT_STATE.rpg?.theme_json?.generation_style_profile || null;
+      dungeonData = _avtGerarDungeon(ww, hh, salas, prof);
+      _avtAplicarRegrasEstilo(dungeonData, prof);
     } else {
       mostrarToast('Gere ou configure o mapa antes de criar a fase', 'aviso'); return;
     }
@@ -19403,11 +19539,13 @@ window._avtProximaFase = _avtProximaFase;
 // Mais salas (de preferência) que a anterior, mesmo tileset com leve variação de cor.
 async function _avtGerarProximaFaseAuto() {
   const prev = _avtFaseAtualObj() || { ordem: 0, npc_level: 1 };
-  const prevSalas = (prev.dungeon_data?.rooms?.length) || 8;
+  const prof = AVT_STATE.rpg?.theme_json?.generation_style_profile || null;
+  const prevSalas = (prev.dungeon_data?.rooms?.length) || prof?.stats?.room_count || 8;
   const salas = prevSalas + Math.floor(Math.random() * 4); // 0..3 a mais (viés p/ cima)
   const area = Math.max(22*16, salas*60);
   const ww = Math.ceil(Math.sqrt(area*(22/16))); const hh = Math.ceil(area/ww);
-  const dungeonData = _avtGerarDungeon(ww, hh, salas);
+  const dungeonData = _avtGerarDungeon(ww, hh, salas, prof);
+  _avtAplicarRegrasEstilo(dungeonData, prof);
   // SAIDA na última sala
   if (dungeonData.rooms?.length > 0) {
     const lr = dungeonData.rooms[dungeonData.rooms.length - 1];
