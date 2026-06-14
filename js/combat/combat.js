@@ -2185,8 +2185,10 @@ function skAbrirFormEfeito() {
   const _sefNecroCor = document.getElementById('sef-necro-cor'); if (_sefNecroCor) _sefNecroCor.value = '#8e44ad';
   const _sefRpForm = document.getElementById('sef-rastro-persona-formula'); if (_sefRpForm) _sefRpForm.value = '';
   const _sefRpTurnos = document.getElementById('sef-rastro-persona-turnos'); if (_sefRpTurnos) _sefRpTurnos.value = 3;
+  const _sefRpCor = document.getElementById('sef-rastro-persona-cor'); if (_sefRpCor) _sefRpCor.value = '#5ee09a';
   const _sefRaForm = document.getElementById('sef-rastro-anima-formula'); if (_sefRaForm) _sefRaForm.value = '';
   const _sefRaTurnos = document.getElementById('sef-rastro-anima-turnos'); if (_sefRaTurnos) _sefRaTurnos.value = 3;
+  const _sefRaCor = document.getElementById('sef-rastro-anima-cor'); if (_sefRaCor) _sefRaCor.value = '#5ee09a';
   document.getElementById('sk-efeito-form').style.display = 'block';
 }
 
@@ -2297,12 +2299,14 @@ function skConfirmarEfeito() {
     efeito.tipo           = 'rastro_persona';
     efeito.rastro_formula = document.getElementById('sef-rastro-persona-formula')?.value.trim() || '1d6';
     efeito.duracao_turnos = parseInt(document.getElementById('sef-rastro-persona-turnos')?.value) || 3;
+    efeito.rastro_cor     = document.getElementById('sef-rastro-persona-cor')?.value || '#5ee09a';
   }
   // Rastro Anima — células por onde a animação de ataque passa ficam contaminadas
   if (document.getElementById('sef-rastro-anima-on')?.checked) {
     efeito.tipo           = 'rastro_anima';
     efeito.rastro_formula = document.getElementById('sef-rastro-anima-formula')?.value.trim() || '1d6';
     efeito.duracao_turnos = parseInt(document.getElementById('sef-rastro-anima-turnos')?.value) || 3;
+    efeito.rastro_cor     = document.getElementById('sef-rastro-anima-cor')?.value || '#5ee09a';
   }
   SK_EFEITOS_TEMP.push(efeito);
   skRenderEfeitosLista();
