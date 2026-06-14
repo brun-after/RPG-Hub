@@ -4113,6 +4113,7 @@ function _avtRenderFrame() {
   // Em P2P, só o host aplica OOC tick (HP, flags). Não-host apenas exibe countdown via _oocStatusEffects.
   if (typeof RTNet === 'undefined' || !RTNet.initialized || RTNet.isHost()) {
     _avtTickEfeitosOOC(now);
+    _avtAtualizarDominados(dt);
   }
 
   if (AVT_STATE._oocStatusEffects?.length) {
@@ -8538,6 +8539,114 @@ function _avtAtualizarPerseguicoes(dt) {
   }
 }
 
+// Movimento dos inimigos dominados (Necromante) fora do combate por turnos.
+// Roda por frame na cadência de perseguição (_avtGetVelocidadePerseguicaoNpc), ao contrário
+// do ataque/efeito, que continua gerido pelo tick lento de _avtTickEfeitosOOC (cdMs).
+function _avtAtualizarDominados(dt) {
+  const _RAIO_DOM_OOC = 10;
+  AVT_STATE.entidades.forEach(ent => {
+    if (!ent._dominado || ent.escondido || ent.hp <= 0) return;
+    // Em batalha por turnos o movimento é gerido pelo fluxo de combate.
+    if (typeof _avtBatalhaDeEnt === 'function' && _avtBatalhaDeEnt(ent.id)) return;
+
+    // Timer de passo próprio na cadência de perseguição.
+    ent._domStepTimer = (ent._domStepTimer ?? 0) - dt;
+    if (ent._domStepTimer > 0) return;
+    ent._domStepTimer = _avtGetVelocidadePerseguicaoNpc(ent);
+
+    // Seleção de alvo idêntica ao tick necromante: inimigo não-dominado vivo no raio,
+    // preferindo os que estão perseguindo; menor HP, desempate por distância.
+    const _alvos = AVT_STATE.entidades.filter(e =>
+      e.tipo === 'inimigo' && e.hp > 0 && !e.escondido && !e._dominado &&
+      (Math.abs(e.x - ent.x) + Math.abs(e.y - ent.y)) <= _RAIO_DOM_OOC
+    );
+    if (!_alvos.length) { ent._domPath = null; ent._domPathGoal = null; return; }
+    const _perseguindo = _alvos.filter(e => AVT_STATE.npcTimers?.[e.id]?.isPursuing);
+    const _pool = _perseguindo.length ? _perseguindo : _alvos;
+    const _dist = e => Math.abs(e.x - ent.x) + Math.abs(e.y - ent.y);
+    const alvo = _pool.reduce((a, b) =>
+      a.hp !== b.hp ? (a.hp < b.hp ? a : b) : (_dist(a) <= _dist(b) ? a : b)
+    );
+
+    // Adjacente: não mover — o ataque fica a cargo do tick necromante.
+    if (_dist(alvo) <= 1) return;
+
+    const curX = Math.round(ent.x), curY = Math.round(ent.y);
+    const goalX = Math.round(alvo.x), goalY = Math.round(alvo.y);
+
+    const _mover = (dx, dy) => {
+      const nx = Math.round(ent.x) + dx, ny = Math.round(ent.y) + dy;
+      if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon) &&
+          !_avtCelulaOcupada(nx, ny, ent.id, ent.tipo, false)) {
+        ent.x = nx; ent.y = ny;
+        if (!Array.isArray(ent._domRecent)) ent._domRecent = [];
+        ent._domRecent.push(`${nx},${ny}`);
+        if (ent._domRecent.length > 3) ent._domRecent.shift();
+        try { _avtBcastTokenMove({ nome: ent.nome, x: nx, y: ny }); } catch(_) {}
+        return true;
+      }
+      return false;
+    };
+
+    // Recalcular caminho BFS quando necessário (espelha _avtAtualizarPerseguicoes).
+    let needRecalc = false;
+    if (!Array.isArray(ent._domPath) || ent._domPath.length === 0) {
+      needRecalc = true;
+    } else if (!ent._domPathGoal ||
+               Math.abs(ent._domPathGoal.x - goalX) + Math.abs(ent._domPathGoal.y - goalY) >= 2) {
+      needRecalc = true;
+    } else {
+      const next = ent._domPath[0];
+      if (!next || !_avtTilePassavel(next.x, next.y, AVT_STATE.dungeon) ||
+          _avtCelulaOcupada(next.x, next.y, ent.id, ent.tipo, false)) {
+        needRecalc = true;
+      }
+    }
+    if (needRecalc) {
+      const full = _avtPathfindSimples(curX, curY, goalX, goalY, 150);
+      if (full && full.length > 1) {
+        ent._domPath = full.slice(1);
+        ent._domPathGoal = { x: goalX, y: goalY };
+      } else {
+        ent._domPath = null;
+        ent._domPathGoal = null;
+      }
+    }
+
+    // Consome 1 waypoint; se falhar, fallback guloso anti ping-pong.
+    let moved = false;
+    if (Array.isArray(ent._domPath) && ent._domPath.length > 0) {
+      const next = ent._domPath[0];
+      if (_mover(next.x - curX, next.y - curY)) {
+        ent._domPath.shift();
+        moved = true;
+      } else {
+        ent._domPath = null; ent._domPathGoal = null;
+      }
+    }
+    if (!moved) {
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      const recent = Array.isArray(ent._domRecent) ? ent._domRecent : [];
+      let bestAlt = null, bestAltDist = Infinity;
+      let bestAltAny = null, bestAltAnyDist = Infinity;
+      dirs.forEach(([dx, dy]) => {
+        const nx2 = curX + dx, ny2 = curY + dy;
+        if (!_avtTilePassavel(nx2, ny2, AVT_STATE.dungeon)) return;
+        if (_avtCelulaOcupada(nx2, ny2, ent.id, ent.tipo, false)) return;
+        const d2 = Math.abs(alvo.x - nx2) + Math.abs(alvo.y - ny2);
+        if (d2 < bestAltAnyDist) { bestAltAnyDist = d2; bestAltAny = [dx, dy]; }
+        if (recent.includes(`${nx2},${ny2}`)) return;
+        if (d2 < bestAltDist) { bestAltDist = d2; bestAlt = [dx, dy]; }
+      });
+      const chosen = bestAlt || bestAltAny;
+      const chosenDist = bestAlt ? bestAltDist : bestAltAnyDist;
+      if (chosen && chosenDist < Math.abs(alvo.x - curX) + Math.abs(alvo.y - curY)) {
+        _mover(chosen[0], chosen[1]);
+      }
+    }
+  });
+}
+
 function _avtTickEfeitosOOC(now) {
   // Expirar avatares OOC (fora de combate — os de combate são gerenciados por _avtTurnoAvancar)
   const _cdMsAv = _avtGetEfeitoCooldownMs();
@@ -8554,7 +8663,14 @@ function _avtTickEfeitosOOC(now) {
   if (!AVT_STATE._oocStatusEffects?.length) return;
   const cdMs = _cdMsAv;
   const nowMs = Date.now();
-  AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects.filter(rec => {
+  // Iterar sobre um snapshot e coletar remoções num Set, em vez de reatribuir o array
+  // via .filter(). Chamadas aninhadas (propagação de efeitos, _avtNpcMorreu,
+  // _avtNecromanteDominar) inserem novos registros em _oocStatusEffects durante o laço;
+  // reconstruir a partir do array vivo no final preserva essas inserções concorrentes.
+  const _recsSnapshot = AVT_STATE._oocStatusEffects.slice();
+  const _toRemove = new Set();
+  _recsSnapshot.forEach(rec => {
+    const _keepRec = (() => {
     const ent = AVT_STATE.entidades.find(e => e.id === rec.entId || (rec.entNome && e.nome === rec.entNome));
     if (!ent || ent.escondido) return false;
     if (nowMs > rec.ef.expiry_ms) {
@@ -8596,7 +8712,9 @@ function _avtTickEfeitosOOC(now) {
           ent.tipo = 'inimigo';
           ent.hp = 0;
           if (ent.status_effects) ent.status_effects = ent.status_effects.filter(e => e.tipo !== 'necromante');
-          _avtNpcMorreu(ent, null);
+          // semDominar: força a morte real; impede que o fallback OOC reencontre este
+          // mesmo necromante (ainda no array, _turnos_restantes>0) e re-domine a entidade.
+          _avtNpcMorreu(ent, null, { semDominar: true });
           mostrarToast(`☠ ${ent.nome} voltou à morte.`, 'aviso', 3000);
         } else {
           // Efeito expirou sem o inimigo ter morrido: apenas limpar o efeito pendente
@@ -8773,19 +8891,9 @@ function _avtTickEfeitosOOC(now) {
               try { _avtBroadcast('avt_hp_update', { nome: _alvoDom.nome, hp: _alvoDom.hp, hpMax: _alvoDom.hpMax }); } catch(_) {}
               if (_alvoDom.hp <= 0) _avtNpcMorreu(_alvoDom, null, { creditoNome: _invAtivaOoc?.dono_char_nome || ef._casterNome });
             }
-          } else {
-            const _dxDom = _alvoDom.x > ent.x ? 1 : _alvoDom.x < ent.x ? -1 : 0;
-            const _dyDom = _alvoDom.y > ent.y ? 1 : _alvoDom.y < ent.y ? -1 : 0;
-            const _passos = _dxDom && _dyDom ? [[_dxDom,0],[0,_dyDom]] : _dxDom ? [[_dxDom,0]] : [[0,_dyDom]];
-            for (const [tdx, tdy] of _passos) {
-              const nx = Math.round(ent.x)+tdx, ny = Math.round(ent.y)+tdy;
-              if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon) && !_avtCelulaOcupada(nx, ny, ent.id, ent.tipo, false)) {
-                ent.x = nx; ent.y = ny;
-                try { _avtBcastTokenMove({ nome: ent.nome, x: nx, y: ny }); } catch(_) {}
-                break;
-              }
-            }
           }
+          // Movimento de aproximação NÃO acontece aqui (cadência lenta do cdMs).
+          // É tratado por _avtAtualizarDominados(dt), na cadência de perseguição.
         }
         _avtRenderHpBar();
         return true;
@@ -8828,7 +8936,10 @@ function _avtTickEfeitosOOC(now) {
       _avtRenderHpBar();
     }
     return true;
+    })();
+    if (!_keepRec) _toRemove.add(rec);
   });
+  AVT_STATE._oocStatusEffects = (AVT_STATE._oocStatusEffects || []).filter(r => !_toRemove.has(r));
 }
 
 function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
@@ -9938,8 +10049,9 @@ function _avtNpcMorreu(npcEnt, bat, opts = {}) {
       npcEnt = _canon;
     }
   }
-  // Se o NPC tem efeito Necromante ativo e ainda não está dominado, dominar em vez de matar
-  if (!npcEnt._dominado) {
+  // Se o NPC tem efeito Necromante ativo e ainda não está dominado, dominar em vez de matar.
+  // opts.semDominar pula esta dominação (ex.: expiração do domínio → morte definitiva).
+  if (!npcEnt._dominado && !opts.semDominar) {
     let efNecro = (npcEnt.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
     // Fallback OOC: o efeito pode ter sido registrado apenas em _oocStatusEffects
     if (!efNecro) {
