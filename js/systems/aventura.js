@@ -70,7 +70,8 @@ var AVT_STATE = {
   _novaFaseWizard: null,   // wizard state for creating extra phases
   invocacoes_ativas: [],   // [{ id, invocacao_def, dono_char_nome, hp_atual, hpMax, iniciativa, _turnosRestantes, _cooldowns }]
   _modoPortaPlacement: false, // when true, next map click sets door position
-  _faseAnterior: null,     // saved dungeon to return to from extra phase
+  _faseStack: [],          // trilha de retorno entre fases (ids; topo = fase anterior)
+  _faseSnapshots: {},      // estado vivo por fase: { [faseId]: { dungeon, entidades, npcTimers, tileset..., hue } }
   itemCatalog: [],         // item_catalog loaded for this adventure
   _bausPreDungeon: [],     // chests prepared before dungeon is loaded
   _itensCharSel: '',       // selected char in itens tab
@@ -3586,13 +3587,16 @@ function _avtPopularEntidadesInimigos(dungeon) {
   const inimigosJson = d._inimigosJson || [];
 
   const _lcNpc = AVT_STATE.rpg?.theme_json?.level_config || {};
-  const _hpBaseNpc = _lcNpc.hp_base ?? 100;
-  const _hpAttrNomeNpc = _lcNpc.hp_attr ?? 'Constituição';
-  const _hpMultNpc = _lcNpc.hp_attr_mult ?? 4;
+  // Balanceamento por fase (sobrepõe o level_config global). Definido em _avtCarregarFase.
+  const _bc = d._balanceConfig || {};
+  const _difMult = (parseFloat(_bc.dificuldade_mult) > 0) ? parseFloat(_bc.dificuldade_mult) : 1;
+  const _hpBaseNpc = _bc.hp_base ?? _lcNpc.hp_base ?? 100;
+  const _hpAttrNomeNpc = _bc.hp_attr ?? _lcNpc.hp_attr ?? 'Constituição';
+  const _hpMultNpc = _bc.hp_attr_mult ?? _lcNpc.hp_attr_mult ?? 4;
   const _normHpN = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const _calcHpNpc = atrs => {
     const k = Object.keys(atrs || {}).find(k2 => _normHpN(k2) === _normHpN(_hpAttrNomeNpc));
-    return Math.max(1, Math.round(_hpBaseNpc + (k ? parseFloat(atrs[k] || 0) : 0) * _hpMultNpc));
+    return Math.max(1, Math.round((_hpBaseNpc + (k ? parseFloat(atrs[k] || 0) : 0) * _hpMultNpc) * _difMult));
   };
 
   if (inimigosJson.length) {
@@ -4482,7 +4486,8 @@ function _avtRenderFrame() {
 
   // Variação de cor por fase: aplica hue-rotate aos tiles (reset após o loop).
   const _hue = AVT_STATE._faseHueShift || 0;
-  const _hueOn = _hue && AVT_STATE._tilesetLoaded && ('filter' in ctx);
+  // Aplica a variação de cor da fase mesmo sem tileset carregado (tiles de fundo procedurais também recebem o tint).
+  const _hueOn = _hue && ('filter' in ctx);
   if (_hueOn) ctx.filter = `hue-rotate(${_hue}deg)`;
   for (let y = 0; y < dungeon.h; y++) {
     for (let x = 0; x < dungeon.w; x++) {
@@ -4555,7 +4560,7 @@ function _avtRenderFrame() {
 
   // Portais de fases extras
   const _fasesExtras = AVT_STATE.rpg?.theme_json?.fases_extras || [];
-  if (_fasesExtras.length && !AVT_STATE._faseAnterior) {
+  if (_fasesExtras.length && (AVT_STATE._faseAtualId || 'principal') === 'principal') {
     for (const _fase of _fasesExtras) {
       const { col, row } = _fase.porta;
       const fpx = Math.round(col * SZ - camera.x);
@@ -16809,6 +16814,7 @@ function _avtMestrePainelRender() {
     { id: 'loot_xp',     label: '📊 XP' },
     { id: 'itens',       label: '🎒 Itens' },
     { id: 'mapa',           label: '🗺 Mapa' },
+    { id: 'fases',          label: '🚪 Fases' },
     { id: 'balanceamento',  label: '⚖ Balanceamento', perigo: true },
     { id: 'campanha',       label: '🏰 Campanha', perigo: true },
   ];
@@ -16840,6 +16846,44 @@ function _avtMpConteudoAba() {
   const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
 
   switch (AVT_STATE.mestrePainelAba) {
+
+    case 'fases': {
+      const inpCss = 'width:100%;box-sizing:border-box;padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem';
+      const atualId = AVT_STATE._faseAtualId || 'principal';
+      const pri = _avtFasePrincipalObj();
+      const extras = (typeof _avtFasesOrdenadas === 'function') ? _avtFasesOrdenadas() : (AVT_STATE.rpg?.theme_json?.fases_extras || []);
+      const linha = (f, isPri) => {
+        const bc = f.balance_config || {};
+        const atual = (f.id === atualId);
+        return `
+        <div style="border:1px solid ${atual?'rgba(200,168,75,0.4)':'rgba(79,163,209,0.12)'};border-radius:8px;padding:10px;margin-bottom:10px;background:${atual?'rgba(200,168,75,0.06)':'rgba(79,163,209,0.03)'}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-size:0.8rem">${isPri?'🏰':'🚪'}</span>
+            <span style="flex:1;font-weight:600;font-size:0.78rem;color:#c8d8e8">${isPri?'Fase inicial':(f.nome||'Fase')}${atual?' <span style="font-size:0.6rem;color:#c8a84b">(atual)</span>':''}</span>
+            <button class="avt-mp-btn" style="flex:0;padding:3px 8px;min-width:0;font-size:0.65rem" onclick="_avtIrParaFase('${f.id}')" title="Ir para esta fase">▶ Ir</button>
+            ${isPri?'':`<button class="avt-mp-btn avt-mp-btn-danger" style="flex:0;padding:3px 8px;min-width:0;font-size:0.65rem" onclick="_avtMestreRemoverFase('${f.id}')">✕</button>`}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            ${isPri?'':`<label style="font-size:0.6rem;color:#7a92aa;display:block">Nome<input id="avt-fb-${f.id}-nome" value="${(f.nome||'').replace(/"/g,'&quot;')}" style="${inpCss}"></label>`}
+            ${isPri?'':`<label style="font-size:0.6rem;color:#7a92aa;display:block">Ordem<input id="avt-fb-${f.id}-ordem" type="number" min="1" value="${f.ordem ?? 1}" style="${inpCss}"></label>`}
+            <label style="font-size:0.6rem;color:#7a92aa;display:block">Nível dos inimigos<input id="avt-fb-${f.id}-npclvl" type="number" min="1" value="${f.npc_level ?? 1}" style="${inpCss}"></label>
+            <label style="font-size:0.6rem;color:#7a92aa;display:block">Mult. dificuldade (HP)<input id="avt-fb-${f.id}-dif" type="number" min="0.1" step="0.1" value="${bc.dificuldade_mult ?? 1}" style="${inpCss}"></label>
+            ${isPri?'':`<label style="font-size:0.6rem;color:#7a92aa;display:block">Coloração (hue 0-359)<input id="avt-fb-${f.id}-hue" type="number" min="0" max="359" value="${f.tint_hue ?? 0}" style="${inpCss}"></label>`}
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:8px">
+            <button class="avt-mp-btn avt-mp-btn-ok" style="flex:0;padding:4px 12px;min-width:0;font-size:0.66rem" onclick="_avtSalvarFaseBalance('${f.id}')">💾 Salvar</button>
+          </div>
+        </div>`;
+      };
+      return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🚪 Fases & Balanceamento</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Configure o nível dos inimigos e a dificuldade de cada fase. O multiplicador sobrepõe o HP base global. Alterações de nível/dificuldade valem ao (re)entrar na fase; a coloração aplica na hora.</div>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:10px" onclick="_avtMestreNovaFase()">🚪 + Nova Fase</button>
+        ${linha(pri, true)}
+        ${extras.length ? extras.map(f => linha(f, false)).join('') : '<div class="avt-mp-hint">Nenhuma fase extra criada.</div>'}
+      </div>`;
+    }
 
     case 'modo': return `
       <div class="avt-mp-secao">
@@ -17153,7 +17197,7 @@ function _avtMpConteudoAba() {
           <button class="avt-mp-btn" onclick="_avtMestreAbrirEditorUnificado()">🗺 Editar mapa</button>
         </div>
       </div>
-      ${AVT_STATE._faseAnterior ? `
+      ${(AVT_STATE._faseStack && AVT_STATE._faseStack.length) ? `
       <div class="avt-mp-secao">
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtVoltarFaseAnterior()">⬅ Voltar ao mapa anterior</button>
       </div>` : ''}
@@ -19560,6 +19604,45 @@ async function _avtMestreRemoverFase(faseId) {
   }
 }
 
+// Salvar balanceamento/metadados de uma fase a partir da aba "🚪 Fases".
+async function _avtSalvarFaseBalance(faseId) {
+  const tj = AVT_STATE.rpg.theme_json || (AVT_STATE.rpg.theme_json = {});
+  const g = id => document.getElementById(id);
+  const numv = (suf, def) => { const el = g(`avt-fb-${faseId}-${suf}`); if (!el) return def; const v = parseFloat(el.value); return Number.isFinite(v) ? v : def; };
+  const strv = (suf, def) => { const el = g(`avt-fb-${faseId}-${suf}`); return el ? (el.value.trim() || def) : def; };
+
+  if (faseId === 'principal') {
+    const dd = tj.dungeon_data || (tj.dungeon_data = {});
+    dd.npc_level = Math.max(1, Math.round(numv('npclvl', dd.npc_level ?? 1)));
+    const dif = numv('dif', 1);
+    dd.balance_config = Object.assign({}, dd.balance_config, { dificuldade_mult: dif > 0 ? dif : 1 });
+  } else {
+    const fase = (tj.fases_extras || []).find(f => f.id === faseId);
+    if (!fase) { mostrarToast('Fase não encontrada', 'erro'); return; }
+    fase.nome = strv('nome', fase.nome);
+    fase.ordem = Math.max(1, Math.round(numv('ordem', fase.ordem ?? 1)));
+    fase.npc_level = Math.max(1, Math.round(numv('npclvl', fase.npc_level ?? 1)));
+    fase.tint_hue = ((Math.round(numv('hue', fase.tint_hue ?? 0)) % 360) + 360) % 360;
+    const dif = numv('dif', 1);
+    fase.balance_config = Object.assign({}, fase.balance_config, { dificuldade_mult: dif > 0 ? dif : 1 });
+  }
+
+  // Refletir na fase em jogo: cor imediata; nível/dificuldade valem ao (re)popular os inimigos.
+  if ((AVT_STATE._faseAtualId || 'principal') === faseId && AVT_STATE.dungeon) {
+    const obj = faseId === 'principal' ? _avtFasePrincipalObj() : (tj.fases_extras || []).find(f => f.id === faseId);
+    if (obj) {
+      AVT_STATE.dungeon._npcLevel      = obj.npc_level ?? 1;
+      AVT_STATE.dungeon._balanceConfig = obj.balance_config || null;
+      AVT_STATE._faseHueShift          = obj.tint_hue || 0;
+    }
+  }
+
+  await _avtSalvarThemeJson();
+  mostrarToast('Fase atualizada', 'ok');
+  _avtMestrePainelRender();
+}
+window._avtSalvarFaseBalance = _avtSalvarFaseBalance;
+
 // ─── Ordem das fases / progressão ────────────────────────────────────────────
 function _avtFasesOrdenadas() {
   const extras = (AVT_STATE.rpg?.theme_json?.fases_extras || []).slice();
@@ -19682,7 +19765,7 @@ function _avtVerificarPortaFase(x, y) {
     if (prox) { _avtPromptFase(`Avançar para ${prox.nome || 'a próxima fase'}?`, 'Avançar', () => _avtEntrarFaseExtra(prox)); return; }
   }
   // Se já estou dentro de uma fase extra, ignorar portas (só SAIDA volta).
-  // Evita pular entre fases extras e quebrar a pilha _faseAnterior.
+  // As portas de fase são posicionadas no mapa principal; dentro de uma fase extra só a SAIDA volta.
   if (AVT_STATE._faseAtualId && AVT_STATE._faseAtualId !== 'principal') return;
   const fases = AVT_STATE.rpg?.theme_json?.fases_extras;
   if (!fases?.length) return;
@@ -19702,106 +19785,173 @@ function _avtVerificarPortaFase(x, y) {
   _avtPromptFase(`Avançar para ${fase.nome || 'a próxima fase'}?`, 'Avançar', () => _avtEntrarFaseExtra(fase));
 }
 
-async function _avtEntrarFaseExtra(fase) {
-  if (!fase.dungeon_data) {
-    fase.dungeon_data = _avtGerarDungeon(40, 28, 6);
-    // Place SAIDA tile in last room
-    if (fase.dungeon_data.rooms?.length > 0) {
-      const lr = fase.dungeon_data.rooms[fase.dungeon_data.rooms.length - 1];
+// ─── Navegação unificada entre fases (snapshot + pilha de retorno) ───────────
+// Toda transição (porta de avançar, SAIDA/voltar, painel do mestre) passa por
+// _avtCarregarFase. O estado vivo de cada fase fica em AVT_STATE._faseSnapshots e
+// AVT_STATE._faseStack guarda a trilha de retorno. A dungeon é SEMPRE clonada ao
+// carregar para nunca compartilhar referência entre fases — raiz do bug em que
+// "uma fase sobrescreve a outra".
+
+function _avtTilesetConfigPrincipal() {
+  return AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_config || null;
+}
+
+// Descritor sintético da fase principal (não vive em fases_extras).
+function _avtFasePrincipalObj() {
+  const dd = AVT_STATE.rpg?.theme_json?.dungeon_data || null;
+  return {
+    id: 'principal', ordem: 0, nome: 'Fase inicial',
+    npc_level: dd?.npc_level ?? 1,
+    tint_hue: 0,
+    balance_config: dd?.balance_config || null,
+    tileset_img_url: dd?.tileset_img_url || null,
+    dungeon_data: dd,
+  };
+}
+window._avtFasePrincipalObj = _avtFasePrincipalObj;
+
+// Snapshot completo do estado vivo da fase atual (dungeon + entidades + tileset + cor).
+function _avtSnapshotFaseAtual() {
+  if (!AVT_STATE._faseSnapshots) AVT_STATE._faseSnapshots = {};
+  const id = AVT_STATE._faseAtualId || 'principal';
+  AVT_STATE._faseSnapshots[id] = {
+    dungeon:         AVT_STATE.dungeon,
+    entidades:       (AVT_STATE.entidades || []).map(e => _avtDeepClone(e)),
+    npcTimers:       _avtDeepClone(AVT_STATE.npcTimers) || {},
+    tilesetImgUrl:   AVT_STATE._tilesetImgUrl || null,
+    tilesetConfig:   AVT_STATE._tilesetConfig || null,
+    tilesetTextures: AVT_STATE._tilesetTextures || {},
+    tilesetLoaded:   AVT_STATE._tilesetLoaded || false,
+    hue:             AVT_STATE._faseHueShift || 0,
+  };
+  return id;
+}
+
+// Tileset da fase: SEMPRE usa o tileset_config do tileset principal; só a imagem
+// (se a fase tiver a sua) e a cor (tint_hue) variam por fase.
+function _avtAplicarTilesetFase(faseObj) {
+  AVT_STATE._faseHueShift = faseObj.tint_hue || 0;
+  const config = _avtTilesetConfigPrincipal();
+  const imgUrl = faseObj.tileset_img_url
+    || AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_img_url
+    || null;
+  if (!config || !imgUrl) return; // sem tileset configurado: mantém o estado atual
+  if (AVT_STATE._tilesetImgUrl === imgUrl && AVT_STATE._tilesetLoaded) return; // já carregado
+  AVT_STATE._tilesetImgUrl   = imgUrl;
+  AVT_STATE._tilesetConfig   = config;
+  AVT_STATE._tilesetLoaded   = false;
+  AVT_STATE._tilesetTextures = {};
+  _avtCarregarTileset(imgUrl, config)
+    .then(() => { AVT_STATE._tilesetLoaded = true; })
+    .catch(() => {});
+}
+
+async function _avtCarregarFase(faseId, opts = {}) {
+  if (!faseId) return;
+  const atualId = AVT_STATE._faseAtualId || 'principal';
+  if (faseId === atualId) { mostrarToast('Já está nesta fase', ''); return; }
+
+  // Resolver objeto da fase alvo (principal é sintética).
+  const faseObj = faseId === 'principal'
+    ? _avtFasePrincipalObj()
+    : (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === faseId) || null;
+  if (!faseObj) { mostrarToast('Fase não encontrada', 'erro'); return; }
+
+  // Gerar dungeon on-demand (e persistir) se a fase extra ainda não tem.
+  if (faseId !== 'principal' && !faseObj.dungeon_data) {
+    faseObj.dungeon_data = _avtGerarDungeon(40, 28, 6);
+    if (faseObj.dungeon_data.rooms?.length > 0) {
+      const lr = faseObj.dungeon_data.rooms[faseObj.dungeon_data.rooms.length - 1];
       const sx = lr.cx ?? lr.x, sy = lr.cy ?? lr.y;
-      if (fase.dungeon_data.tiles[sy]?.[sx] !== undefined) fase.dungeon_data.tiles[sy][sx] = AVT_T.SAIDA;
+      if (faseObj.dungeon_data.tiles[sy]?.[sx] !== undefined) faseObj.dungeon_data.tiles[sy][sx] = AVT_T.SAIDA;
     }
-    const extras = AVT_STATE.rpg.theme_json.fases_extras.map(f =>
-      f.id === fase.id ? { ...f, dungeon_data: fase.dungeon_data } : f
-    );
-    AVT_STATE.rpg.theme_json.fases_extras = extras;
+    AVT_STATE.rpg.theme_json.fases_extras = (AVT_STATE.rpg.theme_json.fases_extras || [])
+      .map(f => f.id === faseObj.id ? faseObj : f);
     try {
       await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
         method: 'PATCH', body: JSON.stringify({ theme_json: AVT_STATE.rpg.theme_json })
       });
     } catch(e) { /* continua mesmo sem persistir */ }
   }
-
-  // Salvar estado completo da fase atual antes de trocar
-  const jogador = _avtMeuJogador();
-  AVT_STATE._faseAnterior = {
-    dungeon:          AVT_STATE.dungeon,
-    entidades:        AVT_STATE.entidades.map(e => _avtDeepClone(e)),
-    npcTimers:        _avtDeepClone(AVT_STATE.npcTimers),
-    faseId:           AVT_STATE._faseAtualId || 'principal',
-    tilesetImgUrl:    AVT_STATE._tilesetImgUrl || null,
-    tilesetConfig:    AVT_STATE._tilesetConfig || null,
-    tilesetTextures:  AVT_STATE._tilesetTextures || {},
-    tilesetLoaded:    AVT_STATE._tilesetLoaded || false
-  };
-
-  // Trocar dungeon
-  AVT_STATE.dungeon = fase.dungeon_data;
-  // Metadados de progressão/animação por fase (nível dos NPCs, seed do gerador Pixi).
-  fase.dungeon_data._npcLevel = fase.npc_level ?? 1;
-  fase.dungeon_data._faseId   = fase.id;
-  if (fase.dungeon_data._faseSeed == null) fase.dungeon_data._faseSeed = _avtSeedFromStr(fase.id);
-  AVT_STATE._faseHueShift = fase.tint_hue || 0; // variação de cor por fase (Pixi/canvas)
-  AVT_STATE._faseAtualId = fase.id;
-  if (typeof AudioManager !== 'undefined') AudioManager.onEnterPhase(fase);
-
-  // Carregar tileset específico da fase, se houver; senão mantém o da fase principal
-  if (fase.tileset_img_url) {
-    const faseTs = fase.dungeon_data?.tileset_config
-      || AVT_STATE._faseAnterior?.tilesetConfig
-      || AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_config
-      || null;
-    if (faseTs) {
-      AVT_STATE._tilesetImgUrl   = fase.tileset_img_url;
-      AVT_STATE._tilesetConfig   = faseTs;
-      AVT_STATE._tilesetLoaded   = false;
-      AVT_STATE._tilesetTextures = {};
-      _avtCarregarTileset(fase.tileset_img_url, faseTs)
-        .then(() => { AVT_STATE._tilesetLoaded = true; })
-        .catch(() => {});
-    }
+  if (faseId === 'principal' && !faseObj.dungeon_data) {
+    mostrarToast('Fase inicial sem dungeon salvo', 'erro'); return;
   }
 
-  // Na nova fase: apenas o jogador que cruzou a porta + inimigos próprios da fase
-  const jogadorNaFase = jogador ? _avtDeepClone(jogador) : null;
-  AVT_STATE.entidades = [];
-  AVT_STATE.npcTimers = {};
+  // O jogador atual viaja entre fases preservando o estado vivo (HP/XP/itens).
+  const jogadorVivo = _avtMeuJogador();
+  const jogadorClone = jogadorVivo ? _avtDeepClone(jogadorVivo) : null;
 
-  if (jogadorNaFase) {
-    // Posicionar no spawn da nova fase
-    const spawns = fase.dungeon_data._spawnJogadores;
-    const sala   = fase.dungeon_data.rooms?.[0];
-    if (spawns?.length) {
-      jogadorNaFase.x = spawns[0].x;
-      jogadorNaFase.y = spawns[0].y;
-    } else if (sala) {
-      jogadorNaFase.x = sala.cx != null ? sala.cx : sala.x;
-      jogadorNaFase.y = sala.cy != null ? sala.cy : sala.y;
-    }
-    AVT_STATE.entidades.push(jogadorNaFase);
-  }
+  // 1) Snapshot da fase atual antes de trocar.
+  _avtSnapshotFaseAtual();
 
-  // Inimigos próprios desta fase.
-  // Se já visitámos esta fase, restaurar o snapshot (preserva mortes/posições dos NPCs)
-  // em vez de repopular — evita a sensação de "mesmos NPCs reposicionados".
-  if (!AVT_STATE._faseSnapshots) AVT_STATE._faseSnapshots = {};
-  const _snap = AVT_STATE._faseSnapshots[fase.id];
-  if (_snap?.entidades?.length) {
-    _snap.entidades.forEach(e => {
-      const ent = _avtDeepClone(e);
-      AVT_STATE.entidades.push(ent);
-      AVT_STATE.npcTimers[ent.id] = _avtDeepClone(_snap.npcTimers?.[ent.id]) || (_avtInitNpcTimer(ent), AVT_STATE.npcTimers[ent.id]);
-    });
+  // 2) Carregar a fase alvo: do snapshot se já visitada, senão fresca. Dungeon SEMPRE clonada.
+  const snap = AVT_STATE._faseSnapshots?.[faseId];
+  if (snap && snap.dungeon) {
+    AVT_STATE.dungeon   = _avtDeepClone(snap.dungeon);
+    AVT_STATE.entidades = (snap.entidades || []).filter(e => e.tipo !== 'jogador').map(e => _avtDeepClone(e));
+    AVT_STATE.npcTimers = _avtDeepClone(snap.npcTimers) || {};
   } else {
-    _avtPopularEntidadesInimigos(fase.dungeon_data);
+    AVT_STATE.dungeon   = _avtDeepClone(faseObj.dungeon_data);
+    AVT_STATE.entidades = [];
+    AVT_STATE.npcTimers = {};
   }
 
-  mostrarToast(`Entrando: ${fase.nome}`, 'ok');
-  _avtLog(`🚪 Entrando: ${fase.nome}`);
+  // Metadados da fase no dungeon (nível/balanceamento dos NPCs, seed do gerador).
+  AVT_STATE.dungeon._npcLevel      = faseObj.npc_level ?? 1;
+  AVT_STATE.dungeon._balanceConfig = faseObj.balance_config || null;
+  AVT_STATE.dungeon._faseId        = faseObj.id;
+  if (AVT_STATE.dungeon._faseSeed == null) AVT_STATE.dungeon._faseSeed = _avtSeedFromStr(String(faseObj.id));
+
+  AVT_STATE._faseAtualId = faseObj.id;
+  if (typeof AudioManager !== 'undefined') AudioManager.onEnterPhase(faseObj);
+
+  // 3) Tileset + cor da fase.
+  _avtAplicarTilesetFase(faseObj);
+
+  // 4) Popular inimigos apenas se a fase ainda não foi visitada.
+  if (!(snap && snap.dungeon)) {
+    _avtPopularEntidadesInimigos(AVT_STATE.dungeon);
+  }
+
+  // 5) Inserir o jogador, posicionando conforme a origem da transição.
+  if (jogadorClone) {
+    let px = null, py = null;
+    if (opts.origem === 'voltar' || opts.origem === 'saida') {
+      // Voltando: posicionar perto da porta que levou à fase de onde saímos.
+      const portaFase = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === atualId);
+      if (portaFase?.porta) { px = portaFase.porta.col + 1; py = portaFase.porta.row; }
+    }
+    if (px == null) {
+      const spawns = AVT_STATE.dungeon._spawnJogadores;
+      const sala   = AVT_STATE.dungeon.rooms?.[0];
+      if (spawns?.length) { px = spawns[0].x; py = spawns[0].y; }
+      else if (sala)      { px = sala.cx != null ? sala.cx : sala.x; py = sala.cy != null ? sala.cy : sala.y; }
+    }
+    if (px != null) { jogadorClone.x = px; jogadorClone.y = py; }
+    AVT_STATE.entidades.push(jogadorClone);
+  }
+
+  // 6) Trilha de retorno: voltar a um ancestral trunca a pilha; avançar empilha de onde viemos.
+  const stack = AVT_STATE._faseStack || (AVT_STATE._faseStack = []);
+  const idx = stack.indexOf(faseId);
+  if (idx >= 0) stack.length = idx;
+  else stack.push(atualId);
+
+  mostrarToast(faseId === 'principal' ? 'Voltou para Fase inicial' : `Entrando: ${faseObj.nome}`, 'ok');
+  _avtLog(`🚪 ${faseId === 'principal' ? 'Fase inicial' : faseObj.nome}`);
   _avtCameraUpdate();
+  if (typeof _avtCameraSnapToPlayer === 'function') _avtCameraSnapToPlayer();
   _avtMestrePainelRender();
-  _avtPhaseHostCheck(fase.id);
+  _avtPhaseHostCheck(faseObj.id);
 }
+window._avtCarregarFase = _avtCarregarFase;
+
+// Compatibilidade: entrar numa fase extra delega à navegação unificada.
+async function _avtEntrarFaseExtra(fase) {
+  if (!fase) return;
+  return _avtCarregarFase(fase.id, { origem: 'porta' });
+}
+window._avtEntrarFaseExtra = _avtEntrarFaseExtra;
 
 // Entrar numa fase é uma ação LOCAL: não arrasta os outros jogadores nem os força
 // a uma sala de espera. Apenas anuncia presença (leve) para o painel do mestre.
@@ -19830,7 +19980,7 @@ function _avtSalaEsperaFase(faseId) {
 window._avtSalaEsperaFase = _avtSalaEsperaFase;
 
 function _avtVerificarSaida(x, y) {
-  if (!AVT_STATE._faseAnterior) return;
+  if (!(AVT_STATE._faseStack && AVT_STATE._faseStack.length)) return;
   const tile = AVT_STATE.dungeon?.tiles?.[y]?.[x];
   if (tile === AVT_T.SAIDA) {
     _avtPromptFase('Voltar ao mapa anterior?', '← Voltar', () => _avtVoltarFaseAnterior());
@@ -19863,63 +20013,14 @@ function _avtPromptFase(titulo, labelAvancar, onAdvance) {
 }
 window._avtPromptFase = _avtPromptFase;
 
+// Voltar à fase anterior na trilha de retorno (topo da pilha _faseStack).
 function _avtVoltarFaseAnterior() {
-  if (!AVT_STATE._faseAnterior) return;
-
-  // Capturar posição atual do jogador na fase extra para atualizar no mapa anterior
-  const jogadorNaFase = _avtMeuJogador();
-  // Salvar o id da fase extra antes de restaurar _faseAtualId (usado para encontrar a porta)
-  const faseExtrasId = AVT_STATE._faseAtualId;
-
-  // Snapshot dos NPCs desta fase extra para preservar mortes/posições ao reentrar.
-  if (faseExtrasId && faseExtrasId !== 'principal') {
-    if (!AVT_STATE._faseSnapshots) AVT_STATE._faseSnapshots = {};
-    const _npcs = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo');
-    AVT_STATE._faseSnapshots[faseExtrasId] = {
-      entidades: _npcs.map(e => _avtDeepClone(e)),
-      npcTimers: _avtDeepClone(AVT_STATE.npcTimers) || {}
-    };
-  }
-
-  // Restaurar estado da fase anterior
-  AVT_STATE.dungeon    = AVT_STATE._faseAnterior.dungeon;
-  AVT_STATE.entidades  = AVT_STATE._faseAnterior.entidades.map(e => _avtDeepClone(e));
-  AVT_STATE.npcTimers  = _avtDeepClone(AVT_STATE._faseAnterior.npcTimers);
-  AVT_STATE._faseAtualId = AVT_STATE._faseAnterior.faseId || 'principal';
-  // Restaurar tint da fase de destino (principal = sem variação)
-  const _faseDest = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === AVT_STATE._faseAtualId);
-  AVT_STATE._faseHueShift = _faseDest?.tint_hue || 0;
-  // Restaurar tileset da fase principal se a fase extra tinha um diferente
-  if (AVT_STATE._faseAnterior.tilesetImgUrl != null) {
-    AVT_STATE._tilesetImgUrl   = AVT_STATE._faseAnterior.tilesetImgUrl;
-    AVT_STATE._tilesetConfig   = AVT_STATE._faseAnterior.tilesetConfig;
-    AVT_STATE._tilesetTextures = AVT_STATE._faseAnterior.tilesetTextures;
-    AVT_STATE._tilesetLoaded   = AVT_STATE._faseAnterior.tilesetLoaded;
-  }
-  AVT_STATE._faseAnterior = null;
-
-  // Mover o jogador de volta para perto da porta de entrada (fase principal)
-  const jogadorRestaurado = jogadorNaFase
-    ? AVT_STATE.entidades.find(e => e.id === jogadorNaFase.id)
-    : null;
-  if (jogadorRestaurado) {
-    // Posicionar ao lado da porta usada para entrar (faseExtrasId = fase de onde saiu)
-    const portaFase = (AVT_STATE.rpg?.theme_json?.fases_extras || [])
-      .find(f => f.id === faseExtrasId);
-    if (portaFase) {
-      jogadorRestaurado.x = portaFase.porta.col + 1;
-      jogadorRestaurado.y = portaFase.porta.row;
-    } else if (AVT_STATE.dungeon?.rooms?.length) {
-      const sala = AVT_STATE.dungeon.rooms[0];
-      jogadorRestaurado.x = sala.cx != null ? sala.cx : sala.x;
-      jogadorRestaurado.y = sala.cy != null ? sala.cy : sala.y;
-    }
-  }
-
-  mostrarToast('Voltou ao mapa anterior', 'ok');
-  _avtCameraUpdate();
-  _avtMestrePainelRender();
+  const stack = AVT_STATE._faseStack || [];
+  if (!stack.length) return;
+  const dest = stack[stack.length - 1];
+  return _avtCarregarFase(dest, { origem: 'voltar' });
 }
+window._avtVoltarFaseAnterior = _avtVoltarFaseAnterior;
 
 function _avtMestreGerarPersonagensExterno() {
   const dungeon = AVT_STATE.dungeon;
@@ -25147,44 +25248,8 @@ try{
   async function _avtIrParaFase(faseId) {
     try {
       if (!faseId) return;
-      // Já estou nela?
-      if ((AVT_STATE._faseAtualId || 'principal') === faseId) {
-        if (typeof mostrarToast === 'function') mostrarToast('Já está nesta fase', '');
-        return;
-      }
-      if (faseId === 'principal') {
-        // Estou em fase extra com referência preservada → volta direta
-        if (AVT_STATE._faseAnterior) {
-          if (typeof _avtVoltarFaseAnterior === 'function') _avtVoltarFaseAnterior();
-          return;
-        }
-        // Recarrega dungeon principal do theme_json (caso _faseAnterior tenha se perdido)
-        const t = AVT_STATE.rpg?.theme_json || {};
-        if (t.dungeon_data?.tiles) {
-          AVT_STATE.dungeon = t.dungeon_data;
-          AVT_STATE._faseAtualId = 'principal';
-          AVT_STATE._faseAnterior = null;
-          AVT_STATE.entidades = [];
-          AVT_STATE.npcTimers = {};
-          if (typeof _avtPopularEntidades === 'function') _avtPopularEntidades();
-          if (typeof _avtAplicarEstadoInimigosPersistido === 'function') _avtAplicarEstadoInimigosPersistido();
-          if (typeof _avtCameraSnapToPlayer === 'function') _avtCameraSnapToPlayer();
-          if (typeof _avtMestrePainelRender === 'function') _avtMestrePainelRender();
-          if (typeof mostrarToast === 'function') mostrarToast('Voltou para Fase inicial', 'ok');
-        } else {
-          if (typeof mostrarToast === 'function') mostrarToast('Fase inicial sem dungeon salvo', 'erro');
-        }
-        return;
-      }
-      // Fase extra: se estou em outra extra, voltar para principal antes
-      if (AVT_STATE._faseAtualId && AVT_STATE._faseAtualId !== 'principal') {
-        if (AVT_STATE._faseAnterior && typeof _avtVoltarFaseAnterior === 'function') {
-          _avtVoltarFaseAnterior();
-        }
-      }
-      const fase = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === faseId);
-      if (!fase) { if (typeof mostrarToast === 'function') mostrarToast('Fase não encontrada', 'erro'); return; }
-      if (typeof _avtEntrarFaseExtra === 'function') await _avtEntrarFaseExtra(fase);
+      // Navegação unificada: snapshot da fase atual + carregamento da alvo (clonada).
+      if (typeof _avtCarregarFase === 'function') await _avtCarregarFase(faseId);
     } catch(e) {
       try { console.warn('[AVT] _avtIrParaFase:', e); } catch(_) {}
     }
