@@ -8894,7 +8894,7 @@ function _avtAtualizarDominados(dt) {
 function _avtIniciarAnimPersistente(ef, entAlvo, casterEnt) {
   if (!ef?.animacao_persistente?.pixi_studio_id) return;
   if (typeof avtPixiPlayPersistent !== 'function') return;
-  const key = `${entAlvo?.id}_${ef.nome}`;
+  const key = `${entAlvo?.id}_${ef.tipo}`;
   avtPixiPlayPersistent(ef.animacao_persistente.pixi_studio_id, entAlvo, casterEnt, ef.animacao_persistente.posicao || 'alvo', key);
 }
 
@@ -11023,6 +11023,7 @@ async function _avtSkillOverlaySel(skId) {
           if (ef.tipo === 'silence')    casterEnt._silenciado = true;
           if (ef.tipo === 'dot')        _avtMostrarDotDrip(casterEnt, ef.dot_variante);
           if (ef.tipo === 'hot')        mostrarToast(`♻ ${casterEnt.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
+          _avtIniciarAnimPersistente(_efSelf, casterEnt, casterEnt);
         }
       });
     }
@@ -11592,6 +11593,7 @@ async function _avtExecutarAtaque() {
                     if (ef.tipo === 'atravessar') alvoProcEf._atravessar = true;
                     if (ef.tipo === 'dot')        _avtMostrarDotDrip(alvoProcEf, ef.dot_variante);
                     if (ef.tipo === 'hot')        mostrarToast(`♻ ${alvoProcEf.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
+                    _avtIniciarAnimPersistente(_efEntryA, alvoProcEf, entCasterAoe);
                   }
                 }
               });
