@@ -50,7 +50,8 @@ var PIXI_STUDIO_STATE = {
   _pickerCb:      null,
   _origin:        null,  // 'aventura' when opened from adventure menu
   _drag:          null,  // { layerId, type, kfIdx, startX, startY, origX, origY, origScale, origRot, spX, spY }
-  _recording:     false,
+  _recordPhase:    null,    // null | 'selecting' | 'recording'
+  _recordStartPos: null,    // {x,y} canvas-relative origin chosen before recording
   _recordPoints:  [],
   _recordStartTs: 0,
   _history:       [],
@@ -406,7 +407,7 @@ function psAddLayer(tipo) {
   if (!cur) return;
   const id = 'l_' + Date.now();
   const maxZ = cur.config_json.layers.reduce((m, l) => Math.max(m, l.z || 0), 0);
-  let layer = { id, tipo, nome: tipo.charAt(0).toUpperCase() + tipo.slice(1), visivel: true, z: maxZ + 1, blendMode: 'add', keyframes: [] };
+  let layer = { id, tipo, nome: tipo.charAt(0).toUpperCase() + tipo.slice(1), visivel: true, z: maxZ + 1, blendMode: 'add', keyframes: [], behavior_override: null, posicao_override: null };
   if (tipo === 'emitter') {
     layer.texture = 'spark'; layer.texture_url = null; layer.glow = null;
     layer.emitter = {
@@ -993,6 +994,8 @@ function psUpdateFilterParam(id, idx, key, val) {
 }
 
 function _psLayerCommonHtml(layer) {
+  const bOpts = [['','(herdar global)'],['one-shot','Disparo único'],['loop','Loop'],['projectile','Projétil (A→B)'],['aoe','AOE'],['follow-caster','Seguir conjurador'],['follow-target','Seguir alvo'],['channel','Canalizado']];
+  const pOpts = [['','(herdar global)'],['alvo','Alvo'],['atacante','Atacante'],['meio','Centro'],['area','Área'],['trajetoria','Trajetória']];
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
   <div class="form-group"><label style="font-size:0.66rem">Nome</label>
     <input type="text" value="${_esc(layer.nome)}" oninput="psUpdateLayerProp('${layer.id}','nome',this.value);_psRenderLayerList()"
@@ -1000,6 +1003,18 @@ function _psLayerCommonHtml(layer) {
   <div class="form-group"><label style="font-size:0.66rem">Z-order</label>
     <input type="number" value="${layer.z||0}" min="0" max="20" oninput="psUpdateLayerProp('${layer.id}','z',parseInt(this.value)||0)"
       style="width:100%;padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem;text-align:center"></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+  <div class="form-group"><label style="font-size:0.62rem">Comportamento</label>
+    <select onchange="psUpdateLayerProp('${layer.id}','behavior_override',this.value||null)"
+      style="width:100%;padding:3px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.62rem">
+      ${bOpts.map(([v,l])=>`<option value="${v}"${(layer.behavior_override||'')=== v?' selected':''}>${l}</option>`).join('')}
+    </select></div>
+  <div class="form-group"><label style="font-size:0.62rem">Posição</label>
+    <select onchange="psUpdateLayerProp('${layer.id}','posicao_override',this.value||null)"
+      style="width:100%;padding:3px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.62rem">
+      ${pOpts.map(([v,l])=>`<option value="${v}"${(layer.posicao_override||'')=== v?' selected':''}>${l}</option>`).join('')}
+    </select></div>
 </div>`;
 }
 
@@ -1818,30 +1833,65 @@ function _psDragEnd() {
 // ══ TRAJECTORY RECORDING ══════════════════════════════════════════════════════
 
 function psToggleGravar() {
-  if (PIXI_STUDIO_STATE._recording) { _psRecordFinish(); return; }
+  const phase = PIXI_STUDIO_STATE._recordPhase;
+  if (phase === 'recording') { _psRecordFinish(); return; }
+  if (phase === 'selecting') {
+    PIXI_STUDIO_STATE._recordPhase = null;
+    const canvas = document.getElementById('ps-preview-canvas');
+    if (canvas) { canvas.style.outline = ''; canvas.style.cursor = ''; canvas.removeEventListener('pointerdown', _psRecordSelectOrigin); }
+    const btn = document.getElementById('ps-record-btn');
+    if (btn) { btn.textContent = '⏺ Gravar'; btn.style.color = ''; btn.style.borderColor = ''; }
+    return;
+  }
   const layer = _psGetLayer(PIXI_STUDIO_STATE.layerSel);
   if (!layer || layer.tipo !== 'emitter') return mostrarToast('Selecione um emissor primeiro', 'aviso');
+  // Phase 1: enter 'selecting' — user must click canvas to set start position
+  PIXI_STUDIO_STATE._recordPhase = 'selecting';
+  PIXI_STUDIO_STATE._recordStartPos = null;
+  const canvas = document.getElementById('ps-preview-canvas');
+  if (canvas) {
+    canvas.style.outline = '2px dashed #f0cc6a';
+    canvas.style.cursor = 'crosshair';
+    canvas.addEventListener('pointerdown', _psRecordSelectOrigin, { once: true });
+  }
+  const btn = document.getElementById('ps-record-btn');
+  if (btn) { btn.textContent = '✕ Cancelar'; btn.style.color = '#f0cc6a'; btn.style.borderColor = '#f0cc6a'; }
+  mostrarToast('Clique no canvas para definir o ponto de origem', 'aviso');
+}
+
+function _psRecordSelectOrigin(e) {
+  if (PIXI_STUDIO_STATE._recordPhase !== 'selecting') return;
+  const rect = e.target.getBoundingClientRect();
+  PIXI_STUDIO_STATE._recordStartPos = {
+    x: e.clientX - rect.left - rect.width / 2,
+    y: e.clientY - rect.top - rect.height / 2,
+  };
+  const canvas = document.getElementById('ps-preview-canvas');
+  if (canvas) canvas.style.cursor = '';
   _psRecordStart();
 }
 
 function _psRecordStart() {
   const canvas = document.getElementById('ps-preview-canvas');
   if (!canvas) return;
-  PIXI_STUDIO_STATE._recording = true;
+  PIXI_STUDIO_STATE._recordPhase = 'recording';
   PIXI_STUDIO_STATE._recordPoints = [];
+  // Inject the pre-selected origin as the first keyframe at t=0
+  const origin = PIXI_STUDIO_STATE._recordStartPos;
+  if (origin) PIXI_STUDIO_STATE._recordPoints.push({ x: origin.x, y: origin.y, t: 0 });
   PIXI_STUDIO_STATE._recordStartTs = Date.now();
   canvas.style.outline = '2px solid #e8604c';
   canvas.addEventListener('pointermove', _psRecordPoint);
   canvas.addEventListener('pointerup', _psRecordFinish);
   const btn = document.getElementById('ps-record-btn');
-  if (btn) { btn.style.color = '#e8604c'; btn.style.borderColor = '#e8604c'; }
+  if (btn) { btn.textContent = '⏹ Parar'; btn.style.color = '#e8604c'; btn.style.borderColor = '#e8604c'; }
   PIXI_STUDIO_STATE.previewTime = 0; PIXI_STUDIO_STATE.previewPlaying = true;
   PIXI_STUDIO_STATE._lastTs = 0; psPreviewRebuildAll();
   mostrarToast('Mova o mouse no canvas. Solte para finalizar.', 'aviso');
 }
 
 function _psRecordPoint(e) {
-  if (!PIXI_STUDIO_STATE._recording) return;
+  if (PIXI_STUDIO_STATE._recordPhase !== 'recording') return;
   const rect = e.target.getBoundingClientRect();
   const x = e.clientX - rect.left - rect.width / 2;
   const y = e.clientY - rect.top - rect.height / 2;
@@ -1851,13 +1901,13 @@ function _psRecordPoint(e) {
 }
 
 function _psRecordFinish() {
-  if (!PIXI_STUDIO_STATE._recording) return;
-  PIXI_STUDIO_STATE._recording = false;
+  if (PIXI_STUDIO_STATE._recordPhase !== 'recording') return;
+  PIXI_STUDIO_STATE._recordPhase = null;
   PIXI_STUDIO_STATE.previewPlaying = false;
   const canvas = document.getElementById('ps-preview-canvas');
   if (canvas) { canvas.style.outline = ''; canvas.removeEventListener('pointermove', _psRecordPoint); canvas.removeEventListener('pointerup', _psRecordFinish); }
   const btn = document.getElementById('ps-record-btn');
-  if (btn) { btn.style.color = ''; btn.style.borderColor = ''; }
+  if (btn) { btn.textContent = '⏺ Gravar'; btn.style.color = ''; btn.style.borderColor = ''; }
   const raw = PIXI_STUDIO_STATE._recordPoints;
   if (raw.length < 3) return mostrarToast('Mova mais para gravar trajetória', 'aviso');
   const smooth = _psSmoothPath(raw);

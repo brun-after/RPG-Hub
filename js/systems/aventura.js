@@ -7743,6 +7743,7 @@ async function _avtPrimeiroAtaqueSelecionarSkill(skId) {
             expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs(), _ooc:true};
           if (!entJog.status_effects) entJog.status_effects = [];
           entJog.status_effects.push(_oocEf);
+          _avtIniciarAnimPersistente(_oocEf, entJog, null);
           if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
           const _oocEntry = {entId:entJog.id, entNome:entJog.nome, ef:{..._oocEf}, lastTickAt:Date.now()};
           AVT_STATE._oocStatusEffects.push(_oocEntry);
@@ -7833,6 +7834,7 @@ async function _avtAplicarSkillAliadoOoc(skId, alvoId) {
           expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs(), _ooc:true};
         if (!entAlvo.status_effects) entAlvo.status_effects = [];
         entAlvo.status_effects.push(_oocEfAl);
+        _avtIniciarAnimPersistente(_oocEfAl, entAlvo, jogador);
         if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
         const _oocEntryAl = {entId:entAlvo.id, entNome:entAlvo.nome, ef:{..._oocEfAl}, lastTickAt:Date.now()};
         AVT_STATE._oocStatusEffects.push(_oocEntryAl);
@@ -8886,6 +8888,19 @@ function _avtAtualizarDominados(dt) {
   });
 }
 
+function _avtIniciarAnimPersistente(ef, entAlvo, casterEnt) {
+  if (!ef?.animacao_persistente?.pixi_studio_id) return;
+  if (typeof avtPixiPlayPersistent !== 'function') return;
+  const key = `${entAlvo?.id}_${ef.nome}`;
+  avtPixiPlayPersistent(ef.animacao_persistente.pixi_studio_id, entAlvo, casterEnt, ef.animacao_persistente.posicao || 'alvo', key);
+}
+
+function _avtPararAnimPersistente(ef, entAlvo) {
+  if (!ef?.animacao_persistente?.pixi_studio_id) return;
+  if (typeof avtPixiStopPersistent !== 'function') return;
+  avtPixiStopPersistent(`${entAlvo?.id}_${ef.nome}`);
+}
+
 function _avtTickEfeitosOOC(now) {
   // Expirar avatares OOC (fora de combate — os de combate são gerenciados por _avtTurnoAvancar)
   const _cdMsAv = _avtGetEfeitoCooldownMs();
@@ -8971,6 +8986,7 @@ function _avtTickEfeitosOOC(now) {
           e => !(e._ooc && e.tipo === rec.ef.tipo)
         );
       }
+      _avtPararAnimPersistente(rec.ef, ent);
       return false;
     }
     if (nowMs - rec.lastTickAt >= cdMs) {
@@ -11642,6 +11658,7 @@ async function _avtExecutarAtaque() {
                 _formulaAtaque: sk?.formula_dano || '1d6',
               };
               alvoProcEf.status_effects.push(_efEntry);
+              _avtIniciarAnimPersistente(_efEntry, alvoProcEf, entCaster);
               const _initEntSync = b.iniciativa.find(e => e.id === alvoProcEf.id);
               if (_initEntSync) {
                 if (!_initEntSync.status_effects) _initEntSync.status_effects = [];
@@ -12110,6 +12127,7 @@ function _avtProcessarStatusEffects(bat, ent) {
         r => !(r.entId === ent.id && r.ef.tipo === ef.tipo && r.ef._ooc)
       );
     }
+    if (!mantido) _avtPararAnimPersistente(ef, ent);
     return mantido;
   });
   if (entObj) entObj.status_effects = ent.status_effects.map(ef => ({...ef}));
@@ -12176,6 +12194,7 @@ async function _avtExecutarSkillEmAliado(skId, alvoId) {
           expiry_ms: Date.now() + (ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs()};
         if (!entAlvo.status_effects) entAlvo.status_effects = [];
         entAlvo.status_effects.push(_hotEntry);
+        _avtIniciarAnimPersistente(_hotEntry, entAlvoObj||entAlvo, caster);
         if (entAlvoObj && entAlvoObj !== entAlvo) {
           if (!entAlvoObj.status_effects) entAlvoObj.status_effects = [];
           entAlvoObj.status_effects.push({..._hotEntry});
@@ -12206,6 +12225,7 @@ async function _avtExecutarSkillEmAliado(skId, alvoId) {
           expiry_ms: Date.now() + (ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs()};
         if (!entAlvo.status_effects) entAlvo.status_effects = [];
         entAlvo.status_effects.push(_efEntryAl);
+        _avtIniciarAnimPersistente(_efEntryAl, entAlvoObj||entAlvo, caster);
         if (entAlvoObj && entAlvoObj !== entAlvo) {
           if (!entAlvoObj.status_effects) entAlvoObj.status_effects = [];
           entAlvoObj.status_effects.push({..._efEntryAl});
