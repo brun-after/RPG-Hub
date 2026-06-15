@@ -3646,6 +3646,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
         isBoss: ini.isBoss || false,
         xpBase: ini.xpBase ?? (ini.isBoss ? 50 : 10),
         presetTipo: aparenciaTipo,
+        topdown_ia: ini.topdown_ia || null,
         tipoClasse, alcance_celulas: ini.alcance_celulas ?? alcancePadrao,
         classe_aventura: tipoClasse,
         atributos: _atrsIni,
@@ -3725,6 +3726,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
         hp: e.hpMax, cor: e.cor, isBoss: e.isBoss,
         pacienciaSecs: e.pacienciaSecs, deteccaoRaio: e.deteccaoRaio,
         xpBase: e.xpBase, aparencia_tipo: e.presetTipo,
+        topdown_ia: e.topdown_ia || null,
         tipoClasse: e.tipoClasse, alcance_celulas: e.alcance_celulas,
         atributos: e.atributos, nivel: e.nivel,
         respawnDelay: e.respawnDelay, respawnTipo: e.respawnTipo,
@@ -5391,8 +5393,9 @@ function _avtCarregarAparencia(ent) {
   if (!ent) return;
   const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
 
-  // Top-down IA token (image uploaded by user, coords from AI)
-  const tdData = dbChar?.custom_attrs?.topdown_ia;
+  // Top-down IA token (image uploaded by user, coords from AI).
+  // NPCs procedurais não têm dbChar: a aparência fica por instância em ent.topdown_ia.
+  const tdData = dbChar?.custom_attrs?.topdown_ia || ent.topdown_ia;
   if (tdData?.img_url) { _avtCarregarTopdownIa(ent, tdData); return; }
 
   const data   = dbChar?.custom_attrs?.animado_data;
@@ -24034,23 +24037,34 @@ async function _avtBulkAplicarAparenciaPreset(key) {
   const alvos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.presetTipo === key);
   if (!alvos.length) { mostrarToast('Nenhum NPC com este preset na cena', 'aviso'); return; }
   mostrarToast(`Aplicando aparência a ${alvos.length} NPC(s)…`, '');
-  let ok = 0, erros = 0;
+  let ok = 0, erros = 0, precisaSalvarDungeon = false;
+  const snaps = (AVT_STATE.dungeon && AVT_STATE.dungeon._inimigosJson) || [];
   for (let i = 0; i < alvos.length; i++) {
     const ent = alvos[i];
-    const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
-    if (!dbChar?.id) { erros++; continue; }
     const maskCor = AVT_BULK_MASK_CORES[i % AVT_BULK_MASK_CORES.length];
     try {
       const maskedToken = await _avtBulkMaskPng(st.tokenFile, maskCor);
       const tokenUrl    = await _avtBulkUpload(maskedToken, ent.id, 'map');
-      const newAttrs = { ...(dbChar.custom_attrs || {}), topdown_ia: { img_url: tokenUrl, coords, base_facing: facing } };
-      await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), { method:'PATCH', body: JSON.stringify({ custom_attrs: newAttrs }) });
-      dbChar.custom_attrs = newAttrs;
+      const td = { img_url: tokenUrl, coords, base_facing: facing };
+      const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
+      if (dbChar?.id) {
+        // NPC vinculado a um personagem do banco: persiste em characters.custom_attrs.
+        const newAttrs = { ...(dbChar.custom_attrs || {}), topdown_ia: td };
+        await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), { method:'PATCH', body: JSON.stringify({ custom_attrs: newAttrs }) });
+        dbChar.custom_attrs = newAttrs;
+      } else {
+        // NPC procedural (sem dbId): persiste por instância no entity + snapshot do dungeon.
+        ent.topdown_ia = td;
+        const snap = snaps.find(s => s.id === ent.id || s.nome === ent.nome);
+        if (snap) snap.topdown_ia = td;
+        precisaSalvarDungeon = true;
+      }
       delete AVT_STATE.aparencias?.[ent.id];
       if (typeof _avtCarregarAparencia === 'function') _avtCarregarAparencia(ent);
       ok++;
     } catch(err) { console.error('_avtBulkAplicarAparenciaPreset:', ent.nome, err); erros++; }
   }
+  if (precisaSalvarDungeon) { try { await _avtSalvarDungeon(); } catch(_) {} }
   mostrarToast(`✓ ${ok} atualizado(s)${erros ? ', ' + erros + ' erro(s)' : ''}`, ok ? 'ok' : 'aviso');
 }
 window._avtBulkAplicarAparenciaPreset = _avtBulkAplicarAparenciaPreset;
