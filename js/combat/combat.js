@@ -2169,6 +2169,10 @@ function skAbrirFormEfeito() {
   fields.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
   checks.forEach(id => { const el = document.getElementById(id); if(el) el.checked=false; });
   inputs.forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  // Reset animação persistente
+  const _sefPpId = document.getElementById('sef-pixi-persist-id');     if (_sefPpId)   _sefPpId.value = '';
+  const _sefPpNm = document.getElementById('sef-pixi-persist-nome');   if (_sefPpNm)   _sefPpNm.textContent = 'Nenhuma';
+  const _sefPpPs = document.getElementById('sef-pixi-persist-posicao');if (_sefPpPs)   _sefPpPs.value = 'alvo';
   const _sefStunTurnos = document.getElementById('sef-stun-turnos'); if (_sefStunTurnos) _sefStunTurnos.value = 1;
   document.getElementById('sef-dot-turnos').value  = 3;
   document.getElementById('sef-hot-turnos').value  = 3;
@@ -2308,6 +2312,12 @@ function skConfirmarEfeito() {
     efeito.duracao_turnos = parseInt(document.getElementById('sef-rastro-anima-turnos')?.value) || 3;
     efeito.rastro_cor     = document.getElementById('sef-rastro-anima-cor')?.value || '#5ee09a';
   }
+  // Animação persistente (Studio Pixi)
+  const _ppId  = document.getElementById('sef-pixi-persist-id')?.value?.trim();
+  const _ppNom = document.getElementById('sef-pixi-persist-nome')?.textContent?.trim();
+  const _ppPos = document.getElementById('sef-pixi-persist-posicao')?.value || 'alvo';
+  if (_ppId) efeito.animacao_persistente = { pixi_studio_id: _ppId, pixi_studio_nome: _ppNom || _ppId, posicao: _ppPos };
+
   SK_EFEITOS_TEMP.push(efeito);
   skRenderEfeitosLista();
   document.getElementById('sk-efeito-form').style.display = 'none';
@@ -2316,6 +2326,24 @@ function skConfirmarEfeito() {
 function skRemoverEfeito(idx) {
   SK_EFEITOS_TEMP.splice(idx, 1);
   skRenderEfeitosLista();
+}
+
+function skAbrirPixiPersist() {
+  if (typeof PIXI_STUDIO_STATE === 'undefined') return mostrarToast('Studio Pixi não carregado.', 'erro');
+  if (typeof psCarregarLista === 'function' && !PIXI_STUDIO_STATE?.animacoes?.length) psCarregarLista();
+  psPickerAbrir((id, nome) => {
+    const idEl   = document.getElementById('sef-pixi-persist-id');
+    const nomeEl = document.getElementById('sef-pixi-persist-nome');
+    if (idEl)   idEl.value = id;
+    if (nomeEl) nomeEl.textContent = nome || id;
+  });
+}
+
+function skLimparPixiPersist() {
+  const idEl   = document.getElementById('sef-pixi-persist-id');
+  const nomeEl = document.getElementById('sef-pixi-persist-nome');
+  if (idEl)   idEl.value = '';
+  if (nomeEl) nomeEl.textContent = 'Nenhuma';
 }
 
 function skRenderEfeitosLista() {
@@ -2352,6 +2380,10 @@ function skRenderEfeitosLista() {
     if (ef.tipo === 'empurrao') {
       const dirLbl = ef.empurrao_direcao === 'perto' ? 'Puxão' : 'Empurrão';
       tags.push({ txt: `💨 ${dirLbl} ${ef.empurrao_distancia} células`, cor: '#f0a84b' });
+    }
+    if (ef.animacao_persistente?.pixi_studio_id) {
+      const posLbl = { alvo:'alvo', atacante:'conjurador', meio:'centro' }[ef.animacao_persistente.posicao] || ef.animacao_persistente.posicao;
+      tags.push({ txt: `✨ Anim. ${ef.animacao_persistente.pixi_studio_nome||'?'} (${posLbl})`, cor: '#7ec8f0' });
     }
     if (ef.efeito_atrasado) {
       const tipoLbl = { dano_aoe:'💥 Dano AoE', cura_aoe:'💚 Cura AoE', buff_aoe:'✨ Buff AoE', movimento:'🏃 Mov', atributo:'⬆ Attr' }[ef.tipo_efeito_atrasado||'dano_aoe'] || '💥 Explosão';

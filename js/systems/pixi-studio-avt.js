@@ -3,7 +3,8 @@
 // Depends on: aventura.js (_avtPixiParticleAnim, _avtEnsurePixiParticles,
 //              _avtProcTextures, AVT_STATE), pixi-studio.js (PIXI_STUDIO_STATE)
 
-var _PS_AVT_ACTIVE = [];  // { app, overlayCanvas, emitters, trackFn, timerId }
+var _PS_AVT_ACTIVE    = [];  // { app, overlayCanvas, emitters, trackFn, timerId }
+var _PS_PERSISTENT    = new Map();  // key -> { cleanup } for duration-bound persistent animations
 
 // Reference positions matching pixi-studio.js PS_ATAC_REF / PS_ALVO_REF
 const _PS_ATAC_REF = { x: -160, y: 0 };
@@ -210,8 +211,9 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior) {
         sp.x = scrPos.x;
         sp.y = scrPos.y;
       } else {
-        sp.x = startScr.x + (kf.x ?? 0);
-        sp.y = startScr.y + (kf.y ?? 0);
+        const anchor = _psAvtLayerAnchor(layer, startScr, endScr);
+        sp.x = anchor.x + (kf.x ?? 0);
+        sp.y = anchor.y + (kf.y ?? 0);
       }
 
       const sv = (kf.scale ?? 1) * bs;
@@ -289,10 +291,11 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior) {
   const startMs = performance.now();
   const tick = () => {
     const t = Math.min((performance.now() - startMs) / durMs, 1);
-    const anchorX = isProj ? startScr.x + (endScr.x - startScr.x) * t : endScr.x;
-    const anchorY = isProj ? startScr.y + (endScr.y - startScr.y) * t : endScr.y;
     for (const it of items) {
       const l = it.layer;
+      const layerAnchor = _psAvtLayerAnchor(l, startScr, endScr);
+      const anchorX = isProj ? startScr.x + (endScr.x - startScr.x) * t : layerAnchor.x;
+      const anchorY = isProj ? startScr.y + (endScr.y - startScr.y) * t : layerAnchor.y;
       const st = l.start_t ?? 0, et = l.end_t ?? 1;
       const vis = t >= st && t <= et;
       const tRel = et > st ? (t - st) / (et - st) : t;
@@ -327,6 +330,15 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior) {
     try { app.destroy(true, { children: true }); } catch (_) {}
     overlayCanvas.remove();
   }, durMs + 200);
+}
+
+// Helper: resolve effective anchor screen pos for a layer given posicao_override
+function _psAvtLayerAnchor(layer, atacScr, alvoScr) {
+  const pos = layer.posicao_override;
+  if (!pos || pos === 'alvo') return alvoScr;
+  if (pos === 'atacante') return atacScr;
+  if (pos === 'meio') return { x: (atacScr.x + alvoScr.x) / 2, y: (atacScr.y + alvoScr.y) / 2 };
+  return alvoScr;
 }
 
 // ── Render emitter layers following their recorded spawn_path ─────────────────
@@ -412,8 +424,9 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr) {
           em.updateSpawnPos(pos.x, pos.y);
         }
       } else if (inRange) {
+        const anchor = _psAvtLayerAnchor(layer, atacScr, alvoScr);
         const ox = layer.offset?.x || 0, oy = layer.offset?.y || 0;
-        em.updateSpawnPos(alvoScr.x + ox, alvoScr.y + oy);
+        em.updateSpawnPos(anchor.x + ox, anchor.y + oy);
       }
       em.update(delta);
     }
@@ -454,32 +467,46 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
     }
   }
 
+  // Separate layers with per-layer behavior_override (follow-caster/follow-target) from the rest
+  const FOLLOW_OVR = ['follow-caster', 'follow-target', 'channel'];
+  const overrideLayers = (cfg.layers || []).filter(l => l.visivel && l.behavior_override && FOLLOW_OVR.includes(l.behavior_override));
+  const mainLayers     = (cfg.layers || []).filter(l => !(l.behavior_override && FOLLOW_OVR.includes(l.behavior_override)));
+  // Render per-layer follow overrides immediately
+  for (const ol of overrideLayers) {
+    const singleCfg = Object.assign({}, cfg, { layers: [ol] });
+    const followEnt = ol.behavior_override === 'follow-target' ? (alvoEnt || atacanteEnt) : atacanteEnt;
+    _psAvtFollow(singleCfg, followEnt, durMs);
+  }
+  // Use filtered config for main rendering when there are overrides
+  const mainCfg = overrideLayers.length ? Object.assign({}, cfg, { layers: mainLayers }) : cfg;
+  if (!mainLayers.filter(l => l.visivel).length && behavior !== 'chain') return 0;
+
   switch (behavior) {
     case 'projectile':
-      return _psAvtProjectile(cfg, atacScr, alvoScr, alvoEnt);
+      return _psAvtProjectile(mainCfg, atacScr, alvoScr, alvoEnt);
     case 'follow-caster':
     case 'channel':
-      _psAvtFollow(cfg, atacanteEnt, durMs);
+      _psAvtFollow(mainCfg, atacanteEnt, durMs);
       return 0;
     case 'follow-target':
-      _psAvtFollow(cfg, alvoEnt, durMs);
+      _psAvtFollow(mainCfg, alvoEnt, durMs);
       return 0;
     case 'chain':
       _psAvtChain(cfg, atacanteEnt, alvoEnt, isAreaMode);
       return 0;
     default: {
       // one-shot, loop, aoe — prefer spawn_path if present, else existing pipeline
-      const hasPath = (cfg.layers || []).some(l => l.tipo === 'emitter' && l.spawn_path?.length);
+      const hasPath = (mainCfg.layers || []).some(l => l.tipo === 'emitter' && l.spawn_path?.length);
       if (hasPath) {
-        _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr);
+        _psAvtRenderWithSpawnPath(mainCfg, atacScr, alvoScr);
       } else {
-        const avtCfg = _psToAvtConfig(cfg);
+        const avtCfg = _psToAvtConfig(mainCfg);
         if (avtCfg && typeof _avtPixiParticleAnim === 'function') {
           _avtPixiParticleAnim(avtCfg, atacScr, alvoScr, posicao);
         }
       }
-      _psAvtRenderSprites(cfg, atacScr, alvoScr, behavior);
-      _psAvtRenderShapes(cfg, atacScr, alvoScr, behavior);
+      _psAvtRenderSprites(mainCfg, atacScr, alvoScr, behavior);
+      _psAvtRenderShapes(mainCfg, atacScr, alvoScr, behavior);
       return 0;
     }
   }
@@ -758,6 +785,133 @@ function _psAvtChain(cfg, atacanteEnt, alvoEnt, isAreaMode) {
   }
 }
 
+// ── Persistent animation: plays indefinitely until explicitly stopped ─────────
+// Used for status effects that last multiple turns (HoT, DoT, Atravessar, etc.)
+// key: unique string (e.g. "entId_efeitoNome") to identify this animation
+// posicao: 'alvo' | 'atacante' | 'meio' — which entity to follow
+async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
+  avtPixiStopPersistent(key);  // stop any existing animation for this key
+
+  const cfg = await _psAvtLoadCfg(animId);
+  if (!cfg || !cfg.layers?.length) return;
+
+  await _avtEnsurePixiParticles();
+  if (typeof PIXI === 'undefined') return;
+
+  const canvas = AVT_STATE.canvas;
+  if (!canvas) return;
+
+  const primaryEnt = (posicao === 'atacante') ? (casterEnt || alvoEnt) : (alvoEnt || casterEnt);
+  if (!primaryEnt) return;
+
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.width  = canvas.width;
+  overlayCanvas.height = canvas.height;
+  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
+  canvas.parentElement?.appendChild(overlayCanvas);
+
+  let app;
+  try {
+    app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false });
+  } catch (e) { overlayCanvas.remove(); return; }
+
+  const worldRoot = new PIXI.Container();
+  app.stage.addChild(worldRoot);
+  const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
+
+  // Resolve which entity each layer should track
+  const _resolveLayerEnt = (l) => {
+    const ov = l.behavior_override;
+    if (ov === 'follow-caster' || ov === 'channel') return casterEnt || alvoEnt;
+    if (ov === 'follow-target') return alvoEnt || casterEnt;
+    return primaryEnt;
+  };
+
+  const cycleDurMs = cfg.duracao_ms || cfg.duration || 1000;
+  const startScr = _psAvtToScreen(primaryEnt);
+  const emitters = [];
+
+  for (const l of (cfg.layers || [])) {
+    if (!l.visivel) continue;
+    const trackEnt = _resolveLayerEnt(l);
+    if (l.tipo === 'emitter' && l.emitter) {
+      const container = new PIXI.Container();
+      container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
+      worldRoot.addChild(container);
+      let emitCfg = Object.assign({}, l.emitter, { emitterLifetime: -1 });
+      const tex = l.texture_url ? PIXI.Texture.from(l.texture_url) : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
+      const texArr = [tex || PIXI.Texture.WHITE];
+      if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) { try { emitCfg = PIXI.particles.upgradeConfig(emitCfg, texArr); } catch (_) {} }
+      try {
+        const em = new PIXI.particles.Emitter(container, emitCfg);
+        em.updateSpawnPos(startScr.x, startScr.y);
+        em.emit = true;
+        emitters.push({ em, layer: l, trackEnt });
+      } catch (_) {}
+    } else if (l.tipo === 'sprite' && l.texture_url) {
+      try {
+        const tex = PIXI.Texture.from(l.texture_url);
+        const sp = new PIXI.Sprite(tex);
+        sp.anchor.set(0.5);
+        sp.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
+        const bs = l.base_scale ?? 1;
+        sp.scale.x = bs * (l.flip_x ? -1 : 1);
+        sp.scale.y = bs * (l.flip_y ? -1 : 1);
+        sp.x = startScr.x; sp.y = startScr.y;
+        worldRoot.addChild(sp);
+        emitters.push({ _isSprite: true, sp, layer: l, trackEnt, cycleStart: performance.now() });
+      } catch (e) {}
+    }
+  }
+
+  let lastTs = performance.now();
+  const trackFn = () => {
+    const now = performance.now();
+    const delta = (now - lastTs) / 1000;
+    lastTs = now;
+    for (const em of emitters) {
+      const scr = _psAvtToScreen(em.trackEnt || primaryEnt);
+      if (em._isSprite) {
+        // Loop keyframes using cycleDurMs
+        const t = ((now - em.cycleStart) % cycleDurMs) / cycleDurMs;
+        const kf = _psAvtInterpKf(em.layer.keyframes, t);
+        if (kf) {
+          const bs = em.layer.base_scale ?? 1;
+          em.sp.x = scr.x + (kf.x ?? 0);
+          em.sp.y = scr.y + (kf.y ?? 0);
+          const sv = (kf.scale ?? 1) * bs;
+          em.sp.scale.x = sv * (em.layer.flip_x ? -1 : 1);
+          em.sp.scale.y = sv * (em.layer.flip_y ? -1 : 1);
+          em.sp.alpha    = kf.alpha    ?? 1;
+          em.sp.rotation = ((kf.rotation ?? 0) * Math.PI) / 180;
+        }
+      } else {
+        if (!em.em.destroyed) { em.em.updateSpawnPos(scr.x, scr.y); em.em.update(delta); }
+      }
+    }
+  };
+
+  app.ticker.add(trackFn);
+
+  const cleanup = () => {
+    app.ticker.remove(trackFn);
+    for (const em of emitters) {
+      if (em._isSprite) continue;
+      try { if (!em.em.destroyed) em.em.destroy(); } catch (_) {}
+    }
+    try { app.destroy(true, { children: true }); } catch (_) {}
+    overlayCanvas.remove();
+    _PS_PERSISTENT.delete(key);
+  };
+
+  _PS_PERSISTENT.set(key, { cleanup });
+}
+
+function avtPixiStopPersistent(key) {
+  const entry = _PS_PERSISTENT.get(key);
+  if (entry) { entry.cleanup(); }
+}
+
 // ── Cleanup all active follow/channel animations ───────────────────────────
 function avtPixiCleanupAll() {
   for (const entry of _PS_AVT_ACTIVE) {
@@ -775,5 +929,7 @@ function avtPixiCleanupAll() {
   _PS_AVT_ACTIVE = [];
 }
 
-window.avtPixiPlayAnimation  = avtPixiPlayAnimation;
-window.avtPixiCleanupAll     = avtPixiCleanupAll;
+window.avtPixiPlayAnimation    = avtPixiPlayAnimation;
+window.avtPixiCleanupAll       = avtPixiCleanupAll;
+window.avtPixiPlayPersistent   = avtPixiPlayPersistent;
+window.avtPixiStopPersistent   = avtPixiStopPersistent;
