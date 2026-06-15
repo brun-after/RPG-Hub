@@ -17807,6 +17807,7 @@ function _avtMestreAbrirEditorUnificado() {
         <div class="avt-ed-group">${toolBtn('door','🚪 Porta')}</div>
         <div class="avt-ed-group">${toolBtn('erase','🧽 Apagar')}</div>
         <span class="avt-ed-spacer"></span>
+        ${tilesetUrl ? `<button class="avt-mp-btn" onclick="_avtEdDistribuirTileset()">✦ Distribuir automaticamente</button>` : ''}
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtMestreSalvarMapaUnificado()">💾 Salvar</button>
         <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
       </div>
@@ -17900,6 +17901,12 @@ function _avtMestreAbrirEditorUnificado() {
   };
   _avtEd._render();
 
+  // Garante que as texturas do tileset estejam em memória; sem isso o canvas
+  // mostraria apenas cores sólidas (dá a impressão de que o tileset "sumiu").
+  if (tilesetUrl && tsCfg && !AVT_STATE._tilesetLoaded && typeof _avtCarregarTileset === 'function') {
+    _avtCarregarTileset(tilesetUrl, tsCfg).then(() => _avtEd._render?.()).catch(() => {});
+  }
+
   const coords = (e) => {
     const rect = canvas.getBoundingClientRect();
     const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
@@ -17972,6 +17979,40 @@ function _avtEdSetTool(tool) {
   _avtEdAtualizarBotoes();
   const labels = { floor: 'Piso', wall: 'Parede', door: 'Porta', erase: 'Apagar' };
   _avtEdStatus('Ferramenta: ' + (labels[tool] || tool));
+  _avtEd._render?.();
+}
+
+// ── Distribuição automática: "assa" as peças do tileset em todo o mapa ──────────
+// Para cada célula não-vazia computa a chave semântica (parede_*/canto_*/piso_*/…)
+// e a grava no grid. Persiste no Salvar; a colisão segue correta porque o grid usa
+// _avtChaveEhParede para identificar todas as chaves de parede.
+function _avtEdDistribuirTileset() {
+  if (!_avtEd.tiles) return;
+  const tsCfg = AVT_STATE._tilesetConfig || AVT_STATE.dungeon?.tileset_config;
+  if (!tsCfg?.blocos) { mostrarToast('Tileset sem configuração de blocos', 'aviso'); return; }
+  const W = _avtEd.w, H = _avtEd.h;
+  // View numérica do grid original: a detecção de vizinhos do autotiler compara com
+  // AVT_T.PISO, então normalizamos mesmo se o grid já tiver chaves de string assadas.
+  const numTiles = _avtEd.tiles.map(row => row.map(t => {
+    if (t === null || t === undefined) return null;
+    if (typeof t === 'number') return t;
+    return (t.startsWith('piso') || t === 'bau' || t.startsWith('objeto')) ? AVT_T.PISO : AVT_T.PAREDE;
+  }));
+  const view = { w: W, h: H, tiles: numTiles, _chestPositions: AVT_STATE.dungeon?._chestPositions };
+  let n = 0;
+  const novo = _avtEd.tiles.map(r => [...r]);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const t = _avtEd.tiles[y]?.[x];
+      if (t === null || t === undefined) continue;   // void permanece sólido
+      if (t === AVT_T.SAIDA) continue;               // preserva a saída
+      const key = _avtGetTileSemanticKey(x, y, view);
+      if (key) { novo[y][x] = key; n++; }
+    }
+  }
+  _avtEd.tiles = novo;
+  _avtEdStatus(`Tileset distribuído em ${n} células.`);
+  mostrarToast('Tileset distribuído pelo mapa', 'ok');
   _avtEd._render?.();
 }
 
@@ -18161,6 +18202,14 @@ function avtReceberDungeonUpdate(p) {
 }
 window.avtReceberDungeonUpdate = avtReceberDungeonUpdate;
 window._avtMestreAbrirEditorUnificado = _avtMestreAbrirEditorUnificado;
+// Handlers inline (onclick/onchange) do editor unificado precisam estar no escopo global.
+window._avtEdSetTool = _avtEdSetTool;
+window._avtEdDistribuirTileset = _avtEdDistribuirTileset;
+window._avtMestreSalvarMapaUnificado = _avtMestreSalvarMapaUnificado;
+window._avtEdConfirmarPorta = _avtEdConfirmarPorta;
+window._avtMestreToggleTrocaTileset = _avtMestreToggleTrocaTileset;
+window._avtMestreHandleTilesetUpload = _avtMestreHandleTilesetUpload;
+window._avtMestreAplicarTilesetUpload = _avtMestreAplicarTilesetUpload;
 
 async function _avtSalvarBossDoorConfig() {
   const modo = document.querySelector('input[name="avt-boss-door-mode"]:checked')?.value || 'spawn_door';
