@@ -653,11 +653,9 @@ const AVT_BULK_MASK_CORES = [
   '#9030e8', '#20c8b0', '#e8d030', '#e83090',
 ];
 
-// Estado persistente dos formulários de aparência em massa (sobrevive a re-renders do painel)
-window._avtBulkAparState = window._avtBulkAparState || {
-  guerreiro: { tokenFile: null, fichaFile: null, facing: 'down', coords: '' },
-  mago:      { tokenFile: null, fichaFile: null, facing: 'down', coords: '' },
-};
+// Estado persistente dos formulários de aparência em massa (sobrevive a re-renders do painel).
+// Entradas por classe são criadas sob demanda em _avtMestrePainelRender e _avtBulkAparSecaoPreset.
+window._avtBulkAparState = window._avtBulkAparState || {};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DB HELPERS
@@ -2538,7 +2536,16 @@ window.avtReceberMemberLinked = avtReceberMemberLinked;
 
 async function _avtMestreSelecionarPersonagem(charNome) {
   if (!SESSION?.user?.id) return;
+  const charAnterior = AVT_STATE.myCharNome;
   AVT_STATE.myCharNome = charNome || null;
+  // Esconde da cena o personagem que o mestre largou, caso ninguém online o controle.
+  if (charAnterior && charAnterior !== charNome) {
+    const entAnt = AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.nome === charAnterior);
+    if (entAnt && !_avtJogadorEstaOnline(entAnt.nome) && AVT_STATE.npcControlando !== entAnt.id) {
+      entAnt.escondido = true;
+      entAnt._charOffline = true;
+    }
+  }
   try {
     await _avtSb(`rpg_members?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}&player_id=eq.${encodeURIComponent(SESSION.user.id)}`,
       { method:'PATCH', body:JSON.stringify({ linked: charNome || null }) });
@@ -2547,6 +2554,7 @@ async function _avtMestreSelecionarPersonagem(charNome) {
     try { _avtBroadcast('avt_member_linked', { player_id: SESSION.user.id, linked: charNome || null }); } catch(_) {}
     mostrarToast(charNome ? `Personagem do mestre: ${charNome}` : 'Personagem do mestre removido', 'ok');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'aviso'); }
+  try { _avtAtualizarVisibilidadeOffline(); } catch(_) {}
   _avtMestrePainelRender();
 }
 
@@ -3105,6 +3113,12 @@ function _avtIniciarRTNet(rpgId, onHostElected) {
             AVT_STATE._charHpBuffer[ent.dbId] = { hp: ent.hp };
             if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('peer-leave').catch(()=>{});
           }
+          // Esconde o personagem do peer que saiu, se ninguém online ainda o controla.
+          if (ent && !_avtJogadorEstaOnline(ent.nome) && AVT_STATE.npcControlando !== ent.id && ent.nome !== AVT_STATE.myCharNome) {
+            ent.escondido = true;
+            ent._charOffline = true;
+          }
+          try { _avtAtualizarVisibilidadeOffline(); } catch(_) {}
           if (typeof _avtPersistirEstadoInimigos === 'function') _avtPersistirEstadoInimigos();
         } catch(_) {}
       });
@@ -3214,6 +3228,15 @@ async function _avtFlushPersistencia(origem) {
 window._avtFlushPersistencia = _avtFlushPersistencia;
 
 function sairAventura() {
+  // Mestre que sai largando um personagem: desvincula no banco para que o personagem
+  // fique órfão e seja escondido nos demais clientes (não permanece "fantasma" na fase).
+  try {
+    if (typeof _avtSouMestre === 'function' && _avtSouMestre() && AVT_STATE.myCharNome && AVT_STATE.rpgId && SESSION?.user?.id) {
+      _avtSb(`rpg_members?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}&player_id=eq.${encodeURIComponent(SESSION.user.id)}`,
+        { method:'PATCH', body:JSON.stringify({ linked: null }) }).catch(()=>{});
+      try { _avtBroadcast('avt_member_linked', { player_id: SESSION.user.id, linked: null }); } catch(_) {}
+    }
+  } catch(_) {}
   _avtCleanupListeners();
   try { if (AVT_STATE._autoSaveTimer) { clearInterval(AVT_STATE._autoSaveTimer); AVT_STATE._autoSaveTimer = null; } } catch(_) {}
   try { if (typeof RTNet !== 'undefined' && RTNet.initialized) RTNet.shutdown(); } catch(_) {}
@@ -17044,9 +17067,8 @@ function _avtMpConteudoAba() {
       </div>
       <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
         <div class="avt-mp-label">🎨 Aparência em Massa</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">Aplica token + foto de perfil com variação de cor a todos os inimigos da classe.</div>
-        ${_avtBulkAparSecao('guerreiro')}
-        ${_avtBulkAparSecao('mago')}
+        <div class="avt-mp-hint" style="margin-bottom:8px">Aplica token + variação de cor a todos os inimigos de cada classe (esqueleto, orc, etc.).</div>
+        ${_avtBulkAparMassaSecoes()}
       </div>
       <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
         <div class="avt-mp-label">⚙ Velocidade de Patrulha</div>
@@ -23911,56 +23933,30 @@ window._avtBulkAplicarAparenciaPreset = _avtBulkAplicarAparenciaPreset;
 // APARÊNCIA EM MASSA
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _avtBulkClasseDeEnt(ent) {
-  const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
-  return ent.classe_aventura || dbChar?.custom_attrs?.classe_aventura || 'guerreiro';
+// Renderiza, na aba NPCs do painel, uma seção de aparência em massa por classe.
+// Itera sobre todas as classes de NPC (_avtGetNpcClasses) e reusa o formulário
+// que filtra por presetTipo (_avtBulkAparSecaoPreset), funcionando para qualquer
+// tipo (esqueleto, orc, etc.) e classes custom.
+function _avtBulkAparMassaSecoes() {
+  const npcClasses = _avtGetNpcClasses();
+  const S = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const inimigos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo');
+  const countByPreset = {};
+  inimigos.forEach(e => { countByPreset[e.presetTipo] = (countByPreset[e.presetTipo] || 0) + 1; });
+  return Object.entries(npcClasses).map(([key, cls]) => {
+    const cnt = countByPreset[key] || 0;
+    return `
+      <div style="margin-bottom:10px;padding:8px;border-radius:7px;border:1px solid rgba(79,163,209,0.12);background:rgba(79,163,209,0.03)">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <span style="width:20px;height:20px;border-radius:50%;background:${S(cls.cor || '#7a5c00')};display:inline-flex;align-items:center;justify-content:center;font-size:0.65rem;color:#fff;flex-shrink:0">${S(cls.icone || key[0].toUpperCase())}</span>
+          <span style="flex:1;font-size:0.72rem;color:#c8d8e8;font-weight:bold">${S(cls.nome || key)}</span>
+          <span style="font-size:0.62rem;color:#7a92aa">${cnt ? cnt + ' na cena' : 'nenhum'}</span>
+        </div>
+        ${_avtBulkAparSecaoPreset(key)}
+      </div>`;
+  }).join('');
 }
-
-function _avtBulkAparSecao(classe) {
-  const label  = classe === 'guerreiro' ? '⚔ Guerreiros' : '🔮 Magos';
-  const count  = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && _avtBulkClasseDeEnt(e) === classe).length;
-  const st     = window._avtBulkAparState[classe];
-  const tokenPreview = st.tokenFile
-    ? `<img src="${URL.createObjectURL(st.tokenFile)}" style="max-width:48px;max-height:48px;object-fit:contain;border-radius:4px;border:1px solid rgba(79,163,209,0.3);vertical-align:middle;margin-left:6px">`
-    : '';
-  const fichaPreview = st.fichaFile
-    ? `<img src="${URL.createObjectURL(st.fichaFile)}" style="max-width:48px;max-height:48px;object-fit:contain;border-radius:4px;border:1px solid rgba(79,163,209,0.3);vertical-align:middle;margin-left:6px">`
-    : '';
-  const inputStyle = 'width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.7rem';
-  const saveAndRender = (field) =>
-    `(function(el){window._avtBulkAparState['${classe}'].${field}=el.files?.[0]||null;_avtMestrePainelRender()})(this)`;
-  return `
-    <div style="margin-bottom:10px;padding:8px;border-radius:7px;border:1px solid rgba(79,163,209,0.12);background:rgba(79,163,209,0.03)">
-      <div style="font-size:0.72rem;color:#c8d8e8;font-weight:bold;margin-bottom:6px">${label} <span style="color:#7a92aa;font-weight:normal">(${count} na cena)</span></div>
-      <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">① Token do mapa (PNG transparente)</div>
-      <div style="display:flex;align-items:center;margin-bottom:6px">
-        <input type="file" accept="image/png,image/webp"
-          onchange="${saveAndRender('tokenFile')}"
-          style="font-size:0.68rem;color:#c8d8e8;flex:1">${tokenPreview}
-      </div>
-      <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">② JSON de coordenadas da IA</div>
-      <textarea id="avt-bulk-coords-${classe}" rows="3" placeholder='{"body_cx":0.5,"body_cy":0.55,"body_r":0.3,...}'
-        oninput="window._avtBulkAparState['${classe}'].coords=this.value"
-        style="${inputStyle};resize:vertical;font-family:monospace;font-size:0.62rem;margin-bottom:6px">${st.coords ? st.coords.replace(/</g,'&lt;') : ''}</textarea>
-      <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">③ Foto de perfil / ficha (opcional)</div>
-      <div style="display:flex;align-items:center;margin-bottom:6px">
-        <input type="file" accept="image/png,image/jpeg,image/webp"
-          onchange="${saveAndRender('fichaFile')}"
-          style="font-size:0.68rem;color:#c8d8e8;flex:1">${fichaPreview}
-      </div>
-      <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">④ Orientação base da imagem</div>
-      <select id="avt-bulk-facing-${classe}" style="${inputStyle};margin-bottom:8px">
-        <option value="down" ${st.facing==='down'?'selected':''}>Olhando para BAIXO (padrão top-down)</option>
-        <option value="up" ${st.facing==='up'?'selected':''}>Olhando para CIMA</option>
-        <option value="right" ${st.facing==='right'?'selected':''}>Olhando para a DIREITA</option>
-        <option value="left" ${st.facing==='left'?'selected':''}>Olhando para a ESQUERDA</option>
-      </select>
-      <button onclick="_avtBulkAplicarAparencia('${classe}')"
-        style="width:100%;padding:7px;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.35);border-radius:7px;color:#c8a84b;cursor:pointer;font-family:var(--fonte-d);font-size:0.75rem">
-        🎨 Aplicar a todos ${classe === 'guerreiro' ? 'guerreiros' : 'magos'} (${count})
-      </button>
-    </div>`;
-}
+window._avtBulkAparMassaSecoes = _avtBulkAparMassaSecoes;
 
 async function _avtBulkMaskPng(file, hexCor) {
   const url = URL.createObjectURL(file);
@@ -24009,72 +24005,6 @@ async function _avtBulkUpload(blob, entId, suffix) {
   if (!res.ok) throw new Error('Upload falhou: ' + await res.text());
   return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${storagePath}`;
 }
-
-async function _avtBulkAplicarAparencia(classe) {
-  const st = window._avtBulkAparState[classe];
-
-  // Captura facing do select antes de qualquer re-render
-  const facingEl = document.getElementById(`avt-bulk-facing-${classe}`);
-  if (facingEl) st.facing = facingEl.value;
-  const facing = st.facing || 'down';
-
-  // Persistir coords do DOM no estado (o DOM pode não existir se chamado via JS)
-  const coordsEl = document.getElementById(`avt-bulk-coords-${classe}`);
-  if (coordsEl) st.coords = coordsEl.value;
-  const coordsText = (st.coords || '').trim();
-
-  if (!st.tokenFile) { mostrarToast('Selecione a imagem do token', 'aviso'); return; }
-  if (!coordsText)   { mostrarToast('Cole o JSON de coordenadas', 'aviso'); return; }
-
-  let coords;
-  try { coords = JSON.parse(coordsText); }
-  catch(e) { mostrarToast('JSON de coordenadas inválido: ' + e.message, 'aviso'); return; }
-
-  const alvos = AVT_STATE.entidades.filter(e =>
-    e.tipo === 'inimigo' && _avtBulkClasseDeEnt(e) === classe
-  );
-  if (!alvos.length) { mostrarToast('Nenhum inimigo da classe ' + classe + ' na cena', 'aviso'); return; }
-
-  mostrarToast(`Aplicando aparência a ${alvos.length} ${classe}(s)…`, '');
-
-  let ok = 0, erros = 0;
-  for (let i = 0; i < alvos.length; i++) {
-    const ent = alvos[i];
-    const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
-    if (!dbChar?.id) { erros++; continue; }
-
-    const maskCor = AVT_BULK_MASK_CORES[i % AVT_BULK_MASK_CORES.length];
-
-    try {
-      const maskedToken = await _avtBulkMaskPng(st.tokenFile, maskCor);
-      const tokenUrl    = await _avtBulkUpload(maskedToken, ent.id, 'map');
-
-      let fichaUrl = dbChar.custom_attrs?.topdown_ia?.ficha_img_url || null;
-      if (st.fichaFile) {
-        const maskedFicha = await _avtBulkMaskPng(st.fichaFile, maskCor);
-        fichaUrl = await _avtBulkUpload(maskedFicha, ent.id, 'ficha');
-      }
-
-      const newAttrs = {
-        ...(dbChar.custom_attrs || {}),
-        topdown_ia: { img_url: tokenUrl, ficha_img_url: fichaUrl, coords, base_facing: facing }
-      };
-      await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
-        method: 'PATCH', body: JSON.stringify({ custom_attrs: newAttrs })
-      });
-      dbChar.custom_attrs = newAttrs;
-
-      delete AVT_STATE.aparencias[ent.id];
-      _avtCarregarAparencia(ent);
-      ok++;
-    } catch(err) {
-      console.error('_avtBulkAplicarAparencia:', ent.nome, err);
-      erros++;
-    }
-  }
-  mostrarToast(`✓ ${ok} atualizado(s)${erros ? ', ' + erros + ' erro(s)' : ''}`, ok ? 'ok' : 'aviso');
-}
-window._avtBulkAplicarAparencia = _avtBulkAplicarAparencia;
 
 
 // ── [PATCH v2_2] Drena broadcasts avt_* que chegaram antes dos handlers ─────
