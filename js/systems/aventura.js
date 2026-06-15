@@ -21770,6 +21770,32 @@ function _avtSkmRenderEfeitos() {
           <input type="number" min="0" max="99" value="${ef.cascata_max??0}" oninput="_AVT_SK_MODAL.efeitos[${i}].cascata_max=+this.value"
             style="width:48px;${inpSt};text-align:center"></label>
       </div>` : ''}
+      <div style="border-top:1px solid rgba(79,163,209,0.1);margin-top:6px;padding-top:5px">
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="font-size:0.62rem;color:#4a7a9a;flex-shrink:0">✦ Anim. persistente:</span>
+          <span id="avt-ef-pixi-sel-${i}" style="flex:1;font-size:0.65rem;color:${ef.animacao_persistente?.pixi_studio_id?'#7ec8f0':'#556677'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            ${ef.animacao_persistente?.pixi_studio_nome?`✓ <strong>${ef.animacao_persistente.pixi_studio_nome.replace(/</g,'&lt;')}</strong>`:'Nenhuma'}
+          </span>
+          <button onclick="_avtEfPixiCarregar(${i})" style="padding:2px 7px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:4px;color:#7ec8f0;font-size:0.65rem;cursor:pointer;flex-shrink:0">Escolher</button>
+          ${ef.animacao_persistente?.pixi_studio_id?`<button onclick="_avtEfPixiLimpar(${i})" style="padding:2px 5px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:4px;color:#c0392b88;font-size:0.65rem;cursor:pointer;flex-shrink:0">✕</button>`:''}
+        </div>
+        ${ef.animacao_persistente?.pixi_studio_id?`
+        <div style="margin-top:4px;display:flex;align-items:center;gap:5px">
+          <span style="font-size:0.62rem;color:#4a7a9a;flex-shrink:0">Seguir:</span>
+          <select onchange="_AVT_SK_MODAL.efeitos[${i}].animacao_persistente.posicao=this.value" style="flex:1;${inpSt}">
+            <option value="alvo" ${(ef.animacao_persistente.posicao||'alvo')==='alvo'?'selected':''}>🎯 Alvo</option>
+            <option value="atacante" ${ef.animacao_persistente.posicao==='atacante'?'selected':''}>⚔️ Conjurador</option>
+            <option value="meio" ${ef.animacao_persistente.posicao==='meio'?'selected':''}>↔️ Centro</option>
+          </select>
+        </div>`:''}
+        <div id="avt-ef-pixi-lista-${i}" style="display:none;margin-top:4px;background:#080c14;border:1px solid rgba(79,163,209,0.2);border-radius:5px;max-height:200px;overflow-y:auto">
+          <div style="padding:4px 6px;border-bottom:1px solid rgba(79,163,209,0.1)">
+            <input type="text" placeholder="Buscar animação…" oninput="_avtEfPixiFiltrar(${i},this.value)"
+              style="width:100%;box-sizing:border-box;${inpSt}">
+          </div>
+          <div id="avt-ef-pixi-rows-${i}"></div>
+        </div>
+      </div>
     </div>`;
   }).join('') || '<div style="font-size:0.72rem;color:#7a92aa;font-style:italic">Nenhum efeito.</div>';
 
@@ -21791,6 +21817,86 @@ function _avtSkmRenderEfeitos() {
       }
     });
   }, 0);
+}
+
+// ── Persistent animation picker helpers (per-effect, adventure mode) ─────────
+
+async function _avtEfPixiCarregar(idx) {
+  const listaEl = document.getElementById('avt-ef-pixi-lista-' + idx);
+  if (!listaEl) return;
+  const isOpen = listaEl.style.display !== 'none';
+  listaEl.style.display = isOpen ? 'none' : 'block';
+  if (isOpen) return;
+  const rowsEl = document.getElementById('avt-ef-pixi-rows-' + idx);
+  if (rowsEl) rowsEl.innerHTML = '<div style="padding:8px;font-size:0.7rem;color:#7a92aa">Carregando...</div>';
+  try {
+    if (!_AVT_PIXI_STUDIO_CACHE) {
+      const uid   = SESSION?.user?.id;
+      const rpgId = AVT_STATE.rpgId || '';
+      let q;
+      if (uid && rpgId) {
+        q = `pixi_animations?or=(criado_por.eq.${encodeURIComponent(uid)},global.eq.true,rpg_id.eq.${encodeURIComponent(rpgId)})&select=id,nome,behavior,duracao_ms,global,preview_url&order=nome`;
+      } else if (uid) {
+        q = `pixi_animations?or=(criado_por.eq.${encodeURIComponent(uid)},global.eq.true)&select=id,nome,behavior,duracao_ms,global,preview_url&order=nome`;
+      } else {
+        q = `pixi_animations?global=eq.true&select=id,nome,behavior,duracao_ms,global,preview_url&order=nome`;
+      }
+      _AVT_PIXI_STUDIO_CACHE = await _avtSb(q) || [];
+      setTimeout(() => { _AVT_PIXI_STUDIO_CACHE = null; }, 60000);
+    }
+    _avtEfPixiRenderRows(idx, _AVT_PIXI_STUDIO_CACHE, '');
+  } catch(e) {
+    if (rowsEl) rowsEl.innerHTML = '<div style="padding:8px;font-size:0.7rem;color:#e74c3c">Erro ao carregar.</div>';
+  }
+}
+
+function _avtEfPixiFiltrar(idx, query) {
+  if (!_AVT_PIXI_STUDIO_CACHE) { _avtEfPixiCarregar(idx); return; }
+  _avtEfPixiRenderRows(idx, _AVT_PIXI_STUDIO_CACHE, query);
+}
+
+function _avtEfPixiRenderRows(idx, rows, query) {
+  const rowsEl = document.getElementById('avt-ef-pixi-rows-' + idx);
+  if (!rowsEl) return;
+  const q = (query || '').toLowerCase().trim();
+  const filtrados = q ? rows.filter(r => (r.nome || '').toLowerCase().includes(q)) : rows;
+  if (!filtrados.length) {
+    rowsEl.innerHTML = '<div style="padding:8px;font-size:0.7rem;color:#7a92aa">Nenhum efeito encontrado.</div>';
+    return;
+  }
+  rowsEl.innerHTML = filtrados.map(r => {
+    const globTag = r.global ? '<span style="font-size:0.58rem;background:rgba(169,120,255,0.15);color:#a978ff;border-radius:3px;padding:1px 4px;margin-left:4px">global</span>' : '';
+    const thumb = r.preview_url
+      ? `<img src="${r.preview_url}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;flex-shrink:0;background:#000">`
+      : '<div style="width:32px;height:32px;background:rgba(79,163,209,0.08);border-radius:3px;flex-shrink:0"></div>';
+    const nomeEsc = (r.nome || 'Sem nome').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    const idEsc   = (r.id  || '').replace(/"/g, '&quot;');
+    return `<div data-ef-idx="${idx}" data-anim-id="${idEsc}" data-anim-nome="${nomeEsc}"
+      onclick="_avtEfPixiSelecionar(+this.dataset.efIdx,this.dataset.animId,this.dataset.animNome)"
+      style="display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;border-bottom:1px solid rgba(79,163,209,0.08)"
+      onmouseover="this.style.background='rgba(79,163,209,0.08)'" onmouseout="this.style.background=''">
+      ${thumb}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.72rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeEsc}${globTag}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _avtEfPixiSelecionar(idx, animId, animNome) {
+  if (!_AVT_SK_MODAL.efeitos[idx]) return;
+  _AVT_SK_MODAL.efeitos[idx].animacao_persistente = {
+    pixi_studio_id:   animId,
+    pixi_studio_nome: animNome,
+    posicao: _AVT_SK_MODAL.efeitos[idx].animacao_persistente?.posicao || 'alvo'
+  };
+  _avtSkmRenderEfeitos();
+}
+
+function _avtEfPixiLimpar(idx) {
+  if (!_AVT_SK_MODAL.efeitos[idx]) return;
+  delete _AVT_SK_MODAL.efeitos[idx].animacao_persistente;
+  _avtSkmRenderEfeitos();
 }
 
 // ── Preview de animação (canvas próprio, construído do zero) ──────────────────
