@@ -676,8 +676,11 @@ function _avtMenuAbrirConfigMestre(aba) {
   AVT_MENU_STATE.configAba = aba;
   const abas = [
     { id: 'menu',          label: '🖼 Menu' },
+    { id: 'combate',       label: '⚔ Combate' },
     { id: 'balanceamento', label: '⚖ Balanço' },
     { id: 'npcs',          label: '🤖 NPCs' },
+    { id: 'mapa',          label: '🗺 Mapa' },
+    { id: 'fases',         label: '🚪 Fases' },
     { id: 'campanha',      label: '🏰 Campanha' },
     { id: 'jogadores',     label: '👥 Jogadores' },
     { id: 'personagens',   label: '👤 Personagens' },
