@@ -818,6 +818,7 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
   const worldRoot = new PIXI.Container();
   app.stage.addChild(worldRoot);
   const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
+  const hexInt = (c) => { if (typeof c === 'number') return c; const n = parseInt(String(c).replace('#',''),16); return isNaN(n)?0xffffff:n; };
 
   // Resolve which entity each layer should track
   const _resolveLayerEnt = (l) => {
@@ -861,6 +862,16 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
         worldRoot.addChild(sp);
         emitters.push({ _isSprite: true, sp, layer: l, trackEnt, cycleStart: performance.now() });
       } catch (e) {}
+    } else if (l.tipo === 'shape') {
+      const g = new PIXI.Graphics();
+      g.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
+      worldRoot.addChild(g);
+      emitters.push({ _isShape: true, g, layer: l, trackEnt, cycleStart: performance.now() });
+    } else if (l.tipo === 'light') {
+      const sp = new PIXI.Sprite(typeof _avtProcTextures === 'function' ? _avtProcTextures('glow') : PIXI.Texture.WHITE);
+      sp.anchor.set(0.5); sp.blendMode = PIXI.BLEND_MODES.ADD;
+      worldRoot.addChild(sp);
+      emitters.push({ _isLight: true, sp, layer: l, trackEnt, cycleStart: performance.now() });
     }
   }
 
@@ -885,6 +896,43 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
           em.sp.alpha    = kf.alpha    ?? 1;
           em.sp.rotation = ((kf.rotation ?? 0) * Math.PI) / 180;
         }
+      } else if (em._isShape) {
+        const l = em.layer;
+        const t = ((now - em.cycleStart) % cycleDurMs) / cycleDurMs;
+        const st = l.start_t ?? 0, et = l.end_t ?? 1;
+        const vis = t >= st && t <= et;
+        const tRel = et > st ? (t - st) / (et - st) : t;
+        const kf = _psAvtInterpGeneric(l.keyframes, tRel);
+        const g = em.g; g.visible = vis;
+        if (vis && kf) {
+          g.clear();
+          g.position.set(scr.x + (kf.x || 0), scr.y + (kf.y || 0));
+          const sw = kf.stroke_width ?? 2, sa = kf.stroke_alpha ?? 1, fa = kf.fill_alpha ?? 0, r = kf.radius ?? 20;
+          if (sa > 0) g.lineStyle(sw, hexInt(kf.stroke_color || '#ffffff'), sa);
+          if (fa > 0) g.beginFill(hexInt(kf.fill_color || '#ffffff'), fa);
+          if (l.shape_type === 'rect') g.drawRect(-r, -r, r * 2, r * 2);
+          else if (l.shape_type === 'polygon') {
+            const sides = Math.max(3, l.sides || 6), pts = [];
+            for (let i = 0; i < sides; i++) { const a = -Math.PI / 2 + i * 2 * Math.PI / sides; pts.push(Math.cos(a) * r, Math.sin(a) * r); }
+            g.drawPolygon(pts);
+          } else g.drawCircle(0, 0, r);
+          if (fa > 0) g.endFill();
+        }
+      } else if (em._isLight) {
+        const l = em.layer;
+        const t = ((now - em.cycleStart) % cycleDurMs) / cycleDurMs;
+        const st = l.start_t ?? 0, et = l.end_t ?? 1;
+        const vis = t >= st && t <= et;
+        const tRel = et > st ? (t - st) / (et - st) : t;
+        const kf = _psAvtInterpGeneric(l.keyframes, tRel);
+        const sp = em.sp; sp.visible = vis;
+        if (vis && kf) {
+          const r = kf.radius ?? 60;
+          sp.width = sp.height = r * 2;
+          sp.position.set(scr.x + (kf.x || 0), scr.y + (kf.y || 0));
+          sp.alpha = kf.alpha ?? 0.7;
+          sp.tint = hexInt(kf.color || l.color || '#ffffff');
+        }
       } else {
         if (!em.em.destroyed) { em.em.updateSpawnPos(scr.x, scr.y); em.em.update(delta); }
       }
@@ -896,7 +944,7 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
   const cleanup = () => {
     app.ticker.remove(trackFn);
     for (const em of emitters) {
-      if (em._isSprite) continue;
+      if (!em.em) continue;  // só emitters têm em.em; graphics/sprites são destruídos por app.destroy
       try { if (!em.em.destroyed) em.em.destroy(); } catch (_) {}
     }
     try { app.destroy(true, { children: true }); } catch (_) {}
