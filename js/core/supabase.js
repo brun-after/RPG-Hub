@@ -205,13 +205,15 @@ async function saveCharacterStats(rpgId,charNameOrId,stats){
  if(stats.hp_atual!==undefined)body.hp_atual=stats.hp_atual;
  if(stats.custom_attrs!==undefined)body.custom_attrs=stats.custom_attrs; // jsonb
  const isUuid = typeof charNameOrId==='string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(charNameOrId);
- let qry;
+ let qry; let charId = null;
  if(isUuid){
+   charId = charNameOrId;
    qry = `characters?id=eq.${encodeURIComponent(charNameOrId)}`;
  } else {
    try{
      const rows = await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charNameOrId)}&select=id&limit=1`);
      if(rows && rows[0] && rows[0].id){
+       charId = rows[0].id;
        qry = `characters?id=eq.${encodeURIComponent(rows[0].id)}`;
      } else {
        qry = `characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charNameOrId)}`;
@@ -221,6 +223,13 @@ async function saveCharacterStats(rpgId,charNameOrId,stats){
    }
  }
  await sb(qry,{method:'PATCH',body:JSON.stringify(body)});
+ // Propagar mudanças para as cópias do personagem em outras aventuras (mesma linhagem).
+ try{
+   const ca = stats.custom_attrs;
+   if(charId && ca?.linhagem_id && typeof window._avtSyncLinhagem==='function'){
+     await window._avtSyncLinhagem({ id: charId, rpg_id: rpgId, custom_attrs: ca, hp_atual: stats.hp_atual });
+   }
+ }catch(_){}
 }
 
 

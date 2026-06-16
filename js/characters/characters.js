@@ -83,6 +83,7 @@ async function executarLevelUp(nome){
        xp:ca.xp,
        pontos_attr:ca.pontos_attr
      })});
+   if(c.custom_attrs?.linhagem_id && typeof window._avtSyncLinhagem==='function') window._avtSyncLinhagem(c);
    document.getElementById('modal-levelup-overlay')?.remove();
    mostrarToast(`${nome} subiu para o Nível ${novo_nivel}! 🎉 (HP max: ${novo_hp_max})`,'sucesso');
    renderCharView(nome);
@@ -296,6 +297,7 @@ async function distribuirPontosAttr(nome){
    if(novoHpMax && novoHpMax !== (c.hp_max||0)) patchBody.hp_max=novoHpMax;
    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
      {method:'PATCH',body:JSON.stringify(patchBody)});
+   if(c.custom_attrs?.linhagem_id && typeof window._avtSyncLinhagem==='function') window._avtSyncLinhagem(c);
    mostrarToast('Atributos distribuídos!','sucesso');
    if (typeof renderFichaView === 'function') renderFichaView(nome); else { renderCharView(nome); renderAttrView(nome); }
  }catch(e){mostrarToast('Erro ao salvar','erro');}

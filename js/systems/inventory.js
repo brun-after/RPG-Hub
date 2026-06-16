@@ -74,6 +74,18 @@ async function invCarregarInventarioChar(charId) {
   } catch(e) { return []; }
 }
 
+// Sincroniza alterações (custom_attrs e/ou inventário) para as cópias do mesmo
+// personagem em outras aventuras (linhagem). Resolve o char por nome ou id.
+async function _invSyncLinhagem(charRef, opts = {}) {
+  try {
+    if (typeof window._avtSyncLinhagem !== 'function') return;
+    const chars = RPG_DATA?.characters || [];
+    const char = chars.find(c => String(c.id) === String(charRef) || c.nome === charRef);
+    if (!char?.id || !char.custom_attrs?.linhagem_id) return;
+    await window._avtSyncLinhagem(char, opts);
+  } catch(_) {}
+}
+
 async function invCarregarTodosInventarios() {
   try {
     const chars = RPG_DATA?.characters || [];
@@ -483,6 +495,7 @@ async function _invEquipar(nomeChar, invItem, def) {
     ]);
     mostrarToast(`⚔ ${def.nome} equipado!`, 'sucesso');
     if (typeof fichasRefreshAtributos === 'function') fichasRefreshAtributos(nomeChar);
+    _invSyncLinhagem(nomeChar, { inventario: true });
   } catch(e) { mostrarToast('Erro ao equipar', 'erro'); }
 }
 
@@ -531,6 +544,7 @@ async function _invDesequipar(nomeChar, invItem, def) {
     ]);
     mostrarToast(`🔓 ${def?.nome || 'Item'} desequipado`, '');
     if (typeof fichasRefreshAtributos === 'function') fichasRefreshAtributos(nomeChar);
+    _invSyncLinhagem(nomeChar, { inventario: true });
   } catch(e) { mostrarToast('Erro ao desequipar', 'erro'); }
 }
 
@@ -898,6 +912,7 @@ async function _consumirItem(invItem) {
       if (idx >= 0) INV.inventarios[charId][idx].quantidade = novaQtd;
     }
   }
+  if (charId) _invSyncLinhagem(charId, { inventario: true });
 }
 
 // ── Aprovações (mestre) ───────────────────────────────────────
@@ -995,6 +1010,7 @@ async function adicionarAoInventario(itemDefId) {
     mostrarToast(`✦ ${def?.nome||'Item'} adicionado`, 'sucesso');
     fecharModalAddInv();
     if (_addInvCharNome) renderInventarioChar(_addInvCharNome);
+    _invSyncLinhagem(_addInvCharId, { inventario: true });
   } catch(e) { mostrarToast('Erro ao adicionar item', 'erro'); }
 }
 
