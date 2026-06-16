@@ -679,6 +679,7 @@ function _avtMenuAbrirConfigMestre(aba) {
     { id: 'combate',       label: '⚔ Combate' },
     { id: 'balanceamento', label: '⚖ Balanço' },
     { id: 'npcs',          label: '🤖 NPCs' },
+    { id: 'loot_xp',       label: '📊 XP' },
     { id: 'mapa',          label: '🗺 Mapa' },
     { id: 'fases',         label: '🚪 Fases' },
     { id: 'campanha',      label: '🏰 Campanha' },

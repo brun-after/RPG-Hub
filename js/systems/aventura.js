@@ -8281,7 +8281,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
           if (entAlvA.hp <= 0) {
             const _efNecroA = (entAlvA.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
             if (!_efNecroA) mostrarToast(`✦ ${entAlvA.nome} derrotado!`, 'sucesso');
-            _avtNpcMorreu(entAlvA, null);
+            _avtNpcMorreu(entAlvA, null, { creditoNome: jogador.nome });
             _avtCancelarPerseguicao(entAlvA.id);
           } else {
             const _timerA = AVT_STATE.npcTimers[entAlvA.id];
@@ -8374,7 +8374,10 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
           mostrarToast(`✦ ${ini.nome} derrotado! XP concedido.`, 'sucesso');
           const xpBase = ini.xpBase ?? 10;
           const vezesMorto = ini.vezes_morto || 0;
-          const xpFinal = Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)));
+          const _xpDecayAtivoPre = AVT_STATE.rpg?.theme_json?.level_config?.xp_decay_ativo ?? true;
+          const xpFinal = (_xpDecayAtivoPre && vezesMorto)
+            ? Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)))
+            : xpBase;
           const myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
           if (myChar) {
             myChar.xp = (myChar.xp || 0) + xpFinal;
@@ -10359,7 +10362,10 @@ function _avtDistribuirXpNpc(npcEnt, bat, opts = {}) {
   const xpBase = npcEnt.xpBase ?? 0;
   if (!xpBase) return;
   const vezesMorto = npcEnt.vezes_morto || 0;
-  const xpFinal = Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)));
+  const _xpDecayAtivo = AVT_STATE.rpg?.theme_json?.level_config?.xp_decay_ativo ?? true;
+  const xpFinal = (_xpDecayAtivo && vezesMorto)
+    ? Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)))
+    : xpBase;
   // Destinatários: jogadores presentes na batalha; quando não há batalha (ex.: morte por
   // DOT fora de combate), credita diretamente o autor do abate.
   const destinatarios = bat ? bat.iniciativa.filter(e => e.tipo === 'jogador').map(j => j.nome) : [];
@@ -17736,6 +17742,18 @@ function _avtMpConteudoAba() {
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarXpPerdaMorte()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">📉 Redução de XP por repetição</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Quando ativo, cada vez que o mesmo inimigo é morto ele concede 20% menos XP que da vez anterior (ex.: 2ª morte = 80%, 3ª = 64%...). Desative para que o inimigo sempre conceda o XP base integral (padrão: ativo).</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:#c8d8e8;cursor:pointer">
+            <input type="checkbox" id="avt-mp-xp-decay-ativo" ${(lc.xp_decay_ativo ?? true) ? 'checked' : ''}
+              style="width:16px;height:16px;accent-color:#4fa3d1;cursor:pointer">
+            Ativar redução de XP por repetição
+          </label>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarXpDecayAtivo()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-label">⬇ Downgrade de nível ao morrer</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">Se ativado, a perda de XP pode reduzir o nível do personagem quando o XP resultante ficar abaixo do limiar do nível atual (padrão: desativado).</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -18943,6 +18961,21 @@ async function _avtSalvarXpPerdaMorte() {
     mostrarToast(`XP perdido ao morrer: ${val}`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
+
+async function _avtSalvarXpDecayAtivo() {
+  const val = !!document.getElementById('avt-mp-xp-decay-ativo')?.checked;
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.xp_decay_ativo = val;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`Redução de XP por repetição: ${val ? 'ativa' : 'desativada'}`, 'sucesso');
+    _avtMestrePainelRender();
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtSalvarXpDecayAtivo = _avtSalvarXpDecayAtivo;
 
 async function _avtSalvarDowngradeMorte() {
   const val = !!document.getElementById('avt-mp-morte-downgrade')?.checked;
@@ -25751,7 +25784,7 @@ function _avtNpcTurnoInvocado(bat) {
 
   // Ataque se adjacente
   const dist = Math.max(Math.abs(entInv.x - alvo.x), Math.abs(entInv.y - alvo.y));
-  const _invAtiva = entInv._invAtiva;
+  const _invAtiva = entInv._invAtiva || AVT_STATE.invocacoes_ativas?.find(i => i.id === entInv.id);
   if (dist <= 1) {
     // Determinar skill/fórmula/nome do ataque
     let _skUsada = null;
@@ -25870,7 +25903,9 @@ function _avtNpcTurnoInvocado(bat) {
         _skUsada.efeitos_bonus.forEach(efB => {
           if (efB.tipo === 'cura') return;
           const _efBEntry = { ...efB, _turnos_restantes: efB.duracao_turnos ?? 1,
-            expiry_ms: Date.now() + (efB.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs() };
+            expiry_ms: Date.now() + (efB.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs(),
+            _casterNome: _invAtiva?.dono_char_nome || '',
+            _casterId: _invAtiva?.dono_char_id || null };
           if (!_entAlvoEf.status_effects) _entAlvoEf.status_effects = [];
           _entAlvoEf.status_effects.push(_efBEntry);
           if (_alvoBatEf) { if (!_alvoBatEf.status_effects) _alvoBatEf.status_effects = []; _alvoBatEf.status_effects.push({..._efBEntry}); }
