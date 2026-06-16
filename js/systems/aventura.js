@@ -663,6 +663,163 @@ window._avtBulkAparState = window._avtBulkAparState || {};
 
 async function _avtSb(path, opts) { return sb(path, opts); }
 
+// ── LINHAGEM (personagem compartilhado entre aventuras) ───────────────────────
+// Um personagem importado de outra aventura carrega um `linhagem_id` em custom_attrs
+// que liga todas as suas cópias (uma linha por aventura). Progresso, HP, inventário e
+// skills são propagados para as linhas-irmãs no banco — que é a fonte da verdade: ao
+// entrar numa aventura, ela carrega os valores já sincronizados, mesmo que estivesse
+// offline no momento da mudança. Evita refatorar o modelo (todo o app carrega
+// characters?rpg_id=eq.X), guardando o vínculo no JSONB sem migração de schema.
+
+function _avtNovaLinhagemId() {
+  try { if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID(); } catch(_) {}
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16);
+  });
+}
+
+// Busca as linhas-irmãs (em outras aventuras) de uma mesma linhagem, exceto a própria.
+async function _avtBuscarIrmaosLinhagem(linhagemId, exceptId) {
+  if (!linhagemId) return [];
+  try {
+    const rows = await _avtSb('characters?custom_attrs->>linhagem_id=eq.' +
+      encodeURIComponent(linhagemId) +
+      '&select=id,rpg_id,nome,custom_attrs,hp_max,hp_atual,xp,nivel,pontos_attr') || [];
+    return rows.filter(r => String(r.id) !== String(exceptId));
+  } catch(_) { return []; }
+}
+
+// Propaga o estado compartilhado de `char` para todas as cópias em outras aventuras.
+// opts.inventario / opts.skills disparam o espelhamento dessas tabelas também.
+async function _avtSyncLinhagem(char, opts = {}) {
+  try {
+    const ca = char?.custom_attrs || {};
+    const linhagemId = ca.linhagem_id;
+    if (!linhagemId || !char?.id) return;
+    const irmaos = await _avtBuscarIrmaosLinhagem(linhagemId, char.id);
+    if (!irmaos.length) return;
+    for (const irmao of irmaos) {
+      // custom_attrs compartilhado por inteiro (progressão, atributos, recursos,
+      // aparência, cor, classe). Posições de mapa ficam em colunas top-level e não
+      // são tocadas.
+      const novoCa = { ...(irmao.custom_attrs || {}), ...ca, linhagem_id: linhagemId };
+      const body = { custom_attrs: novoCa };
+      if (char.hp_max != null) body.hp_max = char.hp_max;
+      if (char.hp_atual != null) body.hp_atual = char.hp_atual;
+      const xpV = char.xp ?? ca.xp; if (xpV != null) body.xp = xpV;
+      const nivelV = char.nivel ?? ca.nivel; if (nivelV != null) body.nivel = nivelV;
+      if (ca.pontos_attr != null) body.pontos_attr = ca.pontos_attr;
+      await _avtSb('characters?id=eq.' + encodeURIComponent(irmao.id), {
+        method: 'PATCH', body: JSON.stringify(body)
+      }).catch(() => {});
+      // Refletir em memória se o irmão estiver na aventura ativa
+      const local = (AVT_STATE.chars || []).find(c => String(c.id) === String(irmao.id));
+      if (local) {
+        if (body.hp_max != null) local.hp_max = body.hp_max;
+        if (body.hp_atual != null) local.hp_atual = body.hp_atual;
+        if (body.xp != null) local.xp = body.xp;
+        if (body.nivel != null) local.nivel = body.nivel;
+        if (body.pontos_attr != null) local.pontos_attr = body.pontos_attr;
+        local.custom_attrs = novoCa;
+      }
+    }
+    if (opts.inventario) await _avtSyncLinhagemInventario(char, irmaos);
+    if (opts.skills) await _avtSyncLinhagemSkills(char, irmaos);
+  } catch(_) {}
+}
+
+// Espelha o inventário de `char` para as cópias-irmãs (full-replace: DELETE + POST).
+async function _avtSyncLinhagemInventario(char, irmaos) {
+  try {
+    if (!char?.id) return;
+    irmaos = irmaos || await _avtBuscarIrmaosLinhagem(char?.custom_attrs?.linhagem_id, char.id);
+    if (!irmaos?.length) return;
+    const origem = await _avtSb('inventario?character_id=eq.' + encodeURIComponent(char.id) + '&order=id') || [];
+    for (const irmao of irmaos) {
+      await _avtSb('inventario?character_id=eq.' + encodeURIComponent(irmao.id), { method: 'DELETE' }).catch(() => {});
+      if (origem.length) {
+        const copias = origem.map(it => ({
+          rpg_id: irmao.rpg_id, character_id: irmao.id,
+          item_catalog_id: it.item_catalog_id, quantidade: it.quantidade,
+          equipado: it.equipado, slot_equipado: it.slot_equipado,
+          bonus_snapshot: it.bonus_snapshot, notas: it.notas,
+        }));
+        await _avtSb('inventario', { method: 'POST', body: JSON.stringify(copias) }).catch(() => {});
+      }
+    }
+  } catch(_) {}
+}
+
+// Espelha as skills de `char` (vinculadas por nome) para as cópias-irmãs.
+async function _avtSyncLinhagemSkills(char, irmaos) {
+  try {
+    if (!char?.id || !char?.nome) return;
+    irmaos = irmaos || await _avtBuscarIrmaosLinhagem(char?.custom_attrs?.linhagem_id, char.id);
+    if (!irmaos?.length) return;
+    const charRpg = char.rpg_id || AVT_STATE.rpgId;
+    const origem = await _avtSb('skills?rpg_id=eq.' + encodeURIComponent(charRpg) +
+      '&personagem=eq.' + encodeURIComponent(char.nome) + '&select=*') || [];
+    for (const irmao of irmaos) {
+      await _avtSb('skills?rpg_id=eq.' + encodeURIComponent(irmao.rpg_id) +
+        '&personagem=eq.' + encodeURIComponent(irmao.nome), { method: 'DELETE' }).catch(() => {});
+      if (origem.length) {
+        const copias = origem.map(sk => ({
+          ...sk, id: undefined, rpg_id: irmao.rpg_id, character_id: irmao.id, personagem: irmao.nome
+        }));
+        await _avtSb('skills', { method: 'POST', body: JSON.stringify(copias) }).catch(() => {});
+      }
+    }
+  } catch(_) {}
+}
+window._avtSyncLinhagem = _avtSyncLinhagem;
+window._avtSyncLinhagemInventario = _avtSyncLinhagemInventario;
+window._avtSyncLinhagemSkills = _avtSyncLinhagemSkills;
+
+// Vínculo retroativo: agrupa cópias já existentes do mesmo personagem (criadas antes da
+// linhagem) por nome normalizado, dentro das aventuras do próprio usuário, e atribui um
+// linhagem_id compartilhado. Roda uma vez por sessão. RISCO ACEITO: nomes iguais de
+// personagens distintos nas aventuras do usuário seriam fundidos numa mesma linhagem.
+var _avtBackfillLinhagemFeito = false;
+async function _avtBackfillLinhagem() {
+  if (_avtBackfillLinhagemFeito) return;
+  _avtBackfillLinhagemFeito = true;
+  try {
+    const rpgs = (typeof HUB_DATA !== 'undefined' && HUB_DATA.rpgs) ? HUB_DATA.rpgs : [];
+    if (!rpgs.length) return;
+    const _norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    const porNome = {}; // nomeNorm -> [{id, nome, custom_attrs}]
+    for (const r of rpgs) {
+      const rid = r.rpg_id || r.id;
+      if (!rid) continue;
+      let chars = [];
+      try {
+        chars = await _avtSb('characters?rpg_id=eq.' + encodeURIComponent(rid) +
+          '&select=id,nome,custom_attrs') || [];
+      } catch(_) { continue; }
+      chars.forEach(ch => {
+        if (ch.custom_attrs?.tipo_personagem === 'npc' || !ch.nome) return;
+        const k = _norm(ch.nome);
+        (porNome[k] = porNome[k] || []).push(ch);
+      });
+    }
+    for (const k of Object.keys(porNome)) {
+      const grupo = porNome[k];
+      if (grupo.length < 2) continue; // sem cópias para vincular
+      // Reaproveitar um linhagem_id já existente no grupo; senão gerar um novo.
+      const existente = grupo.map(g => g.custom_attrs?.linhagem_id).find(Boolean);
+      const linhagemId = existente || _avtNovaLinhagemId();
+      for (const ch of grupo) {
+        if (ch.custom_attrs?.linhagem_id === linhagemId) continue;
+        const novoCa = { ...(ch.custom_attrs || {}), linhagem_id: linhagemId };
+        await _avtSb('characters?id=eq.' + encodeURIComponent(ch.id), {
+          method: 'PATCH', body: JSON.stringify({ custom_attrs: novoCa })
+        }).catch(() => {});
+      }
+    }
+  } catch(_) {}
+}
+window._avtBackfillLinhagem = _avtBackfillLinhagem;
+
 // Escapa texto controlado pelo usuário (nome de aventura/personagem) antes de injetar em
 // innerHTML — evita quebra de layout/injeção de markup por `<`, `"`, etc.
 function _avtEsc(s) {
@@ -940,7 +1097,7 @@ async function _avtCriarToggleAventuraExpand(advId) {
   if (c._advCharsCache[advId] == null) {
     _avtCriarRenderAventurasImport(); // mostra "Carregando…"
     try {
-      const chars = await _avtSb(`characters?rpg_id=eq.${encodeURIComponent(advId)}&select=id,nome,hp_max,custom_attrs&order=nome`);
+      const chars = await _avtSb(`characters?rpg_id=eq.${encodeURIComponent(advId)}&select=id,nome,hp_max,hp_atual,xp,nivel,pontos_attr,custom_attrs&order=nome`);
       c._advCharsCache[advId] = (chars || []).filter(ch => ch.custom_attrs?.tipo_personagem !== 'npc');
     } catch(_) { c._advCharsCache[advId] = []; }
   }
@@ -982,6 +1139,11 @@ async function _avtCriarConfirmarImportIndividual() {
       classe_aventura: ch.custom_attrs?.classe_aventura || 'guerreiro',
       _importedCustomAttrs: ch.custom_attrs || {},
       _importedHpMax: ch.hp_max,
+      _importedHpAtual: ch.hp_atual,
+      _importedXp: ch.xp ?? ch.custom_attrs?.xp ?? 0,
+      _importedNivel: ch.nivel ?? ch.custom_attrs?.nivel ?? 1,
+      _importedPontosAttr: ch.pontos_attr ?? ch.custom_attrs?.pontos_attr ?? 0,
+      _importedLinhagemId: ch.custom_attrs?.linhagem_id || null,
       _importedSkills: skillsDoChar,
       _importSrcRpgId: advId,
       _importSrcCharId: ch.id,
@@ -1711,7 +1873,7 @@ async function avtCriarImportCampanha(campId) {
   }
   try {
     const [chars, fases, campSkills] = await Promise.all([
-      _avtSb(`characters?rpg_id=eq.${encodeURIComponent(campId)}&select=nome,hp_max,custom_attrs,id&order=nome`),
+      _avtSb(`characters?rpg_id=eq.${encodeURIComponent(campId)}&select=nome,hp_max,hp_atual,xp,nivel,pontos_attr,custom_attrs,id&order=nome`),
       _avtSb(`mapas?rpg_id=eq.${encodeURIComponent(campId)}&tipo=eq.fase&select=map_id,nome,render_data`)
         .catch(() => []),
       _avtSb(`skills?rpg_id=eq.${encodeURIComponent(campId)}&select=*`)
@@ -2413,7 +2575,8 @@ async function aventuraCriarSubmit() {
         ? { modo: 'imagem', img_frente: p._aparencia.img_frente || '', img_iso: p._aparencia.img_iso || '' }
         : undefined;
       let custom_attrs;
-      if (p._importedCustomAttrs && Object.keys(p._importedCustomAttrs).length) {
+      const importado = !!(p._importedCustomAttrs && Object.keys(p._importedCustomAttrs).length);
+      if (importado) {
         // Personagem importado de outra aventura: preservar atributos/recursos/aparência originais
         custom_attrs = {
           ...p._importedCustomAttrs,
@@ -2431,14 +2594,52 @@ async function aventuraCriarSubmit() {
           ...(aparenciaFinal ? { aparencia: aparenciaFinal } : {})
         };
       }
+      // Linhagem: liga todas as cópias do mesmo personagem entre aventuras. Importado
+      // entra na linhagem da origem (gera uma nova se a origem ainda não tinha).
+      const linhagemId = (importado && p._importedLinhagemId) || _avtNovaLinhagemId();
+      custom_attrs.linhagem_id = linhagemId;
+      // Progressão acumulada preservada no import (não volta ao nível 1 / não perde status).
+      const impXp = importado ? (p._importedXp ?? 0) : 0;
+      const impNivel = importado ? (p._importedNivel ?? 1) : 1;
+      const impPontos = importado ? (p._importedPontosAttr ?? 0) : 0;
+      // Espelhar progressão dentro do custom_attrs (o resto do código lê de ambos os lugares).
+      custom_attrs.xp = impXp; custom_attrs.nivel = impNivel; custom_attrs.pontos_attr = impPontos;
       // HP: preserva o do personagem importado; senão fórmula do mestre (hp_base + atributo ×
       // multiplicador). Sem level_config, _avtCalcHpJog cai em hp_base=100 default.
       const hpMax = (p._importedHpMax != null && p._importedHpMax > 0)
         ? p._importedHpMax : _avtCalcHpJog({ custom_attrs });
-      await _avtSb('characters', { method: 'POST', body: JSON.stringify({
-        rpg_id: rpgId, nome: p.nome.trim(), hp_max: hpMax, hp_atual: hpMax,
-        xp: 0, nivel: 1, custom_attrs
-      })});
+      const hpAtual = (importado && p._importedHpAtual != null && p._importedHpAtual > 0)
+        ? p._importedHpAtual : hpMax;
+      const [newCharRow] = await _avtSb('characters', {
+        method: 'POST', headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          rpg_id: rpgId, nome: p.nome.trim(), hp_max: hpMax, hp_atual: hpAtual,
+          xp: impXp, nivel: impNivel, pontos_attr: impPontos, custom_attrs
+        })
+      }) || [];
+      // Se a origem não tinha linhagem, carimbá-la para entrar na mesma linhagem do importado.
+      if (importado && !p._importedLinhagemId && p._importSrcCharId) {
+        const srcCa = { ...(p._importedCustomAttrs || {}), linhagem_id: linhagemId };
+        _avtSb('characters?id=eq.' + encodeURIComponent(p._importSrcCharId), {
+          method: 'PATCH', body: JSON.stringify({ custom_attrs: srcCa })
+        }).catch(() => {});
+      }
+      // Copiar o inventário do personagem de origem (import individual de outra aventura).
+      if (newCharRow?.id && p._importSrcCharId) {
+        try {
+          const invSrc = await _avtSb('inventario?character_id=eq.' +
+            encodeURIComponent(p._importSrcCharId) + '&order=id') || [];
+          if (invSrc.length) {
+            const copias = invSrc.map(it => ({
+              rpg_id: rpgId, character_id: newCharRow.id,
+              item_catalog_id: it.item_catalog_id, quantidade: it.quantidade,
+              equipado: it.equipado, slot_equipado: it.slot_equipado,
+              bonus_snapshot: it.bonus_snapshot, notas: it.notas,
+            }));
+            await _avtSb('inventario', { method: 'POST', body: JSON.stringify(copias) });
+          }
+        } catch(_) { /* inventário não copiado: segue sem bloquear a criação */ }
+      }
       // Importar habilidades geradas pela IA
       const habilidadesIA = p._habilidadesIA || [];
       if (habilidadesIA.length) {
@@ -3160,6 +3361,8 @@ window._avtMostrarAventuraScreen = _avtMostrarAventuraScreen;
 
 async function entrarAventura(rpgId) {
   _avtCleanupListeners();
+  // Vincula retroativamente cópias antigas do mesmo personagem (uma vez por sessão).
+  _avtBackfillLinhagem();
   if (typeof avtMenuAbrir === 'function') {
     await avtMenuAbrir(rpgId);
   } else {
@@ -10129,6 +10332,8 @@ async function _avtProcessarMorteJogador(ent, bat) {
         method: 'PATCH',
         body: JSON.stringify({ xp: novoXp, nivel: nivelDepois, custom_attrs: dbChar.custom_attrs })
       }).catch(() => {});
+      // Propagar perda de XP/nível para as cópias do personagem em outras aventuras.
+      _avtSyncLinhagem(dbChar);
     }
   }
 
@@ -10449,6 +10654,7 @@ async function _avtAutoLevelUp(char) {
         pontos_attr: ca.pontos_attr, custom_attrs: ca
       })
     }).catch(() => {});
+    _avtSyncLinhagem(char);
     _avtHudUpdate();
     _avtMestrePainelRender();
   }
@@ -12915,7 +13121,7 @@ function _avtPersistirHpChar(ent) {
         method: 'PATCH', body: JSON.stringify({ hp_atual: ent.hp })
       });
       const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId);
-      if (dbChar) dbChar.hp_atual = ent.hp;
+      if (dbChar) { dbChar.hp_atual = ent.hp; _avtSyncLinhagem(dbChar); }
     } catch (e) {}
   }, 600);
 }
@@ -12933,7 +13139,7 @@ async function _avtFlushCharHpBuffer(origem) {
         method: 'PATCH', body: JSON.stringify({ hp_atual: hp })
       });
       const dbChar = (AVT_STATE.chars || []).find(c => c.id === charId);
-      if (dbChar) dbChar.hp_atual = hp;
+      if (dbChar) { dbChar.hp_atual = hp; _avtSyncLinhagem(dbChar); }
     } catch(e) {
       AVT_STATE._charHpBuffer[charId] = copy[charId]; // re-buffer on failure
     }
