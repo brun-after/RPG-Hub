@@ -8029,6 +8029,9 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   }
 
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const _tipoAreaOoc       = sk?.tipo_area || null;
+  const _isTodosInimigoOoc = sk?.alvo_tipo === 'todos_inimigos';
+  const _isAreaOoc         = _tipoAreaOoc === 'quadrado' || _tipoAreaOoc === 'linha' || _isTodosInimigoOoc;
 
   // Deduzir custo de recurso (mana) para skills de ataque OOC (síncrono — não bloqueia ataque)
   if (sk?.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
@@ -8084,6 +8087,33 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
         } else { danoTotal += parseInt(p) || 0; }
       });
     }
+  }
+
+  // ── Coletar alvos de área OOC ──────────────────────────────────────────
+  let _alvosAreaOoc = null;
+  if (_isAreaOoc) {
+    if (_isTodosInimigoOoc) {
+      _alvosAreaOoc = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0);
+    } else if (_tipoAreaOoc === 'quadrado') {
+      const _ctr = AVT_STATE._areaCentro
+        || { x: Math.round(ini.x), y: Math.round(ini.y), tamanho: sk.tamanho_area || 1 };
+      const { x: _cx, y: _cy, tamanho: _ct } = _ctr;
+      _alvosAreaOoc = AVT_STATE.entidades.filter(e =>
+        e.tipo === 'inimigo' && e.hp > 0 &&
+        Math.max(Math.abs(Math.round(e.x) - _cx), Math.abs(Math.round(e.y) - _cy)) <= _ct
+      );
+    } else if (_tipoAreaOoc === 'linha') {
+      if (AVT_STATE._areaLinha) {
+        const { cells: _lnCells } = AVT_STATE._areaLinha;
+        _alvosAreaOoc = AVT_STATE.entidades.filter(e =>
+          e.tipo === 'inimigo' && e.hp > 0 &&
+          _lnCells.some(c => c.x === Math.round(e.x) && c.y === Math.round(e.y))
+        );
+      } else {
+        _alvosAreaOoc = [ini];
+      }
+    }
+    _alvosAreaOoc = _alvosAreaOoc || [ini];
   }
 
   let hitRoll  = Math.floor(Math.random()*20)+1;
@@ -8183,105 +8213,195 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       return;
     }
     const real = Math.ceil(danoTotal * critMult);
-    ini.hp = Math.max(0, ini.hp - real);
-    _avtAplicarDanoPersistir(ini, ini.hp);
-    // Sincronizar HP no b.iniciativa para o caso do inimigo já estar em batalha
-    const _batSyncPa = _avtBatalhaDeEnt(ini.id);
-    if (_batSyncPa) { const _ieBat = _batSyncPa.iniciativa.find(e => e.id === ini.id); if (_ieBat) _ieBat.hp = ini.hp; }
-    try { _avtBroadcast('avt_hp_update', { nome: ini.nome, hp: ini.hp, hpMax: ini.hpMax }); } catch(_) {}
-    if (isCrit) _avtTokenTremer(AVT_STATE.entidades.find(e=>e.id===ini.id) || ini);
-    _avtMostrarDanoAbaixoHp(ini, real, isCrit);
-    const _critMsg = critMult === 2 ? ' ✦✦ CRÍTICO TOTAL!' : critMult === 1.5 ? ' ✦ CRÍTICO!' : critMult === 1.2 ? ' ⭐ CRÍTICO MENOR!' : '';
-    mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${_critMsg}`, 'ok');
-    // Aplicar efeitos de skill OOC
-    if (sk?.efeitos_bonus?.length) {
-      const entIniOoc = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
-      const entJogOoc = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
-      const cooldownEfMs = _avtGetEfeitoCooldownMs();
-      sk.efeitos_bonus.forEach(ef => {
-        const alvoProcOoc = (['hot','cura','teleporte','atravessar','fantasma'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo') ? entJogOoc : entIniOoc;
-        if (ef.tipo === 'teleporte_alvo') {
-          _avtTeleportarParaAlvo(entJogOoc, entIniOoc, ef.delay_ms ?? 1000, null);
-        } else if (ef.tipo === 'avatar') {
-          _avtCriarAvatar(entJogOoc, ef, null);
-        } else if (ef.tipo === 'cura') {
-          const valorCura = _avtRolarFormula(ef.cura_formula || '1d6');
-          alvoProcOoc.hp = Math.min(alvoProcOoc.hpMax || alvoProcOoc.hp, alvoProcOoc.hp + valorCura);
-          _avtAplicarDanoPersistir(alvoProcOoc, alvoProcOoc.hp);
-          _avtMostrarCuraAcimaDaHead(alvoProcOoc, valorCura);
-          try { _avtBroadcast('avt_hp_update', { nome: alvoProcOoc.nome, hp: alvoProcOoc.hp, hpMax: alvoProcOoc.hpMax }); } catch(_) {}
-        } else if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') {
-          _avtAplicarRastroEfeito(ef, entJogOoc, entIniOoc);
-        } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar','necromante'].includes(ef.tipo)) {
-          if (!alvoProcOoc.status_effects) alvoProcOoc.status_effects = [];
-          const _oocEfPa = {...ef, _turnos_restantes: ef.duracao_turnos??1,
-            expiry_ms: Date.now() + (ef.duracao_turnos??1)*cooldownEfMs, _ooc:true,
-            _casterNome: jogador.nome,
-            _casterId: jogador.id,
-            _skillEfeitos: sk?.efeitos_bonus || [],
-            _formulaAtaque: sk?.formula_dano || '1d6',
-          };
-          alvoProcOoc.status_effects.push(_oocEfPa);
-          if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
-          AVT_STATE._oocStatusEffects.push({entId: alvoProcOoc.id, entNome: alvoProcOoc.nome, ef: {..._oocEfPa}, lastTickAt: Date.now()});
-          // Setar flags imediatamente
-          if (ef.tipo === 'stun')       alvoProcOoc._stunned    = true;
-          if (ef.tipo === 'silence')    alvoProcOoc._silenciado = true;
-          if (ef.tipo === 'fantasma')   alvoProcOoc._fantasma   = true;
-          if (ef.tipo === 'atravessar') alvoProcOoc._atravessar = true;
-          // Necromante: NÃO dominar imediatamente — a dominação só ocorre quando o inimigo
-          // tiver HP <= 0 (via _avtNpcMorreu → _avtNecromanteDominar)
-        }
-      });
-    }
 
-    // Animação de skill configurada (pixi, partículas, etc.)
-    if (sk && typeof _avtPlaySkillAnim === 'function') {
-      const entIniVivo = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
-      const entJogVivo = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
-      _avtPlaySkillAnim(sk, entIniVivo, entJogVivo);
-      try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivo.nome, alvoNome: entIniVivo.nome }); } catch(_) {}
-    }
+    if (_isAreaOoc && _alvosAreaOoc?.length) {
+      // ── PATH DE ÁREA OOC ────────────────────────────────────────────────
+      const _areaLabel = _tipoAreaOoc === 'linha' ? '▬ Linha'
+        : _isTodosInimigoOoc ? '◉ Todos inimigos' : '◼ Área';
+      const _critMsgArea = critMult === 2 ? '🎯✦✦ CRÍTICO TOTAL! ' : critMult === 1.5 ? '🎯 CRÍTICO! ' : critMult === 1.2 ? '⭐ CRÍTICO MENOR! ' : '';
+      mostrarToast(`${_critMsgArea}${skillNome} [${_areaLabel}] atinge ${_alvosAreaOoc.length} alvo(s)!`, 'ok');
 
-    if (ini.hp <= 0) {
-      // Inimigo morreu no primeiro ataque — sem combate
-      // Resolver a entidade real (o efeito foi aplicado em AVT_STATE.entidades, que pode ser
-      // uma referência diferente de `ini`) para detectar a dominação por Necromante.
-      const _iniMorte = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
-      // Verificar se será dominado pelo Necromante antes de conceder XP/toast de morte
-      const _efNecroOoc = (_iniMorte.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
-      if (!_efNecroOoc) {
-        _avtLog(`💀 ${ini.nome} abatido antes do combate começar!`);
-        mostrarToast(`✦ ${ini.nome} derrotado! XP concedido.`, 'sucesso');
-        const xpBase = ini.xpBase ?? 10;
-        const vezesMorto = ini.vezes_morto || 0;
-        const xpFinal = Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)));
-        const myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
-        if (myChar) {
-          myChar.xp = (myChar.xp || 0) + xpFinal;
-          mostrarToast(`✦ ${jogador.nome} +${xpFinal} XP`, 'sucesso');
-          if (jogador.nome === AVT_STATE.myCharNome) _avtMostrarXpFloat(xpFinal);
-          if (myChar.id) {
-            _avtSb('characters?id=eq.' + encodeURIComponent(myChar.id), {
-              method: 'PATCH', body: JSON.stringify({ xp: myChar.xp })
-            }).catch(()=>{});
+      // Animação de skill em área
+      if (sk && typeof _avtPlaySkillAnim === 'function') {
+        const entJogVivoArea = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
+        _avtPlaySkillAnim(sk, entJogVivoArea, entJogVivoArea, true);
+        try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivoArea.nome, alvoNome: _areaLabel }); } catch(_) {}
+      }
+
+      _alvosAreaOoc.forEach((alvA, idxA) => {
+        setTimeout(() => {
+          const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id) || alvA;
+          if (entAlvA.hp <= 0) return;
+
+          entAlvA.hp = Math.max(0, entAlvA.hp - real);
+          _avtAplicarDanoPersistir(entAlvA, entAlvA.hp);
+          const _batSyncA = _avtBatalhaDeEnt(entAlvA.id);
+          if (_batSyncA) { const _ie = _batSyncA.iniciativa.find(e => e.id === entAlvA.id); if (_ie) _ie.hp = entAlvA.hp; }
+          try { _avtBroadcast('avt_hp_update', { nome: entAlvA.nome, hp: entAlvA.hp, hpMax: entAlvA.hpMax }); } catch(_) {}
+          if (isCrit) _avtTokenTremer(entAlvA);
+          _avtMostrarDanoAbaixoHp(entAlvA, real, isCrit);
+
+          if (sk?.efeitos_bonus?.length) {
+            const entJogOocA = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
+            const cooldownEfMsA = _avtGetEfeitoCooldownMs();
+            sk.efeitos_bonus.forEach(ef => {
+              const _selfApplyA = ['hot','cura','teleporte','atravessar','fantasma'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo';
+              const alvoProcA = _selfApplyA ? entJogOocA : entAlvA;
+              if (ef.tipo === 'teleporte_alvo') {
+                _avtTeleportarParaAlvo(entJogOocA, entAlvA, ef.delay_ms ?? 1000, null);
+              } else if (ef.tipo === 'avatar') {
+                _avtCriarAvatar(entJogOocA, ef, null);
+              } else if (ef.tipo === 'cura') {
+                const valorCuraA = _avtRolarFormula(ef.cura_formula || '1d6');
+                alvoProcA.hp = Math.min(alvoProcA.hpMax || alvoProcA.hp, alvoProcA.hp + valorCuraA);
+                _avtAplicarDanoPersistir(alvoProcA, alvoProcA.hp);
+                _avtMostrarCuraAcimaDaHead(alvoProcA, valorCuraA);
+                try { _avtBroadcast('avt_hp_update', { nome: alvoProcA.nome, hp: alvoProcA.hp, hpMax: alvoProcA.hpMax }); } catch(_) {}
+              } else if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') {
+                _avtAplicarRastroEfeito(ef, entJogOocA, entAlvA);
+              } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar','necromante'].includes(ef.tipo)) {
+                if (!alvoProcA.status_effects) alvoProcA.status_effects = [];
+                const _oocEfA = { ...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
+                  expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * cooldownEfMsA, _ooc: true,
+                  _casterNome: jogador.nome, _casterId: jogador.id,
+                  _skillEfeitos: sk?.efeitos_bonus || [],
+                  _formulaAtaque: sk?.formula_dano || '1d6',
+                };
+                alvoProcA.status_effects.push(_oocEfA);
+                if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+                AVT_STATE._oocStatusEffects.push({ entId: alvoProcA.id, entNome: alvoProcA.nome, ef: { ..._oocEfA }, lastTickAt: Date.now() });
+                if (ef.tipo === 'stun')       alvoProcA._stunned    = true;
+                if (ef.tipo === 'silence')    alvoProcA._silenciado = true;
+                if (ef.tipo === 'fantasma')   alvoProcA._fantasma   = true;
+                if (ef.tipo === 'atravessar') alvoProcA._atravessar = true;
+              }
+            });
           }
-          _avtAutoLevelUp(myChar);
-        }
-      }
-      _avtNpcMorreu(_iniMorte, null); // escondido ou dominado por necromante
-      _avtCancelarPerseguicao(ini.id);
+
+          if (entAlvA.hp <= 0) {
+            const _efNecroA = (entAlvA.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
+            if (!_efNecroA) mostrarToast(`✦ ${entAlvA.nome} derrotado!`, 'sucesso');
+            _avtNpcMorreu(entAlvA, null);
+            _avtCancelarPerseguicao(entAlvA.id);
+          } else {
+            const _timerA = AVT_STATE.npcTimers[entAlvA.id];
+            if (_timerA) {
+              _timerA.inactionTimer = 0;
+              _timerA.targetId = jogador.id;
+              if (_timerA.isPursuing) {
+                try { _avtBroadcastNpc('avt_npc_perseguindo', { id: entAlvA.id, targetId: jogador.id }); } catch(_) {}
+              }
+            }
+            _avtIniciarPerseguicao(entAlvA.id);
+          }
+        }, idxA * 80);
+      });
+
+      AVT_STATE._areaCentro = null;
+      AVT_STATE._areaLinha  = null;
+
     } else {
-      // Sobreviveu — colocar em perseguição (não inicia combate diretamente)
-      const timer = AVT_STATE.npcTimers[ini.id];
-      if (timer) {
-        timer.inactionTimer = 0; // recebeu dano, reseta inação
-        timer.targetId = jogador.id;
-        if (timer.isPursuing) {
-          try { _avtBroadcastNpc('avt_npc_perseguindo', { id: ini.id, targetId: jogador.id }); } catch(_) {}
-        }
+      // ── PATH DE ALVO ÚNICO (original) ────────────────────────────────────
+      ini.hp = Math.max(0, ini.hp - real);
+      _avtAplicarDanoPersistir(ini, ini.hp);
+      // Sincronizar HP no b.iniciativa para o caso do inimigo já estar em batalha
+      const _batSyncPa = _avtBatalhaDeEnt(ini.id);
+      if (_batSyncPa) { const _ieBat = _batSyncPa.iniciativa.find(e => e.id === ini.id); if (_ieBat) _ieBat.hp = ini.hp; }
+      try { _avtBroadcast('avt_hp_update', { nome: ini.nome, hp: ini.hp, hpMax: ini.hpMax }); } catch(_) {}
+      if (isCrit) _avtTokenTremer(AVT_STATE.entidades.find(e=>e.id===ini.id) || ini);
+      _avtMostrarDanoAbaixoHp(ini, real, isCrit);
+      const _critMsg = critMult === 2 ? ' ✦✦ CRÍTICO TOTAL!' : critMult === 1.5 ? ' ✦ CRÍTICO!' : critMult === 1.2 ? ' ⭐ CRÍTICO MENOR!' : '';
+      mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${_critMsg}`, 'ok');
+      // Aplicar efeitos de skill OOC
+      if (sk?.efeitos_bonus?.length) {
+        const entIniOoc = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
+        const entJogOoc = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
+        const cooldownEfMs = _avtGetEfeitoCooldownMs();
+        sk.efeitos_bonus.forEach(ef => {
+          const alvoProcOoc = (['hot','cura','teleporte','atravessar','fantasma'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo') ? entJogOoc : entIniOoc;
+          if (ef.tipo === 'teleporte_alvo') {
+            _avtTeleportarParaAlvo(entJogOoc, entIniOoc, ef.delay_ms ?? 1000, null);
+          } else if (ef.tipo === 'avatar') {
+            _avtCriarAvatar(entJogOoc, ef, null);
+          } else if (ef.tipo === 'cura') {
+            const valorCura = _avtRolarFormula(ef.cura_formula || '1d6');
+            alvoProcOoc.hp = Math.min(alvoProcOoc.hpMax || alvoProcOoc.hp, alvoProcOoc.hp + valorCura);
+            _avtAplicarDanoPersistir(alvoProcOoc, alvoProcOoc.hp);
+            _avtMostrarCuraAcimaDaHead(alvoProcOoc, valorCura);
+            try { _avtBroadcast('avt_hp_update', { nome: alvoProcOoc.nome, hp: alvoProcOoc.hp, hpMax: alvoProcOoc.hpMax }); } catch(_) {}
+          } else if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') {
+            _avtAplicarRastroEfeito(ef, entJogOoc, entIniOoc);
+          } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar','necromante'].includes(ef.tipo)) {
+            if (!alvoProcOoc.status_effects) alvoProcOoc.status_effects = [];
+            const _oocEfPa = {...ef, _turnos_restantes: ef.duracao_turnos??1,
+              expiry_ms: Date.now() + (ef.duracao_turnos??1)*cooldownEfMs, _ooc:true,
+              _casterNome: jogador.nome,
+              _casterId: jogador.id,
+              _skillEfeitos: sk?.efeitos_bonus || [],
+              _formulaAtaque: sk?.formula_dano || '1d6',
+            };
+            alvoProcOoc.status_effects.push(_oocEfPa);
+            if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+            AVT_STATE._oocStatusEffects.push({entId: alvoProcOoc.id, entNome: alvoProcOoc.nome, ef: {..._oocEfPa}, lastTickAt: Date.now()});
+            // Setar flags imediatamente
+            if (ef.tipo === 'stun')       alvoProcOoc._stunned    = true;
+            if (ef.tipo === 'silence')    alvoProcOoc._silenciado = true;
+            if (ef.tipo === 'fantasma')   alvoProcOoc._fantasma   = true;
+            if (ef.tipo === 'atravessar') alvoProcOoc._atravessar = true;
+            // Necromante: NÃO dominar imediatamente — a dominação só ocorre quando o inimigo
+            // tiver HP <= 0 (via _avtNpcMorreu → _avtNecromanteDominar)
+          }
+        });
       }
-      _avtIniciarPerseguicao(ini.id);
+
+      // Animação de skill configurada (pixi, partículas, etc.)
+      if (sk && typeof _avtPlaySkillAnim === 'function') {
+        const entIniVivo = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
+        const entJogVivo = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
+        _avtPlaySkillAnim(sk, entIniVivo, entJogVivo);
+        try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivo.nome, alvoNome: entIniVivo.nome }); } catch(_) {}
+      }
+
+      if (ini.hp <= 0) {
+        // Inimigo morreu no primeiro ataque — sem combate
+        // Resolver a entidade real (o efeito foi aplicado em AVT_STATE.entidades, que pode ser
+        // uma referência diferente de `ini`) para detectar a dominação por Necromante.
+        const _iniMorte = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
+        // Verificar se será dominado pelo Necromante antes de conceder XP/toast de morte
+        const _efNecroOoc = (_iniMorte.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
+        if (!_efNecroOoc) {
+          _avtLog(`💀 ${ini.nome} abatido antes do combate começar!`);
+          mostrarToast(`✦ ${ini.nome} derrotado! XP concedido.`, 'sucesso');
+          const xpBase = ini.xpBase ?? 10;
+          const vezesMorto = ini.vezes_morto || 0;
+          const xpFinal = Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)));
+          const myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
+          if (myChar) {
+            myChar.xp = (myChar.xp || 0) + xpFinal;
+            mostrarToast(`✦ ${jogador.nome} +${xpFinal} XP`, 'sucesso');
+            if (jogador.nome === AVT_STATE.myCharNome) _avtMostrarXpFloat(xpFinal);
+            if (myChar.id) {
+              _avtSb('characters?id=eq.' + encodeURIComponent(myChar.id), {
+                method: 'PATCH', body: JSON.stringify({ xp: myChar.xp })
+              }).catch(()=>{});
+            }
+            _avtAutoLevelUp(myChar);
+          }
+        }
+        _avtNpcMorreu(_iniMorte, null); // escondido ou dominado por necromante
+        _avtCancelarPerseguicao(ini.id);
+      } else {
+        // Sobreviveu — colocar em perseguição (não inicia combate diretamente)
+        const timer = AVT_STATE.npcTimers[ini.id];
+        if (timer) {
+          timer.inactionTimer = 0; // recebeu dano, reseta inação
+          timer.targetId = jogador.id;
+          if (timer.isPursuing) {
+            try { _avtBroadcastNpc('avt_npc_perseguindo', { id: ini.id, targetId: jogador.id }); } catch(_) {}
+          }
+        }
+        _avtIniciarPerseguicao(ini.id);
+      }
     }
   }, 1500);
 }
@@ -11466,8 +11586,16 @@ async function _avtExecutarAtaque() {
   let _alvosAreaFinal = null;
   if (_isAreaAttack) {
     if (_isTodosInimigos) {
-      // Todos os inimigos vivos na batalha
       _alvosAreaFinal = b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0);
+      // Incluir inimigos que ainda não entraram na batalha (ex.: em perseguição)
+      AVT_STATE.entidades.forEach(e => {
+        if (e.tipo !== 'inimigo' || e.hp <= 0 || b.iniciativa.some(i => i.id === e.id)) return;
+        _alvosAreaFinal.push(e);
+        const _initRollTodos = Math.floor(Math.random() * 20) + 1;
+        b.iniciativa.push({ ...e, initRoll: _initRollTodos });
+        b.iniciativa.sort((a, bb) => bb.initRoll - a.initRoll);
+        b.envolvidos.push(e.id);
+      });
     } else if (_tipoAreaExec === 'quadrado' && AVT_STATE._areaCentro) {
       const { x: cx, y: cy, tamanho: ct } = AVT_STATE._areaCentro;
       // Inimigos em bat.iniciativa
