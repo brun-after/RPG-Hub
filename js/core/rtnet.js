@@ -43,6 +43,7 @@ window.RTNet = (() => {
     stateTickTimer:   null,
     _hostDeadTimer:   null,
     _candidateTimer:  null,
+    _soloHostTimer:   null,
     periodicSyncTimer:null,
 
     // Event handlers
@@ -382,6 +383,18 @@ window.RTNet = (() => {
     if (ELECTION_MODE === 'voluntary') {
       // Anuncia presença sem candidatar-se: host será eleito só quando alguém clicar "Iniciar como Host"
       _signal('peer_announce', { isHostCandidate: false, userId: _s.userId, joinTs: _s.joinedAt });
+      // Auto-promoção em sessão SOLO: se, após a janela, ninguém mais anunciou presença
+      // e não há host, assume host localmente — evita o jogador solo ficar preso na sala
+      // de espera (falsa sensação de "pausado"). Em multiplayer, a presença de outros
+      // peers cancela a auto-promoção e a eleição voluntária normal prevalece.
+      if (_s._soloHostTimer) clearTimeout(_s._soloHostTimer);
+      _s._soloHostTimer = setTimeout(() => {
+        _s._soloHostTimer = null;
+        if (_s.hostId) return;              // host já eleito/encontrado
+        if (_s.peerJoinTs.size > 0) return; // há outros peers → aguarda host voluntário
+        _log('sessão solo detectada — auto-promovendo a host');
+        _electSelf();
+      }, 3000);
       return;
     }
     _s._candidates.clear();
@@ -765,7 +778,7 @@ window.RTNet = (() => {
       window.RTNet._signalingActive = false;
 
       [_s.snapshotTimer, _s.heartbeatTimer, _s.stateTickTimer, _s.periodicSyncTimer].forEach(t => { if (t) clearInterval(t); });
-      [_s._hostDeadTimer, _s._candidateTimer].forEach(t => { if (t) clearTimeout(t); });
+      [_s._hostDeadTimer, _s._candidateTimer, _s._soloHostTimer].forEach(t => { if (t) clearTimeout(t); });
       _s.snapshotTimer = _s.heartbeatTimer = _s.stateTickTimer = _s._hostDeadTimer = _s._candidateTimer = _s.periodicSyncTimer = null;
 
       for (const pc of _s.peers.values()) { try { pc.close(); } catch(_) {} }
