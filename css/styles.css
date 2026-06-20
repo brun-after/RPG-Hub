@@ -411,7 +411,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .mapa-token-circle { width:32px; height:32px; border-radius:50%; border:2px solid #fff; display:flex; align-items:center; justify-content:center; font-size:1rem; background:var(--painel); box-shadow:0 2px 8px rgba(0,0,0,0.6); }
 .mapa-token-glow { position:absolute; border-radius:50%; pointer-events:none; z-index:-1; animation:tokenGlowPulse 2.4s ease-in-out infinite alternate; }
 @keyframes tokenGlowPulse { from{opacity:0.55;transform:translate(-50%,-50%) scale(1)} to{opacity:0.85;transform:translate(-50%,-50%) scale(1.12)} }
-.mapa-token-label { font-family:var(--fonte-d); font-size:0.5rem; color:#fff; text-shadow:0 1px 4px #000; white-space:nowrap; max-width:90px; overflow:hidden; text-overflow:ellipsis; cursor:default; }
+.mapa-token-label { font-family:var(--fonte-d); font-size:0.5rem; color:#fff; text-shadow:0 1px 4px #000; white-space:nowrap; cursor:default; }
 .mapa-zona { position:absolute; transform:translate(-50%,-50%); border-radius:50%; border:2px dashed rgba(200,168,75,0.5); cursor:pointer; display:flex; align-items:center; justify-content:center; }
 .mapa-zona-label { font-family:var(--fonte-d); font-size:0.55rem; color:var(--destaque); text-shadow:0 1px 3px #000; }
 .mapa-toolbar { display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
