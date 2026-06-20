@@ -30,6 +30,11 @@ function tokenTintOverlayHtml(tints) {
     .join('');
 }
 
+function _scaleTintsOpacity(tints, factor) {
+  if (!tints || !tints.length || factor === 1) return tints;
+  return tints.map(t => t ? { ...t, opacidade: (t.opacidade ?? 0.4) * factor } : t);
+}
+
 // ── Overlays de equipamento visual sobre o token ──────────────────────────────
 function tokenEquipOverlayHtml(equips, tw, th, camadaFiltro) {
   if (!equips || !equips.length) return '';
@@ -214,6 +219,9 @@ function tokenBuildHtml(char, opts) {
   const cor = ca.cor || char.cor || (isNpc ? '#e8604c' : 'var(--primario)');
   const rgb = _tokParseCorRgb(cor);
 
+  const npcFaction    = isNpc ? (ca.npc_faction || 'inimigo') : null;
+  const tintImgFactor = (isNpc && npcFaction === 'inimigo') ? 0.5 : 1;
+
   const isAnimado     = ca.aparencia?.modo === 'animado';
   const apSvg         = tokenBuildSentinel(char);
   const hasCanvas     = isAnimado && apSvg && apSvg.includes('animado-token-mount');
@@ -265,7 +273,9 @@ function tokenBuildHtml(char, opts) {
     const dsFilter  = `drop-shadow(0 0 2px rgba(${r},${g},${b},0.95)) drop-shadow(0 0 5px rgba(${r},${g},${b},0.65)) drop-shadow(0 0 10px rgba(${r},${g},${b},0.3))`;
     const imgH      = Math.round(60 * fator) + 'px';
     const _tints    = ca.aparencia?.tints || [];
-    const _tOvls    = tokenTintOverlayHtml(_tints);
+    const _tOvls    = _tImgUrl
+      ? tokenTintOverlayHtml(_scaleTintsOpacity(_tints, tintImgFactor))
+      : tokenTintOverlayHtml(_tints);
     const innerContent = _tImgUrl
       ? `<div style="position:relative;display:inline-block"><img src="${_tImgUrl}" style="height:${imgH};width:auto;display:block;object-fit:contain">${_tOvls}</div>`
       : apSvg;
@@ -292,7 +302,7 @@ function tokenBuildHtml(char, opts) {
     const tamanho     = Math.round(tamanhoBase * fator) + 'px';
     const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
     const _tints      = ca.aparencia?.tints || [];
-    const _tOvls      = tokenTintOverlayHtml(_tints);
+    const _tOvls      = tokenTintOverlayHtml(_scaleTintsOpacity(_tints, tintImgFactor));
     const glowSize    = Math.round((tamanhoBase + 4) * fator) + 'px';
     const glowHtml    = isProjected ? '' : _tokGlowDiv(rgb, glowSize, glowSize, 'circle');
     return {
