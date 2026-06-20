@@ -69,6 +69,19 @@ async function avtInvCarregarChar(charId) {
   } catch (_) {}
 }
 
+// [4.6] Invalida o cache de inventário deste personagem nos demais clientes.
+// O banco é a fonte da verdade; o evento apenas dispara o reload + re-render remoto.
+// `extra` pode trazer campos diretos (ex.: { ouro }) aplicados sem releitura de tabela.
+function avtInvBroadcastUpdate(charId, extra) {
+  if (!charId) return;
+  try {
+    if (typeof window._avtBroadcast === 'function') {
+      window._avtBroadcast('avt_inv_update', Object.assign({ charId: String(charId) }, extra || {}));
+    }
+  } catch (_) {}
+}
+window.avtInvBroadcastUpdate = avtInvBroadcastUpdate;
+
 // ─── ITEM CRUD ────────────────────────────────────────────────────────────────
 
 async function avtInvDarItem(charId, itemId, qty) {
@@ -92,6 +105,7 @@ async function avtInvDarItem(charId, itemId, qty) {
     if (newRow) {
       if (!AVT_INV.inventarios[charId]) AVT_INV.inventarios[charId] = [];
       AVT_INV.inventarios[charId].push(newRow);
+      avtInvBroadcastUpdate(charId);
     }
     return newRow || null;
   } catch (e) {
@@ -105,10 +119,12 @@ async function avtInvRemoverItem(invId, charId) {
     await sb(`inventario?id=eq.${encodeURIComponent(invId)}`, { method: 'DELETE' });
     if (charId && AVT_INV.inventarios[charId]) {
       AVT_INV.inventarios[charId] = AVT_INV.inventarios[charId].filter(i => String(i.id) !== String(invId));
+      avtInvBroadcastUpdate(charId);
     } else {
       Object.keys(AVT_INV.inventarios).forEach(cid => {
         AVT_INV.inventarios[cid] = AVT_INV.inventarios[cid].filter(i => String(i.id) !== String(invId));
       });
+      if (charId) avtInvBroadcastUpdate(charId);
     }
   } catch (e) {
     try { console.warn('[AVT_INV] remover item error:', e); } catch (_) {}
@@ -313,6 +329,7 @@ async function avtInvUsarConsumivel(charNome, invId) {
     } catch (_) {}
   }
 
+  avtInvBroadcastUpdate(char.id);
   if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender();
   const modal = document.getElementById('avt-inventario-modal');
   if (modal && modal.style.display !== 'none') avtInvRenderPanel(charNome, 'avt-inv-body');
@@ -500,6 +517,7 @@ async function avtInvDarOuro(charNome, qty) {
       body: JSON.stringify({ custom_attrs: char.custom_attrs }),
     });
   } catch (_) {}
+  avtInvBroadcastUpdate(char.id, { ouro: char.custom_attrs.ouro });
 }
 
 async function avtInvRemoverOuro(charNome, qty) {
@@ -514,6 +532,7 @@ async function avtInvRemoverOuro(charNome, qty) {
       body: JSON.stringify({ custom_attrs: char.custom_attrs }),
     });
   } catch (_) {}
+  avtInvBroadcastUpdate(char.id, { ouro: char.custom_attrs.ouro });
 }
 
 // ─── RENDERIZAÇÃO ─────────────────────────────────────────────────────────────

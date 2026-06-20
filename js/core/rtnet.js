@@ -118,6 +118,10 @@ window.RTNet = (() => {
     // [RECURSOS + BAÚS]
     avt_rsv_update:           'avtReceberRsvUpdate',
     avt_bau_aberto:           'avtReceberBauAberto',
+    // [COBERTURA COMPLETA] rastro autoritativo, cooldown OOC e cache de inventário
+    avt_rastro_marcar:        'avtReceberRastroMarcar',
+    avt_ooc_cooldown:         'avtReceberOocCooldown',
+    avt_inv_update:           'avtReceberInvUpdate',
     // [FASES]
     avt_fase_mudou:           'avtReceberFaseMudou',
     avt_porta_proxima:        'avtReceberPortaProxima',
@@ -165,6 +169,10 @@ window.RTNet = (() => {
     avt_char_update:          { persist: 'never',     reliable: true  },
     // [RECURSOS + BAÚS]
     avt_rsv_update:           { persist: 'never',     reliable: true  },
+    // [COBERTURA COMPLETA] eventos confiáveis de baixa frequência
+    avt_rastro_marcar:        { persist: 'never',     reliable: true  },
+    avt_ooc_cooldown:         { persist: 'never',     reliable: true  },
+    avt_inv_update:           { persist: 'never',     reliable: true  },
     // [MAPA] edição de mapa ao vivo pelo mestre (já persistido via theme_json)
     avt_dungeon_update:       { persist: 'never',     reliable: true  },
   };

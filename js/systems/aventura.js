@@ -445,17 +445,40 @@ function _avtEfetosAtivosEnt(ent) {
 // Células contaminadas que causam dano a inimigos que passarem por elas. Cada célula
 // fere cada inimigo apenas 1× (hitSet). Vivem em AVT_STATE._rastroCells.
 
+// Autoridade do estado autoritativo: host eleito ou sessão sem RTNet (solo/legado).
+// Mesma condição usada para o tick OOC em _avtRenderFrame.
+function _avtEhAutoridade() {
+  return typeof RTNet === 'undefined' || !RTNet.initialized || RTNet.isHost();
+}
+window._avtEhAutoridade = _avtEhAutoridade;
+
+// [4.4] Define um cooldown OOC e propaga em tempo real (sem esperar o snapshot de 15s).
+function _avtSetOocCooldown(key, expiry) {
+  if (!key) return;
+  AVT_STATE._oocCooldowns = AVT_STATE._oocCooldowns || {};
+  AVT_STATE._oocCooldowns[key] = expiry;
+  try { _avtBroadcast('avt_ooc_cooldown', { key, expiry }); } catch(_) {}
+}
+window._avtSetOocCooldown = _avtSetOocCooldown;
+
 // Marca uma célula como contaminada pelo caster. Mescla células iguais do mesmo caster.
-function _avtRastroMarcarCelula(caster, x, y, formula, duracaoTurnos, cor) {
+// `_fromNet`: quando true, a célula veio de avt_rastro_marcar (não re-broadcasta) e usa
+// o `expiry_ms` recebido para manter a expiração idêntica entre clientes.
+function _avtRastroMarcarCelula(caster, x, y, formula, duracaoTurnos, cor, _fromNet, _expiryMs) {
   if (!caster || formula == null) return;
   const tx = Math.round(x), ty = Math.round(y);
   if (typeof _avtTilePassavel === 'function' && !_avtTilePassavel(tx, ty, AVT_STATE.dungeon)) return;
   if (!AVT_STATE._rastroCells) AVT_STATE._rastroCells = [];
   const dur = Math.max(1, duracaoTurnos || 3);
   const corCel = cor || '#5ee09a';
-  const expiry = Date.now() + dur * _avtGetEfeitoCooldownMs();
+  const expiry = (_fromNet && typeof _expiryMs === 'number') ? _expiryMs : (Date.now() + dur * _avtGetEfeitoCooldownMs());
   const casterNome = typeof caster === 'string' ? caster : caster.nome;
   const casterId = typeof caster === 'object' ? (caster.id || null) : null;
+  // Propaga a contaminação a todos os clientes (rastro é renderizado por todos; o dano
+  // é aplicado só pela autoridade — ver _avtRastroChecarEntrada).
+  if (!_fromNet) {
+    try { _avtBroadcast('avt_rastro_marcar', { x: tx, y: ty, formula, expiry_ms: expiry, caster: casterNome, casterId, cor: corCel, duracaoTurnos: dur }); } catch(_) {}
+  }
   const ex = AVT_STATE._rastroCells.find(c => c.x === tx && c.y === ty && c.caster === casterNome);
   if (ex) { ex.expiry_ms = Math.max(ex.expiry_ms, expiry); ex.formula = formula; ex.cor = corCel; return; }
   AVT_STATE._rastroCells.push({ x: tx, y: ty, formula, expiry_ms: expiry, caster: casterNome, casterId, cor: corCel, hitSet: new Set() });
@@ -471,6 +494,10 @@ function _avtRastroEhHostil(e) {
 
 // Aplica dano de rastro quando uma entidade hostil entra/está numa célula contaminada.
 function _avtRastroChecarEntrada(ent, x, y) {
+  // Dano de rastro é autoritativo: apenas o host aplica (e propaga via avt_hp_update).
+  // Não-host renderiza as células, mas não aplica dano — evita HP não-autoritativo
+  // revertido pelo tick.
+  if (!_avtEhAutoridade()) return;
   const cells = AVT_STATE._rastroCells;
   if (!cells || !cells.length || !_avtRastroEhHostil(ent)) return;
   const tx = Math.round(x), ty = Math.round(y), now = Date.now();
@@ -548,6 +575,54 @@ function _avtRastroPrune() {
   const now = Date.now();
   AVT_STATE._rastroCells = AVT_STATE._rastroCells.filter(c => now < c.expiry_ms);
 }
+
+// Recebe contaminação de rastro de outro cliente e recria a célula localmente.
+window.avtReceberRastroMarcar = function(p) {
+  try {
+    if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return;
+    if (p.expiry_ms && Date.now() >= p.expiry_ms) return; // já expirada
+    _avtRastroMarcarCelula(p.caster || p.casterId, p.x, p.y, p.formula, p.duracaoTurnos || 3, p.cor, true, p.expiry_ms);
+  } catch(_) {}
+};
+
+// [4.4] Recebe um cooldown OOC de outro cliente (aplicação monotônica, ignora expirados).
+window.avtReceberOocCooldown = function(p) {
+  try {
+    if (!p || !p.key || typeof p.expiry !== 'number') return;
+    if (p.expiry <= Date.now()) return;
+    AVT_STATE._oocCooldowns = AVT_STATE._oocCooldowns || {};
+    const atual = AVT_STATE._oocCooldowns[p.key] || 0;
+    if (p.expiry > atual) AVT_STATE._oocCooldowns[p.key] = p.expiry;
+    try { if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar(); } catch(_) {}
+  } catch(_) {}
+};
+
+// [4.6] Inventário mudou em outro cliente: recarrega do banco (fonte da verdade) e
+// re-renderiza qualquer painel/HUD aberto daquele personagem. `ouro` (opcional) é
+// aplicado direto, pois vive em characters.custom_attrs (não na tabela inventario).
+window.avtReceberInvUpdate = async function(p) {
+  try {
+    if (!p || !p.charId) return;
+    const charId = String(p.charId);
+    const char = (AVT_STATE.chars || []).find(c => String(c.id) === charId);
+    if (typeof p.ouro === 'number' && char) {
+      char.custom_attrs = char.custom_attrs || {};
+      char.custom_attrs.ouro = p.ouro;
+    }
+    if (typeof avtInvCarregarChar === 'function') { try { await avtInvCarregarChar(charId); } catch(_) {} }
+    // Re-render: painel/HUD do jogador local e modais de inventário abertos.
+    const charNome = char?.nome || null;
+    try { if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender(); } catch(_) {}
+    try {
+      const modal = document.getElementById('avt-inventario-modal');
+      if (modal && modal.style.display !== 'none' && charNome && typeof avtInvRenderPanel === 'function') {
+        avtInvRenderPanel(charNome, 'avt-inv-body');
+      }
+    } catch(_) {}
+    // O inventário do mestre é parte do painel do mestre — re-renderiza se aberto.
+    try { if (typeof _avtMestrePainelRender === 'function') _avtMestrePainelRender(); } catch(_) {}
+  } catch(_) {}
+};
 
 // Desenha as células contaminadas no grid (pulso translúcido).
 function _avtRenderRastroCells(ctx, camera, SZ, canvas) {
@@ -3347,6 +3422,8 @@ function _avtIniciarRTNet(rpgId, onHostElected) {
         _oocCooldowns:      AVT_STATE._oocCooldowns,
         _oocStatusEffects:  AVT_STATE._oocStatusEffects,
         batalhaAutoSuspensa:AVT_STATE.batalhaAutoSuspensa,
+        // Rastros contaminados: hitSet (Set) → array para serializar.
+        _rastroCells: (AVT_STATE._rastroCells || []).map(c => ({ ...c, hitSet: Array.from(c.hitSet || []) })),
       }));
       if (AVT_STATE._charHpFlushTimer) clearInterval(AVT_STATE._charHpFlushTimer);
       AVT_STATE._charHpFlushTimer = setInterval(() => {
@@ -8048,7 +8125,7 @@ async function _avtPrimeiroAtaqueSelecionarSkill(skId) {
       });
     }
     const _oocKey = (jogador.id || jogador.nome) + '_' + skId;
-    AVT_STATE._oocCooldowns[_oocKey] = Date.now() + (sk.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000;
+    _avtSetOocCooldown(_oocKey, Date.now() + (sk.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000);
     _avtRenderHpBar();
     mostrarToast(`✨ ${sk.habilidade} aplicado em si mesmo`, 'ok', 2500);
     return;
@@ -8137,7 +8214,7 @@ async function _avtAplicarSkillAliadoOoc(skId, alvoId) {
     });
   }
   const _oocKey = (jogador.id || jogador.nome) + '_' + skId;
-  AVT_STATE._oocCooldowns[_oocKey] = Date.now() + (sk.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000;
+  _avtSetOocCooldown(_oocKey, Date.now() + (sk.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000);
   _avtRenderHpBar();
   mostrarToast(`✨ ${sk.habilidade} aplicado em ${entAlvo.nome}`, 'ok', 2500);
 }
@@ -8476,7 +8553,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   // Aplicar cooldown OOC (multiplica turnos pelo tempo por turno)
   const _oocKey = (jogador.id || jogador.nome) + '_' + (skId || 'basico');
   const _oocMs = (sk?.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000;
-  AVT_STATE._oocCooldowns[_oocKey] = Date.now() + _oocMs;
+  _avtSetOocCooldown(_oocKey, Date.now() + _oocMs);
 
   setTimeout(() => {
     if (critMult === 0) {
@@ -14048,9 +14125,12 @@ function _avtRecuperarPorMovimento(jogador, celulas) {
   char.hp_atual  = hpDepois;
   jogador.hp     = hpDepois;
 
+  let _recursoMudou = false;
   _avtRecursosDoChar(char).forEach(r => {
     const manaPorPasso = lc.mana_regen_por_passo ?? 1;
-    atrs[r.nome] = Math.min(r.max, r.atual + celulas * manaPorPasso);
+    const novo = Math.min(r.max, r.atual + celulas * manaPorPasso);
+    if (novo !== r.atual) _recursoMudou = true;
+    atrs[r.nome] = novo;
   });
   ca.atributos  = atrs;
   char.custom_attrs = ca;
@@ -14061,6 +14141,11 @@ function _avtRecuperarPorMovimento(jogador, celulas) {
 
   // Propaga HP atualizado para host e demais clientes
   try { _avtBroadcast('avt_hp_update', { nome: jogador.nome, hp: hpDepois, hpMax: jogador.hpMax ?? hpMax }); } catch(_) {}
+  // [4.5] Propaga também a regeneração de recursos (mana/PSI) — antes só o HP viajava,
+  // deixando mana dessincronizada entre clientes.
+  if (_recursoMudou) {
+    try { _avtBroadcast('avt_rsv_update', { nome: jogador.nome, atributos: { ...atrs } }); } catch(_) {}
+  }
 
   clearTimeout(AVT_STATE._recDebounceTimer);
   AVT_STATE._recDebounceTimer = setTimeout(async () => {
@@ -14577,6 +14662,9 @@ async function avtAbrirBau(bauId) {
 
   if (loot.length) mostrarToast(`📦 Baú aberto! ${loot.length} item(ns) adicionado(s) ao inventário`, 'sucesso');
   _avtBroadcast('avt_bau_aberto', { bauId, jogadorNome: jogador.nome });
+  // [4.6] Garante invalidação do cache de inventário mesmo no caminho de fallback
+  // (POST direto sem avtInvDarItem). Inclui ouro atualizado do baú.
+  try { if (typeof avtInvBroadcastUpdate === 'function') avtInvBroadcastUpdate(char.id, { ouro: char.custom_attrs?.ouro }); } catch(_) {}
   avtJogadorPainelRender();
 }
 window.avtAbrirBau = avtAbrirBau;
@@ -19066,6 +19154,12 @@ function avtAplicarSnapshotMerge(snap) {
       );
     }
     if (snap._oocStatusEffects) AVT_STATE._oocStatusEffects = snap._oocStatusEffects;
+    if (Array.isArray(snap._rastroCells)) {
+      const _nowR = Date.now();
+      AVT_STATE._rastroCells = snap._rastroCells
+        .filter(c => c && _nowR < c.expiry_ms)
+        .map(c => ({ ...c, hitSet: new Set(c.hitSet || []) }));
+    }
     if ('batalhaAutoSuspensa' in snap) AVT_STATE.batalhaAutoSuspensa = snap.batalhaAutoSuspensa;
     try { if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar(); } catch(_) {}
   } catch(e) { try { console.warn('[AVT] avtAplicarSnapshotMerge:', e); } catch(_) {} }
@@ -25069,6 +25163,12 @@ try{
           fantasma: !!e.fantasma,
           // Último seq de movimento processado pelo host p/ esta entidade (reconciliação).
           ackSeq: (typeof e._ackSeq === 'number') ? e._ackSeq : -1,
+          // [4.2] Dominação fora de combate: propaga flag/dono/cor/tipo p/ todos verem.
+          dominado: !!e._dominado,
+          donoNome: e._donoNome || null,
+          cor: e.cor || null,
+          // [4.3] Paciência restante (ms) p/ HUD do não-host bater com o host.
+          pat: (AVT_STATE.npcTimers?.[e.id]?.ativo) ? Math.max(0, Math.round(AVT_STATE.npcTimers[e.id].patience || 0)) : null,
         });
       }
       return { t: Date.now(), entidades: ents, hostId: _myUid() };
@@ -25102,6 +25202,27 @@ try{
         if (Array.isArray(r.status_effects)) ent.status_effects = r.status_effects;
         if (r.atravessar !== undefined) ent.atravessar = r.atravessar;
         if (r.fantasma !== undefined) ent.fantasma = r.fantasma;
+        // [4.2] Dominação fora de combate: refletir flag/dono/tipo/cor (espelha a lógica
+        // de avtReceberBatalhaUpdate). Só para NPCs — dominação não afeta jogadores e
+        // assim não tocamos na cor/tipo das entidades de jogador.
+        if (ent.tipo !== 'jogador' && r.tipo !== 'jogador') {
+          if (r.dominado !== undefined) ent._dominado = r.dominado;
+          if (r.donoNome !== undefined && r.donoNome !== null) ent._donoNome = r.donoNome;
+          if (r.tipo != null) ent.tipo = r.tipo;
+          if (r.cor != null) ent.cor = r.cor;
+        }
+        // [4.3] Paciência: espelha o tempo restante do host para o HUD (timer "shadow",
+        // somente leitura — a lógica de disparo continua exclusiva do host).
+        if (r.pat != null && r.id) {
+          AVT_STATE.npcTimers = AVT_STATE.npcTimers || {};
+          const _t = (AVT_STATE.npcTimers[r.id] = AVT_STATE.npcTimers[r.id] || {});
+          _t.patience = r.pat;
+          _t.ativo = true;
+          if (!_t.maxPatience || _t.maxPatience < r.pat) _t.maxPatience = r.pat;
+          _t._shadow = true;
+        } else if (r.pat === null && AVT_STATE.npcTimers[r.id]?._shadow) {
+          AVT_STATE.npcTimers[r.id].ativo = false;
+        }
         // Posição: reconciliação autoritativa por sequência de input (server reconciliation)
         if (typeof r.x === 'number' && typeof r.y === 'number') {
           const dx = Math.abs((ent.x||0) - r.x);

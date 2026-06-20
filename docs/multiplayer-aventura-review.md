@@ -56,24 +56,23 @@ produzido junto com a correção dos bugs de "pausado indevido" e rubber-banding
 | Baús / colisão / edição de mapa | eventos confiáveis (host/mestre) | Efetivo |
 | Pausa / host | inatividade + watchdog + auto-promoção | **Efetivo após esta correção** |
 
-## Pontos DESCOBERTOS — plano de cobertura (não implementado nesta entrega)
+## Pontos antes descobertos — agora COBERTOS
 
-| Sistema | Estado atual | Plano de cobertura |
+| Sistema | Estado anterior | Cobertura implementada |
 |---|---|---|
-| Inventário/itens (pickup, drop, troca entre jogadores) | Só equipamento sincroniza; concessões do mestre são locais | Eventos `avt_item_*` autoritativos pelo host (pegar/soltar/transferir) com persistência e validação de posse |
-| Cooldowns OOC de skills | Host rastreia `_oocCooldowns` localmente | Incluir cooldowns por entidade no tick ou evento dedicado; cliente apenas exibe |
-| Regen de recursos (mana/PSI fora de combate) | Sincronizado só em mudança | Enviar baseline + taxa no snapshot/tick para convergência |
-| Flag de NPC dominado | Só no host | Propagar flag de domínio no tick (já há flags `atravessar`/`fantasma` como padrão) |
-| Rastro (Persona) | Aplicação local em cada cliente | Tornar autoritativo via host + incluir células no snapshot |
-| Timers de paciência de NPC | `dt` local por cliente | Canonizar no host e enviar tempo restante no tick |
+| Rastro (Persona/Anima) | Aplicação local; quebrado em P2P (células do não-host nunca chegavam ao host) | **Host-autoritativo**: `avt_rastro_marcar` propaga as células; dano aplicado só pela autoridade (`_avtRastroChecarEntrada` gated por `_avtEhAutoridade`); `_rastroCells` incluído no snapshot |
+| Flag de NPC dominado (fora de combate) | Só no host (em combate já vinha no `avt_batalha_update`) | `dominado`/`donoNome`/`tipo`/`cor` propagados no `avt_state_tick` e aplicados a NPCs |
+| Timers de paciência de NPC | `dt` local por cliente (HUD podia divergir) | Contagem já era host-autoritativa; agora o tempo restante (`pat`) viaja no tick → HUD do não-host espelha o host |
+| Cooldowns OOC de skills | Só via snapshot (15 s) | `avt_ooc_cooldown` emitido a cada uso (`_avtSetOocCooldown`), aplicação monotônica no receptor |
+| Regen de recursos (mana/PSI fora de combate) | Só HP era propagado; mana ficava dessincronizada | `_avtRecuperarPorMovimento` agora também emite `avt_rsv_update` quando recursos mudam |
+| Inventário/itens | Cache `AVT_INV` por cliente; mudanças não invalidavam outros clientes | `avt_inv_update` (com `ouro` opcional) emitido em conceder/remover/consumir/ouro/baú; receptor recarrega do banco e re-renderiza painéis abertos |
 
-### Prioridade sugerida
-1. **Inventário/itens** (maior impacto de jogo e risco de divergência de estado).
-2. **Cooldowns OOC** e **regen de recursos** (afetam decisões de combate fora de turno).
-3. **Paciência de NPC**, **flag de dominado**, **rastro** (refinamentos de consistência).
+Eventos novos registrados em `js/core/rtnet.js`: `avt_rastro_marcar`, `avt_ooc_cooldown`,
+`avt_inv_update` (todos `reliable`, `persist: never`). Dominado e paciência viajam dentro
+do `avt_state_tick` existente.
 
-### Padrão recomendado para os gaps
-Seguir o mesmo modelo host-autoritativo já usado: mutação proposta pelo não-host →
-`avt_player_action`/evento dedicado → host valida e aplica → propaga via tick/evento
-confiável + persistência. Reusar `_avtAcaoParaHost` (`aventura.js`) e o mapa de handlers
-`AVT_HANDLER_MAP` (`rtnet.js`).
+### Padrão usado
+Mesmo modelo host-autoritativo já estabelecido: estado mutável é propagado por evento
+confiável dedicado ou pelo tick autoritativo; o banco permanece como fonte da verdade para
+inventário (o evento apenas dispara reload). Reuso de `AVT_HANDLER_MAP`/`EVENT_OPTS`
+(`rtnet.js`) e dos renderizadores/persistência já existentes.
