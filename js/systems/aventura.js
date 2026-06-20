@@ -25261,6 +25261,13 @@ try{
           if (isMe) {
             // Próprio personagem: descarta inputs já confirmados pelo host (seq <= ackSeq).
             const ack = (typeof r.ackSeq === 'number') ? r.ackSeq : -1;
+            // [P5] Ignora entradas de tick obsoletas/duplicadas (ex.: entidade duplicada
+            // no host com ackSeq menor) que puxariam o jogador de volta a uma posição
+            // velha. Só reconcilia posição com o ack mais recente já visto.
+            if (ack < (ent._maxAckSeq ?? -1)) {
+              // entrada obsoleta — não mexe na posição do próprio jogador
+            } else {
+            ent._maxAckSeq = Math.max(ent._maxAckSeq ?? -1, ack);
             if (Array.isArray(ent._pendingInputs) && ent._pendingInputs.length) {
               ent._pendingInputs = ent._pendingInputs.filter(p => p.seq > ack);
             }
@@ -25284,6 +25291,7 @@ try{
               }
             }
             // else: confirmado mas animação local em curso → deixa a animação concluir.
+            } // fim do guard de ack obsoleto [P5]
           } else if (maxDiv > 2.0) {
             // Outras entidades (jogadores remotos/NPCs): divergência grande → corrige à força.
             ent._waypoints = [];
@@ -25469,15 +25477,24 @@ try{
       if (typeof nx !== 'number' || typeof ny !== 'number') return;
       const ent = _findEnt(id) || _findEnt(nome);
       if (!ent || ent.hp <= 0) return;
-      // Confirma o seq processado SEMPRE (aceito ou rejeitado) para o cliente
-      // reconciliar: o tick ecoa ent._ackSeq e o cliente descarta inputs <= ackSeq.
+      // Confirma o seq processado SEMPRE para o cliente reconciliar: o tick ecoa
+      // ent._ackSeq e o cliente descarta inputs <= ackSeq.
       const _ackInput = () => {
         if (typeof seq === 'number' && seq > (typeof ent._ackSeq === 'number' ? ent._ackSeq : -1)) {
           ent._ackSeq = seq;
         }
       };
-      // Validação de colisão autoritativa — rejeita (sem mover) se inválido, mas
-      // ainda confirma o seq para o cliente saber que o host decidiu.
+      // [P5] Jogadores são AUTORITATIVOS sobre o próprio movimento: o cliente já valida
+      // tile/colisão localmente antes de prever o passo. O host apenas registra e
+      // propaga — não rejeita. Isso elimina o rubber-band em que o host validava contra
+      // um estado divergente (fase/dungeon diferente, entidade duplicada) e rejeitava o
+      // passo, fazendo o cliente ser puxado de volta à célula inicial.
+      if (ent.tipo === 'jogador') {
+        ent.x = nx; ent.y = ny;
+        _ackInput();
+        return;
+      }
+      // NPC/entidade controlada pelo mestre: mantém validação autoritativa do host.
       if (typeof _avtTilePassavel === 'function' && !ent._atravessar) {
         if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) { _ackInput(); return; }
       }
