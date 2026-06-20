@@ -4801,6 +4801,33 @@ function _avtRenderFrame() {
         remaining = 0;
       }
     }
+
+    // ── Animação walk/idle sincronizada com movimento de waypoints ─────────────
+    const _avtIsMoving = e._waypoints.length > 0
+      || Math.abs(e.renderX - e.x) > 0.01
+      || Math.abs(e.renderY - e.y) > 0.01;
+
+    if (_avtIsMoving && !e._avtWasMoving) {
+      e._avtWasMoving = true;
+      window._animCtrlMap?.[e.nome]?.setAnimation?.('walk');
+    } else if (!_avtIsMoving && e._avtWasMoving) {
+      e._avtWasMoving = false;
+      window._animCtrlMap?.[e.nome]?.setAnimation?.('idle');
+    }
+
+    if (_avtIsMoving) {
+      const _prevRx = e._avtPrevRenderX ?? e.renderX;
+      const _movDx  = e.renderX - _prevRx;
+      if (Math.abs(_movDx) > 0.001) {
+        const _dir = _movDx > 0 ? 'right' : 'left';
+        if ((window._tokFacingDir || {})[e.nome] !== _dir) {
+          window._tokFacingDir = window._tokFacingDir || {};
+          window._tokFacingDir[e.nome] = _dir;
+          window._animCtrlMap?.[e.nome]?.setFacing?.(_dir);
+        }
+      }
+    }
+    e._avtPrevRenderX = e.renderX;
   });
 
   // ── Broadcast de posição fina (sub-célula) do jogador local, throttle ~50ms ──
