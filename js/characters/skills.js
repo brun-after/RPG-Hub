@@ -310,6 +310,215 @@ function abrirModalSkill(skillId, personagemNome) {
 }
 function fecharModalSkill() {
   document.getElementById('modal-skill-overlay').style.display = 'none';
+  if (window._skAtaqueBasicoMode) { _skAplicarModoAtaqueBasico(false); window._skAtaqueBasicoMode = null; }
+}
+
+// ── Modo "Ataque Básico" do modal de skill ───────────────────
+// Reaproveita o modal completo de habilidade (animação rica, áudio, efeitos)
+// para configurar o ataque básico, salvando em custom_attrs.ataque_basico.
+function _skAplicarModoAtaqueBasico(on) {
+  document.querySelectorAll('#modal-skill-overlay .sk-only-section').forEach(el => {
+    if (on) { if (el.dataset._abPrev === undefined) el.dataset._abPrev = el.style.display || ''; el.style.display = 'none'; }
+    else if (el.dataset._abPrev !== undefined) { el.style.display = el.dataset._abPrev; delete el.dataset._abPrev; }
+  });
+  const _relabel = (id, txt) => {
+    const el = document.getElementById(id); if (!el) return;
+    if (on) { if (el.dataset._abPrev === undefined) el.dataset._abPrev = el.textContent; el.textContent = txt; }
+    else if (el.dataset._abPrev !== undefined) { el.textContent = el.dataset._abPrev; delete el.dataset._abPrev; }
+  };
+  _relabel('sk-mod-atributo-pct-label', 'Mult. de atributo (× aditivo)');
+  _relabel('sk-cooldown-label', 'Cooldown (t) — vazio=global');
+  const _multEl = document.getElementById('sk-mod-atributo-pct');
+  if (_multEl) _multEl.step = on ? '0.1' : '';
+}
+
+function abrirModalSkillAtaqueBasico(entId) {
+  if (typeof AVT_STATE === 'undefined') return;
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  const dbChar = ent ? AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome) : null;
+  if (!dbChar) { if (typeof mostrarToast === 'function') mostrarToast('Personagem não encontrado', 'erro'); return; }
+  window._skAtaqueBasicoMode = { entId, dbCharId: dbChar.id, nome: ent.nome };
+  const ab = dbChar.custom_attrs?.ataque_basico || {};
+  const overlay = document.getElementById('modal-skill-overlay');
+  document.getElementById('modal-skill-titulo').textContent = '⚔ Ataque Básico — ' + ent.nome;
+  document.getElementById('modal-skill-id').value = '';
+  document.getElementById('modal-skill-personagem').value = ent.nome;
+  document.getElementById('sk-habilidade').value = ab.nome || 'Ataque básico';
+  document.getElementById('sk-custo').value = '';
+  document.getElementById('sk-efeito').value = ab.descricao || '';
+  skFBCarregarFormula(ab.formula_dano || '1d8');
+  skPopularAtributos();
+  document.getElementById('sk-cooldown').value  = ab.cooldown_turnos != null ? ab.cooldown_turnos : '';
+  document.getElementById('sk-tipo-dano').value = ab.tipo_dano || 'fisico';
+  document.getElementById('sk-alcance').value   = ab.alcance_celulas != null ? ab.alcance_celulas : '';
+  document.getElementById('sk-atributo-base').value = ab.atributo_base || '';
+  document.getElementById('sk-mod-atributo-pct').value = ab.mod_atributo_mult != null ? ab.mod_atributo_mult : '';
+  document.getElementById('sk-alvo-tipo').value = 'inimigo';
+  if (typeof skAlvoTipoChange === 'function') skAlvoTipoChange();
+  document.getElementById('sk-crit-pos').value = ab.critico_positivo || '';
+  document.getElementById('sk-crit-neg').value = ab.critico_negativo || '';
+  SK_EFEITOS_TEMP = Array.isArray(ab.efeitos_bonus) ? JSON.parse(JSON.stringify(ab.efeitos_bonus)) : [];
+  skRenderEfeitosLista();
+  skTipoDanoChange();
+  skPreencherAnimacaoNoForm(ab.animacao || {});
+  if (typeof _skCarregarCamposReativos === 'function') _skCarregarCamposReativos(null);
+  _skAplicarModoAtaqueBasico(true);
+  overlay.style.display = 'flex';
+  overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
+  const _isMestre = RPG_DATA?.myRole === 'mestre';
+  const _maxDur = _isMestre ? 10000 : 3000;
+  ['sk-anim-duracao','sk-anim-duracao-canvas'].forEach(id => { const el = document.getElementById(id); if (el) { el.max = _maxDur; if (parseInt(el.value) > _maxDur) el.value = _maxDur; } });
+  if (typeof skAnimValidarDuracao === 'function') skAnimValidarDuracao();
+}
+window.abrirModalSkillAtaqueBasico = abrirModalSkillAtaqueBasico;
+
+async function _skSalvarAtaqueBasicoRico() {
+  const mode = window._skAtaqueBasicoMode;
+  if (!mode) return;
+  const dbChar = AVT_STATE.chars.find(c => c.id === mode.dbCharId);
+  if (!dbChar) { mostrarToast('Personagem não encontrado', 'erro'); return; }
+  const nome = document.getElementById('sk-habilidade').value.trim() || 'Ataque básico';
+  const _animRes = skLerAnimacaoDoForm();
+  if (_animRes.erro) return;
+  const _multRaw = document.getElementById('sk-mod-atributo-pct').value;
+  const _cdRaw   = document.getElementById('sk-cooldown').value;
+  const _alcRaw  = document.getElementById('sk-alcance').value;
+  const ab = {
+    nome,
+    descricao:        document.getElementById('sk-efeito').value.trim() || undefined,
+    formula_dano:     document.getElementById('sk-formula').value.trim() || '1d8',
+    tipo_dano:        document.getElementById('sk-tipo-dano').value || 'fisico',
+    alcance_celulas:  _alcRaw !== '' ? parseInt(_alcRaw) : 1,
+    atributo_base:    document.getElementById('sk-atributo-base').value.trim() || undefined,
+    critico_positivo: document.getElementById('sk-crit-pos').value.trim() || undefined,
+    critico_negativo: document.getElementById('sk-crit-neg').value.trim() || undefined,
+    animacao:         _animRes.animacao,
+    efeitos_bonus:    SK_EFEITOS_TEMP.length ? JSON.parse(JSON.stringify(SK_EFEITOS_TEMP)) : undefined,
+    ...(_multRaw !== '' && !isNaN(parseFloat(_multRaw)) ? { mod_atributo_mult: parseFloat(_multRaw) } : {}),
+    ...(_cdRaw   !== '' && !isNaN(parseInt(_cdRaw))     ? { cooldown_turnos: Math.max(0, parseInt(_cdRaw)) } : {}),
+  };
+  Object.keys(ab).forEach(k => ab[k] === undefined && delete ab[k]);
+  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  dbChar.custom_attrs.ataque_basico = ab;
+  dbChar.custom_attrs.ataque_basico_animacao = ab.animacao || null; // mirror legado
+  fecharModalSkill();
+  if (dbChar.id && typeof _avtSb === 'function') {
+    await _avtSb(`characters?id=eq.${encodeURIComponent(dbChar.id)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs }) }).catch(() => {});
+  }
+  mostrarToast('Ataque básico salvo!', 'ok');
+  if (typeof _avtCharEditorRender === 'function') _avtCharEditorRender();
+}
+
+// Popula os campos de animação + áudio do modal a partir de um objeto `anim`.
+function skPreencherAnimacaoNoForm(anim) {
+  anim = anim || {};
+  const psId = document.getElementById('sk-pixi-studio-id');
+  const psNome = document.getElementById('sk-pixi-studio-nome');
+  if (psId) psId.value = anim.pixi_studio_id || '';
+  if (psNome) psNome.textContent = anim.pixi_studio_nome || 'Nenhuma selecionada';
+  document.getElementById('sk-anim-tipo').value    = anim.tipo  || 'nenhuma';
+  document.getElementById('sk-anim-cor').value     = anim.cor   || '#e74c3c';
+  document.getElementById('sk-anim-icone').value   = anim.icone || '';
+  document.getElementById('sk-anim-trilha').checked = !!anim.trilha;
+  document.getElementById('sk-anim-url').value      = anim.url  || '';
+  document.getElementById('sk-anim-svg-code').value = anim.svg  || '';
+  document.getElementById('sk-anim-tamanho').value  = anim.tamanho  || 120;
+  document.getElementById('sk-anim-duracao').value  = anim.duracao  || 1500;
+  document.getElementById('sk-anim-repeticao').value = anim.repeticao || 1;
+  document.getElementById('sk-anim-duracao-canvas').value = anim.duracao || 600;
+  document.getElementById('sk-anim-repeticao-canvas').value = anim.repeticao || 1;
+  document.getElementById('sk-anim-posicao').value  = anim.posicao  || 'alvo';
+  const gc = anim.gsap_config || {};
+  const gcPreset = document.getElementById('sk-anim-gsap-preset'); if (gcPreset) gcPreset.value = gc.preset || 'impacto_shake';
+  const gcCor = document.getElementById('sk-anim-gsap-cor'); if (gcCor) gcCor.value = gc.cor || '#e74c3c';
+  const gcDur = document.getElementById('sk-anim-gsap-duracao'); if (gcDur) gcDur.value = gc.duracao || 800;
+  const gcInt = document.getElementById('sk-anim-gsap-intensidade'); if (gcInt) gcInt.value = gc.intensidade || 1.0;
+  const gcAlvo = document.getElementById('sk-anim-gsap-alvo'); if (gcAlvo) gcAlvo.value = gc.alvo_efeito || 'alvo';
+  const scEl = document.getElementById('sk-anim-spine-json-config'); if (scEl) scEl.value = anim.spine_config ? JSON.stringify(anim.spine_config, null, 2) : '';
+  const scPos = document.getElementById('sk-anim-spine-posicao'); if (scPos) scPos.value = anim.spine_config?.posicao || 'alvo';
+  skAnimTipoChange();
+  _skPopularSelectSfx();
+  _skAtualizarAutoSfx();
+  const _audCfg = anim.audio || {};
+  const _castSel = document.getElementById('sk-audio-cast-sel');
+  const _impSel  = document.getElementById('sk-audio-impact-sel');
+  const _castUrl = document.getElementById('sk-audio-cast-url');
+  const _impUrl  = document.getElementById('sk-audio-impact-url');
+  const _volEl   = document.getElementById('sk-audio-volume');
+  const _volVal  = document.getElementById('sk-audio-volume-val');
+  if (_castSel)  _castSel.value  = (!_audCfg.cast || _audCfg.cast.startsWith('http')) ? '' : (_audCfg.cast || '');
+  if (_castUrl)  _castUrl.value  = (_audCfg.cast?.startsWith?.('http') ? _audCfg.cast : '');
+  if (_impSel)   _impSel.value   = (!_audCfg.impact || _audCfg.impact.startsWith('http')) ? '' : (_audCfg.impact || '');
+  if (_impUrl)   _impUrl.value   = (_audCfg.impact?.startsWith?.('http') ? _audCfg.impact : '');
+  if (_volEl)  { _volEl.value = _audCfg.volume ?? 0.75; if (_volVal) _volVal.textContent = parseFloat(_volEl.value).toFixed(2); }
+}
+
+// Lê os campos de animação + áudio do modal → { animacao } ou { erro:true }.
+function skLerAnimacaoDoForm() {
+  const animTipo = document.getElementById('sk-anim-tipo').value;
+  if (!animTipo || animTipo === 'nenhuma') return { animacao: null };
+  const _isMidia  = ['gif','imagem','svg','iframe'].includes(animTipo);
+  const _isCanvas = ['projetil','onda','explosao','raio','aura'].includes(animTipo);
+  const _isGSAP   = animTipo === 'gsap' || animTipo === 'gsap_pixi_spine';
+  const _isSpine  = animTipo === 'pixi_spine' || animTipo === 'gsap_pixi_spine';
+  const _isMestre = RPG_DATA?.myRole === 'mestre';
+  const _maxTotal = _isMestre ? 10000 : 3000;
+  if (_isMidia) {
+    const dur = parseInt(document.getElementById('sk-anim-duracao').value) || 1500;
+    const rep = parseInt(document.getElementById('sk-anim-repeticao').value) || 1;
+    if (dur * rep > _maxTotal) { mostrarToast(`Duração total (${dur*rep}ms) excede o limite de ${_maxTotal}ms`, 'erro'); return { erro: true }; }
+  }
+  if (_isCanvas) {
+    const dur = parseInt(document.getElementById('sk-anim-duracao-canvas').value) || 600;
+    const rep = parseInt(document.getElementById('sk-anim-repeticao-canvas').value) || 1;
+    if (dur * rep > _maxTotal) { mostrarToast(`Duração total (${dur*rep}ms) excede o limite de ${_maxTotal}ms`, 'erro'); return { erro: true }; }
+  }
+  const animacao = {
+    tipo:      animTipo,
+    cor:       !_isMidia ? (document.getElementById('sk-anim-cor').value  || '#e74c3c') : undefined,
+    icone:     !_isMidia ? (document.getElementById('sk-anim-icone').value.trim() || '') : undefined,
+    trilha:    _isCanvas ? document.getElementById('sk-anim-trilha').checked : undefined,
+    duracao:   _isMidia ? (parseInt(document.getElementById('sk-anim-duracao').value) || 1500)
+             : _isCanvas ? (parseInt(document.getElementById('sk-anim-duracao-canvas').value) || 600) : undefined,
+    repeticao: _isMidia ? (parseInt(document.getElementById('sk-anim-repeticao').value) || 1)
+             : _isCanvas ? (parseInt(document.getElementById('sk-anim-repeticao-canvas').value) || 1) : undefined,
+    url:       _isMidia && animTipo !== 'svg' ? document.getElementById('sk-anim-url').value.trim() : undefined,
+    svg:       animTipo === 'svg' ? document.getElementById('sk-anim-svg-code').value.trim() : undefined,
+    tamanho:   _isMidia ? (parseInt(document.getElementById('sk-anim-tamanho').value) || 120) : undefined,
+    posicao:   _isMidia ? (document.getElementById('sk-anim-posicao').value || 'alvo') : undefined,
+    gsap_config: _isGSAP ? {
+      preset:      document.getElementById('sk-anim-gsap-preset')?.value       || 'impacto_shake',
+      cor:         document.getElementById('sk-anim-gsap-cor')?.value          || '#e74c3c',
+      duracao:     parseInt(document.getElementById('sk-anim-gsap-duracao')?.value)      || 800,
+      intensidade: parseFloat(document.getElementById('sk-anim-gsap-intensidade')?.value) || 1.0,
+      alvo_efeito: document.getElementById('sk-anim-gsap-alvo')?.value         || 'alvo',
+    } : undefined,
+    spine_config: _isSpine ? (() => {
+      const raw = document.getElementById('sk-anim-spine-json-config')?.value.trim() || '';
+      try {
+        if (!raw) return undefined;
+        const parsed = JSON.parse(raw);
+        const spinePos = document.getElementById('sk-anim-spine-posicao')?.value || 'alvo';
+        return { posicao: spinePos, ...parsed };
+      } catch(_) { return undefined; }
+    })() : undefined,
+    pixi_studio_id:   animTipo === 'pixi_studio' ? (document.getElementById('sk-pixi-studio-id')?.value || null) : undefined,
+    pixi_studio_nome: animTipo === 'pixi_studio' ? (document.getElementById('sk-pixi-studio-nome')?.textContent || null) : undefined,
+  };
+  Object.keys(animacao).forEach(k => animacao[k] === undefined && delete animacao[k]);
+  const _skAudCast   = document.getElementById('sk-audio-cast-url')?.value.trim()
+                     || document.getElementById('sk-audio-cast-sel')?.value || '';
+  const _skAudImpact = document.getElementById('sk-audio-impact-url')?.value.trim()
+                     || document.getElementById('sk-audio-impact-sel')?.value || '';
+  const _skAudVol    = parseFloat(document.getElementById('sk-audio-volume')?.value) || 0.75;
+  if (_skAudCast || _skAudImpact) {
+    animacao.audio = {};
+    if (_skAudCast)   animacao.audio.cast   = _skAudCast;
+    if (_skAudImpact) animacao.audio.impact = _skAudImpact;
+    animacao.audio.volume = _skAudVol;
+  }
+  return { animacao };
 }
 
 function skTipoHabilidadeChange() {
@@ -326,6 +535,7 @@ function skTipoHabilidadeChange() {
 }
 
 async function salvarSkill() {
+  if (window._skAtaqueBasicoMode) { return _skSalvarAtaqueBasicoRico(); }
   const skillId = document.getElementById('modal-skill-id').value;
   const personagem = document.getElementById('modal-skill-personagem').value;
   if (!podeEditarPersonagem(personagem)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }

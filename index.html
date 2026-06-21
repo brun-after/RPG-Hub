@@ -1724,7 +1724,7 @@ Resistência elemental:
 
     <!-- Nome + Custo -->
     <div class="form-group" style="margin-bottom:10px"><label>Nome da habilidade *</label><input type="text" id="sk-habilidade" placeholder="Ex: Ataque Flamejante" style="text-align:left"></div>
-    <div class="form-group" style="margin-bottom:10px"><label>Custo (RSV/Mana)</label><input type="text" id="sk-custo" placeholder="Ex: 3 Mana, ou vazio se passiva" style="text-align:left"></div>
+    <div class="form-group sk-only-section" style="margin-bottom:10px"><label>Custo (RSV/Mana)</label><input type="text" id="sk-custo" placeholder="Ex: 3 Mana, ou vazio se passiva" style="text-align:left"></div>
     <div class="form-group" style="margin-bottom:10px">
       <label style="display:flex;align-items:center;gap:6px">Efeito / Descrição
         <span title="Este campo é apenas descritivo. Efeitos mecânicos devem ser configurados em Efeitos Bônus abaixo." style="font-size:0.6rem;color:rgba(200,168,75,0.6);font-family:var(--fonte-d);background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 5px;cursor:help">apenas narrativo</span>
@@ -1769,7 +1769,7 @@ Resistência elemental:
         </select>
       </div>
       <div class="form-group">
-        <label>Mod. do atributo (%)</label>
+        <label id="sk-mod-atributo-pct-label">Mod. do atributo (%)</label>
         <input type="number" id="sk-mod-atributo-pct" min="0" max="999" placeholder="ex: 20" style="text-align:center"
           title="Bônus = ceil(valor_do_atributo × pct/100). Ex: 20% de Magia 10 = +2">
         <div style="font-size:0.65rem;color:var(--suave);margin-top:3px;font-style:italic">Deixe vazio para sem modificador</div>
@@ -1777,7 +1777,7 @@ Resistência elemental:
     </div>
 
     <!-- Tipo de alvo -->
-    <div class="form-group" style="margin-bottom:10px"><label>Tipo de alvo</label>
+    <div class="form-group sk-only-section" style="margin-bottom:10px"><label>Tipo de alvo</label>
       <select id="sk-alvo-tipo" onchange="skAlvoTipoChange()" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
         <option value="inimigo">⚔ Inimigo (ataque)</option>
         <option value="proprio">🧙 Próprio (só em si mesmo)</option>
@@ -1791,7 +1791,7 @@ Resistência elemental:
 
     <!-- Cooldown + Tipo -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      <div class="form-group"><label>Cooldown (t)</label><input type="number" id="sk-cooldown" min="0" value="0" style="text-align:center"></div>
+      <div class="form-group"><label id="sk-cooldown-label">Cooldown (t)</label><input type="number" id="sk-cooldown" min="0" value="0" style="text-align:center"></div>
       <div class="form-group"><label>Tipo</label>
         <select id="sk-tipo-dano" onchange="skTipoDanoChange()" style="width:100%;padding:8px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
           <option value="fisico">⚔ Físico</option>
@@ -1810,7 +1810,7 @@ Resistência elemental:
     </div>
 
     <!-- Concentração + Nível de Magia (D&D 5e) -->
-    <div style="display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;margin-bottom:10px;padding:8px 10px;background:rgba(176,126,240,0.06);border:1px solid rgba(176,126,240,0.2);border-radius:6px">
+    <div class="sk-only-section" style="display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;margin-bottom:10px;padding:8px 10px;background:rgba(176,126,240,0.06);border:1px solid rgba(176,126,240,0.2);border-radius:6px">
       <label style="display:flex;align-items:center;gap:6px;font-family:var(--fonte-d);font-size:0.68rem;color:#b07ef0;cursor:pointer;white-space:nowrap">
         <input type="checkbox" id="sk-concentracao" style="accent-color:#b07ef0"> 🎯 Concentração
       </label>
@@ -1979,6 +1979,52 @@ Resistência elemental:
         </label>
         <div id="sef-imune-fields" style="display:none;padding-left:12px;margin-bottom:8px">
           <div class="form-group"><label>Turnos</label><input type="number" id="sef-imune-turnos" min="1" value="1" style="text-align:center;width:80px"></div>
+        </div>
+        <!-- ── Modificadores de Ataque Básico (auto-buffs no atacante) ── -->
+        <div style="border-top:1px dashed rgba(200,168,75,0.25);margin:6px 0 8px;padding-top:8px">
+          <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#c8a84b;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">⚔ Modificadores de Ataque Básico</div>
+          <div style="font-size:0.62rem;color:var(--suave);font-style:italic;margin-bottom:8px">Aplicam-se ao próprio atacante e modificam seus ataques básicos pelos turnos indicados.</div>
+          <!-- a) Redução de cooldown do ataque básico -->
+          <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#f0cc6a;cursor:pointer;margin-bottom:6px">
+            <input type="checkbox" id="sef-abcd-on" onchange="skToggleSefFields('abcd')" style="accent-color:#f0cc6a"> ⏩ Reduzir cooldown do ataque básico
+          </label>
+          <div id="sef-abcd-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+              <div class="form-group"><label>Redução fora de combate (ms)</label><input type="number" id="sef-abcd-ms" min="0" step="50" value="500" style="text-align:center"></div>
+              <div class="form-group"><label>Ataques extras/turno</label><input type="number" id="sef-abcd-extra" min="0" max="9" value="1" style="text-align:center"></div>
+              <div class="form-group"><label>Turnos</label><input type="number" id="sef-abcd-turnos" min="1" value="3" style="text-align:center"></div>
+            </div>
+          </div>
+          <!-- b) Buff de dano no ataque básico -->
+          <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#f0cc6a;cursor:pointer;margin-bottom:6px">
+            <input type="checkbox" id="sef-abdano-on" onchange="skToggleSefFields('abdano')" style="accent-color:#f0cc6a"> 💪 Buff de dano no ataque básico
+          </label>
+          <div id="sef-abdano-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="form-group"><label>Dados de dano bônus</label><input type="text" id="sef-abdano-formula" placeholder="1d6 ou 3" style="text-align:left"></div>
+              <div class="form-group"><label>Turnos</label><input type="number" id="sef-abdano-turnos" min="1" value="3" style="text-align:center"></div>
+            </div>
+          </div>
+          <!-- c) Múltiplos alvos no ataque básico -->
+          <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#f0cc6a;cursor:pointer;margin-bottom:6px">
+            <input type="checkbox" id="sef-abmulti-on" onchange="skToggleSefFields('abmulti')" style="accent-color:#f0cc6a"> 🎯 Ataque básico em múltiplos alvos
+          </label>
+          <div id="sef-abmulti-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="form-group"><label>Alvos extras (no alcance)</label><input type="number" id="sef-abmulti-extra" min="1" max="9" value="1" style="text-align:center"></div>
+              <div class="form-group"><label>Turnos</label><input type="number" id="sef-abmulti-turnos" min="1" value="3" style="text-align:center"></div>
+            </div>
+          </div>
+          <!-- d) Aumento de alcance do ataque básico -->
+          <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#f0cc6a;cursor:pointer;margin-bottom:6px">
+            <input type="checkbox" id="sef-abalc-on" onchange="skToggleSefFields('abalc')" style="accent-color:#f0cc6a"> 📏 Aumentar alcance do ataque básico
+          </label>
+          <div id="sef-abalc-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="form-group"><label>Bônus de alcance (células)</label><input type="number" id="sef-abalc-bonus" min="1" max="20" value="2" style="text-align:center"></div>
+              <div class="form-group"><label>Turnos</label><input type="number" id="sef-abalc-turnos" min="1" value="3" style="text-align:center"></div>
+            </div>
+          </div>
         </div>
         <!-- Efeito Atrasado / Explosão (avançado) -->
         <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#b07ef0;cursor:pointer;margin-bottom:6px">
@@ -2431,7 +2477,7 @@ Resistência elemental:
     </div>
 
     <!-- ── SEÇÃO: HABILIDADE REATIVA ─────────────────────────────────────── -->
-    <div style="border-top:1px solid rgba(126,200,240,0.15);margin-top:16px;padding-top:12px">
+    <div class="sk-only-section" style="border-top:1px solid rgba(126,200,240,0.15);margin-top:16px;padding-top:12px">
       <button type="button" onclick="skToggleReativaSection()" style="display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;padding:0;margin-bottom:8px;width:100%">
         <span style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(126,200,240,0.6);text-transform:uppercase;letter-spacing:0.08em">⚡ Habilidade Reativa / Passiva</span>
         <span id="sk-reativa-chevron" style="font-size:0.65rem;color:rgba(126,200,240,0.4)">▶</span>
