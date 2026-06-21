@@ -8113,7 +8113,10 @@ async function _avtPrimeiroAtaqueSelecionarSkill(skId) {
     const entJog = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
     if (sk.efeitos_bonus?.length) {
       sk.efeitos_bonus.forEach(ef => {
-        if (ef.tipo === 'cura') {
+        if (ef.tipo === 'invocar_catalogo') {
+          const casterChar = AVT_STATE.chars.find(c => c.nome === jogador.nome);
+          _avtAplicarEfeitoInvocar(casterChar, ef, _avtMinhaBatalha?.());
+        } else if (ef.tipo === 'cura') {
           const val = _avtRolarFormula(ef.cura_formula || '1d6');
           entJog.hp = Math.min(entJog.hpMax || entJog.hp, entJog.hp + val);
           _avtAplicarDanoPersistir(entJog, entJog.hp);
@@ -8615,6 +8618,14 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
         try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivoArea.nome, alvoNome: entJogVivoArea.nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null }); } catch(_) {}
       }
 
+      // Invocações (efeito 'invocar_catalogo'): vinculadas ao conjurador, uma vez por uso
+      (sk?.efeitos_bonus || []).forEach(ef => {
+        if (ef.tipo === 'invocar_catalogo') {
+          const casterCharArea = AVT_STATE.chars.find(c => c.nome === jogador.nome);
+          _avtAplicarEfeitoInvocar(casterCharArea, ef, _avtMinhaBatalha?.());
+        }
+      });
+
       _alvosAreaOoc.forEach((alvA, idxA) => {
         setTimeout(() => {
           const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id) || alvA;
@@ -8634,7 +8645,9 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
             sk.efeitos_bonus.forEach(ef => {
               const _selfApplyA = ['hot','cura','teleporte','atravessar','fantasma'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo';
               const alvoProcA = _selfApplyA ? entJogOocA : entAlvA;
-              if (ef.tipo === 'teleporte_alvo') {
+              if (ef.tipo === 'invocar_catalogo') {
+                // invocação é vinculada ao conjurador — disparada uma única vez (hoisted)
+              } else if (ef.tipo === 'teleporte_alvo') {
                 _avtTeleportarParaAlvo(entJogOocA, entAlvA, ef.delay_ms ?? 1000, null);
               } else if (ef.tipo === 'avatar') {
                 _avtCriarAvatar(entJogOocA, ef, null);
@@ -8718,7 +8731,10 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
         const cooldownEfMs = _avtGetEfeitoCooldownMs();
         sk.efeitos_bonus.forEach(ef => {
           const alvoProcOoc = (['hot','cura','teleporte','atravessar','fantasma'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo') ? entJogOoc : entIniOoc;
-          if (ef.tipo === 'teleporte_alvo') {
+          if (ef.tipo === 'invocar_catalogo') {
+            const casterCharU = AVT_STATE.chars.find(c => c.nome === jogador.nome);
+            _avtAplicarEfeitoInvocar(casterCharU, ef, _avtMinhaBatalha?.());
+          } else if (ef.tipo === 'teleporte_alvo') {
             _avtTeleportarParaAlvo(entJogOoc, entIniOoc, ef.delay_ms ?? 1000, null);
           } else if (ef.tipo === 'avatar') {
             _avtCriarAvatar(entJogOoc, ef, null);
@@ -9448,6 +9464,21 @@ function _avtTickEfeitosOOC(now) {
       av._oocTickAt = now;
       av._turnosRestantes = (av._turnosRestantes ?? 1) - 1;
       if (av._turnosRestantes <= 0) _avtDestruirAvatar(av.id, null);
+    }
+  });
+
+  // Expirar invocações OOC (fora de combate — as de combate decrementam por turno).
+  // Espelha a lógica dos avatares: cada tick lento (_cdMsAv) reduz 1 turno restante.
+  (AVT_STATE.invocacoes_ativas || []).slice().forEach(inv => {
+    if (_avtBatalhaDeEnt(inv.id)) return;
+    if (inv._turnosRestantes == null) return; // duração ilimitada
+    if (!inv._oocTickAt) inv._oocTickAt = now;
+    if (now - inv._oocTickAt >= _cdMsAv) {
+      inv._oocTickAt = now;
+      inv._turnosRestantes -= 1;
+      const entInv = AVT_STATE.entidades.find(e => e.id === inv.id);
+      if (entInv) entInv._turnosRestantes = inv._turnosRestantes;
+      if (inv._turnosRestantes <= 0) _avtDestruirInvocacao(inv.id, null);
     }
   });
 
@@ -26137,7 +26168,75 @@ try{
 // SISTEMA DE INVOCAÇÕES
 // ══════════════════════════════════════════════════════════════════════════════
 
-function avtInvocar(charNome, invocacaoId) {
+// Conjunto de invocações disponíveis a um personagem: concedidas diretamente
+// (custom_attrs.invocacoes) + catálogo da campanha + globais do mestre.
+// O catálogo (INV_OCACOES.catalogo) já inclui campanha + globais após o carregamento.
+// Retorna Map<id, def>.
+function _avtInvocacoesDisponiveis(char) {
+  const mapa = new Map();
+  if (typeof INV_OCACOES === 'undefined') return mapa;
+  const catalogo = INV_OCACOES.catalogo || [];
+  // Campanha + globais: todo o catálogo carregado
+  catalogo.forEach(def => { if (def && def.id) mapa.set(def.id, def); });
+  // Concedidas diretamente ao personagem (garante resolução por id mesmo se algo
+  // não estiver no catálogo atual mas existir como def referenciada)
+  const concedidas = char?.custom_attrs?.invocacoes;
+  if (Array.isArray(concedidas)) {
+    concedidas.forEach(entry => {
+      const id = entry?.invocacao_id;
+      if (id && !mapa.has(id)) {
+        const def = catalogo.find(i => i.id === id);
+        if (def) mapa.set(id, def);
+      }
+    });
+  }
+  return mapa;
+}
+
+// Aplica um efeito de skill do tipo 'invocar_catalogo': resolve as invocações
+// disponíveis ao conjurador, aplica o modo de seleção (todas / aleatória N) e
+// invoca cada uma escolhida via avtInvocar (com duração opcional sobrescrita).
+function _avtAplicarEfeitoInvocar(casterChar, ef, bat) {
+  if (!casterChar || !ef) return;
+  const disp = _avtInvocacoesDisponiveis(casterChar);
+  const idsConfig = Array.isArray(ef.invocar_ids) ? ef.invocar_ids : [];
+
+  // Filtra mantendo só as disponíveis ao personagem; avisa sobre as faltantes
+  const disponiveis = [];
+  idsConfig.forEach(id => {
+    if (disp.has(id)) disponiveis.push(id);
+    else _avtLog(`⚠ Invocação indisponível para ${casterChar.nome} (ignorada)`, bat?.id);
+  });
+  if (!disponiveis.length) {
+    mostrarToast('Nenhuma invocação disponível para este efeito', 'aviso');
+    return;
+  }
+
+  // Modo de seleção
+  let escolhidos = disponiveis;
+  if (ef.invocar_modo === 'aleatoria') {
+    const qtd = Math.max(1, Math.min(parseInt(ef.invocar_qtd) || 1, disponiveis.length));
+    const pool = disponiveis.slice();
+    escolhidos = [];
+    for (let i = 0; i < qtd; i++) {
+      const idx = Math.floor(Math.random() * pool.length);
+      escolhidos.push(pool.splice(idx, 1)[0]);
+    }
+  }
+
+  const duracaoOverride = ef.invocar_duracao_modo === 'fixa'
+    ? (parseInt(ef.invocar_duracao_turnos) || undefined)
+    : undefined;
+
+  escolhidos.forEach((id, i) => {
+    avtInvocar(casterChar.nome, id, {
+      duracaoOverride,
+      posicao: { dx: 1 + (i % 2), dy: Math.floor(i / 2) * (i % 2 === 0 ? 1 : -1) },
+    });
+  });
+}
+
+function avtInvocar(charNome, invocacaoId, opts = {}) {
   const char = AVT_STATE.chars.find(c => c.nome === charNome);
   const entChar = AVT_STATE.entidades.find(e => e.nome === charNome && e.tipo === 'jogador');
   if (!char || !entChar) { mostrarToast('Personagem não está no mapa', 'aviso'); return; }
@@ -26149,14 +26248,21 @@ function avtInvocar(charNome, invocacaoId) {
   const sabKey = Object.keys(atrs).find(k => k.toLowerCase().includes('sabedor') || k.toLowerCase() === 'wisdom') || 'Sabedoria';
   const sabValor = parseFloat(atrs[sabKey] ?? 0);
 
-  const duracao = (invDef.duracao_base_turnos || 3) + Math.ceil(sabValor * (invDef.duracao_sabedoria_mult || 0));
+  // Duração: override (efeito de skill com turnos fixos) ou a própria da invocação
+  const duracao = (opts.duracaoOverride != null && opts.duracaoOverride > 0)
+    ? opts.duracaoOverride
+    : (invDef.duracao_base_turnos || 3) + Math.ceil(sabValor * (invDef.duracao_sabedoria_mult || 0));
 
   const hpScalingAttr = invDef.hp_atributo_scaling;
   const hpScalingVal = hpScalingAttr ? parseFloat(atrs[hpScalingAttr] ?? 0) : 0;
   const hpMax = (invDef.hp_base || 20) + Math.ceil(hpScalingVal * (invDef.hp_atributo_pct || 0) / 100);
 
   const initRoll = Math.floor(Math.random() * 20) + 1 + (invDef.iniciativa_bonus || 0);
-  const invId = 'invocado_' + invocacaoId.replace(/-/g, '').slice(0, 8) + '_' + Date.now();
+  const invId = 'invocado_' + invocacaoId.replace(/-/g, '').slice(0, 8) + '_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+
+  // Posição: opcional deslocamento para empilhar múltiplas invocações sem sobrepor
+  const offX = opts.posicao?.dx ?? 1;
+  const offY = opts.posicao?.dy ?? 0;
 
   const invAtiva = {
     id: invId,
@@ -26167,8 +26273,8 @@ function avtInvocar(charNome, invocacaoId) {
     hpMax,
     iniciativa: initRoll,
     turno_invocado: 0,
-    posicao_x: entChar.x + 1,
-    posicao_y: entChar.y,
+    posicao_x: entChar.x + offX,
+    posicao_y: entChar.y + offY,
     estado: 'ativo',
     _cooldowns: {},
     _turnosRestantes: duracao,

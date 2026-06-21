@@ -2163,8 +2163,8 @@ function skAbrirFormEfeito() {
     if (lastBtn && lastBtn.parentNode) lastBtn.parentNode.insertBefore(divU, lastBtn);
     else form.appendChild(divU);
   }
-  const fields = ['sef-stun-fields','sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields','sef-imune-fields','sef-delayed-fields','sef-necro-fields','sef-rastro-persona-fields','sef-rastro-anima-fields'];
-  const checks = ['sef-stun-on','sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-imune-on','sef-delayed-on','sef-alvo-usuario','sef-necro-on','sef-rastro-persona-on','sef-rastro-anima-on'];
+  const fields = ['sef-stun-fields','sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields','sef-imune-fields','sef-delayed-fields','sef-necro-fields','sef-rastro-persona-fields','sef-rastro-anima-fields','sef-invocar-fields'];
+  const checks = ['sef-stun-on','sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-imune-on','sef-delayed-on','sef-alvo-usuario','sef-necro-on','sef-rastro-persona-on','sef-rastro-anima-on','sef-invocar-on'];
   const inputs = ['sef-nome','sef-dot-formula','sef-hot-formula','sef-rec-atributo','sef-rec-formula'];
   fields.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
   checks.forEach(id => { const el = document.getElementById(id); if(el) el.checked=false; });
@@ -2193,8 +2193,53 @@ function skAbrirFormEfeito() {
   const _sefRaForm = document.getElementById('sef-rastro-anima-formula'); if (_sefRaForm) _sefRaForm.value = '';
   const _sefRaTurnos = document.getElementById('sef-rastro-anima-turnos'); if (_sefRaTurnos) _sefRaTurnos.value = 3;
   const _sefRaCor = document.getElementById('sef-rastro-anima-cor'); if (_sefRaCor) _sefRaCor.value = '#5ee09a';
+  // Reset + popular invocação
+  const _sefInvModo = document.getElementById('sef-invocar-modo'); if (_sefInvModo) _sefInvModo.value = 'todas';
+  const _sefInvQtd = document.getElementById('sef-invocar-qtd'); if (_sefInvQtd) _sefInvQtd.value = 1;
+  const _sefInvDurModo = document.getElementById('sef-invocar-dur-modo'); if (_sefInvDurModo) _sefInvDurModo.value = 'propria';
+  const _sefInvDurT = document.getElementById('sef-invocar-dur-turnos'); if (_sefInvDurT) _sefInvDurT.value = 3;
+  skPopularInvocarLista();
   document.getElementById('sk-efeito-form').style.display = 'block';
 }
+
+// Popula a lista de invocações selecionáveis a partir do catálogo (campanha + globais).
+function skPopularInvocarLista(selecionados) {
+  const el = document.getElementById('sef-invocar-lista');
+  if (!el) return;
+  const sel = new Set(Array.isArray(selecionados) ? selecionados : []);
+  const render = () => {
+    const cat = (typeof INV_OCACOES !== 'undefined' && INV_OCACOES.catalogo) || [];
+    if (!cat.length) {
+      el.innerHTML = '<div style="font-size:0.68rem;color:var(--suave);font-style:italic">Nenhuma invocação no catálogo desta campanha.</div>';
+      return;
+    }
+    el.innerHTML = cat.map(inv => `
+      <label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;font-size:0.74rem;color:var(--texto)">
+        <input type="checkbox" class="sef-invocar-cb" value="${inv.id}"${sel.has(inv.id) ? ' checked' : ''} style="accent-color:#b07ef0">
+        🔮 ${inv.nome || '(sem nome)'}${inv.global ? ' <span style="color:#b07ef0;font-size:0.6rem">🌐</span>' : ''}
+      </label>`).join('');
+  };
+  if (typeof INV_OCACOES !== 'undefined' && !INV_OCACOES.carregado && typeof invocacoesCarregarDados === 'function') {
+    const rpgId = (typeof RPG_DATA !== 'undefined' && RPG_DATA && RPG_DATA.rpgId) || null;
+    Promise.resolve(invocacoesCarregarDados(rpgId)).then(render).catch(render);
+  } else {
+    render();
+  }
+}
+
+function skToggleInvocarFields() {
+  const on = document.getElementById('sef-invocar-on')?.checked;
+  const wrap = document.getElementById('sef-invocar-fields');
+  if (wrap) wrap.style.display = on ? 'block' : 'none';
+  const modo = document.getElementById('sef-invocar-modo')?.value;
+  const qtdWrap = document.getElementById('sef-invocar-qtd-wrap');
+  if (qtdWrap) qtdWrap.style.display = modo === 'aleatoria' ? 'block' : 'none';
+  const durModo = document.getElementById('sef-invocar-dur-modo')?.value;
+  const durWrap = document.getElementById('sef-invocar-dur-turnos-wrap');
+  if (durWrap) durWrap.style.display = durModo === 'fixa' ? 'block' : 'none';
+}
+window.skToggleInvocarFields = skToggleInvocarFields;
+window.skPopularInvocarLista = skPopularInvocarLista;
 
 function skCancelarEfeito() {
   document.getElementById('sk-efeito-form').style.display = 'none';
@@ -2312,6 +2357,17 @@ function skConfirmarEfeito() {
     efeito.duracao_turnos = parseInt(document.getElementById('sef-rastro-anima-turnos')?.value) || 3;
     efeito.rastro_cor     = document.getElementById('sef-rastro-anima-cor')?.value || '#5ee09a';
   }
+  // Invocação (ativa invocações do catálogo disponíveis ao personagem)
+  if (document.getElementById('sef-invocar-on')?.checked) {
+    const ids = Array.from(document.querySelectorAll('#sef-invocar-lista .sef-invocar-cb:checked')).map(cb => cb.value);
+    if (!ids.length) { mostrarToast('Selecione ao menos uma invocação', 'erro'); return; }
+    efeito.tipo                  = 'invocar_catalogo';
+    efeito.invocar_ids           = ids;
+    efeito.invocar_modo          = document.getElementById('sef-invocar-modo')?.value || 'todas';
+    efeito.invocar_qtd           = parseInt(document.getElementById('sef-invocar-qtd')?.value) || 1;
+    efeito.invocar_duracao_modo  = document.getElementById('sef-invocar-dur-modo')?.value || 'propria';
+    efeito.invocar_duracao_turnos = parseInt(document.getElementById('sef-invocar-dur-turnos')?.value) || 3;
+  }
   // Animação persistente (Studio Pixi)
   const _ppId  = document.getElementById('sef-pixi-persist-id')?.value?.trim();
   const _ppNom = document.getElementById('sef-pixi-persist-nome')?.textContent?.trim();
@@ -2380,6 +2436,12 @@ function skRenderEfeitosLista() {
     if (ef.tipo === 'empurrao') {
       const dirLbl = ef.empurrao_direcao === 'perto' ? 'Puxão' : 'Empurrão';
       tags.push({ txt: `💨 ${dirLbl} ${ef.empurrao_distancia} células`, cor: '#f0a84b' });
+    }
+    if (ef.tipo === 'invocar_catalogo') {
+      const qtdSel = (ef.invocar_ids || []).length;
+      const modoLbl = ef.invocar_modo === 'aleatoria' ? `aleatória ×${ef.invocar_qtd || 1}` : 'todas';
+      const durLbl  = ef.invocar_duracao_modo === 'fixa' ? `${ef.invocar_duracao_turnos || 3}t` : 'dur. própria';
+      tags.push({ txt: `🔮 Invoca ${qtdSel} (${modoLbl}, ${durLbl})`, cor: '#b07ef0' });
     }
     if (ef.animacao_persistente?.pixi_studio_id) {
       const posLbl = { alvo:'alvo', atacante:'conjurador', meio:'centro' }[ef.animacao_persistente.posicao] || ef.animacao_persistente.posicao;

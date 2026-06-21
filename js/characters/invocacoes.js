@@ -11,7 +11,29 @@ async function invocacoesCarregarDados(rpgId) {
   if (!rpgId || typeof sb !== 'function') return;
   try {
     const rows = await sb(`invocacoes?rpg_id=eq.${encodeURIComponent(rpgId)}&order=nome`);
-    INV_OCACOES.catalogo = Array.isArray(rows) ? rows : [];
+    const catalogo = Array.isArray(rows) ? rows : [];
+
+    // Invocações globais: disponíveis em todas as campanhas do MESMO mestre.
+    // Busca os rpg_ids do mestre dono desta campanha e mescla as invocações
+    // marcadas como global=true (deduplicando por id com as da campanha atual).
+    try {
+      const ownerId = (typeof CURRENT_RPG !== 'undefined' && CURRENT_RPG && CURRENT_RPG.owner_id) || null;
+      if (ownerId) {
+        const rpgsDoMestre = await sb(`rpg_registry?owner_id=eq.${encodeURIComponent(ownerId)}&select=rpg_id`);
+        const ids = Array.isArray(rpgsDoMestre) ? rpgsDoMestre.map(r => r.rpg_id).filter(Boolean) : [];
+        if (ids.length) {
+          const globais = await sb(`invocacoes?rpg_id=in.(${ids.map(encodeURIComponent).join(',')})&global=is.true&order=nome`);
+          const existentes = new Set(catalogo.map(i => i.id));
+          (Array.isArray(globais) ? globais : []).forEach(g => {
+            if (!existentes.has(g.id)) { catalogo.push(g); existentes.add(g.id); }
+          });
+        }
+      }
+    } catch (e2) {
+      console.warn('[INV_OCACOES] Falha ao carregar invocações globais:', e2);
+    }
+
+    INV_OCACOES.catalogo = catalogo;
     INV_OCACOES.carregado = true;
   } catch (e) {
     console.error('[INV_OCACOES] Erro ao carregar invocações:', e);
@@ -220,6 +242,7 @@ function abrirModalInvocacao(invId, charNomeHint) {
     document.getElementById('inv-duracao-base').value = inv.duracao_base_turnos || 3;
     document.getElementById('inv-sab-mult').value = inv.duracao_sabedoria_mult || 0;
     document.getElementById('inv-init-bonus').value = inv.iniciativa_bonus || 0;
+    { const _gEl = document.getElementById('inv-global'); if (_gEl) _gEl.checked = !!inv.global; }
 
     // Skills (carregar apenas UUIDs — ignora formato antigo de objetos)
     const skillIds = Array.isArray(inv.habilidades) ? inv.habilidades.filter(h => typeof h === 'string') : [];
@@ -252,6 +275,7 @@ function abrirModalInvocacao(invId, charNomeHint) {
     document.getElementById('inv-duracao-base').value = 3;
     document.getElementById('inv-sab-mult').value = 0;
     document.getElementById('inv-init-bonus').value = 0;
+    { const _gEl = document.getElementById('inv-global'); if (_gEl) _gEl.checked = false; }
     _invRenderSkillsChecklist([]);
   }
 
@@ -333,6 +357,7 @@ async function salvarInvocacao() {
     duracao_base_turnos: parseInt(document.getElementById('inv-duracao-base').value) || 3,
     duracao_sabedoria_mult: parseFloat(document.getElementById('inv-sab-mult').value) || 0,
     iniciativa_bonus: parseInt(document.getElementById('inv-init-bonus').value) || 0,
+    global: document.getElementById('inv-global')?.checked || false,
     habilidades,
   };
 

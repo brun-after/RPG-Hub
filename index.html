@@ -2102,6 +2102,38 @@ Resistência elemental:
             <div class="form-group"><label>Cor do rastro</label><input type="color" id="sef-rastro-anima-cor" value="#5ee09a" style="width:100%;height:34px;padding:2px;border:1px solid var(--borda);border-radius:4px;background:var(--painel);cursor:pointer"></div>
           </div>
         </div>
+        <!-- Invocação (ativa invocações do catálogo disponíveis ao personagem) -->
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#b07ef0;cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="sef-invocar-on" onchange="skToggleInvocarFields()" style="accent-color:#b07ef0"> 🔮 Invocação (invoca aliados do catálogo)
+        </label>
+        <div id="sef-invocar-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+          <div style="font-size:0.62rem;color:var(--suave);margin-bottom:6px">Selecione as invocações que este efeito pode ativar (precisam estar disponíveis ao personagem):</div>
+          <div id="sef-invocar-lista" style="max-height:150px;overflow-y:auto;border:1px solid var(--borda);border-radius:6px;padding:6px 8px;margin-bottom:8px;background:var(--painel)">
+            <div style="font-size:0.68rem;color:var(--suave);font-style:italic">Carregando…</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
+            <div class="form-group"><label>Modo</label>
+              <select id="sef-invocar-modo" onchange="skToggleInvocarFields()" style="width:100%;padding:7px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+                <option value="todas">📋 Todas as selecionadas</option>
+                <option value="aleatoria">🎲 Aleatórias (sorteia)</option>
+              </select>
+            </div>
+            <div class="form-group" id="sef-invocar-qtd-wrap" style="display:none"><label>Qtd. a sortear</label>
+              <input type="number" id="sef-invocar-qtd" min="1" value="1" style="text-align:center">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="form-group"><label>Duração</label>
+              <select id="sef-invocar-dur-modo" onchange="skToggleInvocarFields()" style="width:100%;padding:7px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+                <option value="propria">⏳ Própria da invocação</option>
+                <option value="fixa">🔢 Turnos fixos</option>
+              </select>
+            </div>
+            <div class="form-group" id="sef-invocar-dur-turnos-wrap" style="display:none"><label>Turnos</label>
+              <input type="number" id="sef-invocar-dur-turnos" min="1" value="3" style="text-align:center">
+            </div>
+          </div>
+        </div>
         <!-- Animação Persistente (Studio Pixi) -->
         <div style="border-top:1px solid rgba(79,163,209,0.15);padding-top:8px;margin-top:8px">
           <div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">✦ Animação Persistente (Studio Pixi)</div>
@@ -2494,6 +2526,10 @@ Resistência elemental:
       <label style="font-size:0.75rem;color:var(--suave);display:block;margin-bottom:4px">Descrição</label>
       <textarea id="inv-descricao" rows="2" placeholder="Descrição da invocação..." style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.82rem;padding:8px 10px;resize:vertical;box-sizing:border-box"></textarea>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.2);border-radius:8px;padding:10px 12px">
+      <input type="checkbox" id="inv-global" style="accent-color:#b07ef0">
+      <span style="font-size:0.78rem;color:var(--texto)">🌐 Global — disponível em todas as <strong>suas</strong> campanhas (como mestre)</span>
+    </label>
 
     <!-- ── Aparência ── -->
     <div style="font-size:0.75rem;color:#b07ef0;margin-bottom:8px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.06em">🖼 Aparência</div>

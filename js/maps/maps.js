@@ -409,6 +409,12 @@ async function atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto) {
 // ── Aplicar efeito bônus ao alvo ─────────────────────────────
 async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
   if (!efeitoConfig) return;
+  // Invocação do catálogo: só funciona em modo aventura (depende de AVT_STATE/mapa).
+  // Em arena/campanha clássica é ignorada com aviso, sem criar buff vazio.
+  if (efeitoConfig.tipo === 'invocar_catalogo') {
+    mostrarToast('🔮 Efeito de invocação só funciona no modo Aventura', 'aviso');
+    return;
+  }
   // Mover usuário (teleporte / dash) — efeito imediato, não cria buff
   if (efeitoConfig.tipo === 'mover_usuario') {
     const casterNome = contexto?.atacante || efeitoConfig._casterNome || nomeAlvo;
