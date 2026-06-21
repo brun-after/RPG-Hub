@@ -146,15 +146,15 @@ window.RTNet = (() => {
     avt_jogador_morreu:    { persist: 'immediate', reliable: true  },
     avt_jogador_ressurgiu: { persist: 'immediate', reliable: true  },
     avt_jogador_visivel:   { persist: 'immediate', reliable: true  },
-    avt_skill_selecionada: { persist: 'never',     reliable: false },
-    avt_dado_rolado:       { persist: 'never',     reliable: false },
-    avt_dano_visual:       { persist: 'never',     reliable: false },
+    avt_skill_selecionada: { persist: 'never',     reliable: false, relay: true },
+    avt_dado_rolado:       { persist: 'never',     reliable: false, relay: true },
+    avt_dano_visual:       { persist: 'never',     reliable: false, relay: true },
     avt_hp_update:         { persist: 'snapshot',  reliable: true  },
     avt_member_linked:     { persist: 'immediate', reliable: true  },
-    avt_primeiro_ataque:   { persist: 'never',     reliable: false },
+    avt_primeiro_ataque:   { persist: 'never',     reliable: false, relay: true },
     avt_bau_aberto:        { persist: 'immediate', reliable: true  },
-    avt_skill_anim:        { persist: 'never',     reliable: true  },
-    avt_attack_anim:       { persist: 'never',     reliable: true  },
+    avt_skill_anim:        { persist: 'never',     reliable: true,  relay: true },
+    avt_attack_anim:       { persist: 'never',     reliable: true,  relay: true },
     avt_level_config_update:{ persist: 'immediate',reliable: true  },
     // [HOST-RTC] novos
     avt_state_tick:           { persist: 'never',     reliable: true  }, // tick autoritativo usa canal confiável
@@ -342,9 +342,27 @@ window.RTNet = (() => {
     ch.onmessage = e => {
       try {
         const msg = JSON.parse(e.data);
-        if (msg && msg.tipo) _dispatch(msg.tipo, msg.payload);
+        if (msg && msg.tipo) {
+          // [RELAY] Host repassa eventos one-shot de um cliente aos demais peers, pois o
+          // remetente só nos envia a nós (star). Mantém o frame original intacto.
+          if (_s._isHost && EVENT_OPTS[msg.tipo] && EVENT_OPTS[msg.tipo].relay) {
+            _relayFanout(e.data, msg.tipo, peerId);
+          }
+          _dispatch(msg.tipo, msg.payload);
+        }
       } catch(err) { _warn('DataChannel parse:', err); }
     };
+  }
+
+  // [RELAY] Reenvia um frame já serializado a todos os peers abertos exceto o remetente.
+  // Usa o mapa de canais conforme a confiabilidade do evento.
+  function _relayFanout(frame, tipo, exceptPeerId) {
+    const o = EVENT_OPTS[tipo] || {};
+    const chMap = o.reliable !== false ? _s.channels : _s.fastChannels;
+    for (const [pid, ch] of chMap.entries()) {
+      if (pid === exceptPeerId) continue;
+      if (ch.readyState === 'open') { try { ch.send(frame); } catch(_) {} }
+    }
   }
 
   function _cleanPeer(peerId) {
@@ -627,6 +645,24 @@ window.RTNet = (() => {
     const o = { ...defaults, ...opts };
 
     const frame = JSON.stringify({ tipo, payload });
+
+    // [RELAY] Eventos one-shot originados por um jogador (skill anim, dano visual, etc.)
+    // são roteados pelo host (star) em vez de depender do mesh cliente↔cliente, que pode
+    // falhar sem TURN e fazer o evento chegar só ao host. O host faz o fan-out aos demais
+    // peers ao receber (ver _bindChannel). Sem duplicação: o não-host envia só ao host.
+    if (o.relay && !_s._isHost && _s.hostId && _s.mode !== 'supabase') {
+      const chMap = o.reliable !== false ? _s.channels : _s.fastChannels;
+      const hostCh = chMap.get(_s.hostId);
+      if (hostCh && hostCh.readyState === 'open') {
+        try { hostCh.send(frame); return; } catch(_) {}
+      }
+      // Canal do host indisponível → fallback Supabase (alcança todos os assinantes).
+      if (typeof realtimeBroadcast === 'function') {
+        try { realtimeBroadcast(tipo, payload); } catch(e) { _warn('relay fallback:', e); }
+      }
+      return;
+    }
+
     let allP2P = false;
 
     if (_s.mode !== 'supabase') {
