@@ -7757,6 +7757,53 @@ function _avtDefaultAtaqueBasico(classeAventura) {
 }
 window._avtDefaultAtaqueBasico = _avtDefaultAtaqueBasico;
 
+// Constrói um objeto "tipo-skill" a partir da config de ataque básico, para reaproveitar
+// verbatim a aplicação de efeitos e animação das skills. O sentinela _ehAtaqueBasico
+// preserva as mecânicas próprias (escalonamento aditivo e cooldown) no fluxo de combate/OOC.
+function _avtSkillSinteticaAtaqueBasico(abCfg, classeAventura) {
+  abCfg = abCfg || {};
+  const def = _avtDefaultAtaqueBasico(classeAventura);
+  return {
+    id: null,
+    _ehAtaqueBasico: true,
+    habilidade:      abCfg.nome || 'Ataque básico',
+    formula_dano:    abCfg.formula_dano || def.formula_dano,
+    tipo_dano:       abCfg.tipo_dano || 'fisico',
+    alcance_celulas: abCfg.alcance_celulas ?? def.alcance_celulas,
+    atributo_base:   abCfg.atributo_base || null,
+    alvo_tipo:       'inimigo',
+    efeitos_bonus:   Array.isArray(abCfg.efeitos_bonus) ? abCfg.efeitos_bonus : [],
+    animacao:        abCfg.animacao || null,
+    critico_positivo: abCfg.critico_positivo || null,
+    critico_negativo: abCfg.critico_negativo || null,
+  };
+}
+window._avtSkillSinteticaAtaqueBasico = _avtSkillSinteticaAtaqueBasico;
+
+// Predicado: o efeito aplica-se ao próprio atacante (auto-buff) e não ao alvo.
+function _avtEfeitoVaiParaUsuario(ef) {
+  return ef && (ef.alvo === 'usuario'
+    || ['ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo));
+}
+window._avtEfeitoVaiParaUsuario = _avtEfeitoVaiParaUsuario;
+
+// Agrega os modificadores de ataque básico ativos (auto-buffs) no atacante.
+function _avtAtaqueBasicoBuffs(casterEnt) {
+  const efs = (casterEnt?.status_effects || []).filter(e =>
+    (e._turnos_restantes == null || e._turnos_restantes > 0) &&
+    ['ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(e.tipo));
+  let cdOocMs = 0, ataquesExtra = 0, multiExtra = 0, alcanceBonus = 0;
+  const danoFormulas = [];
+  efs.forEach(e => {
+    if (e.tipo === 'ab_cd_reduzir')   { cdOocMs += (e.ab_cd_ooc_ms || 0); ataquesExtra += (e.ab_ataques_extra || 0); }
+    if (e.tipo === 'ab_dano_buff')    { if (e.ab_dano_formula) danoFormulas.push(e.ab_dano_formula); }
+    if (e.tipo === 'ab_multi_alvo')   { multiExtra += (e.ab_multi_extra || 0); }
+    if (e.tipo === 'ab_alcance_buff') { alcanceBonus += (e.ab_alcance_bonus || 0); }
+  });
+  return { cdOocMs, ataquesExtra, multiExtra, alcanceBonus, danoFormulas };
+}
+window._avtAtaqueBasicoBuffs = _avtAtaqueBasicoBuffs;
+
 // Alcance básico de ataque do NPC derivado da config VIVA (Painel do Mestre), por classe.
 // Não usa ini.alcance_celulas, que pode estar defasado (default de criação/preset/import) e
 // fazer o NPC atacar fora de combate de mais longe do que o configurado no painel.
@@ -7793,7 +7840,10 @@ function _avtVerificarAutoAtaqueBasico(jogador) {
   const dbChar = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
   const abCfg = dbChar?.custom_attrs?.ataque_basico || {};
   const defAb = _avtDefaultAtaqueBasico(jogador.classe_aventura);
-  const alcance = abCfg.alcance_celulas ?? defAb.alcance_celulas;
+  // Alcance com modificador "aumento de alcance do ataque básico" (auto-buff ativo).
+  const _entJogBuff = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
+  const _abBuffsAlc = _avtAtaqueBasicoBuffs(_entJogBuff);
+  const alcance = (abCfg.alcance_celulas ?? defAb.alcance_celulas) + (_abBuffsAlc.alcanceBonus || 0);
   const abKey = (jogador.id || jogador.nome) + '_basico';
   if ((AVT_STATE._oocCooldowns[abKey] || 0) > Date.now()) return; // em cooldown
 
@@ -8462,6 +8512,10 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   const _defAbCore = _avtDefaultAtaqueBasico(jogador.classe_aventura);
   const formula   = sk?.formula_dano || _abCfg?.formula_dano || _defAbCore.formula_dano;
   const skillNome = sk?.habilidade   || _abCfg?.nome || 'Ataque básico';
+  // Objeto sintético tipo-skill + modificadores ativos (auto-buffs) p/ o ataque básico OOC.
+  const skEfetiva = sk || _avtSkillSinteticaAtaqueBasico(_abCfg, jogador.classe_aventura);
+  const _entCasterOOC = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
+  const _abBuffs = !sk ? _avtAtaqueBasicoBuffs(_entCasterOOC) : null;
 
   // Rolar dano
   let danoTotal = 0;
@@ -8567,6 +8621,17 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     }
   }
 
+  // Modificador "buff de dano no ataque básico" (OOC) — soma dados extras.
+  if (!sk && _abBuffs?.danoFormulas?.length) {
+    let _bonusBuffABOoc = 0;
+    _abBuffs.danoFormulas.forEach(f => { _bonusBuffABOoc += _avtRolarFormula(f); });
+    if (_bonusBuffABOoc > 0) {
+      danoTotal += _bonusBuffABOoc;
+      multInfo = multInfo || { atributoVal };
+      multInfo.danoFinal = danoTotal * critMult;
+    }
+  }
+
   const entJog = AVT_STATE.entidades.find(e => e.id === jogador.id);
   const result = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: multInfo ? dadosRolados.reduce((s,d)=>s+d.val,0) : danoTotal };
   _avtMostrarDadosAcimaDaHeadCompleto(entJog || jogador, result, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal', multInfo);
@@ -8588,9 +8653,12 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: ini.nome, animacao: animFinal, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
   }
 
-  // Aplicar cooldown OOC (multiplica turnos pelo tempo por turno)
+  // Aplicar cooldown OOC (multiplica turnos pelo tempo por turno).
+  // Ataque básico: respeita o nº de turnos (override individual > global) e a redução em ms.
   const _oocKey = (jogador.id || jogador.nome) + '_' + (skId || 'basico');
-  const _oocMs = (sk?.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000;
+  const _oocTurnos = sk ? (sk.cooldown_turnos || 1) : _avtGetAtaqueBasicoCooldown(_abCfg);
+  let _oocMs = _oocTurnos * _avtGetSecsPerTurno() * 1000;
+  if (!sk && _abBuffs?.cdOocMs) _oocMs = Math.max(0, _oocMs - _abBuffs.cdOocMs);
   _avtSetOocCooldown(_oocKey, Date.now() + _oocMs);
 
   setTimeout(() => {
@@ -8732,13 +8800,34 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       _avtMostrarDanoAbaixoHp(ini, real, isCrit);
       const _critMsg = critMult === 2 ? ' ✦✦ CRÍTICO TOTAL!' : critMult === 1.5 ? ' ✦ CRÍTICO!' : critMult === 1.2 ? ' ⭐ CRÍTICO MENOR!' : '';
       mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${_critMsg}`, 'ok');
+      // Modificador: ataque básico em múltiplos alvos (OOC) — atinge alvos extras no alcance.
+      if (!sk && (_abBuffs?.multiExtra || 0) > 0) {
+        const _baseAlcOoc = (_abCfg?.alcance_celulas ?? _defAbCore.alcance_celulas) + (_abBuffs.alcanceBonus || 0);
+        const _jxM = Math.round(jogador.x), _jyM = Math.round(jogador.y);
+        const _extrasOoc = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0 && e.id !== ini.id && !e.escondido &&
+            Math.max(Math.abs(Math.round(e.x) - _jxM), Math.abs(Math.round(e.y) - _jyM)) <= _baseAlcOoc)
+          .slice(0, _abBuffs.multiExtra);
+        _extrasOoc.forEach((alvX, idxX) => {
+          setTimeout(() => {
+            const entAlvX = AVT_STATE.entidades.find(e => e.id === alvX.id) || alvX;
+            if (entAlvX.hp <= 0) return;
+            entAlvX.hp = Math.max(0, entAlvX.hp - real);
+            _avtAplicarDanoPersistir(entAlvX, entAlvX.hp);
+            try { _avtBroadcast('avt_hp_update', { nome: entAlvX.nome, hp: entAlvX.hp, hpMax: entAlvX.hpMax }); } catch(_) {}
+            if (isCrit) _avtTokenTremer(entAlvX);
+            _avtMostrarDanoAbaixoHp(entAlvX, real, isCrit);
+            if (entAlvX.hp <= 0) { _avtNpcMorreu(entAlvX, null, { creditoNome: jogador.nome }); _avtCancelarPerseguicao(entAlvX.id); }
+            else _avtIniciarPerseguicao(entAlvX.id);
+          }, (idxX + 1) * 80);
+        });
+      }
       // Aplicar efeitos de skill OOC
-      if (sk?.efeitos_bonus?.length) {
+      if (skEfetiva?.efeitos_bonus?.length) {
         const entIniOoc = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
         const entJogOoc = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
         const cooldownEfMs = _avtGetEfeitoCooldownMs();
-        sk.efeitos_bonus.forEach(ef => {
-          const alvoProcOoc = (['hot','cura','teleporte','atravessar','fantasma'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo') ? entJogOoc : entIniOoc;
+        skEfetiva.efeitos_bonus.forEach(ef => {
+          const alvoProcOoc = (_avtEfeitoVaiParaUsuario(ef) || (['hot','cura','teleporte','atravessar','fantasma'].includes(ef.tipo) && skEfetiva.alvo_tipo === 'inimigo')) ? entJogOoc : entIniOoc;
           if (ef.tipo === 'invocar_catalogo') {
             const casterCharU = AVT_STATE.chars.find(c => c.nome === jogador.nome);
             _avtAplicarEfeitoInvocar(casterCharU, ef, _avtMinhaBatalha?.());
@@ -8754,14 +8843,14 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
             try { _avtBroadcast('avt_hp_update', { nome: alvoProcOoc.nome, hp: alvoProcOoc.hp, hpMax: alvoProcOoc.hpMax }); } catch(_) {}
           } else if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') {
             _avtAplicarRastroEfeito(ef, entJogOoc, entIniOoc);
-          } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar','necromante'].includes(ef.tipo)) {
+          } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar','necromante','ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo)) {
             if (!alvoProcOoc.status_effects) alvoProcOoc.status_effects = [];
             const _oocEfPa = {...ef, _turnos_restantes: ef.duracao_turnos??1,
               expiry_ms: Date.now() + (ef.duracao_turnos??1)*cooldownEfMs, _ooc:true,
               _casterNome: jogador.nome,
               _casterId: jogador.id,
-              _skillEfeitos: sk?.efeitos_bonus || [],
-              _formulaAtaque: sk?.formula_dano || '1d6',
+              _skillEfeitos: skEfetiva?.efeitos_bonus || [],
+              _formulaAtaque: skEfetiva?.formula_dano || '1d6',
             };
             alvoProcOoc.status_effects.push(_oocEfPa);
             if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
@@ -8789,12 +8878,13 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
         });
       }
 
-      // Animação de skill configurada (pixi, partículas, etc.)
-      if (sk && typeof _avtPlaySkillAnim === 'function') {
+      // Animação de skill / ataque básico configurada (pixi, partículas, etc.)
+      const _temAnimRicaOOC = !!(skEfetiva?.animacao && skEfetiva.animacao.tipo && skEfetiva.animacao.tipo !== 'nenhuma');
+      if ((sk || _temAnimRicaOOC) && typeof _avtPlaySkillAnim === 'function') {
         const entIniVivo = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
         const entJogVivo = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
-        _avtPlaySkillAnim(sk, entIniVivo, entJogVivo);
-        try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivo.nome, alvoNome: entIniVivo.nome }); } catch(_) {}
+        _avtPlaySkillAnim(skEfetiva, entIniVivo, entJogVivo);
+        try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome: entJogVivo.nome, alvoNome: entIniVivo.nome }); } catch(_) {}
       }
 
       if (ini.hp <= 0) {
@@ -9040,7 +9130,11 @@ function _avtGetPerseguicaoDesistirChance() {
 function _avtGetPerseguicaoDesistirIntervaloMs() {
   return (AVT_STATE.rpg?.theme_json?.level_config?.perseguicao_desistir_intervalo_s ?? 3) * 1000;
 }
-function _avtGetAtaqueBasicoCooldown() {
+function _avtGetAtaqueBasicoCooldown(abCfg) {
+  // Override individual por personagem (config.ataque_basico.cooldown_turnos) tem
+  // prioridade sobre o padrão global da aventura (Painel do Mestre → Balanceamento).
+  const perChar = abCfg?.cooldown_turnos;
+  if (perChar != null && perChar !== '' && !isNaN(parseInt(perChar))) return Math.max(0, parseInt(perChar));
   return AVT_STATE.rpg?.theme_json?.level_config?.ataque_basico_cooldown_turnos ?? 2;
 }
 
@@ -11923,6 +12017,13 @@ async function _avtExecutarAtaque() {
   const _defAbExec = _avtDefaultAtaqueBasico(ativo.classe_aventura);
   const formula   = sk?.formula_dano || _abCfgExec?.formula_dano || _defAbExec.formula_dano;
   const skillNome = sk?.habilidade   || _abCfgExec?.nome || 'Ataque básico';
+  // Objeto sintético tipo-skill para o ataque básico — reaproveita animação e efeitos.
+  const skEfetiva = sk || _avtSkillSinteticaAtaqueBasico(_abCfgExec, ativo.classe_aventura);
+  const _entCasterAB = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
+  const _abBuffs = !sk ? _avtAtaqueBasicoBuffs(_entCasterAB) : null;
+  const _alcanceBasicoEfetivo = !sk
+    ? ((skEfetiva.alcance_celulas ?? 1) + (_abBuffs?.alcanceBonus || 0))
+    : null;
 
   if (sk) {
     if (!b._cooldowns) b._cooldowns = {};
@@ -11948,16 +12049,25 @@ async function _avtExecutarAtaque() {
       try { _avtBroadcastBatalha(b); } catch (_) {}
     }
   } else {
-    // Ataque básico: cooldown configurável
-    const _basicCd = _avtGetAtaqueBasicoCooldown();
-    if (_basicCd > 0) {
-      if (!b._cooldowns) b._cooldowns = {};
-      const _basicCdKey = ativo.id + '_basico';
-      if ((b._cooldowns[_basicCdKey] || 0) > 0) {
-        mostrarToast(`Ataque básico em cooldown (${b._cooldowns[_basicCdKey]}t)`, 'aviso');
-        return;
-      }
-      b._cooldowns[_basicCdKey] = _basicCd;
+    // Ataque básico: cooldown individual (override) > global; modificador de ataques extras.
+    if (!b._cooldowns) b._cooldowns = {};
+    const _basicCdKey = ativo.id + '_basico';
+    if ((b._cooldowns[_basicCdKey] || 0) > 0) {
+      mostrarToast(`Ataque básico em cooldown (${b._cooldowns[_basicCdKey]}t)`, 'aviso');
+      return;
+    }
+    const _basicCd = _avtGetAtaqueBasicoCooldown(_abCfgExec);
+    if (!b._abAtaquesUsados) b._abAtaquesUsados = {};
+    const _usadosAB = b._abAtaquesUsados[ativo.id] || 0;
+    b._abAtaquesUsados[ativo.id] = _usadosAB + 1;
+    const _restamExtras = (_abBuffs?.ataquesExtra || 0) - _usadosAB; // extras ainda disponíveis após este
+    if (!b._abSeguraTurno) b._abSeguraTurno = {};
+    if (_restamExtras > 0) {
+      // Ainda há ataques básicos extras neste turno — não grava cooldown nem avança o turno.
+      b._abSeguraTurno[ativo.id] = true;
+    } else {
+      b._abSeguraTurno[ativo.id] = false;
+      if (_basicCd > 0) b._cooldowns[_basicCdKey] = _basicCd;
       try { _avtBroadcastBatalha(b); } catch (_) {}
     }
   }
@@ -12035,6 +12145,17 @@ async function _avtExecutarAtaque() {
     }
   }
 
+  // Modificador "buff de dano no ataque básico" — soma dados extras (antes do crítico).
+  if (!sk && _abBuffs?.danoFormulas?.length) {
+    let _bonusBuffAB = 0;
+    _abBuffs.danoFormulas.forEach(f => { _bonusBuffAB += _avtRolarFormula(f); });
+    if (_bonusBuffAB > 0) {
+      danoTotal += _bonusBuffAB;
+      multInfoAtk = multInfoAtk || { atributoVal: atributoValAtk };
+      multInfoAtk.danoFinal = danoTotal;
+    }
+  }
+
   const hitRoll  = Math.floor(Math.random() * 20) + 1;
   const _danoBase1 = dadosRolados.reduce((s,d)=>s+d.val, 0);
   const critMult = _avtCritMultFromD20(hitRoll);
@@ -12054,9 +12175,10 @@ async function _avtExecutarAtaque() {
 
 
 
-  // Animação placeholder para skill sem animação configurada
-  const animPlaceholderAtk = _avtAnimacaoPlaceholder(entAtacanteAnim || ativo, sk);
-  const _animDuracao = sk?.animacao?.duracao ?? animPlaceholderAtk?.duracao ?? 600;
+  // Animação rica (skill OU ataque básico configurado) vs. placeholder.
+  const _temAnimRicaAtk = !!(skEfetiva?.animacao && skEfetiva.animacao.tipo && skEfetiva.animacao.tipo !== 'nenhuma');
+  const animPlaceholderAtk = _temAnimRicaAtk ? null : _avtAnimacaoPlaceholder(entAtacanteAnim || ativo, sk);
+  const _animDuracao = skEfetiva?.animacao?.duracao ?? animPlaceholderAtk?.duracao ?? 600;
   if (animPlaceholderAtk && typeof animarAtaque === 'function') {
     const entAlvoAnim = AVT_STATE.entidades.find(e => e.id === alvo.id);
     const atacEl = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
@@ -12136,7 +12258,7 @@ async function _avtExecutarAtaque() {
   // ── Após animação dos dados, aplicar dano ───────────────────────────────
   _avtSetTimeout(() => {
     if (critMult === 0) {
-      const msg = `💨 ${ativo.nome} errou! (d20: ${hitRoll})${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
+      const msg = `💨 ${ativo.nome} errou! (d20: ${hitRoll})${skEfetiva?.critico_negativo ? ' — ' + skEfetiva.critico_negativo : ''}`;
       _avtLog(msg, b.id);
       if (!_mobileAvtDisp) mostrarToast(msg, '');
     } else {
@@ -12148,7 +12270,7 @@ async function _avtExecutarAtaque() {
         if (multConf > 0 && nivelAtivo > 1) real = Math.floor(real * (1 + (nivelAtivo - 1) * multConf));
       }
       real = Math.floor(real);
-      const tipoDano = sk?.tipo_dano || 'fisico';
+      const tipoDano = skEfetiva?.tipo_dano || 'fisico';
 
       if (_isAreaAttack && _alvosAreaFinal) {
         // ── Ataque em área: aplicar dano a cada inimigo na área ───────────
@@ -12254,16 +12376,16 @@ async function _avtExecutarAtaque() {
         _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano: real, isCrit, critMult });
 
         const _critLabelTurno = critMult === 2 ? '✦✦ CRÍTICO TOTAL! ' : critMult === 1.5 ? '✦ CRÍTICO! ' : critMult === 1.2 ? '⭐ CRÍTICO MENOR! ' : '';
-        const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
+        const critMsg = isCrit && skEfetiva?.critico_positivo ? ' — ' + skEfetiva.critico_positivo : '';
         const msg = isCrit
           ? `${_critLabelTurno}${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
           : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})`;
         _avtLog(msg, b.id); if (!_mobileAvtDisp) mostrarToast(msg, 'ok');
 
-        if (sk?.efeitos_bonus?.length) {
+        if (skEfetiva?.efeitos_bonus?.length) {
           const entCaster = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
-          sk.efeitos_bonus.forEach(ef => {
-            const alvoProcEf = (['hot','cura','teleporte','atravessar','fantasma'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo')
+          skEfetiva.efeitos_bonus.forEach(ef => {
+            const alvoProcEf = (_avtEfeitoVaiParaUsuario(ef) || (['hot','cura','teleporte','atravessar','fantasma'].includes(ef.tipo) && skEfetiva.alvo_tipo === 'inimigo'))
               ? entCaster : (entAlvo || alvo);
             if (ef.tipo === 'teleporte_alvo') {
               _avtTeleportarParaAlvo(entCaster, entAlvo || alvo, ef.delay_ms ?? 1000, b);
@@ -12286,8 +12408,8 @@ async function _avtExecutarAtaque() {
                 expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs(),
                 _casterNome: ativo.nome,
                 _casterId: ativo.id,
-                _skillEfeitos: sk?.efeitos_bonus || [],
-                _formulaAtaque: sk?.formula_dano || '1d6',
+                _skillEfeitos: skEfetiva?.efeitos_bonus || [],
+                _formulaAtaque: skEfetiva?.formula_dano || '1d6',
               };
               alvoProcEf.status_effects.push(_efEntry);
               _avtIniciarAnimPersistente(_efEntry, alvoProcEf, entCaster);
@@ -12306,9 +12428,40 @@ async function _avtExecutarAtaque() {
             }
           });
         }
+        // Modificador: ataque básico em múltiplos alvos — atinge alvos extras no alcance efetivo.
+        if (!sk && (_abBuffs?.multiExtra || 0) > 0 && !_isAreaAttack) {
+          const _raioMulti = _alcanceBasicoEfetivo ?? (skEfetiva.alcance_celulas ?? 1);
+          const _cxM = Math.round(_entCasterAB.x), _cyM = Math.round(_entCasterAB.y);
+          const _extrasMulti = b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0 && e.id !== alvo.id &&
+              Math.max(Math.abs(Math.round(e.x) - _cxM), Math.abs(Math.round(e.y) - _cyM)) <= _raioMulti)
+            .slice(0, _abBuffs.multiExtra);
+          _extrasMulti.forEach((alvX, idxX) => {
+            const entAlvX = AVT_STATE.entidades.find(e => e.id === alvX.id);
+            setTimeout(() => {
+              if (alvX.hp <= 0) return;
+              if (alvX.tipo === 'jogador') { try { _avtRTBroadcastPlayerDamage(alvX.nome, real, ativo.nome); } catch(_) {} }
+              else {
+                alvX.hp = Math.max(0, alvX.hp - real);
+                if (entAlvX) { entAlvX.hp = alvX.hp; _avtAplicarDanoPersistir(entAlvX, entAlvX.hp); }
+                try { _avtBroadcast('avt_hp_update', { nome: alvX.nome, hp: alvX.hp, hpMax: alvX.hpMax }); } catch(_) {}
+              }
+              if (isCrit) _avtTokenTremer(entAlvX || alvX);
+              _avtMostrarDanoAbaixoHp(entAlvX || alvX, real, isCrit);
+              _avtBroadcast('avt_dano_visual', { alvoNome: alvX.nome, dano: real, isCrit, critMult });
+              _avtLog(`  ↳ ${alvX.nome}: ${real} ${tipoDano} (multi-alvo)`, b.id);
+              if (alvX.hp <= 0) {
+                _avtLog(`💀 ${alvX.nome} derrotado!`, b.id);
+                setTimeout(() => { if (alvX.tipo === 'inimigo') { _avtNpcMorreu(entAlvX || alvX, b); _avtCheckVitoria(b); } }, 100);
+              }
+              _avtRenderHpBar();
+            }, (idxX + 1) * 80);
+          });
+          if (_extrasMulti.length) _avtLog(`🎯 ${skillNome} atinge +${_extrasMulti.length} alvo(s)!`, b.id);
+        }
         _avtRenderHpBar();
-        const _delayMorte = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || alvo), _avtEntViva(entAtacanteAnim || ativo)) : 0;
-        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAlvo||alvo).nome }); } catch(_) {} }
+        const _playAnimAtk = sk || _temAnimRicaAtk;
+        const _delayMorte = _playAnimAtk ? _avtPlaySkillAnim(skEfetiva, _avtEntViva(entAlvo || alvo), _avtEntViva(entAtacanteAnim || ativo)) : 0;
+        if (_playAnimAtk) { try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAlvo||alvo).nome }); } catch(_) {} }
         if (alvo.hp <= 0) {
           _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
           setTimeout(() => {
@@ -12322,7 +12475,15 @@ async function _avtExecutarAtaque() {
     }
 
     // Cooldown já foi gravado antes da animação (fix UI lag); nada a fazer aqui.
-    _avtJanelaMovimentoPosDado(b, ativo, () => _avtTurnoAvancar(b));
+    _avtJanelaMovimentoPosDado(b, ativo, () => {
+      if (!sk && b._abSeguraTurno && b._abSeguraTurno[ativo.id]) {
+        // Modificador de ataques básicos extras: mantém o turno para novo ataque (⏭ encerra).
+        mostrarToast('⚔ Ataque básico extra disponível! (⏭ para encerrar o turno)', 'ok');
+        try { _avtHudUpdate(); } catch(_) {}
+      } else {
+        _avtTurnoAvancar(b);
+      }
+    });
   }, AVT_SLOT_MACHINE_MS + _animDuracao);
 }
 
@@ -12904,6 +13065,13 @@ function _avtTurnoAvancar(bat) {
   // Sem guard de host — cada caminho de chamada já controla quem tem autoridade.
   // ── FIX BUG #4: cancela watchdog de NPC quando turno avança com sucesso
   if (bat._npcWatchdog) { try { clearTimeout(bat._npcWatchdog); } catch(_) {} bat._npcWatchdog = null; }
+
+  // Reseta contadores de ataques básicos extras da entidade que está encerrando o turno.
+  const _entFimTurno = bat.iniciativa?.[bat.turnoIdx];
+  if (_entFimTurno) {
+    if (bat._abAtaquesUsados) delete bat._abAtaquesUsados[_entFimTurno.id];
+    if (bat._abSeguraTurno)   delete bat._abSeguraTurno[_entFimTurno.id];
+  }
 
   // Clean up combat overlays
   if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
@@ -18207,7 +18375,7 @@ function _avtMpConteudoAba() {
       </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-label">⚔ Cooldown do Ataque Básico (turnos)</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">Cooldown em turnos do ataque básico de jogadores e inimigos em combate (padrão: 2). Use 0 para sem cooldown.</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Cooldown padrão em turnos do ataque básico de jogadores e inimigos em combate (padrão: 2). Use 0 para sem cooldown. Pode ser sobrescrito individualmente no editor do ataque básico de cada personagem.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <input type="number" id="avt-mp-ataque-basico-cd" min="0" max="20" step="1" value="${lc.ataque_basico_cooldown_turnos ?? 2}"
             style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
@@ -22013,7 +22181,7 @@ function _avtCharEditorRenderSkills(container, ent, dbChar) {
           </div>
         </div>
         <div class="avt-ce2-skill-actions">
-          <button class="avt-ce2-sm-btn" onclick="event.stopPropagation();_avtAbrirModalAtaqueBasico('${abEntIdSafe}')" title="Configurar ataque básico">✏</button>
+          <button class="avt-ce2-sm-btn" onclick="event.stopPropagation();(window.abrirModalSkillAtaqueBasico||_avtAbrirModalAtaqueBasico)('${abEntIdSafe}')" title="Configurar ataque básico">✏</button>
         </div>
       </div>
     </div>`;

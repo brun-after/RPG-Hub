@@ -2163,8 +2163,8 @@ function skAbrirFormEfeito() {
     if (lastBtn && lastBtn.parentNode) lastBtn.parentNode.insertBefore(divU, lastBtn);
     else form.appendChild(divU);
   }
-  const fields = ['sef-stun-fields','sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields','sef-imune-fields','sef-delayed-fields','sef-necro-fields','sef-rastro-persona-fields','sef-rastro-anima-fields','sef-invocar-fields'];
-  const checks = ['sef-stun-on','sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-imune-on','sef-delayed-on','sef-alvo-usuario','sef-necro-on','sef-rastro-persona-on','sef-rastro-anima-on','sef-invocar-on'];
+  const fields = ['sef-stun-fields','sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields','sef-imune-fields','sef-delayed-fields','sef-necro-fields','sef-rastro-persona-fields','sef-rastro-anima-fields','sef-invocar-fields','sef-abcd-fields','sef-abdano-fields','sef-abmulti-fields','sef-abalc-fields'];
+  const checks = ['sef-stun-on','sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-imune-on','sef-delayed-on','sef-alvo-usuario','sef-necro-on','sef-rastro-persona-on','sef-rastro-anima-on','sef-invocar-on','sef-abcd-on','sef-abdano-on','sef-abmulti-on','sef-abalc-on'];
   const inputs = ['sef-nome','sef-dot-formula','sef-hot-formula','sef-rec-atributo','sef-rec-formula'];
   fields.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
   checks.forEach(id => { const el = document.getElementById(id); if(el) el.checked=false; });
@@ -2199,6 +2199,12 @@ function skAbrirFormEfeito() {
   const _sefInvDurModo = document.getElementById('sef-invocar-dur-modo'); if (_sefInvDurModo) _sefInvDurModo.value = 'propria';
   const _sefInvDurT = document.getElementById('sef-invocar-dur-turnos'); if (_sefInvDurT) _sefInvDurT.value = 3;
   skPopularInvocarLista();
+  // Reset modificadores de ataque básico
+  const _setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  _setVal('sef-abcd-ms', 500); _setVal('sef-abcd-extra', 1); _setVal('sef-abcd-turnos', 3);
+  _setVal('sef-abdano-formula', ''); _setVal('sef-abdano-turnos', 3);
+  _setVal('sef-abmulti-extra', 1); _setVal('sef-abmulti-turnos', 3);
+  _setVal('sef-abalc-bonus', 2); _setVal('sef-abalc-turnos', 3);
   document.getElementById('sk-efeito-form').style.display = 'block';
 }
 
@@ -2333,6 +2339,34 @@ function skConfirmarEfeito() {
     efeito.empurrao_direcao  = document.getElementById('sef-empurrao-dir')?.value || 'longe';
     efeito.empurrao_distancia = parseInt(document.getElementById('sef-empurrao-dist')?.value) || 3;
   }
+  // ── Modificadores de Ataque Básico (auto-buffs no atacante) ──
+  if (document.getElementById('sef-abcd-on')?.checked) {
+    efeito.tipo = 'ab_cd_reduzir';
+    efeito.alvo = 'usuario';
+    const _ms = parseInt(document.getElementById('sef-abcd-ms')?.value);
+    efeito.ab_cd_ooc_ms     = isNaN(_ms) ? 500 : Math.max(0, _ms);
+    const _ex = parseInt(document.getElementById('sef-abcd-extra')?.value);
+    efeito.ab_ataques_extra = isNaN(_ex) ? 1 : Math.max(0, _ex);
+    efeito.duracao_turnos   = parseInt(document.getElementById('sef-abcd-turnos')?.value) || 3;
+  }
+  if (document.getElementById('sef-abdano-on')?.checked) {
+    efeito.tipo = 'ab_dano_buff';
+    efeito.alvo = 'usuario';
+    efeito.ab_dano_formula = document.getElementById('sef-abdano-formula')?.value.trim() || '1d6';
+    efeito.duracao_turnos  = parseInt(document.getElementById('sef-abdano-turnos')?.value) || 3;
+  }
+  if (document.getElementById('sef-abmulti-on')?.checked) {
+    efeito.tipo = 'ab_multi_alvo';
+    efeito.alvo = 'usuario';
+    efeito.ab_multi_extra = parseInt(document.getElementById('sef-abmulti-extra')?.value) || 1;
+    efeito.duracao_turnos = parseInt(document.getElementById('sef-abmulti-turnos')?.value) || 3;
+  }
+  if (document.getElementById('sef-abalc-on')?.checked) {
+    efeito.tipo = 'ab_alcance_buff';
+    efeito.alvo = 'usuario';
+    efeito.ab_alcance_bonus = parseInt(document.getElementById('sef-abalc-bonus')?.value) || 2;
+    efeito.duracao_turnos   = parseInt(document.getElementById('sef-abalc-turnos')?.value) || 3;
+  }
   // Efeito colateral no próprio usuário (ex: +5 Corrupção Vegetal ao usar Raiz Contida)
   if (document.getElementById('sef-alvo-usuario')?.checked) {
     efeito.alvo = 'usuario';
@@ -2437,6 +2471,10 @@ function skRenderEfeitosLista() {
       const dirLbl = ef.empurrao_direcao === 'perto' ? 'Puxão' : 'Empurrão';
       tags.push({ txt: `💨 ${dirLbl} ${ef.empurrao_distancia} células`, cor: '#f0a84b' });
     }
+    if (ef.tipo === 'ab_cd_reduzir')   tags.push({ txt: `⏩ AB −${ef.ab_cd_ooc_ms||0}ms / +${ef.ab_ataques_extra||0}atq ×${ef.duracao_turnos}t`, cor: '#f0cc6a' });
+    if (ef.tipo === 'ab_dano_buff')    tags.push({ txt: `💪 AB +${ef.ab_dano_formula} dano ×${ef.duracao_turnos}t`, cor: '#f0cc6a' });
+    if (ef.tipo === 'ab_multi_alvo')   tags.push({ txt: `🎯 AB +${ef.ab_multi_extra} alvos ×${ef.duracao_turnos}t`, cor: '#f0cc6a' });
+    if (ef.tipo === 'ab_alcance_buff') tags.push({ txt: `📏 AB +${ef.ab_alcance_bonus}c alcance ×${ef.duracao_turnos}t`, cor: '#f0cc6a' });
     if (ef.tipo === 'invocar_catalogo') {
       const qtdSel = (ef.invocar_ids || []).length;
       const modoLbl = ef.invocar_modo === 'aleatoria' ? `aleatória ×${ef.invocar_qtd || 1}` : 'todas';
@@ -2453,7 +2491,8 @@ function skRenderEfeitosLista() {
       tags.push({ txt: `${tipoLbl} em ${ef.delay_turnos}t (${descLbl} r${ef.alcance_celulas})`, cor: '#b07ef0' });
     }
     const ehBuff = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo || ef.imune_dano || ef.efeito_atrasado
-      || ef.tipo === 'cura_imediata' || ef.tipo === 'buff');
+      || ef.tipo === 'cura_imediata' || ef.tipo === 'buff'
+      || ['ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo));
     const corBorda = ehBuff ? 'rgba(94,224,154,0.25)' : 'rgba(232,96,76,0.2)';
     return `<div style="display:flex;justify-content:space-between;align-items:flex-start;background:rgba(10,15,25,0.5);border:1px solid ${corBorda};border-radius:6px;padding:7px 10px">
       <div>
