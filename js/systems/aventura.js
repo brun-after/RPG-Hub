@@ -3344,7 +3344,15 @@ async function _avtCarregarDados(rpgId) {
       method: 'PATCH', body: JSON.stringify({ custom_attrs: char.custom_attrs })
     }).catch(() => {});
   });
-  AVT_STATE.skills     = skills || [];
+  AVT_STATE.skills     = (skills || []).map(s => {
+    if (typeof s.animacao === 'string') { try { s.animacao = JSON.parse(s.animacao); } catch(_) { s.animacao = null; } }
+    if (s.animacao && typeof s.animacao !== 'object') s.animacao = null;
+    if (!Array.isArray(s.efeitos_bonus)) {
+      if (typeof s.efeitos_bonus === 'string') { try { s.efeitos_bonus = JSON.parse(s.efeitos_bonus); } catch(_) { s.efeitos_bonus = []; } }
+      else s.efeitos_bonus = [];
+    }
+    return s;
+  });
   AVT_STATE.itemCatalog = itemCatalog || [];
   AVT_STATE.attrDefs   = attrDefs  || [];
 
