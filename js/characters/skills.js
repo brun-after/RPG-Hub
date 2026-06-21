@@ -768,9 +768,9 @@ function _skCarregarCamposReativos(s) {
   const movBonusEl = document.getElementById('sk-mov-bonus-cancelar');
   if (movBonusEl) movBonusEl.value = s?.movimento_bonus_cancelar ?? 0;
   const concEl = document.getElementById('sk-concentracao');
-  if (concEl) concEl.checked = s.concentracao || false;
+  if (concEl) concEl.checked = s?.concentracao || false;
   const nivelEl = document.getElementById('sk-nivel-magia');
-  if (nivelEl) nivelEl.value = s.nivel_magia ?? 0;
+  if (nivelEl) nivelEl.value = s?.nivel_magia ?? 0;
 
   if (extra) extra.style.display = tipo ? 'block' : 'none';
 
