@@ -6600,7 +6600,7 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
 function _avtAtivarModoAlvo(skId, atacante) {
   _avtLimparModoAlvo();
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
-  const alcance = sk?.alcance_celulas ?? 1;
+  const alcance = _avtAlcanceAlvoJogador(sk, atacante);
   const tipoArea = sk?.tipo_area || null;
   const tamanhoArea = sk?.tamanho_area || 1;
   const b = _avtMinhaBatalha();
@@ -7022,7 +7022,7 @@ function _avtCanvasClick(e) {
       // Modo alvo ativo: clique seleciona inimigo ou centro de área
       const { skId, atacante, tipoArea, tamanhoArea } = AVT_STATE._modoAlvoHabilidade;
       const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
-      const alcance = sk?.alcance_celulas ?? 1;
+      const alcance = _avtAlcanceAlvoJogador(sk, atacante);
       const ax = Math.round(atacante.x), ay = Math.round(atacante.y);
 
       if (tipoArea === 'quadrado') {
@@ -7121,7 +7121,7 @@ function _avtCanvasClick(e) {
     const _isMobileClick = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (entAlvo) {
       const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
-      const alcance = sk?.alcance_celulas ?? 1;
+      const alcance = _avtAlcanceAlvoJogador(sk, atacante);
       const dist = Math.max(Math.abs(tileX - Math.round(atacante.x)), Math.abs(tileY - Math.round(atacante.y)));
       if (dist <= alcance) {
         if (_isMobileClick) {
@@ -7219,7 +7219,7 @@ function _avtCanvasKey(e) {
       const _alvoEnt = AVT_STATE.entidades.find(e => e.id === AVT_STATE.alvoSelecionado && e.tipo === 'inimigo' && e.hp > 0);
       if (_alvoEnt) {
         const _sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
-        const _alc = _sk?.alcance_celulas ?? 1;
+        const _alc = _avtAlcanceAlvoJogador(_sk, atacante);
         const _dist = Math.max(Math.abs(Math.round(_alvoEnt.x) - Math.round(atacante.x)), Math.abs(Math.round(_alvoEnt.y) - Math.round(atacante.y)));
         if (_dist <= _alc) {
           AVT_STATE._primeiroAtaqueModoAlvo = null;
@@ -7804,6 +7804,23 @@ function _avtAtaqueBasicoBuffs(casterEnt) {
 }
 window._avtAtaqueBasicoBuffs = _avtAtaqueBasicoBuffs;
 
+// Alcance efetivo do ataque básico do jogador: config per-char (ou default da classe) + buff de alcance.
+function _avtAlcanceBasicoJogador(atacante) {
+  const dbChar = AVT_STATE.chars.find(c => c.id === atacante?.dbId || c.nome === atacante?.nome);
+  const abCfg  = dbChar?.custom_attrs?.ataque_basico || {};
+  const defAb  = _avtDefaultAtaqueBasico(atacante?.classe_aventura);
+  const ent    = AVT_STATE.entidades.find(e => e.id === atacante?.id) || atacante;
+  const buffs  = _avtAtaqueBasicoBuffs(ent);
+  return (abCfg.alcance_celulas ?? defAb.alcance_celulas) + (buffs.alcanceBonus || 0);
+}
+window._avtAlcanceBasicoJogador = _avtAlcanceBasicoJogador;
+
+// Resolve alcance para skill (sk não nulo) OU ataque básico do jogador (sk nulo) de forma uniforme.
+function _avtAlcanceAlvoJogador(sk, atacante) {
+  return sk ? (sk.alcance_celulas ?? 1) : _avtAlcanceBasicoJogador(atacante);
+}
+window._avtAlcanceAlvoJogador = _avtAlcanceAlvoJogador;
+
 // Alcance básico de ataque do NPC derivado da config VIVA (Painel do Mestre), por classe.
 // Não usa ini.alcance_celulas, que pode estar defasado (default de criação/preset/import) e
 // fazer o NPC atacar fora de combate de mais longe do que o configurado no painel.
@@ -7832,18 +7849,13 @@ window._avtAtaqueBasicoEfetivo = _avtAtaqueBasicoEfetivo;
 function _avtVerificarAutoAtaqueBasico(jogador) {
   if (!jogador) return;
   if (_avtMinhaBatalha()) return; // não em combate
-  // Bloquear auto-ataque apenas se o overlay DOM estiver visível (não basta o flag sozinho,
-  // pois no modo controle o flag fica true sem abrir overlay, bloqueando o auto-ataque)
-  if (AVT_STATE._primeiroAtaqueAberto && document.getElementById('avt-skill-overlay')) return;
-  if (AVT_STATE._primeiroAtaqueModoAlvo) return; // já em modo alvo
+  // Não bloquear pelo overlay/flag do picker: no PC o picker abre como overlay flutuante e,
+  // antes, isso impedia o auto-ataque (no mobile, que usa zonas fixas sem overlay, funcionava).
+  // Para paridade PC/mobile, o auto-ataque dispara mesmo com o picker aberto e o fecha abaixo.
+  if (AVT_STATE._primeiroAtaqueModoAlvo) return; // já em modo alvo (jogador escolhendo alvo no mapa)
 
-  const dbChar = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
-  const abCfg = dbChar?.custom_attrs?.ataque_basico || {};
-  const defAb = _avtDefaultAtaqueBasico(jogador.classe_aventura);
   // Alcance com modificador "aumento de alcance do ataque básico" (auto-buff ativo).
-  const _entJogBuff = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
-  const _abBuffsAlc = _avtAtaqueBasicoBuffs(_entJogBuff);
-  const alcance = (abCfg.alcance_celulas ?? defAb.alcance_celulas) + (_abBuffsAlc.alcanceBonus || 0);
+  const alcance = _avtAlcanceBasicoJogador(jogador);
   const abKey = (jogador.id || jogador.nome) + '_basico';
   if ((AVT_STATE._oocCooldowns[abKey] || 0) > Date.now()) return; // em cooldown
 
@@ -7869,6 +7881,10 @@ function _avtVerificarAutoAtaqueBasico(jogador) {
     }, candidatos[0]);
   }
 
+  // Fechar o picker de skills aberto (PC) antes de disparar — _avtExecutarPrimeiroAtaqueCore
+  // não remove o overlay nem zera _primeiroAtaqueAberto.
+  document.getElementById('avt-skill-overlay')?.remove();
+  AVT_STATE._primeiroAtaqueAberto = false;
   _avtExecutarPrimeiroAtaque(null, alvo.id);
 }
 window._avtVerificarAutoAtaqueBasico = _avtVerificarAutoAtaqueBasico;
@@ -7883,7 +7899,10 @@ function _avtMaxAlcanceJogador(jogador) {
     (sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)) &&
     sk.tipo_dano && sk.tipo_dano !== 'cura'
   );
-  return minhas.reduce((max, sk) => Math.max(max, sk.alcance_celulas ?? 1), 1);
+  const maxSkill = minhas.reduce((max, sk) => Math.max(max, sk.alcance_celulas ?? 1), 1);
+  // Inclui o alcance do ataque básico configurado (+ buff) para que inimigos dentro do alcance
+  // do básico, mas fora do alcance de qualquer skill, ainda disparem o primeiro ataque/auto-ataque.
+  return Math.max(maxSkill, _avtAlcanceBasicoJogador(jogador));
 }
 
 function _avtCheckPrimeiroAtaque() {
@@ -7897,7 +7916,7 @@ function _avtCheckPrimeiroAtaque() {
   if (AVT_STATE._primeiroAtaqueModoAlvo) {
     const { skId } = AVT_STATE._primeiroAtaqueModoAlvo;
     const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
-    const alcance = sk?.alcance_celulas ?? 1;
+    const alcance = _avtAlcanceAlvoJogador(sk, jogador);
     const temAlvo = AVT_STATE.entidades.some(e =>
       e.tipo === 'inimigo' && e.hp > 0 &&
       Math.max(Math.abs(Math.round(e.x) - jogador.x), Math.abs(Math.round(e.y) - jogador.y)) <= alcance
@@ -7938,9 +7957,7 @@ function _avtCheckPrimeiroAtaque() {
   if (temInimigo) {
     // Se há inimigo EM PERSEGUIÇÃO dentro do alcance do ataque básico e sem cooldown,
     // disparar auto-ataque diretamente em vez de abrir o seletor manual de skills.
-    const _defAbCk = _avtDefaultAtaqueBasico(jogador.classe_aventura);
-    const _dbCharCk = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
-    const _alcBasico = _dbCharCk?.custom_attrs?.ataque_basico?.alcance_celulas ?? _defAbCk.alcance_celulas;
+    const _alcBasico = _avtAlcanceBasicoJogador(jogador);
     const _abKeyCk = (jogador.id || jogador.nome) + '_basico';
     const _emCooldownCk = (AVT_STATE._oocCooldowns[_abKeyCk] || 0) > Date.now();
     const _temPursuingEmAlcance = !_emCooldownCk && AVT_STATE.entidades.some(e => {
@@ -8042,7 +8059,7 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
   const _jChAB = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
   const _abCfgPAM = _jChAB?.custom_attrs?.ataque_basico;
   const _defAb = _avtDefaultAtaqueBasico(jogador.classe_aventura);
-  const _abAlc = _abCfgPAM?.alcance_celulas ?? _defAb.alcance_celulas;
+  const _abAlc = _avtAlcanceBasicoJogador(jogador);
   const _abForm = _abCfgPAM?.formula_dano || _defAb.formula_dano;
   const _abNome = _abCfgPAM?.nome || 'Ataque básico';
   const _abKey = (jogador.id || jogador.nome) + '_basico';
@@ -8310,7 +8327,7 @@ async function _avtAplicarSkillAliadoOoc(skId, alvoId) {
 // Ativa o modo de destaque de range para seleção de alvo de primeiro ataque (desktop)
 function _avtAtivarModoAlvoPrimeiroAtaque(skId, atacante) {
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
-  const alcance = sk?.alcance_celulas ?? 1;
+  const alcance = _avtAlcanceAlvoJogador(sk, atacante);
   const tiles = [];
   const tilesAlvoVermelho = [];
   const tilesAlvoAmarelo  = [];
@@ -8395,8 +8412,8 @@ function _avtVerificarAlvoAindaNoRangeMobile() {
     return;
   }
   const sk = sel.skId ? AVT_STATE.skills.find(s => s.id === sel.skId) : null;
-  const alcance = sk?.alcance_celulas ?? 1;
   const { atacante } = modoAlvo;
+  const alcance = _avtAlcanceAlvoJogador(sk, atacante);
   const dist = Math.max(
     Math.abs(Math.round(ini.x) - Math.round(atacante.x)),
     Math.abs(Math.round(ini.y) - Math.round(atacante.y))
@@ -8414,7 +8431,7 @@ function _avtVerificarAlvoAindaNoRangeMobile() {
 function _avtMostrarListaAlvosPrimeiroAtaque(skId, jogador) {
   document.getElementById('avt-alvo-skill-overlay')?.remove();
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
-  const alcance = sk?.alcance_celulas ?? 1;
+  const alcance = _avtAlcanceAlvoJogador(sk, jogador);
   const inimigos = AVT_STATE.entidades.filter(e =>
     e.tipo === 'inimigo' && e.hp > 0 &&
     Math.max(Math.abs(Math.round(e.x) - jogador.x), Math.abs(Math.round(e.y) - jogador.y)) <= alcance
@@ -8817,6 +8834,11 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
               const _elA = _avtElPosicaoCanvas(entJog || jogador);
               if (_elA && _elX) animarAtaque({ atacEl: _elA, alvoEl: _elX, animacao: animFinal, dano: 0 });
               try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: entAlvX.nome, animacao: animFinal }); } catch(_) {}
+            }
+            // Animação rica (pixi/partículas) configurada replica em cada alvo extra (paridade com combate e com o alvo primário OOC).
+            if (skEfetiva?.animacao?.tipo && skEfetiva.animacao.tipo !== 'nenhuma' && typeof _avtPlaySkillAnim === 'function') {
+              try { _avtPlaySkillAnim(skEfetiva, entAlvX, entJog || jogador); } catch(_) {}
+              try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entJog||jogador).nome, alvoNome: entAlvX.nome }); } catch(_) {}
             }
             entAlvX.hp = Math.max(0, entAlvX.hp - real);
             _avtAplicarDanoPersistir(entAlvX, entAlvX.hp);
@@ -11801,7 +11823,7 @@ function _avtMostrarListaAlvosComSkill(b, skId) {
   const ativo = _avtAtivo();
   if (!b || !ativo) return;
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
-  const alcance = sk?.alcance_celulas ?? 1;
+  const alcance = _avtAlcanceAlvoJogador(sk, ativo);
   const inimigos = b.iniciativa.filter(e => {
     if (e.tipo !== 'inimigo' || e.hp <= 0) return false;
     return Math.max(Math.abs(e.x - ativo.x), Math.abs(e.y - ativo.y)) <= alcance;
@@ -11976,7 +11998,7 @@ async function _avtExecutarAtaque() {
     if (!alvo || alvo.hp <= 0) {
       const skTmp = AVT_STATE._pendingSkillId
         ? AVT_STATE.skills.find(s => s.id === AVT_STATE._pendingSkillId) : null;
-      const alc = skTmp?.alcance_celulas ?? 1;
+      const alc = _avtAlcanceAlvoJogador(skTmp, ativo);
       const ax = Math.round(ativo.x), ay = Math.round(ativo.y);
       const candidatos = b.iniciativa.filter(e =>
         e.tipo === 'inimigo' && e.hp > 0 &&
@@ -22179,11 +22201,12 @@ function _avtCharEditorRenderSkills(container, ent, dbChar) {
 
   // Card do ataque básico virtual (sempre no topo)
   const abCfg = dbChar?.custom_attrs?.ataque_basico || {};
+  const _abDefCard = _avtDefaultAtaqueBasico(ent.classe_aventura);
   const abAnimacao = abCfg.animacao || dbChar?.custom_attrs?.ataque_basico_animacao;
   const abAnimIcone = abAnimacao?.icone || '⚔️';
-  const abFormula = abCfg.formula_dano || '1d8';
+  const abFormula = abCfg.formula_dano || _abDefCard.formula_dano;
   const abTipo = abCfg.tipo_dano || 'físico';
-  const abAlcance = abCfg.alcance_celulas ?? 1;
+  const abAlcance = abCfg.alcance_celulas ?? _abDefCard.alcance_celulas;
   const abNome = abCfg.nome || 'Ataque Básico';
   const abEntIdSafe = ent.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const atqBasicoCard = `
