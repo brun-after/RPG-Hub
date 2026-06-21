@@ -813,13 +813,20 @@ function skInvocacaoIlimitadoChange() {
 }
 
 // ─── STUDIO PIXI — skill picker helpers ──────────────────────────────────────
-function skEscolherPixiStudio() {
+async function skEscolherPixiStudio() {
   if (typeof psPickerAbrir !== 'function') {
     mostrarToast('Studio Pixi não está carregado.', 'erro');
     return;
   }
-  if (typeof psCarregarLista === 'function' && !PIXI_STUDIO_STATE?.animacoes?.length) {
-    psCarregarLista();
+  // Garante o escopo de RPG atual (aventura ou campanha) para que a query inclua as
+  // animações do RPG (rpg_id), que de outra forma ficariam de fora — lista vazia.
+  if (typeof PIXI_STUDIO_STATE !== 'undefined' && PIXI_STUDIO_STATE) {
+    const _rpgId = (typeof AVT_STATE !== 'undefined' && AVT_STATE?.rpgId) || RPG_DATA?.rpg?.id || null;
+    PIXI_STUDIO_STATE.rpgId = _rpgId;
+  }
+  // Recarrega sempre (o rpgId pode ter mudado desde o último carregamento).
+  if (typeof psCarregarLista === 'function') {
+    try { await psCarregarLista(); } catch (_) {}
   }
   psPickerAbrir((id, nome) => {
     const idEl   = document.getElementById('sk-pixi-studio-id');

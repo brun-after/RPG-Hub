@@ -8811,6 +8811,13 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
           setTimeout(() => {
             const entAlvX = AVT_STATE.entidades.find(e => e.id === alvX.id) || alvX;
             if (entAlvX.hp <= 0) return;
+            // Anima o ataque básico em cada alvo extra (modificador multi-alvo).
+            if (animFinal && typeof animarAtaque === 'function') {
+              const _elX = _avtElPosicaoCanvas(entAlvX);
+              const _elA = _avtElPosicaoCanvas(entJog || jogador);
+              if (_elA && _elX) animarAtaque({ atacEl: _elA, alvoEl: _elX, animacao: animFinal, dano: 0 });
+              try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: entAlvX.nome, animacao: animFinal }); } catch(_) {}
+            }
             entAlvX.hp = Math.max(0, entAlvX.hp - real);
             _avtAplicarDanoPersistir(entAlvX, entAlvX.hp);
             try { _avtBroadcast('avt_hp_update', { nome: entAlvX.nome, hp: entAlvX.hp, hpMax: entAlvX.hpMax }); } catch(_) {}
@@ -12439,6 +12446,17 @@ async function _avtExecutarAtaque() {
             const entAlvX = AVT_STATE.entidades.find(e => e.id === alvX.id);
             setTimeout(() => {
               if (alvX.hp <= 0) return;
+              // Anima o ataque em cada alvo extra (modificador multi-alvo): animação rica
+              // (skill/ataque básico configurado) ou placeholder, conforme o ataque primário.
+              if (_temAnimRicaAtk) {
+                try { _avtPlaySkillAnim(skEfetiva, _avtEntViva(entAlvX || alvX), _avtEntViva(entAtacanteAnim || ativo)); } catch(_) {}
+                try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome: alvX.nome }); } catch(_) {}
+              } else if (animPlaceholderAtk && typeof animarAtaque === 'function') {
+                const _elXm = _avtElPosicaoCanvas(entAlvX || alvX);
+                const _elAm = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
+                if (_elAm && _elXm) animarAtaque({ atacEl: _elAm, alvoEl: _elXm, animacao: animPlaceholderAtk, dano: 0 });
+                try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome: alvX.nome, animacao: animPlaceholderAtk }); } catch(_) {}
+              }
               if (alvX.tipo === 'jogador') { try { _avtRTBroadcastPlayerDamage(alvX.nome, real, ativo.nome); } catch(_) {} }
               else {
                 alvX.hp = Math.max(0, alvX.hp - real);
@@ -22613,13 +22631,15 @@ function _avtSkmRenderEfeitos() {
     {v:'fantasma',l:'👻 Fantasma'},{v:'atravessar',l:'🧱 Atravessar'},
     {v:'necromante',l:'☠ Necromante'},
     {v:'rastro_persona',l:'🐾 Rastro Persona'},{v:'rastro_anima',l:'✨ Rastro Anima'},
+    {v:'ab_cd_reduzir',l:'⏩ AB: Reduzir cooldown'},{v:'ab_dano_buff',l:'💪 AB: Buff de dano'},
+    {v:'ab_multi_alvo',l:'🎯 AB: Múltiplos alvos'},{v:'ab_alcance_buff',l:'📏 AB: Aumentar alcance'},
   ];
   const inpSt = 'padding:3px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem';
   cont.innerHTML = _AVT_SK_MODAL.efeitos.map((ef,i)=>{
-    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar','fantasma','atravessar','necromante','rastro_persona','rastro_anima'].includes(ef.tipo);
+    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar','fantasma','atravessar','necromante','rastro_persona','rastro_anima','ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo);
     return `<div style="padding:7px 8px;margin-bottom:6px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:6px">
       <div style="display:flex;gap:5px;align-items:center;margin-bottom:2px">
-        <select onchange="_AVT_SK_MODAL.efeitos[${i}].tipo=this.value;_avtSkmRenderEfeitos()" style="${inpSt};flex:1">
+        <select onchange="_avtSkmEfTipoChange(${i},this.value)" style="${inpSt};flex:1">
           ${TIPOS_EF.map(t=>`<option value="${t.v}" ${ef.tipo===t.v?'selected':''}>${t.l}</option>`).join('')}
         </select>
         ${hasDuracao ? `<input type="number" value="${ef.duracao_turnos||1}" min="1" max="99" title="Duração (turnos)" oninput="_AVT_SK_MODAL.efeitos[${i}].duracao_turnos=+this.value"
@@ -22653,6 +22673,29 @@ function _avtSkmRenderEfeitos() {
             style="width:48px;${inpSt};text-align:center"></label>
         <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#8e44ad" title="Limite de gerações da cascata (0 = ilimitado)">Cascata máx:
           <input type="number" min="0" max="99" value="${ef.cascata_max??0}" oninput="_AVT_SK_MODAL.efeitos[${i}].cascata_max=+this.value"
+            style="width:48px;${inpSt};text-align:center"></label>
+      </div>` : ''}
+      ${ef.tipo==='ab_cd_reduzir' ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#f0cc6a" title="Redução do cooldown fora de combate (ms)">⏩ Redução (ms):
+          <input type="number" min="0" step="50" value="${ef.ab_cd_ooc_ms??500}" oninput="_AVT_SK_MODAL.efeitos[${i}].ab_cd_ooc_ms=Math.max(0,+this.value)"
+            style="width:64px;${inpSt};text-align:center"></label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#f0cc6a" title="Ataques básicos extras por turno">＋ Ataques/turno:
+          <input type="number" min="0" max="9" value="${ef.ab_ataques_extra??1}" oninput="_AVT_SK_MODAL.efeitos[${i}].ab_ataques_extra=Math.max(0,+this.value)"
+            style="width:48px;${inpSt};text-align:center"></label>
+      </div>` : ''}
+      ${ef.tipo==='ab_dano_buff' ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+        <span style="font-size:0.65rem;color:#f0cc6a;flex-shrink:0">💪 Dano bônus:</span>
+        <input type="text" value="${(ef.ab_dano_formula||'').replace(/"/g,'&quot;')}" placeholder="1d6 ou 3" oninput="_AVT_SK_MODAL.efeitos[${i}].ab_dano_formula=this.value"
+          style="flex:1;${inpSt}">
+      </div>` : ''}
+      ${ef.tipo==='ab_multi_alvo' ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#f0cc6a" title="Alvos extras atingidos no alcance">🎯 Alvos extras:
+          <input type="number" min="1" max="9" value="${ef.ab_multi_extra??1}" oninput="_AVT_SK_MODAL.efeitos[${i}].ab_multi_extra=Math.max(1,+this.value)"
+            style="width:48px;${inpSt};text-align:center"></label>
+      </div>` : ''}
+      ${ef.tipo==='ab_alcance_buff' ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#f0cc6a" title="Bônus de alcance do ataque básico (células)">📏 Alcance (células):
+          <input type="number" min="1" max="20" value="${ef.ab_alcance_bonus??2}" oninput="_AVT_SK_MODAL.efeitos[${i}].ab_alcance_bonus=Math.max(1,+this.value)"
             style="width:48px;${inpSt};text-align:center"></label>
       </div>` : ''}
       <div style="border-top:1px solid rgba(79,163,209,0.1);margin-top:6px;padding-top:5px">
@@ -22703,6 +22746,29 @@ function _avtSkmRenderEfeitos() {
     });
   }, 0);
 }
+
+// Troca o tipo de um efeito de skill (aventura), semeando defaults dos modificadores
+// de ataque básico para que campos obrigatórios não fiquem indefinidos (no-op no runtime).
+function _avtSkmEfTipoChange(i, val) {
+  const ef = _AVT_SK_MODAL.efeitos[i];
+  if (!ef) return;
+  ef.tipo = val;
+  if (val === 'ab_cd_reduzir') {
+    if (ef.ab_cd_ooc_ms == null)    ef.ab_cd_ooc_ms = 500;
+    if (ef.ab_ataques_extra == null) ef.ab_ataques_extra = 1;
+  } else if (val === 'ab_dano_buff') {
+    if (ef.ab_dano_formula == null) ef.ab_dano_formula = '';
+  } else if (val === 'ab_multi_alvo') {
+    if (ef.ab_multi_extra == null)  ef.ab_multi_extra = 1;
+  } else if (val === 'ab_alcance_buff') {
+    if (ef.ab_alcance_bonus == null) ef.ab_alcance_bonus = 2;
+  }
+  if (['ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(val) && ef.duracao_turnos == null) {
+    ef.duracao_turnos = 3;
+  }
+  _avtSkmRenderEfeitos();
+}
+window._avtSkmEfTipoChange = _avtSkmEfTipoChange;
 
 // ── Persistent animation picker helpers (per-effect, adventure mode) ─────────
 
