@@ -8609,7 +8609,10 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       if (sk && typeof _avtPlaySkillAnim === 'function') {
         const entJogVivoArea = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
         _avtPlaySkillAnim(sk, entJogVivoArea, entJogVivoArea, true);
-        try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivoArea.nome, alvoNome: _areaLabel }); } catch(_) {}
+        // Para skills de área, enviar a geometria (centro/linha) e ancorar no conjurador —
+        // o rótulo "_areaLabel" não resolve uma entidade nos peers, e _areaCentro/_areaLinha
+        // são estado local, então a animação não aparecia para quem não conjurou.
+        try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivoArea.nome, alvoNome: entJogVivoArea.nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null }); } catch(_) {}
       }
 
       _alvosAreaOoc.forEach((alvA, idxA) => {
@@ -8658,6 +8661,18 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
                 if (ef.tipo === 'silence')    alvoProcA._silenciado = true;
                 if (ef.tipo === 'fantasma')   alvoProcA._fantasma   = true;
                 if (ef.tipo === 'atravessar') alvoProcA._atravessar = true;
+                // Em P2P não-host: registrar o efeito OOC no host (só o host tica DOT/efeitos OOC
+                // e credita XP/abate). Sem isso, sangramento em área aplicado por não-host nunca
+                // mata nem dá XP no lado autoritativo.
+                if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost()) {
+                  RTNet.sendToHost('avt_player_action', {
+                    tipo: 'ooc_effect_apply',
+                    entId: alvoProcA.id, entNome: alvoProcA.nome,
+                    oocEntry: { entId: alvoProcA.id, entNome: alvoProcA.nome, ef: { ..._oocEfA }, lastTickAt: Date.now() },
+                    statusEffect: _oocEfA,
+                    atravessar: ef.tipo === 'atravessar', fantasma: ef.tipo === 'fantasma',
+                  });
+                }
               }
             });
           }
@@ -8734,6 +8749,18 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
             if (ef.tipo === 'atravessar') alvoProcOoc._atravessar = true;
             // Necromante: NÃO dominar imediatamente — a dominação só ocorre quando o inimigo
             // tiver HP <= 0 (via _avtNpcMorreu → _avtNecromanteDominar)
+            // Em P2P não-host: enviar para o host registrar o efeito OOC, pois só o host
+            // tica DOT/efeitos OOC (e credita XP/abate). Sem isso, sangramento aplicado por
+            // não-host em inimigo nunca mata nem dá XP no lado autoritativo.
+            if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost()) {
+              RTNet.sendToHost('avt_player_action', {
+                tipo: 'ooc_effect_apply',
+                entId: alvoProcOoc.id, entNome: alvoProcOoc.nome,
+                oocEntry: { entId: alvoProcOoc.id, entNome: alvoProcOoc.nome, ef: { ..._oocEfPa }, lastTickAt: Date.now() },
+                statusEffect: _oocEfPa,
+                atravessar: ef.tipo === 'atravessar', fantasma: ef.tipo === 'fantasma',
+              });
+            }
           }
         });
       }
@@ -10466,6 +10493,11 @@ async function _avtProcessarMorteJogador(ent, bat) {
   const xpPerdido         = lc.xp_perda_morte ?? 50;
   const downgradeNivel    = lc.morte_downgrade_nivel ?? false;
   const hpRecuperacaoPct  = lc.hp_recuperacao_morte_pct ?? 100;
+  // Janela de invisibilidade pós-morte (configurável pelo mestre, padrão 5s). O personagem
+  // revive antes (reviveDelayMs) e permanece invisível para inimigos durante toda a janela,
+  // podendo se mover/reposicionar. Ao fim, volta a ser detectável.
+  const invisMs          = Math.max(0, Math.round((lc.invisibilidade_morte_seg ?? 5) * 1000));
+  const reviveDelayMs    = Math.min(1200, invisMs);
 
   const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
   const nivelAntes = dbChar?.custom_attrs?.nivel ?? dbChar?.nivel ?? 1;
@@ -10529,19 +10561,30 @@ async function _avtProcessarMorteJogador(ent, bat) {
     charNome: ent.nome, xpPerdido, novoXp, nivelAntes, nivelDepois
   });
 
-  // Após 3s: restaurar HP e remover invisibilidade
+  // Fase 1 — reviver: restaura HP e devolve o controle, MAS mantém invisível para inimigos.
+  // O jogador já pode se mover/reposicionar enquanto a janela de invisibilidade corre.
   _avtSetTimeout(() => {
     const novoHp = Math.max(1, Math.round((ent.hpMax || 100) * hpRecuperacaoPct / 100));
     ent.hp = novoHp;
     ent._processandoMorte = false;
-    delete ent._invisivelParaInimigos;
+    // NÃO remover _invisivelParaInimigos aqui — só na Fase 2.
     _avtAplicarDanoPersistir(ent, novoHp);
     _avtBroadcast('avt_hp_update',       { nome: ent.nome, hp: novoHp, hpMax: ent.hpMax });
     _avtBroadcast('avt_jogador_ressurgiu', { charNome: ent.nome, novoHp });
     _avtRenderHpBar();
     _avtHudUpdate();
-    mostrarToast(`${ent.nome} recuperou consciência!`, 'ok');
-  }, 3000);
+    mostrarToast(invisMs > reviveDelayMs
+      ? `${ent.nome} recuperou consciência! Invisível — reposicione-se.`
+      : `${ent.nome} recuperou consciência!`, 'ok');
+  }, reviveDelayMs);
+
+  // Fase 2 — fim da invisibilidade: o personagem volta a ser detectável pelos inimigos.
+  _avtSetTimeout(() => {
+    delete ent._invisivelParaInimigos;
+    _avtBroadcast('avt_jogador_visivel', { charNome: ent.nome });
+    _avtRenderHpBar();
+    _avtHudUpdate();
+  }, invisMs);
 }
 
 function avtReceberJogadorMorreu({ charNome, xpPerdido, novoXp, nivelAntes, nivelDepois }) {
@@ -10576,13 +10619,23 @@ function avtReceberJogadorRessurgiu({ charNome, novoHp }) {
   const ent = AVT_STATE.entidades.find(e => e.nome === charNome);
   if (ent) {
     ent.hp = novoHp;
-    delete ent._invisivelParaInimigos;
+    // A invisibilidade NÃO é removida aqui — ela termina via avt_jogador_visivel, ao fim da
+    // janela configurada, para que o personagem reviva e ainda fique invisível um tempo.
     delete ent._processandoMorte;
   }
   _avtRenderHpBar();
   _avtHudUpdate();
 }
 window.avtReceberJogadorRessurgiu = avtReceberJogadorRessurgiu;
+
+function avtReceberJogadorVisivel({ charNome }) {
+  if (!AVT_STATE.rpgId) return;
+  const ent = AVT_STATE.entidades.find(e => e.nome === charNome);
+  if (ent) delete ent._invisivelParaInimigos;
+  _avtRenderHpBar();
+  _avtHudUpdate();
+}
+window.avtReceberJogadorVisivel = avtReceberJogadorVisivel;
 
 // ── LEVEL-UP VISUAL EFFECTS ───────────────────────────────────────────────────
 
@@ -10872,7 +10925,17 @@ function _avtNpcMorreu(npcEnt, bat, opts = {}) {
       const _initFb = bat.iniciativa.find(e => e.id === npcEnt.id);
       if (_initFb) efNecro = (_initFb.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
     }
-    if (efNecro) { if (_avtNecromanteDominar(npcEnt, efNecro, bat)) return; }
+    if (efNecro) {
+      // Creditar o XP do abate ANTES da dominação em cascata. Sem isso, o inimigo morto por
+      // um minion dominado (que propaga o efeito necromante) é dominado em vez de morrer e o
+      // jogador nunca recebe XP. A flag evita crédito duplo quando o domínio expira depois
+      // (morte real via opts.semDominar, sem creditoNome). A cascata é preservada.
+      if (opts.creditoNome && !npcEnt._xpAbateCreditado) {
+        npcEnt._xpAbateCreditado = true;
+        _avtDistribuirXpNpc(npcEnt, bat, opts);
+      }
+      if (_avtNecromanteDominar(npcEnt, efNecro, bat)) return;
+    }
   }
   // Se estava dominado, limpar registro de invocação antes da morte real
   if (npcEnt._dominado) {
@@ -10894,8 +10957,10 @@ function _avtNpcMorreu(npcEnt, bat, opts = {}) {
     _avtGerarDropNpc(npcEnt);
   }
 
-  // XP distribution (credita o autor do abate quando informado — ex.: DOT)
-  _avtDistribuirXpNpc(npcEnt, bat, opts);
+  // XP distribution (credita o autor do abate quando informado — ex.: DOT).
+  // Se o XP já foi creditado no momento do abate (cascata necromante), não creditar de novo
+  // quando o minion dominado morrer de fato (expiração do domínio).
+  if (!npcEnt._xpAbateCreditado) _avtDistribuirXpNpc(npcEnt, bat, opts);
 
   // Boss morto → abre/destranca a porta para a próxima fase
   if (npcEnt.isBoss) { try { _avtOnBossMorto(npcEnt, bat); } catch(_){} }
@@ -12055,7 +12120,9 @@ async function _avtExecutarAtaque() {
 
         // Animar área e limpar estado
         const _delayMorteArea = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entCaster), _avtEntViva(entCaster), _isAreaAttack) : 0;
-        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:areaLabel }); } catch(_) {} }
+        // Skills de área: enviar geometria (centro/linha) e ancorar no conjurador, pois o
+        // rótulo de área não resolve entidade nos peers e _areaCentro/_areaLinha são locais.
+        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAtacanteAnim||ativo).nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null }); } catch(_) {} }
 
         _alvosAreaFinal.forEach((alvA, idxA) => {
           const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id);
@@ -18174,6 +18241,16 @@ function _avtMpConteudoAba() {
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarHpRecuperacaoMorte()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">👻 Invisibilidade após morte (s)</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Tempo em que o personagem permanece invisível para os inimigos após ressurgir, podendo se mover para se reposicionar antes de ser detectado (padrão: 5s). Use 0 para que ele seja detectado imediatamente.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-invis-morte-seg" min="0" max="60" step="1" value="${lc.invisibilidade_morte_seg ?? 5}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">segundos invisível</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarInvisibilidadeMorte()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-label">🔄 Regeneração de HP</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">HP recuperado automaticamente fora de combate. O regen por segundo e por passo são independentes e acumuláveis.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -19103,16 +19180,32 @@ function avtReceberLevelConfigUpdate({ config } = {}) {
 window.avtReceberLevelConfigUpdate = avtReceberLevelConfigUpdate;
 
 // Receber broadcast de animação de skill — re-toca localmente
-function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, animacao } = {}) {
+function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, animacao, areaCentro, areaLinha } = {}) {
   try {
     if (typeof _avtPlaySkillAnim !== 'function') return;
     let sk = skillId ? (AVT_STATE.skills || []).find(s => s.id === skillId) : null;
     if (!sk && animacao) sk = { id: skillId, animacao };
     if (!sk) return;
     const atac = AVT_STATE.entidades.find(e => e.nome === atacanteNome);
-    const alvo = AVT_STATE.entidades.find(e => e.nome === alvoNome);
-    if (!atac || !alvo) return;
-    _avtPlaySkillAnim(sk, alvo, atac);
+    if (!atac) return;
+    const isArea = !!(areaCentro || areaLinha);
+    // Skill de área: o alvo enviado é o próprio conjurador (âncora) e a geometria vem no
+    // payload, pois _areaCentro/_areaLinha são estado local de quem conjurou. Sem isso, a
+    // animação de área não aparecia para os peers (o rótulo de área não resolve entidade).
+    let alvo = AVT_STATE.entidades.find(e => e.nome === alvoNome);
+    if (!alvo) {
+      if (!isArea) return; // alvo único não resolvido: comportamento antigo (não anima)
+      alvo = atac;
+    }
+    const _savedC = AVT_STATE._areaCentro, _savedL = AVT_STATE._areaLinha;
+    if (isArea) {
+      AVT_STATE._areaCentro = areaCentro || null;
+      AVT_STATE._areaLinha  = areaLinha  || null;
+    }
+    try { _avtPlaySkillAnim(sk, alvo, atac, isArea); }
+    finally {
+      if (isArea) { AVT_STATE._areaCentro = _savedC; AVT_STATE._areaLinha = _savedL; }
+    }
   } catch(e) { try { console.warn('[AVT] avtReceberSkillAnim:', e); } catch(_) {} }
 }
 window.avtReceberSkillAnim = avtReceberSkillAnim;
@@ -19406,6 +19499,21 @@ async function _avtSalvarHpRecuperacaoMorte() {
     mostrarToast(`HP recuperado após morte: ${val}%`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
+
+async function _avtSalvarInvisibilidadeMorte() {
+  const seg = Math.max(0, Math.min(60, parseInt(document.getElementById('avt-mp-invis-morte-seg')?.value) || 0));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.invisibilidade_morte_seg = seg;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    try { _avtBroadcast('avt_level_config_update', { config: { invisibilidade_morte_seg: seg } }); } catch(_) {}
+    mostrarToast(`Invisibilidade após morte: ${seg}s`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtSalvarInvisibilidadeMorte = _avtSalvarInvisibilidadeMorte;
 
 async function _avtSalvarHpRegen() {
   const regenS = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-hp-regen-segundo')?.value) || 0));
