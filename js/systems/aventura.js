@@ -8610,7 +8610,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     const _normA = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
     const _classeJog = jogador.classe_aventura || myChar?.custom_attrs?.classe_aventura || 'guerreiro';
     const _attrPorClasse = /mago/i.test(_classeJog) ? 'Inteligência' : 'Força';
-    const atributoBase = sk ? (sk.atributo_base || _attrPorClasse) : _attrPorClasse;
+    const atributoBase = sk ? (sk.atributo_base || _attrPorClasse) : (_abCfg?.atributo_base || 'Força');
     const chave = Object.keys(atrsJog).find(k => _normA(k) === _normA(atributoBase));
     if (chave) atributoVal = parseFloat(atrsJog[chave] || 0);
 
@@ -12146,7 +12146,7 @@ async function _avtExecutarAtaque() {
     const atrsAtivo = dbAtivo2?.custom_attrs?.atributos || {};
     const _classeAtk = ativo.classe_aventura || dbAtivo2?.custom_attrs?.classe_aventura || 'guerreiro';
     const _attrDefaultAtk = /mago/i.test(_classeAtk) ? 'Inteligência' : 'Força';
-    const _atributoBaseAtk = sk?.atributo_base || _attrDefaultAtk;
+    const _atributoBaseAtk = sk ? (sk.atributo_base || _attrDefaultAtk) : (_abCfgExec?.atributo_base || 'Força');
     const chaveAttr = Object.keys(atrsAtivo).find(k => _normA3(k) === _normA3(_atributoBaseAtk));
     if (chaveAttr) atributoValAtk = parseFloat(atrsAtivo[chaveAttr] || 0);
 
@@ -23833,6 +23833,11 @@ function _avtAbrirModalAtaqueBasico(entId) {
 
   const ab = dbChar.custom_attrs?.ataque_basico || {};
   const anim = ab.animacao || dbChar.custom_attrs?.ataque_basico_animacao || {};
+  const _attrSrc = (AVT_STATE.attrDefs?.length ? AVT_STATE.attrDefs :
+    (AVT_STATE.rpg?.theme_json?.attrDefs?.length ? AVT_STATE.rpg.theme_json.attrDefs :
+    (RPG_DATA?.attrDefs || []))).filter(a => a.tipo === 'number' || a.tipo === 'numero' || a.tipo == null);
+  const attrDefs = _attrSrc.length ? _attrSrc
+    : ['Força','Destreza','Constituição','Inteligência','Sabedoria','Carisma'].map(nome => ({ nome }));
   const ANIM_TIPOS = ['nenhuma','projetil','onda','explosao','raio','aura','bola_energia','corte','simples'];
   const TIPOS_DANO = ['fisico','magico','fogo','gelo','raio','veneno','cura','psiquico','luz','sombra'];
   const inpSt = 'width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.25);border-radius:5px;color:#c8d8e8;font-size:0.75rem';
@@ -23861,7 +23866,12 @@ function _avtAbrirModalAtaqueBasico(entId) {
           </select></div>
         <div><div class="avt-sk-label">Alcance (células)</div>
           <input id="avt-ab-alcance" type="number" min="1" max="20" value="${ab.alcance_celulas??1}" style="${inpSt}"></div>
-        <div style="grid-column:span 2"><div class="avt-sk-label">Mult. Força (× — vazio = usar global)</div>
+        <div><div class="avt-sk-label">Atributo base</div>
+          <select id="avt-ab-atributo" style="${selSt}">
+            <option value="">— Padrão (Força) —</option>
+            ${attrDefs.map(a=>`<option value="${a.nome}" ${ab.atributo_base===a.nome?'selected':''}>${a.nome}</option>`).join('')}
+          </select></div>
+        <div><div class="avt-sk-label">Mult. atributo (× — vazio = usar global)</div>
           <input id="avt-ab-forca-mult" type="number" min="0" max="10" step="0.1"
             value="${ab.mod_atributo_mult !== undefined && ab.mod_atributo_mult !== null ? ab.mod_atributo_mult : ''}"
             placeholder="global (${AVT_STATE.rpg?.theme_json?.level_config?.ataque_basico_forca_mult ?? 0.5})"
@@ -23904,6 +23914,7 @@ async function _avtSalvarAtaqueBasico(entId) {
     formula_dano:   document.getElementById('avt-ab-formula')?.value.trim() || '1d8',
     tipo_dano:      document.getElementById('avt-ab-tipo-dano')?.value || 'fisico',
     alcance_celulas: parseInt(document.getElementById('avt-ab-alcance')?.value) || 1,
+    atributo_base:  document.getElementById('avt-ab-atributo')?.value || null,
     animacao:       tipo === 'nenhuma' ? null : { tipo, cor, icone },
     ...(_multVal !== null && !isNaN(_multVal) ? { mod_atributo_mult: _multVal } : {}),
   };
