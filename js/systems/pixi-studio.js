@@ -37,6 +37,7 @@ var PIXI_STUDIO_STATE = {
   _dirty:         false,
   _animCache:     {},          // adventure mode runtime cache: animId -> config_json
   _emitterMap:    new Map(),   // layerId -> PIXI.particles.Emitter
+  _trailHosts:    new Map(),   // layerId -> { container, perParticle, cfg, tex } (rastro)
   _spriteMap:     new Map(),   // layerId -> PIXI.Sprite
   _shapeMap:      new Map(),   // layerId -> PIXI.Graphics
   _bgSprite:      null,
@@ -1616,6 +1617,11 @@ function _psPreviewTick(ts) {
       }
     }
     if (!frozen) em.update(delta / 1000);
+    // Rastro (trail): atualiza a fita de sprites usando a rotina compartilhada com o combate
+    if (!frozen) {
+      const thost = PIXI_STUDIO_STATE._trailHosts.get(layerId);
+      if (thost && typeof _fxUpdateTrail === 'function') _fxUpdateTrail(thost, em);
+    }
   }
 
   // Camera shake (parity with _avtCameraFX) — offsets the world root while playing
@@ -1629,6 +1635,16 @@ function _psPreviewTick(ts) {
       worldRoot.position.set(Math.sin(tms * freq + seed) * amp, Math.cos(tms * freq * 1.13 + seed) * amp);
     } else if (worldRoot.position.x !== 0 || worldRoot.position.y !== 0) {
       worldRoot.position.set(0, 0);
+    }
+    // Parallax: cada camada desloca-se extra proporcional ao shake (profundidade)
+    if (PIXI_STUDIO_STATE._layerContainers) {
+      for (const [lid, cont] of PIXI_STUDIO_STATE._layerContainers) {
+        const lyr = _psGetLayer(lid);
+        const px = lyr?.parallax || 0;
+        const baseX = cont._psBaseX ?? cont.position.x, baseY = cont._psBaseY ?? cont.position.y;
+        if (cont._psBaseX == null) { cont._psBaseX = baseX; cont._psBaseY = baseY; }
+        cont.position.set(baseX + worldRoot.position.x * px, baseY + worldRoot.position.y * px);
+      }
     }
   }
 
@@ -2306,6 +2322,11 @@ function _psApplyContainerFilters(container, layer) {
       quality: layer.glow.quality ?? 0.3,
     }));
   }
+  // Tint da camada: multiplica RGB (paridade com aventura.js) — rotina compartilhada
+  if (layer.tint && typeof _fxTintMatrix === 'function') {
+    const tm = _fxTintMatrix(layer.tint);
+    if (tm) fs.push(tm);
+  }
   if (fs.length) container.filters = fs;
 }
 
@@ -2356,6 +2377,15 @@ function _psCreateEmitter(layer, container, x, y) {
     em.emit = true;
     PIXI_STUDIO_STATE._emitterMap.set(layer.id, em);
     // Emitter is updated exclusively by _psPreviewTick RAF — no ticker.add here
+    // Rastro (trail): host de sprites por partícula, atualizado no _psPreviewTick
+    // (paridade com o runtime de combate em aventura.js).
+    if (layer.trail) {
+      const thost = { container: new PIXI.Container(), perParticle: new WeakMap(),
+                      cfg: layer.trail, tex: tex || PIXI.Texture.WHITE };
+      thost.container.blendMode = container.blendMode;
+      container.addChild(thost.container);
+      PIXI_STUDIO_STATE._trailHosts.set(layer.id, thost);
+    }
   } catch (e) { console.warn('[pixi-studio] emitter create failed', e); }
 }
 
@@ -2363,6 +2393,8 @@ function psPreviewSyncEmitter(layerId) {
   const em = PIXI_STUDIO_STATE._emitterMap.get(layerId);
   if (em && !em.destroyed) { try { em.destroy(); } catch (_) {} }
   PIXI_STUDIO_STATE._emitterMap.delete(layerId);
+  // Trail host vive como filho do container da camada (destruído junto abaixo) — só limpa o mapa
+  PIXI_STUDIO_STATE._trailHosts.delete(layerId);
   // Tear down the layer's previous container (+ its filters) so repeated edits don't
   // orphan containers/filters on the GPU → gray preview.
   if (!PIXI_STUDIO_STATE._layerContainers) PIXI_STUDIO_STATE._layerContainers = new Map();
@@ -2391,6 +2423,7 @@ function _psDestroyAllEmitters() {
     try { if (!em.destroyed) em.destroy(); } catch (_) {}
   }
   PIXI_STUDIO_STATE._emitterMap.clear();
+  PIXI_STUDIO_STATE._trailHosts.clear();
   // RAF is NOT cancelled here — managed by psPreviewMount/psPreviewUnmount
 }
 
