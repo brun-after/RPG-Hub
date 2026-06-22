@@ -8671,11 +8671,13 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   }
 
   // Aplicar cooldown OOC (multiplica turnos pelo tempo por turno).
-  // Ataque básico: respeita o nº de turnos (override individual > global) e a redução em ms.
+  // Ataque básico: respeita o nº de turnos (override individual > global).
+  // Com o modificador "Reduzir cooldown" ativo, cdOocMs passa a ser o intervalo
+  // entre disparos OOC (ex.: 500ms ⇒ ~1 ataque a cada 500ms enquanto o efeito durar).
   const _oocKey = (jogador.id || jogador.nome) + '_' + (skId || 'basico');
   const _oocTurnos = sk ? (sk.cooldown_turnos || 1) : _avtGetAtaqueBasicoCooldown(_abCfg);
   let _oocMs = _oocTurnos * _avtGetSecsPerTurno() * 1000;
-  if (!sk && _abBuffs?.cdOocMs) _oocMs = Math.max(0, _oocMs - _abBuffs.cdOocMs);
+  if (!sk && _abBuffs?.cdOocMs) _oocMs = Math.min(_oocMs, _abBuffs.cdOocMs);
   _avtSetOocCooldown(_oocKey, Date.now() + _oocMs);
 
   setTimeout(() => {
@@ -22699,7 +22701,7 @@ function _avtSkmRenderEfeitos() {
             style="width:48px;${inpSt};text-align:center"></label>
       </div>` : ''}
       ${ef.tipo==='ab_cd_reduzir' ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:4px">
-        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#f0cc6a" title="Redução do cooldown fora de combate (ms)">⏩ Redução (ms):
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#f0cc6a" title="Cooldown do ataque básico fora de combate enquanto o efeito está ativo (ms) — intervalo entre disparos">⏩ Intervalo OOC (ms):
           <input type="number" min="0" step="50" value="${ef.ab_cd_ooc_ms??500}" oninput="_AVT_SK_MODAL.efeitos[${i}].ab_cd_ooc_ms=Math.max(0,+this.value)"
             style="width:64px;${inpSt};text-align:center"></label>
         <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#f0cc6a" title="Ataques básicos extras por turno">＋ Ataques/turno:
