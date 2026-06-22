@@ -569,6 +569,69 @@ function _avtAplicarRastroEfeito(ef, casterEnt, alvoEnt) {
   }
 }
 
+// Aplica empurrão/puxão (forced movement) a um alvo no momento do efeito.
+// `empurrao_direcao`: 'longe' = afasta o alvo do conjurador; 'perto' = puxa em direção a ele.
+// `empurrao_distancia`: nº máximo de células deslocadas; para em parede ou célula ocupada.
+// Espelha js/maps/maps.js → mapaForcedMovement, adaptado às coordenadas da aventura.
+function _avtAplicarEmpurrao(ef, casterEnt, alvoEnt, bat) {
+  if (!casterEnt || !alvoEnt || !ef || alvoEnt.hp <= 0) return;
+  const distancia = Math.max(1, parseInt(ef.empurrao_distancia) || 3);
+  const direcao   = ef.empurrao_direcao === 'perto' ? 'perto' : 'longe';
+  const dxRaw = Math.round(alvoEnt.x) - Math.round(casterEnt.x);
+  const dyRaw = Math.round(alvoEnt.y) - Math.round(casterEnt.y);
+  let dc = Math.sign(dxRaw), dr = Math.sign(dyRaw);
+  if (direcao === 'perto') { dc = -dc; dr = -dr; }
+  if (dc === 0 && dr === 0) return; // mesma célula — direção indefinida
+
+  let x = Math.round(alvoEnt.x), y = Math.round(alvoEnt.y);
+  let passos = 0, bateu = false;
+  for (let i = 0; i < distancia; i++) {
+    const nx = x + dc, ny = y + dr;
+    const passavel = (typeof _avtTilePassavel !== 'function') || _avtTilePassavel(nx, ny, AVT_STATE.dungeon);
+    const ocupada  = (typeof _avtCelulaOcupada === 'function') && _avtCelulaOcupada(nx, ny, alvoEnt.id, alvoEnt.tipo, false);
+    if (!passavel || ocupada) { bateu = true; break; }
+    x = nx; y = ny; passos++;
+  }
+
+  if (passos > 0) {
+    alvoEnt.x = x; alvoEnt.y = y;
+    const _ini = bat?.iniciativa?.find(e => e.id === alvoEnt.id);
+    if (_ini) { _ini.x = x; _ini.y = y; }
+    const _entObj = AVT_STATE.entidades.find(e => e.id === alvoEnt.id);
+    if (_entObj && _entObj !== alvoEnt) { _entObj.x = x; _entObj.y = y; }
+    try { _avtBcastTokenMove({ nome: alvoEnt.nome, x, y }); } catch(_) {}
+    const _lbl = direcao === 'longe' ? 'empurrado' : 'puxado';
+    _avtLog(`💨 ${alvoEnt.nome} foi ${_lbl} ${passos} célula(s)`, bat?.id);
+  }
+
+  // Dano de impacto ao colidir com obstáculo. Aplicado pelo cliente que resolve a ação
+  // (mesmo padrão do dano direto de ataque, ex.: L12400/8729) — não é gated por host.
+  if (bateu) {
+    const danoImpacto = _avtRolarFormula(ef.empurrao_dano_impacto || '1d6');
+    if (alvoEnt.tipo === 'jogador') {
+      try { _avtRTBroadcastPlayerDamage(alvoEnt.nome, danoImpacto, casterEnt.nome); } catch(_) {}
+      try { _avtMostrarDanoAbaixoHp(alvoEnt, danoImpacto, false); } catch(_) {}
+      if (bat) _avtCheckDerrota(bat);
+    } else {
+      alvoEnt.hp = Math.max(0, alvoEnt.hp - danoImpacto);
+      const _entObj2 = AVT_STATE.entidades.find(e => e.id === alvoEnt.id);
+      if (_entObj2 && _entObj2 !== alvoEnt) _entObj2.hp = alvoEnt.hp;
+      const _ini2 = bat?.iniciativa?.find(e => e.id === alvoEnt.id);
+      if (_ini2) _ini2.hp = alvoEnt.hp;
+      try { _avtAplicarDanoPersistir(_entObj2 || alvoEnt, alvoEnt.hp); } catch(_) {}
+      try { _avtMostrarDanoAbaixoHp(_entObj2 || alvoEnt, danoImpacto, false); } catch(_) {}
+      try { _avtBroadcast('avt_hp_update', { nome: alvoEnt.nome, hp: alvoEnt.hp, hpMax: alvoEnt.hpMax }); } catch(_) {}
+      if (alvoEnt.hp <= 0 && alvoEnt.tipo === 'inimigo') {
+        _avtNpcMorreu(_entObj2 || alvoEnt, bat || null, { creditoNome: casterEnt.nome });
+        if (bat) _avtCheckVitoria(bat);
+      }
+    }
+    _avtLog(`  ↳ ${alvoEnt.nome} colidiu e sofreu ${danoImpacto} de impacto`, bat?.id);
+  }
+  try { _avtRenderHpBar(); } catch(_) {}
+}
+window._avtAplicarEmpurrao = _avtAplicarEmpurrao;
+
 // Remove células de rastro expiradas (chamado periodicamente).
 function _avtRastroPrune() {
   if (!AVT_STATE._rastroCells || !AVT_STATE._rastroCells.length) return;
@@ -8754,6 +8817,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
                 try { _avtBroadcast('avt_hp_update', { nome: alvoProcA.nome, hp: alvoProcA.hp, hpMax: alvoProcA.hpMax }); } catch(_) {}
               } else if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') {
                 _avtAplicarRastroEfeito(ef, entJogOocA, entAlvA);
+              } else if (ef.tipo === 'empurrao') {
+                _avtAplicarEmpurrao(ef, entJogOocA, entAlvA, _avtBatalhaDeEnt?.(entAlvA.id) || null);
               } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar','necromante'].includes(ef.tipo)) {
                 if (!alvoProcA.status_effects) alvoProcA.status_effects = [];
                 const _oocEfA = { ...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
@@ -8874,6 +8939,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
             try { _avtBroadcast('avt_hp_update', { nome: alvoProcOoc.nome, hp: alvoProcOoc.hp, hpMax: alvoProcOoc.hpMax }); } catch(_) {}
           } else if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') {
             _avtAplicarRastroEfeito(ef, entJogOoc, entIniOoc);
+          } else if (ef.tipo === 'empurrao') {
+            _avtAplicarEmpurrao(ef, entJogOoc, entIniOoc, _avtBatalhaDeEnt?.(entIniOoc.id) || null);
           } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar','necromante','ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo)) {
             if (!alvoProcOoc.status_effects) alvoProcOoc.status_effects = [];
             const _oocEfPa = {...ef, _turnos_restantes: ef.duracao_turnos??1,
@@ -10013,7 +10080,9 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
       const _entAlvoNpc = AVT_STATE.entidades.find(e => e.id === alvo.id) || alvo;
       const _coolEfNpc = _avtGetEfeitoCooldownMs();
       sk.efeitos_bonus.forEach(ef => {
-        if (['stun','silence','dot','hot','fantasma','atravessar'].includes(ef.tipo)) {
+        if (ef.tipo === 'empurrao') {
+          _avtAplicarEmpurrao(ef, ini, _entAlvoNpc, _avtBatalhaDeEnt?.(_entAlvoNpc.id) || null);
+        } else if (['stun','silence','dot','hot','fantasma','atravessar'].includes(ef.tipo)) {
           if (!_entAlvoNpc.status_effects) _entAlvoNpc.status_effects = [];
           const _efNpc = {...ef, _turnos_restantes: ef.duracao_turnos??1,
             expiry_ms: Date.now()+(ef.duracao_turnos??1)*_coolEfNpc, _ooc:true};
@@ -12353,6 +12422,8 @@ async function _avtExecutarAtaque() {
                   }
                 } else if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') {
                   _avtAplicarRastroEfeito(ef, entCasterAoe, entAlvA || alvA);
+                } else if (ef.tipo === 'empurrao') {
+                  _avtAplicarEmpurrao(ef, entCasterAoe, entAlvA || alvA, b);
                 } else if (!['teleporte_alvo','avatar'].includes(ef.tipo)) {
                   if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
                   const _efEntryA = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
@@ -12433,6 +12504,8 @@ async function _avtExecutarAtaque() {
               _avtLog(`  ↳ Cura: ${alvoProcEf.nome} recupera ${valorCura} HP`, b.id);
             } else if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') {
               _avtAplicarRastroEfeito(ef, entCaster, entAlvo || alvo);
+            } else if (ef.tipo === 'empurrao') {
+              _avtAplicarEmpurrao(ef, entCaster, entAlvo || alvo, b);
             } else {
               if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
               const _efEntry = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
@@ -13454,6 +13527,8 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
               if (sk?.efeitos_bonus?.length) {
                 sk.efeitos_bonus.forEach(ef => {
                   if (['teleporte_alvo','avatar','cura'].includes(ef.tipo)) return;
+                  if (ef.tipo === 'empurrao') { _avtAplicarEmpurrao(ef, entNpc, entAlvA, bat); return; }
+                  if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') { _avtAplicarRastroEfeito(ef, entNpc, entAlvA); return; }
                   if (!entAlvA.status_effects) entAlvA.status_effects = [];
                   const _efEntryNpcA = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
                     expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs()};
@@ -13511,6 +13586,10 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
               const valorCura = _avtRolarFormula(ef.cura_formula || '1d6');
               entNpcObj.hp = Math.min(entNpcObj.hpMax || entNpcObj.hp, entNpcObj.hp + valorCura);
               _avtMostrarCuraAcimaDaHead(entNpcObj, valorCura);
+            } else if (ef.tipo === 'empurrao') {
+              _avtAplicarEmpurrao(ef, entNpcObj, alvoProcEf, bat);
+            } else if (ef.tipo === 'rastro_persona' || ef.tipo === 'rastro_anima') {
+              _avtAplicarRastroEfeito(ef, entNpcObj, alvoProcEf);
             } else {
               if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
               const _efEntryNpc = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
@@ -22674,6 +22753,7 @@ function _avtSkmRenderEfeitos() {
     {v:'fantasma',l:'👻 Fantasma'},{v:'atravessar',l:'🧱 Atravessar'},
     {v:'necromante',l:'☠ Necromante'},
     {v:'rastro_persona',l:'🐾 Rastro Persona'},{v:'rastro_anima',l:'✨ Rastro Anima'},
+    {v:'empurrao',l:'💨 Empurrão / Puxão'},
     {v:'ab_cd_reduzir',l:'⏩ AB: Reduzir cooldown'},{v:'ab_dano_buff',l:'💪 AB: Buff de dano'},
     {v:'ab_multi_alvo',l:'🎯 AB: Múltiplos alvos'},{v:'ab_alcance_buff',l:'📏 AB: Aumentar alcance'},
   ];
@@ -22706,6 +22786,16 @@ function _avtSkmRenderEfeitos() {
         <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#5ee09a">Cor do rastro:
           <input type="color" value="${ef.rastro_cor||'#5ee09a'}" oninput="_AVT_SK_MODAL.efeitos[${i}].rastro_cor=this.value"
             style="width:32px;height:22px;padding:1px;border:1px solid rgba(94,224,154,0.4);border-radius:3px;background:#0a0f18;cursor:pointer"></label>
+      </div>` : ''}
+      ${ef.tipo==='empurrao' ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#f0a84b" title="Empurrar afasta o alvo; Puxão aproxima-o do conjurador">💨 Direção:
+          <select onchange="_AVT_SK_MODAL.efeitos[${i}].empurrao_direcao=this.value" style="${inpSt}">
+            <option value="longe" ${(ef.empurrao_direcao||'longe')==='longe'?'selected':''}>↗ Empurrar (afastar)</option>
+            <option value="perto" ${ef.empurrao_direcao==='perto'?'selected':''}>↙ Puxão (aproximar)</option>
+          </select></label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#f0a84b" title="Nº máx. de células deslocadas (para em parede/ocupação)">Distância:
+          <input type="number" min="1" max="20" value="${ef.empurrao_distancia??3}" oninput="_AVT_SK_MODAL.efeitos[${i}].empurrao_distancia=Math.max(1,+this.value)"
+            style="width:48px;${inpSt};text-align:center"> <span style="font-size:0.62rem;color:#7a92aa">células</span></label>
       </div>` : ''}
       ${ef.tipo==='necromante' ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:4px">
         <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#8e44ad">Cor do dominado:
@@ -22805,6 +22895,9 @@ function _avtSkmEfTipoChange(i, val) {
     if (ef.ab_multi_extra == null)  ef.ab_multi_extra = 1;
   } else if (val === 'ab_alcance_buff') {
     if (ef.ab_alcance_bonus == null) ef.ab_alcance_bonus = 2;
+  } else if (val === 'empurrao') {
+    if (ef.empurrao_direcao == null)   ef.empurrao_direcao = 'longe';
+    if (ef.empurrao_distancia == null) ef.empurrao_distancia = 3;
   }
   if (['ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(val) && ef.duracao_turnos == null) {
     ef.duracao_turnos = 3;
