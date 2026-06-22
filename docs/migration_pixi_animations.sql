@@ -20,12 +20,12 @@ create table if not exists pixi_animations (
 -- ── 2. RLS ────────────────────────────────────────────────────────────────────
 alter table pixi_animations enable row level security;
 
--- Leitura: dono da animação ou animação global
+-- Leitura: qualquer usuário autenticado pode ler animações (dados cosméticos).
+-- Escrita continua restrita ao criador (policies abaixo).
 create policy "pixi_animations_select" on pixi_animations
-  for select using (
-    criado_por = auth.uid()
-    or global = true
-  );
+  for select
+  to authenticated
+  using (true);
 
 -- Insert: apenas usuários autenticados, criado_por deve ser o próprio usuário
 create policy "pixi_animations_insert" on pixi_animations
