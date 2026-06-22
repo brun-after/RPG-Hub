@@ -154,6 +154,8 @@ window.RTNet = (() => {
     avt_primeiro_ataque:   { persist: 'never',     reliable: false, relay: true },
     avt_bau_aberto:        { persist: 'immediate', reliable: true  },
     avt_skill_anim:        { persist: 'never',     reliable: true,  relay: true },
+    avt_efeito_anim_start: { persist: 'never',     reliable: true,  relay: true },
+    avt_efeito_anim_stop:  { persist: 'never',     reliable: true,  relay: true },
     avt_attack_anim:       { persist: 'never',     reliable: true,  relay: true },
     avt_level_config_update:{ persist: 'immediate',reliable: true  },
     // [HOST-RTC] novos

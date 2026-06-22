@@ -559,6 +559,8 @@ function _avtAplicarRastroEfeito(ef, casterEnt, alvoEnt) {
       if (!inBat) entry._ooc = true;
       casterEnt.status_effects.push(entry);
       if (!inBat) (AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects || []).push({ entId: casterEnt.id, entNome: casterEnt.nome, ef: { ...entry }, lastTickAt: Date.now() });
+      // Animação persistente do buff Rastro Persona segue o conjurador durante a duração.
+      _avtIniciarAnimPersistente(entry, casterEnt, casterEnt);
     }
     _avtRastroMarcarCelula(casterEnt, casterEnt.x, casterEnt.y, formula, dur, cor);
   } else if (ef.tipo === 'rastro_anima') {
@@ -8266,7 +8268,7 @@ async function _avtPrimeiroAtaqueSelecionarSkill(skId) {
           AVT_STATE._modoTeleporte = { entId: entJog.id };
           _avtAtivarIndicadorTeleporte(entJog, sk);
           mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
-        } else if (['dot','hot','stun','silence','teleporte','fantasma','atravessar'].includes(ef.tipo)) {
+        } else if (['dot','hot','stun','silence','teleporte','fantasma','atravessar','ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo)) {
           const _oocEf = {...ef, _turnos_restantes: ef.duracao_turnos??1,
             expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs(), _ooc:true};
           if (!entJog.status_effects) entJog.status_effects = [];
@@ -8356,7 +8358,7 @@ async function _avtAplicarSkillAliadoOoc(skId, alvoId) {
           _avtAtivarIndicadorTeleporte(entAlvo, sk);
           mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
         }
-      } else if (['hot','fantasma','atravessar'].includes(ef.tipo)) {
+      } else if (['hot','fantasma','atravessar','ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo)) {
         // Apenas efeitos positivos/neutros são aplicados a aliados (negativos como dot/stun/silence são ignorados)
         const _oocEfAl = {...ef, _turnos_restantes: ef.duracao_turnos??1,
           expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs(), _ooc:true};
@@ -9641,17 +9643,33 @@ function _avtAtualizarDominados(dt) {
   });
 }
 
-function _avtIniciarAnimPersistente(ef, entAlvo, casterEnt) {
+function _avtIniciarAnimPersistente(ef, entAlvo, casterEnt, _fromNet) {
   if (!ef?.animacao_persistente?.pixi_studio_id) return;
   if (typeof avtPixiPlayPersistent !== 'function') return;
   const key = `${entAlvo?.id}_${ef.tipo}`;
   avtPixiPlayPersistent(ef.animacao_persistente.pixi_studio_id, entAlvo, casterEnt, ef.animacao_persistente.posicao || 'alvo', key);
+  // Propaga para os outros jogadores verem a animação persistente (espelha avt_skill_anim).
+  // _fromNet evita re-broadcastar quando a chamada veio de um peer.
+  if (!_fromNet) {
+    try {
+      _avtBroadcast('avt_efeito_anim_start', {
+        animId:     ef.animacao_persistente.pixi_studio_id,
+        posicao:    ef.animacao_persistente.posicao || 'alvo',
+        tipo:       ef.tipo,
+        alvoNome:   entAlvo?.nome || null,
+        casterNome: casterEnt?.nome || null,
+      });
+    } catch(_) {}
+  }
 }
 
-function _avtPararAnimPersistente(ef, entAlvo) {
+function _avtPararAnimPersistente(ef, entAlvo, _fromNet) {
   if (!ef?.animacao_persistente?.pixi_studio_id) return;
   if (typeof avtPixiStopPersistent !== 'function') return;
-  avtPixiStopPersistent(`${entAlvo?.id}_${ef.nome}`);
+  avtPixiStopPersistent(`${entAlvo?.id}_${ef.tipo}`);
+  if (!_fromNet) {
+    try { _avtBroadcast('avt_efeito_anim_stop', { tipo: ef.tipo, alvoNome: entAlvo?.nome || null }); } catch(_) {}
+  }
 }
 
 function _avtTickEfeitosOOC(now) {
@@ -13595,6 +13613,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
               const _efEntryNpc = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
                 expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs()};
               alvoProcEf.status_effects.push(_efEntryNpc);
+              _avtIniciarAnimPersistente(_efEntryNpc, alvoProcEf, entNpcObj);
               // Sync to bat.iniciativa entry (different object)
               const _initEntNpcSync = bat.iniciativa.find(e => e.id === alvoProcEf.id);
               if (_initEntNpcSync) {
@@ -19555,6 +19574,32 @@ function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, animacao, areaCe
   } catch(e) { try { console.warn('[AVT] avtReceberSkillAnim:', e); } catch(_) {} }
 }
 window.avtReceberSkillAnim = avtReceberSkillAnim;
+
+// Receber broadcast de início de animação persistente de efeito (Rastro Persona,
+// Atravessar, modificadores de ataque básico, etc.). Espelha avtReceberSkillAnim:
+// resolve as entidades por nome e reconstrói a chave local antes de tocar.
+function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome } = {}) {
+  try {
+    if (typeof avtPixiPlayPersistent !== 'function' || !animId || !tipo) return;
+    const alvo = alvoNome ? AVT_STATE.entidades.find(e => e.nome === alvoNome) : null;
+    if (!alvo) return; // sem entidade-âncora resolvida não há onde ancorar a animação
+    const caster = casterNome ? AVT_STATE.entidades.find(e => e.nome === casterNome) : null;
+    const key = `${alvo.id}_${tipo}`;
+    avtPixiPlayPersistent(animId, alvo, caster, posicao || 'alvo', key);
+  } catch(e) { try { console.warn('[AVT] avtReceberEfeitoAnimStart:', e); } catch(_) {} }
+}
+window.avtReceberEfeitoAnimStart = avtReceberEfeitoAnimStart;
+
+// Receber broadcast de parada de animação persistente de efeito.
+function avtReceberEfeitoAnimStop({ tipo, alvoNome } = {}) {
+  try {
+    if (typeof avtPixiStopPersistent !== 'function' || !tipo) return;
+    const alvo = alvoNome ? AVT_STATE.entidades.find(e => e.nome === alvoNome) : null;
+    if (!alvo) return;
+    avtPixiStopPersistent(`${alvo.id}_${tipo}`);
+  } catch(e) { try { console.warn('[AVT] avtReceberEfeitoAnimStop:', e); } catch(_) {} }
+}
+window.avtReceberEfeitoAnimStop = avtReceberEfeitoAnimStop;
 
 // Receber broadcast de animação de ataque placeholder
 function avtReceberAttackAnim({ atacanteNome, alvoNome, animacao, delay } = {}) {
