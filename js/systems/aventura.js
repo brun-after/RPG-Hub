@@ -16982,6 +16982,47 @@ function _avtHexToInt(h) {
   return parseInt(h, 16) || 0xffffff;
 }
 
+// ── Shared FX helpers (parity between adventure runtime & studio preview) ─────
+// Atualiza a "fita" de sprites de rastro de um emitter: um chain de sprites por
+// partícula viva, com o head colado na partícula e a cauda esmaecendo por `fade`.
+function _fxUpdateTrail(host, em) {
+  if (!host || !em) return;
+  let part = em._activeParticlesFirst;
+  while (part) {
+    let chain = host.perParticle.get(part);
+    if (!chain) { chain = []; host.perParticle.set(part, chain); }
+    if (chain.length < (host.cfg.length || 10)) {
+      const s = new PIXI.Sprite(host.tex);
+      s.anchor.set(0.5);
+      s.tint = part.tint || 0xffffff;
+      s.blendMode = host.container.blendMode;
+      host.container.addChild(s);
+      chain.unshift(s);
+    } else {
+      const s = chain.pop(); chain.unshift(s);
+    }
+    const fade = host.cfg.fade ?? 0.85;
+    chain.forEach((s, i) => {
+      if (i === 0) { s.x = part.x; s.y = part.y; s.alpha = (part.alpha ?? 1) * 0.9; s.scale.set((part.scale?.x ?? 1) * 0.9); }
+      else { s.alpha *= fade; s.scale.x *= 0.98; s.scale.y *= 0.98; }
+    });
+    part = part.next;
+  }
+}
+
+// Retorna um ColorMatrixFilter que multiplica RGB pelo tint (tinge partículas,
+// rastro e luz de uma camada de forma uniforme). Retorna null para branco/ausente.
+function _fxTintMatrix(hex) {
+  if (!hex) return null;
+  const n = _avtHexToInt(hex);
+  if (n === 0xffffff) return null;
+  const r = ((n >> 16) & 0xff) / 255, g = ((n >> 8) & 0xff) / 255, b = (n & 0xff) / 255;
+  const cm = new PIXI.ColorMatrixFilter();
+  cm.matrix = [r,0,0,0,0, 0,g,0,0,0, 0,0,b,0,0, 0,0,0,1,0];
+  return cm;
+}
+if (typeof window !== 'undefined') { window._fxUpdateTrail = _fxUpdateTrail; window._fxTintMatrix = _fxTintMatrix; }
+
 // ── Semáforo de instâncias PIXI.Application ───────────────────────────────────
 // Browsers limitam contextos WebGL simultâneos (~8-16). Limitar a 3 evita travamentos
 // quando skills são usadas rapidamente em sequência.
@@ -17197,6 +17238,8 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
               color: _avtHexToInt(layer.glow.color || '#ffffff'), quality: layer.glow.quality ?? 0.3,
             }));
           }
+          // Tint da camada: multiplica RGB de partículas/rastro/luz via ColorMatrix
+          if (layer.tint) { const tm = _fxTintMatrix(layer.tint); if (tm) layerFilters.push(tm); }
           if (layerFilters.length) layerContainer.filters = layerFilters;
           worldRoot.addChild(layerContainer);
 
@@ -17260,10 +17303,6 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
             trailHosts.container.blendMode = layerContainer.blendMode;
             layerContainer.addChild(trailHosts.container);
           }
-
-          if (layer.tint) emitters.forEach(em => {
-            // best-effort tint via colorStart/Tint not natively supported; rely on color list
-          });
 
           packs.push({
             emitters, offset: layer.offset, parallax: layer.parallax || 0,
@@ -17333,13 +17372,11 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
               try { em.update(dt * 0.001); } catch(_) {}
             });
 
-            // Track sub-emitter spawns on particle death + trails per active particle
-            if (p.trailHosts || (p.subEmitters && p.subEmitters.length)) {
+            // Track sub-emitter spawns on particle death
+            if (p.subEmitters && p.subEmitters.length) {
               p.emitters.forEach(em => {
                 let part = em._activeParticlesFirst;
-                const alive = new Set();
                 while (part) {
-                  alive.add(part);
                   if (!trackedParticles.has(part)) {
                     trackedParticles.add(part);
                     // Hook death via wrapping kill
@@ -17358,36 +17395,17 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
                       };
                     }
                   }
-                  // Trail
-                  if (p.trailHosts) {
-                    let chain = p.trailHosts.perParticle.get(part);
-                    if (!chain) {
-                      chain = [];
-                      p.trailHosts.perParticle.set(part, chain);
-                    }
-                    if (chain.length < (p.trailHosts.cfg.length || 10)) {
-                      const s = new PIXI.Sprite(p.trailHosts.tex);
-                      s.anchor.set(0.5);
-                      s.tint = part.tint || 0xffffff;
-                      s.blendMode = p.trailHosts.container.blendMode;
-                      p.trailHosts.container.addChild(s);
-                      chain.unshift(s);
-                    } else {
-                      const s = chain.pop(); chain.unshift(s);
-                    }
-                    const fade = p.trailHosts.cfg.fade ?? 0.85;
-                    chain.forEach((s, i) => {
-                      if (i === 0) { s.x = part.x; s.y = part.y; s.alpha = (part.alpha ?? 1) * 0.9; s.scale.set((part.scale?.x ?? 1) * 0.9); }
-                      else { s.alpha *= fade; s.scale.x *= 0.98; s.scale.y *= 0.98; }
-                    });
-                  }
                   part = part.next;
                 }
-                // Cleanup trails for dead particles
-                if (p.trailHosts) {
-                  // (WeakMap auto-collects, but we should fade orphans visually — skip for simplicity)
-                }
               });
+            }
+
+            // Trails per active particle (rotina compartilhada com o preview do studio)
+            if (p.trailHosts) p.emitters.forEach(em => _fxUpdateTrail(p.trailHosts, em));
+
+            // Parallax: desloca a camada extra proporcional ao shake da câmera (profundidade)
+            if (p.parallax && p.layerContainer) {
+              p.layerContainer.position.set(worldRoot.position.x * p.parallax, worldRoot.position.y * p.parallax);
             }
 
             // Light sprite follows mean position
