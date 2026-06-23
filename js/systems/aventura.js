@@ -7536,9 +7536,15 @@ window._avtDpadControle = _avtDpadControle;
 // Último timestamp de presença de um membro. A presença do chat é chaveada pelo
 // NOME DO PERSONAGEM quando há vínculo (ver chat.js: enviarPresenca), e pelo nick
 // quando não há. Consultamos as duas chaves e pegamos a mais recente.
+// Também consideramos `_lastGameSeen`: atividade no canal de jogo (heartbeat
+// avt_player_hp a cada 500ms / move-input) que o host registra. Esse sinal é bem
+// mais confiável que o canal de chat e evita que tokens de jogadores presentes
+// pisquem por lacunas de presença do chat.
 function _avtPresencaTs(membro) {
   const ls = (typeof CHAT !== 'undefined' && CHAT._lastSeenAll) || {};
-  return Math.max(ls[membro?.linked] || 0, ls[membro?.nickname] || 0);
+  const chatTs = Math.max(ls[membro?.linked] || 0, ls[membro?.nickname] || 0);
+  const ent = membro?.linked ? (AVT_STATE.entidades || []).find(e => e.nome === membro.linked) : null;
+  return Math.max(chatTs, ent?._lastGameSeen || 0);
 }
 
 // Retorna true se o personagem tem um jogador vinculado online (ou mestre controlando).
@@ -7574,10 +7580,17 @@ window._avtJogadorEstaOnline = _avtJogadorEstaOnline;
 function _avtAtualizarVisibilidadeOffline() {
   if (!AVT_STATE.membros?.length) return;
   const d = AVT_STATE.dungeonData || AVT_STATE.dungeon;
+  // Visibilidade de jogadores remotos é autoridade do host da fase: clientes não-autoridade
+  // recebem o estado pelo tick (avt_state_tick) e não devem recalcular localmente — senão
+  // brigam com o host e o token pisca. Não-autoridade só cuida do próprio personagem.
+  const souAutoridade = (typeof window._avtSouHostDaFaseAtual === 'function')
+    ? window._avtSouHostDaFaseAtual()
+    : (typeof RTNet !== 'undefined' && RTNet.isHost && RTNet.isHost());
   AVT_STATE.entidades.filter(e => e.tipo === 'jogador').forEach(e => {
     const online = _avtJogadorEstaOnline(e.nome);
     const mestroControlando = AVT_STATE.npcControlando === e.id;
     const ehMeuPersonagem = e.nome === AVT_STATE.myCharNome;
+    if (!souAutoridade && !ehMeuPersonagem && !mestroControlando) return;
     if (!online && !mestroControlando && !ehMeuPersonagem) {
       if (!e.escondido) {
         e.escondido = true;
@@ -19723,8 +19736,9 @@ function avtAplicarSnapshotMerge(snap) {
             if (typeof remoto.hpMax === 'number')   local.hpMax = remoto.hpMax;
             if (Array.isArray(remoto.status_effects)) local.status_effects = remoto.status_effects;
           }
-          // Escondido: sempre do host (flag visual)
-          if ('escondido' in remoto)              local.escondido = remoto.escondido;
+          // Escondido: do host (flag visual), exceto o MEU personagem — nunca deixo
+          // um snapshot remoto esconder meu próprio token.
+          if (!ehMeuChar && 'escondido' in remoto) local.escondido = remoto.escondido;
           // Posição: nunca sobrescreve a do MEU personagem (evita teleporte)
           if (!ehMeuChar) {
             if (typeof remoto.x === 'number') local.x = remoto.x;
@@ -26050,8 +26064,12 @@ try{
             if (typeof r.hpMax === 'number') ent.hpMax = r.hpMax;
           }
         }
-        // Tick pode esconder, nunca revelar (revelar é exclusivo de avt_npc_respawn)
-        if (r.escondido === true || (typeof r.hp === 'number' && r.hp <= 0 && ent.tipo === 'inimigo')) {
+        // Visibilidade de JOGADORES é autoridade única do host: espelha nos dois
+        // sentidos (revela e esconde), mas nunca esconde meu próprio personagem.
+        // Para inimigos/NPCs mantém-se hide-only (revelar é exclusivo de avt_npc_respawn).
+        if (ent.tipo === 'jogador') {
+          if (ent.nome !== meCharNome) ent.escondido = (r.escondido === true);
+        } else if (r.escondido === true || (typeof r.hp === 'number' && r.hp <= 0 && ent.tipo === 'inimigo')) {
           ent.escondido = true;
         }
         // Status effects e flags de movimento: sincronizar do host
@@ -26306,6 +26324,7 @@ try{
       if (typeof nx !== 'number' || typeof ny !== 'number') return;
       const ent = _findEnt(id) || _findEnt(nome);
       if (!ent || ent.hp <= 0) return;
+      ent._lastGameSeen = Date.now();
       // Confirma o seq processado SEMPRE para o cliente reconciliar: o tick ecoa
       // ent._ackSeq e o cliente descarta inputs <= ackSeq.
       const _ackInput = () => {
@@ -26699,6 +26718,7 @@ try{
         if (!nome) return;
         const ent = AVT_STATE.entidades.find(e => e.nome === nome);
         if (!ent) return;
+        ent._lastGameSeen = Date.now();
         if (typeof hp === 'number')    ent.hp = hp;
         if (typeof hpMax === 'number') ent.hpMax = hpMax;
         if (Array.isArray(status_effects)) ent.status_effects = status_effects;
