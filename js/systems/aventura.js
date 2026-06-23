@@ -7533,6 +7533,14 @@ function _avtDpadControle(dc, dr) {
 }
 window._avtDpadControle = _avtDpadControle;
 
+// Último timestamp de presença de um membro. A presença do chat é chaveada pelo
+// NOME DO PERSONAGEM quando há vínculo (ver chat.js: enviarPresenca), e pelo nick
+// quando não há. Consultamos as duas chaves e pegamos a mais recente.
+function _avtPresencaTs(membro) {
+  const ls = (typeof CHAT !== 'undefined' && CHAT._lastSeenAll) || {};
+  return Math.max(ls[membro?.linked] || 0, ls[membro?.nickname] || 0);
+}
+
 // Retorna true se o personagem tem um jogador vinculado online (ou mestre controlando).
 // Personagens sem jogador ativo são invisíveis à mecânica de combate.
 function _avtPersonagemCombateAtivo(charNome) {
@@ -7549,7 +7557,7 @@ function _avtPersonagemCombateAtivo(charNome) {
   const membro = (AVT_STATE.membros || []).find(m => m.linked === charNome);
   if (!membro) return false;
   const agora = Date.now();
-  const ts = ((typeof CHAT !== 'undefined' && CHAT._lastSeenAll) || {})[membro.nickname] || 0;
+  const ts = _avtPresencaTs(membro);
   return agora - ts < 120000;
 }
 
@@ -7557,7 +7565,7 @@ function _avtPersonagemCombateAtivo(charNome) {
 function _avtJogadorEstaOnline(charNome) {
   const membro = (AVT_STATE.membros || []).find(m => m.linked === charNome);
   if (!membro) return false;
-  const ts = ((typeof CHAT !== 'undefined' && CHAT._lastSeenAll) || {})[membro.nickname] || 0;
+  const ts = _avtPresencaTs(membro);
   return Date.now() - ts < 120000;
 }
 window._avtJogadorEstaOnline = _avtJogadorEstaOnline;
@@ -7631,7 +7639,6 @@ function _avtVerificarInatividade() {
 
   const agora    = Date.now();
   const JANELA   = 120000; // 2 min
-  const lastSeen = (typeof CHAT !== 'undefined' && CHAT._lastSeenAll) || {};
   const meuChar  = AVT_STATE.myCharNome || null;
 
   // Jogador local: atividade real de jogo conta como presença, independente do chat.
@@ -7641,7 +7648,7 @@ function _avtVerificarInatividade() {
     if (meuChar && e.nome === meuChar) return euAtivo;
     const membro = membros.find(m => m.linked === e.nome);
     if (!membro) return false;
-    const ts = lastSeen[membro.nickname] || 0;
+    const ts = _avtPresencaTs(membro);
     return agora - ts < JANELA;
   });
 
