@@ -3458,6 +3458,13 @@ async function _avtCarregarDados(rpgId) {
     AVT_STATE.dungeon = _avtGerarDungeon(60, 40, 8);
   }
   _avtBausPreDungeonParaMapa();
+  // Início é sempre a fase inicial (fase 1). Entrar/Jogar nunca herda a fase de
+  // outro jogador — o isolamento por fase cuida do resto.
+  AVT_STATE._faseAtualId = 'principal';
+  if (AVT_STATE.dungeon) {
+    AVT_STATE.dungeon._faseId   = 'principal';
+    AVT_STATE.dungeon._npcLevel = t.dungeon_data?.npc_level ?? AVT_STATE.dungeon._npcLevel ?? 1;
+  }
   AVT_STATE._tilesetConfig   = AVT_STATE.dungeon.tileset_config  || null;
   AVT_STATE._tilesetImgUrl   = AVT_STATE.dungeon.tileset_img_url || null;
   AVT_STATE._tilesetLoaded   = false;
@@ -3486,6 +3493,8 @@ function _avtIniciarCanvas() {
       _avtCarregarTileset(AVT_STATE._tilesetImgUrl, AVT_STATE._tilesetConfig)
         .catch(e => console.warn('[tileset] load failed:', e));
     }
+    // Host por fase também para a fase inicial: solo assume; multiplayer resolve.
+    try { _avtResolverHostDaFase('principal'); _avtIniciarFaseHostLoop(); } catch(_) {}
   }));
 }
 window._avtIniciarCanvas = _avtIniciarCanvas;
@@ -3498,6 +3507,8 @@ function _avtIniciarRTNet(rpgId, onHostElected) {
     const _uid = SESSION?.user?.id || ('anon-' + Math.random().toString(36).slice(2));
     RTNet.init({ rpgId, userId: _uid, isAventura: true }).then(() => {
       RTNet.registrarSnapshotProvider(() => ({
+        // Fase do estado: o receptor só aplica se estiver na mesma fase.
+        faseId: (AVT_STATE._faseAtualId || 'principal'),
         entidades: (AVT_STATE.entidades || []).map(
           ({ _waypoints, _lerpTo, _patrolDir, _patrolNext, _recent, _npcLastTick,
              _onWaypointReached, _wpCallbackOwner,
@@ -19685,6 +19696,10 @@ window.avtReceberAttackAnim = avtReceberAttackAnim;
 // Merge não-destrutivo de snapshot do host (HP, status, escondido) — preserva posição do meu personagem
 function avtAplicarSnapshotMerge(snap) {
   if (!snap || typeof AVT_STATE === 'undefined') return;
+  // Isolamento por fase: não aplicar um snapshot de uma fase diferente da minha
+  // (ex.: host está na fase 2 e eu acabei de entrar na fase inicial).
+  const _minhaFase = AVT_STATE._faseAtualId || 'principal';
+  if (snap.faseId != null && snap.faseId !== _minhaFase) return;
   try {
     const meuNome = AVT_STATE.myCharNome;
     if (Array.isArray(snap.entidades)) {
@@ -21125,6 +21140,9 @@ async function _avtCarregarFase(faseId, opts = {}) {
   if (typeof _avtCameraSnapToPlayer === 'function') _avtCameraSnapToPlayer();
   _avtMestrePainelRender();
   _avtPhaseHostCheck(faseObj.id);
+  // Host por fase: resolve quem coordena esta fase (host vivo → guest; senão
+  // pergunta ser host/aguardar; solo → assume). Mantém o loop de reafirmação.
+  try { _avtResolverHostDaFase(faseObj.id); _avtIniciarFaseHostLoop(); } catch(_) {}
 }
 window._avtCarregarFase = _avtCarregarFase;
 
@@ -21145,6 +21163,150 @@ function _avtPhaseHostCheck(faseId) {
   } catch(_) {}
 }
 window._avtPhaseHostCheck = _avtPhaseHostCheck;
+
+// ─── Host autoritativo POR FASE ──────────────────────────────────────────────
+// Cada fase tem o seu host: o primeiro a entrar numa fase sem host escolhe ser
+// host ou aguardar. O host da fase roda todo o broadcast autoritativo daquela
+// fase (tick/snapshot escopados por faseId). Registro leve sincronizado por
+// 'avt_fase_host'; entradas expiram (FASE_HOST_DEAD) para permitir nova eleição.
+const FASE_HOST_DEAD = 16_000; // ms sem reafirmação → host da fase considerado morto
+const FASE_HOST_REASSERT = 5_000;
+
+function _avtMeuUid() { try { return SESSION?.user?.id || null; } catch(_) { return null; } }
+window._avtMeuUid = _avtMeuUid;
+
+function _avtFaseHostFresco(faseId) {
+  const reg = AVT_STATE._faseHosts || {};
+  const ts  = AVT_STATE._faseHostsTs || {};
+  const uid = reg[faseId];
+  if (!uid) return null;
+  if (Date.now() - (ts[faseId] || 0) > FASE_HOST_DEAD) return null;
+  return uid;
+}
+
+// Autoridade da minha fase atual. Sem host de fase válido, cai no host rtnet
+// global (compat. sessão de 1 fase / solo).
+function _avtSouHostDaFaseAtual() {
+  const fid = AVT_STATE._faseAtualId || 'principal';
+  const uid = _avtFaseHostFresco(fid);
+  if (uid) return uid === _avtMeuUid();
+  try { return (typeof RTNet !== 'undefined' && RTNet.isHost && RTNet.isHost()); } catch(_) { return false; }
+}
+window._avtSouHostDaFaseAtual = _avtSouHostDaFaseAtual;
+
+function _avtRegistrarHostFase(faseId, uid) {
+  if (!faseId || !uid) return;
+  AVT_STATE._faseHosts   = AVT_STATE._faseHosts   || {};
+  AVT_STATE._faseHostsTs = AVT_STATE._faseHostsTs || {};
+  const cur = AVT_STATE._faseHosts[faseId];
+  // Conflito de claim: menor uid vence (determinístico em todos os clientes).
+  const winner = (cur && cur !== uid) ? (uid < cur ? uid : cur) : uid;
+  AVT_STATE._faseHosts[faseId]   = winner;
+  AVT_STATE._faseHostsTs[faseId] = Date.now();
+  if (cur && cur !== uid && winner === _avtMeuUid()) _avtReafirmarHostFase(faseId);
+}
+
+function _avtClaimHostFase(faseId) {
+  const uid = _avtMeuUid();
+  if (!faseId || !uid) return;
+  _avtRegistrarHostFase(faseId, uid);
+  try { _avtBroadcast('avt_fase_host', { faseId, uid }); } catch(_) {}
+  try { _avtMestrePainelRender(); } catch(_) {}
+}
+window._avtClaimHostFase = _avtClaimHostFase;
+
+function _avtReafirmarHostFase(faseId) {
+  const uid = _avtMeuUid();
+  if (!faseId || !uid) return;
+  AVT_STATE._faseHostsTs = AVT_STATE._faseHostsTs || {};
+  AVT_STATE._faseHostsTs[faseId] = Date.now();
+  try { _avtBroadcast('avt_fase_host', { faseId, uid }); } catch(_) {}
+}
+window._avtReafirmarHostFase = _avtReafirmarHostFase;
+
+function avtReceberFaseHost(payload) {
+  if (!payload?.faseId || !payload?.uid) return;
+  _avtRegistrarHostFase(payload.faseId, payload.uid);
+}
+window.avtReceberFaseHost = avtReceberFaseHost;
+
+// Loop de reafirmação: enquanto eu for host da minha fase, renovo o registro
+// nos outros clientes; ao parar (saí da fase / caí), a entrada expira sozinha.
+function _avtIniciarFaseHostLoop() {
+  if (AVT_STATE._faseHostLoop) return;
+  AVT_STATE._faseHostLoop = setInterval(() => {
+    try {
+      const fid = AVT_STATE._faseAtualId || 'principal';
+      const uid = _avtMeuUid();
+      if ((AVT_STATE._faseHosts || {})[fid] === uid) {
+        _avtReafirmarHostFase(fid); // sou host → renovo
+      } else if (!_avtFaseHostFresco(fid) && uid) {
+        // Minha fase ficou sem host vivo (host saiu/caiu): reivindico para não
+        // travar a fase. Empates resolvem por menor uid em _avtRegistrarHostFase.
+        _avtClaimHostFase(fid);
+      }
+    } catch(_) {}
+  }, FASE_HOST_REASSERT);
+}
+window._avtIniciarFaseHostLoop = _avtIniciarFaseHostLoop;
+
+// Ao entrar numa fase: se houver host vivo (outro), entro como guest. Se não
+// houver e existirem outros jogadores, pergunto se quero ser host ou aguardar.
+// Solo (sem peers) ou já sendo host: assume autoridade silenciosamente.
+function _avtResolverHostDaFase(faseId) {
+  if (_avtFaseHostFresco(faseId)) return; // já há host desta fase → sou guest
+  const temPeers = (() => {
+    try { return typeof RTNet !== 'undefined' && RTNet.initialized && RTNet._peerJoinTs && RTNet._peerJoinTs().size > 0; }
+    catch(_) { return false; }
+  })();
+  if (!temPeers) { _avtClaimHostFase(faseId); return; } // solo → host automático
+  // Anuncia presença e aguarda ~1.5s por uma reafirmação de host antes de perguntar
+  // (evita perguntar quando já existe host que ainda não foi propagado a mim).
+  try { _avtPhaseHostCheck(faseId); } catch(_) {}
+  setTimeout(() => {
+    try {
+      if ((AVT_STATE._faseAtualId || 'principal') !== faseId) return; // já saí
+      if (_avtFaseHostFresco(faseId)) return; // host apareceu → sou guest
+      _avtPromptHostFase(faseId);
+    } catch(_) {}
+  }, 1500);
+}
+window._avtResolverHostDaFase = _avtResolverHostDaFase;
+
+function _avtPromptHostFase(faseId) {
+  if (AVT_STATE._promptHostAberto) return;
+  AVT_STATE._promptHostAberto = true;
+  let ov = document.getElementById('avt-prompt-host-fase');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'avt-prompt-host-fase';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5)';
+    document.body.appendChild(ov);
+  }
+  const fechar = () => { AVT_STATE._promptHostAberto = false; ov.remove(); };
+  ov.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(200,168,75,0.35);border-radius:12px;padding:20px;max-width:360px;width:90%;text-align:center">
+      <div style="font-family:var(--fonte-d, sans-serif);font-size:0.95rem;color:#c8d8e8;margin-bottom:6px">🛡️ Nova fase sem host</div>
+      <div style="font-size:0.72rem;color:#7a92aa;margin-bottom:16px;line-height:1.5">Você é o primeiro nesta fase. Quer ser o host (coordena os inimigos e o estado da fase) ou aguardar outro jogador assumir?</div>
+      <div style="display:flex;gap:8px">
+        <button id="avt-host-fase-wait" style="flex:1;padding:10px;border-radius:8px;cursor:pointer;background:none;border:1px solid rgba(122,146,170,0.3);color:#7a92aa;font-family:var(--fonte-d, sans-serif);font-size:0.72rem">Aguardar host</button>
+        <button id="avt-host-fase-yes" style="flex:1;padding:10px;border-radius:8px;cursor:pointer;background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.5);color:#c8a84b;font-family:var(--fonte-d, sans-serif);font-size:0.72rem">Ser host</button>
+      </div>
+    </div>`;
+  ov.querySelector('#avt-host-fase-yes').onclick = () => { fechar(); _avtClaimHostFase(faseId); };
+  ov.querySelector('#avt-host-fase-wait').onclick = () => {
+    fechar();
+    mostrarToast('⏳ Aguardando um host para esta fase…', '', 2500);
+    // Se ninguém assumir em ~6s e ainda não houver host, assume para não travar a fase.
+    setTimeout(() => {
+      try {
+        const fid = AVT_STATE._faseAtualId || 'principal';
+        if (fid === faseId && !_avtFaseHostFresco(faseId)) _avtClaimHostFase(faseId);
+      } catch(_) {}
+    }, 6000);
+  };
+}
+window._avtPromptHostFase = _avtPromptHostFase;
 
 function _avtSalaEsperaFase(faseId) {
   const seEl = document.getElementById('avt-sala-espera');
@@ -25654,8 +25816,12 @@ try{
 
   // ── Host eleito ─────────────────────────────────────────────────────────
   function _avtSouHostDe(npcId){
-    // Em qualquer modo RTNet (incluindo supabase sem peers), o host RTNet controla todos os NPCs
+    // Autoridade de NPC é POR FASE: o host da minha fase controla os NPCs dela
+    // (fallback ao host rtnet global quando não há host de fase registrado).
     if (typeof RTNet !== 'undefined' && RTNet.initialized) {
+      try {
+        if (typeof window._avtSouHostDaFaseAtual === 'function') return window._avtSouHostDaFaseAtual();
+      } catch(_) {}
       return RTNet.isHost();
     }
     const exp = AVT_STATE._npcHostLease && AVT_STATE._npcHostLease[npcId];
@@ -25800,8 +25966,8 @@ try{
           // Pausado? Bloqueia mutations
           if (_isPaused() && tipo !== 'avt_dado_rolado' && tipo !== 'avt_skill_selecionada') return;
 
-          // Movimento de NPC/inimigo: só o host propaga.
-          if (tipo === 'avt_token_move' && _isRTNet() && !_isHost()) {
+          // Movimento de NPC/inimigo: só o host DA FASE propaga.
+          if (tipo === 'avt_token_move' && _isRTNet() && !_souHostDaFase()) {
             const nome = payload?.nome || payload?.id;
             const ent  = _findEnt(nome);
             if (ent && _isInimigo(ent)) return; // descarta — host é a fonte
@@ -25815,9 +25981,17 @@ try{
   } catch(e) { try { console.warn('[HOST-RTC] wrap _avtBroadcast falhou:', e); } catch(_){} }
 
   // ── Tick autoritativo do host: HP + posição de tudo ─────────────────────
+  // Autoridade é POR FASE: só o host da fase atual produz o tick (fallback ao
+  // host rtnet global quando não há host de fase registrado — compat. 1 fase).
+  function _souHostDaFase() {
+    try {
+      if (typeof window._avtSouHostDaFaseAtual === 'function') return window._avtSouHostDaFaseAtual();
+    } catch(_) {}
+    return _isHost();
+  }
   window._avtBuildStateTick = function() {
     try {
-      if (!_isHost() || !AVT_STATE || !Array.isArray(AVT_STATE.entidades)) return null;
+      if (!_souHostDaFase() || !AVT_STATE || !Array.isArray(AVT_STATE.entidades)) return null;
       const ents = [];
       for (const e of AVT_STATE.entidades) {
         if (!e || !e.id) continue;
@@ -25842,7 +26016,8 @@ try{
           pat: (AVT_STATE.npcTimers?.[e.id]?.ativo) ? Math.max(0, Math.round(AVT_STATE.npcTimers[e.id].patience || 0)) : null,
         });
       }
-      return { t: Date.now(), entidades: ents, hostId: _myUid() };
+      return { t: Date.now(), entidades: ents, hostId: _myUid(),
+               faseId: (AVT_STATE._faseAtualId || 'principal') };
     } catch(_) { return null; }
   };
 
@@ -25850,7 +26025,10 @@ try{
   window.avtReceberStateTick = function(payload) {
     try {
       if (!payload || !Array.isArray(payload.entidades)) return;
-      if (_isHost()) return; // não aplicar em mim mesmo
+      // Isolamento por fase: ignora ticks de uma fase diferente da minha.
+      const _minhaFase = AVT_STATE._faseAtualId || 'principal';
+      if (payload.faseId != null && payload.faseId !== _minhaFase) return;
+      if (_souHostDaFase()) return; // não aplicar em mim mesmo (sou autoridade da fase)
       const meCharNome = AVT_STATE?.myCharNome || null;
       for (const r of payload.entidades) {
         const ent = _findEnt(r.id) || _findEnt(r.nome);

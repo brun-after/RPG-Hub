@@ -1199,6 +1199,13 @@ function _avtMenuBindFaseMudouHandler() {
       if (typeof AVT_STATE !== 'undefined') {
         AVT_STATE._fasePresenca = AVT_STATE._fasePresenca || {};
         AVT_STATE._fasePresenca[payload.nome] = payload.faseId || 'principal';
+        // Se EU sou o host desta fase, reafirmo na hora para o recém-chegado saber
+        // rapidamente que já há host (evita prompt duplicado de "ser host").
+        const fid = payload.faseId || 'principal';
+        if ((AVT_STATE._faseHosts || {})[fid] === (window._avtMeuUid && window._avtMeuUid())
+            && typeof window._avtReafirmarHostFase === 'function') {
+          window._avtReafirmarHostFase(fid);
+        }
       }
     } catch(_) {}
   });
