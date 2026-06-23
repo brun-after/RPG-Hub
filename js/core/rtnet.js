@@ -125,6 +125,7 @@ window.RTNet = (() => {
     avt_inv_update:           'avtReceberInvUpdate',
     // [FASES]
     avt_fase_mudou:           'avtReceberFaseMudou',
+    avt_fase_host:            'avtReceberFaseHost',
     avt_porta_proxima:        'avtReceberPortaProxima',
     avt_dungeon_update:       'avtReceberDungeonUpdate',
   };
@@ -179,6 +180,8 @@ window.RTNet = (() => {
     avt_inv_update:           { persist: 'never',     reliable: true  },
     // [MAPA] edição de mapa ao vivo pelo mestre (já persistido via theme_json)
     avt_dungeon_update:       { persist: 'never',     reliable: true  },
+    // [FASES] anúncio/reafirmação de host por fase
+    avt_fase_host:            { persist: 'never',     reliable: true  },
   };
 
   function _log(...a)  { try { console.log('[RTNet]',  ...a); } catch(_) {} }
@@ -515,12 +518,13 @@ window.RTNet = (() => {
     _resetHostWatch();
     if (_s._isHost) {
       _startHostHeartbeat();
-      _startStateTick();
       if (!wasHost) _startSnapshotTimer();
     } else {
       _stopHostHeartbeat();
-      _stopStateTick();
     }
+    // Tick autoritativo roda em todos os peers (gate por fase em _avtBuildStateTick),
+    // para suportar host por fase mesmo em quem não é o host rtnet global.
+    _startStateTick();
     try { window.dispatchEvent(new CustomEvent('rtnet:hostchange', { detail: { hostId, isHost: _s._isHost } })); } catch(_) {}
   }
 
@@ -581,8 +585,10 @@ window.RTNet = (() => {
 
   function _startStateTick() {
     _stopStateTick();
+    // O timer roda em TODOS os peers; a autoridade é decidida por _avtBuildStateTick,
+    // que só produz tick quando este cliente é o host da SUA fase atual (host por fase).
+    // Assim um guest que vira host de outra fase também emite o tick daquela fase.
     _s.stateTickTimer = setInterval(() => {
-      if (!_s._isHost) return;
       try {
         if (typeof window._avtBuildStateTick === 'function') {
           const tick = window._avtBuildStateTick();
@@ -623,6 +629,9 @@ window.RTNet = (() => {
     _log('aplicando snapshot do host');
     try {
       if (typeof AVT_STATE === 'undefined' || !AVT_STATE) return;
+      // Isolamento por fase: não aplicar snapshot de fase diferente da minha.
+      const _minhaFase = AVT_STATE._faseAtualId || 'principal';
+      if (snapshot.faseId != null && snapshot.faseId !== _minhaFase) return;
       // Merge não-destrutivo (preserva posição do MEU personagem) quando disponível
       if (typeof window !== 'undefined' && typeof window.avtAplicarSnapshotMerge === 'function') {
         try { window.avtAplicarSnapshotMerge(snapshot); return; } catch(e) { _warn('avtAplicarSnapshotMerge falhou, fallback:', e); }

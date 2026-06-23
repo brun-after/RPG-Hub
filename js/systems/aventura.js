@@ -3260,10 +3260,25 @@ function _avtBausPreDungeonParaMapa() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Grava AVT_STATE.dungeon no slot certo do theme_json conforme a fase atual:
+// fase 'principal' → theme_json.dungeon_data; fase extra → fases_extras[i].dungeon_data.
+// Evita que um save disparado dentro de uma fase extra sobrescreva a fase inicial.
+function _avtGravarDungeonNoSlot(t) {
+  if (!t || !AVT_STATE.dungeon) return;
+  const faseId = AVT_STATE._faseAtualId || 'principal';
+  if (faseId === 'principal') {
+    t.dungeon_data = AVT_STATE.dungeon;
+  } else {
+    const fa = (t.fases_extras || []).find(f => f.id === faseId);
+    if (fa) fa.dungeon_data = AVT_STATE.dungeon;
+  }
+}
+window._avtGravarDungeonNoSlot = _avtGravarDungeonNoSlot;
+
 async function _avtSalvarDungeon() {
   if (!AVT_STATE.rpgId || !AVT_STATE.dungeon) return;
   const t = AVT_STATE.rpg?.theme_json || {};
-  t.dungeon_data = AVT_STATE.dungeon;
+  _avtGravarDungeonNoSlot(t);
   try {
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
       method:'PATCH', body:JSON.stringify({ theme_json: t })
@@ -3443,6 +3458,13 @@ async function _avtCarregarDados(rpgId) {
     AVT_STATE.dungeon = _avtGerarDungeon(60, 40, 8);
   }
   _avtBausPreDungeonParaMapa();
+  // Início é sempre a fase inicial (fase 1). Entrar/Jogar nunca herda a fase de
+  // outro jogador — o isolamento por fase cuida do resto.
+  AVT_STATE._faseAtualId = 'principal';
+  if (AVT_STATE.dungeon) {
+    AVT_STATE.dungeon._faseId   = 'principal';
+    AVT_STATE.dungeon._npcLevel = t.dungeon_data?.npc_level ?? AVT_STATE.dungeon._npcLevel ?? 1;
+  }
   AVT_STATE._tilesetConfig   = AVT_STATE.dungeon.tileset_config  || null;
   AVT_STATE._tilesetImgUrl   = AVT_STATE.dungeon.tileset_img_url || null;
   AVT_STATE._tilesetLoaded   = false;
@@ -3471,6 +3493,8 @@ function _avtIniciarCanvas() {
       _avtCarregarTileset(AVT_STATE._tilesetImgUrl, AVT_STATE._tilesetConfig)
         .catch(e => console.warn('[tileset] load failed:', e));
     }
+    // Host por fase também para a fase inicial: solo assume; multiplayer resolve.
+    try { _avtResolverHostDaFase('principal'); _avtIniciarFaseHostLoop(); } catch(_) {}
   }));
 }
 window._avtIniciarCanvas = _avtIniciarCanvas;
@@ -3483,6 +3507,8 @@ function _avtIniciarRTNet(rpgId, onHostElected) {
     const _uid = SESSION?.user?.id || ('anon-' + Math.random().toString(36).slice(2));
     RTNet.init({ rpgId, userId: _uid, isAventura: true }).then(() => {
       RTNet.registrarSnapshotProvider(() => ({
+        // Fase do estado: o receptor só aplica se estiver na mesma fase.
+        faseId: (AVT_STATE._faseAtualId || 'principal'),
         entidades: (AVT_STATE.entidades || []).map(
           ({ _waypoints, _lerpTo, _patrolDir, _patrolNext, _recent, _npcLastTick,
              _onWaypointReached, _wpCallbackOwner,
@@ -3933,15 +3959,25 @@ function _avtInitNpcTimer(ent) {
 // ── Progressão de NPC por nível ──────────────────────────────────────────────
 // 3 pontos/nível: 2 Con+1 For ou 2 For+1 Con. A partir do lv 3 também ganha
 // 1-2 Inteligência; lv 7+ Destreza; lv 10+ Sabedoria (mana). Retorna NOVO objeto.
-function _avtNivelarNpc(base, nivel, isBoss) {
+function _avtNivelarNpc(base, nivel, isBoss, seed) {
   const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const atrs = { ...(base || {}) };
   const find = nome => Object.keys(atrs).find(k => _norm(k) === _norm(nome)) || nome;
   const add = (nome, qtd) => { const k = find(nome); atrs[k] = (parseFloat(atrs[k]) || 0) + qtd; };
+  // PRNG determinístico (mulberry32) quando recebe seed → mesmos stats por fase a cada load.
+  // Sem seed, mantém aleatoriedade legada.
+  let _state = (seed != null) ? (seed >>> 0) : null;
+  const rnd = () => {
+    if (_state == null) return Math.random();
+    _state |= 0; _state = (_state + 0x6D2B79F5) | 0;
+    let t = Math.imul(_state ^ (_state >>> 15), 1 | _state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
   for (let lv = 2; lv <= (nivel || 1); lv++) {
-    if (Math.random() < 0.5) { add('Constituição', 2); add('Força', 1); }
-    else                     { add('Força', 2); add('Constituição', 1); }
-    if (lv >= 3)  add('Inteligência', Math.random() < 0.5 ? 1 : 2);
+    if (rnd() < 0.5) { add('Constituição', 2); add('Força', 1); }
+    else             { add('Força', 2); add('Constituição', 1); }
+    if (lv >= 3)  add('Inteligência', rnd() < 0.5 ? 1 : 2);
     if (lv >= 7)  add('Destreza', 1);
     if (lv >= 10) add('Sabedoria', 1);
   }
@@ -4007,6 +4043,33 @@ function _avtFaseMageSkill(d) {
 }
 window._avtFaseMageSkill = _avtFaseMageSkill;
 
+// Célula passável mais próxima de (x,y) via BFS, limitada ao tamanho da dungeon.
+// Reutilizado ao popular inimigos (posições salvas podem ficar fora dos limites
+// quando a fase muda de dimensão) e por rotinas de reposicionamento de entidades.
+// Retorna {x,y} ou null se não houver tile válido.
+function _avtCelulaValidaMaisProxima(x, y, dungeon) {
+  const d = dungeon || AVT_STATE.dungeon;
+  if (!d) return null;
+  const sx = Math.round(x), sy = Math.round(y);
+  if (_avtTilePassavel(sx, sy, d)) return { x: sx, y: sy };
+  const cap = (d.w && d.h) ? (d.w * d.h + 1) : 4000;
+  const visited = new Set([`${sx},${sy}`]);
+  const queue = [[sx, sy]];
+  while (queue.length) {
+    const [qx, qy] = queue.shift();
+    for (const [ddx, ddy] of [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]]) {
+      const nx = qx + ddx, ny = qy + ddy;
+      const key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      if (_avtTilePassavel(nx, ny, d)) return { x: nx, y: ny };
+      if (visited.size < cap) queue.push([nx, ny]);
+    }
+  }
+  return null;
+}
+window._avtCelulaValidaMaisProxima = _avtCelulaValidaMaisProxima;
+
 function _avtPopularEntidadesInimigos(dungeon) {
   const d = dungeon || AVT_STATE.dungeon;
   if (!d?.tiles) return;
@@ -4035,16 +4098,28 @@ function _avtPopularEntidadesInimigos(dungeon) {
       const tipoClasse = ini.tipoClasse || (ini.isBoss ? 'guerreiro' : (Math.random() < 0.5 ? 'guerreiro' : 'mago'));
       const _lcAlc = AVT_STATE.rpg?.theme_json?.level_config || {};
       const alcancePadrao = tipoClasse === 'mago' ? (_lcAlc.alcance_basico_mago ?? 4) : (_lcAlc.alcance_basico_guerreiro ?? 2);
-      // atributos já vêm leveled no JSON; se vier sem nível mas a fase tem, nivelar.
-      const _nivelIni = ini.nivel ?? _npcNivel;
-      const _atrsIni = (ini.nivel != null || _npcNivel <= 1)
-        ? (ini.atributos || {})
-        : _avtNivelarNpc(ini.atributos || {}, _npcNivel, ini.isBoss);
+      // Escalonamento por fase determinístico: nivela a partir do conjunto BASE
+      // (atributos_base) usando o npc_level da fase atual, com seed estável por fase+índice.
+      // Assim ajustar npc_level re-escala de fato, sem cravar stats no JSON persistido.
+      const _seedIni = _avtSeedFromStr((d._faseId || AVT_STATE._faseAtualId || 'principal') + '#' + i);
+      let _nivelIni, _atrsIni;
+      if (ini.atributos_base) {
+        _nivelIni = _npcNivel;
+        _atrsIni = _npcNivel <= 1 ? { ...ini.atributos_base }
+          : _avtNivelarNpc(ini.atributos_base, _npcNivel, ini.isBoss, _seedIni);
+      } else {
+        // Legado: stats já cravados em ini.atributos para ini.nivel; não re-nivelar
+        // (evita dupla aplicação). Re-escalona a partir do próximo save com atributos_base.
+        _nivelIni = ini.nivel ?? _npcNivel;
+        _atrsIni = ini.atributos || {};
+      }
       const _hpMaxIni = _calcHpNpc(_atrsIni);
       const defaultRespawnDelay = ini.isBoss ? 300 : 60;
+      // Posição salva pode ficar fora dos limites se a fase mudou de dimensão.
+      const _posIni = _avtCelulaValidaMaisProxima(ini.x, ini.y, d) || { x: ini.x, y: ini.y };
       const ent = {
         id: 'ini_' + i, nome: ini.nome || `Inimigo ${i+1}`, tipo: 'inimigo',
-        x: ini.x, y: ini.y, hp: Math.min(ini.hp || _hpMaxIni, _hpMaxIni), hpMax: _hpMaxIni,
+        x: _posIni.x, y: _posIni.y, hp: Math.min(ini.hp || _hpMaxIni, _hpMaxIni), hpMax: _hpMaxIni,
         cor: _hexVary(corBase, i), _semNome: !ini.nome,
         pacienciaSecs: ini.pacienciaSecs ?? 5,
         deteccaoRaio: ini.deteccaoRaio ?? 3,
@@ -4054,7 +4129,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
         topdown_ia: ini.topdown_ia || null,
         tipoClasse, alcance_celulas: ini.alcance_celulas ?? alcancePadrao,
         classe_aventura: tipoClasse,
-        atributos: _atrsIni,
+        atributos: _atrsIni, atributos_base: ini.atributos_base || null,
         nivel: _nivelIni, skill_slots: 1 + Math.floor(_nivelIni / 3),
         respawnDelay: ini.respawnDelay ?? defaultRespawnDelay,
         respawnTipo: ini.respawnTipo ?? 'timer',
@@ -4076,7 +4151,9 @@ function _avtPopularEntidadesInimigos(dungeon) {
       };
       if (isBossRoom) {
         const bPreset = npcClasses.boss || AVT_NPC_PRESETS.boss;
-        const _atrsB = _avtNivelarNpc({ 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 }, _npcNivel, true);
+        const _baseB = { 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 };
+        const _seedB = _avtSeedFromStr((d._faseId || AVT_STATE._faseAtualId || 'principal') + '#boss');
+        const _atrsB = _npcNivel <= 1 ? { ..._baseB } : _avtNivelarNpc(_baseB, _npcNivel, true, _seedB);
         const _hpMaxB = _calcHpNpc(_atrsB);
         const ent = {
           id: 'ini_boss_fase', nome: bPreset.nome || 'Boss', tipo: 'inimigo',
@@ -4086,7 +4163,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
           pacienciaSecs: bPreset.pacienciaSecs, deteccaoRaio: bPreset.deteccaoRaio,
           isBoss: true, xpBase: bPreset.xpBase, presetTipo: 'boss',
           tipoClasse: 'guerreiro', alcance_celulas: (AVT_STATE.rpg?.theme_json?.level_config?.alcance_basico_guerreiro ?? 2), classe_aventura: 'guerreiro',
-          atributos: _atrsB,
+          atributos: _atrsB, atributos_base: _baseB,
           nivel: _npcNivel, skill_slots: 1 + Math.floor(_npcNivel / 3),
           respawnDelay: bPreset.respawnDelay ?? 300,
           respawnTipo: bPreset.respawnTipo ?? 'timer',
@@ -4101,7 +4178,9 @@ function _avtPopularEntidadesInimigos(dungeon) {
           const tipoClasse = Math.random() < 0.5 ? 'guerreiro' : 'mago';
           const _lcAlc2 = AVT_STATE.rpg?.theme_json?.level_config || {};
           const alcancePadrao = tipoClasse === 'mago' ? (_lcAlc2.alcance_basico_mago ?? 4) : (_lcAlc2.alcance_basico_guerreiro ?? 2);
-          const _atrsE = _avtNivelarNpc({ ..._attrsPorClasse[tipoClasse] }, _npcNivel, false);
+          const _baseE = { ..._attrsPorClasse[tipoClasse] };
+          const _seedE = _avtSeedFromStr((d._faseId || AVT_STATE._faseAtualId || 'principal') + '#' + uid);
+          const _atrsE = _npcNivel <= 1 ? { ..._baseE } : _avtNivelarNpc(_baseE, _npcNivel, false, _seedE);
           const _hpMaxE = _calcHpNpc(_atrsE);
           const ent = {
             id: 'ini_fase_' + uid, nome: `${preset.nome} ${uid+1}`, tipo: 'inimigo',
@@ -4112,7 +4191,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
             pacienciaSecs: preset.pacienciaSecs, deteccaoRaio: preset.deteccaoRaio,
             isBoss: false, xpBase: preset.xpBase, presetTipo: presetKey,
             tipoClasse, alcance_celulas: alcancePadrao, classe_aventura: tipoClasse,
-            atributos: _atrsE,
+            atributos: _atrsE, atributos_base: _baseE,
             nivel: _npcNivel, skill_slots: 1 + Math.floor(_npcNivel / 3),
             respawnDelay: preset.respawnDelay ?? 60,
             respawnTipo: preset.respawnTipo ?? 'timer',
@@ -4133,7 +4212,9 @@ function _avtPopularEntidadesInimigos(dungeon) {
         xpBase: e.xpBase, aparencia_tipo: e.presetTipo,
         topdown_ia: e.topdown_ia || null,
         tipoClasse: e.tipoClasse, alcance_celulas: e.alcance_celulas,
-        atributos: e.atributos, nivel: e.nivel,
+        // Persistir o conjunto BASE (não nivelado): o nível/stats são recalculados
+        // a partir do npc_level da fase ao recarregar, para o escalonamento re-aplicar.
+        atributos_base: e.atributos_base || e.atributos,
         respawnDelay: e.respawnDelay, respawnTipo: e.respawnTipo,
       }));
     _avtSalvarDungeon();
@@ -19231,12 +19312,7 @@ async function _avtMestreSalvarMapaUnificado() {
   // Persistir estado da fase atual no lugar certo (principal vs fase extra)
   const tj = AVT_STATE.rpg.theme_json;
   const faseId = AVT_STATE._faseAtualId || 'principal';
-  if (faseId === 'principal') {
-    tj.dungeon_data = AVT_STATE.dungeon;
-  } else {
-    const fa = (tj.fases_extras || []).find(f => f.id === faseId);
-    if (fa) fa.dungeon_data = AVT_STATE.dungeon;
-  }
+  _avtGravarDungeonNoSlot(tj);
   // Portas de fase editadas (merge das coords) — mantém objetos das fases já existentes
   if (_avtEd.fasesExtras && tj.fases_extras) {
     tj.fases_extras.forEach(f => {
@@ -19620,6 +19696,10 @@ window.avtReceberAttackAnim = avtReceberAttackAnim;
 // Merge não-destrutivo de snapshot do host (HP, status, escondido) — preserva posição do meu personagem
 function avtAplicarSnapshotMerge(snap) {
   if (!snap || typeof AVT_STATE === 'undefined') return;
+  // Isolamento por fase: não aplicar um snapshot de uma fase diferente da minha
+  // (ex.: host está na fase 2 e eu acabei de entrar na fase inicial).
+  const _minhaFase = AVT_STATE._faseAtualId || 'principal';
+  if (snap.faseId != null && snap.faseId !== _minhaFase) return;
   try {
     const meuNome = AVT_STATE.myCharNome;
     if (Array.isArray(snap.entidades)) {
@@ -20942,12 +21022,18 @@ function _avtSnapshotFaseAtual() {
 // (se a fase tiver a sua) e a cor (tint_hue) variam por fase.
 function _avtAplicarTilesetFase(faseObj) {
   AVT_STATE._faseHueShift = faseObj.tint_hue || 0;
-  const config = _avtTilesetConfigPrincipal();
+  // Config/imagem PRÓPRIAS da fase quando existirem; senão herda do principal.
+  const config = faseObj.tileset_config
+    || (faseObj.dungeon_data && faseObj.dungeon_data.tileset_config)
+    || _avtTilesetConfigPrincipal();
   const imgUrl = faseObj.tileset_img_url
     || AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_img_url
     || null;
   if (!config || !imgUrl) return; // sem tileset configurado: mantém o estado atual
-  if (AVT_STATE._tilesetImgUrl === imgUrl && AVT_STATE._tilesetLoaded) return; // já carregado
+  // Invalida cache por imagem E config (fases podem ter o mesmo URL mas layout distinto).
+  const _cacheKey = imgUrl + '|' + JSON.stringify(config);
+  if (AVT_STATE._tilesetCacheKey === _cacheKey && AVT_STATE._tilesetLoaded) return; // já carregado
+  AVT_STATE._tilesetCacheKey = _cacheKey;
   AVT_STATE._tilesetImgUrl   = imgUrl;
   AVT_STATE._tilesetConfig   = config;
   AVT_STATE._tilesetLoaded   = false;
@@ -21054,6 +21140,9 @@ async function _avtCarregarFase(faseId, opts = {}) {
   if (typeof _avtCameraSnapToPlayer === 'function') _avtCameraSnapToPlayer();
   _avtMestrePainelRender();
   _avtPhaseHostCheck(faseObj.id);
+  // Host por fase: resolve quem coordena esta fase (host vivo → guest; senão
+  // pergunta ser host/aguardar; solo → assume). Mantém o loop de reafirmação.
+  try { _avtResolverHostDaFase(faseObj.id); _avtIniciarFaseHostLoop(); } catch(_) {}
 }
 window._avtCarregarFase = _avtCarregarFase;
 
@@ -21074,6 +21163,150 @@ function _avtPhaseHostCheck(faseId) {
   } catch(_) {}
 }
 window._avtPhaseHostCheck = _avtPhaseHostCheck;
+
+// ─── Host autoritativo POR FASE ──────────────────────────────────────────────
+// Cada fase tem o seu host: o primeiro a entrar numa fase sem host escolhe ser
+// host ou aguardar. O host da fase roda todo o broadcast autoritativo daquela
+// fase (tick/snapshot escopados por faseId). Registro leve sincronizado por
+// 'avt_fase_host'; entradas expiram (FASE_HOST_DEAD) para permitir nova eleição.
+const FASE_HOST_DEAD = 16_000; // ms sem reafirmação → host da fase considerado morto
+const FASE_HOST_REASSERT = 5_000;
+
+function _avtMeuUid() { try { return SESSION?.user?.id || null; } catch(_) { return null; } }
+window._avtMeuUid = _avtMeuUid;
+
+function _avtFaseHostFresco(faseId) {
+  const reg = AVT_STATE._faseHosts || {};
+  const ts  = AVT_STATE._faseHostsTs || {};
+  const uid = reg[faseId];
+  if (!uid) return null;
+  if (Date.now() - (ts[faseId] || 0) > FASE_HOST_DEAD) return null;
+  return uid;
+}
+
+// Autoridade da minha fase atual. Sem host de fase válido, cai no host rtnet
+// global (compat. sessão de 1 fase / solo).
+function _avtSouHostDaFaseAtual() {
+  const fid = AVT_STATE._faseAtualId || 'principal';
+  const uid = _avtFaseHostFresco(fid);
+  if (uid) return uid === _avtMeuUid();
+  try { return (typeof RTNet !== 'undefined' && RTNet.isHost && RTNet.isHost()); } catch(_) { return false; }
+}
+window._avtSouHostDaFaseAtual = _avtSouHostDaFaseAtual;
+
+function _avtRegistrarHostFase(faseId, uid) {
+  if (!faseId || !uid) return;
+  AVT_STATE._faseHosts   = AVT_STATE._faseHosts   || {};
+  AVT_STATE._faseHostsTs = AVT_STATE._faseHostsTs || {};
+  const cur = AVT_STATE._faseHosts[faseId];
+  // Conflito de claim: menor uid vence (determinístico em todos os clientes).
+  const winner = (cur && cur !== uid) ? (uid < cur ? uid : cur) : uid;
+  AVT_STATE._faseHosts[faseId]   = winner;
+  AVT_STATE._faseHostsTs[faseId] = Date.now();
+  if (cur && cur !== uid && winner === _avtMeuUid()) _avtReafirmarHostFase(faseId);
+}
+
+function _avtClaimHostFase(faseId) {
+  const uid = _avtMeuUid();
+  if (!faseId || !uid) return;
+  _avtRegistrarHostFase(faseId, uid);
+  try { _avtBroadcast('avt_fase_host', { faseId, uid }); } catch(_) {}
+  try { _avtMestrePainelRender(); } catch(_) {}
+}
+window._avtClaimHostFase = _avtClaimHostFase;
+
+function _avtReafirmarHostFase(faseId) {
+  const uid = _avtMeuUid();
+  if (!faseId || !uid) return;
+  AVT_STATE._faseHostsTs = AVT_STATE._faseHostsTs || {};
+  AVT_STATE._faseHostsTs[faseId] = Date.now();
+  try { _avtBroadcast('avt_fase_host', { faseId, uid }); } catch(_) {}
+}
+window._avtReafirmarHostFase = _avtReafirmarHostFase;
+
+function avtReceberFaseHost(payload) {
+  if (!payload?.faseId || !payload?.uid) return;
+  _avtRegistrarHostFase(payload.faseId, payload.uid);
+}
+window.avtReceberFaseHost = avtReceberFaseHost;
+
+// Loop de reafirmação: enquanto eu for host da minha fase, renovo o registro
+// nos outros clientes; ao parar (saí da fase / caí), a entrada expira sozinha.
+function _avtIniciarFaseHostLoop() {
+  if (AVT_STATE._faseHostLoop) return;
+  AVT_STATE._faseHostLoop = setInterval(() => {
+    try {
+      const fid = AVT_STATE._faseAtualId || 'principal';
+      const uid = _avtMeuUid();
+      if ((AVT_STATE._faseHosts || {})[fid] === uid) {
+        _avtReafirmarHostFase(fid); // sou host → renovo
+      } else if (!_avtFaseHostFresco(fid) && uid) {
+        // Minha fase ficou sem host vivo (host saiu/caiu): reivindico para não
+        // travar a fase. Empates resolvem por menor uid em _avtRegistrarHostFase.
+        _avtClaimHostFase(fid);
+      }
+    } catch(_) {}
+  }, FASE_HOST_REASSERT);
+}
+window._avtIniciarFaseHostLoop = _avtIniciarFaseHostLoop;
+
+// Ao entrar numa fase: se houver host vivo (outro), entro como guest. Se não
+// houver e existirem outros jogadores, pergunto se quero ser host ou aguardar.
+// Solo (sem peers) ou já sendo host: assume autoridade silenciosamente.
+function _avtResolverHostDaFase(faseId) {
+  if (_avtFaseHostFresco(faseId)) return; // já há host desta fase → sou guest
+  const temPeers = (() => {
+    try { return typeof RTNet !== 'undefined' && RTNet.initialized && RTNet._peerJoinTs && RTNet._peerJoinTs().size > 0; }
+    catch(_) { return false; }
+  })();
+  if (!temPeers) { _avtClaimHostFase(faseId); return; } // solo → host automático
+  // Anuncia presença e aguarda ~1.5s por uma reafirmação de host antes de perguntar
+  // (evita perguntar quando já existe host que ainda não foi propagado a mim).
+  try { _avtPhaseHostCheck(faseId); } catch(_) {}
+  setTimeout(() => {
+    try {
+      if ((AVT_STATE._faseAtualId || 'principal') !== faseId) return; // já saí
+      if (_avtFaseHostFresco(faseId)) return; // host apareceu → sou guest
+      _avtPromptHostFase(faseId);
+    } catch(_) {}
+  }, 1500);
+}
+window._avtResolverHostDaFase = _avtResolverHostDaFase;
+
+function _avtPromptHostFase(faseId) {
+  if (AVT_STATE._promptHostAberto) return;
+  AVT_STATE._promptHostAberto = true;
+  let ov = document.getElementById('avt-prompt-host-fase');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'avt-prompt-host-fase';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5)';
+    document.body.appendChild(ov);
+  }
+  const fechar = () => { AVT_STATE._promptHostAberto = false; ov.remove(); };
+  ov.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(200,168,75,0.35);border-radius:12px;padding:20px;max-width:360px;width:90%;text-align:center">
+      <div style="font-family:var(--fonte-d, sans-serif);font-size:0.95rem;color:#c8d8e8;margin-bottom:6px">🛡️ Nova fase sem host</div>
+      <div style="font-size:0.72rem;color:#7a92aa;margin-bottom:16px;line-height:1.5">Você é o primeiro nesta fase. Quer ser o host (coordena os inimigos e o estado da fase) ou aguardar outro jogador assumir?</div>
+      <div style="display:flex;gap:8px">
+        <button id="avt-host-fase-wait" style="flex:1;padding:10px;border-radius:8px;cursor:pointer;background:none;border:1px solid rgba(122,146,170,0.3);color:#7a92aa;font-family:var(--fonte-d, sans-serif);font-size:0.72rem">Aguardar host</button>
+        <button id="avt-host-fase-yes" style="flex:1;padding:10px;border-radius:8px;cursor:pointer;background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.5);color:#c8a84b;font-family:var(--fonte-d, sans-serif);font-size:0.72rem">Ser host</button>
+      </div>
+    </div>`;
+  ov.querySelector('#avt-host-fase-yes').onclick = () => { fechar(); _avtClaimHostFase(faseId); };
+  ov.querySelector('#avt-host-fase-wait').onclick = () => {
+    fechar();
+    mostrarToast('⏳ Aguardando um host para esta fase…', '', 2500);
+    // Se ninguém assumir em ~6s e ainda não houver host, assume para não travar a fase.
+    setTimeout(() => {
+      try {
+        const fid = AVT_STATE._faseAtualId || 'principal';
+        if (fid === faseId && !_avtFaseHostFresco(faseId)) _avtClaimHostFase(faseId);
+      } catch(_) {}
+    }, 6000);
+  };
+}
+window._avtPromptHostFase = _avtPromptHostFase;
 
 function _avtSalaEsperaFase(faseId) {
   const seEl = document.getElementById('avt-sala-espera');
@@ -25583,8 +25816,12 @@ try{
 
   // ── Host eleito ─────────────────────────────────────────────────────────
   function _avtSouHostDe(npcId){
-    // Em qualquer modo RTNet (incluindo supabase sem peers), o host RTNet controla todos os NPCs
+    // Autoridade de NPC é POR FASE: o host da minha fase controla os NPCs dela
+    // (fallback ao host rtnet global quando não há host de fase registrado).
     if (typeof RTNet !== 'undefined' && RTNet.initialized) {
+      try {
+        if (typeof window._avtSouHostDaFaseAtual === 'function') return window._avtSouHostDaFaseAtual();
+      } catch(_) {}
       return RTNet.isHost();
     }
     const exp = AVT_STATE._npcHostLease && AVT_STATE._npcHostLease[npcId];
@@ -25729,8 +25966,8 @@ try{
           // Pausado? Bloqueia mutations
           if (_isPaused() && tipo !== 'avt_dado_rolado' && tipo !== 'avt_skill_selecionada') return;
 
-          // Movimento de NPC/inimigo: só o host propaga.
-          if (tipo === 'avt_token_move' && _isRTNet() && !_isHost()) {
+          // Movimento de NPC/inimigo: só o host DA FASE propaga.
+          if (tipo === 'avt_token_move' && _isRTNet() && !_souHostDaFase()) {
             const nome = payload?.nome || payload?.id;
             const ent  = _findEnt(nome);
             if (ent && _isInimigo(ent)) return; // descarta — host é a fonte
@@ -25744,9 +25981,17 @@ try{
   } catch(e) { try { console.warn('[HOST-RTC] wrap _avtBroadcast falhou:', e); } catch(_){} }
 
   // ── Tick autoritativo do host: HP + posição de tudo ─────────────────────
+  // Autoridade é POR FASE: só o host da fase atual produz o tick (fallback ao
+  // host rtnet global quando não há host de fase registrado — compat. 1 fase).
+  function _souHostDaFase() {
+    try {
+      if (typeof window._avtSouHostDaFaseAtual === 'function') return window._avtSouHostDaFaseAtual();
+    } catch(_) {}
+    return _isHost();
+  }
   window._avtBuildStateTick = function() {
     try {
-      if (!_isHost() || !AVT_STATE || !Array.isArray(AVT_STATE.entidades)) return null;
+      if (!_souHostDaFase() || !AVT_STATE || !Array.isArray(AVT_STATE.entidades)) return null;
       const ents = [];
       for (const e of AVT_STATE.entidades) {
         if (!e || !e.id) continue;
@@ -25771,7 +26016,8 @@ try{
           pat: (AVT_STATE.npcTimers?.[e.id]?.ativo) ? Math.max(0, Math.round(AVT_STATE.npcTimers[e.id].patience || 0)) : null,
         });
       }
-      return { t: Date.now(), entidades: ents, hostId: _myUid() };
+      return { t: Date.now(), entidades: ents, hostId: _myUid(),
+               faseId: (AVT_STATE._faseAtualId || 'principal') };
     } catch(_) { return null; }
   };
 
@@ -25779,7 +26025,10 @@ try{
   window.avtReceberStateTick = function(payload) {
     try {
       if (!payload || !Array.isArray(payload.entidades)) return;
-      if (_isHost()) return; // não aplicar em mim mesmo
+      // Isolamento por fase: ignora ticks de uma fase diferente da minha.
+      const _minhaFase = AVT_STATE._faseAtualId || 'principal';
+      if (payload.faseId != null && payload.faseId !== _minhaFase) return;
+      if (_souHostDaFase()) return; // não aplicar em mim mesmo (sou autoridade da fase)
       const meCharNome = AVT_STATE?.myCharNome || null;
       for (const r of payload.entidades) {
         const ent = _findEnt(r.id) || _findEnt(r.nome);

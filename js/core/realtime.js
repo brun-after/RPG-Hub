@@ -413,6 +413,7 @@ function iniciarRealtime(rpgId){
            avt_state_tick:    'avtReceberStateTick',
            avt_player_hp:     'avtReceberPlayerHp',
            avt_player_damage: 'avtReceberPlayerDamage',
+           avt_fase_host:     'avtReceberFaseHost',
          };
          if(_avtEv === 'avt_bau_aberto'){
            try{ if(typeof mostrarToast==='function') mostrarToast((_avtPl && _avtPl.jogadorNome ? _avtPl.jogadorNome : 'Alguém') + ' abriu um baú!','ok'); }catch(_){}
