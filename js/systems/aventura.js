@@ -3260,10 +3260,25 @@ function _avtBausPreDungeonParaMapa() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Grava AVT_STATE.dungeon no slot certo do theme_json conforme a fase atual:
+// fase 'principal' → theme_json.dungeon_data; fase extra → fases_extras[i].dungeon_data.
+// Evita que um save disparado dentro de uma fase extra sobrescreva a fase inicial.
+function _avtGravarDungeonNoSlot(t) {
+  if (!t || !AVT_STATE.dungeon) return;
+  const faseId = AVT_STATE._faseAtualId || 'principal';
+  if (faseId === 'principal') {
+    t.dungeon_data = AVT_STATE.dungeon;
+  } else {
+    const fa = (t.fases_extras || []).find(f => f.id === faseId);
+    if (fa) fa.dungeon_data = AVT_STATE.dungeon;
+  }
+}
+window._avtGravarDungeonNoSlot = _avtGravarDungeonNoSlot;
+
 async function _avtSalvarDungeon() {
   if (!AVT_STATE.rpgId || !AVT_STATE.dungeon) return;
   const t = AVT_STATE.rpg?.theme_json || {};
-  t.dungeon_data = AVT_STATE.dungeon;
+  _avtGravarDungeonNoSlot(t);
   try {
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
       method:'PATCH', body:JSON.stringify({ theme_json: t })
@@ -3933,15 +3948,25 @@ function _avtInitNpcTimer(ent) {
 // ── Progressão de NPC por nível ──────────────────────────────────────────────
 // 3 pontos/nível: 2 Con+1 For ou 2 For+1 Con. A partir do lv 3 também ganha
 // 1-2 Inteligência; lv 7+ Destreza; lv 10+ Sabedoria (mana). Retorna NOVO objeto.
-function _avtNivelarNpc(base, nivel, isBoss) {
+function _avtNivelarNpc(base, nivel, isBoss, seed) {
   const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const atrs = { ...(base || {}) };
   const find = nome => Object.keys(atrs).find(k => _norm(k) === _norm(nome)) || nome;
   const add = (nome, qtd) => { const k = find(nome); atrs[k] = (parseFloat(atrs[k]) || 0) + qtd; };
+  // PRNG determinístico (mulberry32) quando recebe seed → mesmos stats por fase a cada load.
+  // Sem seed, mantém aleatoriedade legada.
+  let _state = (seed != null) ? (seed >>> 0) : null;
+  const rnd = () => {
+    if (_state == null) return Math.random();
+    _state |= 0; _state = (_state + 0x6D2B79F5) | 0;
+    let t = Math.imul(_state ^ (_state >>> 15), 1 | _state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
   for (let lv = 2; lv <= (nivel || 1); lv++) {
-    if (Math.random() < 0.5) { add('Constituição', 2); add('Força', 1); }
-    else                     { add('Força', 2); add('Constituição', 1); }
-    if (lv >= 3)  add('Inteligência', Math.random() < 0.5 ? 1 : 2);
+    if (rnd() < 0.5) { add('Constituição', 2); add('Força', 1); }
+    else             { add('Força', 2); add('Constituição', 1); }
+    if (lv >= 3)  add('Inteligência', rnd() < 0.5 ? 1 : 2);
     if (lv >= 7)  add('Destreza', 1);
     if (lv >= 10) add('Sabedoria', 1);
   }
@@ -4007,6 +4032,33 @@ function _avtFaseMageSkill(d) {
 }
 window._avtFaseMageSkill = _avtFaseMageSkill;
 
+// Célula passável mais próxima de (x,y) via BFS, limitada ao tamanho da dungeon.
+// Reutilizado ao popular inimigos (posições salvas podem ficar fora dos limites
+// quando a fase muda de dimensão) e por rotinas de reposicionamento de entidades.
+// Retorna {x,y} ou null se não houver tile válido.
+function _avtCelulaValidaMaisProxima(x, y, dungeon) {
+  const d = dungeon || AVT_STATE.dungeon;
+  if (!d) return null;
+  const sx = Math.round(x), sy = Math.round(y);
+  if (_avtTilePassavel(sx, sy, d)) return { x: sx, y: sy };
+  const cap = (d.w && d.h) ? (d.w * d.h + 1) : 4000;
+  const visited = new Set([`${sx},${sy}`]);
+  const queue = [[sx, sy]];
+  while (queue.length) {
+    const [qx, qy] = queue.shift();
+    for (const [ddx, ddy] of [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]]) {
+      const nx = qx + ddx, ny = qy + ddy;
+      const key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      if (_avtTilePassavel(nx, ny, d)) return { x: nx, y: ny };
+      if (visited.size < cap) queue.push([nx, ny]);
+    }
+  }
+  return null;
+}
+window._avtCelulaValidaMaisProxima = _avtCelulaValidaMaisProxima;
+
 function _avtPopularEntidadesInimigos(dungeon) {
   const d = dungeon || AVT_STATE.dungeon;
   if (!d?.tiles) return;
@@ -4035,16 +4087,28 @@ function _avtPopularEntidadesInimigos(dungeon) {
       const tipoClasse = ini.tipoClasse || (ini.isBoss ? 'guerreiro' : (Math.random() < 0.5 ? 'guerreiro' : 'mago'));
       const _lcAlc = AVT_STATE.rpg?.theme_json?.level_config || {};
       const alcancePadrao = tipoClasse === 'mago' ? (_lcAlc.alcance_basico_mago ?? 4) : (_lcAlc.alcance_basico_guerreiro ?? 2);
-      // atributos já vêm leveled no JSON; se vier sem nível mas a fase tem, nivelar.
-      const _nivelIni = ini.nivel ?? _npcNivel;
-      const _atrsIni = (ini.nivel != null || _npcNivel <= 1)
-        ? (ini.atributos || {})
-        : _avtNivelarNpc(ini.atributos || {}, _npcNivel, ini.isBoss);
+      // Escalonamento por fase determinístico: nivela a partir do conjunto BASE
+      // (atributos_base) usando o npc_level da fase atual, com seed estável por fase+índice.
+      // Assim ajustar npc_level re-escala de fato, sem cravar stats no JSON persistido.
+      const _seedIni = _avtSeedFromStr((d._faseId || AVT_STATE._faseAtualId || 'principal') + '#' + i);
+      let _nivelIni, _atrsIni;
+      if (ini.atributos_base) {
+        _nivelIni = _npcNivel;
+        _atrsIni = _npcNivel <= 1 ? { ...ini.atributos_base }
+          : _avtNivelarNpc(ini.atributos_base, _npcNivel, ini.isBoss, _seedIni);
+      } else {
+        // Legado: stats já cravados em ini.atributos para ini.nivel; não re-nivelar
+        // (evita dupla aplicação). Re-escalona a partir do próximo save com atributos_base.
+        _nivelIni = ini.nivel ?? _npcNivel;
+        _atrsIni = ini.atributos || {};
+      }
       const _hpMaxIni = _calcHpNpc(_atrsIni);
       const defaultRespawnDelay = ini.isBoss ? 300 : 60;
+      // Posição salva pode ficar fora dos limites se a fase mudou de dimensão.
+      const _posIni = _avtCelulaValidaMaisProxima(ini.x, ini.y, d) || { x: ini.x, y: ini.y };
       const ent = {
         id: 'ini_' + i, nome: ini.nome || `Inimigo ${i+1}`, tipo: 'inimigo',
-        x: ini.x, y: ini.y, hp: Math.min(ini.hp || _hpMaxIni, _hpMaxIni), hpMax: _hpMaxIni,
+        x: _posIni.x, y: _posIni.y, hp: Math.min(ini.hp || _hpMaxIni, _hpMaxIni), hpMax: _hpMaxIni,
         cor: _hexVary(corBase, i), _semNome: !ini.nome,
         pacienciaSecs: ini.pacienciaSecs ?? 5,
         deteccaoRaio: ini.deteccaoRaio ?? 3,
@@ -4054,7 +4118,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
         topdown_ia: ini.topdown_ia || null,
         tipoClasse, alcance_celulas: ini.alcance_celulas ?? alcancePadrao,
         classe_aventura: tipoClasse,
-        atributos: _atrsIni,
+        atributos: _atrsIni, atributos_base: ini.atributos_base || null,
         nivel: _nivelIni, skill_slots: 1 + Math.floor(_nivelIni / 3),
         respawnDelay: ini.respawnDelay ?? defaultRespawnDelay,
         respawnTipo: ini.respawnTipo ?? 'timer',
@@ -4076,7 +4140,9 @@ function _avtPopularEntidadesInimigos(dungeon) {
       };
       if (isBossRoom) {
         const bPreset = npcClasses.boss || AVT_NPC_PRESETS.boss;
-        const _atrsB = _avtNivelarNpc({ 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 }, _npcNivel, true);
+        const _baseB = { 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 };
+        const _seedB = _avtSeedFromStr((d._faseId || AVT_STATE._faseAtualId || 'principal') + '#boss');
+        const _atrsB = _npcNivel <= 1 ? { ..._baseB } : _avtNivelarNpc(_baseB, _npcNivel, true, _seedB);
         const _hpMaxB = _calcHpNpc(_atrsB);
         const ent = {
           id: 'ini_boss_fase', nome: bPreset.nome || 'Boss', tipo: 'inimigo',
@@ -4086,7 +4152,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
           pacienciaSecs: bPreset.pacienciaSecs, deteccaoRaio: bPreset.deteccaoRaio,
           isBoss: true, xpBase: bPreset.xpBase, presetTipo: 'boss',
           tipoClasse: 'guerreiro', alcance_celulas: (AVT_STATE.rpg?.theme_json?.level_config?.alcance_basico_guerreiro ?? 2), classe_aventura: 'guerreiro',
-          atributos: _atrsB,
+          atributos: _atrsB, atributos_base: _baseB,
           nivel: _npcNivel, skill_slots: 1 + Math.floor(_npcNivel / 3),
           respawnDelay: bPreset.respawnDelay ?? 300,
           respawnTipo: bPreset.respawnTipo ?? 'timer',
@@ -4101,7 +4167,9 @@ function _avtPopularEntidadesInimigos(dungeon) {
           const tipoClasse = Math.random() < 0.5 ? 'guerreiro' : 'mago';
           const _lcAlc2 = AVT_STATE.rpg?.theme_json?.level_config || {};
           const alcancePadrao = tipoClasse === 'mago' ? (_lcAlc2.alcance_basico_mago ?? 4) : (_lcAlc2.alcance_basico_guerreiro ?? 2);
-          const _atrsE = _avtNivelarNpc({ ..._attrsPorClasse[tipoClasse] }, _npcNivel, false);
+          const _baseE = { ..._attrsPorClasse[tipoClasse] };
+          const _seedE = _avtSeedFromStr((d._faseId || AVT_STATE._faseAtualId || 'principal') + '#' + uid);
+          const _atrsE = _npcNivel <= 1 ? { ..._baseE } : _avtNivelarNpc(_baseE, _npcNivel, false, _seedE);
           const _hpMaxE = _calcHpNpc(_atrsE);
           const ent = {
             id: 'ini_fase_' + uid, nome: `${preset.nome} ${uid+1}`, tipo: 'inimigo',
@@ -4112,7 +4180,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
             pacienciaSecs: preset.pacienciaSecs, deteccaoRaio: preset.deteccaoRaio,
             isBoss: false, xpBase: preset.xpBase, presetTipo: presetKey,
             tipoClasse, alcance_celulas: alcancePadrao, classe_aventura: tipoClasse,
-            atributos: _atrsE,
+            atributos: _atrsE, atributos_base: _baseE,
             nivel: _npcNivel, skill_slots: 1 + Math.floor(_npcNivel / 3),
             respawnDelay: preset.respawnDelay ?? 60,
             respawnTipo: preset.respawnTipo ?? 'timer',
@@ -4133,7 +4201,9 @@ function _avtPopularEntidadesInimigos(dungeon) {
         xpBase: e.xpBase, aparencia_tipo: e.presetTipo,
         topdown_ia: e.topdown_ia || null,
         tipoClasse: e.tipoClasse, alcance_celulas: e.alcance_celulas,
-        atributos: e.atributos, nivel: e.nivel,
+        // Persistir o conjunto BASE (não nivelado): o nível/stats são recalculados
+        // a partir do npc_level da fase ao recarregar, para o escalonamento re-aplicar.
+        atributos_base: e.atributos_base || e.atributos,
         respawnDelay: e.respawnDelay, respawnTipo: e.respawnTipo,
       }));
     _avtSalvarDungeon();
@@ -19231,12 +19301,7 @@ async function _avtMestreSalvarMapaUnificado() {
   // Persistir estado da fase atual no lugar certo (principal vs fase extra)
   const tj = AVT_STATE.rpg.theme_json;
   const faseId = AVT_STATE._faseAtualId || 'principal';
-  if (faseId === 'principal') {
-    tj.dungeon_data = AVT_STATE.dungeon;
-  } else {
-    const fa = (tj.fases_extras || []).find(f => f.id === faseId);
-    if (fa) fa.dungeon_data = AVT_STATE.dungeon;
-  }
+  _avtGravarDungeonNoSlot(tj);
   // Portas de fase editadas (merge das coords) — mantém objetos das fases já existentes
   if (_avtEd.fasesExtras && tj.fases_extras) {
     tj.fases_extras.forEach(f => {
@@ -20942,12 +21007,18 @@ function _avtSnapshotFaseAtual() {
 // (se a fase tiver a sua) e a cor (tint_hue) variam por fase.
 function _avtAplicarTilesetFase(faseObj) {
   AVT_STATE._faseHueShift = faseObj.tint_hue || 0;
-  const config = _avtTilesetConfigPrincipal();
+  // Config/imagem PRÓPRIAS da fase quando existirem; senão herda do principal.
+  const config = faseObj.tileset_config
+    || (faseObj.dungeon_data && faseObj.dungeon_data.tileset_config)
+    || _avtTilesetConfigPrincipal();
   const imgUrl = faseObj.tileset_img_url
     || AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_img_url
     || null;
   if (!config || !imgUrl) return; // sem tileset configurado: mantém o estado atual
-  if (AVT_STATE._tilesetImgUrl === imgUrl && AVT_STATE._tilesetLoaded) return; // já carregado
+  // Invalida cache por imagem E config (fases podem ter o mesmo URL mas layout distinto).
+  const _cacheKey = imgUrl + '|' + JSON.stringify(config);
+  if (AVT_STATE._tilesetCacheKey === _cacheKey && AVT_STATE._tilesetLoaded) return; // já carregado
+  AVT_STATE._tilesetCacheKey = _cacheKey;
   AVT_STATE._tilesetImgUrl   = imgUrl;
   AVT_STATE._tilesetConfig   = config;
   AVT_STATE._tilesetLoaded   = false;
