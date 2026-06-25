@@ -12,6 +12,130 @@ var AVT_MENU_STATE = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GRÁFICOS — preferência individual, localStorage
+// ─────────────────────────────────────────────────────────────────────────────
+
+var AVT_GRAFICOS = { ativo: false, nivel: 1 };
+
+const _AVT_GRAFICOS_KEY = 'rpghub_avt_graficos';
+
+function _avtGraficosCarregar() {
+  try {
+    const raw = localStorage.getItem(_AVT_GRAFICOS_KEY);
+    if (raw) Object.assign(AVT_GRAFICOS, JSON.parse(raw));
+  } catch(e) {}
+}
+
+function _avtGraficosSalvar() {
+  try { localStorage.setItem(_AVT_GRAFICOS_KEY, JSON.stringify(AVT_GRAFICOS)); } catch(e) {}
+}
+
+function _avtGarantirFiltros3D() {
+  if (document.getElementById('avt-svg-filtros3d')) return;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.id = 'avt-svg-filtros3d';
+  svg.setAttribute('style', 'display:none;position:absolute;width:0;height:0');
+  svg.innerHTML = `<defs>
+    <filter id="avt-filtro3d-1" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.065" numOctaves="4" seed="3" result="noise"/>
+      <feDiffuseLighting in="noise" surfaceScale="1.5" diffuseConstant="0.85" lighting-color="white" result="luz">
+        <feDistantLight azimuth="40" elevation="60"/>
+      </feDiffuseLighting>
+      <feBlend in="SourceGraphic" in2="luz" mode="overlay"/>
+    </filter>
+    <filter id="avt-filtro3d-2" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.065" numOctaves="4" seed="3" result="noise"/>
+      <feDiffuseLighting in="noise" surfaceScale="3.0" diffuseConstant="1.1" lighting-color="white" result="luz">
+        <feDistantLight azimuth="40" elevation="55"/>
+      </feDiffuseLighting>
+      <feBlend in="SourceGraphic" in2="luz" mode="overlay"/>
+    </filter>
+    <filter id="avt-filtro3d-3" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="5" seed="3" result="noise"/>
+      <feDiffuseLighting in="noise" surfaceScale="5.0" diffuseConstant="1.35" lighting-color="white" result="luz">
+        <feDistantLight azimuth="40" elevation="48"/>
+      </feDiffuseLighting>
+      <feBlend in="SourceGraphic" in2="luz" mode="overlay"/>
+    </filter>
+  </defs>`;
+  document.body.appendChild(svg);
+}
+
+function _avtGraficosAplicar() {
+  _avtGarantirFiltros3D();
+  const canvas = AVT_STATE?.canvas || document.getElementById('avt-canvas');
+  if (!canvas) return;
+  canvas.style.filter = AVT_GRAFICOS.ativo ? `url(#avt-filtro3d-${AVT_GRAFICOS.nivel})` : '';
+}
+
+function _avtGraficosAtualizarUI() {
+  const g = AVT_GRAFICOS;
+  const chk = document.getElementById('avt-cfg-tex3d-ativo');
+  if (chk) chk.checked = g.ativo;
+  [1,2,3].forEach(n => {
+    const btn = document.getElementById(`avt-cfg-tex3d-n${n}`);
+    if (!btn) return;
+    const sel = g.ativo && g.nivel === n;
+    btn.style.background = `rgba(200,168,75,${sel ? '0.15' : '0.04'})`;
+    btn.style.borderColor = `rgba(200,168,75,${sel ? '0.55' : '0.18'})`;
+    btn.style.color = sel ? '#f0cc6a' : '#7a92aa';
+    btn.style.opacity = g.ativo ? '1' : '0.45';
+  });
+}
+
+function _avtGraficosToggle(ativo) {
+  AVT_GRAFICOS.ativo = ativo;
+  _avtGraficosSalvar();
+  _avtGraficosAplicar();
+  _avtGraficosAtualizarUI();
+}
+
+function _avtGraficosNivel(n) {
+  AVT_GRAFICOS.nivel = n;
+  _avtGraficosSalvar();
+  _avtGraficosAplicar();
+  _avtGraficosAtualizarUI();
+}
+
+function _avtMenuHtmlGraficos() {
+  const g = AVT_GRAFICOS;
+  const niveisLabel = ['', 'Sutil', 'Moderado', 'Intenso'];
+  return `
+    <div style="margin-bottom:20px">
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">🎨 Filtro de Textura 3D</div>
+
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:12px">
+        <input type="checkbox" id="avt-cfg-tex3d-ativo"
+               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
+               ${g.ativo ? 'checked' : ''}
+               onchange="_avtGraficosToggle(this.checked)">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto,#c8d8e8)">Textura 3D</div>
+          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">Adiciona relevo e profundidade visual ao mapa da aventura</div>
+        </div>
+      </label>
+
+      <div style="display:flex;gap:6px">
+        ${[1,2,3].map(n => `
+          <button onclick="_avtGraficosNivel(${n})" id="avt-cfg-tex3d-n${n}"
+            style="flex:1;padding:8px;border-radius:7px;cursor:pointer;font-size:0.68rem;font-family:var(--fonte-d);
+                   background:rgba(200,168,75,${g.ativo && g.nivel===n ? '0.15' : '0.04'});
+                   border:1px solid rgba(200,168,75,${g.ativo && g.nivel===n ? '0.55' : '0.18'});
+                   color:${g.ativo && g.nivel===n ? '#f0cc6a' : '#7a92aa'};
+                   opacity:${g.ativo ? '1' : '0.45'}">
+            ${niveisLabel[n]}
+          </button>
+        `).join('')}
+      </div>
+      <div style="font-size:0.6rem;color:#5a6b7a;margin-top:6px">Preferência salva localmente neste dispositivo.</div>
+    </div>
+  `;
+}
+
+window._avtGraficosToggle = _avtGraficosToggle;
+window._avtGraficosNivel  = _avtGraficosNivel;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ENTRADA PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -686,6 +810,7 @@ function _avtMenuAbrirConfigMestre(aba) {
     { id: 'jogadores',     label: '👥 Jogadores' },
     { id: 'personagens',   label: '👤 Personagens' },
     { id: 'jogador',       label: '🎮 Player' },
+    { id: 'graficos',      label: '🎨 Gráficos' },
   ];
 
   const tabBar = `
@@ -754,6 +879,10 @@ function _avtMenuConfigConteudoAba(aba) {
 
   if (aba === 'jogador') {
     return _avtMenuHtmlConfigJogador();
+  }
+
+  if (aba === 'graficos') {
+    return _avtMenuHtmlGraficos();
   }
 
   // Abas do painel do mestre: reutiliza _avtMpConteudoAba()
@@ -853,6 +982,10 @@ function _avtMenuHtmlConfigJogador() {
         </div>
       </div>
     </div>
+
+    <div style="border-top:1px solid rgba(79,163,209,0.1);margin-bottom:16px"></div>
+
+    ${_avtMenuHtmlGraficos()}
 
     <button onclick="_avtMenuSalvarConfigJogador()" style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.35);border-radius:7px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.7rem;padding:8px 20px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase;width:100%">Salvar Configurações</button>
   `;
