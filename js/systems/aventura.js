@@ -3588,6 +3588,7 @@ function _avtMostrarAventuraScreen() {
 window._avtMostrarAventuraScreen = _avtMostrarAventuraScreen;
 
 async function entrarAventura(rpgId) {
+  if (typeof _avtGraficosCarregar === 'function') _avtGraficosCarregar();
   _avtCleanupListeners();
   // Vincula retroativamente cópias antigas do mesmo personagem (uma vez por sessão).
   _avtBackfillLinhagem();
@@ -4342,6 +4343,7 @@ function _avtCanvasInit() {
   if (_savedDpad) wrap.appendChild(_savedDpad);
 
   AVT_STATE.canvas = canvas;
+  if (typeof _avtGraficosAplicar === 'function') _avtGraficosAplicar();
 
   // ResizeObserver for reliable dimensions
   AVT_STATE._resizeObs = new ResizeObserver(() => _avtCanvasResize());
