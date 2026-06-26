@@ -37,25 +37,16 @@ function _avtGarantirFiltros3D() {
   svg.setAttribute('style', 'display:none;position:absolute;width:0;height:0');
   svg.innerHTML = `<defs>
     <filter id="avt-filtro3d-1" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.065" numOctaves="4" seed="3" result="noise"/>
-      <feDiffuseLighting in="noise" surfaceScale="1.5" diffuseConstant="0.85" lighting-color="white" result="luz">
-        <feDistantLight azimuth="40" elevation="60"/>
-      </feDiffuseLighting>
-      <feBlend in="SourceGraphic" in2="luz" mode="overlay"/>
+      <feConvolveMatrix order="3" preserveAlpha="true"
+        kernelMatrix="-0.5 -0.3 0  -0.3 1 0.3  0 0.3 0.5"/>
     </filter>
     <filter id="avt-filtro3d-2" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.065" numOctaves="4" seed="3" result="noise"/>
-      <feDiffuseLighting in="noise" surfaceScale="3.0" diffuseConstant="1.1" lighting-color="white" result="luz">
-        <feDistantLight azimuth="40" elevation="55"/>
-      </feDiffuseLighting>
-      <feBlend in="SourceGraphic" in2="luz" mode="overlay"/>
+      <feConvolveMatrix order="3" preserveAlpha="true"
+        kernelMatrix="-1 -0.6 0  -0.6 1 0.6  0 0.6 1"/>
     </filter>
     <filter id="avt-filtro3d-3" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="5" seed="3" result="noise"/>
-      <feDiffuseLighting in="noise" surfaceScale="5.0" diffuseConstant="1.35" lighting-color="white" result="luz">
-        <feDistantLight azimuth="40" elevation="48"/>
-      </feDiffuseLighting>
-      <feBlend in="SourceGraphic" in2="luz" mode="overlay"/>
+      <feConvolveMatrix order="3" preserveAlpha="true"
+        kernelMatrix="-2 -1 0  -1 1 1  0 1 2"/>
     </filter>
   </defs>`;
   document.body.appendChild(svg);
