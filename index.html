@@ -513,6 +513,12 @@
           <button class="avt-isodpad-diag" ontouchstart="event.preventDefault();avtDpad(1,0)" ontouchend="avtDpadStop()" onmousedown="avtDpad(1,0)" onmouseup="avtDpadStop()" title="Baixo">↘</button>
         </div>
       </div>
+      <!-- Controle analógico (joystick virtual) -->
+      <div id="avt-analogico-stick" style="display:none;position:absolute;bottom:20px;left:20px;z-index:30;touch-action:none">
+        <div class="avt-joystick-outer">
+          <div class="avt-joystick-inner" id="avt-joystick-knob"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Master panel (collapsible, absolute over map) -->
