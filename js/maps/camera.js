@@ -67,9 +67,13 @@ function animarAtaque3Camadas(atacanteNome, alvoNome, dano, tipoDano, ehCritico,
     const rect=alvoEl.getBoundingClientRect(), mapaImg=document.getElementById('mapa-img'), mapaRect=mapaImg?.getBoundingClientRect();
     if (!mapaRect) return;
     const num=document.createElement('div');
+    // Polimento: arredonda o valor exibido para não mostrar floats feios (ex.: 21.5999…).
+    // Ligado por padrão; respeita o toggle AVT_GRAFICOS.polimento quando definido.
+    const _polir = (typeof AVT_GRAFICOS === 'undefined' || AVT_GRAFICOS?.polimento !== false);
+    const _danoExib = (dano===0||dano===null) ? dano : (_polir ? Math.round(dano) : dano);
     num.className='numero-flutuante'+(ehCura?' cura':ehCritico?' critico':dano===0||dano===null?' errou':' dano');
     num.style.cssText='left:'+(rect.left-mapaRect.left+rect.width/2)+'px;top:'+(rect.top-mapaRect.top-10)+'px';
-    num.textContent = ehCura ? '+'+dano : (dano===0||dano===null ? 'ERROU' : '-'+dano);
+    num.textContent = ehCura ? '+'+_danoExib : (dano===0||dano===null ? 'ERROU' : '-'+_danoExib);
     mapaImg.style.position='relative'; mapaImg.appendChild(num); setTimeout(()=>num.remove(),1000);
   }, 300);
 }
