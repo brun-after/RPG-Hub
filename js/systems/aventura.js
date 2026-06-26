@@ -776,6 +776,17 @@ Silhueta clara e legível mesmo quando reduzida (o token será exibido pequeno n
 SEM fundo, SEM sombra projetada (será adicionada pelo engine).
 Use cores adequadas para um personagem de RPG.`;
 
+// Prompt para gerar o SPRITE ISOMÉTRICO (figura em pé, vista 3/4) usado na visão iso.
+const AVT_ISO_GEN_PROMPT = (desc) => `Crie um sprite isométrico de RPG (vista 3/4, ~45°, como Diablo) para: ${desc || 'um personagem RPG'}.
+Estilo: pixel art ou pintado à mão, fundo TRANSPARENTE (PNG, canal alpha).
+Enquadramento: corpo INTEIRO de pé, de frente para a câmera em leve perspectiva 3/4.
+MUITO IMPORTANTE — para o engine animar e plantar no tile:
+• Os PÉS devem ficar na BASE-CENTRO da imagem (rente à borda inferior, horizontalmente centralizados).
+• Figura vertical "em pé"; a imagem deve ser mais alta do que larga (ex.: proporção ~3:4 ou 2:3).
+• Personagem centralizado horizontalmente, ocupando boa parte da altura do quadro.
+SEM fundo, SEM sombra projetada e SEM moldura (a sombra é adicionada pelo engine).
+Silhueta legível mesmo reduzido. Cores adequadas a um personagem de RPG.`;
+
 const AVT_TOPDOWN_COORD_PROMPT = `Analise esta imagem de token RPG vista de cima (top-down, bird's-eye view, fundo transparente) e retorne APENAS JSON (sem markdown, sem blocos de código — apenas o objeto JSON começando com {) com as coordenadas normalizadas (0.0–1.0) das regiões visuais para animação.
 
 {
@@ -5674,12 +5685,20 @@ function _avtRenderFrame() {
     const r = isBoss ? Math.floor(rBase * 1.4) : rBase;
     const cx = px + SZ/2, cy = py + SZ/2;
 
+    // Ponto de "chão"/pés da entidade. No iso, os pés ficam no CENTRO do tile (que mapeia
+    // para o centro do losango sob a transformação CSS); assim o personagem "pousa" no tile
+    // em vez de preencher a célula — cujo fundo, ao ser inclinado, cairia num canto do
+    // losango ("pés num canto"). No top-down, mantém o comportamento anterior (sob o token).
+    const _iso = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo);
+    const _footX = cx;
+    const _footY = _iso ? cy : (cy + r + 2);
+
     // Atualizar estado de animação (detectar movimento)
     _avtAnimAtualizar(e);
 
-    // Sombra (mantida no plano do chão — desenhada antes do billboard)
+    // Sombra (no ponto dos pés; mantida no plano do chão — desenhada antes do billboard)
     ctx.beginPath();
-    ctx.ellipse(cx, cy+r+2, r-2, 4, 0, 0, Math.PI*2);
+    ctx.ellipse(_footX, _footY, r-2, 4, 0, 0, Math.PI*2);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fill();
 
@@ -5688,7 +5707,7 @@ function _avtRenderFrame() {
     // Ancorado nos pés (sobre a sombra), então o personagem fica plantado no tile.
     const _bbOn = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
       && AVT_GRAFICOS?.bilbordes && typeof _avtIsoBillboardAplicar === 'function');
-    if (_bbOn) { ctx.save(); _avtIsoBillboardAplicar(ctx, cx, cy + r + 2); }
+    if (_bbOn) { ctx.save(); _avtIsoBillboardAplicar(ctx, _footX, _footY); }
 
     // Silence aura: gradiente escuro atrás do token
     if (e._silenciado || e.status_effects?.some(ef => ef.tipo === 'silence' && ((ef._turnos_restantes ?? 0) > 0 || ef._ooc))) {
@@ -5736,9 +5755,13 @@ function _avtRenderFrame() {
       }
     }
 
-    // Sprite isométrico personalizado (quando modo iso ativo e token configurado)
+    // Sprite isométrico personalizado (quando modo iso ativo e token configurado).
+    // Animado (iso_anim) tem precedência sobre o estático (iso_token_url).
+    const _isoAnim = (AVT_GRAFICOS?.isoAtivo && e.custom_attrs?.iso_anim) || null;
     const _isoUrl = AVT_GRAFICOS?.isoAtivo && e.custom_attrs?.iso_token_url || null;
-    if (_isoUrl) {
+    if (_isoAnim?.img_url) {
+      _avtDesenharIsoIa(ctx, e, _footX, _footY, SZ, _isoAnim);
+    } else if (_isoUrl) {
       AVT_STATE._isoTokenCache = AVT_STATE._isoTokenCache || {};
       let _isoImg = AVT_STATE._isoTokenCache[_isoUrl];
       if (!_isoImg) {
@@ -5746,8 +5769,9 @@ function _avtRenderFrame() {
         AVT_STATE._isoTokenCache[_isoUrl] = _isoImg;
       }
       if (_isoImg.complete && _isoImg.naturalWidth > 0) {
-        const imgSz = SZ * 0.92;
-        ctx.drawImage(_isoImg, cx - imgSz / 2, py + (SZ - imgSz) / 2, imgSz, imgSz);
+        const imgSz = SZ * 0.95;
+        // Ancorado pelos pés (base-centro = ponto de chão), figura "em pé" sobre o tile.
+        ctx.drawImage(_isoImg, _footX - imgSz / 2, _footY - imgSz, imgSz, imgSz);
       } else {
         ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.fillStyle = e.cor || '#4fa3d1'; ctx.fill();
@@ -5769,9 +5793,10 @@ function _avtRenderFrame() {
         const imgH = SZ * 0.95;
         const ratio = creatureImg.naturalWidth / creatureImg.naturalHeight;
         const imgW = imgH * (isFinite(ratio) && ratio > 0 ? ratio : 1);
-        // 'head' é quase quadrada → centraliza; 'iso' é alta → ancora embaixo p/ ficar "em pé".
-        const _imgY = _isoView ? (py + SZ - imgH) : (py + (SZ - imgH) / 2);
-        ctx.drawImage(creatureImg, cx - imgW/2, _imgY, imgW, imgH);
+        // 'head' é quase quadrada → centraliza; 'iso' é alta → ancora pelos pés (base-centro
+        // no ponto de chão = centro do tile) p/ ficar "em pé" pousado no tile.
+        const _imgY = _isoView ? (_footY - imgH) : (py + (SZ - imgH) / 2);
+        ctx.drawImage(creatureImg, _footX - imgW/2, _imgY, imgW, imgH);
         // Contorno colorido sutil
         ctx.beginPath();
         ctx.arc(cx, cy + SZ*0.05, r * 0.5, 0, Math.PI*2);
@@ -5784,8 +5809,10 @@ function _avtRenderFrame() {
         const _isoViewC = !!(AVT_GRAFICOS?.isoAtivo);
         const _classeImg = _classeAvt ? _avtGetClasseImg(_classeAvt, _avtClasseVariant(e.nome), _isoViewC ? 'iso' : 'head') : null;
         if (_classeImg && _classeImg.complete && _classeImg.naturalWidth > 0) {
-          const imgSz = SZ * 0.92;
-          ctx.drawImage(_classeImg, cx - imgSz / 2, py + (SZ - imgSz) / 2, imgSz, imgSz);
+          const imgSz = SZ * (_isoViewC ? 0.95 : 0.92);
+          // iso → ancora pelos pés (em pé no tile); top-down → centralizado na célula.
+          const _classeY = _isoViewC ? (_footY - imgSz) : (py + (SZ - imgSz) / 2);
+          ctx.drawImage(_classeImg, _footX - imgSz / 2, _classeY, imgSz, imgSz);
         } else {
           // Fallback: círculo com ícone/letra
           ctx.beginPath();
@@ -6468,9 +6495,20 @@ function _avtDesenharTopdownIa(ctx, ent, cx, cy, SZ, ap) {
   const baseAng = baseAngles[baseFacing] ?? 0;
   let angle = baseAng;
   if (a?.dir && (a.dir.dx !== 0 || a.dir.dy !== 0)) {
+    let ddx = a.dir.dx, ddy = a.dir.dy;
+    // No iso com billboards, o token é contra-transformado (sem cisalhamento), então o
+    // espaço de desenho equivale ao da TELA. Projetamos a direção de grade pela matriz iso
+    // (mesma de projeção) para o token apontar corretamente em TODAS as direções — antes,
+    // rotacionar a direção de grade e depois cisalhar deixava tudo torto, exceto à esquerda.
+    if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo && AVT_GRAFICOS?.bilbordes) {
+      const _ang = (typeof _ISO_ANGLE_X !== 'undefined') ? _ISO_ANGLE_X : 52;
+      const cosX = Math.cos(_ang * Math.PI / 180);
+      const sdx = ddx - ddy, sdy = cosX * (ddx + ddy);
+      ddx = sdx; ddy = sdy;
+    }
     // atan2(dy,dx): leste=0, sul=PI/2, oeste=PI, norte=-PI/2
     // Subtraímos PI/2 para que vetor "sul" (dy=1) fique com ângulo 0 (que somado a baseAng=down=0 mantém arte virada pra baixo)
-    angle = Math.atan2(a.dir.dy, a.dir.dx) - Math.PI/2 + baseAng;
+    angle = Math.atan2(ddy, ddx) - Math.PI/2 + baseAng;
   }
 
   ctx.save();
@@ -6491,6 +6529,65 @@ function _avtDesenharTopdownIa(ctx, ent, cx, cy, SZ, ap) {
     ctx.translate(0, -Math.sin(t * Math.PI) * 8); // "lança" pra frente (já rotacionado)
   }
   ctx.drawImage(ap.img, offX, offY, drawW, drawH);
+  ctx.restore();
+}
+
+// ── Motor de animação procedural para o sprite ISOMÉTRICO (iso_anim) ──────────
+// Em vez de mover a imagem como um bloco (cara de "recorte"), fatia a imagem em N tiras
+// horizontais e aplica deslocamento/escala por tira, ponderados pela ALTURA (0 = pés,
+// 1 = topo). Os pés ficam ancorados (peso 0) e o movimento cresce para cima, com gradiente
+// de fase (follow-through) → flexão contínua e orgânica. Ancorado bottom-center em
+// (footX, footY); desenhado dentro do wrap de billboard (fica em pé na tela).
+// Cache de imagem compartilhado com o token estático (AVT_STATE._isoTokenCache).
+function _avtDesenharIsoIa(ctx, ent, footX, footY, SZ, data) {
+  const url = data?.img_url;
+  if (!url) return;
+  AVT_STATE._isoTokenCache = AVT_STATE._isoTokenCache || {};
+  let img = AVT_STATE._isoTokenCache[url];
+  if (!img) { img = new Image(); img.crossOrigin = 'anonymous'; img.src = url; AVT_STATE._isoTokenCache[url] = img; }
+  if (!(img.complete && img.naturalWidth > 0)) {
+    ctx.beginPath(); ctx.arc(footX, footY - SZ * 0.3, SZ * 0.3, 0, Math.PI * 2);
+    ctx.fillStyle = ent.cor || '#4fa3d1'; ctx.fill();
+    return;
+  }
+  const a   = AVT_STATE.entAnim[ent.id] || { state: 'idle', stateStart: performance.now(), facing: 1 };
+  const now = performance.now();
+  const st  = a.state || 'idle';
+  const tState = now - (a.stateStart || now);
+
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const H = SZ * 1.12;                 // altura desenhada (pousa no tile, um pouco maior)
+  const W = H * (iw / ih);
+
+  // Parâmetros por estado
+  let swayAmp, swayHz, bobAmp, bobHz, breatheAmp;
+  if (st === 'walk')        { swayAmp = W * 0.10; swayHz = 1 / 130; bobAmp = SZ * 0.06; bobHz = 1 / 130; breatheAmp = 0.0; }
+  else if (st === 'attack') { swayAmp = W * 0.05; swayHz = 1 / 120; bobAmp = SZ * 0.02; bobHz = 1 / 120; breatheAmp = 0.0; }
+  else                      { swayAmp = W * 0.035; swayHz = 1 / 760; bobAmp = SZ * 0.012; bobHz = 1 / 900; breatheAmp = 0.025; }
+
+  // Avanço de ataque (empurra mais o topo para a frente)
+  let atkPush = 0, atkStretch = 1;
+  if (st === 'attack') { const tt = Math.min(1, tState / 400); const e = Math.sin(tt * Math.PI); atkPush = e * W * 0.20; atkStretch = 1 + e * 0.06; }
+
+  const bob = (st === 'walk')
+    ? -Math.abs(Math.sin(now * bobHz * Math.PI * 2)) * bobAmp   // quique p/ cima no andar
+    : Math.sin(now * bobHz * Math.PI * 2) * bobAmp;             // respiração/flutuação leve
+  const breatheSy = 1 + breatheAmp * Math.sin(now / 900);
+
+  const N = 18;
+  ctx.save();
+  ctx.translate(footX, footY);
+  if ((a.facing || 1) < 0) ctx.scale(-1, 1);   // espelha p/ a esquerda
+  for (let i = 0; i < N; i++) {
+    const sy = ih * i / N, sh = ih / N;
+    const h  = 1 - (i + 0.5) / N;               // 0 = pés, 1 = topo
+    let dx = swayAmp * h * Math.sin(now * swayHz * Math.PI * 2 + h * 2.2); // mesh warp
+    dx += atkPush * h;
+    const dyTop = (-H + H * (i / N)) * breatheSy + bob;
+    const dh    = (H / N) * breatheSy + 0.6;     // +0.6 evita emendas entre tiras
+    const dw    = W * (1 + (atkStretch - 1) * h);
+    ctx.drawImage(img, 0, sy, iw, sh, -dw / 2 + dx, dyTop, dw, dh);
+  }
   ctx.restore();
 }
 
@@ -22267,7 +22364,7 @@ function _avtCe2PodeEditarImg(ent) {
 }
 
 function _avtCe2TrocarImagemTipo(entId, alvo) {
-  alvo = (alvo === 'token') ? 'token' : 'ficha';
+  alvo = (alvo === 'token' || alvo === 'iso') ? alvo : 'ficha'; // preserva 'iso' (antes virava 'ficha')
   const ent = AVT_STATE.entidades.find(e => e.id === entId);
   if (!_avtCe2PodeEditarImg(ent)) { mostrarToast('Sem permissão para alterar', 'erro'); return; }
   let wrap = document.getElementById('avt-ce2-portrait-wrap');
@@ -22283,7 +22380,7 @@ function _avtCe2TrocarImagemTipo(entId, alvo) {
     wrap.querySelector('.avt-ce2-img-popover').remove(); return;
   }
   const idSafe = entId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  const titulo = alvo === 'iso' ? 'Sprite isométrico (URL)' : alvo === 'token' ? 'Trocar token (mapa)' : 'Trocar foto de perfil';
+  const titulo = alvo === 'iso' ? 'Sprite isométrico' : alvo === 'token' ? 'Trocar token (mapa)' : 'Trocar foto de perfil';
   const pop = document.createElement('div');
   pop.className = 'avt-ce2-img-popover';
   pop.innerHTML = `
@@ -22292,6 +22389,9 @@ function _avtCe2TrocarImagemTipo(entId, alvo) {
     <div class="avt-ce2-img-popover-row">
       <button onclick="event.stopPropagation();_avtCe2SalvarImgUrlTipo('${idSafe}','${alvo}')"
         class="avt-ce2-sm-btn add" style="flex:1">✓ Aplicar</button>
+      <label class="avt-ce2-sm-btn" style="cursor:pointer" title="Enviar arquivo de imagem">📁
+        <input type="file" accept="image/*" style="display:none"
+          onchange="event.stopPropagation();_avtCe2UploadImg(this,'${idSafe}','${alvo}')"></label>
       <button onclick="event.stopPropagation();this.closest('.avt-ce2-img-popover').remove()"
         class="avt-ce2-sm-btn">✕</button>
     </div>
@@ -22307,7 +22407,7 @@ function _avtCe2TrocarImagemTipo(entId, alvo) {
 function _avtCe2TrocarImagem(entId) { return _avtCe2TrocarImagemTipo(entId, 'ficha'); }
 
 async function _avtCe2SalvarImgUrlTipo(entId, alvo) {
-  alvo = (alvo === 'token') ? 'token' : 'ficha';
+  alvo = (alvo === 'token' || alvo === 'iso') ? alvo : 'ficha'; // preserva 'iso' (antes virava 'ficha')
   const inp = document.getElementById('avt-ce2-img-url-inp');
   if (!inp) return;
   const url = inp.value.trim();
@@ -22341,6 +22441,25 @@ async function _avtCe2SalvarImgUrlTipo(entId, alvo) {
 }
 
 async function _avtCe2SalvarImgUrl(entId) { return _avtCe2SalvarImgUrlTipo(entId, 'ficha'); }
+
+// Upload de arquivo no popover de imagem (token/iso/ficha): envia ao storage, preenche o
+// campo de URL e aplica. Reusa uploadToStorage (js/core/supabase.js).
+async function _avtCe2UploadImg(input, entId, alvo) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (typeof uploadToStorage !== 'function') { mostrarToast('Upload indisponível', 'erro'); return; }
+  try {
+    mostrarToast('Enviando imagem…', 'info');
+    const url = await uploadToStorage(file, 'characters');
+    const inp = document.getElementById('avt-ce2-img-url-inp');
+    if (inp) inp.value = url;
+    await _avtCe2SalvarImgUrlTipo(entId, alvo);
+  } catch (e) {
+    mostrarToast('Erro no upload: ' + (e?.message || e), 'erro');
+    console.error(e);
+  }
+}
+window._avtCe2UploadImg = _avtCe2UploadImg;
 
 function _avtCharEditorRenderRight(ent, dbChar, attrs) {
   const right = document.getElementById('avt-ce-right');
@@ -25323,6 +25442,9 @@ function _avtCharImportarAparencia(entId) {
           <button id="avt-apar-tab-topdown" onclick="_avtAparTabSwitch('topdown')"
             style="flex:1;padding:6px 4px;background:rgba(200,168,75,0.07);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#c8a84b;cursor:pointer;font-size:0.72rem;font-family:var(--fonte-d)">
             🎯 Top-Down IA</button>
+          <button id="avt-apar-tab-iso" onclick="_avtAparTabSwitch('iso')"
+            style="flex:1;padding:6px 4px;background:rgba(126,200,240,0.07);border:1px solid rgba(126,200,240,0.25);border-radius:6px;color:#7ec8f0;cursor:pointer;font-size:0.72rem;font-family:var(--fonte-d)">
+            🏔 Isométrico IA</button>
         </div>
 
         <!-- Tab: Animado (partes) -->
@@ -25403,6 +25525,37 @@ function _avtCharImportarAparencia(entId) {
             💾 Salvar token top-down + imagem da ficha</button>
         </div>
 
+        <!-- Tab: Isométrico IA -->
+        <div id="avt-apar-tab-iso-body" style="display:none">
+          <p style="font-size:0.72rem;color:#7a92aa;margin:0 0 10px">Gere uma imagem isométrica (figura em pé, 3/4) com IA externa. O engine a anima (idle/andar) e a "planta" no tile.</p>
+
+          <div style="margin-bottom:10px">
+            <div style="font-size:0.68rem;color:#7ec8f0;margin-bottom:4px">① Descrição do personagem</div>
+            <input id="avt-iso-desc" placeholder="Ex: guerreiro élfico com espada longa e armadura prateada"
+              style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(126,200,240,0.3);border-radius:6px;color:#c8d8e8;font-size:0.72rem">
+          </div>
+
+          <div style="margin-bottom:10px">
+            <div style="font-size:0.68rem;color:#7ec8f0;margin-bottom:4px">② Prompt para a IA gerar a imagem</div>
+            <textarea id="avt-iso-gen-prompt" readonly rows="5"
+              style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(126,200,240,0.2);border-radius:6px;color:#7a92aa;font-size:0.64rem;resize:none;font-family:monospace">${AVT_ISO_GEN_PROMPT(ent.nome)}</textarea>
+            <button class="avt-mp-btn" style="margin-top:4px"
+              onclick="(()=>{const d=document.getElementById('avt-iso-desc').value||'${ent.nome}';const p=AVT_ISO_GEN_PROMPT(d);document.getElementById('avt-iso-gen-prompt').value=p;navigator.clipboard?.writeText(p);mostrarToast('Prompt copiado!','ok')})()">⎘ Atualizar e copiar</button>
+          </div>
+
+          <div style="margin-bottom:10px">
+            <div style="font-size:0.68rem;color:#7ec8f0;margin-bottom:4px">③ Upload da imagem gerada (PNG transparente)</div>
+            <input type="file" id="avt-iso-img" accept="image/png,image/webp,image/gif"
+              onchange="_avtIsoPreviewImagem(this)"
+              style="font-size:0.7rem;color:#c8d8e8;width:100%">
+            <div id="avt-iso-img-preview" style="margin-top:6px"></div>
+          </div>
+
+          <button onclick="_avtIsoIaSalvar('${entId}')"
+            style="width:100%;padding:8px;background:rgba(126,200,240,0.15);border:1px solid rgba(126,200,240,0.4);border-radius:8px;color:#7ec8f0;cursor:pointer;font-family:var(--fonte-d);font-size:0.78rem">
+            💾 Salvar sprite isométrico animado</button>
+        </div>
+
       </div>
       <div class="avt-modal-footer" id="avt-apar-footer-anim">
         <button class="avt-mp-btn" onclick="_avtAnimPreview()">👁 Validar JSON</button>
@@ -25412,12 +25565,25 @@ function _avtCharImportarAparencia(entId) {
 }
 
 function _avtAparTabSwitch(tab) {
-  const isAnim = tab === 'anim';
-  document.getElementById('avt-apar-tab-anim-body').style.display    = isAnim ? '' : 'none';
-  document.getElementById('avt-apar-tab-topdown-body').style.display = isAnim ? 'none' : '';
-  document.getElementById('avt-apar-footer-anim').style.display      = isAnim ? '' : 'none';
-  document.getElementById('avt-apar-tab-anim').style.background    = isAnim ? 'rgba(79,163,209,0.25)' : 'rgba(79,163,209,0.07)';
-  document.getElementById('avt-apar-tab-topdown').style.background  = isAnim ? 'rgba(200,168,75,0.07)' : 'rgba(200,168,75,0.2)';
+  const isAnim = tab === 'anim', isTd = tab === 'topdown', isIso = tab === 'iso';
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  show('avt-apar-tab-anim-body',    isAnim);
+  show('avt-apar-tab-topdown-body', isTd);
+  show('avt-apar-tab-iso-body',     isIso);
+  show('avt-apar-footer-anim',      isAnim); // rodapé (validar/salvar JSON) só p/ a aba Animado
+  const bg = (id, on, col) => { const el = document.getElementById(id); if (el) el.style.background = on ? col : col.replace(/0\.\d+\)$/, '0.07)'); };
+  bg('avt-apar-tab-anim',    isAnim, 'rgba(79,163,209,0.25)');
+  bg('avt-apar-tab-topdown', isTd,   'rgba(200,168,75,0.25)');
+  bg('avt-apar-tab-iso',     isIso,  'rgba(126,200,240,0.25)');
+}
+
+function _avtIsoPreviewImagem(input) {
+  const f = input.files?.[0];
+  const prev = document.getElementById('avt-iso-img-preview');
+  if (f && prev) {
+    const url = URL.createObjectURL(f);
+    prev.innerHTML = `<img src="${url}" style="max-width:90px;max-height:120px;object-fit:contain;border-radius:6px;border:1px solid rgba(126,200,240,0.3)">`;
+  }
 }
 
 function _avtTdPreviewImagem(input) {
@@ -25581,6 +25747,44 @@ async function _avtTopdownIaSalvar(entId) {
 window._avtTopdownIaSalvar = _avtTopdownIaSalvar;
 window._avtAparTabSwitch   = _avtAparTabSwitch;
 window._avtTdPreviewImagem = _avtTdPreviewImagem;
+window._avtIsoPreviewImagem = _avtIsoPreviewImagem;
+
+// Salva o sprite isométrico animado: faz upload, grava custom_attrs.iso_anim (consumido
+// pelo motor de faixas) e iso_token_url (fallback estático), persiste e recarrega no mapa.
+async function _avtIsoIaSalvar(entId) {
+  const imgInput = document.getElementById('avt-iso-img');
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent?.dbId || c.nome === ent?.nome);
+  if (!dbChar) { mostrarToast('Personagem não encontrado', 'aviso'); return; }
+  const file = imgInput?.files?.[0] || null;
+  const prev = dbChar.custom_attrs?.iso_anim || {};
+  if (!file && !prev.img_url) { mostrarToast('Selecione a imagem isométrica (passo ③)', 'aviso'); return; }
+  if (typeof uploadToStorage !== 'function') { mostrarToast('Upload indisponível', 'erro'); return; }
+  mostrarToast('Salvando…', '');
+  try {
+    const url = file ? await uploadToStorage(file, 'characters') : prev.img_url;
+    const isoAnim = { img_url: url, coords: prev.coords || null };
+    const newAttrs = { ...(dbChar.custom_attrs || {}), iso_anim: isoAnim, iso_token_url: url };
+    await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: newAttrs })
+    });
+    dbChar.custom_attrs = newAttrs;
+    if (ent) {
+      ent.custom_attrs = ent.custom_attrs || {};
+      ent.custom_attrs.iso_anim = isoAnim;
+      ent.custom_attrs.iso_token_url = url;
+      if (AVT_STATE._isoTokenCache) delete AVT_STATE._isoTokenCache[url];
+    }
+    _avtCharEditorRender();
+    mostrarToast('Sprite isométrico salvo!', 'ok');
+    const ov = document.getElementById('avt-anim-import-overlay');
+    if (ov) ov.style.display = 'none';
+  } catch (e) {
+    console.error('_avtIsoIaSalvar:', e);
+    mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
+  }
+}
+window._avtIsoIaSalvar = _avtIsoIaSalvar;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLASSES DE NPCs — edição, criação e configuração por preset
