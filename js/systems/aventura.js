@@ -4358,11 +4358,18 @@ function _avtCanvasInit() {
   // ─── PAN do mapa (cursor mãozinha em tiles fora de salas) ───
   AVT_STATE._pan = null;
   const _tileFromEvent = (ev) => {
-    const r = canvas.getBoundingClientRect();
     const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+    let lx, ly;
+    if (typeof _avtIsoScreenToCanvas === 'function' && AVT_GRAFICOS?.isoAtivo) {
+      const c = _avtIsoScreenToCanvas(ev.clientX, ev.clientY);
+      lx = c.x; ly = c.y;
+    } else {
+      const r = canvas.getBoundingClientRect();
+      lx = ev.clientX - r.left; ly = ev.clientY - r.top;
+    }
     return {
-      x: Math.floor((ev.clientX - r.left + AVT_STATE.camera.x) / SZ),
-      y: Math.floor((ev.clientY - r.top  + AVT_STATE.camera.y) / SZ),
+      x: Math.floor((lx + AVT_STATE.camera.x) / SZ),
+      y: Math.floor((ly + AVT_STATE.camera.y) / SZ),
     };
   };
   const _tilePanavel = (tx, ty) => {
@@ -4394,15 +4401,20 @@ function _avtCanvasInit() {
   canvas.addEventListener('pointermove', (ev) => {
     const pan = AVT_STATE._pan;
     if (pan && pan.pointerId === ev.pointerId) {
-      const dx = ev.clientX - pan.startX;
-      const dy = ev.clientY - pan.startY;
-      const dist = Math.abs(dx) + Math.abs(dy);
+      const dxRaw = ev.clientX - pan.startX;
+      const dyRaw = ev.clientY - pan.startY;
+      const dist = Math.abs(dxRaw) + Math.abs(dyRaw);
       if (dist > 4) pan.moved = true;
       if (!pan.thresholdMet) {
         if (dist < _avtPanDeadzone()) return;
         pan.thresholdMet = true;
         AVT_STATE._userPanned = true;
         canvas.style.cursor = 'grabbing';
+      }
+      let dx = dxRaw, dy = dyRaw;
+      if (typeof _avtIsoDeltaToCanvas === 'function' && AVT_GRAFICOS?.isoAtivo) {
+        const d = _avtIsoDeltaToCanvas(dxRaw, dyRaw);
+        dx = d.x; dy = d.y;
       }
       AVT_STATE.camera.x = Math.round(pan.camX - dx);
       AVT_STATE.camera.y = Math.round(pan.camY - dy);
@@ -5386,6 +5398,24 @@ function _avtRenderFrame() {
       }
     }
 
+    // Sprite isométrico personalizado (quando modo iso ativo e token configurado)
+    const _isoUrl = AVT_GRAFICOS?.isoAtivo && e.custom_attrs?.iso_token_url || null;
+    if (_isoUrl) {
+      AVT_STATE._isoTokenCache = AVT_STATE._isoTokenCache || {};
+      let _isoImg = AVT_STATE._isoTokenCache[_isoUrl];
+      if (!_isoImg) {
+        _isoImg = new Image(); _isoImg.src = _isoUrl;
+        AVT_STATE._isoTokenCache[_isoUrl] = _isoImg;
+      }
+      if (_isoImg.complete && _isoImg.naturalWidth > 0) {
+        const imgSz = SZ * 0.92;
+        ctx.drawImage(_isoImg, cx - imgSz / 2, py + (SZ - imgSz) / 2, imgSz, imgSz);
+      } else {
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = e.cor || '#4fa3d1'; ctx.fill();
+      }
+    } else {
+
     // Sprite animado se disponível, senão SVG de criatura, senão fallback círculo+ícone/letra
     const ap = AVT_STATE.aparencias[e.id];
     if (ap && ap.loaded) {
@@ -5438,6 +5468,7 @@ function _avtRenderFrame() {
         }
       }
     }
+    } // end else (não-iso)
 
     // Boss: coroa acima da entidade
     if (isBoss) {
@@ -7044,10 +7075,17 @@ function _avtCanvasClick(e) {
   // Suprime click logo após um drag de pan do mapa
   if (AVT_STATE._panSuprimirClick) { AVT_STATE._panSuprimirClick = false; return; }
   const canvas = AVT_STATE.canvas;
-  const rect = canvas.getBoundingClientRect();
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  const tileX = Math.floor((e.clientX - rect.left + AVT_STATE.camera.x) / SZ);
-  const tileY = Math.floor((e.clientY - rect.top  + AVT_STATE.camera.y) / SZ);
+  let _cx, _cy;
+  if (typeof _avtIsoScreenToCanvas === 'function' && AVT_GRAFICOS?.isoAtivo) {
+    const c = _avtIsoScreenToCanvas(e.clientX, e.clientY);
+    _cx = c.x; _cy = c.y;
+  } else {
+    const rect = canvas.getBoundingClientRect();
+    _cx = e.clientX - rect.left; _cy = e.clientY - rect.top;
+  }
+  const tileX = Math.floor((_cx + AVT_STATE.camera.x) / SZ);
+  const tileY = Math.floor((_cy + AVT_STATE.camera.y) / SZ);
 
   // Door placement mode for nova fase wizard
   if (AVT_STATE._modoPortaPlacement) {
@@ -7321,10 +7359,17 @@ function _avtCanvasClick(e) {
 
 function _avtCanvasDblClick(e) {
   const canvas = AVT_STATE.canvas;
-  const rect = canvas.getBoundingClientRect();
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  const tileX = Math.floor((e.clientX - rect.left + AVT_STATE.camera.x) / SZ);
-  const tileY = Math.floor((e.clientY - rect.top  + AVT_STATE.camera.y) / SZ);
+  let _cx, _cy;
+  if (typeof _avtIsoScreenToCanvas === 'function' && AVT_GRAFICOS?.isoAtivo) {
+    const c = _avtIsoScreenToCanvas(e.clientX, e.clientY);
+    _cx = c.x; _cy = c.y;
+  } else {
+    const rect = canvas.getBoundingClientRect();
+    _cx = e.clientX - rect.left; _cy = e.clientY - rect.top;
+  }
+  const tileX = Math.floor((_cx + AVT_STATE.camera.x) / SZ);
+  const tileY = Math.floor((_cy + AVT_STATE.camera.y) / SZ);
   const ent = AVT_STATE.entidades.find(e => Math.round(e.x) === tileX && Math.round(e.y) === tileY);
   if (ent) {
     e.preventDefault();
@@ -21803,6 +21848,8 @@ function _avtCharEditorRender() {
       <button class="avt-ce2-foot-link" style="background:none;border:none;color:#7a92aa;font-size:0.6rem;cursor:pointer;padding:2px 4px;text-decoration:underline dotted;letter-spacing:.02em"
         onclick="_avtCe2TrocarImagemTipo('${entIdSafe}','ficha')">🖼 Trocar foto</button>
       <button class="avt-ce2-foot-link" style="background:none;border:none;color:#7a92aa;font-size:0.6rem;cursor:pointer;padding:2px 4px;text-decoration:underline dotted;letter-spacing:.02em"
+        onclick="_avtCe2TrocarImagemTipo('${entIdSafe}','iso')">🏔 Sprite isométrico</button>
+      <button class="avt-ce2-foot-link" style="background:none;border:none;color:#7a92aa;font-size:0.6rem;cursor:pointer;padding:2px 4px;text-decoration:underline dotted;letter-spacing:.02em"
         onclick="_avtCharImportarAparencia('${entIdSafe}')">🎨 Importar via IA</button>
     </div>` : ''}
 
@@ -21871,7 +21918,7 @@ function _avtCe2TrocarImagemTipo(entId, alvo) {
     wrap.querySelector('.avt-ce2-img-popover').remove(); return;
   }
   const idSafe = entId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  const titulo = alvo === 'token' ? 'Trocar token (mapa)' : 'Trocar foto de perfil';
+  const titulo = alvo === 'iso' ? 'Sprite isométrico (URL)' : alvo === 'token' ? 'Trocar token (mapa)' : 'Trocar foto de perfil';
   const pop = document.createElement('div');
   pop.className = 'avt-ce2-img-popover';
   pop.innerHTML = `
@@ -21907,7 +21954,12 @@ async function _avtCe2SalvarImgUrlTipo(entId, alvo) {
   if (!dbChar) { mostrarToast('Personagem não encontrado no banco', 'erro'); return; }
   if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
   if (!dbChar.custom_attrs.aparencia) dbChar.custom_attrs.aparencia = {};
-  if (alvo === 'token') {
+  if (alvo === 'iso') {
+    dbChar.custom_attrs.iso_token_url = url;
+    ent.custom_attrs = ent.custom_attrs || {};
+    ent.custom_attrs.iso_token_url = url;
+    if (AVT_STATE._isoTokenCache) delete AVT_STATE._isoTokenCache[url];
+  } else if (alvo === 'token') {
     dbChar.custom_attrs.aparencia.img_token = url;
     if (!dbChar.custom_attrs.topdown_ia) dbChar.custom_attrs.topdown_ia = {};
     dbChar.custom_attrs.topdown_ia.token_url = url;
@@ -21918,7 +21970,7 @@ async function _avtCe2SalvarImgUrlTipo(entId, alvo) {
     await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
       method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs })
     });
-    mostrarToast(alvo === 'token' ? 'Token salvo!' : 'Foto salva!', 'ok');
+    mostrarToast(alvo === 'iso' ? 'Sprite isométrico salvo!' : alvo === 'token' ? 'Token salvo!' : 'Foto salva!', 'ok');
     _avtCharEditorRender();
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }

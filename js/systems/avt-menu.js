@@ -15,9 +15,12 @@ var AVT_MENU_STATE = {
 // GRÁFICOS — preferência individual, localStorage
 // ─────────────────────────────────────────────────────────────────────────────
 
-var AVT_GRAFICOS = { ativo: false, nivel: 1 };
+var AVT_GRAFICOS = { ativo: false, nivel: 1, isoAtivo: false };
 
 const _AVT_GRAFICOS_KEY = 'rpghub_avt_graficos';
+
+const _ISO_ANGLE_X = 52;   // graus — inclinação isométrica
+const _ISO_SCALE   = 1.45; // fator compensatório de escala
 
 function _avtGraficosCarregar() {
   try {
@@ -52,11 +55,56 @@ function _avtGarantirFiltros3D() {
   document.body.appendChild(svg);
 }
 
+function _avtGraficosIsoAplicar() {
+  const wrap = document.getElementById('avt-mapa-wrap');
+  if (!wrap) return;
+  if (AVT_GRAFICOS.isoAtivo) {
+    wrap.style.transform = `rotateX(${_ISO_ANGLE_X}deg) rotateZ(45deg) scale(${_ISO_SCALE})`;
+    wrap.style.transformOrigin = 'center center';
+  } else {
+    wrap.style.transform = '';
+    wrap.style.transformOrigin = '';
+  }
+}
+
+// Inversa analítica do CSS transform afim: tela → canvas (sem perspective, logo afim exata)
+function _avtIsoScreenToCanvas(clientX, clientY) {
+  const wrap = document.getElementById('avt-mapa-wrap');
+  if (!wrap) return { x: clientX, y: clientY };
+  let ox = 0, oy = 0, el = wrap;
+  while (el) { ox += el.offsetLeft; oy += el.offsetTop; el = el.offsetParent; }
+  const cw = wrap.offsetWidth, ch = wrap.offsetHeight;
+  const dx = clientX - (ox + cw / 2);
+  const dy = clientY - (oy + ch / 2);
+  const k    = _ISO_SCALE / Math.SQRT2;
+  const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
+  return {
+    x: (dx + dy / cosX) / (2 * k) + cw / 2,
+    y: (dy / cosX - dx) / (2 * k) + ch / 2,
+  };
+}
+
+// Inversa para deltas de pan (offset cancela, só transforma a direção)
+function _avtIsoDeltaToCanvas(dx, dy) {
+  const k    = _ISO_SCALE / Math.SQRT2;
+  const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
+  return { x: (dx + dy / cosX) / (2 * k), y: (dy / cosX - dx) / (2 * k) };
+}
+
+function _avtGraficosIsoToggle(ativo) {
+  AVT_GRAFICOS.isoAtivo = ativo;
+  _avtGraficosSalvar();
+  _avtGraficosIsoAplicar();
+  const chk = document.getElementById('avt-cfg-iso-ativo');
+  if (chk) chk.checked = ativo;
+}
+
 function _avtGraficosAplicar() {
   _avtGarantirFiltros3D();
   const canvas = AVT_STATE?.canvas || document.getElementById('avt-canvas');
   if (!canvas) return;
   canvas.style.filter = AVT_GRAFICOS.ativo ? `url(#avt-filtro3d-${AVT_GRAFICOS.nivel})` : '';
+  _avtGraficosIsoAplicar();
 }
 
 function _avtGraficosAtualizarUI() {
@@ -120,11 +168,30 @@ function _avtMenuHtmlGraficos() {
       </div>
       <div style="font-size:0.6rem;color:#5a6b7a;margin-top:6px">Preferência salva localmente neste dispositivo.</div>
     </div>
+
+    <div>
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">🏔 Visão Isométrica</div>
+
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:8px">
+        <input type="checkbox" id="avt-cfg-iso-ativo"
+               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
+               ${g.isoAtivo ? 'checked' : ''}
+               onchange="_avtGraficosIsoToggle(this.checked)">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto,#c8d8e8)">Visão Isométrica</div>
+          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">Inclina o mapa para perspectiva 3D isométrica. Compatível com o efeito de textura.</div>
+        </div>
+      </label>
+      <div style="font-size:0.6rem;color:#5a6b7a">Para um sprite isométrico personalizado, configure na ficha do personagem.</div>
+    </div>
   `;
 }
 
-window._avtGraficosToggle = _avtGraficosToggle;
-window._avtGraficosNivel  = _avtGraficosNivel;
+window._avtGraficosToggle    = _avtGraficosToggle;
+window._avtGraficosNivel     = _avtGraficosNivel;
+window._avtGraficosIsoToggle = _avtGraficosIsoToggle;
+window._avtIsoScreenToCanvas = _avtIsoScreenToCanvas;
+window._avtIsoDeltaToCanvas  = _avtIsoDeltaToCanvas;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRADA PRINCIPAL
