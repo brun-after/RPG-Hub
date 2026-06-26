@@ -16163,6 +16163,10 @@ function _avtCanvasFlash(screenX, screenY, cor, tipo) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  // Billboard: efeito desenhado no canvas inclinado; contra-transforma p/ ficar "em pé".
+  // Requer projeção (posição) + billboard (em pé) ligados.
+  const _bb = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
+    && AVT_GRAFICOS?.vfxProjecao && AVT_GRAFICOS?.vfxBillboard && typeof _avtIsoBillboardAplicar === 'function');
 
   let frame = 0;
   const FRAMES = 8;
@@ -16172,6 +16176,7 @@ function _avtCanvasFlash(screenX, screenY, cor, tipo) {
     const alpha = 1 - frame / FRAMES;
     const radius = SZ * 0.5 * (1 + frame * 0.15);
     ctx.save();
+    if (_bb) _avtIsoBillboardAplicar(ctx, screenX, screenY);
     ctx.globalAlpha = alpha;
     ctx.beginPath();
     ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
@@ -17870,16 +17875,40 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
       // ── Stage tree ────────────────────────────────────────────────────────
       const worldRoot = new PIXI.Container();
       const uiRoot    = new PIXI.Container();
-      app.stage.addChild(worldRoot);
+      // Billboard iso (projeção + em pé): envolve o worldRoot num container
+      // contra-transformado, ancorado no ponto do efeito, para os efeitos ficarem "em pé"
+      // no personagem (decomposição skew/scale equivalente à matriz inversa do CSS, usando
+      // os mesmos k/cosX da projeção). O dim de fundo (bgRoot) e o flash (uiRoot) ficam
+      // FORA do billboard, em tela cheia.
+      const _isoBB = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
+        && AVT_GRAFICOS?.vfxProjecao && AVT_GRAFICOS?.vfxBillboard && typeof _ISO_ANGLE_X !== 'undefined');
+      const bgRoot = new PIXI.Container();
+      app.stage.addChild(bgRoot);
+      if (_isoBB) {
+        const isoRoot = new PIXI.Container();
+        const _k = _ISO_SCALE / Math.SQRT2;
+        const _cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
+        const _inv2k = 1 / (2 * _k);
+        const _ax = (mode === 'emanation') ? startX : (mode === 'static' ? endX : midX);
+        const _ay = (mode === 'emanation') ? startY : (mode === 'static' ? endY : midY);
+        isoRoot.pivot.set(_ax, _ay);
+        isoRoot.position.set(_ax, _ay);
+        isoRoot.skew.set(Math.PI / 4, -Math.PI / 4);
+        isoRoot.scale.set(_inv2k * Math.SQRT2, _inv2k * Math.SQRT2 / _cosX);
+        isoRoot.addChild(worldRoot);
+        app.stage.addChild(isoRoot);
+      } else {
+        app.stage.addChild(worldRoot);
+      }
       app.stage.addChild(uiRoot);
 
-      // Background dim (vignette)
+      // Background dim (vignette) — tela cheia, atrás dos efeitos (não billboarda)
       if (root.background && (root.background.darken || root.background.radialDim)) {
         const dim = new PIXI.Graphics();
         const a = root.background.darken || 0.3;
         dim.beginFill(0x000000, a).drawRect(0,0,app.renderer.width, app.renderer.height).endFill();
         if (root.background.radialDim) dim.blendMode = PIXI.BLEND_MODES.MULTIPLY;
-        worldRoot.addChild(dim);
+        bgRoot.addChild(dim);
       }
 
       // Global filters: bloom + tone + user-defined
@@ -18240,12 +18269,24 @@ function _avtPlayTravelBody(travelCfg, atacScr, alvoScr, cor, intensidade) {
         width: canvas.width, height: canvas.height });
       const body = _avtBuildBody(travelCfg.body, cor);
       if (!body) { app.destroy(true); overlayCanvas.remove(); return; }
-      body.position.set(atacScr.x, atacScr.y);
-      app.stage.addChild(body);
-
-      // Trail simples: clones que desbotam
+      // Billboard iso: envolve o conteúdo num container contra-transformado (ancorado no
+      // midpoint) p/ o projétil viajar "em pé" entre os pontos projetados.
+      const _isoBB = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
+        && AVT_GRAFICOS?.vfxProjecao && AVT_GRAFICOS?.vfxBillboard && typeof _ISO_ANGLE_X !== 'undefined');
+      const _root = new PIXI.Container();
+      if (_isoBB) {
+        const _k = _ISO_SCALE / Math.SQRT2, _cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180), _inv2k = 1 / (2 * _k);
+        const _ax = (atacScr.x + alvoScr.x) / 2, _ay = (atacScr.y + alvoScr.y) / 2;
+        _root.pivot.set(_ax, _ay); _root.position.set(_ax, _ay);
+        _root.skew.set(Math.PI / 4, -Math.PI / 4);
+        _root.scale.set(_inv2k * Math.SQRT2, _inv2k * Math.SQRT2 / _cosX);
+      }
+      app.stage.addChild(_root);
+      // Trail simples: clones que desbotam (atrás do corpo)
       const trailContainer = new PIXI.Container();
-      app.stage.addChildAt(trailContainer, 0);
+      _root.addChild(trailContainer);
+      body.position.set(atacScr.x, atacScr.y);
+      _root.addChild(body);
       const trailCfg = travelCfg.trail || {};
       const trailMax = trailCfg.length ?? 6;
       const trailFade = trailCfg.fade ?? 0.82;

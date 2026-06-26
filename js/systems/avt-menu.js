@@ -22,6 +22,8 @@ var AVT_GRAFICOS = {
   atmosfera: true,    // vinheta + luz ambiente nos jogadores
   profundidade: true, // y-sort + ângulo 2:1 (estilo Diablo)
   polimento: true,    // números arredondados + labels mais legíveis
+  vfxProjecao: true,  // efeitos de habilidade posicionados pela projeção iso (tile/profundidade corretos)
+  vfxBillboard: true, // efeitos de habilidade "em pé" (sem cisalhamento), acompanhando os personagens
 };
 
 const _AVT_GRAFICOS_KEY = 'rpghub_avt_graficos';
@@ -86,9 +88,15 @@ function _avtGraficosIsoAplicar() {
   if (AVT_GRAFICOS.isoAtivo) {
     wrap.style.transform = `rotateX(${_ISO_ANGLE_X}deg) rotateZ(45deg) scale(${_ISO_SCALE})`;
     wrap.style.transformOrigin = 'center center';
+    // Estabiliza a camada de compositing 3D: evita re-rasterização (clarão) no mobile
+    // quando overlays/efeitos são inseridos perto da camada transformada.
+    wrap.style.willChange = 'transform';
+    wrap.style.backfaceVisibility = 'hidden';
   } else {
     wrap.style.transform = '';
     wrap.style.transformOrigin = '';
+    wrap.style.willChange = '';
+    wrap.style.backfaceVisibility = '';
   }
   _avtIsoLayoutAplicar();
   _avtAtmosferaAplicar();
@@ -197,6 +205,23 @@ function _avtIsoDeltaToCanvas(dx, dy) {
   return { x: (dx + dy / cosX) / (2 * k), y: (dy / cosX - dx) / (2 * k) };
 }
 
+// Projeção DIRETA canvas → tela (inversa de _avtIsoScreenToCanvas), em coordenadas do
+// PAI não-transformado do wrap. Usada para posicionar a camada de VFX (que fica FORA da
+// transformação 3D) sobre o tile/profundidade corretos. Como a transform usa origin
+// center e o pai é não-transformado, o centro do wrap = centro do pai.
+function _avtIsoCanvasToScreen(canvasX, canvasY) {
+  const wrap = document.getElementById('avt-mapa-wrap');
+  if (!wrap) return { x: canvasX, y: canvasY };
+  const cw = wrap.offsetWidth, ch = wrap.offsetHeight;
+  const k    = _ISO_SCALE / Math.SQRT2;
+  const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
+  const cxd = canvasX - cw / 2, cyd = canvasY - ch / 2;
+  const dx = (cxd - cyd) * k;            // desloc. de tela a partir do centro
+  const dy = (cxd + cyd) * k * cosX;
+  return { x: wrap.offsetLeft + cw / 2 + dx, y: wrap.offsetTop + ch / 2 + dy };
+}
+window._avtIsoCanvasToScreen = _avtIsoCanvasToScreen;
+
 // Billboards: aplica ao contexto 2D a contra-transformação (inversa da parte linear do
 // CSS) ao redor do ponto de ancoragem (pivô, normalmente os pés). Como o CSS aplica uma
 // transformação AFIM (não há perspective), desenhar com a inversa faz o sprite voltar a
@@ -244,7 +269,7 @@ window._avtGraficosRefinoToggle = _avtGraficosRefinoToggle;
 // exceto "polimento" que vale sempre).
 function _avtIsoRefinosAtualizarUI() {
   const isoOn = !!AVT_GRAFICOS.isoAtivo;
-  ['bilbordes', 'atmosfera', 'profundidade'].forEach(chave => {
+  ['bilbordes', 'atmosfera', 'profundidade', 'vfxProjecao', 'vfxBillboard'].forEach(chave => {
     const chk = document.getElementById('avt-cfg-iso-' + chave);
     if (chk) { chk.disabled = !isoOn; chk.checked = !!AVT_GRAFICOS[chave]; }
     const row = document.getElementById('avt-cfg-iso-' + chave + '-row');
@@ -499,6 +524,8 @@ function _avtMenuHtmlGraficos() {
         ['bilbordes',    'Personagens em pé', 'Mantém personagens e nomes verticais voltados à câmera, em vez de inclinados junto com o chão.', true],
         ['atmosfera',    'Atmosfera e luz',   'Vinheta escura nas bordas e brilho ambiente ao redor dos jogadores.', true],
         ['profundidade', 'Profundidade 2:1',  'Quem está à frente sobrepõe quem está atrás e usa o ângulo isométrico 2:1 clássico.', true],
+        ['vfxProjecao',  'Efeitos: profundidade', 'Posiciona os efeitos de habilidade no tile/profundidade corretos (projeção isométrica).', true],
+        ['vfxBillboard', 'Efeitos: em pé',    'Desenha os efeitos de habilidade verticais, acompanhando os personagens em pé (não deitados no chão).', true],
         ['polimento',    'Polimento visual',  'Números de dano arredondados e nomes com contorno para melhor leitura.', false],
       ].map(([chave, titulo, desc, dependeIso]) => {
         const dis = (dependeIso && !g.isoAtivo) ? 'disabled' : '';
