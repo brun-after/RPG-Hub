@@ -15,7 +15,7 @@ var AVT_MENU_STATE = {
 // GRÁFICOS — preferência individual, localStorage
 // ─────────────────────────────────────────────────────────────────────────────
 
-var AVT_GRAFICOS = { ativo: false, nivel: 1, isoAtivo: false, isoTeclado: false, isoMobile: false };
+var AVT_GRAFICOS = { ativo: false, nivel: 1, isoAtivo: false, isoTeclado: false, isoMobile: false, analogico: false };
 
 const _AVT_GRAFICOS_KEY = 'rpghub_avt_graficos';
 
@@ -175,12 +175,82 @@ function _avtGraficosMobileToggle(ativo) {
   if (chk) chk.checked = ativo;
 }
 
-// Mostra/esconde o overlay do D-pad isométrico conforme preferência + dispositivo.
+// Mostra/esconde os overlays de controle conforme preferências (sem gate de touch —
+// se o usuário ativou explicitamente a opção, é suficiente para exibir).
 function _avtGraficosControlesAplicar() {
-  const ov = document.getElementById('avt-iso-dpad');
-  if (!ov) return;
-  const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-  ov.style.display = (AVT_GRAFICOS.isoAtivo && AVT_GRAFICOS.isoMobile && isTouch) ? 'block' : 'none';
+  const isoDpad     = document.getElementById('avt-iso-dpad');
+  const regularDpad = document.getElementById('avt-dpad');
+  const analogicoEl = document.getElementById('avt-analogico-stick');
+
+  const showIsoDpad   = !!(AVT_GRAFICOS.isoAtivo && AVT_GRAFICOS.isoMobile && !AVT_GRAFICOS.analogico);
+  const showAnalogico = !!AVT_GRAFICOS.analogico;
+
+  if (isoDpad)     isoDpad.style.display     = showIsoDpad   ? 'block' : 'none';
+  if (analogicoEl) analogicoEl.style.display = showAnalogico ? 'block' : 'none';
+  if (regularDpad && (showIsoDpad || showAnalogico)) regularDpad.style.display = 'none';
+
+  if (showAnalogico) _avtAnalogicoIniciar();
+}
+
+function _avtGraficosAnalogicoToggle(ativo) {
+  AVT_GRAFICOS.analogico = !!ativo;
+  _avtGraficosSalvar();
+  _avtGraficosControlesAplicar();
+  const chk = document.getElementById('avt-cfg-analogico');
+  if (chk) chk.checked = !!ativo;
+}
+window._avtGraficosAnalogicoToggle = _avtGraficosAnalogicoToggle;
+
+// Inicializa o joystick analógico via Pointer Events (roda uma única vez).
+let _avtAnalogicoIniciado = false;
+function _avtAnalogicoIniciar() {
+  if (_avtAnalogicoIniciado) return;
+  const outer = document.querySelector('#avt-analogico-stick .avt-joystick-outer');
+  const knob  = document.getElementById('avt-joystick-knob');
+  if (!outer || !knob) return;
+  _avtAnalogicoIniciado = true;
+
+  const R = 50; // raio máximo de deslocamento do knob em px
+  let _active = false, _lastSector = -1;
+
+  // 8 setores horários desde E: E SE S SO O NO N NE
+  // Modo normal → (dx,dy) de grade convencionais
+  // Modo iso    → rotaciona 45° para alinhar ao visual da tela
+  const _mapNormal = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+  const _mapIso    = [[1,-1],[1,0],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+
+  function _dirGrid(sector) {
+    return (AVT_GRAFICOS?.isoAtivo ? _mapIso : _mapNormal)[sector];
+  }
+
+  function _mover(ex, ey) {
+    const rect = outer.getBoundingClientRect();
+    let x = ex - (rect.left + rect.width  / 2);
+    let y = ey - (rect.top  + rect.height / 2);
+    const d = Math.sqrt(x * x + y * y);
+    if (d > R) { x = x / d * R; y = y / d * R; }
+    knob.style.transform = `translate(${x}px,${y}px)`;
+
+    if (d < 14) { // deadzone
+      if (_lastSector !== -1) { _lastSector = -1; if (typeof avtDpadStop === 'function') avtDpadStop(); }
+      return;
+    }
+    const sector = Math.round(((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360 / 45) % 8;
+    if (sector === _lastSector) return;
+    _lastSector = sector;
+    const [dx, dy] = _dirGrid(sector);
+    if (typeof avtDpad === 'function') avtDpad(dx, dy);
+  }
+
+  outer.addEventListener('pointerdown', e => {
+    _active = true; outer.setPointerCapture(e.pointerId); _mover(e.clientX, e.clientY);
+  });
+  outer.addEventListener('pointermove', e => { if (_active) _mover(e.clientX, e.clientY); });
+  ['pointerup', 'pointercancel'].forEach(ev => outer.addEventListener(ev, () => {
+    _active = false; _lastSector = -1;
+    knob.style.transform = '';
+    if (typeof avtDpadStop === 'function') avtDpadStop();
+  }));
 }
 
 // Atualiza o estado disabled/checked dos toggles da aba Controles, se visíveis.
@@ -200,7 +270,20 @@ function _avtMenuHtmlControles() {
   const op  = g.isoAtivo ? '1' : '0.45';
   return `
     <div>
-      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">🎮 Controles Isométricos</div>
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">🎮 Controles</div>
+
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:18px">
+        <input type="checkbox" id="avt-cfg-analogico"
+               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
+               ${g.analogico ? 'checked' : ''}
+               onchange="_avtGraficosAnalogicoToggle(this.checked)">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto,#c8d8e8)">Controle analógico</div>
+          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">Alavanca virtual no lugar do D-pad. Em modo isométrico os eixos se alinham à perspectiva visual.</div>
+        </div>
+      </label>
+
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.55);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">🗺 Controles Isométricos</div>
 
       <div id="avt-cfg-controles-aviso" style="display:${g.isoAtivo ? 'none' : 'block'};font-size:0.68rem;color:#c89a4b;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;padding:8px 10px;margin-bottom:12px">
         Disponível apenas com a <b>Visão Isométrica</b> ativada (aba Gráficos).
@@ -224,10 +307,10 @@ function _avtMenuHtmlControles() {
                onchange="_avtGraficosMobileToggle(this.checked)">
         <div>
           <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto,#c8d8e8)">Controle isométrico mobile</div>
-          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">D-pad com as diagonais em destaque (cima/baixo/esquerda/direita) e os direcionais comuns reduzidos.</div>
+          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">D-pad com as diagonais em destaque e os direcionais comuns reduzidos.</div>
         </div>
       </label>
-      <div style="font-size:0.6rem;color:#5a6b7a;margin-top:6px">Preferência salva localmente neste dispositivo.</div>
+      <div style="font-size:0.6rem;color:#5a6b7a;margin-top:6px">Preferências salvas localmente neste dispositivo.</div>
     </div>
   `;
 }

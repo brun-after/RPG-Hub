@@ -1537,6 +1537,29 @@ body.mesa-ativa.nav-peek .nav-tabs {
 }
 .avt-isodpad-card:active { background: rgba(79,163,209,0.22); opacity: 0.7; }
 
+/* Joystick analógico virtual */
+.avt-joystick-outer {
+  width: 130px; height: 130px;
+  border-radius: 50%;
+  background: rgba(79,163,209,0.10);
+  border: 2px solid rgba(79,163,209,0.35);
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+.avt-joystick-inner {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: rgba(79,163,209,0.40);
+  border: 2px solid rgba(79,163,209,0.75);
+  position: absolute;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  transition: transform 0.05s ease;
+}
+
 /* Map option cards no wizard */
 .avt-mapa-opcao {
   border: 1px solid rgba(255,255,255,0.1);
