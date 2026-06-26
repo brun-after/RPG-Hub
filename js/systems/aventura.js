@@ -6555,40 +6555,25 @@ function _avtDesenharIsoIa(ctx, ent, footX, footY, SZ, data) {
   const st  = a.state || 'idle';
   const tState = now - (a.stateStart || now);
 
-  const iw = img.naturalWidth, ih = img.naturalHeight;
-  const H = SZ * 1.12;                 // altura desenhada (pousa no tile, um pouco maior)
-  const W = H * (iw / ih);
+  // Toggle global de pernas (configurações gráficas) × override por token.
+  const pernasGlobal = (typeof AVT_GRAFICOS === 'undefined') ? true : (AVT_GRAFICOS.pernas !== false);
 
-  // Parâmetros por estado
-  let swayAmp, swayHz, bobAmp, bobHz, breatheAmp;
-  if (st === 'walk')        { swayAmp = W * 0.10; swayHz = 1 / 130; bobAmp = SZ * 0.06; bobHz = 1 / 130; breatheAmp = 0.0; }
-  else if (st === 'attack') { swayAmp = W * 0.05; swayHz = 1 / 120; bobAmp = SZ * 0.02; bobHz = 1 / 120; breatheAmp = 0.0; }
-  else                      { swayAmp = W * 0.035; swayHz = 1 / 760; bobAmp = SZ * 0.012; bobHz = 1 / 900; breatheAmp = 0.025; }
-
-  // Avanço de ataque (empurra mais o topo para a frente)
-  let atkPush = 0, atkStretch = 1;
-  if (st === 'attack') { const tt = Math.min(1, tState / 400); const e = Math.sin(tt * Math.PI); atkPush = e * W * 0.20; atkStretch = 1 + e * 0.06; }
-
-  const bob = (st === 'walk')
-    ? -Math.abs(Math.sin(now * bobHz * Math.PI * 2)) * bobAmp   // quique p/ cima no andar
-    : Math.sin(now * bobHz * Math.PI * 2) * bobAmp;             // respiração/flutuação leve
-  const breatheSy = 1 + breatheAmp * Math.sin(now / 900);
-
-  const N = 18;
-  ctx.save();
-  ctx.translate(footX, footY);
-  if ((a.facing || 1) < 0) ctx.scale(-1, 1);   // espelha p/ a esquerda
-  for (let i = 0; i < N; i++) {
-    const sy = ih * i / N, sh = ih / N;
-    const h  = 1 - (i + 0.5) / N;               // 0 = pés, 1 = topo
-    let dx = swayAmp * h * Math.sin(now * swayHz * Math.PI * 2 + h * 2.2); // mesh warp
-    dx += atkPush * h;
-    const dyTop = (-H + H * (i / N)) * breatheSy + bob;
-    const dh    = (H / N) * breatheSy + 0.6;     // +0.6 evita emendas entre tiras
-    const dw    = W * (1 + (atkStretch - 1) * h);
-    ctx.drawImage(img, 0, sy, iw, sh, -dw / 2 + dx, dyTop, dw, dh);
+  // Dispatch para a biblioteca de presets (avt-walk-presets.js). O motor faz o
+  // fatiamento, o translate(footX,footY), o espelhamento de facing e o estilo
+  // selecionado. Fallback: desenho estático caso o módulo não esteja carregado.
+  if (typeof avtWalkRender === 'function') {
+    avtWalkRender(ctx, img, {
+      footX, footY, SZ, now,
+      state: st, tState,
+      facing: (a.facing || 1),
+      presetId: data.walkPreset || 'quique',
+      params: data.walkParams || null,
+      pernas: pernasGlobal && (data.pernas !== false),
+    });
+  } else {
+    const H = SZ * 1.12, W = H * (img.naturalWidth / img.naturalHeight);
+    ctx.drawImage(img, footX - W / 2, footY - H, W, H);
   }
-  ctx.restore();
 }
 
 function _avtDesenharAparencia(ctx, ent, cx, cy, SZ, ap) {
@@ -22438,6 +22423,8 @@ function _avtCe2TrocarImagemTipo(entId, alvo) {
     </div>
     <button onclick="event.stopPropagation();_avtCharImportarAparencia('${idSafe}');this.closest('.avt-ce2-img-popover').remove()"
       class="avt-ce2-sm-btn" style="width:100%;text-align:left;margin-top:2px">🎨 Importar via IA</button>
+    ${alvo === 'iso' ? `<button onclick="event.stopPropagation();_avtWalkStudioAbrir('${idSafe}');this.closest('.avt-ce2-img-popover').remove()"
+      class="avt-ce2-sm-btn" style="width:100%;text-align:left;margin-top:2px">🚶 Estúdio de Caminhada</button>` : ''}
   `;
   pop.addEventListener('click', e => e.stopPropagation());
   wrap.appendChild(pop);
@@ -25826,6 +25813,260 @@ async function _avtIsoIaSalvar(entId) {
   }
 }
 window._avtIsoIaSalvar = _avtIsoIaSalvar;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ESTÚDIO DE CAMINHADA — preview/seleção de presets de andar por token
+// Reaproveita o overlay #avt-anim-import-overlay e o motor avtWalkRender (mesmo
+// do jogo → WYSIWYG). Persiste em custom_attrs.iso_anim { walkPreset, walkParams,
+// pernas } via _avtSb, igual ao _avtIsoIaSalvar.
+// ─────────────────────────────────────────────────────────────────────────────
+window._avtWalkStudio = window._avtWalkStudio || null;
+
+// Resolve a URL de imagem usada no estúdio (sprite iso → fallback p/ token/ficha).
+function _avtWalkStudioImgUrl(dbChar) {
+  const ca = dbChar?.custom_attrs || {};
+  const ap = ca.aparencia || {};
+  return ca.iso_anim?.img_url || ca.iso_token_url
+    || ap.img_iso || ap.img_frente || ap.composed_img
+    || ca.img_retrato || ca.img || '';
+}
+
+function _avtWalkStudioAbrir(entId) {
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  if (typeof _avtCe2PodeEditarImg === 'function' && !_avtCe2PodeEditarImg(ent)) {
+    mostrarToast('Sem permissão para alterar', 'erro'); return;
+  }
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent?.dbId || c.nome === ent?.nome);
+  if (!dbChar) { mostrarToast('Personagem não encontrado', 'erro'); return; }
+  if (typeof AVT_WALK_PRESETS === 'undefined') { mostrarToast('Módulo de caminhada não carregado', 'erro'); return; }
+
+  const url = _avtWalkStudioImgUrl(dbChar);
+  if (!url) { mostrarToast('Configure um sprite/imagem isométrico primeiro (🏔)', 'aviso'); return; }
+
+  const iso = dbChar.custom_attrs?.iso_anim || {};
+  const presetId = (iso.walkPreset && AVT_WALK_PRESETS[iso.walkPreset]) ? iso.walkPreset : 'passada';
+  const params = Object.assign({}, AVT_WALK_PRESETS[presetId].paramsPadrao,
+    (iso.walkPreset === presetId ? (iso.walkParams || {}) : {}));
+
+  const img = new Image(); img.crossOrigin = 'anonymous'; img.src = url;
+  window._avtWalkStudio = {
+    aberto: true, entId, dbChar, img, url,
+    presetId, params,
+    pernas: iso.pernas !== false,
+    state: 'walk', stateStart: performance.now(), facing: 1, raf: 0,
+  };
+  _avtWalkStudioRender();
+  if (window._avtWalkStudio.raf) cancelAnimationFrame(window._avtWalkStudio.raf);
+  window._avtWalkStudio.raf = requestAnimationFrame(_avtWalkStudioLoop);
+}
+window._avtWalkStudioAbrir = _avtWalkStudioAbrir;
+
+function _avtWalkStudioFechar() {
+  const S = window._avtWalkStudio;
+  if (S?.raf) cancelAnimationFrame(S.raf);
+  if (S) S.aberto = false;
+  const ov = document.getElementById('avt-anim-import-overlay');
+  if (ov) ov.style.display = 'none';
+}
+window._avtWalkStudioFechar = _avtWalkStudioFechar;
+
+function _avtWalkStudioSelectPreset(id) {
+  const S = window._avtWalkStudio; if (!S || !AVT_WALK_PRESETS[id]) return;
+  const iso = S.dbChar?.custom_attrs?.iso_anim || {};
+  S.presetId = id;
+  S.params = Object.assign({}, AVT_WALK_PRESETS[id].paramsPadrao,
+    (iso.walkPreset === id ? (iso.walkParams || {}) : {}));
+  _avtWalkStudioRender();
+}
+window._avtWalkStudioSelectPreset = _avtWalkStudioSelectPreset;
+
+function _avtWalkStudioSetState(s) {
+  const S = window._avtWalkStudio; if (!S) return;
+  S.state = s; S.stateStart = performance.now();
+  _avtWalkStudioRender();
+}
+window._avtWalkStudioSetState = _avtWalkStudioSetState;
+
+function _avtWalkStudioFlip() {
+  const S = window._avtWalkStudio; if (!S) return;
+  S.facing = (S.facing || 1) < 0 ? 1 : -1;
+  _avtWalkStudioRender();
+}
+window._avtWalkStudioFlip = _avtWalkStudioFlip;
+
+function _avtWalkStudioTogglePernas(on) {
+  const S = window._avtWalkStudio; if (!S) return;
+  S.pernas = !!on;
+}
+window._avtWalkStudioTogglePernas = _avtWalkStudioTogglePernas;
+
+function _avtWalkStudioSetParam(key, val) {
+  const S = window._avtWalkStudio; if (!S) return;
+  S.params[key] = val;
+  const sp = document.getElementById('avt-walk-v-' + key);
+  if (sp) sp.textContent = (+val).toFixed(key === 'cadencia' ? 0 : 3);
+}
+window._avtWalkStudioSetParam = _avtWalkStudioSetParam;
+
+function _avtWalkStudioSetWeapon(field, val) {
+  const S = window._avtWalkStudio; if (!S) return;
+  if (!S.params.weaponAnchor) S.params.weaponAnchor = { yTop: 0.3, yBot: 0.8, damp: 0 };
+  S.params.weaponAnchor[field] = val;
+  const sp = document.getElementById('avt-walk-wv-' + field);
+  if (sp) sp.textContent = (+val).toFixed(2);
+}
+window._avtWalkStudioSetWeapon = _avtWalkStudioSetWeapon;
+
+// Loop de animação (mesmo motor do jogo) — cards + preview grande.
+function _avtWalkStudioLoop() {
+  const S = window._avtWalkStudio;
+  if (!S || !S.aberto) return;
+  const img = S.img, now = performance.now();
+  if (typeof avtWalkRender === 'function' && img && img.complete && img.naturalWidth > 0) {
+    // Cards: cada preset andando com seus parâmetros padrão (comparação lado a lado).
+    document.querySelectorAll('#avt-walk-cards canvas').forEach(cv => {
+      const id = cv.dataset.preset; if (!AVT_WALK_PRESETS[id]) return;
+      const cx = cv.getContext('2d'); cx.clearRect(0, 0, cv.width, cv.height);
+      avtWalkRender(cx, img, {
+        footX: cv.width / 2, footY: cv.height - 8, SZ: cv.height * 0.6,
+        now, state: 'walk', tState: now, facing: 1,
+        presetId: id, params: AVT_WALK_PRESETS[id].paramsPadrao, pernas: true,
+      });
+    });
+    // Preview grande: preset selecionado + parâmetros editados + estado/facing.
+    const big = document.getElementById('avt-walk-preview');
+    if (big) {
+      const cx = big.getContext('2d'); cx.clearRect(0, 0, big.width, big.height);
+      let tState = 0;
+      if (S.state === 'attack') tState = (now - (S.stateStart || now)) % 700;
+      else if (S.state === 'idle') tState = now - (S.stateStart || now);
+      avtWalkRender(cx, img, {
+        footX: big.width / 2, footY: big.height - 18, SZ: big.height * 0.6,
+        now, state: S.state, tState, facing: S.facing,
+        presetId: S.presetId, params: S.params, pernas: S.pernas,
+      });
+    }
+  }
+  S.raf = requestAnimationFrame(_avtWalkStudioLoop);
+}
+
+function _avtWalkStudioSlider(label, key, min, max, step) {
+  const S = window._avtWalkStudio;
+  const val = (S.params[key] != null) ? S.params[key]
+    : (AVT_WALK_PRESETS[S.presetId].paramsPadrao[key] ?? min);
+  const dec = key === 'cadencia' ? 0 : 3;
+  return `<label style="display:block;font-size:0.6rem;color:#7a92aa;margin:7px 0 1px">${label}: <span id="avt-walk-v-${key}" style="color:#c8d8e8">${(+val).toFixed(dec)}</span></label>
+    <input type="range" min="${min}" max="${max}" step="${step}" value="${val}"
+      style="width:100%;accent-color:#c8a84b"
+      oninput="_avtWalkStudioSetParam('${key}', parseFloat(this.value))">`;
+}
+
+function _avtWalkStudioRender() {
+  const S = window._avtWalkStudio; if (!S) return;
+  const overlay = document.getElementById('avt-anim-import-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+
+  const wa = S.params.weaponAnchor || { yTop: 0.3, yBot: 0.8, damp: 0 };
+  const cards = Object.entries(AVT_WALK_PRESETS).map(([id, p]) => {
+    const sel = id === S.presetId;
+    return `<div class="avt-walk-card${sel ? ' sel' : ''}" onclick="_avtWalkStudioSelectPreset('${id}')"
+        title="${p.descricao}">
+        <canvas data-preset="${id}" width="96" height="118"></canvas>
+        <div class="avt-walk-card-nome">${p.icone} ${p.nome}</div>
+      </div>`;
+  }).join('');
+
+  const stBtn = (s, lbl) => `<button class="avt-walk-stbtn${S.state === s ? ' on' : ''}"
+      onclick="_avtWalkStudioSetState('${s}')">${lbl}</button>`;
+  const presetDesc = AVT_WALK_PRESETS[S.presetId]?.descricao || '';
+
+  overlay.innerHTML = `
+    <div class="avt-modal-box" style="max-width:760px;width:94vw">
+      <div class="avt-modal-header">
+        <span>🚶 Estúdio de Caminhada — ${S.dbChar?.nome || ''}</span>
+        <button onclick="_avtWalkStudioFechar()" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem;line-height:1;padding:0">×</button>
+      </div>
+      <div class="avt-modal-body avt-walk-body">
+        <div class="avt-walk-left">
+          <div class="avt-walk-hint">Compare os estilos andando e escolha o melhor para a posição do corpo e da arma deste token.</div>
+          <div id="avt-walk-cards" class="avt-walk-cards">${cards}</div>
+        </div>
+        <div class="avt-walk-right">
+          <div class="avt-walk-preview-wrap">
+            <canvas id="avt-walk-preview" width="220" height="270"></canvas>
+          </div>
+          <div class="avt-walk-stbar">
+            ${stBtn('idle', '⏸ Parado')}${stBtn('walk', '🚶 Andar')}${stBtn('attack', '⚔ Atacar')}
+            <button class="avt-walk-stbtn" onclick="_avtWalkStudioFlip()" title="Virar">↔ Virar</button>
+          </div>
+          <div class="avt-walk-desc">${presetDesc}</div>
+          <div id="avt-walk-controls">
+            <label style="display:flex;align-items:center;gap:7px;font-size:0.66rem;color:#c8d8e8;margin:4px 0 2px;cursor:pointer">
+              <input type="checkbox" ${S.pernas ? 'checked' : ''} style="accent-color:#c8a84b"
+                onchange="_avtWalkStudioTogglePernas(this.checked)"> Pernas articuladas neste token
+            </label>
+            ${_avtWalkStudioSlider('Cadência (ms/passada)', 'cadencia', 200, 1600, 10)}
+            ${_avtWalkStudioSlider('Amplitude do passo', 'amplitudePasso', 0.02, 0.25, 0.005)}
+            ${_avtWalkStudioSlider('Altura da divisão das pernas', 'legSplitY', 0.20, 0.60, 0.01)}
+            ${_avtWalkStudioSlider('Centro das pernas (←/→)', 'legCenter', 0.30, 0.70, 0.01)}
+            ${_avtWalkStudioSlider('Inclinação do corpo', 'inclinacao', 0, 0.06, 0.002)}
+            <div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(79,163,209,0.12)">
+              <div style="font-size:0.6rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.06em">Âncora da arma (estabiliza a banda)</div>
+              <label style="display:block;font-size:0.6rem;color:#7a92aa;margin:5px 0 1px">Início (base→topo): <span id="avt-walk-wv-yTop" style="color:#c8d8e8">${(+wa.yTop).toFixed(2)}</span></label>
+              <input type="range" min="0" max="1" step="0.02" value="${wa.yTop}" style="width:100%;accent-color:#c8a84b" oninput="_avtWalkStudioSetWeapon('yTop', parseFloat(this.value))">
+              <label style="display:block;font-size:0.6rem;color:#7a92aa;margin:5px 0 1px">Fim (base→topo): <span id="avt-walk-wv-yBot" style="color:#c8d8e8">${(+wa.yBot).toFixed(2)}</span></label>
+              <input type="range" min="0" max="1" step="0.02" value="${wa.yBot}" style="width:100%;accent-color:#c8a84b" oninput="_avtWalkStudioSetWeapon('yBot', parseFloat(this.value))">
+              <label style="display:block;font-size:0.6rem;color:#7a92aa;margin:5px 0 1px">Estabilização: <span id="avt-walk-wv-damp" style="color:#c8d8e8">${(+wa.damp).toFixed(2)}</span></label>
+              <input type="range" min="0" max="0.95" step="0.05" value="${wa.damp}" style="width:100%;accent-color:#c8a84b" oninput="_avtWalkStudioSetWeapon('damp', parseFloat(this.value))">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="avt-modal-footer">
+        <button class="avt-mp-btn" onclick="_avtWalkStudioFechar()">Cancelar</button>
+        <button class="avt-mp-btn" onclick="_avtWalkPresetSalvar()">💾 Salvar caminhada</button>
+      </div>
+    </div>`;
+}
+window._avtWalkStudioRender = _avtWalkStudioRender;
+
+// Persiste preset/params/pernas em custom_attrs.iso_anim (preservando img_url).
+async function _avtWalkPresetSalvar() {
+  const S = window._avtWalkStudio; if (!S) return;
+  const dbChar = S.dbChar;
+  const ent = AVT_STATE.entidades.find(e => e.id === S.entId);
+  if (!dbChar) { mostrarToast('Personagem não encontrado', 'erro'); return; }
+  mostrarToast('Salvando…', '');
+  try {
+    const prevIso = dbChar.custom_attrs?.iso_anim || {};
+    const isoAnim = Object.assign({}, prevIso, {
+      img_url: prevIso.img_url || S.url,
+      walkPreset: S.presetId,
+      walkParams: S.params,
+      pernas: S.pernas,
+    });
+    const newAttrs = Object.assign({}, dbChar.custom_attrs || {}, {
+      iso_anim: isoAnim,
+      iso_token_url: (dbChar.custom_attrs?.iso_token_url) || S.url,
+    });
+    await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: newAttrs })
+    });
+    dbChar.custom_attrs = newAttrs;
+    if (ent) {
+      ent.custom_attrs = ent.custom_attrs || {};
+      ent.custom_attrs.iso_anim = isoAnim;
+      ent.custom_attrs.iso_token_url = newAttrs.iso_token_url;
+    }
+    mostrarToast('Caminhada salva!', 'ok');
+    _avtWalkStudioFechar();
+  } catch (e) {
+    console.error('_avtWalkPresetSalvar:', e);
+    mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
+  }
+}
+window._avtWalkPresetSalvar = _avtWalkPresetSalvar;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLASSES DE NPCs — edição, criação e configuração por preset

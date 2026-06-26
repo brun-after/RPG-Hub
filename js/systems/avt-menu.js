@@ -21,6 +21,7 @@ var AVT_GRAFICOS = {
   bilbordes: true,    // personagens/labels "em pé" (contra-transformação afim)
   atmosfera: true,    // vinheta + luz ambiente nos jogadores
   profundidade: true, // y-sort + ângulo 2:1 (estilo Diablo)
+  pernas: true,       // movimentação de pernas dos tokens (passada articulada) ao andar
   polimento: true,    // números arredondados + labels mais legíveis
   vfxProjecao: true,  // efeitos de habilidade posicionados pela projeção iso (tile/profundidade corretos)
   vfxBillboard: true, // efeitos de habilidade "em pé" (sem cisalhamento), acompanhando os personagens
@@ -269,7 +270,7 @@ window._avtGraficosRefinoToggle = _avtGraficosRefinoToggle;
 // exceto "polimento" que vale sempre).
 function _avtIsoRefinosAtualizarUI() {
   const isoOn = !!AVT_GRAFICOS.isoAtivo;
-  ['bilbordes', 'atmosfera', 'profundidade', 'vfxProjecao', 'vfxBillboard'].forEach(chave => {
+  ['bilbordes', 'atmosfera', 'profundidade', 'pernas', 'vfxProjecao', 'vfxBillboard'].forEach(chave => {
     const chk = document.getElementById('avt-cfg-iso-' + chave);
     if (chk) { chk.disabled = !isoOn; chk.checked = !!AVT_GRAFICOS[chave]; }
     const row = document.getElementById('avt-cfg-iso-' + chave + '-row');
@@ -524,6 +525,7 @@ function _avtMenuHtmlGraficos() {
         ['bilbordes',    'Personagens em pé', 'Mantém personagens e nomes verticais voltados à câmera, em vez de inclinados junto com o chão.', true],
         ['atmosfera',    'Atmosfera e luz',   'Vinheta escura nas bordas e brilho ambiente ao redor dos jogadores.', true],
         ['profundidade', 'Profundidade 2:1',  'Quem está à frente sobrepõe quem está atrás e usa o ângulo isométrico 2:1 clássico.', true],
+        ['pernas',       'Movimentação de pernas', 'Anima as pernas dos tokens ao andar (passada articulada). Desligue para um balanço simples. O estilo por token é escolhido no Estúdio de Caminhada da ficha.', true],
         ['vfxProjecao',  'Efeitos: profundidade', 'Posiciona os efeitos de habilidade no tile/profundidade corretos (projeção isométrica).', true],
         ['vfxBillboard', 'Efeitos: em pé',    'Desenha os efeitos de habilidade verticais, acompanhando os personagens em pé (não deitados no chão).', true],
         ['polimento',    'Polimento visual',  'Números de dano arredondados e nomes com contorno para melhor leitura.', false],

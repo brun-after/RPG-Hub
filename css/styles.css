@@ -2858,3 +2858,45 @@ details[open] .avt-mp-summary::before { transform: rotate(90deg); }
 }
 .avt-skm-fb-chip-dado button { color: #f0cc6a; }
 .avt-skm-fb-chip-bonus button { color: #7ec8f0; }
+
+/* ── Estúdio de Caminhada (presets de andar do token isométrico) ───────────── */
+.avt-walk-body { display: flex; gap: 14px; align-items: flex-start; }
+.avt-walk-left { flex: 1 1 55%; min-width: 0; }
+.avt-walk-right { flex: 1 1 45%; min-width: 230px; max-width: 300px; }
+.avt-walk-hint { font-size: 0.66rem; color: #7a92aa; margin-bottom: 8px; line-height: 1.35; }
+.avt-walk-cards {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+}
+.avt-walk-card {
+  border: 1px solid rgba(79,163,209,0.18); border-radius: 9px; padding: 6px 4px 4px;
+  background: rgba(10,15,24,0.6); cursor: pointer; text-align: center;
+  transition: border-color .15s, background .15s, transform .1s;
+}
+.avt-walk-card:hover { border-color: rgba(200,168,75,0.45); transform: translateY(-1px); }
+.avt-walk-card.sel { border-color: #c8a84b; background: rgba(200,168,75,0.1); box-shadow: 0 0 0 1px rgba(200,168,75,0.35) inset; }
+.avt-walk-card canvas {
+  width: 100%; height: auto; display: block;
+  background: radial-gradient(ellipse at 50% 92%, rgba(79,163,209,0.12), transparent 62%);
+  border-radius: 6px;
+}
+.avt-walk-card-nome { font-size: 0.6rem; color: #c8d8e8; margin-top: 3px; font-family: var(--fonte-d, inherit); }
+.avt-walk-preview-wrap {
+  border: 1px solid rgba(79,163,209,0.18); border-radius: 10px; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 90%, rgba(79,163,209,0.14), #070b12 64%);
+  display: flex; justify-content: center;
+}
+.avt-walk-preview-wrap canvas { display: block; width: 100%; height: auto; max-width: 220px; }
+.avt-walk-stbar { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.avt-walk-stbtn {
+  flex: 1 1 auto; padding: 5px 6px; border-radius: 6px; cursor: pointer;
+  border: 1px solid rgba(79,163,209,0.2); background: rgba(255,255,255,0.03);
+  color: #c8d8e8; font-size: 0.64rem; font-family: var(--fonte-d, inherit);
+}
+.avt-walk-stbtn:hover { border-color: rgba(200,168,75,0.4); }
+.avt-walk-stbtn.on { border-color: #c8a84b; background: rgba(200,168,75,0.14); color: #f0cc6a; }
+.avt-walk-desc { font-size: 0.62rem; color: #7a92aa; margin: 8px 0 2px; line-height: 1.35; min-height: 1.6em; }
+@media (max-width: 640px) {
+  .avt-walk-body { flex-direction: column; }
+  .avt-walk-right { max-width: none; width: 100%; }
+}
