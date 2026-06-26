@@ -15,13 +15,36 @@ var AVT_MENU_STATE = {
 // GRÁFICOS — preferência individual, localStorage
 // ─────────────────────────────────────────────────────────────────────────────
 
-var AVT_GRAFICOS = { ativo: false, nivel: 1, isoAtivo: false, isoTeclado: false, isoMobile: false, analogico: false };
+var AVT_GRAFICOS = {
+  ativo: false, nivel: 1, isoAtivo: false, isoTeclado: false, isoMobile: false, analogico: false,
+  // Refinamentos da visão isométrica (ligados por padrão; individualmente desativáveis).
+  bilbordes: true,    // personagens/labels "em pé" (contra-transformação afim)
+  atmosfera: true,    // vinheta + luz ambiente nos jogadores
+  profundidade: true, // y-sort + ângulo 2:1 (estilo Diablo)
+  polimento: true,    // números arredondados + labels mais legíveis
+};
 
 const _AVT_GRAFICOS_KEY = 'rpghub_avt_graficos';
 
-const _ISO_ANGLE_X = 52;   // graus — inclinação isométrica
-const _ISO_SCALE   = 1.45; // fator compensatório de escala
+// Ângulo/escala isométricos: valores-base (52°) e os efetivos (recalculados conforme
+// o toggle "profundidade", que adota o diamante 2:1 clássico em 60°). São lidos pelas
+// projeções de clique/pan e pela contra-transformação de billboards, logo qualquer
+// mudança aqui se propaga automaticamente.
+const _ISO_BASE_ANGLE_X = 52;   // graus — inclinação isométrica base
+const _ISO_BASE_SCALE   = 1.45; // fator compensatório de escala base
+var _ISO_ANGLE_X = _ISO_BASE_ANGLE_X;
+var _ISO_SCALE   = _ISO_BASE_SCALE;
 const _ISO_OVERSIZE = 1.8; // fator de aumento do wrap p/ cobrir os cantos do viewport
+
+// Recalcula ângulo/escala efetivos. Com "profundidade" ativa usa 60° (squash ~0.5 →
+// diamante 2:1) e compensa a escala para preservar a extensão vertical na tela.
+function _avtIsoParamsAtualizar() {
+  const usa2to1 = !!(AVT_GRAFICOS.isoAtivo && AVT_GRAFICOS.profundidade);
+  _ISO_ANGLE_X = usa2to1 ? 60 : _ISO_BASE_ANGLE_X;
+  const cosBase = Math.cos(_ISO_BASE_ANGLE_X * Math.PI / 180);
+  const cosCur  = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
+  _ISO_SCALE = _ISO_BASE_SCALE * (cosBase / cosCur);
+}
 
 function _avtGraficosCarregar() {
   try {
@@ -59,6 +82,7 @@ function _avtGarantirFiltros3D() {
 function _avtGraficosIsoAplicar() {
   const wrap = document.getElementById('avt-mapa-wrap');
   if (!wrap) return;
+  _avtIsoParamsAtualizar(); // ângulo/escala efetivos (depende de "profundidade")
   if (AVT_GRAFICOS.isoAtivo) {
     wrap.style.transform = `rotateX(${_ISO_ANGLE_X}deg) rotateZ(45deg) scale(${_ISO_SCALE})`;
     wrap.style.transformOrigin = 'center center';
@@ -67,8 +91,32 @@ function _avtGraficosIsoAplicar() {
     wrap.style.transformOrigin = '';
   }
   _avtIsoLayoutAplicar();
+  _avtAtmosferaAplicar();
   _avtGraficosControlesAplicar();
 }
+
+// Vinheta de atmosfera: escurece bordas/void para o "mood" de masmorra. Aplicada como
+// overlay fixo NÃO transformado sobre o container do mapa (irmão do wrap), de modo que
+// não sofre a rotação isométrica. Os glows de luz nos jogadores são desenhados no canvas
+// (em _avtRenderFrame), pois precisam acompanhar a câmera.
+function _avtAtmosferaAplicar() {
+  const wrap = document.getElementById('avt-mapa-wrap');
+  const parent = wrap?.parentElement;
+  if (!parent) return;
+  let vig = document.getElementById('avt-atmosfera');
+  const ativo = !!(AVT_GRAFICOS.isoAtivo && AVT_GRAFICOS.atmosfera);
+  if (!ativo) { if (vig) vig.style.display = 'none'; return; }
+  if (!vig) {
+    vig = document.createElement('div');
+    vig.id = 'avt-atmosfera';
+    vig.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:20;'
+      + 'background:radial-gradient(ellipse 62% 62% at 50% 48%,'
+      + 'rgba(0,0,0,0) 38%,rgba(3,5,10,0.40) 72%,rgba(2,3,8,0.82) 100%);';
+    parent.appendChild(vig);
+  }
+  vig.style.display = 'block';
+}
+window._avtAtmosferaAplicar = _avtAtmosferaAplicar;
 
 // Cantos pretos: aumenta o wrap (e o canvas, que o acompanha) por _ISO_OVERSIZE e
 // clipa o excedente no container pai, de modo que o paralelogramo da transform
@@ -149,6 +197,24 @@ function _avtIsoDeltaToCanvas(dx, dy) {
   return { x: (dx + dy / cosX) / (2 * k), y: (dy / cosX - dx) / (2 * k) };
 }
 
+// Billboards: aplica ao contexto 2D a contra-transformação (inversa da parte linear do
+// CSS) ao redor do ponto de ancoragem (pivô, normalmente os pés). Como o CSS aplica uma
+// transformação AFIM (não há perspective), desenhar com a inversa faz o sprite voltar a
+// aparecer "em pé"/sem distorção na tela, mantendo os pés plantados no tile. O chamador
+// envolve o desenho com ctx.save()/ctx.restore(). Usa os MESMOS k/cosX da projeção de
+// clique, então acompanha o ângulo 2:1 automaticamente.
+function _avtIsoBillboardAplicar(ctx, pivotX, pivotY) {
+  const k    = _ISO_SCALE / Math.SQRT2;
+  const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
+  const inv2k = 1 / (2 * k);
+  // Matriz inversa (tela→canvas), em torno do pivô: T(p)·M⁻¹·T(-p).
+  // transform(a,b,c,d,e,f): x'=a·x+c·y+e, y'=b·x+d·y+f.
+  ctx.translate(pivotX, pivotY);
+  ctx.transform(inv2k, -inv2k, inv2k / cosX, inv2k / cosX, 0, 0);
+  ctx.translate(-pivotX, -pivotY);
+}
+window._avtIsoBillboardAplicar = _avtIsoBillboardAplicar;
+
 function _avtGraficosIsoToggle(ativo) {
   AVT_GRAFICOS.isoAtivo = ativo;
   _avtGraficosSalvar();
@@ -157,6 +223,35 @@ function _avtGraficosIsoToggle(ativo) {
   if (chk) chk.checked = ativo;
   // Reflete o estado (habilita/desabilita) dos controles iso, se o painel estiver aberto
   _avtControlesAtualizarUI();
+  _avtIsoRefinosAtualizarUI();
+}
+
+// ── Refinamentos da visão isométrica (preferência individual) ─────────────────
+// Toggle genérico para bilbordes/atmosfera/profundidade/polimento. Apenas atualiza a
+// flag e reaplica a transform iso (o loop de render lê as flags a cada frame).
+function _avtGraficosRefinoToggle(chave, ativo) {
+  AVT_GRAFICOS[chave] = !!ativo;
+  _avtGraficosSalvar();
+  // "profundidade" muda o ângulo 2:1; "atmosfera" liga/desliga a vinheta.
+  // Reaplicar a transform recalcula ambos sem reabrir a fase.
+  _avtGraficosIsoAplicar();
+  const chk = document.getElementById('avt-cfg-iso-' + chave);
+  if (chk) chk.checked = !!ativo;
+}
+window._avtGraficosRefinoToggle = _avtGraficosRefinoToggle;
+
+// Atualiza estado disabled/checked dos toggles de refinamento (dependem de isoAtivo,
+// exceto "polimento" que vale sempre).
+function _avtIsoRefinosAtualizarUI() {
+  const isoOn = !!AVT_GRAFICOS.isoAtivo;
+  ['bilbordes', 'atmosfera', 'profundidade'].forEach(chave => {
+    const chk = document.getElementById('avt-cfg-iso-' + chave);
+    if (chk) { chk.disabled = !isoOn; chk.checked = !!AVT_GRAFICOS[chave]; }
+    const row = document.getElementById('avt-cfg-iso-' + chave + '-row');
+    if (row) row.style.opacity = isoOn ? '1' : '0.45';
+  });
+  const pol = document.getElementById('avt-cfg-iso-polimento');
+  if (pol) pol.checked = !!AVT_GRAFICOS.polimento;
 }
 
 // ── Controles isométricos (preferência individual) ───────────────────────────
@@ -398,7 +493,30 @@ function _avtMenuHtmlGraficos() {
           <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">Inclina o mapa para perspectiva 3D isométrica. Compatível com o efeito de textura.</div>
         </div>
       </label>
-      <div style="font-size:0.6rem;color:#5a6b7a">Para um sprite isométrico personalizado, configure na ficha do personagem.</div>
+
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:rgba(200,168,75,0.55);text-transform:uppercase;letter-spacing:.08em;margin:14px 0 8px">✨ Refinamentos (estilo Diablo)</div>
+      ${[
+        ['bilbordes',    'Personagens em pé', 'Mantém personagens e nomes verticais voltados à câmera, em vez de inclinados junto com o chão.', true],
+        ['atmosfera',    'Atmosfera e luz',   'Vinheta escura nas bordas e brilho ambiente ao redor dos jogadores.', true],
+        ['profundidade', 'Profundidade 2:1',  'Quem está à frente sobrepõe quem está atrás e usa o ângulo isométrico 2:1 clássico.', true],
+        ['polimento',    'Polimento visual',  'Números de dano arredondados e nomes com contorno para melhor leitura.', false],
+      ].map(([chave, titulo, desc, dependeIso]) => {
+        const dis = (dependeIso && !g.isoAtivo) ? 'disabled' : '';
+        const op  = (dependeIso && !g.isoAtivo) ? '0.45' : '1';
+        return `
+      <label id="avt-cfg-iso-${chave}-row" style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:9px 10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:8px;opacity:${op}">
+        <input type="checkbox" id="avt-cfg-iso-${chave}" ${dis}
+               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
+               ${g[chave] ? 'checked' : ''}
+               onchange="_avtGraficosRefinoToggle('${chave}', this.checked)">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.8rem;color:var(--texto,#c8d8e8)">${titulo}</div>
+          <div style="font-size:0.7rem;color:var(--suave,#7a92aa);margin-top:2px">${desc}</div>
+        </div>
+      </label>`;
+      }).join('')}
+
+      <div style="font-size:0.6rem;color:#5a6b7a;margin-top:2px">Para um sprite isométrico personalizado, configure na ficha do personagem.</div>
     </div>
   `;
 }

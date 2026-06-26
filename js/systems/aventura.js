@@ -5624,8 +5624,39 @@ function _avtRenderFrame() {
     }
   }
 
+  // ── Atmosfera: poços de luz radiais nos jogadores (luz de tocha) ──────────────
+  // Desenhados no plano do chão (acompanham a câmera/inclinação) com mesclagem aditiva,
+  // antes das entidades, para dar a sensação de iluminação localizada estilo Diablo.
+  if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo && AVT_GRAFICOS?.atmosfera) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    entidades.forEach(e => {
+      if (e.escondido || e.tipo !== 'jogador' || e.hp <= 0) return;
+      const lx = Math.round(e.renderX * SZ - camera.x) + SZ / 2;
+      const ly = Math.round(e.renderY * SZ - camera.y) + SZ / 2;
+      const lr = SZ * 3.2;
+      const grad = ctx.createRadialGradient(lx, ly, SZ * 0.2, lx, ly, lr);
+      grad.addColorStop(0,   'rgba(255,226,170,0.20)');
+      grad.addColorStop(0.5, 'rgba(255,196,120,0.08)');
+      grad.addColorStop(1,   'rgba(255,180,100,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(lx, ly, lr, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
   // ── Desenhar entidades ────────────────────────────────────────────────────
-  entidades.forEach(e => {
+  // Y-sort (profundidade): em iso, desenhar de trás para a frente (menor renderY primeiro)
+  // para que quem está à frente sobreponha quem está atrás, como no Diablo. Usa uma cópia
+  // para não alterar a ordem em AVT_STATE.entidades.
+  const _ysort = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo && AVT_GRAFICOS?.profundidade);
+  const _entsDesenho = _ysort
+    ? [...entidades].sort((a, b) =>
+        ((a.renderY ?? a.y) - (b.renderY ?? b.y)) || ((a.renderX ?? a.x) - (b.renderX ?? b.x)))
+    : entidades;
+  _entsDesenho.forEach(e => {
     if (e.escondido || (e.tipo === 'inimigo' && e.hp <= 0)) return; // NPCs mortos não aparecem no mapa
     const _isAvatar   = e.tipo === 'avatar';
     const _isInvocado = e.tipo === 'invocado';
@@ -5646,11 +5677,18 @@ function _avtRenderFrame() {
     // Atualizar estado de animação (detectar movimento)
     _avtAnimAtualizar(e);
 
-    // Sombra
+    // Sombra (mantida no plano do chão — desenhada antes do billboard)
     ctx.beginPath();
     ctx.ellipse(cx, cy+r+2, r-2, 4, 0, 0, Math.PI*2);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fill();
+
+    // ── Billboard: contra-transforma o conjunto da entidade para que sprite, nome e
+    // barras apareçam "em pé" voltados à câmera (em vez de inclinados com o chão).
+    // Ancorado nos pés (sobre a sombra), então o personagem fica plantado no tile.
+    const _bbOn = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
+      && AVT_GRAFICOS?.bilbordes && typeof _avtIsoBillboardAplicar === 'function');
+    if (_bbOn) { ctx.save(); _avtIsoBillboardAplicar(ctx, cx, cy + r + 2); }
 
     // Silence aura: gradiente escuro atrás do token
     if (e._silenciado || e.status_effects?.some(ef => ef.tipo === 'silence' && ((ef._turnos_restantes ?? 0) > 0 || ef._ooc))) {
@@ -5885,8 +5923,9 @@ function _avtRenderFrame() {
 
     // Nome do personagem abaixo das barras
     const _nameY = _lastBarBottomY + 7;
-    ctx.fillStyle = 'rgba(220,230,240,0.78)';
-    ctx.font = `${Math.floor(SZ*0.17)}px var(--fonte-d,sans-serif)`;
+    // Polimento: contorno escuro + fonte levemente maior para legibilidade sobre o mapa.
+    const _polirLabel = !!(typeof AVT_GRAFICOS === 'undefined' || AVT_GRAFICOS?.polimento !== false);
+    ctx.font = `${Math.floor(SZ * (_polirLabel ? 0.19 : 0.17))}px var(--fonte-d,sans-serif)`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const _maxNomeW = SZ * 1.6;
@@ -5896,6 +5935,15 @@ function _avtRenderFrame() {
         _nomeLabel = _nomeLabel.slice(0, -1);
       }
       _nomeLabel += '…';
+    }
+    if (_polirLabel) {
+      ctx.lineWidth = Math.max(2, Math.round(SZ * 0.06));
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.lineJoin = 'round';
+      ctx.strokeText(_nomeLabel, cx, _nameY);
+      ctx.fillStyle = 'rgba(235,242,250,0.95)';
+    } else {
+      ctx.fillStyle = 'rgba(220,230,240,0.78)';
     }
     ctx.fillText(_nomeLabel, cx, _nameY);
 
@@ -6006,6 +6054,8 @@ function _avtRenderFrame() {
       ctx.stroke();
       ctx.restore();
     }
+
+    if (_bbOn) ctx.restore(); // encerra a contra-transformação do billboard
   });
 
   // Atualizar posição do botão de rolar dados (desktop) para seguir o token ativo
