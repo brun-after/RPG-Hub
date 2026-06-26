@@ -15,12 +15,13 @@ var AVT_MENU_STATE = {
 // GRÁFICOS — preferência individual, localStorage
 // ─────────────────────────────────────────────────────────────────────────────
 
-var AVT_GRAFICOS = { ativo: false, nivel: 1, isoAtivo: false };
+var AVT_GRAFICOS = { ativo: false, nivel: 1, isoAtivo: false, isoTeclado: false, isoMobile: false };
 
 const _AVT_GRAFICOS_KEY = 'rpghub_avt_graficos';
 
 const _ISO_ANGLE_X = 52;   // graus — inclinação isométrica
 const _ISO_SCALE   = 1.45; // fator compensatório de escala
+const _ISO_OVERSIZE = 1.8; // fator de aumento do wrap p/ cobrir os cantos do viewport
 
 function _avtGraficosCarregar() {
   try {
@@ -65,7 +66,64 @@ function _avtGraficosIsoAplicar() {
     wrap.style.transform = '';
     wrap.style.transformOrigin = '';
   }
+  _avtIsoLayoutAplicar();
+  _avtGraficosControlesAplicar();
 }
+
+// Cantos pretos: aumenta o wrap (e o canvas, que o acompanha) por _ISO_OVERSIZE e
+// clipa o excedente no container pai, de modo que o paralelogramo da transform
+// cubra todo o viewport. Mantém canvas == wrap, preservando a matemática de
+// clique/pan/câmera (que usa offsetWidth/Height e a cadeia de offsetLeft).
+function _avtIsoLayoutAplicar() {
+  const wrap = document.getElementById('avt-mapa-wrap');
+  if (!wrap) return;
+  const parent = wrap.parentElement;
+  if (!parent) return;
+  // Só atua dentro do jogo (canvas existente e área com tamanho). Ao alternar no
+  // menu pré-jogo, apenas guarda a preferência; o layout é aplicado ao entrar.
+  const emJogo = !!(typeof AVT_STATE !== 'undefined' && AVT_STATE.canvas) && parent.clientWidth > 0;
+  if (!emJogo && AVT_GRAFICOS.isoAtivo) return;
+  if (AVT_GRAFICOS.isoAtivo) {
+    if (!wrap._isoLayoutPrev) {
+      wrap._isoLayoutPrev = {
+        position: wrap.style.position, flex: wrap.style.flex,
+        width: wrap.style.width, height: wrap.style.height,
+        left: wrap.style.left, top: wrap.style.top,
+        parentOverflow: parent.style.overflow,
+      };
+    }
+    parent.style.overflow = 'hidden';
+    wrap.style.position = 'absolute';
+    wrap.style.flex = 'none';
+    _avtIsoSizeWrap();
+  } else if (wrap._isoLayoutPrev) {
+    const p = wrap._isoLayoutPrev;
+    wrap.style.position = p.position; wrap.style.flex = p.flex;
+    wrap.style.width = p.width; wrap.style.height = p.height;
+    wrap.style.left = p.left; wrap.style.top = p.top;
+    parent.style.overflow = p.parentOverflow;
+    wrap._isoLayoutPrev = null;
+  }
+  // Redimensiona o canvas para o novo tamanho do wrap.
+  if (typeof _avtCanvasResize === 'function') { _avtIsoResizing = true; try { _avtCanvasResize(); } finally { _avtIsoResizing = false; } }
+}
+
+// Define apenas as dimensões oversized do wrap a partir do pai (sem disparar resize).
+// Reaproveitado pelo _avtCanvasResize quando a janela muda de tamanho em iso.
+var _avtIsoResizing = false;
+function _avtIsoSizeWrap() {
+  const wrap = document.getElementById('avt-mapa-wrap');
+  if (!wrap || !AVT_GRAFICOS.isoAtivo) return;
+  const parent = wrap.parentElement;
+  if (!parent || parent.clientWidth <= 0) return;
+  const pw = parent.clientWidth, ph = parent.clientHeight;
+  const f = _ISO_OVERSIZE;
+  wrap.style.width  = (pw * f) + 'px';
+  wrap.style.height = (ph * f) + 'px';
+  wrap.style.left = (pw * (1 - f) / 2) + 'px';
+  wrap.style.top  = (ph * (1 - f) / 2) + 'px';
+}
+window._avtIsoSizeWrap = _avtIsoSizeWrap;
 
 // Inversa analítica do CSS transform afim: tela → canvas (sem perspective, logo afim exata)
 function _avtIsoScreenToCanvas(clientX, clientY) {
@@ -97,6 +155,81 @@ function _avtGraficosIsoToggle(ativo) {
   _avtGraficosIsoAplicar();
   const chk = document.getElementById('avt-cfg-iso-ativo');
   if (chk) chk.checked = ativo;
+  // Reflete o estado (habilita/desabilita) dos controles iso, se o painel estiver aberto
+  _avtControlesAtualizarUI();
+}
+
+// ── Controles isométricos (preferência individual) ───────────────────────────
+function _avtGraficosTecladoToggle(ativo) {
+  AVT_GRAFICOS.isoTeclado = ativo;
+  _avtGraficosSalvar();
+  const chk = document.getElementById('avt-cfg-iso-teclado');
+  if (chk) chk.checked = ativo;
+}
+
+function _avtGraficosMobileToggle(ativo) {
+  AVT_GRAFICOS.isoMobile = ativo;
+  _avtGraficosSalvar();
+  _avtGraficosControlesAplicar();
+  const chk = document.getElementById('avt-cfg-iso-mobile');
+  if (chk) chk.checked = ativo;
+}
+
+// Mostra/esconde o overlay do D-pad isométrico conforme preferência + dispositivo.
+function _avtGraficosControlesAplicar() {
+  const ov = document.getElementById('avt-iso-dpad');
+  if (!ov) return;
+  const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  ov.style.display = (AVT_GRAFICOS.isoAtivo && AVT_GRAFICOS.isoMobile && isTouch) ? 'block' : 'none';
+}
+
+// Atualiza o estado disabled/checked dos toggles da aba Controles, se visíveis.
+function _avtControlesAtualizarUI() {
+  const isoOn = !!AVT_GRAFICOS.isoAtivo;
+  ['avt-cfg-iso-teclado', 'avt-cfg-iso-mobile'].forEach(id => {
+    const chk = document.getElementById(id);
+    if (chk) chk.disabled = !isoOn;
+  });
+  const aviso = document.getElementById('avt-cfg-controles-aviso');
+  if (aviso) aviso.style.display = isoOn ? 'none' : 'block';
+}
+
+function _avtMenuHtmlControles() {
+  const g = AVT_GRAFICOS;
+  const dis = g.isoAtivo ? '' : 'disabled';
+  const op  = g.isoAtivo ? '1' : '0.45';
+  return `
+    <div>
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">🎮 Controles Isométricos</div>
+
+      <div id="avt-cfg-controles-aviso" style="display:${g.isoAtivo ? 'none' : 'block'};font-size:0.68rem;color:#c89a4b;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;padding:8px 10px;margin-bottom:12px">
+        Disponível apenas com a <b>Visão Isométrica</b> ativada (aba Gráficos).
+      </div>
+
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:10px;opacity:${op}">
+        <input type="checkbox" id="avt-cfg-iso-teclado" ${dis}
+               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
+               ${g.isoTeclado ? 'checked' : ''}
+               onchange="_avtGraficosTecladoToggle(this.checked)">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto,#c8d8e8)">Controle isométrico (teclado)</div>
+          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">Move com W / E / S / D em diamante, alinhado às diagonais da tela.</div>
+        </div>
+      </label>
+
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;opacity:${op}">
+        <input type="checkbox" id="avt-cfg-iso-mobile" ${dis}
+               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
+               ${g.isoMobile ? 'checked' : ''}
+               onchange="_avtGraficosMobileToggle(this.checked)">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto,#c8d8e8)">Controle isométrico mobile</div>
+          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">D-pad com as diagonais em destaque (cima/baixo/esquerda/direita) e os direcionais comuns reduzidos.</div>
+        </div>
+      </label>
+      <div style="font-size:0.6rem;color:#5a6b7a;margin-top:6px">Preferência salva localmente neste dispositivo.</div>
+    </div>
+  `;
 }
 
 function _avtGraficosAplicar() {
@@ -187,11 +320,14 @@ function _avtMenuHtmlGraficos() {
   `;
 }
 
-window._avtGraficosToggle    = _avtGraficosToggle;
-window._avtGraficosNivel     = _avtGraficosNivel;
-window._avtGraficosIsoToggle = _avtGraficosIsoToggle;
-window._avtIsoScreenToCanvas = _avtIsoScreenToCanvas;
-window._avtIsoDeltaToCanvas  = _avtIsoDeltaToCanvas;
+window._avtGraficosToggle        = _avtGraficosToggle;
+window._avtGraficosNivel         = _avtGraficosNivel;
+window._avtGraficosIsoToggle     = _avtGraficosIsoToggle;
+window._avtGraficosTecladoToggle = _avtGraficosTecladoToggle;
+window._avtGraficosMobileToggle  = _avtGraficosMobileToggle;
+window._avtGraficosControlesAplicar = _avtGraficosControlesAplicar;
+window._avtIsoScreenToCanvas     = _avtIsoScreenToCanvas;
+window._avtIsoDeltaToCanvas      = _avtIsoDeltaToCanvas;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ENTRADA PRINCIPAL
@@ -869,6 +1005,7 @@ function _avtMenuAbrirConfigMestre(aba) {
     { id: 'personagens',   label: '👤 Personagens' },
     { id: 'jogador',       label: '🎮 Player' },
     { id: 'graficos',      label: '🎨 Gráficos' },
+    { id: 'controles',     label: '🎮 Controles' },
   ];
 
   const tabBar = `
@@ -941,6 +1078,10 @@ function _avtMenuConfigConteudoAba(aba) {
 
   if (aba === 'graficos') {
     return _avtMenuHtmlGraficos();
+  }
+
+  if (aba === 'controles') {
+    return _avtMenuHtmlControles();
   }
 
   // Abas do painel do mestre: reutiliza _avtMpConteudoAba()
@@ -1044,6 +1185,10 @@ function _avtMenuHtmlConfigJogador() {
     <div style="border-top:1px solid rgba(79,163,209,0.1);margin-bottom:16px"></div>
 
     ${_avtMenuHtmlGraficos()}
+
+    <div style="border-top:1px solid rgba(79,163,209,0.1);margin-bottom:16px"></div>
+
+    ${_avtMenuHtmlControles()}
 
     <button onclick="_avtMenuSalvarConfigJogador()" style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.35);border-radius:7px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.7rem;padding:8px 20px;cursor:pointer;letter-spacing:.06em;text-transform:uppercase;width:100%">Salvar Configurações</button>
   `;

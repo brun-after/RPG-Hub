@@ -499,6 +499,20 @@
           <div></div>
         </div>
       </div>
+      <!-- Mobile D-pad isométrico: diagonais primárias (destaque) + cardeais secundários (apagados) -->
+      <div id="avt-iso-dpad" style="display:none;position:absolute;bottom:16px;left:16px;z-index:30;touch-action:none">
+        <div style="display:grid;grid-template-columns:repeat(3,62px);grid-template-rows:repeat(3,62px);gap:2px;place-items:center">
+          <button class="avt-isodpad-diag" ontouchstart="event.preventDefault();avtDpad(-1,0)" ontouchend="avtDpadStop()" onmousedown="avtDpad(-1,0)" onmouseup="avtDpadStop()" title="Cima">↖</button>
+          <button class="avt-isodpad-card" ontouchstart="event.preventDefault();avtDpad(-1,-1)" ontouchend="avtDpadStop()" onmousedown="avtDpad(-1,-1)" onmouseup="avtDpadStop()">↑</button>
+          <button class="avt-isodpad-diag" ontouchstart="event.preventDefault();avtDpad(0,-1)" ontouchend="avtDpadStop()" onmousedown="avtDpad(0,-1)" onmouseup="avtDpadStop()" title="Direita">↗</button>
+          <button class="avt-isodpad-card" ontouchstart="event.preventDefault();avtDpad(-1,1)" ontouchend="avtDpadStop()" onmousedown="avtDpad(-1,1)" onmouseup="avtDpadStop()">←</button>
+          <div></div>
+          <button class="avt-isodpad-card" ontouchstart="event.preventDefault();avtDpad(1,-1)" ontouchend="avtDpadStop()" onmousedown="avtDpad(1,-1)" onmouseup="avtDpadStop()">→</button>
+          <button class="avt-isodpad-diag" ontouchstart="event.preventDefault();avtDpad(0,1)" ontouchend="avtDpadStop()" onmousedown="avtDpad(0,1)" onmouseup="avtDpadStop()" title="Esquerda">↙</button>
+          <button class="avt-isodpad-card" ontouchstart="event.preventDefault();avtDpad(1,1)" ontouchend="avtDpadStop()" onmousedown="avtDpad(1,1)" onmouseup="avtDpadStop()">↓</button>
+          <button class="avt-isodpad-diag" ontouchstart="event.preventDefault();avtDpad(1,0)" ontouchend="avtDpadStop()" onmousedown="avtDpad(1,0)" onmouseup="avtDpadStop()" title="Baixo">↘</button>
+        </div>
+      </div>
     </div>
 
     <!-- Master panel (collapsible, absolute over map) -->

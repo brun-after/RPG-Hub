@@ -715,15 +715,45 @@ const AVT_WARRIOR_SVG_B = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 
 const AVT_MAGE_SVG_A    = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="2" y="0" width="1" height="12" fill="#7a4f1a"/><rect x="1" y="0" width="3" height="2" fill="#c8a830"/><rect x="1" y="0" width="3" height="1" fill="#f0d060"/><rect x="7" y="1" width="2" height="1" fill="#4a2070"/><rect x="6" y="2" width="4" height="1" fill="#5a2880"/><rect x="5" y="3" width="6" height="2" fill="#5a2880"/><rect x="6" y="3" width="4" height="2" fill="#2a1440"/><rect x="7" y="4" width="1" height="1" fill="#c8a830"/><rect x="9" y="4" width="1" height="1" fill="#c8a830"/><rect x="7" y="5" width="2" height="1" fill="#3d1a60"/><rect x="5" y="6" width="6" height="5" fill="#5a2880"/><rect x="7" y="7" width="2" height="1" fill="#c8a830"/><rect x="8" y="8" width="1" height="2" fill="#c8a830"/><rect x="7" y="9" width="2" height="1" fill="#c8a830"/><rect x="3" y="7" width="2" height="3" fill="#4a2070"/><rect x="11" y="7" width="2" height="3" fill="#4a2070"/><rect x="3" y="10" width="1" height="1" fill="#c8a8a0"/><rect x="4" y="11" width="8" height="3" fill="#4a2070"/><rect x="5" y="14" width="2" height="1" fill="#3a1860"/><rect x="9" y="14" width="2" height="1" fill="#3a1860"/><rect x="6" y="15" width="1" height="1" fill="#2a1440"/><rect x="9" y="15" width="1" height="1" fill="#2a1440"/></svg>`;
 const AVT_MAGE_SVG_B    = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="2" y="0" width="1" height="12" fill="#606878"/><rect x="1" y="0" width="3" height="2" fill="#a0c8e8"/><rect x="2" y="0" width="1" height="1" fill="#d0eeff"/><rect x="7" y="1" width="2" height="1" fill="#162040"/><rect x="6" y="2" width="4" height="1" fill="#1c2c50"/><rect x="5" y="3" width="6" height="2" fill="#1c2c50"/><rect x="6" y="3" width="4" height="2" fill="#0a1428"/><rect x="7" y="4" width="1" height="1" fill="#60b8e8"/><rect x="9" y="4" width="1" height="1" fill="#60b8e8"/><rect x="7" y="5" width="2" height="1" fill="#162040"/><rect x="4" y="6" width="8" height="2" fill="#2a4070"/><rect x="5" y="6" width="6" height="5" fill="#1c2c50"/><rect x="6" y="7" width="1" height="1" fill="#a0b8c8"/><rect x="7" y="8" width="2" height="1" fill="#a0b8c8"/><rect x="9" y="7" width="1" height="1" fill="#a0b8c8"/><rect x="7" y="9" width="2" height="1" fill="#a0b8c8"/><rect x="3" y="7" width="2" height="3" fill="#162040"/><rect x="11" y="7" width="2" height="3" fill="#162040"/><rect x="3" y="10" width="1" height="1" fill="#c0c8d0"/><rect x="4" y="11" width="8" height="3" fill="#162040"/><rect x="5" y="14" width="2" height="1" fill="#0a1428"/><rect x="9" y="14" width="2" height="1" fill="#0a1428"/><rect x="6" y="15" width="1" height="1" fill="#080e1c"/><rect x="9" y="15" width="1" height="1" fill="#080e1c"/></svg>`;
 
+// ── Variantes head (top-down) e novas classes ─────────────────────────────────
+const AVT_WARRIOR_SVG_A_HEAD = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="5" y="2" width="6" height="1" fill="#1a2228"/><rect x="4" y="3" width="1" height="1" fill="#1a2228"/><rect x="11" y="3" width="1" height="1" fill="#1a2228"/><rect x="3" y="4" width="1" height="8" fill="#1a2228"/><rect x="12" y="4" width="1" height="8" fill="#1a2228"/><rect x="4" y="12" width="1" height="1" fill="#1a2228"/><rect x="11" y="12" width="1" height="1" fill="#1a2228"/><rect x="5" y="13" width="6" height="1" fill="#1a2228"/><rect x="5" y="3" width="6" height="1" fill="#a0aab0"/><rect x="4" y="4" width="8" height="8" fill="#a0aab0"/><rect x="5" y="12" width="6" height="1" fill="#a0aab0"/><rect x="9" y="4" width="3" height="7" fill="#8a9199"/><rect x="5" y="10" width="6" height="2" fill="#8a9199"/><rect x="7" y="3" width="2" height="10" fill="#cc2233"/><rect x="4" y="7" width="8" height="2" fill="#cc2233"/><rect x="7" y="7" width="1" height="1" fill="#ff4444"/><rect x="5" y="3" width="3" height="1" fill="#c0c8d0"/><rect x="4" y="4" width="2" height="2" fill="#c0c8d0"/></svg>`;
+const AVT_WARRIOR_SVG_B_HEAD = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="5" y="2" width="6" height="1" fill="#1a1a08"/><rect x="4" y="3" width="1" height="1" fill="#1a1a08"/><rect x="11" y="3" width="1" height="1" fill="#1a1a08"/><rect x="3" y="4" width="1" height="8" fill="#1a1a08"/><rect x="12" y="4" width="1" height="8" fill="#1a1a08"/><rect x="4" y="12" width="1" height="1" fill="#1a1a08"/><rect x="11" y="12" width="1" height="1" fill="#1a1a08"/><rect x="5" y="13" width="6" height="1" fill="#1a1a08"/><rect x="5" y="3" width="6" height="1" fill="#d4b040"/><rect x="4" y="4" width="8" height="8" fill="#d4b040"/><rect x="5" y="12" width="6" height="1" fill="#d4b040"/><rect x="9" y="4" width="3" height="7" fill="#a08020"/><rect x="5" y="10" width="6" height="2" fill="#a08020"/><rect x="7" y="3" width="2" height="10" fill="#1a3c78"/><rect x="4" y="7" width="8" height="2" fill="#1a3c78"/><rect x="7" y="7" width="1" height="1" fill="#c8a830"/><rect x="5" y="3" width="3" height="1" fill="#e8d060"/><rect x="4" y="4" width="2" height="2" fill="#e8d060"/></svg>`;
+const AVT_MAGE_SVG_A_HEAD    = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="5" y="2" width="6" height="1" fill="#180a2a"/><rect x="4" y="3" width="1" height="1" fill="#180a2a"/><rect x="11" y="3" width="1" height="1" fill="#180a2a"/><rect x="3" y="4" width="1" height="8" fill="#180a2a"/><rect x="12" y="4" width="1" height="8" fill="#180a2a"/><rect x="4" y="12" width="1" height="1" fill="#180a2a"/><rect x="11" y="12" width="1" height="1" fill="#180a2a"/><rect x="5" y="13" width="6" height="1" fill="#180a2a"/><rect x="5" y="3" width="6" height="1" fill="#5a2880"/><rect x="4" y="4" width="8" height="8" fill="#5a2880"/><rect x="5" y="12" width="6" height="1" fill="#5a2880"/><rect x="9" y="4" width="3" height="7" fill="#4a2070"/><rect x="5" y="10" width="6" height="2" fill="#4a2070"/><rect x="7" y="3" width="2" height="10" fill="#c8a830"/><rect x="4" y="7" width="8" height="2" fill="#c8a830"/><rect x="6" y="5" width="1" height="1" fill="#c8a830"/><rect x="9" y="5" width="1" height="1" fill="#c8a830"/><rect x="6" y="9" width="1" height="1" fill="#c8a830"/><rect x="9" y="9" width="1" height="1" fill="#c8a830"/><rect x="7" y="7" width="2" height="2" fill="#f0d060"/><rect x="5" y="3" width="2" height="1" fill="#8a50c0"/><rect x="4" y="4" width="2" height="1" fill="#8a50c0"/></svg>`;
+const AVT_MAGE_SVG_B_HEAD    = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="5" y="2" width="6" height="1" fill="#080e1e"/><rect x="4" y="3" width="1" height="1" fill="#080e1e"/><rect x="11" y="3" width="1" height="1" fill="#080e1e"/><rect x="3" y="4" width="1" height="8" fill="#080e1e"/><rect x="12" y="4" width="1" height="8" fill="#080e1e"/><rect x="4" y="12" width="1" height="1" fill="#080e1e"/><rect x="11" y="12" width="1" height="1" fill="#080e1e"/><rect x="5" y="13" width="6" height="1" fill="#080e1e"/><rect x="5" y="3" width="6" height="1" fill="#1c2c50"/><rect x="4" y="4" width="8" height="8" fill="#1c2c50"/><rect x="5" y="12" width="6" height="1" fill="#1c2c50"/><rect x="9" y="4" width="3" height="7" fill="#162040"/><rect x="5" y="10" width="6" height="2" fill="#162040"/><rect x="7" y="3" width="2" height="10" fill="#60b8e8"/><rect x="4" y="7" width="8" height="2" fill="#60b8e8"/><rect x="6" y="5" width="1" height="1" fill="#a0d8f8"/><rect x="9" y="5" width="1" height="1" fill="#a0d8f8"/><rect x="6" y="9" width="1" height="1" fill="#a0d8f8"/><rect x="9" y="9" width="1" height="1" fill="#a0d8f8"/><rect x="7" y="7" width="2" height="2" fill="#d0eeff"/><rect x="5" y="3" width="2" height="1" fill="#2a4070"/><rect x="4" y="4" width="2" height="1" fill="#2a4070"/></svg>`;
+// ── Paladino ──────────────────────────────────────────────────────────────────
+const AVT_PALADIN_SVG_A      = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="6" y="1" width="4" height="1" fill="#d4b040"/><rect x="5" y="2" width="6" height="2" fill="#d4b040"/><rect x="6" y="4" width="4" height="1" fill="#a08020"/><rect x="6" y="3" width="1" height="1" fill="#1a1a2a"/><rect x="9" y="3" width="1" height="1" fill="#1a1a2a"/><rect x="7" y="5" width="2" height="1" fill="#a08020"/><rect x="3" y="6" width="3" height="2" fill="#d4b040"/><rect x="10" y="6" width="3" height="2" fill="#d4b040"/><rect x="5" y="6" width="6" height="4" fill="#c8a830"/><rect x="7" y="7" width="2" height="4" fill="#f8f8ff"/><rect x="6" y="8" width="4" height="2" fill="#f8f8ff"/><rect x="5" y="10" width="6" height="1" fill="#8a5520"/><rect x="5" y="11" width="2" height="2" fill="#d4b040"/><rect x="9" y="11" width="2" height="2" fill="#d4b040"/><rect x="6" y="13" width="2" height="2" fill="#a08020"/><rect x="8" y="13" width="2" height="2" fill="#a08020"/><rect x="12" y="2" width="1" height="1" fill="#fffff0"/><rect x="11" y="3" width="1" height="1" fill="#fffff0"/><rect x="10" y="4" width="1" height="1" fill="#e8e8c0"/><rect x="11" y="5" width="2" height="1" fill="#8a5520"/><rect x="1" y="7" width="2" height="3" fill="#e8e8ff"/><rect x="2" y="10" width="1" height="1" fill="#c8c8e0"/><rect x="1" y="8" width="1" height="1" fill="#f8f8ff"/></svg>`;
+const AVT_PALADIN_SVG_B      = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="6" y="1" width="4" height="1" fill="#c8d0d8"/><rect x="5" y="2" width="6" height="2" fill="#c8d0d8"/><rect x="6" y="4" width="4" height="1" fill="#a0a8b0"/><rect x="6" y="3" width="1" height="1" fill="#1a1a2a"/><rect x="9" y="3" width="1" height="1" fill="#1a1a2a"/><rect x="7" y="5" width="2" height="1" fill="#a0a8b0"/><rect x="3" y="6" width="3" height="2" fill="#c8d0d8"/><rect x="10" y="6" width="3" height="2" fill="#c8d0d8"/><rect x="5" y="6" width="6" height="4" fill="#d8e0e8"/><rect x="7" y="7" width="2" height="4" fill="#c8a830"/><rect x="6" y="8" width="4" height="2" fill="#c8a830"/><rect x="7" y="8" width="1" height="1" fill="#f0d060"/><rect x="5" y="10" width="6" height="1" fill="#8a5520"/><rect x="5" y="11" width="2" height="2" fill="#c8d0d8"/><rect x="9" y="11" width="2" height="2" fill="#c8d0d8"/><rect x="6" y="13" width="2" height="2" fill="#a0a8b0"/><rect x="8" y="13" width="2" height="2" fill="#a0a8b0"/><rect x="12" y="2" width="1" height="1" fill="#e8e8f0"/><rect x="11" y="3" width="1" height="1" fill="#e8e8f0"/><rect x="10" y="4" width="1" height="1" fill="#d0d8e0"/><rect x="11" y="5" width="2" height="1" fill="#8a5520"/><rect x="1" y="7" width="2" height="3" fill="#c8d0d8"/><rect x="2" y="10" width="1" height="1" fill="#a0a8b0"/><rect x="1" y="8" width="1" height="1" fill="#c8a830"/></svg>`;
+const AVT_PALADIN_SVG_A_HEAD = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="5" y="2" width="6" height="1" fill="#1a1a08"/><rect x="4" y="3" width="1" height="1" fill="#1a1a08"/><rect x="11" y="3" width="1" height="1" fill="#1a1a08"/><rect x="3" y="4" width="1" height="8" fill="#1a1a08"/><rect x="12" y="4" width="1" height="8" fill="#1a1a08"/><rect x="4" y="12" width="1" height="1" fill="#1a1a08"/><rect x="11" y="12" width="1" height="1" fill="#1a1a08"/><rect x="5" y="13" width="6" height="1" fill="#1a1a08"/><rect x="5" y="3" width="6" height="1" fill="#d4b040"/><rect x="4" y="4" width="8" height="8" fill="#d4b040"/><rect x="5" y="12" width="6" height="1" fill="#d4b040"/><rect x="9" y="4" width="3" height="7" fill="#a08020"/><rect x="5" y="10" width="6" height="2" fill="#a08020"/><rect x="7" y="3" width="2" height="10" fill="#f8f8ff"/><rect x="4" y="7" width="8" height="2" fill="#f8f8ff"/><rect x="7" y="7" width="2" height="2" fill="#ffffff"/><rect x="5" y="3" width="3" height="1" fill="#e8d060"/><rect x="4" y="4" width="2" height="2" fill="#e8d060"/></svg>`;
+const AVT_PALADIN_SVG_B_HEAD = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="5" y="2" width="6" height="1" fill="#1a2228"/><rect x="4" y="3" width="1" height="1" fill="#1a2228"/><rect x="11" y="3" width="1" height="1" fill="#1a2228"/><rect x="3" y="4" width="1" height="8" fill="#1a2228"/><rect x="12" y="4" width="1" height="8" fill="#1a2228"/><rect x="4" y="12" width="1" height="1" fill="#1a2228"/><rect x="11" y="12" width="1" height="1" fill="#1a2228"/><rect x="5" y="13" width="6" height="1" fill="#1a2228"/><rect x="5" y="3" width="6" height="1" fill="#c8d0d8"/><rect x="4" y="4" width="8" height="8" fill="#c8d0d8"/><rect x="5" y="12" width="6" height="1" fill="#c8d0d8"/><rect x="9" y="4" width="3" height="7" fill="#a0a8b0"/><rect x="5" y="10" width="6" height="2" fill="#a0a8b0"/><rect x="7" y="3" width="2" height="10" fill="#c8a830"/><rect x="4" y="7" width="8" height="2" fill="#c8a830"/><rect x="7" y="7" width="2" height="2" fill="#f0d060"/><rect x="5" y="3" width="3" height="1" fill="#d8e0e8"/><rect x="4" y="4" width="2" height="2" fill="#d8e0e8"/></svg>`;
+// ── Arqueiro ──────────────────────────────────────────────────────────────────
+const AVT_ARCHER_SVG_A       = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="13" y="2" width="1" height="12" fill="#7a5018"/><rect x="14" y="2" width="1" height="2" fill="#6a4010"/><rect x="14" y="12" width="1" height="2" fill="#6a4010"/><rect x="6" y="7" width="7" height="1" fill="#d4b040"/><rect x="5" y="7" width="1" height="1" fill="#e8d070"/><rect x="7" y="1" width="2" height="1" fill="#1a4018"/><rect x="6" y="2" width="4" height="1" fill="#2a5020"/><rect x="5" y="3" width="6" height="2" fill="#2a5020"/><rect x="6" y="3" width="4" height="2" fill="#1a3a10"/><rect x="7" y="4" width="1" height="1" fill="#8a5030"/><rect x="9" y="4" width="1" height="1" fill="#8a5030"/><rect x="3" y="6" width="2" height="3" fill="#2a5020"/><rect x="5" y="6" width="7" height="5" fill="#3a6a2a"/><rect x="10" y="6" width="2" height="3" fill="#2a5020"/><rect x="5" y="11" width="7" height="1" fill="#6a4020"/><rect x="5" y="12" width="2" height="2" fill="#4a3018"/><rect x="9" y="12" width="2" height="2" fill="#4a3018"/><rect x="6" y="14" width="2" height="1" fill="#3a2010"/><rect x="8" y="14" width="2" height="1" fill="#3a2010"/><rect x="3" y="10" width="1" height="1" fill="#8a6030"/></svg>`;
+const AVT_ARCHER_SVG_B       = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="13" y="2" width="1" height="12" fill="#5a3808"/><rect x="14" y="2" width="1" height="2" fill="#4a2808"/><rect x="14" y="12" width="1" height="2" fill="#4a2808"/><rect x="6" y="7" width="7" height="1" fill="#c8c890"/><rect x="5" y="7" width="1" height="1" fill="#d8d8a0"/><rect x="7" y="1" width="2" height="1" fill="#1a2a18"/><rect x="6" y="2" width="4" height="1" fill="#1a3a18"/><rect x="5" y="3" width="6" height="2" fill="#1a3a18"/><rect x="6" y="3" width="4" height="2" fill="#0a2208"/><rect x="7" y="4" width="1" height="1" fill="#7a4028"/><rect x="9" y="4" width="1" height="1" fill="#7a4028"/><rect x="3" y="6" width="2" height="3" fill="#1a3a18"/><rect x="5" y="6" width="7" height="5" fill="#2a5020"/><rect x="10" y="6" width="2" height="3" fill="#1a3a18"/><rect x="5" y="11" width="7" height="1" fill="#5a3010"/><rect x="5" y="12" width="2" height="2" fill="#3a2010"/><rect x="9" y="12" width="2" height="2" fill="#3a2010"/><rect x="6" y="14" width="2" height="1" fill="#2a1808"/><rect x="8" y="14" width="2" height="1" fill="#2a1808"/><rect x="3" y="10" width="1" height="1" fill="#6a4820"/></svg>`;
+const AVT_ARCHER_SVG_A_HEAD  = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="5" y="2" width="6" height="1" fill="#102008"/><rect x="4" y="3" width="1" height="1" fill="#102008"/><rect x="11" y="3" width="1" height="1" fill="#102008"/><rect x="3" y="4" width="1" height="8" fill="#102008"/><rect x="12" y="4" width="1" height="8" fill="#102008"/><rect x="4" y="12" width="1" height="1" fill="#102008"/><rect x="11" y="12" width="1" height="1" fill="#102008"/><rect x="5" y="13" width="6" height="1" fill="#102008"/><rect x="5" y="3" width="6" height="1" fill="#3a6a2a"/><rect x="4" y="4" width="8" height="8" fill="#3a6a2a"/><rect x="5" y="12" width="6" height="1" fill="#3a6a2a"/><rect x="9" y="4" width="3" height="7" fill="#2a5020"/><rect x="5" y="10" width="6" height="2" fill="#2a5020"/><rect x="8" y="3" width="1" height="10" fill="#d4b040"/><rect x="4" y="8" width="3" height="1" fill="#7a5018"/><rect x="9" y="8" width="3" height="1" fill="#7a5018"/><rect x="8" y="4" width="1" height="2" fill="#e8d070"/><rect x="5" y="3" width="2" height="1" fill="#4a8038"/><rect x="4" y="4" width="2" height="2" fill="#4a8038"/></svg>`;
+const AVT_ARCHER_SVG_B_HEAD  = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="5" y="2" width="6" height="1" fill="#0a1808"/><rect x="4" y="3" width="1" height="1" fill="#0a1808"/><rect x="11" y="3" width="1" height="1" fill="#0a1808"/><rect x="3" y="4" width="1" height="8" fill="#0a1808"/><rect x="12" y="4" width="1" height="8" fill="#0a1808"/><rect x="4" y="12" width="1" height="1" fill="#0a1808"/><rect x="11" y="12" width="1" height="1" fill="#0a1808"/><rect x="5" y="13" width="6" height="1" fill="#0a1808"/><rect x="5" y="3" width="6" height="1" fill="#2a5020"/><rect x="4" y="4" width="8" height="8" fill="#2a5020"/><rect x="5" y="12" width="6" height="1" fill="#2a5020"/><rect x="9" y="4" width="3" height="7" fill="#1a3a10"/><rect x="5" y="10" width="6" height="2" fill="#1a3a10"/><rect x="8" y="3" width="1" height="10" fill="#c8c890"/><rect x="4" y="8" width="3" height="1" fill="#5a3808"/><rect x="9" y="8" width="3" height="1" fill="#5a3808"/><rect x="8" y="4" width="1" height="2" fill="#d8d8a0"/><rect x="5" y="3" width="2" height="1" fill="#3a6028"/><rect x="4" y="4" width="2" height="2" fill="#3a6028"/></svg>`;
+// ── Ladino ────────────────────────────────────────────────────────────────────
+const AVT_LADINO_SVG_A       = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="6" y="1" width="4" height="1" fill="#282838"/><rect x="5" y="2" width="6" height="2" fill="#282838"/><rect x="6" y="4" width="4" height="1" fill="#1a1a28"/><rect x="7" y="3" width="1" height="1" fill="#1a1a2a"/><rect x="9" y="3" width="1" height="1" fill="#1a1a2a"/><rect x="7" y="5" width="2" height="1" fill="#1a1a28"/><rect x="3" y="6" width="3" height="2" fill="#282838"/><rect x="10" y="6" width="3" height="2" fill="#282838"/><rect x="5" y="6" width="6" height="4" fill="#282838"/><rect x="7" y="7" width="2" height="4" fill="#383848"/><rect x="6" y="8" width="4" height="2" fill="#383848"/><rect x="5" y="10" width="6" height="1" fill="#202028"/><rect x="5" y="11" width="2" height="2" fill="#282838"/><rect x="9" y="11" width="2" height="2" fill="#282838"/><rect x="6" y="13" width="2" height="2" fill="#1a1a28"/><rect x="8" y="13" width="2" height="2" fill="#1a1a28"/><rect x="13" y="5" width="1" height="5" fill="#b0b8c0"/><rect x="14" y="5" width="1" height="1" fill="#d0d8e0"/><rect x="13" y="10" width="2" height="1" fill="#808898"/><rect x="1" y="6" width="1" height="4" fill="#b0b8c0"/><rect x="1" y="6" width="2" height="1" fill="#d0d8e0"/><rect x="1" y="10" width="2" height="1" fill="#808898"/></svg>`;
+const AVT_LADINO_SVG_B       = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="6" y="1" width="4" height="1" fill="#1a0828"/><rect x="5" y="2" width="6" height="2" fill="#2a1040"/><rect x="6" y="4" width="4" height="1" fill="#1a0828"/><rect x="7" y="3" width="1" height="1" fill="#0a0a18"/><rect x="9" y="3" width="1" height="1" fill="#0a0a18"/><rect x="7" y="5" width="2" height="1" fill="#1a0828"/><rect x="3" y="6" width="3" height="2" fill="#2a1040"/><rect x="10" y="6" width="3" height="2" fill="#2a1040"/><rect x="5" y="6" width="6" height="4" fill="#2a1040"/><rect x="7" y="7" width="2" height="4" fill="#3a1858"/><rect x="6" y="8" width="4" height="2" fill="#3a1858"/><rect x="5" y="10" width="6" height="1" fill="#180830"/><rect x="5" y="11" width="2" height="2" fill="#2a1040"/><rect x="9" y="11" width="2" height="2" fill="#2a1040"/><rect x="6" y="13" width="2" height="2" fill="#1a0828"/><rect x="8" y="13" width="2" height="2" fill="#1a0828"/><rect x="13" y="5" width="1" height="5" fill="#a878d0"/><rect x="14" y="5" width="1" height="1" fill="#c898e8"/><rect x="13" y="10" width="2" height="1" fill="#6848a0"/><rect x="1" y="6" width="1" height="4" fill="#a878d0"/><rect x="1" y="6" width="2" height="1" fill="#c898e8"/><rect x="1" y="10" width="2" height="1" fill="#6848a0"/></svg>`;
+const AVT_LADINO_SVG_A_HEAD  = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="5" y="2" width="6" height="1" fill="#0a0a18"/><rect x="4" y="3" width="1" height="1" fill="#0a0a18"/><rect x="11" y="3" width="1" height="1" fill="#0a0a18"/><rect x="3" y="4" width="1" height="8" fill="#0a0a18"/><rect x="12" y="4" width="1" height="8" fill="#0a0a18"/><rect x="4" y="12" width="1" height="1" fill="#0a0a18"/><rect x="11" y="12" width="1" height="1" fill="#0a0a18"/><rect x="5" y="13" width="6" height="1" fill="#0a0a18"/><rect x="5" y="3" width="6" height="1" fill="#282838"/><rect x="4" y="4" width="8" height="8" fill="#282838"/><rect x="5" y="12" width="6" height="1" fill="#282838"/><rect x="9" y="4" width="3" height="7" fill="#1a1a28"/><rect x="5" y="10" width="6" height="2" fill="#1a1a28"/><rect x="9" y="4" width="1" height="8" fill="#b0b8c0" opacity="0.8" transform="rotate(45 9.5 8)"/><rect x="7" y="10" width="6" height="1" fill="#b0b8c0"/><rect x="11" y="4" width="1" height="2" fill="#808898"/><rect x="5" y="3" width="2" height="1" fill="#383848"/><rect x="4" y="4" width="2" height="2" fill="#383848"/></svg>`;
+const AVT_LADINO_SVG_B_HEAD  = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="5" y="2" width="6" height="1" fill="#080410"/><rect x="4" y="3" width="1" height="1" fill="#080410"/><rect x="11" y="3" width="1" height="1" fill="#080410"/><rect x="3" y="4" width="1" height="8" fill="#080410"/><rect x="12" y="4" width="1" height="8" fill="#080410"/><rect x="4" y="12" width="1" height="1" fill="#080410"/><rect x="11" y="12" width="1" height="1" fill="#080410"/><rect x="5" y="13" width="6" height="1" fill="#080410"/><rect x="5" y="3" width="6" height="1" fill="#2a1040"/><rect x="4" y="4" width="8" height="8" fill="#2a1040"/><rect x="5" y="12" width="6" height="1" fill="#2a1040"/><rect x="9" y="4" width="3" height="7" fill="#1a0828"/><rect x="5" y="10" width="6" height="2" fill="#1a0828"/><rect x="9" y="4" width="1" height="8" fill="#a878d0" opacity="0.9" transform="rotate(45 9.5 8)"/><rect x="7" y="10" width="6" height="1" fill="#a878d0"/><rect x="11" y="4" width="1" height="2" fill="#6848a0"/><rect x="5" y="3" width="2" height="1" fill="#3a1858"/><rect x="4" y="4" width="2" height="2" fill="#3a1858"/></svg>`;
+
 const _avtClasseImgCache = {};
-function _avtGetClasseImg(classeAventura, variant) {
-  const key = `${classeAventura}_${variant}`;
+function _avtGetClasseImg(classeAventura, variant, modo) {
+  const sfx = (modo === 'head') ? '_HEAD' : '';
+  const key = `${classeAventura}_${variant}${sfx}`;
   if (_avtClasseImgCache[key]) return _avtClasseImgCache[key];
   const svgMap = {
-    guerreiro_0: AVT_WARRIOR_SVG_A, guerreiro_1: AVT_WARRIOR_SVG_B,
-    mago_0: AVT_MAGE_SVG_A,         mago_1: AVT_MAGE_SVG_B,
+    guerreiro_0: AVT_WARRIOR_SVG_A,  guerreiro_1: AVT_WARRIOR_SVG_B,
+    guerreiro_0_HEAD: AVT_WARRIOR_SVG_A_HEAD, guerreiro_1_HEAD: AVT_WARRIOR_SVG_B_HEAD,
+    mago_0: AVT_MAGE_SVG_A,          mago_1: AVT_MAGE_SVG_B,
+    mago_0_HEAD: AVT_MAGE_SVG_A_HEAD,         mago_1_HEAD: AVT_MAGE_SVG_B_HEAD,
+    paladino_0: AVT_PALADIN_SVG_A,   paladino_1: AVT_PALADIN_SVG_B,
+    paladino_0_HEAD: AVT_PALADIN_SVG_A_HEAD,   paladino_1_HEAD: AVT_PALADIN_SVG_B_HEAD,
+    arqueiro_0: AVT_ARCHER_SVG_A,    arqueiro_1: AVT_ARCHER_SVG_B,
+    arqueiro_0_HEAD: AVT_ARCHER_SVG_A_HEAD,    arqueiro_1_HEAD: AVT_ARCHER_SVG_B_HEAD,
+    ladino_0: AVT_LADINO_SVG_A,      ladino_1: AVT_LADINO_SVG_B,
+    ladino_0_HEAD: AVT_LADINO_SVG_A_HEAD,      ladino_1_HEAD: AVT_LADINO_SVG_B_HEAD,
   };
-  const svgStr = svgMap[key];
+  const svgStr = svgMap[key] || svgMap[`${classeAventura}_${variant}`];
   if (!svgStr) return null;
   const img = new Image();
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
@@ -778,22 +808,251 @@ REGRAS:
 - shadow_y: y onde a sombra tocaria o chão (geralmente 0.85–0.95).
 - pivot_x/y: ponto de rotação do token para animação.`;
 
-// Presets de aparência para NPCs e Bosses genéricos
-const AVT_NPC_PRESETS = {
-  goblin:    { nome:'Goblin',    icone:'G', cor:'#3a7a20', hpBase:40,  pacienciaSecs:5, deteccaoRaio:3, xpBase:10 },
-  esqueleto: { nome:'Esqueleto', icone:'S', cor:'#7a8090', hpBase:45,  pacienciaSecs:6, deteccaoRaio:3, xpBase:10 },
-  orc:       { nome:'Orc',       icone:'O', cor:'#6a3010', hpBase:60,  pacienciaSecs:4, deteccaoRaio:4, xpBase:10 },
-  troll:     { nome:'Troll',     icone:'T', cor:'#405c30', hpBase:70,  pacienciaSecs:7, deteccaoRaio:4, xpBase:10 },
-  vampiro:   { nome:'Vampiro',   icone:'V', cor:'#4a0a2a', hpBase:55,  pacienciaSecs:3, deteccaoRaio:5, xpBase:10 },
-  cultista:  { nome:'Cultista',  icone:'C', cor:'#2a1a5a', hpBase:50,  pacienciaSecs:5, deteccaoRaio:3, xpBase:10 },
-  boss:      { nome:'Boss',      icone:'☠', cor:'#4a0000', hpBase:140, pacienciaSecs:1, deteccaoRaio:6, isBoss:true, xpBase:50 },
+// Modelos de token SVG exclusivos do modo aventura.
+// head(c): vista overhead (viewBox "2 2 28 24") — token circular visto de cima.
+// iso(c):  perspectiva isométrica 3/4 (viewBox "0 0 32 54") — figura em pé.
+// c = cor hex do preset. Retorna conteúdo interno do <svg> (sem wrapper).
+const AVT_CREATURE_MODELS = {
+  goblin: {
+    head: c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="24" rx="8" ry="1.5" fill="#000" opacity="0.18"/>
+<circle cx="16" cy="14" r="11" fill="${dk}"/><circle cx="16" cy="14" r="10" fill="${c}"/>
+<path d="M6,14 L3,9 L9,12 Z" fill="${sh}"/><path d="M26,14 L29,9 L23,12 Z" fill="${sh}"/>
+<circle cx="16" cy="13" r="7" fill="${sh}"/>
+<ellipse cx="12.5" cy="12" rx="2.5" ry="2.8" fill="#e8e000"/><ellipse cx="19.5" cy="12" rx="2.5" ry="2.8" fill="#e8e000"/>
+<circle cx="13" cy="12.5" r="1.4" fill="#111"/><circle cx="20" cy="12.5" r="1.4" fill="#111"/>
+<ellipse cx="16" cy="16.5" rx="1.8" ry="1" fill="${dk}"/><circle cx="12" cy="9" r="3" fill="#fff" opacity="0.10"/>`; },
+    iso:  c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="51" rx="8" ry="2" fill="#000" opacity="0.22"/>
+<rect x="12" y="44" width="4" height="7" rx="1" fill="${dk}"/><rect x="17" y="44" width="4" height="7" rx="1" fill="${dk}"/>
+<ellipse cx="16" cy="32" rx="8" ry="12" fill="${md}"/><ellipse cx="16" cy="32" rx="7" ry="11" fill="${c}"/><ellipse cx="16" cy="32" rx="5" ry="8" fill="${sh}"/>
+<ellipse cx="16" cy="18" rx="7" ry="8" fill="${md}"/><circle cx="16" cy="18" r="6.5" fill="${c}"/>
+<path d="M8,20 L5,13 L11,17 Z" fill="${sh}"/><path d="M24,20 L27,13 L21,17 Z" fill="${sh}"/>
+<ellipse cx="13" cy="17" rx="2.2" ry="2.5" fill="#e8e000"/><ellipse cx="19" cy="17" rx="2.2" ry="2.5" fill="#e8e000"/>
+<circle cx="13.4" cy="17.5" r="1.2" fill="#111"/><circle cx="19.4" cy="17.5" r="1.2" fill="#111"/>
+<ellipse cx="16" cy="21" rx="1.5" ry="0.9" fill="${dk}"/><circle cx="13" cy="14" r="2.5" fill="#fff" opacity="0.09"/>`; }
+  },
+  esqueleto: {
+    head: c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38); return `<ellipse cx="16" cy="24" rx="8" ry="1.5" fill="#000" opacity="0.15"/>
+<circle cx="16" cy="14" r="11" fill="${dk}"/><ellipse cx="16" cy="13" rx="9" ry="10" fill="${c}"/>
+<ellipse cx="11.5" cy="13" rx="3.5" ry="4" fill="#000" opacity="0.75"/><ellipse cx="20.5" cy="13" rx="3.5" ry="4" fill="#000" opacity="0.75"/>
+<ellipse cx="11.5" cy="13" rx="2" ry="2.5" fill="#30ff50" opacity="0.7"/><ellipse cx="20.5" cy="13" rx="2" ry="2.5" fill="#30ff50" opacity="0.7"/>
+<path d="M13,7 Q16,5.5 19,7" stroke="${dk}" stroke-width="1" fill="none"/>
+<line x1="16" y1="5.5" x2="16" y2="8" stroke="${dk}" stroke-width="0.8"/>
+<ellipse cx="16" cy="18" rx="2.5" ry="1" fill="${md}"/><ellipse cx="16" cy="19.5" rx="3.5" ry="1.5" fill="${dk}" opacity="0.7"/>`; },
+    iso:  c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38); return `<ellipse cx="16" cy="51" rx="8" ry="2" fill="#000" opacity="0.18"/>
+<rect x="13" y="44" width="3" height="7" fill="${md}"/><rect x="17" y="44" width="3" height="7" fill="${md}"/>
+<rect x="11" y="33" width="4" height="11" rx="1" fill="${c}"/><rect x="18" y="33" width="4" height="11" rx="1" fill="${c}"/>
+<rect x="13" y="27" width="7" height="17" rx="2" fill="${c}"/>
+<line x1="13" y1="30" x2="20" y2="30" stroke="${dk}" stroke-width="1"/><line x1="13" y1="33" x2="20" y2="33" stroke="${dk}" stroke-width="1"/>
+<line x1="13" y1="36" x2="20" y2="36" stroke="${dk}" stroke-width="1"/><line x1="13" y1="39" x2="20" y2="39" stroke="${dk}" stroke-width="1"/>
+<ellipse cx="16" cy="18" rx="6" ry="7" fill="${c}"/>
+<ellipse cx="12" cy="18" rx="2.5" ry="3" fill="#000" opacity="0.7"/><ellipse cx="20" cy="18" rx="2.5" ry="3" fill="#000" opacity="0.7"/>
+<ellipse cx="12" cy="18" rx="1.4" ry="1.8" fill="#30ff50" opacity="0.6"/><ellipse cx="20" cy="18" rx="1.4" ry="1.8" fill="#30ff50" opacity="0.6"/>
+<path d="M12,12 Q16,10 20,12" stroke="${dk}" stroke-width="1" fill="none"/>
+<line x1="16" y1="10" x2="16" y2="13" stroke="${dk}" stroke-width="0.8"/>`; }
+  },
+  orc: {
+    head: c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="24" rx="9" ry="1.5" fill="#000" opacity="0.2"/>
+<circle cx="16" cy="14" r="11" fill="${dk}"/><circle cx="16" cy="14" r="10" fill="${c}"/>
+<rect x="8" y="10" width="16" height="10" rx="5" fill="${sh}"/>
+<ellipse cx="16" cy="10" rx="8" ry="5" fill="${c}"/><ellipse cx="16" cy="10" rx="6" ry="3.5" fill="${sh}"/>
+<path d="M10,20 L8,23 L13,22" fill="#eee" opacity="0.9"/><path d="M22,20 L24,23 L19,22" fill="#eee" opacity="0.9"/>
+<ellipse cx="14" cy="12" rx="2" ry="2.2" fill="#c82020" opacity="0.85"/><ellipse cx="18" cy="12" rx="2" ry="2.2" fill="#c82020" opacity="0.85"/>
+<circle cx="14.4" cy="12.4" r="1.1" fill="#111"/><circle cx="18.4" cy="12.4" r="1.1" fill="#111"/>
+<ellipse cx="16" cy="9.5" rx="3" ry="1.8" fill="${md}"/><circle cx="12" cy="10" r="2.5" fill="#fff" opacity="0.08"/>`; },
+    iso:  c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="51" rx="9" ry="2.2" fill="#000" opacity="0.25"/>
+<rect x="11" y="43" width="5" height="8" rx="2" fill="${dk}"/><rect x="17" y="43" width="5" height="8" rx="2" fill="${dk}"/>
+<ellipse cx="16" cy="31" rx="10" ry="13" fill="${md}"/><ellipse cx="16" cy="31" rx="9" ry="12" fill="${c}"/>
+<rect x="8" y="28" width="5" height="12" rx="2" fill="${md}"/><rect x="19" y="28" width="5" height="12" rx="2" fill="${md}"/>
+<ellipse cx="16" cy="17" rx="8" ry="9" fill="${md}"/><circle cx="16" cy="17" r="7.5" fill="${c}"/>
+<ellipse cx="16" cy="14" rx="6" ry="4" fill="${sh}"/>
+<path d="M9,24 L6,27 L11,27" fill="#eee" opacity="0.85"/><path d="M23,24 L26,27 L21,27" fill="#eee" opacity="0.85"/>
+<ellipse cx="13.5" cy="17" rx="2" ry="2.2" fill="#c82020" opacity="0.85"/><ellipse cx="18.5" cy="17" rx="2" ry="2.2" fill="#c82020" opacity="0.85"/>
+<circle cx="14" cy="17.4" r="1.1" fill="#111"/><circle cx="19" cy="17.4" r="1.1" fill="#111"/>`; }
+  },
+  troll: {
+    head: c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="24" rx="10" ry="2" fill="#000" opacity="0.2"/>
+<circle cx="16" cy="14" r="11.5" fill="${dk}"/><circle cx="16" cy="14" r="10.5" fill="${c}"/>
+<ellipse cx="8" cy="14" rx="4" ry="3" fill="${sh}"/><ellipse cx="24" cy="14" rx="4" ry="3" fill="${sh}"/>
+<circle cx="16" cy="13" r="8" fill="${sh}"/>
+<ellipse cx="14" cy="11" rx="2.5" ry="2" fill="#a0c060" opacity="0.6"/><ellipse cx="18" cy="11" rx="2.5" ry="2" fill="#a0c060" opacity="0.6"/>
+<circle cx="14" cy="11.5" r="1.3" fill="#333"/><circle cx="18" cy="11.5" r="1.3" fill="#333"/>
+<ellipse cx="16" cy="8" rx="4" ry="2.5" fill="${md}"/>
+<ellipse cx="16" cy="16.5" rx="3" ry="1.5" fill="${dk}"/><circle cx="11" cy="11" r="2" fill="#fff" opacity="0.07"/>`; },
+    iso:  c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="51" rx="11" ry="2.5" fill="#000" opacity="0.28"/>
+<rect x="10" y="43" width="6" height="9" rx="2" fill="${dk}"/><rect x="17" y="43" width="6" height="9" rx="2" fill="${dk}"/>
+<ellipse cx="16" cy="30" rx="12" ry="14" fill="${md}"/><ellipse cx="16" cy="30" rx="11" ry="13" fill="${c}"/><ellipse cx="16" cy="30" rx="7" ry="9" fill="${sh}"/>
+<rect x="4" y="24" width="7" height="15" rx="3" fill="${md}"/><rect x="21" y="24" width="7" height="15" rx="3" fill="${md}"/>
+<ellipse cx="16" cy="15" rx="10" ry="10" fill="${md}"/><circle cx="16" cy="15" r="9" fill="${c}"/>
+<ellipse cx="16" cy="12" rx="7" ry="4" fill="${sh}"/>
+<ellipse cx="13" cy="15" rx="2.5" ry="2.2" fill="#a0c060" opacity="0.7"/><ellipse cx="19" cy="15" rx="2.5" ry="2.2" fill="#a0c060" opacity="0.7"/>
+<circle cx="13.5" cy="15.5" r="1.3" fill="#333"/><circle cx="19.5" cy="15.5" r="1.3" fill="#333"/>
+<ellipse cx="16" cy="20" rx="4" ry="2" fill="${dk}"/>`; }
+  },
+  vampiro: {
+    head: c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38); const pale='#e0cccc'; return `<ellipse cx="16" cy="24" rx="8" ry="1.5" fill="#000" opacity="0.18"/>
+<circle cx="16" cy="14" r="11" fill="${dk}"/>
+<path d="M5,10 Q16,3 27,10 L27,22 Q16,28 5,22 Z" fill="${md}" opacity="0.85"/>
+<path d="M5,10 Q16,4 27,10" fill="${dk}"/>
+<path d="M27,10 L30,6 L24,8" fill="${dk}"/><path d="M5,10 L2,6 L8,8" fill="${dk}"/>
+<circle cx="16" cy="13" r="6" fill="${pale}"/>
+<ellipse cx="13.5" cy="13" rx="1.8" ry="2.2" fill="#c00000"/><ellipse cx="18.5" cy="13" rx="1.8" ry="2.2" fill="#c00000"/>
+<circle cx="14" cy="13.5" r="1" fill="#700"/><circle cx="19" cy="13.5" r="1" fill="#700"/>
+<path d="M13,17.5 L14.5,16 L16,17 L17.5,16 L19,17.5" fill="none" stroke="#c00000" stroke-width="0.8"/>
+<circle cx="13.5" cy="10.5" r="2" fill="#fff" opacity="0.08"/>`; },
+    iso:  c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38); const pale='#e0cccc'; return `<ellipse cx="16" cy="51" rx="7" ry="2" fill="#000" opacity="0.2"/>
+<rect x="13" y="44" width="4" height="7" rx="1" fill="${dk}"/><rect x="16" y="44" width="4" height="7" rx="1" fill="${dk}"/>
+<path d="M6,15 L8,44 L16,48 L24,44 L26,15 Q16,10 6,15 Z" fill="${md}"/>
+<path d="M6,15 L2,35 L8,32" fill="${dk}" opacity="0.7"/><path d="M26,15 L30,35 L24,32" fill="${dk}" opacity="0.7"/>
+<ellipse cx="16" cy="31" rx="7" ry="13" fill="${c}"/><ellipse cx="16" cy="31" rx="5.5" ry="11" fill="${md}"/>
+<circle cx="16" cy="17" r="6.5" fill="${pale}"/>
+<ellipse cx="13.5" cy="17" rx="1.8" ry="2.2" fill="#c00000"/><ellipse cx="18.5" cy="17" rx="1.8" ry="2.2" fill="#c00000"/>
+<circle cx="14" cy="17.5" r="1" fill="#700"/><circle cx="19" cy="17.5" r="1" fill="#700"/>
+<path d="M13.5,22 L15,20.5 L16,21.5 L17,20.5 L18.5,22" fill="none" stroke="#c00000" stroke-width="0.8"/>`; }
+  },
+  demonio: {
+    head: c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="24" rx="9" ry="1.8" fill="#000" opacity="0.22"/>
+<circle cx="16" cy="14" r="11" fill="${dk}"/><circle cx="16" cy="14" r="10" fill="${c}"/>
+<path d="M9,10 L6,3 L13,9" fill="${sh}"/><path d="M23,10 L26,3 L19,9" fill="${sh}"/>
+<path d="M9,10 L5,6 L11,7 L9,10" fill="${md}"/><path d="M23,10 L27,6 L21,7 L23,10" fill="${md}"/>
+<circle cx="16" cy="13" r="7.5" fill="${sh}"/>
+<ellipse cx="13" cy="13" rx="2.2" ry="2.5" fill="#ff2000" opacity="0.9"/><ellipse cx="19" cy="13" rx="2.2" ry="2.5" fill="#ff2000" opacity="0.9"/>
+<circle cx="13.4" cy="13.5" r="1.2" fill="#600"/><circle cx="19.4" cy="13.5" r="1.2" fill="#600"/>
+<ellipse cx="16" cy="17.5" rx="2.5" ry="1.2" fill="${dk}"/><circle cx="12" cy="10" r="2" fill="#fff" opacity="0.09"/>`; },
+    iso:  c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="51" rx="8" ry="2" fill="#000" opacity="0.25"/>
+<rect x="12" y="44" width="4" height="7" rx="1" fill="${dk}"/><rect x="17" y="44" width="4" height="7" rx="1" fill="${dk}"/>
+<path d="M6,12 L4,26 L11,22 L8,38 L16,45 L24,38 L21,22 L28,26 L26,12 Q16,5 6,12 Z" fill="${md}"/>
+<ellipse cx="16" cy="31" rx="8" ry="12" fill="${c}"/><ellipse cx="16" cy="31" rx="6" ry="10" fill="${sh}"/>
+<ellipse cx="16" cy="17" rx="7" ry="8" fill="${md}"/><circle cx="16" cy="17" r="6.5" fill="${c}"/>
+<path d="M9,11 L6,4 L13,10" fill="${sh}"/><path d="M23,11 L26,4 L19,10" fill="${sh}"/>
+<ellipse cx="13" cy="17" rx="2.2" ry="2.5" fill="#ff2000" opacity="0.9"/><ellipse cx="19" cy="17" rx="2.2" ry="2.5" fill="#ff2000" opacity="0.9"/>
+<circle cx="13.4" cy="17.5" r="1.2" fill="#600"/><circle cx="19.4" cy="17.5" r="1.2" fill="#600"/>
+<path d="M7,20 L4,30 L9,26" fill="${dk}" opacity="0.7"/><path d="M25,20 L28,30 L23,26" fill="${dk}" opacity="0.7"/>`; }
+  },
+  npc_generico: {
+    head: c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="24" rx="9" ry="1.5" fill="#000" opacity="0.18"/>
+<circle cx="16" cy="14" r="11" fill="${dk}"/><circle cx="16" cy="14" r="10" fill="${md}"/>
+<circle cx="16" cy="14" r="8" fill="${c}"/>
+<rect x="11" y="8" width="10" height="7" rx="2" fill="${sh}"/>
+<rect x="12" y="15" width="8" height="3" rx="1" fill="${dk}"/>
+<line x1="12" y1="15" x2="20" y2="15" stroke="${dk}" stroke-width="1.2"/>
+<circle cx="16" cy="12" r="2" fill="${dk}" opacity="0.5"/>
+<circle cx="13" cy="9.5" r="1.5" fill="#fff" opacity="0.1"/>`; },
+    iso:  c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="51" rx="8" ry="2" fill="#000" opacity="0.2"/>
+<rect x="12" y="44" width="4" height="7" rx="1" fill="${dk}"/><rect x="17" y="44" width="4" height="7" rx="1" fill="${dk}"/>
+<ellipse cx="16" cy="32" rx="8" ry="11" fill="${md}"/><ellipse cx="16" cy="32" rx="7" ry="10" fill="${c}"/>
+<rect x="8" y="24" width="5" height="14" rx="2" fill="${md}"/><rect x="19" y="24" width="5" height="14" rx="2" fill="${md}"/>
+<rect x="6" y="28" width="7" height="9" rx="2" fill="${sh}" opacity="0.7"/>
+<ellipse cx="16" cy="18" rx="7" ry="8" fill="${md}"/><circle cx="16" cy="18" r="6" fill="${sh}"/>
+<rect x="11" y="11" width="10" height="8" rx="2" fill="${dk}"/>
+<rect x="12" y="17" width="8" height="4" rx="1" fill="${md}"/>
+<line x1="12" y1="17" x2="20" y2="17" stroke="${dk}" stroke-width="1.2"/>`; }
+  },
+  lobo: {
+    head: c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="24" rx="9" ry="1.5" fill="#000" opacity="0.18"/>
+<circle cx="16" cy="14" r="11" fill="${dk}"/><ellipse cx="16" cy="15" rx="10" ry="9" fill="${c}"/>
+<ellipse cx="16" cy="11" rx="6" ry="7" fill="${sh}"/>
+<path d="M11,8 L9,3 L14,7" fill="${sh}"/><path d="M21,8 L23,3 L18,7" fill="${sh}"/>
+<ellipse cx="16" cy="9" rx="4.5" ry="5.5" fill="${c}"/>
+<ellipse cx="14" cy="11" rx="1.8" ry="1.5" fill="#f0d080" opacity="0.85"/><ellipse cx="18" cy="11" rx="1.8" ry="1.5" fill="#f0d080" opacity="0.85"/>
+<circle cx="14.3" cy="11.5" r="1" fill="#111"/><circle cx="18.3" cy="11.5" r="1" fill="#111"/>
+<ellipse cx="16" cy="19" rx="3.5" ry="2" fill="${md}"/>
+<ellipse cx="16" cy="22" rx="2" ry="1.5" fill="${c}" opacity="0.7"/><circle cx="12" cy="8.5" r="2" fill="#fff" opacity="0.09"/>`; },
+    iso:  c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="51" rx="10" ry="2.2" fill="#000" opacity="0.22"/>
+<rect x="9" y="44" width="4" height="7" rx="2" fill="${dk}"/><rect x="13" y="44" width="4" height="7" rx="2" fill="${dk}"/>
+<rect x="17" y="45" width="4" height="6" rx="2" fill="${dk}"/><rect x="21" y="44" width="4" height="7" rx="2" fill="${dk}"/>
+<ellipse cx="16" cy="37" rx="9" ry="10" fill="${md}"/><ellipse cx="16" cy="37" rx="8" ry="9" fill="${c}"/><ellipse cx="16" cy="37" rx="5.5" ry="6" fill="${sh}"/>
+<ellipse cx="16" cy="20" rx="6" ry="7" fill="${md}"/><circle cx="16" cy="20" r="5.5" fill="${c}"/>
+<path d="M10,17 L8,11 L14,15" fill="${sh}"/><path d="M22,17 L24,11 L18,15" fill="${sh}"/>
+<ellipse cx="13.5" cy="19" rx="1.7" ry="1.5" fill="#f0d080" opacity="0.85"/><ellipse cx="18.5" cy="19" rx="1.7" ry="1.5" fill="#f0d080" opacity="0.85"/>
+<circle cx="14" cy="19.5" r="1" fill="#111"/><circle cx="19" cy="19.5" r="1" fill="#111"/>
+<ellipse cx="16" cy="23.5" rx="3" ry="1.5" fill="${md}"/><path d="M22,40 L26,34 L28,42" fill="${dk}" opacity="0.7"/>`; }
+  },
+  aranha: {
+    head: c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="24" rx="8" ry="1.5" fill="#000" opacity="0.18"/>
+<circle cx="16" cy="14" r="11" fill="${dk}"/>
+<line x1="16" y1="14" x2="5" y2="7" stroke="${md}" stroke-width="2" stroke-linecap="round"/>
+<line x1="16" y1="14" x2="5" y2="14" stroke="${md}" stroke-width="2" stroke-linecap="round"/>
+<line x1="16" y1="14" x2="5" y2="21" stroke="${md}" stroke-width="2" stroke-linecap="round"/>
+<line x1="16" y1="14" x2="10" y2="24" stroke="${md}" stroke-width="2" stroke-linecap="round"/>
+<line x1="16" y1="14" x2="27" y2="7" stroke="${md}" stroke-width="2" stroke-linecap="round"/>
+<line x1="16" y1="14" x2="27" y2="14" stroke="${md}" stroke-width="2" stroke-linecap="round"/>
+<line x1="16" y1="14" x2="27" y2="21" stroke="${md}" stroke-width="2" stroke-linecap="round"/>
+<line x1="16" y1="14" x2="22" y2="24" stroke="${md}" stroke-width="2" stroke-linecap="round"/>
+<circle cx="16" cy="14" r="6.5" fill="${c}"/><circle cx="16" cy="11" r="3.5" fill="${sh}"/>
+<circle cx="12.5" cy="10.5" r="1" fill="#ff0000" opacity="0.9"/><circle cx="14.5" cy="9.5" r="1" fill="#ff0000" opacity="0.9"/>
+<circle cx="16.5" cy="9" r="1" fill="#ff0000" opacity="0.9"/><circle cx="18.5" cy="9.5" r="1" fill="#ff0000" opacity="0.9"/>
+<circle cx="13" cy="14" r="1.5" fill="#fff" opacity="0.08"/>`; },
+    iso:  c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="51" rx="12" ry="2.5" fill="#000" opacity="0.22"/>
+<line x1="16" y1="38" x2="4" y2="30" stroke="${md}" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="16" y1="38" x2="4" y2="40" stroke="${md}" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="16" y1="38" x2="4" y2="46" stroke="${md}" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="16" y1="38" x2="10" y2="50" stroke="${md}" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="16" y1="38" x2="28" y2="30" stroke="${md}" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="16" y1="38" x2="28" y2="40" stroke="${md}" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="16" y1="38" x2="28" y2="46" stroke="${md}" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="16" y1="38" x2="22" y2="50" stroke="${md}" stroke-width="2.5" stroke-linecap="round"/>
+<ellipse cx="16" cy="38" rx="9" ry="10" fill="${c}"/><ellipse cx="16" cy="38" rx="7" ry="8" fill="${sh}"/>
+<ellipse cx="16" cy="23" rx="6" ry="6.5" fill="${c}"/>
+<circle cx="12.5" cy="20.5" r="1.2" fill="#ff0000" opacity="0.9"/><circle cx="14.5" cy="19.5" r="1.2" fill="#ff0000" opacity="0.9"/>
+<circle cx="16.5" cy="19" r="1.2" fill="#ff0000" opacity="0.9"/><circle cx="18.5" cy="19.5" r="1.2" fill="#ff0000" opacity="0.9"/>`; }
+  },
+  slime: {
+    head: c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="24" rx="9" ry="2" fill="#000" opacity="0.15"/>
+<circle cx="16" cy="14" r="11" fill="${dk}"/>
+<path d="M7,14 Q7,5 16,5 Q25,5 25,14 Q26,19 22,22 Q16,25 10,22 Q6,19 7,14 Z" fill="${c}"/>
+<path d="M9,12 Q9,6.5 16,6.5 Q23,6.5 23,12 Q23,16 19.5,18.5 Q16,20 12.5,18.5 Q9,16 9,12 Z" fill="${sh}"/>
+<circle cx="13" cy="13" r="3.5" fill="${c}" opacity="0.5"/><circle cx="20" cy="12" r="2.5" fill="${c}" opacity="0.4"/>
+<ellipse cx="13.5" cy="12" rx="2" ry="2.2" fill="#fff" opacity="0.4"/><ellipse cx="18.5" cy="12" rx="2" ry="2.2" fill="#fff" opacity="0.4"/>
+<ellipse cx="14" cy="12.5" rx="1.1" ry="1.3" fill="${dk}" opacity="0.7"/><ellipse cx="19" cy="12.5" rx="1.1" ry="1.3" fill="${dk}" opacity="0.7"/>
+<circle cx="12" cy="9" r="2.5" fill="#fff" opacity="0.12"/>`; },
+    iso:  c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="50" rx="11" ry="3" fill="#000" opacity="0.18"/>
+<path d="M6,42 Q5,32 16,30 Q27,32 26,42 Q26,49 16,50 Q6,49 6,42 Z" fill="${c}"/>
+<path d="M8,40 Q7,32 16,31 Q25,32 24,40 Q24,47 16,47 Q8,47 8,40 Z" fill="${sh}"/>
+<circle cx="12.5" cy="38" r="4" fill="${c}" opacity="0.45"/><circle cx="21" cy="36" r="3" fill="${c}" opacity="0.4"/>
+<ellipse cx="13.5" cy="36" rx="2.2" ry="2.5" fill="#fff" opacity="0.38"/><ellipse cx="18.5" cy="36" rx="2.2" ry="2.5" fill="#fff" opacity="0.38"/>
+<ellipse cx="14" cy="37" rx="1.2" ry="1.4" fill="${dk}" opacity="0.7"/><ellipse cx="19" cy="37" rx="1.2" ry="1.4" fill="${dk}" opacity="0.7"/>
+<circle cx="11" cy="33" r="3" fill="#fff" opacity="0.10"/>`; }
+  },
+  cultista: {
+    head: c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="24" rx="8" ry="1.5" fill="#000" opacity="0.18"/>
+<circle cx="16" cy="14" r="11" fill="${dk}"/>
+<circle cx="16" cy="14" r="10" fill="${c}"/>
+<circle cx="16" cy="13" r="8" fill="${dk}"/><ellipse cx="16" cy="14" rx="6" ry="7" fill="${c}" opacity="0.7"/>
+<circle cx="16" cy="10" r="3.5" fill="${sh}"/>
+<path d="M16,6 L17,9 L20.2,9 L17.6,11 L18.6,14 L16,12 L13.4,14 L14.4,11 L11.8,9 L15,9 Z" fill="#f0e040" opacity="0.85"/>
+<circle cx="14" cy="16.5" r="1.5" fill="#c050ff" opacity="0.7"/><circle cx="18" cy="16.5" r="1.5" fill="#c050ff" opacity="0.7"/>
+<circle cx="13" cy="9.5" r="1.5" fill="#fff" opacity="0.07"/>`; },
+    iso:  c => { const dk=_hexDarken2(c,65),md=_hexDarken2(c,38),sh=_hexDarken2(c,18); return `<ellipse cx="16" cy="51" rx="7" ry="2" fill="#000" opacity="0.2"/>
+<rect x="13" y="44" width="4" height="7" rx="1" fill="${dk}"/><rect x="16" y="44" width="4" height="7" rx="1" fill="${dk}"/>
+<ellipse cx="16" cy="34" rx="7" ry="12" fill="${dk}"/><ellipse cx="16" cy="34" rx="6" ry="11" fill="${c}"/><ellipse cx="16" cy="34" rx="4.5" ry="9" fill="${md}"/>
+<path d="M9,30 L4,38 L10,34" fill="${md}" opacity="0.8"/><path d="M23,30 L28,38 L22,34" fill="${md}" opacity="0.8"/>
+<ellipse cx="16" cy="17" rx="7" ry="8" fill="${dk}"/><circle cx="16" cy="17" r="6.5" fill="${c}"/>
+<circle cx="16" cy="17" r="5" fill="${dk}" opacity="0.7"/>
+<path d="M16,10 L17.2,13.5 L21,13.5 L18.2,15.7 L19,19.5 L16,17 L13,19.5 L13.8,15.7 L11,13.5 L14.8,13.5 Z" fill="#f0e040" opacity="0.85"/>
+<circle cx="14" cy="20" r="1.5" fill="#c050ff" opacity="0.7"/><circle cx="18" cy="20" r="1.5" fill="#c050ff" opacity="0.7"/>`; }
+  }
 };
 
-// Mapeamento preset → modelo de criatura SVG (CREATURE_MODELS de appearance.js)
+// Presets de aparência para NPCs e Bosses genéricos
+const AVT_NPC_PRESETS = {
+  goblin:    { nome:'Goblin',    icone:'G',  cor:'#3a7a20', hpBase:40,  pacienciaSecs:5, deteccaoRaio:3, xpBase:10 },
+  esqueleto: { nome:'Esqueleto', icone:'S',  cor:'#7a8090', hpBase:45,  pacienciaSecs:6, deteccaoRaio:3, xpBase:10 },
+  orc:       { nome:'Orc',       icone:'O',  cor:'#6a3010', hpBase:60,  pacienciaSecs:4, deteccaoRaio:4, xpBase:10 },
+  troll:     { nome:'Troll',     icone:'T',  cor:'#405c30', hpBase:70,  pacienciaSecs:7, deteccaoRaio:4, xpBase:10 },
+  vampiro:   { nome:'Vampiro',   icone:'V',  cor:'#4a0a2a', hpBase:55,  pacienciaSecs:3, deteccaoRaio:5, xpBase:10 },
+  cultista:  { nome:'Cultista',  icone:'C',  cor:'#2a1a5a', hpBase:50,  pacienciaSecs:5, deteccaoRaio:3, xpBase:10 },
+  boss:      { nome:'Boss',      icone:'☠',  cor:'#4a0000', hpBase:140, pacienciaSecs:1, deteccaoRaio:6, isBoss:true, xpBase:50 },
+  lobo:      { nome:'Lobo',      icone:'🐺', cor:'#605040', hpBase:35,  pacienciaSecs:4, deteccaoRaio:5, xpBase:8  },
+  aranha:    { nome:'Aranha',    icone:'🕷',  cor:'#302840', hpBase:30,  pacienciaSecs:6, deteccaoRaio:3, xpBase:6  },
+  slime:     { nome:'Slime',     icone:'💧', cor:'#205820', hpBase:25,  pacienciaSecs:8, deteccaoRaio:2, xpBase:5  },
+};
+
+// Mapeamento preset → chave em AVT_CREATURE_MODELS
 const AVT_PRESET_TO_CREATURE = {
-  goblin: 'goblin', esqueleto: 'esqueleto', orc: 'goblin',
-  troll: 'goblin', vampiro: 'demonio', cultista: 'demonio',
-  boss: 'demonio', npc_generico: 'npc_generico'
+  goblin:'goblin', esqueleto:'esqueleto', orc:'orc',
+  troll:'troll', vampiro:'vampiro', cultista:'cultista',
+  boss:'demonio', npc_generico:'npc_generico',
+  lobo:'lobo', aranha:'aranha', slime:'slime',
 };
 
 // Retorna as classes de NPC configuráveis (do theme_json.npc_classes, ou padrões se não existir).
@@ -821,16 +1080,27 @@ function _hexVary(hex, seed) {
   return '#' + [clamp(r+v), clamp(g+v), clamp(b+v)].map(x => x.toString(16).padStart(2,'0')).join('');
 }
 
-// Cache e carregamento de imagens SVG de criaturas para o canvas
-function _avtGetCreatureImg(tipo, cor) {
+// Cache e carregamento de imagens SVG de criaturas para o canvas.
+// modo: 'head' = token visto de cima (top-down, viewBox "2 2 28 24");
+//       'iso'  = figura em pé (viewBox "0 0 32 54"), usada quando o mapa está
+//                inclinado em isométrico. Os modelos retornam conteúdo interno,
+//                então embrulhamos no <svg> com o viewBox correto de cada modo.
+function _avtGetCreatureImg(tipo, cor, modo) {
+  modo = (modo === 'iso') ? 'iso' : 'head';
   if (!AVT_STATE._creatureImgCache) AVT_STATE._creatureImgCache = {};
-  const key = tipo + '_' + cor;
+  const key = tipo + '_' + cor + '_' + modo;
   if (AVT_STATE._creatureImgCache[key]) return AVT_STATE._creatureImgCache[key];
-  const model = (typeof CREATURE_MODELS !== 'undefined') && CREATURE_MODELS[tipo];
+  const model = AVT_CREATURE_MODELS[tipo];
   if (!model) return null;
   try {
-    const svg = model.iso ? model.iso(cor) : (model.head ? model.head(cor) : null);
-    if (!svg) return null;
+    // Fallback entre modos caso algum modelo não defina os dois.
+    const fn = model[modo] || model.iso || model.head;
+    if (!fn) return null;
+    const usaIso = (fn === model.iso) || (modo === 'iso' && !model.head);
+    const viewBox = usaIso ? '0 0 32 54' : '2 2 28 24';
+    const inner = fn(cor);
+    if (!inner) return null;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">${inner}</svg>`;
     const img = new Image();
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     AVT_STATE._creatureImgCache[key] = img;
@@ -1371,6 +1641,9 @@ function _avtCriarRenderCharsLista() {
           style="padding:4px 6px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
           <option value="guerreiro" ${(p.classe_aventura||'guerreiro')==='guerreiro'?'selected':''}>⚔ Guerreiro</option>
           <option value="mago" ${p.classe_aventura==='mago'?'selected':''}>🔮 Mago</option>
+          <option value="paladino" ${p.classe_aventura==='paladino'?'selected':''}>🛡 Paladino</option>
+          <option value="arqueiro" ${p.classe_aventura==='arqueiro'?'selected':''}>🏹 Arqueiro</option>
+          <option value="ladino" ${p.classe_aventura==='ladino'?'selected':''}>🗡 Ladino</option>
         </select>
         ${configBadge}
         <button onclick="_avtAbrirConfigPersonagem(${i})"
@@ -4598,6 +4871,13 @@ function _avtCanvasResize() {
   const wrap = document.getElementById('avt-mapa-wrap');
   const canvas = AVT_STATE.canvas;
   if (!wrap || !canvas) return;
+  // Em iso, reaplica o oversize do wrap antes de ler o tamanho (acompanha resize da janela).
+  // Guarda contra reentrância: _avtIsoLayoutAplicar também chama este resize.
+  if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
+      && typeof _avtIsoSizeWrap === 'function'
+      && typeof _avtIsoResizing !== 'undefined' && !_avtIsoResizing) {
+    _avtIsoSizeWrap();
+  }
   const w = wrap.clientWidth  || window.innerWidth;
   let h = wrap.clientHeight || (window.innerHeight - 130);
   // Em modo aventura + dispositivo móvel, o overlay flutua transparente sobre o canvas full-screen
@@ -4629,6 +4909,16 @@ function _avtCameraCenter() {
   const canvas = AVT_STATE.canvas;
   if (!jogadores.length || !canvas || !canvas.width) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  // No iso, centraliza no jogador controlado (sem offset/clamp) e sincroniza.
+  if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo) {
+    _avtCameraUpdateCentralizada(true);
+    AVT_STATE.camera.x = AVT_STATE.camera._targetX ?? 0;
+    AVT_STATE.camera.y = AVT_STATE.camera._targetY ?? 0;
+    AVT_STATE.camera._floatX = AVT_STATE.camera.x;
+    AVT_STATE.camera._floatY = AVT_STATE.camera.y;
+    AVT_STATE._cameraInicializada = true;
+    return;
+  }
   const cx = jogadores.reduce((s, j) => s + j.x, 0) / jogadores.length;
   const cy = jogadores.reduce((s, j) => s + j.y, 0) / jogadores.length;
   const _ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
@@ -4647,6 +4937,13 @@ function _avtCameraCenter() {
 function _avtCameraUpdate() {
   const canvas = AVT_STATE.canvas;
   if (!canvas?.width) return;
+  // Modo isométrico: a transform rotaciona/aproxima o canvas, então o follow por
+  // margem deixa o jogador cair fora da área visível. Centraliza sempre (sem clamp
+  // de bordas — o oversize do wrap já cobre o vazio dos cantos do mapa).
+  if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo) {
+    _avtCameraUpdateCentralizada(true);
+    return;
+  }
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   // Mobile: margem maior → câmera segue antes do personagem chegar à borda → mais centralizado
   const MARGIN = (navigator.maxTouchPoints > 0 || 'ontouchstart' in window) ? 0.30 : 0.20;
@@ -4735,11 +5032,12 @@ function _avtCameraFocarEntidades(entA, entB) {
   AVT_STATE.camera._floatY  = AVT_STATE.camera.y;
 }
 
-function _avtCameraUpdateCentralizada() {
+function _avtCameraUpdateCentralizada(skipClamp) {
   const canvas = AVT_STATE.canvas;
   if (!canvas?.width) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  const _overlayH = AVT_STATE._overlayH ?? 160;
+  // No iso (skipClamp) centraliza de verdade, sem descontar o overlay inferior.
+  const _overlayH = skipClamp ? 0 : (AVT_STATE._overlayH ?? 160);
   const effectiveH = canvas.height - _overlayH;
   const j = _avtMeuJogador() || AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0);
   if (!j) return;
@@ -4748,7 +5046,7 @@ function _avtCameraUpdateCentralizada() {
   let tX = rx * SZ - canvas.width / 2 + SZ / 2;
   let tY = ry * SZ - effectiveH / 2 + SZ / 2;
   const dungeon = AVT_STATE.dungeon;
-  if (dungeon) {
+  if (dungeon && !skipClamp) {
     tX = Math.max(0, Math.min(tX, Math.max(0, dungeon.w * SZ - canvas.width)));
     tY = Math.max(0, Math.min(tY, Math.max(0, dungeon.h * SZ - canvas.height)));
   }
@@ -4790,7 +5088,9 @@ function _avtRenderFrame() {
   AVT_STATE._lastFrameTs = now;
 
   // Câmera centralizada: atualizar alvo a cada frame usando posição interpolada do jogador
-  if (typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo
+  if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo) {
+    _avtCameraUpdateCentralizada(true);
+  } else if (typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo
       && MOBILE_CTRL?.modoTela === 'dispositivo'
       && MOBILE_CTRL?.modoCamara === 'centralizada') {
     _avtCameraUpdateCentralizada();
@@ -5421,14 +5721,19 @@ function _avtRenderFrame() {
     if (ap && ap.loaded) {
       _avtDesenharAparencia(ctx, e, cx, cy, SZ, ap);
     } else {
-      // Tentar renderizar SVG de criatura a partir do presetTipo
+      // Tentar renderizar SVG de criatura a partir do presetTipo.
+      // Top-down → arte "head" (vista de cima, centralizada no tile);
+      // isométrico → arte "iso" (figura em pé, ancorada na base do tile).
       const creatureModelKey = AVT_PRESET_TO_CREATURE[e.presetTipo];
-      const creatureImg = creatureModelKey ? _avtGetCreatureImg(creatureModelKey, e.cor) : null;
+      const _isoView = !!(AVT_GRAFICOS?.isoAtivo);
+      const creatureImg = creatureModelKey ? _avtGetCreatureImg(creatureModelKey, e.cor, _isoView ? 'iso' : 'head') : null;
       if (creatureImg && creatureImg.complete && creatureImg.naturalWidth > 0) {
         const imgH = SZ * 0.95;
         const ratio = creatureImg.naturalWidth / creatureImg.naturalHeight;
         const imgW = imgH * (isFinite(ratio) && ratio > 0 ? ratio : 1);
-        ctx.drawImage(creatureImg, cx - imgW/2, py + SZ - imgH, imgW, imgH);
+        // 'head' é quase quadrada → centraliza; 'iso' é alta → ancora embaixo p/ ficar "em pé".
+        const _imgY = _isoView ? (py + SZ - imgH) : (py + (SZ - imgH) / 2);
+        ctx.drawImage(creatureImg, cx - imgW/2, _imgY, imgW, imgH);
         // Contorno colorido sutil
         ctx.beginPath();
         ctx.arc(cx, cy + SZ*0.05, r * 0.5, 0, Math.PI*2);
@@ -5438,7 +5743,8 @@ function _avtRenderFrame() {
       } else {
         // Tentar sprite pixel art por classe antes do círculo genérico
         const _classeAvt = e.classe_aventura;
-        const _classeImg = _classeAvt ? _avtGetClasseImg(_classeAvt, _avtClasseVariant(e.nome)) : null;
+        const _isoViewC = !!(AVT_GRAFICOS?.isoAtivo);
+        const _classeImg = _classeAvt ? _avtGetClasseImg(_classeAvt, _avtClasseVariant(e.nome), _isoViewC ? 'iso' : 'head') : null;
         if (_classeImg && _classeImg.complete && _classeImg.naturalWidth > 0) {
           const imgSz = SZ * 0.92;
           ctx.drawImage(_classeImg, cx - imgSz / 2, py + (SZ - imgSz) / 2, imgSz, imgSz);
@@ -7444,7 +7750,16 @@ function _avtCanvasKey(e) {
   }
 
   // ── WASD: mover personagem ────────────────────────────────────────────────
-  const wasd = { a:[-1,0], d:[1,0], w:[0,-1], s:[0,1] };
+  // Em isométrico com "controle iso (teclado)", usa W/E/S/D em diamante: a posição
+  // física da tecla casa com a direção na tela (cada tecla = um eixo cardeal da grade,
+  // que aparece como diagonal). W=cima-esq(Oeste), E=cima-dir(Norte), S=baixo-esq(Sul),
+  // D=baixo-dir(Leste).
+  let wasd;
+  if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo && AVT_GRAFICOS?.isoTeclado) {
+    wasd = { w:[-1,0], e:[0,-1], s:[0,1], d:[1,0] };
+  } else {
+    wasd = { a:[-1,0], d:[1,0], w:[0,-1], s:[0,1] };
+  }
   const dir = wasd[_key];
   if (!dir) return;
   const _myBatKey = _avtMinhaBatalha();
