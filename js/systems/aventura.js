@@ -369,6 +369,12 @@ window._avtSkillsOrdenadasPorNumero = _avtSkillsOrdenadasPorNumero;
 const AVT_T  = { PAREDE: 0, PISO: 1, SAIDA: 2 };
 const AVT_SZ = 48;
 
+// Buffer reutilizado para o y-sort do render iso (evita alocar uma cópia por frame).
+const _avtYsortBuf = [];
+// Cache do gradiente radial de atmosfera (luz de tocha). Criado uma vez por raio (SZ),
+// na origem; o posicionamento por jogador é feito via ctx.translate no laço de render.
+let _avtAtmGrad = null, _avtAtmGradR = -1;
+
 // ── Cores dos efeitos de status (usados em visuais de canvas e CSS) ──────────
 const AVT_STATUS_COLORS = {
   stun:         '#9b59b6',
@@ -5715,19 +5721,27 @@ function _avtRenderFrame() {
   if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo && AVT_GRAFICOS?.atmosfera) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    const lr = SZ * 3.2;
+    // Gradiente-template na origem, recriado só quando o raio (SZ) muda; posicionado
+    // por jogador via translate, evitando um createRadialGradient por jogador/frame.
+    if (!_avtAtmGrad || _avtAtmGradR !== lr) {
+      const g = ctx.createRadialGradient(0, 0, SZ * 0.2, 0, 0, lr);
+      g.addColorStop(0,   'rgba(255,226,170,0.20)');
+      g.addColorStop(0.5, 'rgba(255,196,120,0.08)');
+      g.addColorStop(1,   'rgba(255,180,100,0)');
+      _avtAtmGrad = g; _avtAtmGradR = lr;
+    }
     entidades.forEach(e => {
       if (e.escondido || e.tipo !== 'jogador' || e.hp <= 0) return;
       const lx = Math.round(e.renderX * SZ - camera.x) + SZ / 2;
       const ly = Math.round(e.renderY * SZ - camera.y) + SZ / 2;
-      const lr = SZ * 3.2;
-      const grad = ctx.createRadialGradient(lx, ly, SZ * 0.2, lx, ly, lr);
-      grad.addColorStop(0,   'rgba(255,226,170,0.20)');
-      grad.addColorStop(0.5, 'rgba(255,196,120,0.08)');
-      grad.addColorStop(1,   'rgba(255,180,100,0)');
-      ctx.fillStyle = grad;
+      ctx.save();
+      ctx.translate(lx, ly);
+      ctx.fillStyle = _avtAtmGrad;
       ctx.beginPath();
-      ctx.arc(lx, ly, lr, 0, Math.PI * 2);
+      ctx.arc(0, 0, lr, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     });
     ctx.restore();
   }
@@ -5737,10 +5751,19 @@ function _avtRenderFrame() {
   // para que quem está à frente sobreponha quem está atrás, como no Diablo. Usa uma cópia
   // para não alterar a ordem em AVT_STATE.entidades.
   const _ysort = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo && AVT_GRAFICOS?.profundidade);
-  const _entsDesenho = _ysort
-    ? [...entidades].sort((a, b) =>
-        ((a.renderY ?? a.y) - (b.renderY ?? b.y)) || ((a.renderX ?? a.x) - (b.renderX ?? b.x)))
-    : entidades;
+  let _entsDesenho;
+  if (_ysort) {
+    // Reusa um buffer persistente (evita alocar uma cópia por frame → menos GC/stutter)
+    // sem alterar a ordem de AVT_STATE.entidades.
+    const buf = _avtYsortBuf;
+    buf.length = 0;
+    for (let i = 0; i < entidades.length; i++) buf.push(entidades[i]);
+    buf.sort((a, b) =>
+      ((a.renderY ?? a.y) - (b.renderY ?? b.y)) || ((a.renderX ?? a.x) - (b.renderX ?? b.x)));
+    _entsDesenho = buf;
+  } else {
+    _entsDesenho = entidades;
+  }
   _entsDesenho.forEach(e => {
     if (e.escondido || (e.tipo === 'inimigo' && e.hp <= 0)) return; // NPCs mortos não aparecem no mapa
     const _isAvatar   = e.tipo === 'avatar';
@@ -8375,6 +8398,47 @@ function _avtMeuJogador() {
     }
   }
   return null;
+}
+
+// ── Áudio de skill por distância (modo aventura) ─────────────────────────────
+// No modo aventura o volume máximo dos SFX de skill é reduzido em 25% e o som
+// atenua com a distância: ouvinte e fonte medidos em células; ≥ AVT_SFX_DIST_MAX
+// → silêncio; abaixo disso o volume cai linearmente (0 células = cheio).
+const AVT_SFX_AVENTURA_MULT = 0.75; // -25% no modo aventura
+const AVT_SFX_DIST_MAX      = 20;   // células; ≥ isso = silêncio
+
+// Ouvinte: personagem local; se o mestre/host observa sem personagem, usa o
+// centro da câmera (mesma convenção de coordenadas do render: x*SZ - camera.x).
+function _avtSfxOuvinte() {
+  const me = _avtMeuJogador();
+  if (me && typeof me.x === 'number') return { x: me.x, y: me.y };
+  const cam = AVT_STATE.camera, cv = AVT_STATE.canvas;
+  if (cam && cv) {
+    const SZ = Math.round(AVT_SZ * (cam.zoom || 1));
+    if (SZ > 0) return { x: (cam.x + cv.width / 2) / SZ, y: (cam.y + cv.height / 2) / SZ };
+  }
+  return null;
+}
+
+// Volume final do SFX: aplica a redução de 25% e a atenuação linear por
+// distância (Chebyshev, como o sistema de alcance de skill). Retorna 0 quando a
+// fonte está fora do alcance audível, sinalizando ao chamador para não tocar.
+function _avtSfxVolDist(baseVol, fonte) {
+  let v = (baseVol ?? 0.75) * AVT_SFX_AVENTURA_MULT;
+  const ouv = _avtSfxOuvinte();
+  if (ouv && fonte && typeof fonte.x === 'number') {
+    const dist = Math.max(Math.abs(ouv.x - fonte.x), Math.abs(ouv.y - fonte.y));
+    if (dist >= AVT_SFX_DIST_MAX) return 0;
+    v *= (1 - dist / AVT_SFX_DIST_MAX);
+  }
+  return v;
+}
+
+// Isolamento por fase: true se o faseId recebido pertence à minha fase atual.
+// faseId ausente (null/undefined) conta como "minha", preservando o comportamento
+// legado de handlers que recebiam payloads sem fase.
+function _avtMinhaFase(faseId) {
+  return faseId == null || faseId === (AVT_STATE._faseAtualId || 'principal');
 }
 
 // Entidade que o usuário atual está controlando para fins de movimentação:
@@ -11044,7 +11108,7 @@ function avtReceberMovimento(_payload) {
   // Anti-eco: descartar pacotes avt_token_move fora de ordem (seq monotônico por nome).
   const { nome, x, y, rx, ry, id, seq, ts, faseId } = (_payload || {});
   // Isolamento por fase: ignorar movimento de quem está noutra fase.
-  if (faseId != null && faseId !== (AVT_STATE._faseAtualId || 'principal')) return;
+  if (!_avtMinhaFase(faseId)) return;
   try{
     if(nome && (seq != null || ts != null)){
       const _dedupeKey = id || nome;
@@ -16248,7 +16312,12 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
 
   if (typeof AudioManager !== 'undefined') {
     const audioConf = anim.audio || {};
-    const vol = audioConf.volume ?? 0.75;
+    const volBase = audioConf.volume ?? 0.75;
+    // No modo aventura: -25% + atenuação por distância. Cast é medido na posição
+    // do conjurador (atacanteEnt) e o impacto na do alvo (alvoEnt), de modo que
+    // cada metade do efeito atenua de forma independente em relação ao ouvinte.
+    const volCast = _avtSfxVolDist(volBase, atacanteEnt || alvoEnt);
+    const volImp  = _avtSfxVolDist(volBase, alvoEnt);
     const autoSfx = AudioManager.getSkillSfx(
       tipo,
       anim.posicao || anim.gsap_config?.alvo_efeito || 'alvo',
@@ -16257,16 +16326,16 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
     );
     const castSfx   = audioConf.cast   || autoSfx.cast;
     const impactSfx = audioConf.impact || autoSfx.impact;
-    if (castSfx) AudioManager.playSFX(castSfx, { volume: vol, pitchVariance: 0.06 });
-    if (impactSfx) {
+    if (castSfx && volCast > 0.001) AudioManager.playSFX(castSfx, { volume: volCast, pitchVariance: 0.06 });
+    if (impactSfx && volImp > 0.001) {
       const travelTypes = ['projetil', 'onda', 'raio'];
       const isTravel = travelTypes.includes(tipo) &&
         ['trajetoria', 'raio', 'retorno'].includes(anim.posicao || '');
       const impactDelay = isTravel ? (anim.duracao || 600) : 0;
       if (impactDelay > 0) {
-        setTimeout(() => AudioManager.playSFX(impactSfx, { volume: vol, pitchVariance: 0.06 }), impactDelay);
+        setTimeout(() => AudioManager.playSFX(impactSfx, { volume: volImp, pitchVariance: 0.06 }), impactDelay);
       } else {
-        AudioManager.playSFX(impactSfx, { volume: vol, pitchVariance: 0.06 });
+        AudioManager.playSFX(impactSfx, { volume: volImp, pitchVariance: 0.06 });
       }
     }
   }
@@ -20852,8 +20921,7 @@ function avtAplicarSnapshotMerge(snap) {
   if (!snap || typeof AVT_STATE === 'undefined') return;
   // Isolamento por fase: não aplicar um snapshot de uma fase diferente da minha
   // (ex.: host está na fase 2 e eu acabei de entrar na fase inicial).
-  const _minhaFase = AVT_STATE._faseAtualId || 'principal';
-  if (snap.faseId != null && snap.faseId !== _minhaFase) return;
+  if (!_avtMinhaFase(snap.faseId)) return;
   try {
     const meuNome = AVT_STATE.myCharNome;
     if (Array.isArray(snap.entidades)) {
@@ -27571,8 +27639,7 @@ try{
     try {
       if (!payload || !Array.isArray(payload.entidades)) return;
       // Isolamento por fase: ignora ticks de uma fase diferente da minha.
-      const _minhaFase = AVT_STATE._faseAtualId || 'principal';
-      if (payload.faseId != null && payload.faseId !== _minhaFase) return;
+      if (!_avtMinhaFase(payload.faseId)) return;
       if (_souHostDaFase()) return; // não aplicar em mim mesmo (sou autoridade da fase)
       const meCharNome = AVT_STATE?.myCharNome || null;
       for (const r of payload.entidades) {

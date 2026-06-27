@@ -38,6 +38,8 @@ const _ISO_BASE_SCALE   = 1.45; // fator compensatório de escala base
 var _ISO_ANGLE_X = _ISO_BASE_ANGLE_X;
 var _ISO_SCALE   = _ISO_BASE_SCALE;
 const _ISO_OVERSIZE = 1.8; // fator de aumento do wrap p/ cobrir os cantos do viewport
+// Coeficientes da contra-transformação de billboard, cacheados (ver _avtIsoParamsAtualizar).
+var _ISO_BB = null;
 
 // Recalcula ângulo/escala efetivos. Com "profundidade" ativa usa 60° (squash ~0.5 →
 // diamante 2:1) e compensa a escala para preservar a extensão vertical na tela.
@@ -47,6 +49,12 @@ function _avtIsoParamsAtualizar() {
   const cosBase = Math.cos(_ISO_BASE_ANGLE_X * Math.PI / 180);
   const cosCur  = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
   _ISO_SCALE = _ISO_BASE_SCALE * (cosBase / cosCur);
+  // Pré-computa os coeficientes da contra-transformação de billboard. Eles só
+  // dependem de _ISO_SCALE/_ISO_ANGLE_X (mudam apenas em toggle), então cacheá-los
+  // aqui evita refazer Math.cos/divisões por entidade a cada frame no render iso.
+  const k = _ISO_SCALE / Math.SQRT2;
+  const inv2k = 1 / (2 * k);
+  _ISO_BB = { inv2k, inv2kCos: inv2k / cosCur };
 }
 
 function _avtGraficosCarregar() {
@@ -230,13 +238,13 @@ window._avtIsoCanvasToScreen = _avtIsoCanvasToScreen;
 // envolve o desenho com ctx.save()/ctx.restore(). Usa os MESMOS k/cosX da projeção de
 // clique, então acompanha o ângulo 2:1 automaticamente.
 function _avtIsoBillboardAplicar(ctx, pivotX, pivotY) {
-  const k    = _ISO_SCALE / Math.SQRT2;
-  const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
-  const inv2k = 1 / (2 * k);
+  // Lê os coeficientes cacheados (recalcula sob demanda se ainda não populados).
+  if (!_ISO_BB) _avtIsoParamsAtualizar();
+  const { inv2k, inv2kCos } = _ISO_BB;
   // Matriz inversa (tela→canvas), em torno do pivô: T(p)·M⁻¹·T(-p).
   // transform(a,b,c,d,e,f): x'=a·x+c·y+e, y'=b·x+d·y+f.
   ctx.translate(pivotX, pivotY);
-  ctx.transform(inv2k, -inv2k, inv2k / cosX, inv2k / cosX, 0, 0);
+  ctx.transform(inv2k, -inv2k, inv2kCos, inv2kCos, 0, 0);
   ctx.translate(-pivotX, -pivotY);
 }
 window._avtIsoBillboardAplicar = _avtIsoBillboardAplicar;
