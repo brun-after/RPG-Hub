@@ -180,6 +180,8 @@ function psRenderShell() {
     <button id="ps-record-btn" onclick="psToggleGravar()" title="Gravar trajetória do emissor selecionado" style="background:none;border:1px solid var(--borda);border-radius:4px;color:var(--suave);font-size:0.72rem;cursor:pointer;padding:2px 8px">⏺ Gravar</button>
     <button id="ps-fx-btn" onclick="psToggleFx()" title="Pós-processamento (glow/bloom/câmera) — WYSIWYG" style="background:none;border:1px solid var(--primario);border-radius:4px;color:var(--primario);font-size:0.72rem;cursor:pointer;padding:2px 8px">✨ FX</button>
     <button id="ps-scene-btn" onclick="psToggleScene()" title="Preview com bonecos móveis (atacante/alvo)" style="background:none;border:1px solid var(--borda);border-radius:4px;color:var(--suave);font-size:0.72rem;cursor:pointer;padding:2px 8px">👥 Cena</button>
+    <button id="ps-fase-btn" onclick="psToggleFase()" title="Preview como uma fase real (grade iso/topdown + tokens dos personagens)" style="background:none;border:1px solid var(--borda);border-radius:4px;color:var(--suave);font-size:0.72rem;cursor:pointer;padding:2px 8px">🗺️ Fase</button>
+    <select id="ps-fase-char" onchange="psFaseSetChar(this.value)" title="Token isométrico para simular o disparo" style="display:none;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.66rem;padding:2px 4px;max-width:130px"></select>
     <div style="flex:1"></div>
     <span id="ps-preview-time" style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave)">0.0s / 2.0s</span>
     <label style="font-size:0.68rem;color:var(--suave);display:flex;align-items:center;gap:4px">Zoom
@@ -299,7 +301,7 @@ function psNova() {
 
 function _psDefaultConfig() {
   return {
-    version: 2, behavior: 'one-shot', duracao_ms: 1000, posicao: 'alvo',
+    version: 3, behavior: 'one-shot', duracao_ms: 1000, posicao: 'alvo',
     camera: { shake: { amp: 4, decay: 0.92, freq: 32 } },
     lighting: { bloom: { threshold: 0.6, intensity: 0.7, quality: 4 }, tone: 'filmic' },
     background: { darken: 0.1 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
@@ -327,6 +329,7 @@ async function psSalvar() {
   cur.behavior   = cur.config_json.behavior   || 'one-shot';
   cur.duracao_ms = cur.config_json.duracao_ms || 1000;
   cur.global     = cur.config_json.global     || false;
+  cur.config_json.version = 3;   // anchor model (origin/height/pose) + iso scale/lift
 
   const preview = await _psCaptureThumbnail().catch(() => null);
   let previewUrl = cur.preview_url || null;
@@ -636,6 +639,7 @@ function _psRenderPropsPanel() {
     onchange="psUpdateConfigProp('global',this.checked)"> Global (todas campanhas)
 </label>
 ${_psLightingHtml(cur.config_json)}
+${_psIsoConfigHtml(cur.config_json)}
 ${_psScreenFxHtml(cur.config_json)}
 ${_psQualityHtml(cur.config_json)}
 ${_psAudioHtml(cur.config_json)}`;
@@ -669,6 +673,24 @@ ${kfs.map((k,i)=>`<tr style="border-top:1px solid rgba(255,255,255,0.05)">
   <td><select onchange="psUpdateKeyframe('${layer.id}',${i},{ease:this.value})" style="width:60px;padding:1px;background:var(--painel);border:1px solid var(--borda);border-radius:2px;color:var(--texto);font-size:0.56rem">${PS_EASING_NAMES.map(n=>`<option value="${n}"${(k.ease||'linear')===n?' selected':''}>${n.replace('ease','')||'linear'}</option>`).join('')}</select></td>
   <td><button onclick="psRemoveKeyframe('${layer.id}',${i})" style="background:none;border:none;color:var(--perigo);cursor:pointer;font-size:0.7rem">✕</button></td></tr>`).join('')}
 </tbody></table></div>` : '<div style="font-size:0.72rem;color:var(--suave);font-style:italic">Sem keyframes</div>'}
+</div>`;
+}
+
+// Animation-level isometric tuning: overall size multiplier + default firing height.
+function _psIsoConfigHtml(cfg) {
+  const sc = (typeof cfg.iso_scale === 'number') ? cfg.iso_scale : 1;
+  const lf = (typeof cfg.iso_lift_frac === 'number') ? cfg.iso_lift_frac : 0.62;
+  return `<div style="border-top:1px solid var(--borda);padding-top:10px;margin-top:6px">
+  <div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;margin-bottom:8px">Isométrico</div>
+  <div class="form-group" style="margin-bottom:6px"><label style="font-size:0.64rem;display:flex;justify-content:space-between">Escala iso (×)<span id="ps-isoscale-v">${sc.toFixed(2)}</span></label>
+    <input type="range" min="0.2" max="2" step="0.05" value="${sc}"
+      oninput="document.getElementById('ps-isoscale-v').textContent=parseFloat(this.value).toFixed(2);psUpdateConfigProp('iso_scale',parseFloat(this.value));psPreviewRebuildAll()"
+      style="width:100%"></div>
+  <div class="form-group"><label style="font-size:0.64rem;display:flex;justify-content:space-between">Altura de disparo (peitoral)<span id="ps-isolift-v">${lf.toFixed(2)}</span></label>
+    <input type="range" min="0" max="1.2" step="0.01" value="${lf}"
+      oninput="document.getElementById('ps-isolift-v').textContent=parseFloat(this.value).toFixed(2);psUpdateConfigProp('iso_lift_frac',parseFloat(this.value));psPreviewRebuildAll()"
+      style="width:100%"></div>
+  <div style="font-size:0.56rem;color:var(--suave);line-height:1.3">Multiplica o ajuste automático para a projeção iso. Altura padrão dos efeitos sem âncora própria (pés=0, peitoral≈0.62).</div>
 </div>`;
 }
 
@@ -1016,7 +1038,47 @@ function _psLayerCommonHtml(layer) {
       style="width:100%;padding:3px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.62rem">
       ${pOpts.map(([v,l])=>`<option value="${v}"${(layer.posicao_override||'')=== v?' selected':''}>${l}</option>`).join('')}
     </select></div>
-</div>`;
+</div>${_psLayerAnchorHtml(layer)}`;
+}
+
+// ── Origem / Pose (modelo de âncora v3) ──────────────────────────────────────
+// Controla DE ONDE a camada nasce (célula ligada ao conjurador/alvo, ponto na célula,
+// altura) e COMO se orienta (em pé / deitada no chão / encostada). Lido em jogo e no
+// preview "Fase" pelo resolver compartilhado _avtResolveAnchor.
+function _psLayerAnchorHtml(layer) {
+  const a = layer.anchor || {};
+  const id = layer.id;
+  const sel = (key, val, opts) => `<select onchange="psUpdateLayerProp('${id}','anchor.${key}',this.value||null);_psRenderPropsPanel();psPreviewRebuildAll()"
+      style="width:100%;padding:3px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.62rem">
+      ${opts.map(([v,l])=>`<option value="${v}"${String(val||'')===v?' selected':''}>${l}</option>`).join('')}</select>`;
+  const srcOpts  = [['','(auto)'],['caster','Conjurador'],['target','Alvo'],['mid','Centro'],['area','Área']];
+  const spotOpts = [['center','Centro'],['nw','Canto NO'],['ne','Canto NE'],['sw','Canto SO'],['se','Canto SE']];
+  const zOpts    = [['','(auto: peitoral)'],['ground','Chão'],['chest','Peitoral'],['top','Topo'],['float','Flutuante']];
+  const poseOpts = [['upright','Em pé (billboard)'],['floor','Deitado no chão'],['leaning','Encostado']];
+  const numIn = (key, val) => `<input type="number" value="${val||0}" step="1" min="-12" max="12"
+      onchange="psUpdateLayerProp('${id}','anchor.${key}',parseInt(this.value)||0);psPreviewRebuildAll()"
+      style="width:100%;padding:3px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.66rem;text-align:center">`;
+  const zFrac = (typeof a.zFrac === 'number') ? a.zFrac : 0.62;
+  return `<details style="border-top:1px solid var(--borda);padding-top:8px;margin-top:2px">
+  <summary style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);text-transform:uppercase;cursor:pointer;margin-bottom:6px">Origem / Pose (iso)</summary>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+    <div class="form-group"><label style="font-size:0.6rem">Origem (célula de)</label>${sel('source', a.source, srcOpts)}</div>
+    <div class="form-group"><label style="font-size:0.6rem">Ponto na célula</label>${sel('spot', a.spot || 'center', spotOpts)}</div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+    <div class="form-group"><label style="font-size:0.6rem">Célula Δx</label>${numIn('cell.dx', a.cell?.dx)}</div>
+    <div class="form-group"><label style="font-size:0.6rem">Célula Δy</label>${numIn('cell.dy', a.cell?.dy)}</div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+    <div class="form-group"><label style="font-size:0.6rem">Altura</label>${sel('z', a.z, zOpts)}</div>
+    <div class="form-group"><label style="font-size:0.6rem">Pose</label>${sel('pose', a.pose || 'upright', poseOpts)}</div>
+  </div>
+  <div class="form-group"><label style="font-size:0.6rem;display:flex;justify-content:space-between">Altura fina (sobrepõe)<span id="ps-zfrac-${id}">${zFrac.toFixed(2)}</span></label>
+    <input type="range" min="0" max="1.2" step="0.01" value="${zFrac}"
+      oninput="document.getElementById('ps-zfrac-${id}').textContent=parseFloat(this.value).toFixed(2);psUpdateLayerProp('${id}','anchor.zFrac',parseFloat(this.value));psPreviewRebuildAll()"
+      style="width:100%"></div>
+  <div style="font-size:0.56rem;color:var(--suave);line-height:1.3">Pés=0 · Peitoral≈0.62 · Topo≈0.95. Vale só no modo isométrico.</div>
+</details>`;
 }
 
 function _psRangeHtml(layerId, label, key, val, min, max, step, isEmitter) {
@@ -2006,11 +2068,18 @@ function psPreviewRebuildAll() {
   if (!cfg) return;
   const cx = app.renderer.width / 2, cy = app.renderer.height / 2;
   const sceneMode = !!PIXI_STUDIO_STATE._sceneMode;
+  const faseMode  = !!PIXI_STUDIO_STATE._faseMode;
+  // Fase mode: simulate the actual stage (iso/topdown grid + character tokens). Effect sizes
+  // get the same auto-scale used in game so the preview is WYSIWYG.
+  const faseScale = faseMode ? ((typeof _avtVfxAutoScale === 'function' ? _avtVfxAutoScale() : 1) * (cfg.iso_scale || 1)) : 1;
   const bm = { add: PIXI.BLEND_MODES.ADD, normal: PIXI.BLEND_MODES.NORMAL, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY };
   const sorted = [...(cfg.layers || [])].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
 
-  // Contextual reference markers based on effect posicao (replaced by live dummies in scene mode)
-  if (sceneMode) {
+  // Contextual reference markers based on effect posicao (replaced by live dummies in scene mode,
+  // or by a real stage with character tokens in fase mode)
+  if (faseMode) {
+    _psBuildFaseStage(cx, cy);
+  } else if (sceneMode) {
     _psBuildSceneDummies(cx, cy);
   } else {
     const posicao = cfg.posicao || 'trajetoria';
@@ -2072,12 +2141,13 @@ function psPreviewRebuildAll() {
     container.blendMode = bm[layer.blendMode] ?? PIXI.BLEND_MODES.ADD;
     worldRoot.addChild(container);
     PIXI_STUDIO_STATE._layerContainers.set(layer.id, container);
+    if (faseMode) _psFaseStyleLayer(container, layer, faseScale);
 
     if (layer.tipo === 'emitter' && layer.emitter) {
       _psCreateEmitter(layer, container, layer.offset?.x || 0, layer.offset?.y || 0);
       if (fxOn) _psApplyContainerFilters(container, layer);
       // Draggable origin gizmo for the selected emitter
-      if (layer.id === PIXI_STUDIO_STATE.layerSel && !sceneMode) {
+      if (layer.id === PIXI_STUDIO_STATE.layerSel && !sceneMode && !faseMode) {
         const ox = layer.offset?.x || 0, oy = layer.offset?.y || 0;
         const giz = new PIXI.Graphics();
         giz.lineStyle(1.5, 0x4fa3d1, 0.95);
@@ -2295,9 +2365,126 @@ function psToggleFx() {
 function psToggleScene() {
   PIXI_STUDIO_STATE._sceneMode = !PIXI_STUDIO_STATE._sceneMode;
   const on = PIXI_STUDIO_STATE._sceneMode;
+  if (on) { PIXI_STUDIO_STATE._faseMode = false; _psFaseBtnSync(); }
   const btn = document.getElementById('ps-scene-btn');
   if (btn) { btn.style.color = on ? 'var(--primario)' : 'var(--suave)'; btn.style.borderColor = on ? 'var(--primario)' : 'var(--borda)'; }
   psPreviewRebuildAll();
+}
+
+// ── Fase mode: preview as a real stage (iso/topdown grid + character tokens) ──
+function _psFaseBtnSync() {
+  const on = !!PIXI_STUDIO_STATE._faseMode;
+  const btn = document.getElementById('ps-fase-btn');
+  if (btn) { btn.style.color = on ? 'var(--primario)' : 'var(--suave)'; btn.style.borderColor = on ? 'var(--primario)' : 'var(--borda)'; }
+  const sel = document.getElementById('ps-fase-char');
+  if (sel) sel.style.display = on ? '' : 'none';
+}
+function psToggleFase() {
+  PIXI_STUDIO_STATE._faseMode = !PIXI_STUDIO_STATE._faseMode;
+  if (PIXI_STUDIO_STATE._faseMode) PIXI_STUDIO_STATE._sceneMode = false;
+  const sel = document.getElementById('ps-fase-char');
+  if (PIXI_STUDIO_STATE._faseMode && sel) _psFasePopulateChars(sel);
+  const sceneBtn = document.getElementById('ps-scene-btn');
+  if (sceneBtn) { sceneBtn.style.color = 'var(--suave)'; sceneBtn.style.borderColor = 'var(--borda)'; }
+  _psFaseBtnSync();
+  psPreviewRebuildAll();
+}
+function psFaseSetChar(id) {
+  PIXI_STUDIO_STATE._faseCharId = id || null;
+  psPreviewRebuildAll();
+}
+// Adventure characters/entities that have an isometric token, for the dummy picker.
+function _psFaseCharList() {
+  const out = [], seen = new Set();
+  const push = (src) => (src || []).forEach(e => {
+    const url = e?.custom_attrs?.iso_anim?.img_url || e?.custom_attrs?.iso_token_url;
+    const key = String(e?.id ?? e?.nome ?? '');
+    if (url && !seen.has(key)) { seen.add(key); out.push({ id: e.id ?? e.nome, nome: e.nome || '?', url }); }
+  });
+  if (typeof AVT_STATE !== 'undefined' && AVT_STATE) { push(AVT_STATE.entidades); push(AVT_STATE.chars); }
+  return out;
+}
+function _psFasePopulateChars(sel) {
+  const list = _psFaseCharList();
+  sel.innerHTML = list.length
+    ? list.map(c => `<option value="${_esc(String(c.id))}">${_esc(c.nome)}</option>`).join('')
+    : '<option value="">(sem token iso)</option>';
+  if (list.length && !PIXI_STUDIO_STATE._faseCharId) PIXI_STUDIO_STATE._faseCharId = list[0].id;
+  if (PIXI_STUDIO_STATE._faseCharId != null) sel.value = String(PIXI_STUDIO_STATE._faseCharId);
+}
+function _psFaseTokenUrl() {
+  const list = _psFaseCharList();
+  if (!list.length) return null;
+  const c = list.find(x => String(x.id) === String(PIXI_STUDIO_STATE._faseCharId)) || list[0];
+  return c ? c.url : null;
+}
+// Apply iso auto-scale + floor-pose tilt to an effect layer container in fase preview.
+function _psFaseStyleLayer(container, layer, faseScale) {
+  const iso = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo);
+  const pose = (layer.anchor && layer.anchor.pose) || 'upright';
+  if (iso && pose === 'floor') { container.rotation = Math.PI / 4; container.scale.set(faseScale, faseScale * 0.5); }
+  else container.scale.set(faseScale, faseScale);
+}
+// Draw a standing token whose CHEST sits at the firing line (cy), so the author sees the
+// effect originate from the configured height. Falls back to a placeholder silhouette.
+function _psFaseDrawToken(parent, x, cy, H, lift, url) {
+  const feetY = cy + lift * H;
+  const sh = new PIXI.Graphics();
+  sh.beginFill(0x000000, 0.3); sh.drawEllipse(x, feetY, H * 0.26, H * 0.09); sh.endFill();
+  parent.addChildAt(sh, 0);
+  if (url) {
+    try {
+      const sp = new PIXI.Sprite(PIXI.Texture.from(url));
+      sp.anchor.set(0.5, 1); sp.width = H; sp.height = H; sp.position.set(x, feetY); sp.alpha = 0.95;
+      parent.addChild(sp); return;
+    } catch (_) {}
+  }
+  const g = new PIXI.Graphics();
+  g.beginFill(0x223052, 0.65); g.lineStyle(1, 0x4fa3d1, 0.6);
+  g.drawRoundedRect(x - H * 0.2, feetY - H, H * 0.4, H, 10); g.endFill();
+  parent.addChild(g);
+}
+function _psBuildFaseStage(cx, cy) {
+  const worldRoot = PIXI_STUDIO_STATE._worldRoot;
+  if (!worldRoot || typeof PIXI === 'undefined') return;
+  const cfg = PIXI_STUDIO_STATE.atual?.config_json || {};
+  const iso = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo);
+  const posicao = cfg.posicao || 'trajetoria';
+
+  // Ground grid — iso diamond (2:1) when isometric, flat otherwise.
+  const grid = new PIXI.Graphics();
+  grid.lineStyle(1, 0x39507a, iso ? 0.55 : 0.3);
+  const cell = 46, n = 8;
+  for (let i = -n; i <= n; i++) {
+    grid.moveTo(i * cell, -n * cell); grid.lineTo(i * cell, n * cell);
+    grid.moveTo(-n * cell, i * cell); grid.lineTo(n * cell, i * cell);
+  }
+  const gc = new PIXI.Container();
+  gc.addChild(grid); gc.position.set(cx, cy);
+  if (iso) { gc.rotation = Math.PI / 4; gc.scale.set(1, 0.5); }
+  worldRoot.addChildAt(gc, 0);
+
+  // Standing token dummies whose chest aligns to the firing line.
+  const lift = (typeof cfg.iso_lift_frac === 'number') ? cfg.iso_lift_frac : 0.62;
+  const H = 120;
+  const url = _psFaseTokenUrl();
+  const place = (ox) => _psFaseDrawToken(worldRoot, cx + ox, cy, H, lift, url);
+  if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno' || posicao === 'meio') {
+    place(PS_ATAC_REF.x); place(PS_ALVO_REF.x);
+  } else if (posicao === 'atacante') {
+    place(0);
+  } else {
+    place(0);   // alvo / area / default
+  }
+
+  // Firing-height marker (chest line) + label.
+  const mk = new PIXI.Graphics();
+  mk.lineStyle(1, 0xc8a84b, 0.45);
+  mk.moveTo(cx - 190, cy); mk.lineTo(cx + 190, cy);
+  worldRoot.addChild(mk);
+  const lbl = new PIXI.Text(`altura ${Math.round(lift * 100)}%`, { fontSize: 10, fill: 0xc8a84b, resolution: 2 });
+  lbl.anchor.set(0, 1); lbl.alpha = 0.7; lbl.position.set(cx - 188, cy - 2);
+  worldRoot.addChild(lbl);
 }
 
 function _psHexToInt(c) {
@@ -3005,6 +3192,8 @@ window.psSetSpawnType         = psSetSpawnType;
 window.psUpdateSpawnRect      = psUpdateSpawnRect;
 window.psToggleFx             = psToggleFx;
 window.psToggleScene          = psToggleScene;
+window.psToggleFase           = psToggleFase;
+window.psFaseSetChar          = psFaseSetChar;
 window.psToggleLayerGlow      = psToggleLayerGlow;
 window.psToggleLayerTrail     = psToggleLayerTrail;
 window.psToggleLayerLightCast = psToggleLayerLightCast;

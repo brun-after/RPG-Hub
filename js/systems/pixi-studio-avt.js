@@ -27,6 +27,167 @@ function _psStudioToScreen(px, py, atacScr, alvoScr) {
   return { x: atacScr.x + rotX * scale, y: atacScr.y + rotY * scale };
 }
 
+// ─── Anchor model (config v3): per-layer origin / height / pose ──────────────
+// Lets an effect (or a single layer) declare WHERE on the field it spawns and HOW
+// it is oriented, so the same animation reads correctly in top-down and isometric.
+//   source : 'caster' | 'target' | 'mid' | 'area'  (generalizes posicao_override)
+//   cell   : { dx, dy }  offset in GRID CELLS from the source entity (e.g. the cell in front)
+//   spot   : 'center' | 'nw' | 'ne' | 'sw' | 'se'  planar point inside the cell (ground plane)
+//   z      : 'ground' | 'chest' | 'top' | 'float'  vertical height along the body
+//   zFrac  : 0..1+  fraction of token height (feet=0, top=1); overrides z when set
+//   pose   : 'upright' | 'floor' | 'leaning'  billboard up / lie on the floor / tilted
+const _PS_CHEST_FRAC = 0.62;   // peitoral ≈ 62% da altura do token (pés=0, topo=1)
+const _PS_Z_FRAC = { ground: 0, chest: _PS_CHEST_FRAC, top: 0.95, float: 0.5 };
+const _PS_LEAN = 0.55;         // fração da contra-transformação aplicada na pose 'leaning'
+
+// True when iso VFX projection is active (overlay lives inside the CSS-transformed wrap).
+function _avtVfxIsoOn() {
+  return !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS && AVT_GRAFICOS.isoAtivo
+    && AVT_GRAFICOS.vfxProjecao && typeof _ISO_ANGLE_X !== 'undefined');
+}
+// True when effects should also be billboarded (appear "standing"/facing the camera).
+function _avtVfxBillboardOn() {
+  return _avtVfxIsoOn() && !!AVT_GRAFICOS.vfxBillboard;
+}
+// Token image height in screen px at the current zoom (mirrors aventura.js iso token draw).
+function _avtVfxTokenPx() {
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera?.zoom || 1));
+  return SZ * 0.95;
+}
+// Auto base scale for VFX adapted to the current graphics mode (iso shrinks vs top-down).
+// Topdown → 1 (unchanged). Iso → smaller, lighter for higher "nivel"/2:1 depth.
+function _avtVfxAutoScale() {
+  if (!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS && AVT_GRAFICOS.isoAtivo)) return 1;
+  let s = 0.62;                                   // iso base: animations authored for top-down look big
+  if (AVT_GRAFICOS.profundidade) s *= 0.92;       // 2:1 diamond squashes the ground plane
+  return s;
+}
+// Combined VFX scale: auto base × per-animation override (cfg.iso_scale, default 1).
+function _avtVfxScale(cfg) {
+  const mult = (cfg && typeof cfg.iso_scale === 'number') ? cfg.iso_scale : 1;
+  return _avtVfxAutoScale() * mult;
+}
+
+// Normalize a raw anchor config, falling back to a legacy source keyword.
+function _psNormAnchor(anchorCfg, fallbackSource) {
+  const a = anchorCfg || {};
+  return {
+    source: a.source || fallbackSource || 'target',
+    cell:   { dx: (a.cell && a.cell.dx) || 0, dy: (a.cell && a.cell.dy) || 0 },
+    spot:   a.spot || 'center',
+    z:      a.z || null,
+    zFrac:  (typeof a.zFrac === 'number') ? a.zFrac : null,
+    pose:   a.pose || 'upright',
+  };
+}
+// Map a source keyword → entity (mid handled by the caller).
+function _psSourceEnt(source, casterEnt, targetEnt) {
+  if (source === 'caster') return casterEnt || targetEnt;
+  return targetEnt || casterEnt;   // 'target'/'area'/default
+}
+// Canvas-space planar anchor: cell center + cell offset + corner spot (ground plane).
+function _psPlanarAnchor(ent, a) {
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera?.zoom || 1));
+  const live = (typeof _avtEntViva === 'function') ? _avtEntViva(ent) : ent;
+  const gx = (live.renderX ?? live.x ?? 0) + (a.cell?.dx || 0);
+  const gy = (live.renderY ?? live.y ?? 0) + (a.cell?.dy || 0);
+  let x = Math.round(gx * SZ - AVT_STATE.camera.x + SZ / 2);
+  let y = Math.round(gy * SZ - AVT_STATE.camera.y + SZ / 2);
+  const h = SZ / 2;
+  switch (a.spot) {
+    case 'nw': x -= h; y -= h; break;
+    case 'ne': x += h; y -= h; break;
+    case 'sw': x -= h; y += h; break;
+    case 'se': x += h; y += h; break;
+  }
+  return { x, y };
+}
+// Vertical lift in SCREEN px from z/zFrac. Only meaningful when billboard is on; 0 otherwise.
+function _psAnchorLift(a) {
+  if (!_avtVfxBillboardOn()) return 0;
+  let frac;
+  if (typeof a.zFrac === 'number') frac = a.zFrac;
+  else if (a.z && _PS_Z_FRAC[a.z] != null) frac = _PS_Z_FRAC[a.z];
+  else frac = _PS_CHEST_FRAC;        // iso default: launch from the chest
+  return frac * _avtVfxTokenPx();
+}
+// Shared resolver: anchor config + entities → { x, y, lift, pose }.  x/y in canvas coords.
+function _avtResolveAnchor(anchorCfg, casterEnt, targetEnt, fallbackSource) {
+  const a = _psNormAnchor(anchorCfg, fallbackSource);
+  let planar;
+  if (a.source === 'mid') {
+    const pc = _psPlanarAnchor(casterEnt || targetEnt, a);
+    const pt = _psPlanarAnchor(targetEnt || casterEnt, a);
+    planar = { x: (pc.x + pt.x) / 2, y: (pc.y + pt.y) / 2 };
+  } else {
+    planar = _psPlanarAnchor(_psSourceEnt(a.source, casterEnt, targetEnt), a);
+  }
+  return { x: planar.x, y: planar.y, lift: _psAnchorLift(a), pose: a.pose, norm: a };
+}
+
+// Build a PIXI container wired for the current graphics mode and add it to `stage`.
+// Returns the CONTENT container — add display objects to it using ABSOLUTE canvas
+// coords (same coords as top-down). In iso+billboard the content is counter-transformed
+// around `anchor` so it appears upright, and lifted by `lift` screen px (chest height).
+// pose:'floor' skips the billboard so content lies in the (CSS-skewed) ground plane.
+function _avtVfxRoot(stage, pose, anchor, lift) {
+  const billboard = _avtVfxBillboardOn() && pose !== 'floor';
+  if (!billboard) {
+    // top-down, billboard off, or floor pose: content rendered in place. A non-floor
+    // lift (rare: iso w/ billboard off) is applied directly in screen space.
+    const c = new PIXI.Container();
+    if (pose !== 'floor' && lift && !_avtVfxIsoOn()) c.position.set(0, 0); // top-down: no vertical
+    stage.addChild(c);
+    return c;
+  }
+  const k = _ISO_SCALE / Math.SQRT2;
+  const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
+  const inv2k = 1 / (2 * k);
+  const bb = new PIXI.Container();
+  const ax = anchor ? anchor.x : 0, ay = anchor ? anchor.y : 0;
+  bb.pivot.set(ax, ay);
+  bb.position.set(ax, ay);
+  if (pose === 'leaning') {
+    bb.skew.set(Math.PI / 4 * _PS_LEAN, -Math.PI / 4 * _PS_LEAN);
+    bb.scale.set(1 + (inv2k * Math.SQRT2 - 1) * _PS_LEAN, 1 + (inv2k * Math.SQRT2 / cosX - 1) * _PS_LEAN);
+  } else {
+    bb.skew.set(Math.PI / 4, -Math.PI / 4);
+    bb.scale.set(inv2k * Math.SQRT2, inv2k * Math.SQRT2 / cosX);
+  }
+  // Lift is applied in billboard-local space; since CSS∘billboard = identity for vectors,
+  // a local (0,-lift) appears as exactly (0,-lift) screen px (up the body).
+  const content = new PIXI.Container();
+  content.position.set(0, -(lift || 0));
+  bb.addChild(content);
+  stage.addChild(bb);
+  return content;
+}
+
+// Tracked variant of _avtVfxRoot for follow/persistent effects: the pivot moves with the
+// entity each frame. Returns { content, update(scr, lift) }. Add objects to `content` using
+// absolute canvas coords; call update() per frame with the tracked screen position.
+function _avtVfxTrackedRoot(stage, pose) {
+  const billboard = _avtVfxBillboardOn() && pose !== 'floor';
+  if (!billboard) {
+    const c = new PIXI.Container();
+    stage.addChild(c);
+    return { content: c, update: () => {} };
+  }
+  const k = _ISO_SCALE / Math.SQRT2;
+  const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
+  const inv2k = 1 / (2 * k);
+  const bb = new PIXI.Container();
+  bb.skew.set(Math.PI / 4, -Math.PI / 4);
+  bb.scale.set(inv2k * Math.SQRT2, inv2k * Math.SQRT2 / cosX);
+  const content = new PIXI.Container();
+  bb.addChild(content);
+  stage.addChild(bb);
+  return {
+    content,
+    update: (scr, lift) => { bb.pivot.set(scr.x, scr.y); bb.position.set(scr.x, scr.y); content.position.set(0, -(lift || 0)); },
+  };
+}
+
 // ── Convert Studio config_json layers → AVT particle config format ─────────
 function _psToAvtConfig(cfg) {
   if (!cfg) return null;
@@ -38,6 +199,9 @@ function _psToAvtConfig(cfg) {
     background: cfg.background   || {},
     filters:    cfg.filters      || [],
     travel:     cfg.travel       || null,
+    iso_scale:     (typeof cfg.iso_scale === 'number') ? cfg.iso_scale : undefined,
+    iso_lift_frac: (typeof cfg.iso_lift_frac === 'number') ? cfg.iso_lift_frac : undefined,
+    anchor:        cfg.anchor || undefined,
     layers: [],
   };
   const layers = cfg.layers || [];
@@ -127,8 +291,10 @@ function _psAvtInterpKf(kfs, t) {
 
 // ── Render sprite layers (tipo:'sprite') as animated PIXI sprites ──────────
 // behavior: 'projectile' → sprite travels startScr→endScr over durMs
-//           other        → sprite anchors at startScr + keyframe offsets
-async function _psAvtRenderSprites(cfg, startScr, endScr, behavior) {
+//           other        → sprite anchors at the layer anchor + keyframe offsets
+// In iso each layer is wrapped in a pose-aware root (upright/floor) and lifted to its
+// configured height (chest by default); sizes are auto-scaled for the graphics mode.
+async function _psAvtRenderSprites(cfg, startScr, endScr, behavior, casterEnt, targetEnt) {
   const spriteLayers = (cfg.layers || []).filter(l => l.visivel && l.tipo === 'sprite' && l.texture_url);
   if (!spriteLayers.length) return;
 
@@ -139,6 +305,7 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior) {
   if (!canvas) return;
 
   const durMs = cfg.duracao_ms || cfg.duration || 1000;
+  const vfxScale = _avtVfxScale(cfg);
   const overlayCanvas = document.createElement('canvas');
   overlayCanvas.width  = canvas.width;
   overlayCanvas.height = canvas.height;
@@ -164,21 +331,26 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior) {
     multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL,
   };
 
+  const isProjectile = behavior === 'projectile';
+  const midScr = { x: (startScr.x + endScr.x) / 2, y: (startScr.y + endScr.y) / 2 };
+
   const sprites = [];
   for (const l of spriteLayers) {
     try {
+      // Anchor: trajectory pivots at the travel midpoint; otherwise the layer's own anchor.
+      const anchor = _psAvtLayerAnchor(l, startScr, endScr, casterEnt, targetEnt);
+      const pivot = isProjectile ? midScr : { x: anchor.x, y: anchor.y };
+      const root = _avtVfxRoot(app.stage, anchor.pose, pivot, anchor.lift);
       const tex = PIXI.Texture.from(l.texture_url);
       const sp = new PIXI.Sprite(tex);
       sp.anchor.set(0.5);
       sp.blendMode = bmMap[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
-      app.stage.addChild(sp);
-      sprites.push({ sp, layer: l });
+      root.addChild(sp);
+      sprites.push({ sp, layer: l, anchor });
     } catch (e) {
       console.warn('[pixi-studio-avt] Sprite texture error', l.texture_url, e);
     }
   }
-
-  const isProjectile = behavior === 'projectile';
 
   // Precompute rotation offset: angle of adventure travel minus angle of studio reference axis
   const dx_s = _PS_ALVO_REF.x - _PS_ATAC_REF.x;
@@ -194,7 +366,7 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior) {
   const tick = () => {
     const elapsed = performance.now() - startMs;
     const t = Math.min(elapsed / durMs, 1);
-    for (const { sp, layer } of sprites) {
+    for (const { sp, layer, anchor } of sprites) {
       const st = layer.start_t ?? 0;
       const et = layer.end_t   ?? 1;
       sp.visible = (t >= st && t <= et);
@@ -211,12 +383,11 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior) {
         sp.x = scrPos.x;
         sp.y = scrPos.y;
       } else {
-        const anchor = _psAvtLayerAnchor(layer, startScr, endScr);
-        sp.x = anchor.x + (kf.x ?? 0);
-        sp.y = anchor.y + (kf.y ?? 0);
+        sp.x = anchor.x + (kf.x ?? 0) * vfxScale;
+        sp.y = anchor.y + (kf.y ?? 0) * vfxScale;
       }
 
-      const sv = (kf.scale ?? 1) * bs;
+      const sv = (kf.scale ?? 1) * bs * vfxScale;
       sp.scale.x = sv * (layer.flip_x ? -1 : 1);
       sp.scale.y = sv * (layer.flip_y ? -1 : 1);
       sp.alpha    = kf.alpha    ?? 1;
@@ -253,7 +424,7 @@ function _psAvtInterpGeneric(kfs, t) {
 }
 
 // ── Render shape + light layers in combat (parity with the studio preview) ────
-async function _psAvtRenderShapes(cfg, startScr, endScr, behavior) {
+async function _psAvtRenderShapes(cfg, startScr, endScr, behavior, casterEnt, targetEnt) {
   const layers = (cfg.layers || []).filter(l => l.visivel && (l.tipo === 'shape' || l.tipo === 'light'));
   if (!layers.length) return;
   await _avtEnsurePixiParticles();
@@ -262,6 +433,7 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior) {
   if (!canvas) return;
 
   const durMs = cfg.duracao_ms || cfg.duration || 1000;
+  const vfxScale = _avtVfxScale(cfg);
   const overlayCanvas = document.createElement('canvas');
   overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
   overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
@@ -275,16 +447,20 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior) {
   const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
   const hexInt = (c) => { if (typeof c === 'number') return c; const n = parseInt(String(c).replace('#', ''), 16); return isNaN(n) ? 0xffffff : n; };
   const isProj = behavior === 'projectile';
+  const midScr = { x: (startScr.x + endScr.x) / 2, y: (startScr.y + endScr.y) / 2 };
   const items = [];
   for (const l of layers) {
+    const anchor = _psAvtLayerAnchor(l, startScr, endScr, casterEnt, targetEnt);
+    const pivot = isProj ? midScr : { x: anchor.x, y: anchor.y };
+    const root = _avtVfxRoot(app.stage, anchor.pose, pivot, anchor.lift);
     if (l.tipo === 'shape') {
       const g = new PIXI.Graphics();
       g.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
-      app.stage.addChild(g); items.push({ g, layer: l });
+      root.addChild(g); items.push({ g, layer: l, anchor });
     } else {
       const sp = new PIXI.Sprite(typeof _avtProcTextures === 'function' ? _avtProcTextures('glow') : PIXI.Texture.WHITE);
       sp.anchor.set(0.5); sp.blendMode = PIXI.BLEND_MODES.ADD;
-      app.stage.addChild(sp); items.push({ sp, layer: l });
+      root.addChild(sp); items.push({ sp, layer: l, anchor });
     }
   }
 
@@ -293,9 +469,8 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior) {
     const t = Math.min((performance.now() - startMs) / durMs, 1);
     for (const it of items) {
       const l = it.layer;
-      const layerAnchor = _psAvtLayerAnchor(l, startScr, endScr);
-      const anchorX = isProj ? startScr.x + (endScr.x - startScr.x) * t : layerAnchor.x;
-      const anchorY = isProj ? startScr.y + (endScr.y - startScr.y) * t : layerAnchor.y;
+      const anchorX = isProj ? startScr.x + (endScr.x - startScr.x) * t : it.anchor.x;
+      const anchorY = isProj ? startScr.y + (endScr.y - startScr.y) * t : it.anchor.y;
       const st = l.start_t ?? 0, et = l.end_t ?? 1;
       const vis = t >= st && t <= et;
       const tRel = et > st ? (t - st) / (et - st) : t;
@@ -303,8 +478,8 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior) {
       if (it.g) {
         const g = it.g; g.visible = vis; if (!vis || !kf) continue;
         g.clear();
-        g.position.set(anchorX + (kf.x || 0), anchorY + (kf.y || 0));
-        const sw = kf.stroke_width ?? 2, sa = kf.stroke_alpha ?? 1, fa = kf.fill_alpha ?? 0, r = kf.radius ?? 20;
+        g.position.set(anchorX + (kf.x || 0) * vfxScale, anchorY + (kf.y || 0) * vfxScale);
+        const sw = kf.stroke_width ?? 2, sa = kf.stroke_alpha ?? 1, fa = kf.fill_alpha ?? 0, r = (kf.radius ?? 20) * vfxScale;
         if (sa > 0) g.lineStyle(sw, hexInt(kf.stroke_color || '#ffffff'), sa);
         if (fa > 0) g.beginFill(hexInt(kf.fill_color || '#ffffff'), fa);
         if (l.shape_type === 'rect') g.drawRect(-r, -r, r * 2, r * 2);
@@ -316,9 +491,9 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior) {
         if (fa > 0) g.endFill();
       } else {
         const sp = it.sp; sp.visible = vis; if (!vis || !kf) continue;
-        const r = kf.radius ?? 60;
+        const r = (kf.radius ?? 60) * vfxScale;
         sp.width = sp.height = r * 2;
-        sp.position.set(anchorX + (kf.x || 0), anchorY + (kf.y || 0));
+        sp.position.set(anchorX + (kf.x || 0) * vfxScale, anchorY + (kf.y || 0) * vfxScale);
         sp.alpha = kf.alpha ?? 0.7;
         sp.tint = hexInt(kf.color || l.color || '#ffffff');
       }
@@ -332,18 +507,52 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior) {
   }, durMs + 200);
 }
 
-// Helper: resolve effective anchor screen pos for a layer given posicao_override
-function _psAvtLayerAnchor(layer, atacScr, alvoScr) {
-  const pos = layer.posicao_override;
-  if (!pos || pos === 'alvo') return alvoScr;
-  if (pos === 'atacante') return atacScr;
-  if (pos === 'meio') return { x: (atacScr.x + alvoScr.x) / 2, y: (atacScr.y + alvoScr.y) / 2 };
-  return alvoScr;
+// Resolve a layer's effective anchor → { x, y, lift, pose }.
+// Prefers the new per-layer `anchor` model; otherwise falls back to legacy
+// `posicao_override` (screen point) plus the default chest lift in iso.
+function _psAvtLayerAnchor(layer, atacScr, alvoScr, casterEnt, targetEnt) {
+  if (layer && layer.anchor) {
+    const fb = layer.posicao_override === 'atacante' ? 'caster'
+             : layer.posicao_override === 'meio'     ? 'mid' : 'target';
+    return _avtResolveAnchor(layer.anchor, casterEnt, targetEnt, fb);
+  }
+  const pos = layer && layer.posicao_override;
+  let pt;
+  if (pos === 'atacante')   pt = atacScr;
+  else if (pos === 'meio')  pt = { x: (atacScr.x + alvoScr.x) / 2, y: (atacScr.y + alvoScr.y) / 2 };
+  else                      pt = alvoScr;   // 'alvo' / default
+  return { x: pt.x, y: pt.y, lift: _avtVfxBillboardOn() ? _PS_CHEST_FRAC * _avtVfxTokenPx() : 0, pose: 'upright' };
+}
+
+// Scale an emitter config (v2 list-style or v5 behaviors) by `s` in screen space.
+function _avtScaleEmitterCfg(cfg, s) {
+  if (!cfg || !(s > 0) || s === 1) return cfg;
+  let c; try { c = JSON.parse(JSON.stringify(cfg)); } catch (_) { return cfg; }
+  const scaleList = (o) => { if (o && Array.isArray(o.list)) o.list.forEach(p => { if (typeof p.value === 'number') p.value *= s; }); };
+  // v2 list-style
+  if (c.scale) scaleList(c.scale);
+  if (c.speed) { if (typeof c.speed.start === 'number') c.speed.start *= s; if (typeof c.speed.end === 'number') c.speed.end *= s; }
+  if (c.acceleration) { if (typeof c.acceleration.x === 'number') c.acceleration.x *= s; if (typeof c.acceleration.y === 'number') c.acceleration.y *= s; }
+  if (c.spawnCircle) { if (typeof c.spawnCircle.r === 'number') c.spawnCircle.r *= s; }
+  if (c.spawnRect) { ['x','y','w','h'].forEach(k => { if (typeof c.spawnRect[k] === 'number') c.spawnRect[k] *= s; }); }
+  // v5 behaviors
+  if (Array.isArray(c.behaviors)) {
+    for (const b of c.behaviors) {
+      if (!b || !b.config) continue;
+      if (b.type === 'scale' || b.type === 'scaleStatic') { scaleList(b.config.scale); ['min','max'].forEach(k => { if (typeof b.config[k] === 'number') b.config[k] *= s; }); }
+      if (b.type === 'moveSpeed' || b.type === 'moveSpeedStatic') { scaleList(b.config.speed); ['min','max'].forEach(k => { if (typeof b.config[k] === 'number') b.config[k] *= s; }); }
+      if (typeof b.type === 'string' && b.type.startsWith('spawnShape') && b.config.data) {
+        const d = b.config.data; ['radius','w','h','x','y'].forEach(k => { if (typeof d[k] === 'number') d[k] *= s; });
+      }
+    }
+  }
+  return c;
 }
 
 // ── Render emitter layers following their recorded spawn_path ─────────────────
-// Uses a similarity transform to map studio-space → screen-space.
-async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr) {
+// Uses a similarity transform to map studio-space → screen-space. Each layer is wrapped
+// in a pose-aware iso root (upright/floor) and lifted to its configured height.
+async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targetEnt) {
   const layers = (cfg.layers || []).filter(l => l.emitter);
   if (!layers.length) return;
 
@@ -354,6 +563,8 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr) {
   if (!canvas) return;
 
   const durMs = cfg.duracao_ms || cfg.duration || 1000;
+  const vfxScale = _avtVfxScale(cfg);
+  const midScr = { x: (atacScr.x + alvoScr.x) / 2, y: (atacScr.y + alvoScr.y) / 2 };
   const overlayCanvas = document.createElement('canvas');
   overlayCanvas.width  = canvas.width;
   overlayCanvas.height = canvas.height;
@@ -376,11 +587,15 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr) {
 
   const emitters = [];
   for (const l of layers) {
+    const anchor = _psAvtLayerAnchor(l, atacScr, alvoScr, casterEnt, targetEnt);
+    // spawn_path spans both tokens → pivot at the travel midpoint; static → the layer anchor.
+    const pivot = l.spawn_path?.length ? midScr : { x: anchor.x, y: anchor.y };
+    const root = _avtVfxRoot(app.stage, anchor.pose, pivot, anchor.lift);
     const container = new PIXI.Container();
     container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
-    app.stage.addChild(container);
+    root.addChild(container);
 
-    let emitCfg = Object.assign({}, l.emitter);
+    let emitCfg = _avtScaleEmitterCfg(Object.assign({}, l.emitter), vfxScale);
     // We control emission timing manually; override auto-stop from emitterLifetime
     if (!Array.isArray(emitCfg.behaviors)) emitCfg.emitterLifetime = -1;
     const tex = l.texture_url
@@ -392,13 +607,13 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr) {
     }
     try {
       const em = new PIXI.particles.Emitter(container, emitCfg);
-      // Initial position: start of spawn_path or attacker
+      // Initial position: start of spawn_path or the layer anchor
       const initPos = l.spawn_path?.length
         ? _psStudioToScreen(l.spawn_path[0].x ?? 0, l.spawn_path[0].y ?? 0, atacScr, alvoScr)
-        : alvoScr;
+        : { x: anchor.x, y: anchor.y };
       em.updateSpawnPos(initPos.x, initPos.y);
       em.emit = false;
-      emitters.push({ em, layer: l });
+      emitters.push({ em, layer: l, anchor });
     } catch (_) {}
   }
 
@@ -411,7 +626,7 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr) {
     lastTs = now;
     const t = Math.min((now - startMs) / durMs, 1);
 
-    for (const { em, layer } of emitters) {
+    for (const { em, layer, anchor } of emitters) {
       if (em.destroyed) continue;
       const st = layer.start_t ?? 0, et = layer.end_t ?? 1;
       const inRange = t >= st && t <= et;
@@ -424,8 +639,7 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr) {
           em.updateSpawnPos(pos.x, pos.y);
         }
       } else if (inRange) {
-        const anchor = _psAvtLayerAnchor(layer, atacScr, alvoScr);
-        const ox = layer.offset?.x || 0, oy = layer.offset?.y || 0;
+        const ox = (layer.offset?.x || 0) * vfxScale, oy = (layer.offset?.y || 0) * vfxScale;
         em.updateSpawnPos(anchor.x + ox, anchor.y + oy);
       }
       em.update(delta);
@@ -483,7 +697,7 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
 
   switch (behavior) {
     case 'projectile':
-      return _psAvtProjectile(mainCfg, atacScr, alvoScr, alvoEnt);
+      return _psAvtProjectile(mainCfg, atacScr, alvoScr, alvoEnt, atacanteEnt);
     case 'follow-caster':
     case 'channel':
       _psAvtFollow(mainCfg, atacanteEnt, durMs);
@@ -498,15 +712,15 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
       // one-shot, loop, aoe — prefer spawn_path if present, else existing pipeline
       const hasPath = (mainCfg.layers || []).some(l => l.tipo === 'emitter' && l.spawn_path?.length);
       if (hasPath) {
-        _psAvtRenderWithSpawnPath(mainCfg, atacScr, alvoScr);
+        _psAvtRenderWithSpawnPath(mainCfg, atacScr, alvoScr, atacanteEnt, alvoEnt);
       } else {
         const avtCfg = _psToAvtConfig(mainCfg);
         if (avtCfg && typeof _avtPixiParticleAnim === 'function') {
           _avtPixiParticleAnim(avtCfg, atacScr, alvoScr, posicao);
         }
       }
-      _psAvtRenderSprites(mainCfg, atacScr, alvoScr, behavior);
-      _psAvtRenderShapes(mainCfg, atacScr, alvoScr, behavior);
+      _psAvtRenderSprites(mainCfg, atacScr, alvoScr, behavior, atacanteEnt, alvoEnt);
+      _psAvtRenderShapes(mainCfg, atacScr, alvoScr, behavior, atacanteEnt, alvoEnt);
       return 0;
     }
   }
@@ -532,7 +746,7 @@ function _psAvtPathPos(path, atac, alvo, t) {
 }
 
 // ── Emitter projectile that follows a travel path (arc/spiral/homing) ──────
-async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt) {
+async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt, atacanteEnt) {
   const layers = (cfg.layers || []).filter(l => l.visivel && l.tipo === 'emitter' && l.emitter);
   if (!layers.length) return;
   await _avtEnsurePixiParticles();
@@ -541,6 +755,8 @@ async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt) {
   if (!canvas) return;
 
   const durMs = cfg.duracao_ms || cfg.duration || 1000;
+  const vfxScale = _avtVfxScale(cfg);
+  const midScr = { x: (atacScr.x + alvoScr.x) / 2, y: (atacScr.y + alvoScr.y) / 2 };
   const overlayCanvas = document.createElement('canvas');
   overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
   overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
@@ -553,10 +769,12 @@ async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt) {
   const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
   const emitters = [];
   for (const l of layers) {
+    const anchor = _psAvtLayerAnchor(l, atacScr, alvoScr, atacanteEnt, alvoEnt);
+    const root = _avtVfxRoot(app.stage, anchor.pose, midScr, anchor.lift);
     const container = new PIXI.Container();
     container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
-    app.stage.addChild(container);
-    let emitCfg = Object.assign({}, l.emitter);
+    root.addChild(container);
+    let emitCfg = _avtScaleEmitterCfg(Object.assign({}, l.emitter), vfxScale);
     if (!Array.isArray(emitCfg.behaviors)) emitCfg.emitterLifetime = -1;
     const tex = l.texture_url ? PIXI.Texture.from(l.texture_url) : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
     const texArr = [tex || PIXI.Texture.WHITE];
@@ -597,23 +815,23 @@ async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt) {
 }
 
 // ── Projectile: emitter travels from caster to target ─────────────────────
-function _psAvtProjectile(cfg, atacScr, alvoScr, alvoEnt) {
+function _psAvtProjectile(cfg, atacScr, alvoScr, alvoEnt, atacanteEnt) {
   const hasSpawnPath = (cfg.layers || []).some(l => l.tipo === 'emitter' && l.spawn_path?.length);
 
   // If any emitter layer has a recorded spawn_path, respect it exactly
   if (hasSpawnPath) {
-    _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr);
-    _psAvtRenderSprites(cfg, atacScr, alvoScr, 'projectile');
-    _psAvtRenderShapes(cfg, atacScr, alvoScr, 'projectile');
+    _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, atacanteEnt, alvoEnt);
+    _psAvtRenderSprites(cfg, atacScr, alvoScr, 'projectile', atacanteEnt, alvoEnt);
+    _psAvtRenderShapes(cfg, atacScr, alvoScr, 'projectile', atacanteEnt, alvoEnt);
     return cfg.duracao_ms || cfg.duration || 1000;
   }
 
   // Curved travel (arc/spiral/homing): emitters fly along the computed path
   const path = cfg.travel?.path;
   if (path && path !== 'linear') {
-    _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt);
-    _psAvtRenderSprites(cfg, atacScr, alvoScr, 'projectile');
-    _psAvtRenderShapes(cfg, atacScr, alvoScr, 'projectile');
+    _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt, atacanteEnt);
+    _psAvtRenderSprites(cfg, atacScr, alvoScr, 'projectile', atacanteEnt, alvoEnt);
+    _psAvtRenderShapes(cfg, atacScr, alvoScr, 'projectile', atacanteEnt, alvoEnt);
     return cfg.duracao_ms || cfg.duration || 1000;
   }
 
@@ -636,8 +854,8 @@ function _psAvtProjectile(cfg, atacScr, alvoScr, alvoEnt) {
   }, speedMs);
 
   // Sprite layers travel from attacker to target over the full duration
-  _psAvtRenderSprites(cfg, atacScr, alvoScr, 'projectile');
-  _psAvtRenderShapes(cfg, atacScr, alvoScr, 'projectile');
+  _psAvtRenderSprites(cfg, atacScr, alvoScr, 'projectile', atacanteEnt, alvoEnt);
+  _psAvtRenderShapes(cfg, atacScr, alvoScr, 'projectile', atacanteEnt, alvoEnt);
 
   return speedMs;
 }
@@ -678,8 +896,11 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
       return;
     }
 
-    const worldRoot = new PIXI.Container();
-    app.stage.addChild(worldRoot);
+    const vfxScale = _avtVfxScale(cfg);
+    const _followPose = (cfg.anchor && cfg.anchor.pose) || 'upright';
+    const _followLift = _psAnchorLift(_psNormAnchor(cfg.anchor));
+    const tracked = _avtVfxTrackedRoot(app.stage, _followPose);
+    const worldRoot = tracked.content;
 
     const emitters = [];
     const bm = {
@@ -696,7 +917,7 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
         container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
         worldRoot.addChild(container);
 
-        let emitCfg = Object.assign({}, l.emitter);
+        let emitCfg = _avtScaleEmitterCfg(Object.assign({}, l.emitter), vfxScale);
         if (!Array.isArray(emitCfg.behaviors)) emitCfg.emitterLifetime = -1;
         const tex = l.texture_url
           ? PIXI.Texture.from(l.texture_url)
@@ -715,7 +936,7 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
           const sp = new PIXI.Sprite(tex);
           sp.anchor.set(0.5);
           sp.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
-          const bs = l.base_scale ?? 1;
+          const bs = (l.base_scale ?? 1) * vfxScale;
           sp.scale.x = bs * (l.flip_x ? -1 : 1);
           sp.scale.y = bs * (l.flip_y ? -1 : 1);
           sp.x = startScr.x;
@@ -734,14 +955,15 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
       const delta = (now - lastTs) / 1000;
       lastTs = now;
       const scr = _psAvtToScreen(targetEnt);
+      tracked.update(scr, _followLift);
       for (const em of emitters) {
         if (em._isSprite) {
           const t = Math.min((now - em.startMs) / em.durMs, 1);
           const kf = _psAvtInterpKf(em.layer.keyframes, t);
           if (kf) {
-            const bs = em.layer.base_scale ?? 1;
-            em.sp.x = scr.x + (kf.x ?? 0);
-            em.sp.y = scr.y + (kf.y ?? 0);
+            const bs = (em.layer.base_scale ?? 1) * vfxScale;
+            em.sp.x = scr.x + (kf.x ?? 0) * vfxScale;
+            em.sp.y = scr.y + (kf.y ?? 0) * vfxScale;
             const sv = (kf.scale ?? 1) * bs;
             em.sp.scale.x = sv * (em.layer.flip_x ? -1 : 1);
             em.sp.scale.y = sv * (em.layer.flip_y ? -1 : 1);
@@ -815,8 +1037,11 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
     app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false });
   } catch (e) { overlayCanvas.remove(); return; }
 
-  const worldRoot = new PIXI.Container();
-  app.stage.addChild(worldRoot);
+  const vfxScale = _avtVfxScale(cfg);
+  const _persistPose = (cfg.anchor && cfg.anchor.pose) || 'upright';
+  const _persistLift = _psAnchorLift(_psNormAnchor(cfg.anchor));
+  const tracked = _avtVfxTrackedRoot(app.stage, _persistPose);
+  const worldRoot = tracked.content;
   const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
   const hexInt = (c) => { if (typeof c === 'number') return c; const n = parseInt(String(c).replace('#',''),16); return isNaN(n)?0xffffff:n; };
 
@@ -839,7 +1064,7 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
       const container = new PIXI.Container();
       container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
       worldRoot.addChild(container);
-      let emitCfg = Object.assign({}, l.emitter, { emitterLifetime: -1 });
+      let emitCfg = Object.assign(_avtScaleEmitterCfg(Object.assign({}, l.emitter), vfxScale), { emitterLifetime: -1 });
       const tex = l.texture_url ? PIXI.Texture.from(l.texture_url) : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
       const texArr = [tex || PIXI.Texture.WHITE];
       if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) { try { emitCfg = PIXI.particles.upgradeConfig(emitCfg, texArr); } catch (_) {} }
@@ -855,7 +1080,7 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
         const sp = new PIXI.Sprite(tex);
         sp.anchor.set(0.5);
         sp.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
-        const bs = l.base_scale ?? 1;
+        const bs = (l.base_scale ?? 1) * vfxScale;
         sp.scale.x = bs * (l.flip_x ? -1 : 1);
         sp.scale.y = bs * (l.flip_y ? -1 : 1);
         sp.x = startScr.x; sp.y = startScr.y;
@@ -880,6 +1105,7 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
     const now = performance.now();
     const delta = (now - lastTs) / 1000;
     lastTs = now;
+    tracked.update(_psAvtToScreen(primaryEnt), _persistLift);
     for (const em of emitters) {
       const scr = _psAvtToScreen(em.trackEnt || primaryEnt);
       if (em._isSprite) {
@@ -887,9 +1113,9 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
         const t = ((now - em.cycleStart) % cycleDurMs) / cycleDurMs;
         const kf = _psAvtInterpKf(em.layer.keyframes, t);
         if (kf) {
-          const bs = em.layer.base_scale ?? 1;
-          em.sp.x = scr.x + (kf.x ?? 0);
-          em.sp.y = scr.y + (kf.y ?? 0);
+          const bs = (em.layer.base_scale ?? 1) * vfxScale;
+          em.sp.x = scr.x + (kf.x ?? 0) * vfxScale;
+          em.sp.y = scr.y + (kf.y ?? 0) * vfxScale;
           const sv = (kf.scale ?? 1) * bs;
           em.sp.scale.x = sv * (em.layer.flip_x ? -1 : 1);
           em.sp.scale.y = sv * (em.layer.flip_y ? -1 : 1);
@@ -906,8 +1132,8 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
         const g = em.g; g.visible = vis;
         if (vis && kf) {
           g.clear();
-          g.position.set(scr.x + (kf.x || 0), scr.y + (kf.y || 0));
-          const sw = kf.stroke_width ?? 2, sa = kf.stroke_alpha ?? 1, fa = kf.fill_alpha ?? 0, r = kf.radius ?? 20;
+          g.position.set(scr.x + (kf.x || 0) * vfxScale, scr.y + (kf.y || 0) * vfxScale);
+          const sw = kf.stroke_width ?? 2, sa = kf.stroke_alpha ?? 1, fa = kf.fill_alpha ?? 0, r = (kf.radius ?? 20) * vfxScale;
           if (sa > 0) g.lineStyle(sw, hexInt(kf.stroke_color || '#ffffff'), sa);
           if (fa > 0) g.beginFill(hexInt(kf.fill_color || '#ffffff'), fa);
           if (l.shape_type === 'rect') g.drawRect(-r, -r, r * 2, r * 2);
@@ -927,9 +1153,9 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
         const kf = _psAvtInterpGeneric(l.keyframes, tRel);
         const sp = em.sp; sp.visible = vis;
         if (vis && kf) {
-          const r = kf.radius ?? 60;
+          const r = (kf.radius ?? 60) * vfxScale;
           sp.width = sp.height = r * 2;
-          sp.position.set(scr.x + (kf.x || 0), scr.y + (kf.y || 0));
+          sp.position.set(scr.x + (kf.x || 0) * vfxScale, scr.y + (kf.y || 0) * vfxScale);
           sp.alpha = kf.alpha ?? 0.7;
           sp.tint = hexInt(kf.color || l.color || '#ffffff');
         }

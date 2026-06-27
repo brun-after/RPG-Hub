@@ -17813,6 +17813,9 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
 
   // Normalize config (legacy compat + preset merge)
   const root = _avtFxNormalize(particleConfig);
+  // Auto-scale particle sizes/speeds for the current graphics mode (iso shrinks vs top-down;
+  // top-down → 1, so legacy behavior is unchanged). Per-anim override via cfg.iso_scale.
+  const _vfxScale = (typeof _avtVfxScale === 'function') ? _avtVfxScale(root) : 1;
   const layers = root.layers || [];
   if (!layers.length) {
     console.warn('[pixi-fx] particleConfig sem layers válidas — usando fallback', particleConfig);
@@ -17865,8 +17868,12 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
       // no personagem (decomposição skew/scale equivalente à matriz inversa do CSS, usando
       // os mesmos k/cosX da projeção). O dim de fundo (bgRoot) e o flash (uiRoot) ficam
       // FORA do billboard, em tela cheia.
+      // pose:'floor' (effect-level) lies in the ground plane → skip the billboard so the
+      // CSS-skewed overlay reads as lying on the floor (e.g. a magic circle / rune).
+      const _effPose = (root.anchor && root.anchor.pose) || 'upright';
       const _isoBB = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
-        && AVT_GRAFICOS?.vfxProjecao && AVT_GRAFICOS?.vfxBillboard && typeof _ISO_ANGLE_X !== 'undefined');
+        && AVT_GRAFICOS?.vfxProjecao && AVT_GRAFICOS?.vfxBillboard && typeof _ISO_ANGLE_X !== 'undefined')
+        && _effPose !== 'floor';
       const bgRoot = new PIXI.Container();
       app.stage.addChild(bgRoot);
       if (_isoBB) {
@@ -17880,6 +17887,12 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
         isoRoot.position.set(_ax, _ay);
         isoRoot.skew.set(Math.PI / 4, -Math.PI / 4);
         isoRoot.scale.set(_inv2k * Math.SQRT2, _inv2k * Math.SQRT2 / _cosX);
+        // Chest lift: raise effects to ~peitoral height of the token. Applied in billboard-local
+        // space (CSS∘billboard = identity for vectors), so it reads as a true vertical screen
+        // offset matching the iso token art. Configurable via cfg.iso_lift_frac (default chest).
+        const _liftFrac = (typeof root.iso_lift_frac === 'number') ? root.iso_lift_frac : 0.62;
+        const _SZv = Math.round(AVT_SZ * (AVT_STATE.camera?.zoom || 1));
+        worldRoot.position.set(0, -_liftFrac * _SZv * 0.95);
         isoRoot.addChild(worldRoot);
         app.stage.addChild(isoRoot);
       } else {
@@ -17942,6 +17955,7 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
         const texSpec = layer.texture || layer.textures || root.textures || 'spark';
         return _avtFxResolveTextures(texSpec).then(textures => {
           let cfg = Object.assign({}, layer.emitter || {});
+          if (_vfxScale !== 1 && typeof _avtScaleEmitterCfg === 'function') cfg = _avtScaleEmitterCfg(cfg, _vfxScale);
           const isV5 = Array.isArray(cfg.behaviors);
           if (!isV5 && PIXI.particles.upgradeConfig) {
             try { cfg = PIXI.particles.upgradeConfig(cfg, textures); } catch(_) {}
