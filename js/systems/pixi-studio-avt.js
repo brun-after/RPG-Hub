@@ -188,6 +188,38 @@ function _avtVfxTrackedRoot(stage, pose) {
   };
 }
 
+// Draw a clawed-hand silhouette into a Graphics, sized ~r, reaching UP (fingertips at -y,
+// wrist at +y), origin at the palm center. Issued between the caller's beginFill/endFill so it
+// fills + strokes like other shapes. Shared by the runtime and the studio preview.
+function _psHandPath(g, r) {
+  const palmW = r * 1.1, palmH = r * 1.05;
+  // palm
+  g.drawRoundedRect(-palmW / 2, -palmH * 0.1, palmW, palmH, r * 0.32);
+  // four fingers (tapered claws) fanning upward
+  const fx = [-0.42, -0.16, 0.12, 0.4];
+  const fl = [0.95, 1.18, 1.12, 0.86];   // relative lengths
+  for (let i = 0; i < 4; i++) {
+    const bx = fx[i] * palmW;
+    const tipx = bx + fx[i] * r * 0.5;     // fan outward
+    const topy = -palmH * 0.1 - fl[i] * r;
+    const wb = r * 0.18;                    // base half-width
+    g.drawPolygon([bx - wb, -palmH * 0.05, bx + wb, -palmH * 0.05, tipx + wb * 0.35, topy + r * 0.12, tipx, topy, tipx - wb * 0.35, topy + r * 0.12]);
+  }
+  // thumb (to the left, lower)
+  g.drawPolygon([-palmW * 0.5, palmH * 0.5, -palmW * 0.5 - r * 0.1, palmH * 0.18, -palmW * 0.95, -r * 0.05, -palmW * 0.78, palmH * 0.2, -palmW * 0.5, palmH * 0.62]);
+}
+
+// Draw a beam (glow + bright core + tip flare) from A to B in the Graphics' local space.
+// `len` (0..1) controls how far the beam currently extends from A toward B.
+function _psBeamPath(g, A, B, thick, color, alpha, len, hexInt) {
+  const bx = A.x + (B.x - A.x) * len, by = A.y + (B.y - A.y) * len;
+  const col = hexInt(color || '#ffffff');
+  g.lineStyle(thick * 2.4, col, alpha * 0.25); g.moveTo(A.x, A.y); g.lineTo(bx, by);   // outer glow
+  g.lineStyle(thick, col, alpha * 0.8);         g.moveTo(A.x, A.y); g.lineTo(bx, by);   // mid
+  g.lineStyle(Math.max(1, thick * 0.4), 0xffffff, alpha); g.moveTo(A.x, A.y); g.lineTo(bx, by); // white core
+  g.beginFill(col, alpha * 0.9); g.drawCircle(bx, by, thick * 1.1); g.endFill();        // tip flare
+}
+
 // ── Convert Studio config_json layers → AVT particle config format ─────────
 function _psToAvtConfig(cfg) {
   if (!cfg) return null;
@@ -478,17 +510,24 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior, casterEnt, ta
       if (it.g) {
         const g = it.g; g.visible = vis; if (!vis || !kf) continue;
         g.clear();
-        g.position.set(anchorX + (kf.x || 0) * vfxScale, anchorY + (kf.y || 0) * vfxScale);
         const sw = kf.stroke_width ?? 2, sa = kf.stroke_alpha ?? 1, fa = kf.fill_alpha ?? 0, r = (kf.radius ?? 20) * vfxScale;
-        if (sa > 0) g.lineStyle(sw, hexInt(kf.stroke_color || '#ffffff'), sa);
-        if (fa > 0) g.beginFill(hexInt(kf.fill_color || '#ffffff'), fa);
-        if (l.shape_type === 'rect') g.drawRect(-r, -r, r * 2, r * 2);
-        else if (l.shape_type === 'polygon') {
-          const sides = Math.max(3, l.sides || 6), pts = [];
-          for (let i = 0; i < sides; i++) { const a = -Math.PI / 2 + i * 2 * Math.PI / sides; pts.push(Math.cos(a) * r, Math.sin(a) * r); }
-          g.drawPolygon(pts);
-        } else g.drawCircle(0, 0, r);
-        if (fa > 0) g.endFill();
+        if (l.shape_type === 'beam') {
+          // Beam spans caster→target (chest height via the root lift); `len` extends it.
+          g.position.set(0, 0);
+          _psBeamPath(g, startScr, endScr, Math.max(2, r), kf.stroke_color || '#ffffff', sa, kf.len ?? 1, hexInt);
+        } else {
+          g.position.set(anchorX + (kf.x || 0) * vfxScale, anchorY + (kf.y || 0) * vfxScale);
+          if (sa > 0) g.lineStyle(sw, hexInt(kf.stroke_color || '#ffffff'), sa);
+          if (fa > 0) g.beginFill(hexInt(kf.fill_color || '#ffffff'), fa);
+          if (l.shape_type === 'rect') g.drawRect(-r, -r, r * 2, r * 2);
+          else if (l.shape_type === 'hand') { if (!(fa > 0)) g.beginFill(hexInt(kf.fill_color || kf.stroke_color || '#ffffff'), 0.9); _psHandPath(g, r); }
+          else if (l.shape_type === 'polygon') {
+            const sides = Math.max(3, l.sides || 6), pts = [];
+            for (let i = 0; i < sides; i++) { const a = -Math.PI / 2 + i * 2 * Math.PI / sides; pts.push(Math.cos(a) * r, Math.sin(a) * r); }
+            g.drawPolygon(pts);
+          } else g.drawCircle(0, 0, r);
+          if (fa > 0 || l.shape_type === 'hand') g.endFill();
+        }
       } else {
         const sp = it.sp; sp.visible = vis; if (!vis || !kf) continue;
         const r = (kf.radius ?? 60) * vfxScale;

@@ -1041,44 +1041,70 @@ function _psLayerCommonHtml(layer) {
 </div>${_psLayerAnchorHtml(layer)}`;
 }
 
-// ── Origem / Pose (modelo de âncora v3) ──────────────────────────────────────
-// Controla DE ONDE a camada nasce (célula ligada ao conjurador/alvo, ponto na célula,
-// altura) e COMO se orienta (em pé / deitada no chão / encostada). Lido em jogo e no
-// preview "Fase" pelo resolver compartilhado _avtResolveAnchor.
+// ── Origem / Pose (modelo de âncora v3) — UI visual e intuitiva ──────────────
+// Controla DE ONDE a camada nasce (conjurador/alvo/centro + célula vizinha), a ALTURA
+// (chão→acima) e a POSE (em pé / deitada / inclinada). Lido em jogo e no preview pelo
+// resolver compartilhado _avtResolveAnchor.
+function _psAnchorBtnGroup(id, key, current, opts) {
+  return `<div style="display:flex;flex-wrap:wrap;gap:4px">` + opts.map(([v, l]) => {
+    const on = String(current) === String(v);
+    return `<button onclick="psSetAnchor('${id}','${key}','${v}')" style="flex:1;min-width:fit-content;padding:4px 7px;border-radius:5px;cursor:pointer;font-size:0.62rem;border:1px solid ${on ? 'var(--primario)' : 'var(--borda)'};background:${on ? 'rgba(79,163,209,0.15)' : 'var(--painel)'};color:${on ? 'var(--primario)' : 'var(--suave)'}">${l}</button>`;
+  }).join('') + `</div>`;
+}
+// 3×3 picker for the relative cell (dx,dy in -1..1); center = on the source entity.
+function _psAnchorCellGrid(id, dx, dy) {
+  let cells = '';
+  for (let r = -1; r <= 1; r++) for (let c = -1; c <= 1; c++) {
+    const on = (dx | 0) === c && (dy | 0) === r;
+    const isCenter = c === 0 && r === 0;
+    cells += `<button onclick="psSetAnchorCell('${id}',${c},${r})" title="${isCenter ? 'na célula do alvo/conjurador' : 'célula vizinha'}"
+      style="width:26px;height:20px;border-radius:4px;cursor:pointer;border:1px solid ${on ? 'var(--primario)' : 'var(--borda)'};background:${on ? 'rgba(79,163,209,0.25)' : (isCenter ? 'rgba(255,255,255,0.06)' : 'var(--painel)')};color:var(--suave);font-size:0.6rem;padding:0">${isCenter ? '◉' : ''}</button>`;
+  }
+  return `<div style="display:grid;grid-template-columns:repeat(3,26px);gap:3px;justify-content:start">${cells}</div>`;
+}
 function _psLayerAnchorHtml(layer) {
   const a = layer.anchor || {};
   const id = layer.id;
-  const sel = (key, val, opts) => `<select onchange="psUpdateLayerProp('${id}','anchor.${key}',this.value||null);_psRenderPropsPanel();psPreviewRebuildAll()"
-      style="width:100%;padding:3px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.62rem">
-      ${opts.map(([v,l])=>`<option value="${v}"${String(val||'')===v?' selected':''}>${l}</option>`).join('')}</select>`;
-  const srcOpts  = [['','(auto)'],['caster','Conjurador'],['target','Alvo'],['mid','Centro'],['area','Área']];
-  const spotOpts = [['center','Centro'],['nw','Canto NO'],['ne','Canto NE'],['sw','Canto SO'],['se','Canto SE']];
-  const zOpts    = [['','(auto: peitoral)'],['ground','Chão'],['chest','Peitoral'],['top','Topo'],['float','Flutuante']];
-  const poseOpts = [['upright','Em pé (billboard)'],['floor','Deitado no chão'],['leaning','Encostado']];
-  const numIn = (key, val) => `<input type="number" value="${val||0}" step="1" min="-12" max="12"
-      onchange="psUpdateLayerProp('${id}','anchor.${key}',parseInt(this.value)||0);psPreviewRebuildAll()"
-      style="width:100%;padding:3px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.66rem;text-align:center">`;
+  const dx = a.cell?.dx || 0, dy = a.cell?.dy || 0;
   const zFrac = (typeof a.zFrac === 'number') ? a.zFrac : 0.62;
-  return `<details style="border-top:1px solid var(--borda);padding-top:8px;margin-top:2px">
-  <summary style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);text-transform:uppercase;cursor:pointer;margin-bottom:6px">Origem / Pose (iso)</summary>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
-    <div class="form-group"><label style="font-size:0.6rem">Origem (célula de)</label>${sel('source', a.source, srcOpts)}</div>
-    <div class="form-group"><label style="font-size:0.6rem">Ponto na célula</label>${sel('spot', a.spot || 'center', spotOpts)}</div>
+  // height presets (name → zFrac); highlight the closest match
+  const heights = [['Chão', 0], ['Cintura', 0.42], ['Peito', 0.62], ['Cabeça', 0.9], ['Acima', 1.05], ['Flutuar', 0.5]];
+  const hKey = (heights.find(([, v]) => Math.abs(v - zFrac) < 0.02) || [])[0] || '';
+  const hBtns = heights.map(([l, v]) =>
+    `<button onclick="psSetAnchorHeight('${id}',${v})" style="flex:1;min-width:fit-content;padding:4px 6px;border-radius:5px;cursor:pointer;font-size:0.62rem;border:1px solid ${hKey === l ? 'var(--primario)' : 'var(--borda)'};background:${hKey === l ? 'rgba(79,163,209,0.15)' : 'var(--painel)'};color:${hKey === l ? 'var(--primario)' : 'var(--suave)'}">${l}</button>`).join('');
+  return `<div style="border-top:1px solid var(--borda);padding-top:10px;margin-top:4px;display:flex;flex-direction:column;gap:8px">
+  <div style="font-family:var(--fonte-d);font-size:0.64rem;color:var(--destaque);text-transform:uppercase">Origem da animação</div>
+  <div><label style="font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px">De onde sai?</label>
+    ${_psAnchorBtnGroup(id, 'source', a.source || 'target', [['caster', 'Conjurador'], ['target', 'Alvo'], ['mid', 'Centro']])}</div>
+  <div style="display:flex;gap:12px;align-items:flex-start">
+    <div><label style="font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px">Célula (vizinha)</label>${_psAnchorCellGrid(id, dx, dy)}</div>
+    <div style="flex:1"><label style="font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px">Ponto na célula</label>
+      ${_psAnchorBtnGroup(id, 'spot', a.spot || 'center', [['center', 'Centro'], ['nw', 'NO'], ['ne', 'NE'], ['sw', 'SO'], ['se', 'SE']])}</div>
   </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
-    <div class="form-group"><label style="font-size:0.6rem">Célula Δx</label>${numIn('cell.dx', a.cell?.dx)}</div>
-    <div class="form-group"><label style="font-size:0.6rem">Célula Δy</label>${numIn('cell.dy', a.cell?.dy)}</div>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
-    <div class="form-group"><label style="font-size:0.6rem">Altura</label>${sel('z', a.z, zOpts)}</div>
-    <div class="form-group"><label style="font-size:0.6rem">Pose</label>${sel('pose', a.pose || 'upright', poseOpts)}</div>
-  </div>
-  <div class="form-group"><label style="font-size:0.6rem;display:flex;justify-content:space-between">Altura fina (sobrepõe)<span id="ps-zfrac-${id}">${zFrac.toFixed(2)}</span></label>
-    <input type="range" min="0" max="1.2" step="0.01" value="${zFrac}"
-      oninput="document.getElementById('ps-zfrac-${id}').textContent=parseFloat(this.value).toFixed(2);psUpdateLayerProp('${id}','anchor.zFrac',parseFloat(this.value));psPreviewRebuildAll()"
-      style="width:100%"></div>
-  <div style="font-size:0.56rem;color:var(--suave);line-height:1.3">Pés=0 · Peitoral≈0.62 · Topo≈0.95. Vale só no modo isométrico.</div>
-</details>`;
+  <div><label style="font-size:0.6rem;color:var(--suave);display:flex;justify-content:space-between;margin-bottom:3px"><span>Altura (no iso)</span><span style="color:var(--primario)">${Math.round(zFrac * 100)}%</span></label>
+    <div style="display:flex;flex-wrap:wrap;gap:4px">${hBtns}</div>
+    <input type="range" min="0" max="1.2" step="0.01" value="${zFrac}" title="ajuste fino da altura"
+      oninput="psUpdateLayerProp('${id}','anchor.zFrac',parseFloat(this.value));psUpdateLayerProp('${id}','anchor.z',null);_psRenderPropsPanel();psPreviewRebuildAll()"
+      style="width:100%;margin-top:5px"></div>
+  <div><label style="font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px">Pose</label>
+    ${_psAnchorBtnGroup(id, 'pose', a.pose || 'upright', [['upright', 'Em pé'], ['floor', 'Deitado no chão'], ['leaning', 'Inclinado']])}</div>
+  <div style="font-size:0.56rem;color:var(--suave);line-height:1.3">"Em pé" encara a câmera; "deitado" fica no plano do chão (runas, ondas). Altura só vale no modo isométrico.</div>
+</div>`;
+}
+// Setters for the visual anchor controls.
+function psSetAnchor(id, key, val) {
+  psUpdateLayerProp(id, 'anchor.' + key, val || null);
+  _psRenderPropsPanel(); psPreviewRebuildAll();
+}
+function psSetAnchorCell(id, dx, dy) {
+  psUpdateLayerProp(id, 'anchor.cell.dx', dx);
+  psUpdateLayerProp(id, 'anchor.cell.dy', dy);
+  _psRenderPropsPanel(); psPreviewRebuildAll();
+}
+function psSetAnchorHeight(id, zFrac) {
+  psUpdateLayerProp(id, 'anchor.zFrac', zFrac);
+  psUpdateLayerProp(id, 'anchor.z', null);
+  _psRenderPropsPanel(); psPreviewRebuildAll();
 }
 
 function _psRangeHtml(layerId, label, key, val, min, max, step, isEmitter) {
@@ -1200,7 +1226,7 @@ ${isShape ? `
 <div class="form-group" style="margin-bottom:8px"><label style="font-size:0.66rem">Tipo de Forma</label>
   <select onchange="psUpdateLayerProp('${layer.id}','shape_type',this.value);_psRenderPropsPanel()"
     style="width:100%;padding:5px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem">
-    ${['circle','rect','polygon'].map(t=>`<option value="${t}"${layer.shape_type===t?' selected':''}>${t}</option>`).join('')}
+    ${[['circle','círculo'],['rect','retângulo'],['polygon','polígono'],['beam','feixe (conjurador→alvo)'],['hand','mão/garra']].map(([t,lbl])=>`<option value="${t}"${layer.shape_type===t?' selected':''}>${lbl}</option>`).join('')}
   </select></div>
 ${layer.shape_type === 'polygon' ? `<div class="form-group" style="margin-bottom:8px"><label style="font-size:0.66rem">Lados</label>
   <input type="number" min="3" max="12" step="1" value="${layer.sides||6}" oninput="psUpdateLayerProp('${layer.id}','sides',parseInt(this.value)||6)"
@@ -1795,17 +1821,28 @@ function _psPreviewRenderFrame(t) {
         const r  = kf.radius ?? 20;
         const bm = { add: PIXI.BLEND_MODES.ADD, normal: PIXI.BLEND_MODES.NORMAL, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY };
         g.blendMode = bm[layer.blendMode] ?? PIXI.BLEND_MODES.ADD;
-        if (sa > 0) g.lineStyle(sw, parseInt(sc.replace('#',''), 16), sa);
-        if (fa > 0) g.beginFill(parseInt((kf.fill_color||'#ffffff').replace('#',''), 16), fa);
-        if (layer.shape_type === 'circle') g.drawCircle(0, 0, r);
-        else if (layer.shape_type === 'rect') g.drawRect(-r, -r, r * 2, r * 2);
-        else if (layer.shape_type === 'polygon') {
-          const sides = Math.max(3, layer.sides || 6);
-          const pts = [];
-          for (let i = 0; i < sides; i++) { const ang = -Math.PI / 2 + i * 2 * Math.PI / sides; pts.push(Math.cos(ang) * r, Math.sin(ang) * r); }
-          g.drawPolygon(pts);
+        const _hex = (c) => parseInt(String(c||'#ffffff').replace('#',''), 16);
+        if (layer.shape_type === 'beam' && typeof _psBeamPath === 'function') {
+          // Beam from caster→target reference points (container sits at center).
+          g.position.set(0, 0);
+          _psBeamPath(g, { x: PS_ATAC_REF.x, y: 0 }, { x: PS_ALVO_REF.x, y: 0 }, Math.max(2, r), sc, sa, kf.len ?? 1, _hex);
+        } else {
+          if (sa > 0) g.lineStyle(sw, _hex(sc), sa);
+          if (fa > 0) g.beginFill(_hex(kf.fill_color || '#ffffff'), fa);
+          if (layer.shape_type === 'circle') g.drawCircle(0, 0, r);
+          else if (layer.shape_type === 'rect') g.drawRect(-r, -r, r * 2, r * 2);
+          else if (layer.shape_type === 'hand' && typeof _psHandPath === 'function') {
+            if (!(fa > 0)) g.beginFill(_hex(kf.fill_color || sc), 0.9);
+            _psHandPath(g, r);
+          }
+          else if (layer.shape_type === 'polygon') {
+            const sides = Math.max(3, layer.sides || 6);
+            const pts = [];
+            for (let i = 0; i < sides; i++) { const ang = -Math.PI / 2 + i * 2 * Math.PI / sides; pts.push(Math.cos(ang) * r, Math.sin(ang) * r); }
+            g.drawPolygon(pts);
+          }
+          if (fa > 0 || layer.shape_type === 'hand') g.endFill();
         }
-        if (fa > 0) g.endFill();
       }
     }
 
@@ -2418,72 +2455,118 @@ function _psFaseTokenUrl() {
   const c = list.find(x => String(x.id) === String(PIXI_STUDIO_STATE._faseCharId)) || list[0];
   return c ? c.url : null;
 }
-// Apply iso auto-scale + floor-pose tilt to an effect layer container in fase preview.
+// Apply iso auto-scale + floor-pose projection to an effect layer container in fase preview.
+// Effects are rendered upright (no skew) at the chest line; pose:'floor' lays them in the
+// ground plane using the SAME iso projection as the floor (rotate 45° + vertical squash cosX).
 function _psFaseStyleLayer(container, layer, faseScale) {
   const iso = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo);
   const pose = (layer.anchor && layer.anchor.pose) || 'upright';
-  if (iso && pose === 'floor') { container.rotation = Math.PI / 4; container.scale.set(faseScale, faseScale * 0.5); }
-  else container.scale.set(faseScale, faseScale);
+  if (iso && pose === 'floor') {
+    const cosX = _psFaseCosX();
+    container.rotation = Math.PI / 4;
+    container.scale.set(faseScale, faseScale * cosX);
+  } else {
+    container.scale.set(faseScale, faseScale);
+  }
 }
-// Draw a standing token whose CHEST sits at the firing line (cy), so the author sees the
-// effect originate from the configured height. Falls back to a placeholder silhouette.
-function _psFaseDrawToken(parent, x, cy, H, lift, url) {
-  const feetY = cy + lift * H;
+
+// Current isometric vertical-squash factor (cos of the real iso tilt angle). Mirrors the game.
+function _psFaseCosX() {
+  if (typeof _avtIsoParamsAtualizar === 'function') { try { _avtIsoParamsAtualizar(); } catch (_) {} }
+  const ang = (typeof _ISO_ANGLE_X !== 'undefined') ? _ISO_ANGLE_X : 60;
+  return Math.cos(ang * Math.PI / 180);
+}
+
+// Draw a real isometric diamond floor that fills the canvas (pure: only needs a Graphics).
+// tileW = full diamond width in px; cosX = vertical squash (≈0.5 for a 2:1 diamond).
+function _psFaseDrawFloor(g, w, h, cx, cy, tileW, cosX, gridColor) {
+  const halfW = tileW / 2, halfH = halfW * cosX;
+  const cols = Math.ceil(w / halfW) + 6, rows = Math.ceil(h / halfH) + 6;
+  for (let r = -rows; r <= rows; r++) {
+    for (let c = -cols; c <= cols; c++) {
+      const x = cx + (c - r) * halfW;
+      const y = cy + (c + r) * halfH;
+      if (x < -tileW || x > w + tileW || y < -(halfH + 4) || y > h + halfH + 4) continue;
+      const checker = ((c + r) & 1) === 0;
+      g.beginFill(gridColor, checker ? 0.06 : 0.02);
+      g.lineStyle(1, gridColor, 0.22);
+      g.moveTo(x, y - halfH); g.lineTo(x + halfW, y); g.lineTo(x, y + halfH); g.lineTo(x - halfW, y); g.closePath();
+      g.endFill();
+    }
+  }
+}
+
+// Highlighted tile under a token's feet + the standing token sprite (chest at firing line).
+function _psFaseStandToken(parent, x, feetY, tokenH, tileW, cosX, url, accent) {
+  const halfW = tileW / 2, halfH = halfW * cosX;
+  // tile highlight (diamond) under the feet
+  const tile = new PIXI.Graphics();
+  tile.beginFill(accent, 0.16); tile.lineStyle(1.5, accent, 0.6);
+  tile.moveTo(x, feetY - halfH); tile.lineTo(x + halfW, feetY); tile.lineTo(x, feetY + halfH); tile.lineTo(x - halfW, feetY); tile.closePath();
+  tile.endFill();
+  parent.addChild(tile);
+  // contact shadow
   const sh = new PIXI.Graphics();
-  sh.beginFill(0x000000, 0.3); sh.drawEllipse(x, feetY, H * 0.26, H * 0.09); sh.endFill();
-  parent.addChildAt(sh, 0);
+  sh.beginFill(0x000000, 0.32); sh.drawEllipse(x, feetY, halfW * 0.7, halfH * 0.7); sh.endFill();
+  parent.addChild(sh);
+  // token sprite (square iso token, anchored at feet) or placeholder silhouette
   if (url) {
     try {
       const sp = new PIXI.Sprite(PIXI.Texture.from(url));
-      sp.anchor.set(0.5, 1); sp.width = H; sp.height = H; sp.position.set(x, feetY); sp.alpha = 0.95;
+      sp.anchor.set(0.5, 1); sp.width = tokenH; sp.height = tokenH; sp.position.set(x, feetY + halfH * 0.35); sp.alpha = 0.97;
       parent.addChild(sp); return;
     } catch (_) {}
   }
   const g = new PIXI.Graphics();
-  g.beginFill(0x223052, 0.65); g.lineStyle(1, 0x4fa3d1, 0.6);
-  g.drawRoundedRect(x - H * 0.2, feetY - H, H * 0.4, H, 10); g.endFill();
+  g.beginFill(0x223052, 0.7); g.lineStyle(1.5, accent, 0.7);
+  // simple humanoid placeholder: body + head
+  const topY = feetY - tokenH;
+  g.drawRoundedRect(x - tokenH * 0.16, topY + tokenH * 0.22, tokenH * 0.32, tokenH * 0.78, 7);
+  g.drawCircle(x, topY + tokenH * 0.13, tokenH * 0.13);
+  g.endFill();
   parent.addChild(g);
 }
+
 function _psBuildFaseStage(cx, cy) {
   const worldRoot = PIXI_STUDIO_STATE._worldRoot;
-  if (!worldRoot || typeof PIXI === 'undefined') return;
+  const app = PIXI_STUDIO_STATE.previewApp;
+  if (!worldRoot || !app || typeof PIXI === 'undefined') return;
   const cfg = PIXI_STUDIO_STATE.atual?.config_json || {};
   const iso = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo);
   const posicao = cfg.posicao || 'trajetoria';
+  const w = app.renderer.width, h = app.renderer.height;
 
-  // Ground grid — iso diamond (2:1) when isometric, flat otherwise.
-  const grid = new PIXI.Graphics();
-  grid.lineStyle(1, 0x39507a, iso ? 0.55 : 0.3);
-  const cell = 46, n = 8;
-  for (let i = -n; i <= n; i++) {
-    grid.moveTo(i * cell, -n * cell); grid.lineTo(i * cell, n * cell);
-    grid.moveTo(-n * cell, i * cell); grid.lineTo(n * cell, i * cell);
-  }
-  const gc = new PIXI.Container();
-  gc.addChild(grid); gc.position.set(cx, cy);
-  if (iso) { gc.rotation = Math.PI / 4; gc.scale.set(1, 0.5); }
-  worldRoot.addChildAt(gc, 0);
-
-  // Standing token dummies whose chest aligns to the firing line.
+  const cosX = iso ? _psFaseCosX() : 1;
+  const tileW = 104;                                   // diamond width in px
+  const tokenH = Math.round(tileW * 0.95);             // token height ≈ 0.95 cell (mirrors game)
   const lift = (typeof cfg.iso_lift_frac === 'number') ? cfg.iso_lift_frac : 0.62;
-  const H = 120;
-  const url = _psFaseTokenUrl();
-  const place = (ox) => _psFaseDrawToken(worldRoot, cx + ox, cy, H, lift, url);
-  if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno' || posicao === 'meio') {
-    place(PS_ATAC_REF.x); place(PS_ALVO_REF.x);
-  } else if (posicao === 'atacante') {
-    place(0);
+  const feetY = cy + lift * tokenH;                    // chest sits on the firing line (cy)
+
+  // Ground: iso diamond floor (or a flat orthogonal grid in top-down).
+  const floor = new PIXI.Graphics();
+  if (iso) {
+    _psFaseDrawFloor(floor, w, h, cx, feetY, tileW, cosX, 0x4a6a9a);
   } else {
-    place(0);   // alvo / area / default
+    floor.lineStyle(1, 0x39507a, 0.25);
+    for (let gx = (cx % tileW) - tileW; gx < w + tileW; gx += tileW) { floor.moveTo(gx, 0); floor.lineTo(gx, h); }
+    for (let gy = (feetY % tileW) - tileW; gy < h + tileW; gy += tileW) { floor.moveTo(0, gy); floor.lineTo(w, gy); }
+  }
+  worldRoot.addChildAt(floor, 0);
+
+  // Standing tokens whose chest aligns to the firing line, on highlighted tiles.
+  const url = _psFaseTokenUrl();
+  const stand = (ox, accent) => _psFaseStandToken(worldRoot, cx + ox, feetY, tokenH, tileW, cosX, url, accent);
+  if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno' || posicao === 'meio') {
+    stand(PS_ATAC_REF.x, 0x4fa3d1); stand(PS_ALVO_REF.x, 0xe74c3c);
+  } else if (posicao === 'atacante') {
+    stand(0, 0x4fa3d1);
+  } else {
+    stand(0, 0xe74c3c);  // alvo / area / default
   }
 
-  // Firing-height marker (chest line) + label.
-  const mk = new PIXI.Graphics();
-  mk.lineStyle(1, 0xc8a84b, 0.45);
-  mk.moveTo(cx - 190, cy); mk.lineTo(cx + 190, cy);
-  worldRoot.addChild(mk);
+  // Subtle firing-height tick + label so the author sees the configured launch height.
   const lbl = new PIXI.Text(`altura ${Math.round(lift * 100)}%`, { fontSize: 10, fill: 0xc8a84b, resolution: 2 });
-  lbl.anchor.set(0, 1); lbl.alpha = 0.7; lbl.position.set(cx - 188, cy - 2);
+  lbl.anchor.set(0, 1); lbl.alpha = 0.6; lbl.position.set(8, h - 6);
   worldRoot.addChild(lbl);
 }
 
@@ -3194,6 +3277,9 @@ window.psToggleFx             = psToggleFx;
 window.psToggleScene          = psToggleScene;
 window.psToggleFase           = psToggleFase;
 window.psFaseSetChar          = psFaseSetChar;
+window.psSetAnchor            = psSetAnchor;
+window.psSetAnchorCell        = psSetAnchorCell;
+window.psSetAnchorHeight      = psSetAnchorHeight;
 window.psToggleLayerGlow      = psToggleLayerGlow;
 window.psToggleLayerTrail     = psToggleLayerTrail;
 window.psToggleLayerLightCast = psToggleLayerLightCast;
