@@ -57,6 +57,19 @@ function _avtIsoParamsAtualizar() {
   _ISO_BB = { inv2k, inv2kCos: inv2k / cosCur };
 }
 
+// Resolução de backing dos overlays WebGL de VFX. No iso o canvas do mapa é ampliado por
+// _ISO_OVERSIZE (para cobrir os cantos da rotação 3D), então renderizar CADA overlay de
+// efeito nessa resolução cheia multiplica a memória/fill-rate no GPU móvel (~3,24×) — o que
+// estoura os contextos WebGL e trava o jogo. Renderizando a ~1/_ISO_OVERSIZE o custo por
+// overlay volta ao patamar do topdown. Com autoDensity:true o tamanho CSS de exibição é
+// preservado, então alinhamento/posicionamento dos efeitos não muda. Topdown → 1 (sem
+// alteração de comportamento).
+function _avtVfxOverlayResolution() {
+  if (!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS && AVT_GRAFICOS.isoAtivo)) return 1;
+  return 1 / (_ISO_OVERSIZE || 1.8);
+}
+window._avtVfxOverlayResolution = _avtVfxOverlayResolution;
+
 function _avtGraficosCarregar() {
   try {
     const raw = localStorage.getItem(_AVT_GRAFICOS_KEY);

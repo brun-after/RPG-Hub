@@ -18372,7 +18372,9 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
 
     let app;
     try {
-      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0, antialias: true,
+      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0,
+        antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
+        resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
         width: canvas.width, height: canvas.height, powerPreference:'high-performance' });
 
       // ── Stage tree ────────────────────────────────────────────────────────
@@ -18779,7 +18781,9 @@ function _avtPlayTravelBody(travelCfg, atacScr, alvoScr, cor, intensidade) {
   Promise.all([...filterTypes].map(t => _avtEnsurePixiFilter(t))).then(() => {
     let app;
     try {
-      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha:0, antialias:true,
+      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha:0,
+        antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
+        resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
         width: canvas.width, height: canvas.height });
       const body = _avtBuildBody(travelCfg.body, cor);
       if (!body) { app.destroy(true); overlayCanvas.remove(); return; }
@@ -18926,7 +18930,9 @@ function _avtPixiSpineAnim(spineConfig, screenX, screenY) {
     const duration = spineConfig.duracao || 1000;
     let app;
     try {
-      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0, width: canvas.width, height: canvas.height });
+      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0,
+        resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
+        width: canvas.width, height: canvas.height });
       PIXI.Assets.load([spineConfig.skeleton, spineConfig.atlas].filter(Boolean)).then(resources => {
         try {
           const SpineClass = PIXI.spine && PIXI.spine.Spine;

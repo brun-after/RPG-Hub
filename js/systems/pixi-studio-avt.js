@@ -368,6 +368,8 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior, casterEnt, t
       height: overlayCanvas.height,
       backgroundAlpha: 0,
       antialias: false,
+      resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1),
+      autoDensity: true,
     });
   } catch (e) {
     overlayCanvas.remove();
@@ -493,7 +495,7 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior, casterEnt, ta
 
   let app;
   try {
-    app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false });
+    app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false, resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true });
   } catch (e) { overlayCanvas.remove(); return; }
 
   const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
@@ -652,6 +654,8 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
       view: overlayCanvas,
       width: overlayCanvas.width, height: overlayCanvas.height,
       backgroundAlpha: 0, antialias: false,
+      resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1),
+      autoDensity: true,
     });
   } catch (e) { overlayCanvas.remove(); return; }
 
@@ -905,7 +909,7 @@ async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt, atacante
   canvas.parentElement?.appendChild(overlayCanvas);
 
   let app;
-  try { app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false }); }
+  try { app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false, resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true }); }
   catch (e) { overlayCanvas.remove(); return; }
 
   const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
@@ -1036,6 +1040,8 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
         height: overlayCanvas.height,
         backgroundAlpha: 0,
         antialias: false,
+        resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1),
+        autoDensity: true,
       });
     } catch (e) {
       overlayCanvas.remove();
@@ -1180,7 +1186,7 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
 
   let app;
   try {
-    app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false });
+    app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false, resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true });
   } catch (e) { overlayCanvas.remove(); return; }
 
   const vfxScale = _avtVfxScale(cfg);
