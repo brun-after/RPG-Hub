@@ -546,6 +546,101 @@ var PIXI_STUDIO_PRESETS = {
     ],
   },
 
+  // ─── v3: novos presets demonstrando o modelo de âncora (origem/altura/pose) ───
+
+  // Círculo conjurador "em pé" no peitoral do conjurador, do qual sai um feixe ao alvo
+  // (estilo ultimate da Lux). posicao 'raio' renderiza o feixe entre conjurador e alvo.
+  circulo_feixe: {
+    version: 3, behavior: 'one-shot', duracao_ms: 1100, posicao: 'raio',
+    camera: { shake: { amp: 5, decay: 0.9, freq: 34 }, hitstop: { ms: 40, at: 0.25 } },
+    lighting: { bloom: { threshold: 0.5, intensity: 1.0, quality: 5 }, tone: 'filmic' },
+    background: { darken: 0.14 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
+    iso_lift_frac: 0.62,
+    layers: [
+      { id: 'l0', tipo: 'shape', nome: 'Círculo conjurador', visivel: true, z: 2, blendMode: 'add', shape_type: 'circle',
+        anchor: { source: 'caster', spot: 'center', z: 'chest', pose: 'upright' },
+        keyframes: [
+          { t: 0,    radius: 4,  stroke_color: '#ffd27a', stroke_alpha: 0,   stroke_width: 3, fill_alpha: 0 },
+          { t: 0.18, radius: 34, stroke_color: '#ffe7b0', stroke_alpha: 1,   stroke_width: 4, fill_alpha: 0.08, ease: 'easeOutQuad' },
+          { t: 0.5,  radius: 36, stroke_color: '#ffcf6a', stroke_alpha: 0.9, stroke_width: 3, fill_alpha: 0.05 },
+          { t: 1,    radius: 30, stroke_color: '#ff9a3c', stroke_alpha: 0,   stroke_width: 1, fill_alpha: 0 } ] },
+      { id: 'l1', tipo: 'emitter', nome: 'Feixe', visivel: true, z: 4, blendMode: 'add', texture: 'streak', texture_url: null,
+        glow: { distance: 14, outerStrength: 1.8, color: '#ffb060' },
+        anchor: { source: 'caster', z: 'chest', pose: 'upright' },
+        emitter: {
+          alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] },
+          scale: { list: [{ value: 0.7, time: 0 }, { value: 0.2, time: 1 }] },
+          color: { list: [{ value: 'fff4d0', time: 0 }, { value: 'ff7a1c', time: 1 }] },
+          speed: { start: 40, end: 10 }, lifetime: { min: 0.25, max: 0.5 }, frequency: 0.004,
+          emitterLifetime: 0.6, maxParticles: 120, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 4 } },
+        start_t: 0.18, end_t: 1, keyframes: [] },
+    ],
+  },
+
+  // Runa deitada no chão sob o conjurador, da qual um projétil é arremessado ao alvo.
+  // O projétil usa spawn_path (conjurador→alvo) e sobe ao peitoral; a runa fica no chão.
+  runa_projetil: {
+    version: 3, behavior: 'one-shot', duracao_ms: 1000, posicao: 'alvo',
+    camera: { shake: { amp: 3, decay: 0.92, freq: 30 } },
+    lighting: { bloom: { threshold: 0.55, intensity: 0.9, quality: 5 }, tone: 'filmic' },
+    background: { darken: 0.1 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
+    iso_lift_frac: 0.62,
+    layers: [
+      { id: 'l0', tipo: 'shape', nome: 'Runa (chão)', visivel: true, z: 2, blendMode: 'add', shape_type: 'circle',
+        anchor: { source: 'caster', spot: 'center', z: 'ground', pose: 'floor' },
+        keyframes: [
+          { t: 0,   radius: 6,  stroke_color: '#a878ff', stroke_alpha: 0, stroke_width: 2, fill_alpha: 0 },
+          { t: 0.2, radius: 30, stroke_color: '#c8a8ff', stroke_alpha: 1, stroke_width: 3, fill_alpha: 0.06, ease: 'easeOutQuad' },
+          { t: 1,   radius: 30, stroke_color: '#7a4cff', stroke_alpha: 0.5, stroke_width: 1, fill_alpha: 0 } ] },
+      { id: 'l1', tipo: 'emitter', nome: 'Projétil', visivel: true, z: 4, blendMode: 'add', texture: 'spark', texture_url: null,
+        glow: { distance: 12, outerStrength: 1.6, color: '#c060ff' },
+        anchor: { source: 'caster', z: 'chest', pose: 'upright' },
+        spawn_path: [{ x: -150, y: -10, t: 0 }, { x: 150, y: -10, t: 1 }],
+        emitter: {
+          alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] },
+          scale: { list: [{ value: 0.5, time: 0 }, { value: 0.12, time: 1 }] },
+          color: { list: [{ value: 'ffffff', time: 0 }, { value: 'b060ff', time: 1 }] },
+          speed: { start: 60, end: 10 }, acceleration: { x: 0, y: 0 }, lifetime: { min: 0.2, max: 0.4 },
+          frequency: 0.006, emitterLifetime: -1, maxParticles: 90, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 3 } },
+        start_t: 0.2, end_t: 1, keyframes: [] },
+    ],
+  },
+
+  // Mão gigante que sobe do chão sob o alvo e desce batendo. Demonstra source:'target',
+  // altura 'ground' e poses 'upright' (mão sobe em pé) + 'floor' (onda de impacto no chão).
+  mao_do_chao: {
+    version: 3, behavior: 'one-shot', duracao_ms: 1300, posicao: 'alvo',
+    camera: { shake: { amp: 8, decay: 0.9, freq: 40 }, hitstop: { ms: 60, at: 0.55 } },
+    lighting: { bloom: { threshold: 0.6, intensity: 0.7, quality: 5 }, tone: 'filmic' },
+    background: { darken: 0.16 }, audio: { cast: '', impact: '', volume: 0.8 }, global: false,
+    iso_lift_frac: 0.0,
+    layers: [
+      { id: 'l0', tipo: 'emitter', nome: 'Terra subindo', visivel: true, z: 3, blendMode: 'normal', texture: 'smoke', texture_url: null,
+        anchor: { source: 'target', spot: 'center', z: 'ground', pose: 'upright' },
+        emitter: {
+          alpha: { list: [{ value: 0.8, time: 0 }, { value: 0, time: 1 }] },
+          scale: { list: [{ value: 0.4, time: 0 }, { value: 1.2, time: 1 }] },
+          color: { list: [{ value: '8a6a44', time: 0 }, { value: '3a2a1a', time: 1 }] },
+          speed: { start: 120, end: 20 }, acceleration: { x: 0, y: -60 }, lifetime: { min: 0.4, max: 0.8 },
+          frequency: 0.01, emitterLifetime: 0.5, maxParticles: 60, spawnType: 'rect', spawnRect: { x: -24, y: 0, w: 48, h: 6 } },
+        start_t: 0, end_t: 0.55, keyframes: [] },
+      { id: 'l1', tipo: 'shape', nome: 'Mão (sobe e bate)', visivel: true, z: 4, blendMode: 'normal', shape_type: 'rect',
+        anchor: { source: 'target', spot: 'center', z: 'ground', pose: 'upright' },
+        keyframes: [
+          { t: 0,   x: 0, y: 0,   radius: 2,  stroke_color: '#1a1020', stroke_alpha: 0, stroke_width: 2, fill_alpha: 0 },
+          { t: 0.5, x: 0, y: -40, radius: 34, stroke_color: '#2a1a30', stroke_alpha: 1, stroke_width: 3, fill_alpha: 0.85, ease: 'easeOutQuad' },
+          { t: 0.7, x: 0, y: -10, radius: 30, stroke_color: '#3a2440', stroke_alpha: 1, stroke_width: 3, fill_alpha: 0.9, ease: 'easeInQuad' },
+          { t: 1,   x: 0, y: 0,   radius: 20, stroke_color: '#2a1a30', stroke_alpha: 0, stroke_width: 1, fill_alpha: 0 } ] },
+      { id: 'l2', tipo: 'shape', nome: 'Impacto (chão)', visivel: true, z: 5, blendMode: 'add', shape_type: 'circle',
+        anchor: { source: 'target', spot: 'center', z: 'ground', pose: 'floor' },
+        start_t: 0.55, end_t: 1,
+        keyframes: [
+          { t: 0,   radius: 6,  stroke_color: '#ffd0a0', stroke_alpha: 0,   stroke_width: 4, fill_alpha: 0 },
+          { t: 0.2, radius: 50, stroke_color: '#ffb070', stroke_alpha: 0.9, stroke_width: 3, fill_alpha: 0, ease: 'easeOutQuad' },
+          { t: 1,   radius: 80, stroke_color: '#8a5a30', stroke_alpha: 0,   stroke_width: 1, fill_alpha: 0 } ] },
+    ],
+  },
+
 };
 
 // Display metadata for the presets library (nome PT-BR + categoria)
@@ -573,4 +668,7 @@ var PIXI_STUDIO_PRESET_META = {
   vortex_sombrio:   { nome: 'Vórtex Sombrio',          categoria: 'Sombra',  cor: '#a020f0' },
   chuva_arcana:     { nome: 'Chuva Arcana',            categoria: 'Arcano',  cor: '#6a8cff' },
   cura_radiante:    { nome: 'Cura Radiante',           categoria: 'Cura',    cor: '#6fe89a' },
+  circulo_feixe:    { nome: 'Círculo — Feixe',         categoria: 'Arcano',  cor: '#ffb060' },
+  runa_projetil:    { nome: 'Runa — Projétil',         categoria: 'Arcano',  cor: '#b060ff' },
+  mao_do_chao:      { nome: 'Mão do Chão',             categoria: 'Terra',   cor: '#6a4a2a' },
 };
