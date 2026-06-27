@@ -297,6 +297,17 @@ function _psAvtToScreen(ent) {
   };
 }
 
+// ── Live travel endpoints (caster→target) re-read each frame ───────────────
+// A projectile must always fly from the caster token's CURRENT position to the
+// target token's CURRENT position — never to a stale point captured at fire time.
+// Falls back to the frozen screen coords when no live entity is available.
+function _psAvtLiveEnds(casterEnt, targetEnt, fbA, fbB) {
+  return {
+    atac: casterEnt ? _psAvtToScreen(casterEnt) : fbA,
+    alvo: targetEnt ? _psAvtToScreen(targetEnt) : fbB,
+  };
+}
+
 // ── Interpolate keyframes at time t ───────────────────────────────────────
 function _psAvtInterpKf(kfs, t) {
   if (!kfs || !kfs.length) return null;
@@ -384,20 +395,24 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior, casterEnt, t
     }
   }
 
-  // Precompute rotation offset: angle of adventure travel minus angle of studio reference axis
+  // Rotation offset is recomputed per frame for projectiles (the travel axis tracks
+  // the live tokens); studio reference axis is constant.
   const dx_s = _PS_ALVO_REF.x - _PS_ATAC_REF.x;
   const dy_s = _PS_ALVO_REF.y - _PS_ATAC_REF.y;
-  const dx_a = endScr.x - startScr.x;
-  const dy_a = endScr.y - startScr.y;
-  const rotOffset = isProjectile
-    ? Math.atan2(dy_a, dx_a) - Math.atan2(dy_s, dx_s)
-    : 0;
 
   const startMs = performance.now();
 
   const tick = () => {
     const elapsed = performance.now() - startMs;
     const t = Math.min(elapsed / durMs, 1);
+    // Projectiles re-acquire the live caster/target each frame so they always fly
+    // between the tokens' current positions, never the ones captured at fire time.
+    const ends = isProjectile ? _psAvtLiveEnds(casterEnt, targetEnt, startScr, endScr) : null;
+    const sScr = ends ? ends.atac : startScr;
+    const eScr = ends ? ends.alvo : endScr;
+    const rotOffset = isProjectile
+      ? Math.atan2(eScr.y - sScr.y, eScr.x - sScr.x) - Math.atan2(dy_s, dx_s)
+      : 0;
     for (const { sp, layer, anchor } of sprites) {
       const st = layer.start_t ?? 0;
       const et = layer.end_t   ?? 1;
@@ -411,7 +426,7 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior, casterEnt, t
 
       if (isProjectile) {
         // Map studio-space keyframe position → screen-space via similarity transform
-        const scrPos = _psStudioToScreen(kf.x ?? 0, kf.y ?? 0, startScr, endScr);
+        const scrPos = _psStudioToScreen(kf.x ?? 0, kf.y ?? 0, sScr, eScr);
         sp.x = scrPos.x;
         sp.y = scrPos.y;
       } else {
@@ -499,10 +514,14 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior, casterEnt, ta
   const startMs = performance.now();
   const tick = () => {
     const t = Math.min((performance.now() - startMs) / durMs, 1);
+    // Projectile shapes/beams track the live caster/target each frame (never stale).
+    const ends = isProj ? _psAvtLiveEnds(casterEnt, targetEnt, startScr, endScr) : null;
+    const sScr = ends ? ends.atac : startScr;
+    const eScr = ends ? ends.alvo : endScr;
     for (const it of items) {
       const l = it.layer;
-      const anchorX = isProj ? startScr.x + (endScr.x - startScr.x) * t : it.anchor.x;
-      const anchorY = isProj ? startScr.y + (endScr.y - startScr.y) * t : it.anchor.y;
+      const anchorX = isProj ? sScr.x + (eScr.x - sScr.x) * t : it.anchor.x;
+      const anchorY = isProj ? sScr.y + (eScr.y - sScr.y) * t : it.anchor.y;
       const st = l.start_t ?? 0, et = l.end_t ?? 1;
       const vis = t >= st && t <= et;
       const tRel = et > st ? (t - st) / (et - st) : t;
@@ -514,7 +533,7 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior, casterEnt, ta
         if (l.shape_type === 'beam') {
           // Beam spans caster→target (chest height via the root lift); `len` extends it.
           g.position.set(0, 0);
-          _psBeamPath(g, startScr, endScr, Math.max(2, r), kf.stroke_color || '#ffffff', sa, kf.len ?? 1, hexInt);
+          _psBeamPath(g, sScr, eScr, Math.max(2, r), kf.stroke_color || '#ffffff', sa, kf.len ?? 1, hexInt);
         } else {
           g.position.set(anchorX + (kf.x || 0) * vfxScale, anchorY + (kf.y || 0) * vfxScale);
           if (sa > 0) g.lineStyle(sw, hexInt(kf.stroke_color || '#ffffff'), sa);
@@ -664,6 +683,10 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
     const delta = (now - lastTs) / 1000;
     lastTs = now;
     const t = Math.min((now - startMs) / durMs, 1);
+    // Spawn-path emitters travel between the LIVE caster/target each frame: the
+    // studio→screen similarity transform re-anchors on the tokens' current positions,
+    // so the recorded path (origin offset preserved) always ends on the target token.
+    const ends = _psAvtLiveEnds(casterEnt, targetEnt, atacScr, alvoScr);
 
     for (const { em, layer, anchor } of emitters) {
       if (em.destroyed) continue;
@@ -674,7 +697,7 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
         const tRel = et > st ? (t - st) / (et - st) : 0;
         const sp = _psAvtInterpKf(layer.spawn_path, tRel);
         if (sp) {
-          const pos = _psStudioToScreen(sp.x ?? 0, sp.y ?? 0, atacScr, alvoScr);
+          const pos = _psStudioToScreen(sp.x ?? 0, sp.y ?? 0, ends.atac, ends.alvo);
           em.updateSpawnPos(pos.x, pos.y);
         }
       } else if (inRange) {
@@ -832,9 +855,10 @@ async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt, atacante
     const now = performance.now();
     const delta = (now - lastTs) / 1000; lastTs = now;
     const t = Math.min((now - startMs) / durMs, 1);
-    // Homing re-acquires the (possibly moving) target each frame
-    const alvo = (path === 'homing' && alvoEnt) ? _psAvtToScreen(alvoEnt) : alvoScr;
-    const pos = _psAvtPathPos(path, atacScr, alvo, t);
+    // Every path (linear/arc/spiral/homing) re-acquires the live caster and target each
+    // frame, so the projectile always flies between the tokens' current positions.
+    const ends = _psAvtLiveEnds(atacanteEnt, alvoEnt, atacScr, alvoScr);
+    const pos = _psAvtPathPos(path, ends.atac, ends.alvo, t);
     for (const { em, layer } of emitters) {
       if (em.destroyed) continue;
       const st = layer.start_t ?? 0, et = layer.end_t ?? 1;
@@ -879,16 +903,19 @@ function _psAvtProjectile(cfg, atacScr, alvoScr, alvoEnt, atacanteEnt) {
   const avtCfg  = _psToAvtConfig(cfg);
   if (!avtCfg) return 0;
 
-  // Phase 1: cast anim at attacker
+  // Phase 1: cast anim at the caster's live position
   if (typeof _avtPixiParticleAnim === 'function') {
+    const castAtac = atacanteEnt ? _psAvtToScreen(atacanteEnt) : atacScr;
     _avtPixiParticleAnim(Object.assign({}, avtCfg, { duration: Math.min(400, speedMs) }),
-      atacScr, atacScr, 'atacante');
+      castAtac, castAtac, 'atacante');
   }
 
-  // Phase 2: impact anim at target after travel time
+  // Phase 2: impact anim at the target's live position after travel time (re-acquired
+  // so it lands on the target token's current spot, never the one captured at fire time)
   setTimeout(() => {
     if (typeof _avtPixiParticleAnim === 'function') {
-      _avtPixiParticleAnim(avtCfg, atacScr, alvoScr, 'alvo');
+      const ends = _psAvtLiveEnds(atacanteEnt, alvoEnt, atacScr, alvoScr);
+      _avtPixiParticleAnim(avtCfg, ends.atac, ends.alvo, 'alvo');
     }
   }, speedMs);
 
