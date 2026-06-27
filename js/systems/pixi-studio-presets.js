@@ -548,39 +548,57 @@ var PIXI_STUDIO_PRESETS = {
 
   // ─── v3: novos presets demonstrando o modelo de âncora (origem/altura/pose) ───
 
-  // Círculo conjurador "em pé" no peitoral do conjurador, do qual sai um feixe ao alvo
-  // (estilo ultimate da Lux). posicao 'raio' renderiza o feixe entre conjurador e alvo.
+  // Círculo conjurador "em pé" no peitoral do conjurador → carrega e dispara um FEIXE
+  // espesso até o alvo (estilo ultimate da Lux). Usa shape_type 'beam' (geometria real).
   circulo_feixe: {
-    version: 3, behavior: 'one-shot', duracao_ms: 1100, posicao: 'raio',
-    camera: { shake: { amp: 5, decay: 0.9, freq: 34 }, hitstop: { ms: 40, at: 0.25 } },
-    lighting: { bloom: { threshold: 0.5, intensity: 1.0, quality: 5 }, tone: 'filmic' },
-    background: { darken: 0.14 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
+    version: 3, behavior: 'one-shot', duracao_ms: 1500, posicao: 'raio',
+    camera: { shake: { amp: 6, decay: 0.9, freq: 36 }, hitstop: { ms: 45, at: 0.42 } },
+    lighting: { bloom: { threshold: 0.45, intensity: 1.1, quality: 5 }, tone: 'filmic' },
+    background: { darken: 0.16 }, audio: { cast: '', impact: '', volume: 0.78 }, global: false,
     iso_lift_frac: 0.62,
     layers: [
+      // 1) círculo de conjuração em pé, carregando no peitoral
       { id: 'l0', tipo: 'shape', nome: 'Círculo conjurador', visivel: true, z: 2, blendMode: 'add', shape_type: 'circle',
-        anchor: { source: 'caster', spot: 'center', z: 'chest', pose: 'upright' },
+        anchor: { source: 'caster', spot: 'center', z: 'chest', pose: 'upright' }, end_t: 0.55,
         keyframes: [
           { t: 0,    radius: 4,  stroke_color: '#ffd27a', stroke_alpha: 0,   stroke_width: 3, fill_alpha: 0 },
-          { t: 0.18, radius: 34, stroke_color: '#ffe7b0', stroke_alpha: 1,   stroke_width: 4, fill_alpha: 0.08, ease: 'easeOutQuad' },
-          { t: 0.5,  radius: 36, stroke_color: '#ffcf6a', stroke_alpha: 0.9, stroke_width: 3, fill_alpha: 0.05 },
+          { t: 0.4,  radius: 34, stroke_color: '#ffe7b0', stroke_alpha: 1,   stroke_width: 5, fill_alpha: 0.10, ease: 'easeOutQuad' },
+          { t: 0.7,  radius: 38, stroke_color: '#ffcf6a', stroke_alpha: 0.9, stroke_width: 3, fill_alpha: 0.05 },
           { t: 1,    radius: 30, stroke_color: '#ff9a3c', stroke_alpha: 0,   stroke_width: 1, fill_alpha: 0 } ] },
-      { id: 'l1', tipo: 'emitter', nome: 'Feixe', visivel: true, z: 4, blendMode: 'add', texture: 'streak', texture_url: null,
-        glow: { distance: 14, outerStrength: 1.8, color: '#ffb060' },
+      // 2) o feixe propriamente dito (conjurador→alvo), no peitoral
+      { id: 'l1', tipo: 'shape', nome: 'Feixe', visivel: true, z: 4, blendMode: 'add', shape_type: 'beam',
+        anchor: { source: 'caster', z: 'chest', pose: 'upright' }, start_t: 0.38, end_t: 1,
+        keyframes: [
+          { t: 0,    radius: 4,  len: 0,    stroke_color: '#ffffff', stroke_alpha: 0 },
+          { t: 0.12, radius: 18, len: 1,    stroke_color: '#ffe2a8', stroke_alpha: 1, ease: 'easeOutQuad' },
+          { t: 0.6,  radius: 14, len: 1,    stroke_color: '#ff9a3c', stroke_alpha: 1 },
+          { t: 1,    radius: 5,  len: 1,    stroke_color: '#ff7a1c', stroke_alpha: 0 } ] },
+      // 3) fagulhas correndo ao longo do feixe
+      { id: 'l2', tipo: 'emitter', nome: 'Fagulhas', visivel: true, z: 5, blendMode: 'add', texture: 'streak', texture_url: null,
+        glow: { distance: 12, outerStrength: 1.6, color: '#ffb060' },
         anchor: { source: 'caster', z: 'chest', pose: 'upright' },
+        spawn_path: [{ x: -150, y: 0, t: 0 }, { x: 150, y: 0, t: 1 }],
         emitter: {
           alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] },
-          scale: { list: [{ value: 0.7, time: 0 }, { value: 0.2, time: 1 }] },
+          scale: { list: [{ value: 0.55, time: 0 }, { value: 0.12, time: 1 }] },
           color: { list: [{ value: 'fff4d0', time: 0 }, { value: 'ff7a1c', time: 1 }] },
-          speed: { start: 40, end: 10 }, lifetime: { min: 0.25, max: 0.5 }, frequency: 0.004,
-          emitterLifetime: 0.6, maxParticles: 120, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 4 } },
-        start_t: 0.18, end_t: 1, keyframes: [] },
+          speed: { start: 70, end: 20 }, lifetime: { min: 0.18, max: 0.36 }, frequency: 0.005,
+          emitterLifetime: -1, maxParticles: 120, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 5 } },
+        start_t: 0.42, end_t: 1, keyframes: [] },
+      // 4) flash de impacto no alvo
+      { id: 'l3', tipo: 'shape', nome: 'Impacto', visivel: true, z: 6, blendMode: 'add', shape_type: 'circle',
+        anchor: { source: 'target', spot: 'center', z: 'chest', pose: 'upright' }, start_t: 0.5, end_t: 1,
+        keyframes: [
+          { t: 0,   radius: 6,  stroke_color: '#fff1c8', stroke_alpha: 0,   stroke_width: 5, fill_alpha: 0 },
+          { t: 0.25,radius: 50, stroke_color: '#ffce80', stroke_alpha: 0.9, stroke_width: 3, fill_alpha: 0.12, ease: 'easeOutQuad' },
+          { t: 1,   radius: 86, stroke_color: '#ff8a3c', stroke_alpha: 0,   stroke_width: 1, fill_alpha: 0 } ] },
     ],
   },
 
   // Runa deitada no chão sob o conjurador, da qual um projétil é arremessado ao alvo.
   // O projétil usa spawn_path (conjurador→alvo) e sobe ao peitoral; a runa fica no chão.
   runa_projetil: {
-    version: 3, behavior: 'one-shot', duracao_ms: 1000, posicao: 'alvo',
+    version: 3, behavior: 'one-shot', duracao_ms: 1100, posicao: 'alvo',
     camera: { shake: { amp: 3, decay: 0.92, freq: 30 } },
     lighting: { bloom: { threshold: 0.55, intensity: 0.9, quality: 5 }, tone: 'filmic' },
     background: { darken: 0.1 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
@@ -590,54 +608,64 @@ var PIXI_STUDIO_PRESETS = {
         anchor: { source: 'caster', spot: 'center', z: 'ground', pose: 'floor' },
         keyframes: [
           { t: 0,   radius: 6,  stroke_color: '#a878ff', stroke_alpha: 0, stroke_width: 2, fill_alpha: 0 },
-          { t: 0.2, radius: 30, stroke_color: '#c8a8ff', stroke_alpha: 1, stroke_width: 3, fill_alpha: 0.06, ease: 'easeOutQuad' },
-          { t: 1,   radius: 30, stroke_color: '#7a4cff', stroke_alpha: 0.5, stroke_width: 1, fill_alpha: 0 } ] },
+          { t: 0.2, radius: 34, stroke_color: '#c8a8ff', stroke_alpha: 1, stroke_width: 3, fill_alpha: 0.08, ease: 'easeOutQuad' },
+          { t: 1,   radius: 34, stroke_color: '#7a4cff', stroke_alpha: 0.5, stroke_width: 1, fill_alpha: 0 } ] },
       { id: 'l1', tipo: 'emitter', nome: 'Projétil', visivel: true, z: 4, blendMode: 'add', texture: 'spark', texture_url: null,
         glow: { distance: 12, outerStrength: 1.6, color: '#c060ff' },
         anchor: { source: 'caster', z: 'chest', pose: 'upright' },
-        spawn_path: [{ x: -150, y: -10, t: 0 }, { x: 150, y: -10, t: 1 }],
+        spawn_path: [{ x: -150, y: 0, t: 0 }, { x: 150, y: 0, t: 1 }],
         emitter: {
           alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] },
-          scale: { list: [{ value: 0.5, time: 0 }, { value: 0.12, time: 1 }] },
+          scale: { list: [{ value: 0.6, time: 0 }, { value: 0.14, time: 1 }] },
           color: { list: [{ value: 'ffffff', time: 0 }, { value: 'b060ff', time: 1 }] },
-          speed: { start: 60, end: 10 }, acceleration: { x: 0, y: 0 }, lifetime: { min: 0.2, max: 0.4 },
-          frequency: 0.006, emitterLifetime: -1, maxParticles: 90, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 3 } },
-        start_t: 0.2, end_t: 1, keyframes: [] },
+          speed: { start: 70, end: 20 }, acceleration: { x: 0, y: 0 }, lifetime: { min: 0.2, max: 0.4 },
+          frequency: 0.006, emitterLifetime: -1, maxParticles: 90, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 4 } },
+        start_t: 0.25, end_t: 0.95, keyframes: [] },
+      { id: 'l2', tipo: 'shape', nome: 'Impacto', visivel: true, z: 5, blendMode: 'add', shape_type: 'circle',
+        anchor: { source: 'target', spot: 'center', z: 'chest', pose: 'upright' }, start_t: 0.7, end_t: 1,
+        keyframes: [
+          { t: 0,   radius: 6,  stroke_color: '#e0c8ff', stroke_alpha: 0,   stroke_width: 4, fill_alpha: 0 },
+          { t: 0.3, radius: 40, stroke_color: '#c8a8ff', stroke_alpha: 0.9, stroke_width: 3, fill_alpha: 0, ease: 'easeOutQuad' },
+          { t: 1,   radius: 64, stroke_color: '#7a4cff', stroke_alpha: 0,   stroke_width: 1, fill_alpha: 0 } ] },
     ],
   },
 
-  // Mão gigante que sobe do chão sob o alvo e desce batendo. Demonstra source:'target',
-  // altura 'ground' e poses 'upright' (mão sobe em pé) + 'floor' (onda de impacto no chão).
+  // Mão/garra gigante que SOBE do chão sob o alvo (shape_type 'hand') e desce batendo,
+  // com poeira na base e onda de choque deitada no chão. source:'target', z:'ground'.
   mao_do_chao: {
-    version: 3, behavior: 'one-shot', duracao_ms: 1300, posicao: 'alvo',
-    camera: { shake: { amp: 8, decay: 0.9, freq: 40 }, hitstop: { ms: 60, at: 0.55 } },
+    version: 3, behavior: 'one-shot', duracao_ms: 1500, posicao: 'alvo',
+    camera: { shake: { amp: 9, decay: 0.9, freq: 40 }, hitstop: { ms: 70, at: 0.6 } },
     lighting: { bloom: { threshold: 0.6, intensity: 0.7, quality: 5 }, tone: 'filmic' },
-    background: { darken: 0.16 }, audio: { cast: '', impact: '', volume: 0.8 }, global: false,
+    background: { darken: 0.18 }, audio: { cast: '', impact: '', volume: 0.85 }, global: false,
     iso_lift_frac: 0.0,
     layers: [
-      { id: 'l0', tipo: 'emitter', nome: 'Terra subindo', visivel: true, z: 3, blendMode: 'normal', texture: 'smoke', texture_url: null,
+      // poeira/detritos subindo da base
+      { id: 'l0', tipo: 'emitter', nome: 'Poeira', visivel: true, z: 3, blendMode: 'normal', texture: 'smoke', texture_url: null,
         anchor: { source: 'target', spot: 'center', z: 'ground', pose: 'upright' },
+        spawn_path: [{ x: 150, y: 0, t: 0 }, { x: 150, y: 0, t: 1 }],
         emitter: {
-          alpha: { list: [{ value: 0.8, time: 0 }, { value: 0, time: 1 }] },
-          scale: { list: [{ value: 0.4, time: 0 }, { value: 1.2, time: 1 }] },
-          color: { list: [{ value: '8a6a44', time: 0 }, { value: '3a2a1a', time: 1 }] },
-          speed: { start: 120, end: 20 }, acceleration: { x: 0, y: -60 }, lifetime: { min: 0.4, max: 0.8 },
-          frequency: 0.01, emitterLifetime: 0.5, maxParticles: 60, spawnType: 'rect', spawnRect: { x: -24, y: 0, w: 48, h: 6 } },
-        start_t: 0, end_t: 0.55, keyframes: [] },
-      { id: 'l1', tipo: 'shape', nome: 'Mão (sobe e bate)', visivel: true, z: 4, blendMode: 'normal', shape_type: 'rect',
+          alpha: { list: [{ value: 0.7, time: 0 }, { value: 0, time: 1 }] },
+          scale: { list: [{ value: 0.5, time: 0 }, { value: 1.4, time: 1 }] },
+          color: { list: [{ value: '8a6a44', time: 0 }, { value: '2a1f14', time: 1 }] },
+          speed: { start: 130, end: 20 }, acceleration: { x: 0, y: -50 }, lifetime: { min: 0.4, max: 0.9 },
+          frequency: 0.012, emitterLifetime: -1, maxParticles: 70, spawnType: 'rect', spawnRect: { x: -26, y: -4, w: 52, h: 8 } },
+        start_t: 0, end_t: 0.65, keyframes: [] },
+      // a mão: sobe do chão, fecha e desce batendo
+      { id: 'l1', tipo: 'shape', nome: 'Mão', visivel: true, z: 4, blendMode: 'normal', shape_type: 'hand',
         anchor: { source: 'target', spot: 'center', z: 'ground', pose: 'upright' },
         keyframes: [
-          { t: 0,   x: 0, y: 0,   radius: 2,  stroke_color: '#1a1020', stroke_alpha: 0, stroke_width: 2, fill_alpha: 0 },
-          { t: 0.5, x: 0, y: -40, radius: 34, stroke_color: '#2a1a30', stroke_alpha: 1, stroke_width: 3, fill_alpha: 0.85, ease: 'easeOutQuad' },
-          { t: 0.7, x: 0, y: -10, radius: 30, stroke_color: '#3a2440', stroke_alpha: 1, stroke_width: 3, fill_alpha: 0.9, ease: 'easeInQuad' },
-          { t: 1,   x: 0, y: 0,   radius: 20, stroke_color: '#2a1a30', stroke_alpha: 0, stroke_width: 1, fill_alpha: 0 } ] },
+          { t: 0,    x: 0, y: 30,  radius: 8,  fill_color: '#241a2e', fill_alpha: 0,    stroke_color: '#0c0712', stroke_alpha: 0,   stroke_width: 2 },
+          { t: 0.45, x: 0, y: -54, radius: 46, fill_color: '#2a1e36', fill_alpha: 0.95, stroke_color: '#0c0712', stroke_alpha: 0.8, stroke_width: 3, ease: 'easeOutQuad' },
+          { t: 0.62, x: 0, y: -64, radius: 48, fill_color: '#33243f', fill_alpha: 1,    stroke_color: '#0c0712', stroke_alpha: 0.9, stroke_width: 3 },
+          { t: 0.74, x: 0, y: -18, radius: 44, fill_color: '#2a1e36', fill_alpha: 1,    stroke_color: '#0c0712', stroke_alpha: 0.9, stroke_width: 3, ease: 'easeInQuad' },
+          { t: 1,    x: 0, y: -10, radius: 40, fill_color: '#241a2e', fill_alpha: 0,    stroke_color: '#0c0712', stroke_alpha: 0,   stroke_width: 1 } ] },
+      // onda de choque deitada no chão no impacto
       { id: 'l2', tipo: 'shape', nome: 'Impacto (chão)', visivel: true, z: 5, blendMode: 'add', shape_type: 'circle',
-        anchor: { source: 'target', spot: 'center', z: 'ground', pose: 'floor' },
-        start_t: 0.55, end_t: 1,
+        anchor: { source: 'target', spot: 'center', z: 'ground', pose: 'floor' }, start_t: 0.62, end_t: 1,
         keyframes: [
-          { t: 0,   radius: 6,  stroke_color: '#ffd0a0', stroke_alpha: 0,   stroke_width: 4, fill_alpha: 0 },
-          { t: 0.2, radius: 50, stroke_color: '#ffb070', stroke_alpha: 0.9, stroke_width: 3, fill_alpha: 0, ease: 'easeOutQuad' },
-          { t: 1,   radius: 80, stroke_color: '#8a5a30', stroke_alpha: 0,   stroke_width: 1, fill_alpha: 0 } ] },
+          { t: 0,   radius: 6,  stroke_color: '#ffd0a0', stroke_alpha: 0,   stroke_width: 5, fill_alpha: 0 },
+          { t: 0.25,radius: 56, stroke_color: '#ffb070', stroke_alpha: 0.9, stroke_width: 3, fill_alpha: 0, ease: 'easeOutQuad' },
+          { t: 1,   radius: 96, stroke_color: '#8a5a30', stroke_alpha: 0,   stroke_width: 1, fill_alpha: 0 } ] },
     ],
   },
 
