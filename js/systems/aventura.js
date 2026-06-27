@@ -3263,7 +3263,10 @@ function _avtGetBauById(bauId) {
 
 function _avtMestreAddBau() {
   const bauId = 'bau_' + Date.now();
-  const newBau = { id: bauId, tipo: 'bau', nome: 'Baú', x: 0.5, y: 0.5, loot_itens: [], ouro: 0, aberto: false };
+  const newBau = { id: bauId, tipo: 'bau', nome: 'Baú', x: 0.5, y: 0.5, loot_itens: [], ouro: 0, aberto: false, img_url: null };
+  // Se há dungeon ativa mas ainda sem render_data, cria-o para não cair
+  // indevidamente no fluxo "sem mapa" (causa do aviso "mapa não carregado").
+  if (AVT_STATE.dungeon && !AVT_STATE.dungeon.render_data) AVT_STATE.dungeon.render_data = {};
   const rd = AVT_STATE.dungeon?.render_data;
   if (rd) {
     if (!rd.objetos) rd.objetos = [];
@@ -3345,6 +3348,15 @@ function _avtMestreEditarBau(bauId) {
         </div>
       </div>
       <div style="margin-bottom:10px">
+        <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Imagem do baú (opcional)</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div id="avt-bau-img-preview" style="width:40px;height:40px;flex:0 0 40px;border-radius:6px;border:1px solid rgba(200,168,75,0.2);background:#0a0f18 center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:1.1rem;${bau.img_url?`background-image:url('${String(bau.img_url).replace(/'/g,"%27")}')`:''}">${bau.img_url?'':'📦'}</div>
+          <input id="avt-bau-img-url" value="${(bau.img_url||'').replace(/"/g,'&quot;')}" placeholder="Cole a URL da imagem…" oninput="(function(p){var u=document.getElementById('avt-bau-img-url').value.trim();p.style.backgroundImage=u?\"url('\"+u.replace(/'/g,'%27')+\"')\":'';p.textContent=u?'':'📦';})(document.getElementById('avt-bau-img-preview'))"
+            style="flex:1;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem">
+          <label class="avt-mp-btn" style="padding:5px 8px;font-size:0.72rem;cursor:pointer;white-space:nowrap" title="Enviar arquivo de imagem">📁<input type="file" accept="image/*" style="display:none" onchange="_avtBauUploadImg(this,'${String(bauId).replace(/'/g,"\\'")}')"></label>
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <label style="font-size:0.65rem;color:#7a92aa">Itens no baú</label>
           ${catalog.length ? `<button class="avt-mp-btn avt-mp-btn-ok" style="padding:2px 8px;font-size:0.68rem" onclick="_avtBauAddItem('${String(bauId).replace(/'/g,"\\'")}')">+ Item do catálogo</button>` : ''}
@@ -3409,11 +3421,32 @@ function _avtBauRemoverItem(bauId, idx) {
   _avtMestreEditarBau(bauId);
 }
 
+// Upload de imagem do baú: envia ao storage e preenche o campo de URL + preview.
+// Reusa uploadToStorage (js/core/supabase.js), mesmo padrão de _avtCe2UploadImg.
+async function _avtBauUploadImg(input, bauId) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (typeof uploadToStorage !== 'function') { mostrarToast('Upload indisponível', 'erro'); return; }
+  try {
+    mostrarToast('Enviando imagem…', 'info');
+    const url = await uploadToStorage(file, `aventuras/${AVT_STATE.rpgId || 'rpg'}/baus`);
+    const inp = document.getElementById('avt-bau-img-url');
+    if (inp) inp.value = url;
+    const prev = document.getElementById('avt-bau-img-preview');
+    if (prev) { prev.style.backgroundImage = `url('${url.replace(/'/g,'%27')}')`; prev.textContent = ''; }
+    mostrarToast('Imagem enviada!', 'ok');
+  } catch (e) {
+    mostrarToast('Erro no upload: ' + (e?.message || e), 'erro');
+    console.error(e);
+  }
+}
+
 function _avtBauSalvar(bauId) {
   const bau = _avtGetBauById(bauId);
   if (!bau) return;
   bau.nome  = document.getElementById('avt-bau-nome')?.value || 'Baú';
   bau.ouro  = parseInt(document.getElementById('avt-bau-ouro')?.value) || 0;
+  bau.img_url = (document.getElementById('avt-bau-img-url')?.value || '').trim() || null;
   document.getElementById('avt-bau-editor-overlay').style.display = 'none';
   const isInDungeon = AVT_STATE.dungeon?.render_data?.objetos?.some(o => String(o.id) === String(bauId));
   if (isInDungeon) _avtSalvarDungeon();
@@ -3452,10 +3485,25 @@ async function _avtMestreDarItemChar(charNome, itemId, qty) {
       if (!AVT_INV.inventarios[char.id]) AVT_INV.inventarios[char.id] = [];
       AVT_INV.inventarios[char.id].push(newRow);
     }
+    // Notifica o jogador (e demais clientes) para recarregar/re-renderizar o inventário.
+    try { if (typeof avtInvBroadcastUpdate === 'function') avtInvBroadcastUpdate(char.id); } catch(_) {}
     mostrarToast(`${item.icone||'📦'} ${item.nome} ×${q} → ${char.nome}`, 'ok');
     _avtMestrePainelRender();
   } catch(e) { mostrarToast('Erro ao dar item: ' + (e?.message||e), 'erro'); }
 }
+
+// Seleciona personagem na aba Itens e carrega seu inventário sob demanda,
+// evitando que o painel do mestre fique mostrando "Selecione um personagem".
+async function _avtItensSelChar(nome) {
+  AVT_STATE._itensCharSel = nome;
+  _avtMestrePainelRender();
+  const char = (AVT_STATE.chars || []).find(c => c.nome === nome);
+  if (char?.id && typeof avtInvCarregarChar === 'function') {
+    try { await avtInvCarregarChar(char.id); } catch(_) {}
+    _avtMestrePainelRender();
+  }
+}
+window._avtItensSelChar = _avtItensSelChar;
 
 async function _avtMestreAtualizarOuroChar(charNome, delta) {
   if (!charNome || !delta) return;
@@ -3514,8 +3562,9 @@ function _avtBauPreParaMapa(bauId) {
   const idx = (AVT_STATE._bausPreDungeon||[]).findIndex(o => String(o.id) === String(bauId));
   if (idx < 0) return;
   const bau = AVT_STATE._bausPreDungeon[idx];
-  const rd = AVT_STATE.dungeon?.render_data;
-  if (!rd) return mostrarToast('Nenhum mapa ativo', 'aviso');
+  if (!AVT_STATE.dungeon) return mostrarToast('Nenhum mapa ativo', 'aviso');
+  if (!AVT_STATE.dungeon.render_data) AVT_STATE.dungeon.render_data = {};
+  const rd = AVT_STATE.dungeon.render_data;
   if (!rd.objetos) rd.objetos = [];
   rd.objetos.push(bau);
   AVT_STATE._bausPreDungeon.splice(idx, 1);
@@ -3533,8 +3582,9 @@ function _avtRemoverBauPre(bauId) {
 function _avtBausPreDungeonParaMapa() {
   const bausPre = AVT_STATE._bausPreDungeon || [];
   if (!bausPre.length) return;
-  const rd = AVT_STATE.dungeon?.render_data;
-  if (!rd) return;
+  if (!AVT_STATE.dungeon) return;
+  if (!AVT_STATE.dungeon.render_data) AVT_STATE.dungeon.render_data = {};
+  const rd = AVT_STATE.dungeon.render_data;
   if (!rd.objetos) rd.objetos = [];
   bausPre.forEach(b => rd.objetos.push(b));
   AVT_STATE._bausPreDungeon = [];
@@ -5089,6 +5139,24 @@ function _avtGridStyle() {
   return { op, stroke: `rgba(${rgb},${op})` };
 }
 
+// Cache de imagens de objetos do mapa (baús, loot). Retorna a Image carregada
+// ou null enquanto carrega/erro. Reusa o padrão dos tokens (_avtCarregarTopdownIa).
+function _avtObjImg(url) {
+  if (!url) return null;
+  if (!AVT_STATE._objImgCache) AVT_STATE._objImgCache = {};
+  const rec = AVT_STATE._objImgCache[url];
+  if (rec === undefined) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    AVT_STATE._objImgCache[url] = null; // pendente
+    img.onload  = () => { AVT_STATE._objImgCache[url] = img; };
+    img.onerror = () => { AVT_STATE._objImgCache[url] = false; };
+    img.src = url;
+    return null;
+  }
+  return rec || null;
+}
+
 function _avtRenderFrame() {
   const { canvas, ctx, dungeon, entidades, camera } = AVT_STATE;
   if (!ctx || !dungeon || !canvas.width) return;
@@ -5200,6 +5268,7 @@ function _avtRenderFrame() {
         const _rpWp = _avtRastroPersonaAtivo(_jPlayer);
         if (_rpWp) _avtRastroMarcarCelula(_jPlayer, cell.x, cell.y, _rpWp.rastro_formula || '1d6', _rpWp.duracao_turnos ?? 3, _rpWp.rastro_cor);
         _avtRecuperarPorMovimento(_jPlayer, 1);
+        try { _avtColetarObjsNaPosicao(_jPlayer); } catch(_) {}
         _avtCameraUpdate();
         const fimDoCaminho = restantes === 0 &&
           (!AVT_STATE._caminhoDestino || AVT_STATE._caminhoDestino.length === 0);
@@ -6089,6 +6158,79 @@ function _avtRenderFrame() {
 
     if (_bbOn) ctx.restore(); // encerra a contra-transformação do billboard
   });
+
+  // ── Objetos do mapa: baús, loot no chão e orbes de recurso ───────────────
+  // Itera render_data.objetos (baús, sacos de loot, orbes de HP/mana) e desenha
+  // sobre o mundo, com culling igual ao dos portais.
+  const _mapObjs = dungeon.render_data?.objetos;
+  if (Array.isArray(_mapObjs) && _mapObjs.length) {
+    for (const o of _mapObjs) {
+      if (!o) continue;
+      const _ox = Math.round((o.x ?? 0) * dungeon.w);
+      const _oy = Math.round((o.y ?? 0) * dungeon.h);
+      const px = Math.round(_ox * SZ - camera.x);
+      const py = Math.round(_oy * SZ - camera.y);
+      if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
+      const ocx = px + SZ / 2, ocy = py + SZ / 2;
+      const tipo = o.tipo;
+      if (tipo === 'bau' || tipo === 'chest') {
+        const img = o.img_url ? _avtObjImg(o.img_url) : null;
+        ctx.save();
+        if (o.aberto) ctx.globalAlpha = 0.45;
+        if (img) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, px + 2, py + 2, SZ - 4, SZ - 4);
+        } else {
+          ctx.font = `${Math.round(SZ * 0.62)}px serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(o.aberto ? '📭' : '📦', ocx, ocy);
+        }
+        ctx.restore();
+      } else if (tipo === 'loot') {
+        const img = o.img_url ? _avtObjImg(o.img_url) : null;
+        const _bob = Math.sin(now / 400 + (_ox + _oy)) * (SZ * 0.05);
+        ctx.save();
+        ctx.globalAlpha = 0.45 + 0.2 * Math.sin(now / 300);
+        ctx.beginPath();
+        ctx.arc(ocx, ocy + _bob, SZ * 0.34, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(200,168,75,0.20)';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        if (img) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, px + SZ * 0.2, py + SZ * 0.2 + _bob, SZ * 0.6, SZ * 0.6);
+        } else {
+          ctx.font = `${Math.round(SZ * 0.5)}px serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(o.icone || '🎁', ocx, ocy + _bob);
+        }
+        ctx.restore();
+      } else if (tipo === 'orbe_hp' || tipo === 'orbe_mana') {
+        const cor = tipo === 'orbe_hp' ? '#2ecc71' : '#4fa3d1';
+        const pulse = 0.5 + 0.5 * Math.sin(now / 250 + _ox + _oy);
+        const _bob = Math.sin(now / 400 + (_ox + _oy)) * (SZ * 0.06);
+        const r = SZ * (0.16 + 0.03 * pulse);
+        const oy2 = ocy + _bob;
+        ctx.save();
+        ctx.shadowColor = cor;
+        ctx.shadowBlur = Math.round(10 + pulse * 12);
+        const grad = ctx.createRadialGradient(ocx, oy2, 0, ocx, oy2, r * 1.6);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.4, cor);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(ocx, oy2, r * 1.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.arc(ocx, oy2, r * 0.55, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
 
   // Atualizar posição do botão de rolar dados (desktop) para seguir o token ativo
   _avtAtualizarPosBotaoRolar();
@@ -8389,6 +8531,7 @@ function _avtMoverJogador(dx, dy) {
           _avtVerificarSaida(cell.x, cell.y);
         }
         _avtRecuperarPorMovimento(jogador, 1);
+        try { _avtColetarObjsNaPosicao(jogador); } catch(_) {}
         _avtCameraUpdate();
       };
     }
@@ -11824,9 +11967,12 @@ function _avtNpcMorreu(npcEnt, bat, opts = {}) {
   else _avtPersistirEstadoInimigos();
   _avtBroadcastNpcMorreu(npcEnt.id);
 
-  // 10% drop chance on first kill only
-  if (npcEnt.vezes_morto === 1 && Math.random() < 0.10) {
-    _avtGerarDropNpc(npcEnt);
+  // Drops (item no chão + orbes de recurso). Apenas na primeira morte e gerado
+  // de forma autoritativa pelo host (ou mestre fora de P2P); demais clientes
+  // recebem via avt_obj_spawn. Evita drops divergentes/duplicados.
+  if (npcEnt.vezes_morto === 1) {
+    const _ehHost = (typeof RTNet === 'undefined' || !RTNet.initialized || RTNet.isHost());
+    if (_ehHost) { try { _avtProcessarDropsNpc(npcEnt); } catch(_) {} }
   }
 
   // XP distribution (credita o autor do abate quando informado — ex.: DOT).
@@ -11964,31 +12110,82 @@ function _avtNecromanteDominar(npcEnt, efNecro, bat) {
   return true;
 }
 
-// Generate a loot drop at NPC's position
-async function _avtGerarDropNpc(npcEnt) {
-  if (!AVT_STATE.rpgId) return;
-  // Idempotência local: marca o NPC para não dropar duas vezes na mesma morte
+// Escolha ponderada por peso (peso <= 0 ignorado). Fallback uniforme.
+function _avtEscolherPorPeso(arr, pesoFn) {
+  if (!arr || !arr.length) return null;
+  const total = arr.reduce((s, x) => s + Math.max(0, pesoFn(x)), 0);
+  if (total <= 0) return arr[Math.floor(Math.random() * arr.length)];
+  let r = Math.random() * total;
+  for (const x of arr) { r -= Math.max(0, pesoFn(x)); if (r <= 0) return x; }
+  return arr[arr.length - 1];
+}
+
+// Adiciona um objeto (loot/orbe) ao mapa, persiste a dungeon e sincroniza clientes.
+function _avtSpawnObjMapa(obj) {
+  if (!obj || !AVT_STATE.dungeon) return;
+  if (!AVT_STATE.dungeon.render_data) AVT_STATE.dungeon.render_data = {};
+  const rd = AVT_STATE.dungeon.render_data;
+  if (!rd.objetos) rd.objetos = [];
+  rd.objetos.push(obj);
+  try { _avtSalvarDungeon(); } catch(_) {}
+  try { _avtBroadcast('avt_obj_spawn', { obj }); } catch(_) {}
+}
+
+// Processa todos os drops na morte do NPC: item no chão + orbes de HP/mana.
+// Chamado apenas pelo host (ver _avtNpcMorreu). Idempotente por morte.
+function _avtProcessarDropsNpc(npcEnt) {
+  if (!AVT_STATE.rpgId || !AVT_STATE.dungeon) return;
   if (npcEnt._dropFeito) return;
   npcEnt._dropFeito = true;
-  try {
-    const catalog = AVT_STATE.itemCatalog || [];
-    const droppable = catalog.filter(i => i.droppable);
-    if (!droppable.length) return;
-    const item = droppable[Math.floor(Math.random() * droppable.length)];
-    await _avtSb('loot_pendente', {
-      method: 'POST',
-      headers: { 'Prefer': 'return=minimal' },
-      body: JSON.stringify({
-        rpg_id: AVT_STATE.rpgId,
-        item_id: item.id,
-        origem_npc: npcEnt.nome,
-        posicao_col: npcEnt.x,
-        posicao_row: npcEnt.y,
-        mapa_id: AVT_STATE.faseId || null,
-      })
-    });
-    mostrarToast(`${npcEnt.nome} droppou ${item.nome}!`, 'sucesso');
-  } catch(e) {}
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const dropChance = lc.drop_item_chance != null ? lc.drop_item_chance : 0.10;
+  if (Math.random() < dropChance) _avtGerarDropNpc(npcEnt);
+  // Orbes de recurso (verde = HP, azul = mana)
+  const hpChance = lc.orbe_hp_chance != null ? lc.orbe_hp_chance : 0;
+  if (Math.random() < hpChance) _avtGerarOrbeNpc(npcEnt, 'orbe_hp', lc.orbe_hp_tiers);
+  const manaChance = lc.orbe_mana_chance != null ? lc.orbe_mana_chance : 0;
+  if (Math.random() < manaChance) _avtGerarOrbeNpc(npcEnt, 'orbe_mana', lc.orbe_mana_tiers);
+}
+
+// Gera um saco de loot no chão, na posição do NPC. Item ponderado por drop_rate.
+function _avtGerarDropNpc(npcEnt) {
+  const catalog = AVT_STATE.itemCatalog || [];
+  const droppable = catalog.filter(i => i.droppable);
+  if (!droppable.length) return;
+  const item = _avtEscolherPorPeso(droppable, i => (i.drop_rate != null ? i.drop_rate : 1));
+  if (!item) return;
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  _avtSpawnObjMapa({
+    id: 'loot_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    tipo: 'loot',
+    x: (npcEnt.x || 0) / dw,
+    y: (npcEnt.y || 0) / dh,
+    item_id: item.id,
+    nome: item.nome,
+    icone: item.icone || '🎁',
+    img_url: item.img_url || null,
+    quantidade: 1,
+  });
+  mostrarToast(`${npcEnt.nome} deixou cair ${item.nome}!`, 'sucesso');
+}
+
+// Gera um orbe de recurso (HP/mana) na posição do NPC, escolhendo um tier por
+// raridade. Tiers: [{ valor, modo:'abs'|'pct', raridade_pct }]. Default 1 tier.
+function _avtGerarOrbeNpc(npcEnt, tipo, tiers) {
+  const lista = (Array.isArray(tiers) && tiers.length)
+    ? tiers
+    : [{ valor: tipo === 'orbe_hp' ? 25 : 20, modo: 'pct', raridade_pct: 100 }];
+  const tier = _avtEscolherPorPeso(lista, t => (t.raridade_pct != null ? t.raridade_pct : 1));
+  if (!tier) return;
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  _avtSpawnObjMapa({
+    id: (tipo === 'orbe_hp' ? 'orbh_' : 'orbm_') + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    tipo,
+    x: (npcEnt.x || 0) / dw,
+    y: (npcEnt.y || 0) / dh,
+    valor: tier.valor != null ? tier.valor : (tipo === 'orbe_hp' ? 25 : 20),
+    modo: tier.modo === 'abs' ? 'abs' : 'pct',
+  });
 }
 
 // Debounced save of dungeon position to DB (so late-joining players see correct positions)
@@ -15671,6 +15868,66 @@ function _avtBauNaPosicao(x, y) {
   }) || null;
 }
 
+// Coleta automática de loot/orbes na célula do jogador (chamada ao chegar numa
+// célula durante a exploração). Coleta TODOS os objetos coletáveis na posição.
+async function _avtColetarObjsNaPosicao(jogador) {
+  if (!jogador) return;
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd?.objetos?.length) return;
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  const jx = Math.round(jogador.x), jy = Math.round(jogador.y);
+  const coletaveis = rd.objetos.filter(o => {
+    if (o.tipo !== 'loot' && o.tipo !== 'orbe_hp' && o.tipo !== 'orbe_mana') return false;
+    return Math.round((o.x ?? 0) * dw) === jx && Math.round((o.y ?? 0) * dh) === jy;
+  });
+  if (!coletaveis.length) return;
+  const char = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
+
+  for (const obj of coletaveis) {
+    // Remove imediatamente para evitar coleta dupla
+    const idx = rd.objetos.findIndex(o => String(o.id) === String(obj.id));
+    if (idx >= 0) rd.objetos.splice(idx, 1);
+
+    if (obj.tipo === 'loot') {
+      if (char?.id && obj.item_id) {
+        if (typeof avtInvDarItem === 'function') {
+          await avtInvDarItem(char.id, obj.item_id, obj.quantidade || 1).catch(() => {});
+        }
+        mostrarToast(`🎁 ${obj.nome || 'Item'} coletado!`, 'sucesso');
+      }
+    } else if (obj.tipo === 'orbe_hp' && char) {
+      const hpMax = (typeof _avtCalcHpJog === 'function' ? _avtCalcHpJog(char) : (jogador.hpMax || 100));
+      const cura = obj.modo === 'abs' ? Math.round(obj.valor || 0) : Math.round(hpMax * (obj.valor || 0) / 100);
+      const novo = Math.min(hpMax, (char.hp_atual ?? jogador.hp ?? 0) + cura);
+      char.hp_atual = novo;
+      try { _avtAplicarDanoPersistir(jogador, novo); } catch(_) { jogador.hp = novo; }
+      try { _avtBroadcast('avt_hp_update', { nome: jogador.nome, hp: novo, hpMax: jogador.hpMax ?? hpMax }); } catch(_) {}
+      try { _avtRenderHpBar(); } catch(_) {}
+      mostrarToast(`💚 +${cura} HP`, 'sucesso');
+    } else if (obj.tipo === 'orbe_mana' && char) {
+      const recursos = _avtRecursosDoChar(char);
+      const rec = recursos.find(r => /mana/i.test(r.nome)) || recursos[0];
+      if (rec) {
+        const add = obj.modo === 'abs' ? Math.round(obj.valor || 0) : Math.round(rec.max * (obj.valor || 0) / 100);
+        const novo = Math.min(rec.max, rec.atual + add);
+        if (!char.custom_attrs) char.custom_attrs = {};
+        const atrs = char.custom_attrs.atributos || (char.custom_attrs.atributos = {});
+        atrs[rec.nome] = novo;
+        try {
+          await _avtSb(`characters?id=eq.${encodeURIComponent(char.id)}`, {
+            method: 'PATCH', body: JSON.stringify({ custom_attrs: char.custom_attrs })
+          });
+        } catch(_) {}
+        try { _avtBroadcast('avt_rsv_update', { nome: jogador.nome, atributos: { ...atrs } }); } catch(_) {}
+        mostrarToast(`💙 +${add} ${rec.nome}`, 'sucesso');
+      }
+    }
+    try { _avtBroadcast('avt_obj_pickup', { objId: obj.id }); } catch(_) {}
+  }
+  try { _avtSalvarDungeon(); } catch(_) {}
+  try { if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender(); } catch(_) {}
+}
+
 // Open a chest at player's position
 async function avtAbrirBau(bauId) {
   const jogador = _avtMeuJogador();
@@ -15745,6 +16002,30 @@ function avtReceberBauAberto({ bauId, jogadorNome } = {}) {
 }
 window.avtReceberBauAberto = avtReceberBauAberto;
 
+// Receber spawn de objeto (loot no chão / orbe de recurso) de outro cliente.
+function avtReceberObjSpawn({ obj } = {}) {
+  try {
+    if (!obj || !AVT_STATE.dungeon) return;
+    if (!AVT_STATE.dungeon.render_data) AVT_STATE.dungeon.render_data = {};
+    const rd = AVT_STATE.dungeon.render_data;
+    if (!rd.objetos) rd.objetos = [];
+    if (!rd.objetos.some(o => String(o.id) === String(obj.id))) rd.objetos.push(obj);
+  } catch(_) {}
+}
+window.avtReceberObjSpawn = avtReceberObjSpawn;
+
+// Receber coleta/remoção de objeto por outro cliente.
+function avtReceberObjPickup({ objId } = {}) {
+  try {
+    const rd = AVT_STATE.dungeon?.render_data;
+    if (!rd?.objetos || !objId) return;
+    const idx = rd.objetos.findIndex(o => String(o.id) === String(objId));
+    if (idx >= 0) rd.objetos.splice(idx, 1);
+    try { if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender(); } catch(_) {}
+  } catch(_) {}
+}
+window.avtReceberObjPickup = avtReceberObjPickup;
+
 // ─── END PLAYER PANEL ─────────────────────────────────────────────────────────
 
 // ─── CATALOG IMPORT ───────────────────────────────────────────────────────────
@@ -15805,6 +16086,145 @@ async function avtImportarCatalogoConfirmar() {
   mostrarToast(`Catálogo importado: ${sucesso} item(ns)${falha ? `, ${falha} erro(s)` : ''}`, sucesso ? 'sucesso' : 'erro');
 }
 window.avtImportarCatalogoConfirmar = avtImportarCatalogoConfirmar;
+
+// ─── EDITOR DE ITEM DO CATÁLOGO (com imagem) ──────────────────────────────────
+// itemId null = novo item. Abre modal com campos básicos + seletor de imagem
+// (URL + upload via uploadToStorage) + flags de drop.
+function _avtCatItemEditor(itemId) {
+  const it = itemId ? (AVT_STATE.itemCatalog || []).find(i => String(i.id) === String(itemId)) : null;
+  const v = it || { nome: '', tipo: 'consumivel', icone: '📦', raridade: 'comum', img_url: '', slot_padrao: '', droppable: false, drop_rate: 0.1 };
+  let overlay = document.getElementById('avt-catitem-editor-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'avt-catitem-editor-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(overlay);
+  }
+  const inputCss = 'width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem';
+  const labCss = 'font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px';
+  const tipos = ['consumivel','equipamento','misc'];
+  const rars = ['comum','incomum','raro','epico','lendario'];
+  const esc = s => String(s==null?'':s).replace(/"/g,'&quot;');
+  overlay.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(200,168,75,0.3);border-radius:12px;padding:20px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8a84b">${it?'✏ Editar Item':'＋ Novo Item'}</div>
+        <button onclick="document.getElementById('avt-catitem-editor-overlay').remove()" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem">×</button>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="${labCss}">Imagem (opcional)</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div id="avt-catitem-img-preview" style="width:44px;height:44px;flex:0 0 44px;border-radius:6px;border:1px solid rgba(200,168,75,0.2);background:#0a0f18 center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:1.2rem;${v.img_url?`background-image:url('${String(v.img_url).replace(/'/g,"%27")}')`:''}">${v.img_url?'':(v.icone||'📦')}</div>
+          <input id="avt-catitem-img-url" value="${esc(v.img_url)}" placeholder="Cole a URL da imagem…" oninput="(function(p){var u=document.getElementById('avt-catitem-img-url').value.trim();p.style.backgroundImage=u?\"url('\"+u.replace(/'/g,'%27')+\"')\":'';p.textContent=u?'':'📦';})(document.getElementById('avt-catitem-img-preview'))"
+            style="flex:1;${inputCss}">
+          <label class="avt-mp-btn" style="padding:5px 8px;font-size:0.72rem;cursor:pointer;white-space:nowrap" title="Enviar arquivo">📁<input type="file" accept="image/*" style="display:none" onchange="_avtCatItemUploadImg(this)"></label>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div style="grid-column:1/-1">
+          <label style="${labCss}">Nome</label>
+          <input id="avt-catitem-nome" value="${esc(v.nome)}" style="${inputCss}">
+        </div>
+        <div>
+          <label style="${labCss}">Tipo</label>
+          <select id="avt-catitem-tipo" style="${inputCss}">${tipos.map(t=>`<option value="${t}" ${v.tipo===t?'selected':''}>${t}</option>`).join('')}</select>
+        </div>
+        <div>
+          <label style="${labCss}">Raridade</label>
+          <select id="avt-catitem-rar" style="${inputCss}">${rars.map(r=>`<option value="${r}" ${v.raridade===r?'selected':''}>${r}</option>`).join('')}</select>
+        </div>
+        <div>
+          <label style="${labCss}">Ícone (emoji)</label>
+          <input id="avt-catitem-icone" value="${esc(v.icone)}" maxlength="4" style="${inputCss}">
+        </div>
+        <div>
+          <label style="${labCss}">Slot (equip.)</label>
+          <input id="avt-catitem-slot" value="${esc(v.slot_padrao)}" placeholder="ex: arma_principal" style="${inputCss}">
+        </div>
+      </div>
+      <div style="border:1px solid rgba(231,76,60,0.2);border-radius:6px;padding:8px;margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:#c8d8e8;cursor:pointer">
+          <input type="checkbox" id="avt-catitem-droppable" ${v.droppable?'checked':''}> 💀 Pode dropar de inimigos
+        </label>
+        <div style="margin-top:6px">
+          <label style="${labCss}">Peso/chance relativa do drop (drop_rate)</label>
+          <input type="number" id="avt-catitem-droprate" min="0" step="0.05" value="${v.drop_rate ?? 0.1}" style="${inputCss}">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtCatItemSalvar('${itemId?String(itemId).replace(/'/g,"\\'"):''}')">💾 Salvar</button>
+        ${it?`<button class="avt-mp-btn avt-mp-btn-danger" style="flex:0" onclick="_avtCatItemRemover('${String(itemId).replace(/'/g,"\\'")}')">🗑 Excluir</button>`:''}
+        <button class="avt-mp-btn" style="flex:1" onclick="document.getElementById('avt-catitem-editor-overlay').remove()">Cancelar</button>
+      </div>
+    </div>`;
+  overlay.style.display = 'flex';
+}
+window._avtCatItemEditor = _avtCatItemEditor;
+
+async function _avtCatItemUploadImg(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (typeof uploadToStorage !== 'function') { mostrarToast('Upload indisponível', 'erro'); return; }
+  try {
+    mostrarToast('Enviando imagem…', 'info');
+    const url = await uploadToStorage(file, `aventuras/${AVT_STATE.rpgId || 'rpg'}/itens`);
+    const inp = document.getElementById('avt-catitem-img-url');
+    if (inp) inp.value = url;
+    const prev = document.getElementById('avt-catitem-img-preview');
+    if (prev) { prev.style.backgroundImage = `url('${url.replace(/'/g,'%27')}')`; prev.textContent = ''; }
+    mostrarToast('Imagem enviada!', 'ok');
+  } catch (e) { mostrarToast('Erro no upload: ' + (e?.message || e), 'erro'); console.error(e); }
+}
+window._avtCatItemUploadImg = _avtCatItemUploadImg;
+
+async function _avtCatItemSalvar(itemId) {
+  const rpgId = AVT_STATE.rpgId;
+  if (!rpgId) { mostrarToast('Aventura não carregada', 'erro'); return; }
+  const nome = (document.getElementById('avt-catitem-nome')?.value || '').trim();
+  if (!nome) { mostrarToast('Informe o nome do item', 'aviso'); return; }
+  const payload = {
+    nome,
+    tipo: document.getElementById('avt-catitem-tipo')?.value || 'misc',
+    raridade: document.getElementById('avt-catitem-rar')?.value || 'comum',
+    icone: (document.getElementById('avt-catitem-icone')?.value || '📦').trim() || '📦',
+    slot_padrao: (document.getElementById('avt-catitem-slot')?.value || '').trim() || null,
+    img_url: (document.getElementById('avt-catitem-img-url')?.value || '').trim() || null,
+    droppable: !!document.getElementById('avt-catitem-droppable')?.checked,
+    drop_rate: parseFloat(document.getElementById('avt-catitem-droprate')?.value) || 0,
+  };
+  try {
+    if (itemId) {
+      await _avtSb(`item_catalog?id=eq.${encodeURIComponent(itemId)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await _avtSb('item_catalog', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ ...payload, rpg_id: rpgId })
+      });
+    }
+    AVT_STATE.itemCatalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate`).catch(()=>AVT_STATE.itemCatalog||[]);
+    document.getElementById('avt-catitem-editor-overlay')?.remove();
+    mostrarToast('Item salvo!', 'ok');
+    _avtMestrePainelRender();
+  } catch (e) { mostrarToast('Erro ao salvar item: ' + (e?.message || e), 'erro'); console.error(e); }
+}
+window._avtCatItemSalvar = _avtCatItemSalvar;
+
+async function _avtCatItemRemover(itemId) {
+  if (!itemId) return;
+  if (!confirm('Excluir este item do catálogo?')) return;
+  const rpgId = AVT_STATE.rpgId;
+  try {
+    await _avtSb(`item_catalog?id=eq.${encodeURIComponent(itemId)}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+    AVT_STATE.itemCatalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate`).catch(()=>AVT_STATE.itemCatalog||[]);
+    document.getElementById('avt-catitem-editor-overlay')?.remove();
+    mostrarToast('Item excluído', 'ok');
+    _avtMestrePainelRender();
+  } catch (e) { mostrarToast('Erro ao excluir: ' + (e?.message || e), 'erro'); console.error(e); }
+}
+window._avtCatItemRemover = _avtCatItemRemover;
 
 // ─── END CATALOG IMPORT ───────────────────────────────────────────────────────
 
@@ -18974,7 +19394,7 @@ function _avtMpConteudoAba() {
       const bausMap = (rd?.objetos || []).filter(o => o.tipo === 'bau' || o.tipo === 'chest');
       const bausPre = AVT_STATE._bausPreDungeon || [];
       const RAR_COR = {comum:'#888',incomum:'#2ecc71',raro:'#3498db',epico:'#9b59b6',lendario:'#f39c12'};
-      const charSelectHtml = `<select onchange="AVT_STATE._itensCharSel=this.value;_avtMestrePainelRender()"
+      const charSelectHtml = `<select onchange="_avtItensSelChar(this.value)"
         style="width:100%;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;margin-bottom:8px">
         <option value="">— Escolher personagem —</option>
         ${chars.map(c=>`<option value="${c.nome.replace(/"/g,'&quot;')}" ${selChar===c.nome?'selected':''}>${c.nome}</option>`).join('')}
@@ -18982,6 +19402,10 @@ function _avtMpConteudoAba() {
       return `
       <div class="avt-mp-secao">
         <div class="avt-mp-label">🎁 Dar Item ao Personagem</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtCatItemEditor(null)">＋ Novo item</button>
+          <button class="avt-mp-btn" style="flex:1" onclick="avtImportarCatalogo()">📥 Importar JSON</button>
+        </div>
         ${charSelectHtml}
         <div style="display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap">
           ${['','consumivel','equipamento','misc'].map(t => `<button onclick="AVT_STATE._itensFiltroTipo='${t}';_avtMestrePainelRender()"
@@ -18994,14 +19418,18 @@ function _avtMpConteudoAba() {
             const rarCol = RAR_COR[item.raridade]||'#888';
             const isSel = AVT_STATE._itensDarSel === String(item.id);
             const idSafe = String(item.id).replace(/'/g,"\\'");
+            const icoHtml = item.img_url
+              ? `<span style="width:22px;height:22px;flex-shrink:0;border-radius:4px;background:#0a0f18 center/cover no-repeat;background-image:url('${String(item.img_url).replace(/'/g,'%27')}')"></span>`
+              : `<span style="font-size:1rem;flex-shrink:0">${item.icone||'📦'}</span>`;
             return `<div onclick="AVT_STATE._itensDarSel='${idSafe}';_avtMestrePainelRender()"
               style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:4px;
               border:1px solid ${isSel?rarCol:'transparent'};background:${isSel?'rgba(79,163,209,0.1)':'transparent'};cursor:pointer">
-              <span style="font-size:1rem;flex-shrink:0">${item.icone||'📦'}</span>
+              ${icoHtml}
               <div style="flex:1;min-width:0">
-                <div style="font-size:0.7rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.nome}</div>
+                <div style="font-size:0.7rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.nome}${item.droppable?' <span title="Pode dropar de inimigos" style="font-size:0.62rem">💀</span>':''}</div>
                 <div style="font-size:0.58rem;color:${rarCol}">${item.raridade||'comum'} · ${item.tipo||'misc'}</div>
               </div>
+              <button onclick="event.stopPropagation();_avtCatItemEditor('${idSafe}')" title="Editar item" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:0.8rem;padding:2px 4px">✏</button>
               ${isSel?'<span style="color:#4fa3d1;font-size:0.75rem">✓</span>':''}
             </div>`;
           }).join('')}
@@ -19019,6 +19447,12 @@ function _avtMpConteudoAba() {
           🎁 Dar Item ao Personagem Selecionado
         </button>
         ` : `<div class="avt-mp-hint">Catálogo vazio. Importe itens via aba 🏰 Campanha.</div>`}
+      </div>
+
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🔮 Orbes de Recurso (HP / Mana)</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Configure quanto cada orbe restaura. Até 3 variantes por recurso, com valor absoluto ou % e raridade (peso). As chances de drop ficam na aba ⚖ Balanceamento.</div>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtOrbeConfigEditor()">🔮 Configurar Orbes</button>
       </div>
 
       <div class="avt-mp-secao">
@@ -19099,7 +19533,30 @@ function _avtMpConteudoAba() {
       const hpBaseAtual   = lc.hp_base ?? 100;
       const hpAttrAtual   = lc.hp_attr ?? 'Constituição';
       const hpMultAtual   = lc.hp_attr_mult ?? 4;
+      const dropItemPct = Math.round((lc.drop_item_chance != null ? lc.drop_item_chance : 0.10) * 100);
+      const orbeHpPct   = Math.round((lc.orbe_hp_chance != null ? lc.orbe_hp_chance : 0) * 100);
+      const orbeManaPct = Math.round((lc.orbe_mana_chance != null ? lc.orbe_mana_chance : 0) * 100);
       return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">💀 Drops de Inimigos (chances)</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Chance de cada inimigo, ao morrer, deixar cair um item (entre os marcados como "Pode dropar" no catálogo) e/ou orbes de recurso no chão. Os jogadores coletam ao passar por cima. Configure o valor de cada orbe na aba 🎒 Itens.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="number" id="avt-mp-drop-item-pct" min="0" max="100" step="1" value="${dropItemPct}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">% chance de dropar item</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="number" id="avt-mp-orbe-hp-pct" min="0" max="100" step="1" value="${orbeHpPct}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(46,204,113,0.3);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#2ecc71">💚 % chance de orbe de HP</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-orbe-mana-pct" min="0" max="100" step="1" value="${orbeManaPct}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#4fa3d1">💙 % chance de orbe de mana</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDropsConfig()" style="width:100%">💾 Salvar</button>
+      </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-label">🏃 Velocidade de Corrida (ms/célula)</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">Tempo base (ms) para percorrer uma célula a 100% de velocidade (Destreza 10). Define também a velocidade de perseguição dos NPCs. Menor = mais rápido.</div>
@@ -20088,6 +20545,108 @@ async function _avtSalvarVelocidadeCorrida() {
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarVelocidadeCorrida = _avtSalvarVelocidadeCorrida;
+
+// Salva as chances globais de drop (item + orbes de recurso).
+async function _avtSalvarDropsConfig() {
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  const clamp = (id, def) => Math.max(0, Math.min(100, parseInt(document.getElementById(id)?.value))) / 100;
+  const cfg = {
+    drop_item_chance: isNaN(clamp('avt-mp-drop-item-pct')) ? 0.10 : clamp('avt-mp-drop-item-pct'),
+    orbe_hp_chance:   isNaN(clamp('avt-mp-orbe-hp-pct'))   ? 0    : clamp('avt-mp-orbe-hp-pct'),
+    orbe_mana_chance: isNaN(clamp('avt-mp-orbe-mana-pct')) ? 0    : clamp('avt-mp-orbe-mana-pct'),
+  };
+  Object.assign(rpg.theme_json.level_config, cfg);
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    try { _avtBroadcast('avt_level_config_update', { config: cfg }); } catch(_) {}
+    mostrarToast('Chances de drop salvas!', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtSalvarDropsConfig = _avtSalvarDropsConfig;
+
+// Editor das variantes (tiers) de orbes de HP/mana: até 3 por recurso.
+// Cada tier: { valor, modo:'abs'|'pct', raridade_pct }.
+function _avtOrbeConfigEditor() {
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  let overlay = document.getElementById('avt-orbe-config-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'avt-orbe-config-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(overlay);
+  }
+  const inputCss = 'box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem';
+  const rowsFor = (pref, tiers, cor) => {
+    const def = pref === 'hp' ? 25 : 20;
+    return [0,1,2].map(i => {
+      const t = (tiers && tiers[i]) || {};
+      const valor = t.valor != null ? t.valor : (i === 0 ? def : '');
+      const modo = t.modo === 'abs' ? 'abs' : 'pct';
+      const rar = t.raridade_pct != null ? t.raridade_pct : (i === 0 ? 100 : 0);
+      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+        <span style="font-size:0.62rem;color:${cor};width:46px">Var. ${i+1}</span>
+        <input type="number" id="avt-orbe-${pref}-valor-${i}" value="${valor}" placeholder="valor" style="width:64px;${inputCss}">
+        <select id="avt-orbe-${pref}-modo-${i}" style="width:74px;${inputCss}">
+          <option value="pct" ${modo==='pct'?'selected':''}>%</option>
+          <option value="abs" ${modo==='abs'?'selected':''}>abs</option>
+        </select>
+        <input type="number" id="avt-orbe-${pref}-rar-${i}" min="0" value="${rar}" placeholder="raridade %" style="width:74px;${inputCss}">
+        <span style="font-size:0.58rem;color:#7a92aa">peso</span>
+      </div>`;
+    }).join('');
+  };
+  overlay.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(200,168,75,0.3);border-radius:12px;padding:20px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8a84b">🔮 Configurar Orbes</div>
+        <button onclick="document.getElementById('avt-orbe-config-overlay').remove()" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem">×</button>
+      </div>
+      <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:10px">Cada variante tem um <b>valor</b> (absoluto ou % do máximo) e uma <b>raridade</b> (peso relativo: maior = sai mais). Deixe a raridade em 0 para desativar a variante.</div>
+      <div style="margin-bottom:14px">
+        <div style="font-size:0.72rem;color:#2ecc71;margin-bottom:6px">💚 Orbes de HP</div>
+        ${rowsFor('hp', lc.orbe_hp_tiers, '#2ecc71')}
+      </div>
+      <div style="margin-bottom:14px">
+        <div style="font-size:0.72rem;color:#4fa3d1;margin-bottom:6px">💙 Orbes de Mana</div>
+        ${rowsFor('mana', lc.orbe_mana_tiers, '#4fa3d1')}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtSalvarOrbeTiers()">💾 Salvar</button>
+        <button class="avt-mp-btn" style="flex:1" onclick="document.getElementById('avt-orbe-config-overlay').remove()">Cancelar</button>
+      </div>
+    </div>`;
+  overlay.style.display = 'flex';
+}
+window._avtOrbeConfigEditor = _avtOrbeConfigEditor;
+
+async function _avtSalvarOrbeTiers() {
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  const coletar = (pref) => {
+    const tiers = [];
+    for (let i = 0; i < 3; i++) {
+      const valor = parseFloat(document.getElementById(`avt-orbe-${pref}-valor-${i}`)?.value);
+      const modo  = document.getElementById(`avt-orbe-${pref}-modo-${i}`)?.value === 'abs' ? 'abs' : 'pct';
+      const rar   = parseFloat(document.getElementById(`avt-orbe-${pref}-rar-${i}`)?.value);
+      if (!isNaN(valor) && !isNaN(rar) && rar > 0) tiers.push({ valor, modo, raridade_pct: rar });
+    }
+    return tiers;
+  };
+  const cfg = { orbe_hp_tiers: coletar('hp'), orbe_mana_tiers: coletar('mana') };
+  Object.assign(rpg.theme_json.level_config, cfg);
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    try { _avtBroadcast('avt_level_config_update', { config: cfg }); } catch(_) {}
+    document.getElementById('avt-orbe-config-overlay')?.remove();
+    mostrarToast('Orbes configurados!', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtSalvarOrbeTiers = _avtSalvarOrbeTiers;
 
 async function _avtSalvarDestrezaVelPct() {
   const val = Math.max(0, Math.min(50, parseInt(document.getElementById('avt-mp-dex-vel-pct')?.value) || 5));
