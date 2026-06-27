@@ -813,14 +813,17 @@ window.RTNet = (() => {
         _startElection();
       }
 
-      // Timer de ressincronização periódica para não-host
+      // Timer de ressincronização periódica para não-host. Jitter por cliente (±2.5s)
+      // para evitar que todos os players peçam o snapshot ao host no mesmo instante
+      // (pico de carga a cada 10s com 6 jogadores).
       if (_s.periodicSyncTimer) clearInterval(_s.periodicSyncTimer);
+      const _periodMs = PERIODIC_SYNC_INTERVAL + Math.round((Math.random() * 2 - 1) * 2500);
       _s.periodicSyncTimer = setInterval(() => {
         if (_s.initialized && !_s._isHost && _s.hostId) {
           _log('sync periódico — solicitando snapshot do host');
           _signal('snapshot_request', { target_id: _s.hostId });
         }
-      }, PERIODIC_SYNC_INTERVAL);
+      }, _periodMs);
     },
 
     shutdown() {
