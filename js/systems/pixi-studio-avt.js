@@ -256,6 +256,11 @@ function _psToAvtConfig(cfg) {
         subEmitters: l.subEmitters || undefined,
         filters:    l.filters || undefined,
         offset:     l.offset || null,
+        // Preserve per-layer origin so a layer that still falls through to the legacy
+        // pipeline (e.g. combined with a global motion mode) keeps its anchor data.
+        anchor:           l.anchor || null,
+        posicao_override: l.posicao_override || null,
+        pose:             l.pose || (l.anchor && l.anchor.pose) || undefined,
         emitter,
         spawn_path: l.spawn_path || null,
         start_t:    l.start_t    ?? 0,
@@ -620,6 +625,18 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
 
+  // Lazy-load any scene/layer filter classes before building (bloom, glow, user filters,
+  // chromatic aberration) so the scene-level look matches the legacy pipeline.
+  if (typeof _avtEnsurePixiFilter === 'function') {
+    const filterTypes = new Set();
+    const collectF = o => { if (Array.isArray(o && o.filters)) o.filters.forEach(f => f && f.type && filterTypes.add(f.type)); };
+    collectF(cfg); layers.forEach(collectF);
+    layers.forEach(l => { if (l.glow) filterTypes.add('glow'); });
+    if (cfg.lighting && cfg.lighting.bloom) filterTypes.add('bloom');
+    if (cfg.camera && cfg.camera.chromaticAberration) filterTypes.add('rgbsplit');
+    try { await Promise.all([...filterTypes].map(t => _avtEnsurePixiFilter(t))); } catch (_) {}
+  }
+
   const durMs = cfg.duracao_ms || cfg.duration || 1000;
   const vfxScale = _avtVfxScale(cfg);
   const midScr = { x: (atacScr.x + alvoScr.x) / 2, y: (atacScr.y + alvoScr.y) / 2 };
@@ -638,6 +655,41 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
     });
   } catch (e) { overlayCanvas.remove(); return; }
 
+  // Scene tree mirrors _avtPixiParticleAnim so routed animations keep their scene-level look:
+  //   bgRoot (full-screen dim, behind) < sceneRoot (all layers; carries bloom/tone + shake)
+  //   < uiRoot (camera flash / chromatic aberration).
+  const bgRoot    = new PIXI.Container();
+  const sceneRoot = new PIXI.Container();
+  const uiRoot    = new PIXI.Container();
+  app.stage.addChild(bgRoot, sceneRoot, uiRoot);
+
+  // Background dim / vignette (full screen, behind the effects)
+  if (cfg.background && (cfg.background.darken || cfg.background.radialDim)) {
+    const dim = new PIXI.Graphics();
+    const a = cfg.background.darken || 0.3;
+    dim.beginFill(0x000000, a).drawRect(0, 0, app.renderer.width, app.renderer.height).endFill();
+    if (cfg.background.radialDim) dim.blendMode = PIXI.BLEND_MODES.MULTIPLY;
+    bgRoot.addChild(dim);
+  }
+
+  // Scene-level lighting (bloom + tone) + user filters, applied to the whole effect.
+  const sceneFilters = [];
+  if (cfg.lighting && cfg.lighting.bloom && PIXI.filters && PIXI.filters.AdvancedBloomFilter) {
+    const b = cfg.lighting.bloom;
+    sceneFilters.push(new PIXI.filters.AdvancedBloomFilter({
+      threshold: b.threshold ?? 0.4, bloomScale: b.intensity ?? 1.5,
+      brightness: 1.0, blur: 8, quality: b.quality ?? 6,
+    }));
+  }
+  if (cfg.lighting && cfg.lighting.tone && cfg.lighting.tone !== 'none' && PIXI.ColorMatrixFilter) {
+    const cm = new PIXI.ColorMatrixFilter();
+    if (cfg.lighting.tone === 'filmic') { cm.contrast(0.15, true); cm.saturate(0.12, true); cm.brightness(1.04, true); }
+    else if (cfg.lighting.tone === 'aces') { cm.contrast(0.22, true); cm.saturate(0.18, true); cm.brightness(1.06, true); cm.hue(-4, true); }
+    sceneFilters.push(cm);
+  }
+  if (typeof _avtBuildPixiFilters === 'function') sceneFilters.push(..._avtBuildPixiFilters(cfg.filters, sceneRoot));
+  if (sceneFilters.length) sceneRoot.filters = sceneFilters;
+
   const bm = {
     add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN,
     multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL,
@@ -648,9 +700,21 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
     const anchor = _psAvtLayerAnchor(l, atacScr, alvoScr, casterEnt, targetEnt);
     // spawn_path spans both tokens → pivot at the travel midpoint; static → the layer anchor.
     const pivot = l.spawn_path?.length ? midScr : { x: anchor.x, y: anchor.y };
-    const root = _avtVfxRoot(app.stage, anchor.pose, pivot, anchor.lift);
+    const root = _avtVfxRoot(sceneRoot, anchor.pose, pivot, anchor.lift);
     const container = new PIXI.Container();
     container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
+    // Per-layer glow + tint + user filters (preserve the studio look)
+    const layerFilters = (typeof _avtBuildPixiFilters === 'function') ? _avtBuildPixiFilters(l.filters, container) : [];
+    if (l.glow && PIXI.filters && PIXI.filters.GlowFilter) {
+      layerFilters.push(new PIXI.filters.GlowFilter({
+        distance: l.glow.distance ?? 14, outerStrength: l.glow.outerStrength ?? 2,
+        innerStrength: l.glow.innerStrength ?? 0,
+        color: (typeof _avtHexToInt === 'function' ? _avtHexToInt(l.glow.color || '#ffffff') : 0xffffff),
+        quality: l.glow.quality ?? 0.3,
+      }));
+    }
+    if (l.tint && typeof _fxTintMatrix === 'function') { const tm = _fxTintMatrix(l.tint); if (tm) layerFilters.push(tm); }
+    if (layerFilters.length) container.filters = layerFilters;
     root.addChild(container);
 
     let emitCfg = _avtScaleEmitterCfg(Object.assign({}, l.emitter), vfxScale);
@@ -710,8 +774,15 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
 
   app.ticker.add(tick);
 
+  // Camera FX (shake / flash / zoom punch / chromatic aberration) over the whole scene.
+  let cleanupCam = null;
+  if (typeof _avtCameraFX === 'function' && cfg.camera && Object.keys(cfg.camera).length) {
+    try { cleanupCam = _avtCameraFX(app, sceneRoot, uiRoot, cfg.camera, durMs); } catch (_) {}
+  }
+
   setTimeout(() => {
     app.ticker.remove(tick);
+    try { if (cleanupCam) cleanupCam(); } catch (_) {}
     for (const { em } of emitters) {
       try { if (!em.destroyed) em.destroy(); } catch (_) {}
     }
@@ -771,9 +842,18 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
       _psAvtChain(cfg, atacanteEnt, alvoEnt, isAreaMode);
       return 0;
     default: {
-      // one-shot, loop, aoe — prefer spawn_path if present, else existing pipeline
-      const hasPath = (mainCfg.layers || []).some(l => l.tipo === 'emitter' && l.spawn_path?.length);
-      if (hasPath) {
+      // one-shot, loop, aoe — route static-origin effects (per-layer anchor and/or
+      // recorded spawn_path) through the anchor-aware renderer so the configured
+      // "Origem da animação" is honored. The legacy pipeline is kept only for the global
+      // MOTION modes (trajetoria/espiral/raio/area/retorno) and phase envelopes, which the
+      // anchor renderer has no concept of; for those the motion overrides the static origin.
+      const emitterLayers = (mainCfg.layers || []).filter(l => l.visivel && l.tipo === 'emitter' && l.emitter);
+      const hasPath    = emitterLayers.some(l => l.spawn_path?.length);
+      const anyAnchor  = emitterLayers.some(l => l.anchor);
+      const legacyMotion = isAreaMode || ['trajetoria', 'espiral', 'raio', 'retorno', 'area'].includes(posicao);
+      const hasPhases  = !!(cfg.phases || cfg.cast || cfg.travel || cfg.impact);
+      const useAnchorRenderer = hasPath || (anyAnchor && !legacyMotion && !hasPhases);
+      if (useAnchorRenderer) {
         _psAvtRenderWithSpawnPath(mainCfg, atacScr, alvoScr, atacanteEnt, alvoEnt);
       } else {
         const avtCfg = _psToAvtConfig(mainCfg);
