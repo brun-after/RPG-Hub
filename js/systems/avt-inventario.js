@@ -31,6 +31,15 @@ const _AVT_RAR_COR = {
   lendario: '#f39c12',
 };
 
+// Ícone do item: imagem (img_url) se houver, senão emoji. `px` controla o tamanho.
+function _avtInvIco(def, px) {
+  px = px || 18;
+  if (def && def.img_url) {
+    return `<span style="display:inline-block;width:${px}px;height:${px}px;flex-shrink:0;border-radius:4px;vertical-align:middle;background:#0a0f18 center/cover no-repeat;background-image:url('${String(def.img_url).replace(/'/g,'%27')}')"></span>`;
+  }
+  return `<span style="font-size:${Math.round(px*0.9)}px;flex-shrink:0">${(def && def.icone) || '📦'}</span>`;
+}
+
 // ─── INIT & RESET ─────────────────────────────────────────────────────────────
 
 async function avtInvInit(rpgId) {
@@ -40,7 +49,7 @@ async function avtInvInit(rpgId) {
   try {
     const e = encodeURIComponent(rpgId);
     const [catalogo, inventario] = await Promise.all([
-      sb(`item_catalog?rpg_id=eq.${e}&select=id,nome,tipo,icone,raridade,descricao,slot_padrao,atributos_bonus,efeitos,visual_config&order=nome`).catch(() => []),
+      sb(`item_catalog?rpg_id=eq.${e}&select=id,nome,tipo,icone,raridade,descricao,slot_padrao,atributos_bonus,efeitos,visual_config,img_url&order=nome`).catch(() => []),
       sb(`inventario?rpg_id=eq.${e}&select=*&order=id`).catch(() => []),
     ]);
     AVT_INV.catalogo = catalogo || [];
@@ -598,7 +607,7 @@ function avtInvRenderPanel(charNome, containerId) {
         title="${def.nome} — ${slotInfo.label}. Clique para desequipar."
         style="padding:5px 4px;background:rgba(79,163,209,0.06);border:1px solid ${border};border-radius:5px;cursor:pointer;text-align:center;min-width:0">
         <div style="font-size:0.5rem;color:#7a92aa;margin-bottom:2px">${slotInfo.icon} ${slotInfo.label}</div>
-        <div style="font-size:0.6rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${def.nome}">${def.icone || '📦'} ${def.nome}</div>
+        <div style="font-size:0.6rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${def.nome}">${_avtInvIco(def,14)} ${def.nome}</div>
       </div>`;
     } else {
       html += `
@@ -641,7 +650,7 @@ function avtInvRenderPanel(charNome, containerId) {
 
       html += `
       <div style="display:flex;align-items:center;gap:8px;border:1px solid rgba(79,163,209,0.1);border-radius:7px;padding:7px 10px;background:rgba(5,8,16,0.3)">
-        <span style="font-size:1.1rem;flex-shrink:0">${def.icone || '📦'}</span>
+        ${_avtInvIco(def,20)}
         <div style="flex:1;min-width:0">
           <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${def.nome}</div>
           <div style="font-size:0.58rem;color:${rarColor}">${def.raridade || 'comum'} · ${def.tipo}${efLabel ? ' · ' + efLabel : ''}${qtdSuffix}</div>

@@ -119,6 +119,9 @@ window.RTNet = (() => {
     // [RECURSOS + BAÚS]
     avt_rsv_update:           'avtReceberRsvUpdate',
     avt_bau_aberto:           'avtReceberBauAberto',
+    // [OBJETOS] loot no chão e orbes de recurso (spawn/coleta)
+    avt_obj_spawn:            'avtReceberObjSpawn',
+    avt_obj_pickup:           'avtReceberObjPickup',
     // [COBERTURA COMPLETA] rastro autoritativo, cooldown OOC e cache de inventário
     avt_rastro_marcar:        'avtReceberRastroMarcar',
     avt_ooc_cooldown:         'avtReceberOocCooldown',
@@ -154,6 +157,8 @@ window.RTNet = (() => {
     avt_member_linked:     { persist: 'immediate', reliable: true  },
     avt_primeiro_ataque:   { persist: 'never',     reliable: false, relay: true },
     avt_bau_aberto:        { persist: 'immediate', reliable: true  },
+    avt_obj_spawn:         { persist: 'immediate', reliable: true  },
+    avt_obj_pickup:        { persist: 'immediate', reliable: true  },
     avt_skill_anim:        { persist: 'never',     reliable: true,  relay: true },
     avt_efeito_anim_start: { persist: 'never',     reliable: true,  relay: true },
     avt_efeito_anim_stop:  { persist: 'never',     reliable: true,  relay: true },
