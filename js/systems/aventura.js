@@ -4563,6 +4563,11 @@ function _avtPopularEntidades() {
       x: sx, y: sy, renderX: sx, renderY: sy, _velocidadeLerp: null, _waypoints: [],
       hp: _hpAtualJ, hpMax: _hpMaxJ, cor: col, dbId: c.id,
       presetTipo: temAparencia ? null : 'npc_generico',
+      // Referência ao custom_attrs do personagem para que sprite isométrico
+      // (iso_anim/iso_token_url) e demais leituras por entidade sobrevivam ao
+      // recarregar — antes a entidade nascia sem custom_attrs e o token salvo
+      // sumia, caindo no top-down até salvar de novo na sessão.
+      custom_attrs: ca,
       _charOffline: false
     });
     // Esconder personagem se o jogador vinculado estiver offline (somente em sessão multiplayer)
@@ -6539,6 +6544,21 @@ function _avtDesenharTopdownIa(ctx, ent, cx, cy, SZ, ap) {
 // de fase (follow-through) → flexão contínua e orgânica. Ancorado bottom-center em
 // (footX, footY); desenhado dentro do wrap de billboard (fica em pé na tela).
 // Cache de imagem compartilhado com o token estático (AVT_STATE._isoTokenCache).
+// Resolve o sentido horizontal efetivo da arte iso a partir do facing automático
+// (segue o movimento) e do modo configurado por token:
+//   'auto'      → segue o movimento (padrão);
+//   'auto_inv'  → segue o movimento, porém com a frente da arte invertida;
+//   'direita'   → sempre virado para a direita (nunca espelha);
+//   'esquerda'  → sempre virado para a esquerda.
+function _avtIsoFacing(autoFacing, mode) {
+  switch (mode) {
+    case 'auto_inv': return -autoFacing;
+    case 'direita':  return 1;
+    case 'esquerda': return -1;
+    default:         return autoFacing;
+  }
+}
+
 function _avtDesenharIsoIa(ctx, ent, footX, footY, SZ, data) {
   const url = data?.img_url;
   if (!url) return;
@@ -6558,6 +6578,12 @@ function _avtDesenharIsoIa(ctx, ent, footX, footY, SZ, data) {
   // Toggle global de pernas (configurações gráficas) × override por token.
   const pernasGlobal = (typeof AVT_GRAFICOS === 'undefined') ? true : (AVT_GRAFICOS.pernas !== false);
 
+  // Sentido da imagem: o facing automático (a.facing) segue o eixo X do movimento,
+  // mas a arte do token pode ter sido desenhada virada para um lado fixo. O
+  // facingMode do token ajusta isso para que "andar para a frente" não pareça de
+  // costas: auto (segue o movimento), auto_inv (espelha a base), direita/esquerda fixos.
+  const facingEfetivo = _avtIsoFacing(a.facing || 1, data.facingMode);
+
   // Dispatch para a biblioteca de presets (avt-walk-presets.js). O motor faz o
   // fatiamento, o translate(footX,footY), o espelhamento de facing e o estilo
   // selecionado. Fallback: desenho estático caso o módulo não esteja carregado.
@@ -6565,7 +6591,7 @@ function _avtDesenharIsoIa(ctx, ent, footX, footY, SZ, data) {
     avtWalkRender(ctx, img, {
       footX, footY, SZ, now,
       state: st, tState,
-      facing: (a.facing || 1),
+      facing: facingEfetivo,
       presetId: data.walkPreset || 'quique',
       params: data.walkParams || null,
       pernas: pernasGlobal && (data.pernas !== false),
@@ -25853,6 +25879,7 @@ function _avtWalkStudioAbrir(entId) {
     aberto: true, entId, dbChar, img, url,
     presetId, params,
     pernas: iso.pernas !== false,
+    facingMode: iso.facingMode || 'auto',
     state: 'walk', stateStart: performance.now(), facing: 1, raf: 0,
   };
   _avtWalkStudioRender();
@@ -25900,6 +25927,12 @@ function _avtWalkStudioTogglePernas(on) {
 }
 window._avtWalkStudioTogglePernas = _avtWalkStudioTogglePernas;
 
+function _avtWalkStudioSetFacingMode(mode) {
+  const S = window._avtWalkStudio; if (!S) return;
+  S.facingMode = mode || 'auto';
+}
+window._avtWalkStudioSetFacingMode = _avtWalkStudioSetFacingMode;
+
 function _avtWalkStudioSetParam(key, val) {
   const S = window._avtWalkStudio; if (!S) return;
   S.params[key] = val;
@@ -25940,9 +25973,13 @@ function _avtWalkStudioLoop() {
       let tState = 0;
       if (S.state === 'attack') tState = (now - (S.stateStart || now)) % 700;
       else if (S.state === 'idle') tState = now - (S.stateStart || now);
+      // Facing do preview = botão Virar (S.facing) resolvido pelo modo de sentido,
+      // espelhando exatamente o que o jogo fará com _avtIsoFacing.
+      const facingPreview = (typeof _avtIsoFacing === 'function')
+        ? _avtIsoFacing(S.facing, S.facingMode) : S.facing;
       avtWalkRender(cx, img, {
         footX: big.width / 2, footY: big.height - 18, SZ: big.height * 0.6,
-        now, state: S.state, tState, facing: S.facing,
+        now, state: S.state, tState, facing: facingPreview,
         presetId: S.presetId, params: S.params, pernas: S.pernas,
       });
     }
@@ -26006,6 +26043,14 @@ function _avtWalkStudioRender() {
               <input type="checkbox" ${S.pernas ? 'checked' : ''} style="accent-color:#c8a84b"
                 onchange="_avtWalkStudioTogglePernas(this.checked)"> Pernas articuladas neste token
             </label>
+            <label style="display:block;font-size:0.6rem;color:#7a92aa;margin:7px 0 1px">Frente da imagem (sentido) <span style="color:#5f7488">— se anda parecendo de costas, ajuste aqui</span></label>
+            <select onchange="_avtWalkStudioSetFacingMode(this.value)"
+              style="width:100%;box-sizing:border-box;padding:5px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.66rem;margin-bottom:2px">
+              <option value="auto" ${S.facingMode === 'auto' ? 'selected' : ''}>Auto — vira para o lado do movimento</option>
+              <option value="auto_inv" ${S.facingMode === 'auto_inv' ? 'selected' : ''}>Auto invertido — arte desenhada virada ao contrário</option>
+              <option value="direita" ${S.facingMode === 'direita' ? 'selected' : ''}>Sempre à direita</option>
+              <option value="esquerda" ${S.facingMode === 'esquerda' ? 'selected' : ''}>Sempre à esquerda</option>
+            </select>
             ${_avtWalkStudioSlider('Cadência (ms/passada)', 'cadencia', 200, 1600, 10)}
             ${_avtWalkStudioSlider('Amplitude do passo', 'amplitudePasso', 0.02, 0.25, 0.005)}
             ${_avtWalkStudioSlider('Altura da divisão das pernas', 'legSplitY', 0.20, 0.60, 0.01)}
@@ -26045,6 +26090,7 @@ async function _avtWalkPresetSalvar() {
       walkPreset: S.presetId,
       walkParams: S.params,
       pernas: S.pernas,
+      facingMode: S.facingMode || 'auto',
     });
     const newAttrs = Object.assign({}, dbChar.custom_attrs || {}, {
       iso_anim: isoAnim,
