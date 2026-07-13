@@ -50,6 +50,7 @@ import './hub/import.js';
 import './systems/arena.js';
 import './systems/inventory.js';
 import './systems/aventura.js';
+import './aventura/renderer-pixi';
 import './systems/avt-walk-presets.js';
 import './systems/avt-menu.js';
 import './systems/avt-inventario.js';

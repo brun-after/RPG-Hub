@@ -5430,14 +5430,24 @@ function _avtRenderFrame() {
     }
   }
 
-  ctx.fillStyle = '#050810';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
   // Estilo da grade configurável pelo mestre (cor + opacidade, persistido em theme_json)
   const _gridStyle = _avtGridStyle();
 
   // Variação de cor por fase: aplica hue-rotate aos tiles (reset após o loop).
   const _hue = AVT_STATE._faseHueShift || 0;
+
+  // Camada de mundo em PIXI (WebGL): fundo + tiles + grade assados 1× por fase, câmera
+  // como transform de container (aventura/renderer-pixi.ts). Quando ativa, o canvas 2D
+  // fica transparente por cima e desenha só o dinâmico (entidades, portas, efeitos).
+  // `?renderer=canvas` na URL ou localStorage avt_renderer='canvas' força o legado.
+  const _pixiWorld = (typeof avtPixiWorldFrame === 'function')
+    && avtPixiWorldFrame(canvas, camera, SZ, dungeon, _gridStyle, _hue);
+
+  if (_pixiWorld) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  } else {
+  ctx.fillStyle = '#050810';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   // Aplica a variação de cor da fase mesmo sem tileset carregado (tiles de fundo procedurais também recebem o tint).
   const _hueOn = _hue && ('filter' in ctx);
   if (_hueOn) ctx.filter = `hue-rotate(${_hue}deg)`;
@@ -5489,12 +5499,14 @@ function _avtRenderFrame() {
     }
   }
   if (_hueOn) ctx.filter = 'none';
+  } // fim do caminho Canvas 2D legado (tiles)
 
   // Rastros contaminados (Rastro Persona / Rastro Anima)
   try { _avtRenderRastroCells(ctx, camera, SZ, canvas); } catch(_) {}
 
   // Overlay de grade suave nos tilesets (linhas finas e translúcidas)
-  if (AVT_STATE._tilesetLoaded && _gridStyle.op > 0) {
+  // (com a camada PIXI ativa, a grade já foi assada junto com os tiles)
+  if (!_pixiWorld && AVT_STATE._tilesetLoaded && _gridStyle.op > 0) {
     ctx.strokeStyle = _gridStyle.stroke;
     ctx.lineWidth = 0.5;
     ctx.setLineDash([]);
