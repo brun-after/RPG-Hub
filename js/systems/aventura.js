@@ -4079,7 +4079,7 @@ async function _avtFlushPersistencia(origem) {
       }).then(() => {
         const dbChar = (AVT_STATE.chars || []).find(c => c.id === charId);
         if (dbChar) dbChar.hp_atual = hp;
-      }).catch(() => {})
+      }).catch(e => { try { console.warn('[AVT][flush] HP buffered do char ' + charId + ' falhou:', e); } catch(_) {} })
     );
   }
   AVT_STATE._charHpBuffer = {};
@@ -4093,7 +4093,7 @@ async function _avtFlushPersistencia(origem) {
     promises.push(
       _avtSb('characters?id=eq.' + encodeURIComponent(ent.dbId), {
         method: 'PATCH', body: JSON.stringify({ hp_atual: ent.hp, custom_attrs: ca })
-      }).catch(() => {})
+      }).catch(e => { try { console.warn('[AVT][flush] posição/HP de "' + ent.nome + '" falhou:', e); } catch(_) {} })
     );
   }
 
@@ -4104,7 +4104,7 @@ async function _avtFlushPersistencia(origem) {
       promises.push(
         (typeof sbRpc === 'function' ? sbRpc('npc_update_position', {
           _rpg: rpgId, _npc: ent.id, _x: ent.x || 0, _y: ent.y || 0, _user: null
-        }) : Promise.resolve()).catch(() => {})
+        }) : Promise.resolve()).catch(e => { try { console.warn('[AVT][flush] posição do NPC "' + ent.id + '" falhou:', e); } catch(_) {} })
       );
     }
   }
@@ -15031,6 +15031,7 @@ async function _avtFlushCharHpBuffer(origem) {
       if (dbChar) { dbChar.hp_atual = hp; _avtSyncLinhagem(dbChar); }
     } catch(e) {
       AVT_STATE._charHpBuffer[charId] = copy[charId]; // re-buffer on failure
+      try { console.warn('[AVT][flush] HP do char ' + charId + ' falhou (re-buffer):', e); } catch(_) {}
     }
   }
   try { console.log('[AVT] HP flush (' + (origem||'?') + '):', ids.length, 'chars'); } catch(_) {}
@@ -19132,10 +19133,10 @@ function _avtVfxHostDestroy() {
   const h = _avtVfxHostState;
   if (!h) return;
   _avtVfxHostState = null;
-  try { h.active.forEach(ad => { try { ad.destroy(); } catch(_) {} }); } catch(_) {}
+  try { h.active.forEach(ad => { try { ad.destroy(); } catch(e) { try { console.warn('[pixi-fx] destroy de adapter falhou:', e); } catch(_) {} } }); } catch(_) {}
   try { h.app.ticker.remove(h._syncFn); } catch(_) {}
   try { h.overlayCanvas.remove(); } catch(_) {}
-  try { h.app.destroy(true); } catch(_) {}
+  try { h.app.destroy(true); } catch(e) { try { console.warn('[pixi-fx] destroy do app host falhou:', e); } catch(_) {} }
 }
 window._avtVfxHostDestroy = _avtVfxHostDestroy;
 
