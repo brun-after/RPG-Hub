@@ -540,12 +540,26 @@ try { window.sbRpc = sbRpc; } catch(_) {}
 
 
 // ── SESSION STATE (Modo Aventura — camada B snapshots) ────────────
+// rpg_session_state.rpg_id é uuid com FK para rpg_registry; aventuras com id
+// string usam a tabela avt_session_state (chave text, sem FK) — ver
+// docs/migration_avt_session_state.sql. Sem a migração aplicada, as chamadas
+// falham e o chamador (RTNet) tolera o erro (resync segue só via peer snapshot).
+function _isUuidId(id) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''));
+}
+
 async function sessionStateGet(rpgId) {
-  return sb(`rpg_session_state?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`);
+  if (_isUuidId(rpgId)) {
+    return sb(`rpg_session_state?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`);
+  }
+  return sb(`avt_session_state?session_key=eq.${encodeURIComponent(rpgId)}&select=*`);
 }
 
 async function sessionStateUpdate(rpgId, snapshot) {
-  return sbRpc('update_session_snapshot', { p_rpg_id: rpgId, p_snapshot: snapshot });
+  if (_isUuidId(rpgId)) {
+    return sbRpc('update_session_snapshot', { p_rpg_id: rpgId, p_snapshot: snapshot });
+  }
+  return sbRpc('update_avt_session_snapshot', { p_key: String(rpgId), p_snapshot: snapshot });
 }
 
 try { window.sessionStateGet    = sessionStateGet;    } catch(_) {}

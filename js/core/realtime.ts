@@ -91,6 +91,9 @@ function iniciarRealtime(rpgId){
  const HEARTBEAT_INTERVAL_MS = 25_000;
  const HEARTBEAT_DEAD_AFTER  = 2; // pendentes consecutivos para considerar zumbi
 
+ // Telemetria WS para o overlay AVT_PERF (contadores acumulados)
+ if (!globalThis.__rtWsStats) globalThis.__rtWsStats = { in: 0, out: 0 };
+
  function _log(...args){ try{ console.log('[RT]', ...args); }catch(_){} }
  function _warn(...args){ try{ console.warn('[RT]', ...args); }catch(_){} }
 
@@ -112,7 +115,7 @@ function iniciarRealtime(rpgId){
  function _enviarFrame(frameStr){
    const ws = realtimeWS;
    if(ws && ws.readyState===WebSocket.OPEN){
-     try { ws.send(frameStr); return true; } catch(e){ _warn('send falhou:', e); }
+     try { ws.send(frameStr); globalThis.__rtWsStats && globalThis.__rtWsStats.out++; return true; } catch(e){ _warn('send falhou:', e); }
    }
    // bufferiza
    if(_outbox.length>=_OUTBOX_MAX){
@@ -376,6 +379,7 @@ function iniciarRealtime(rpgId){
        // [PATCH v2_2] Dispatcher unificado de avt_* com fila quando handler ausente
        // Em modo P2P puro (RTNet.mode==='p2p') os eventos já chegam via DataChannel — ignorar Supabase
        if(msg.event==='broadcast' && msg.payload && typeof msg.payload.event === 'string' && msg.payload.event.indexOf('avt_')===0){
+         globalThis.__rtWsStats && globalThis.__rtWsStats.in++;
          if(typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode === 'p2p') return;
          const _avtEv = msg.payload.event;
          const _avtPl = msg.payload.payload;
@@ -414,6 +418,9 @@ function iniciarRealtime(rpgId){
            avt_player_hp:     'avtReceberPlayerHp',
            avt_player_damage: 'avtReceberPlayerDamage',
            avt_fase_host:     'avtReceberFaseHost',
+           avt_fase_host_release: 'avtReceberFaseHostRelease',
+           avt_ping:          'avtReceberPing',
+           avt_pong:          'avtReceberPong',
          };
          if(_avtEv === 'avt_bau_aberto'){
            try{ if(typeof mostrarToast==='function') mostrarToast((_avtPl && _avtPl.jogadorNome ? _avtPl.jogadorNome : 'Alguém') + ' abriu um baú!','ok'); }catch(_){}
@@ -625,7 +632,10 @@ function iniciarRealtime(rpgId){
        }
 
         // ── NPC_STATE (sincronização autoritativa de NPCs) ──
+        // Em P2P/mixed a autoridade de NPC é o tick do host da fase; aplicar também o
+        // postgres_change criaria autoridade dupla (teleporte/pulo duplo de NPC).
         if(topic.includes('npc_state')){
+          if(typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') return;
           try{
             if(ev === 'DELETE'){
               const oldRec = msg.payload.old_record || {};

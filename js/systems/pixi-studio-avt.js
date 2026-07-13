@@ -3,12 +3,77 @@
 // Depends on: aventura.js (_avtPixiParticleAnim, _avtEnsurePixiParticles,
 //              _avtProcTextures, AVT_STATE), pixi-studio.js (PIXI_STUDIO_STATE)
 
-var _PS_AVT_ACTIVE    = [];  // { app, overlayCanvas, emitters, trackFn, timerId }
+var _PS_AVT_ACTIVE    = [];  // { timerId, cleanup } — efeitos ativos (follow + one-shots)
 var _PS_PERSISTENT    = new Map();  // key -> { cleanup } for duration-bound persistent animations
 
 // Reference positions matching pixi-studio.js PS_ATAC_REF / PS_ALVO_REF
 const _PS_ATAC_REF = { x: -160, y: 0 };
 const _PS_ALVO_REF = { x:  160, y: 0 };
+
+// ── Aquisição de "app" para efeitos ──────────────────────────────────────────
+// Caminho preferencial: host Pixi persistente do aventura.js (_avtVfxAcquireApp) —
+// o efeito vira um Container no app único (sem novo contexto WebGL). Fallback:
+// overlay <canvas> por efeito (comportamento antigo).
+// Retorna { app, destroy() } ou null.
+function _psAvtAcquireApp() {
+  if (typeof _avtVfxAcquireApp === 'function') {
+    const ad = _avtVfxAcquireApp();
+    if (ad) return { app: ad, destroy: () => { try { ad.destroy(); } catch (_) {} } };
+  }
+  const canvas = AVT_STATE.canvas;
+  if (!canvas || typeof PIXI === 'undefined') return null;
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
+  canvas.parentElement?.appendChild(overlayCanvas);
+  let app;
+  try {
+    app = new PIXI.Application({
+      view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height,
+      backgroundAlpha: 0, antialias: false,
+      resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1),
+      autoDensity: true,
+    });
+  } catch (e) { overlayCanvas.remove(); return null; }
+  return {
+    app, overlayCanvas,
+    destroy: () => {
+      try { app.destroy(true, { children: true }); } catch (_) {}
+      try { overlayCanvas.remove(); } catch (_) {}
+    },
+  };
+}
+
+// Registra um efeito one-shot no rastreio global, para que avtPixiCleanupAll consiga
+// destruí-lo em teardown (troca de fase/saída) mesmo antes do timer de fim disparar.
+function _psAvtTrack(cleanup, durMs) {
+  const entry = { cleanup: null, timerId: null };
+  let done = false;
+  entry.cleanup = () => {
+    if (done) return; done = true;
+    clearTimeout(entry.timerId);
+    try { cleanup(); } catch (_) {}
+    _PS_AVT_ACTIVE = _PS_AVT_ACTIVE.filter(e => e !== entry);
+  };
+  entry.timerId = setTimeout(entry.cleanup, durMs);
+  _PS_AVT_ACTIVE.push(entry);
+  return entry;
+}
+
+// Textura com tolerância a URL quebrada: nunca lança; em erro de carga, remove a
+// entrada envenenada do cache global do PIXI (permite retry num uso futuro).
+function _psAvtTexFrom(url) {
+  try {
+    const tex = PIXI.Texture.from(url);
+    if (tex && tex.baseTexture && !tex.baseTexture.valid) {
+      tex.baseTexture.once('error', () => {
+        try { PIXI.Texture.removeFromCache(url); } catch (_) {}
+        try { PIXI.BaseTexture.removeFromCache && PIXI.BaseTexture.removeFromCache(url); } catch (_) {}
+      });
+    }
+    return tex || PIXI.Texture.WHITE;
+  } catch (_) { return PIXI.Texture.WHITE; }
+}
 
 // ── Transform studio-space coordinates to adventure screen-space ─────────────
 function _psStudioToScreen(px, py, atacScr, alvoScr) {
@@ -18,7 +83,11 @@ function _psStudioToScreen(px, py, atacScr, alvoScr) {
   const dy_a = alvoScr.y - atacScr.y;
   const lenS = Math.sqrt(dx_s * dx_s + dy_s * dy_s);
   const lenA = Math.sqrt(dx_a * dx_a + dy_a * dy_a);
-  const scale = lenS > 0 ? lenA / lenS : 1;
+  // Self-cast / tokens na mesma célula: lenA→0 colapsaria toda a geometria num
+  // ponto (scale→0). Clampa o span a ~1 tile para o efeito continuar legível.
+  const SZv = Math.round((typeof AVT_SZ !== 'undefined' ? AVT_SZ : 48) * (AVT_STATE.camera?.zoom || 1));
+  const lenEff = Math.max(lenA, SZv);
+  const scale = lenS > 0 ? lenEff / lenS : 1;
   const angle = Math.atan2(dy_a, dx_a) - Math.atan2(dy_s, dx_s);
   const relX  = px - _PS_ATAC_REF.x;
   const relY  = py - _PS_ATAC_REF.y;
@@ -272,8 +341,13 @@ function _psToAvtConfig(cfg) {
 }
 
 // ── Load animation config (from cache or Supabase) ─────────────────────────
+// Falhas/IDs inexistentes entram num cache negativo de 30s — sem ele, cada uso da
+// skill re-batia na rede pelo mesmo ID quebrado.
+const _PS_CFG_FAIL = new Map(); // animId -> ts da falha
 async function _psAvtLoadCfg(animId) {
   if (!animId) return null;
+  const failTs = _PS_CFG_FAIL.get(animId);
+  if (failTs && Date.now() - failTs < 30000) return null;
   const cache = (typeof PIXI_STUDIO_STATE !== 'undefined') ? PIXI_STUDIO_STATE._animCache : null;
   if (cache && cache[animId]) return cache[animId];
   try {
@@ -283,9 +357,12 @@ async function _psAvtLoadCfg(animId) {
       cache[animId] = cfg;
       setTimeout(() => { delete cache[animId]; }, 30000);
     }
+    if (!cfg) _PS_CFG_FAIL.set(animId, Date.now());
+    else _PS_CFG_FAIL.delete(animId);
     return cfg || null;
   } catch (e) {
     console.warn('[pixi-studio-avt] Failed to load anim', animId, e);
+    _PS_CFG_FAIL.set(animId, Date.now());
     return null;
   }
 }
@@ -354,27 +431,9 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior, casterEnt, t
 
   const durMs = cfg.duracao_ms || cfg.duration || 1000;
   const vfxScale = _avtVfxScale(cfg);
-  const overlayCanvas = document.createElement('canvas');
-  overlayCanvas.width  = canvas.width;
-  overlayCanvas.height = canvas.height;
-  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
-  canvas.parentElement?.appendChild(overlayCanvas);
-
-  let app;
-  try {
-    app = new PIXI.Application({
-      view: overlayCanvas,
-      width: overlayCanvas.width,
-      height: overlayCanvas.height,
-      backgroundAlpha: 0,
-      antialias: false,
-      resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1),
-      autoDensity: true,
-    });
-  } catch (e) {
-    overlayCanvas.remove();
-    return;
-  }
+  const acq = _psAvtAcquireApp();
+  if (!acq) return;
+  const app = acq.app;
 
   const bmMap = {
     add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN,
@@ -391,7 +450,7 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior, casterEnt, t
       const anchor = _psAvtLayerAnchor(l, startScr, endScr, casterEnt, targetEnt);
       const pivot = isProjectile ? midScr : { x: anchor.x, y: anchor.y };
       const root = _avtVfxRoot(app.stage, anchor.pose, pivot, anchor.lift);
-      const tex = PIXI.Texture.from(l.texture_url);
+      const tex = _psAvtTexFrom(l.texture_url);
       const sp = new PIXI.Sprite(tex);
       sp.anchor.set(0.5);
       sp.blendMode = bmMap[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
@@ -451,10 +510,9 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior, casterEnt, t
 
   app.ticker.add(tick);
 
-  setTimeout(() => {
-    app.ticker.remove(tick);
-    try { app.destroy(true, { children: true }); } catch (_) {}
-    overlayCanvas.remove();
+  _psAvtTrack(() => {
+    try { app.ticker.remove(tick); } catch (_) {}
+    acq.destroy();
   }, durMs + 200);
 }
 
@@ -488,15 +546,9 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior, casterEnt, ta
 
   const durMs = cfg.duracao_ms || cfg.duration || 1000;
   const vfxScale = _avtVfxScale(cfg);
-  const overlayCanvas = document.createElement('canvas');
-  overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
-  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
-  canvas.parentElement?.appendChild(overlayCanvas);
-
-  let app;
-  try {
-    app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false, resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true });
-  } catch (e) { overlayCanvas.remove(); return; }
+  const acq = _psAvtAcquireApp();
+  if (!acq) return;
+  const app = acq.app;
 
   const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
   const hexInt = (c) => { if (typeof c === 'number') return c; const n = parseInt(String(c).replace('#', ''), 16); return isNaN(n) ? 0xffffff : n; };
@@ -565,10 +617,9 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior, casterEnt, ta
     }
   };
   app.ticker.add(tick);
-  setTimeout(() => {
-    app.ticker.remove(tick);
-    try { app.destroy(true, { children: true }); } catch (_) {}
-    overlayCanvas.remove();
+  _psAvtTrack(() => {
+    try { app.ticker.remove(tick); } catch (_) {}
+    acq.destroy();
   }, durMs + 200);
 }
 
@@ -642,22 +693,9 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
   const durMs = cfg.duracao_ms || cfg.duration || 1000;
   const vfxScale = _avtVfxScale(cfg);
   const midScr = { x: (atacScr.x + alvoScr.x) / 2, y: (atacScr.y + alvoScr.y) / 2 };
-  const overlayCanvas = document.createElement('canvas');
-  overlayCanvas.width  = canvas.width;
-  overlayCanvas.height = canvas.height;
-  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
-  canvas.parentElement?.appendChild(overlayCanvas);
-
-  let app;
-  try {
-    app = new PIXI.Application({
-      view: overlayCanvas,
-      width: overlayCanvas.width, height: overlayCanvas.height,
-      backgroundAlpha: 0, antialias: false,
-      resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1),
-      autoDensity: true,
-    });
-  } catch (e) { overlayCanvas.remove(); return; }
+  const acq = _psAvtAcquireApp();
+  if (!acq) return;
+  const app = acq.app;
 
   // Scene tree mirrors _avtPixiParticleAnim so routed animations keep their scene-level look:
   //   bgRoot (full-screen dim, behind) < sceneRoot (all layers; carries bloom/tone + shake)
@@ -725,7 +763,7 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
     // We control emission timing manually; override auto-stop from emitterLifetime
     if (!Array.isArray(emitCfg.behaviors)) emitCfg.emitterLifetime = -1;
     const tex = l.texture_url
-      ? PIXI.Texture.from(l.texture_url)
+      ? _psAvtTexFrom(l.texture_url)
       : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
     const texArr = [tex || PIXI.Texture.WHITE];
     if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) {
@@ -784,14 +822,13 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
     try { cleanupCam = _avtCameraFX(app, sceneRoot, uiRoot, cfg.camera, durMs); } catch (_) {}
   }
 
-  setTimeout(() => {
-    app.ticker.remove(tick);
+  _psAvtTrack(() => {
+    try { app.ticker.remove(tick); } catch (_) {}
     try { if (cleanupCam) cleanupCam(); } catch (_) {}
     for (const { em } of emitters) {
       try { if (!em.destroyed) em.destroy(); } catch (_) {}
     }
-    try { app.destroy(true, { children: true }); } catch (_) {}
-    overlayCanvas.remove();
+    acq.destroy();
   }, durMs + 300);
 }
 
@@ -903,14 +940,9 @@ async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt, atacante
   const durMs = cfg.duracao_ms || cfg.duration || 1000;
   const vfxScale = _avtVfxScale(cfg);
   const midScr = { x: (atacScr.x + alvoScr.x) / 2, y: (atacScr.y + alvoScr.y) / 2 };
-  const overlayCanvas = document.createElement('canvas');
-  overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
-  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
-  canvas.parentElement?.appendChild(overlayCanvas);
-
-  let app;
-  try { app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false, resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true }); }
-  catch (e) { overlayCanvas.remove(); return; }
+  const acq = _psAvtAcquireApp();
+  if (!acq) return;
+  const app = acq.app;
 
   const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
   const emitters = [];
@@ -922,7 +954,7 @@ async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt, atacante
     root.addChild(container);
     let emitCfg = _avtScaleEmitterCfg(Object.assign({}, l.emitter), vfxScale);
     if (!Array.isArray(emitCfg.behaviors)) emitCfg.emitterLifetime = -1;
-    const tex = l.texture_url ? PIXI.Texture.from(l.texture_url) : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
+    const tex = l.texture_url ? _psAvtTexFrom(l.texture_url) : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
     const texArr = [tex || PIXI.Texture.WHITE];
     if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) { try { emitCfg = PIXI.particles.upgradeConfig(emitCfg, texArr); } catch (_) {} }
     try {
@@ -953,11 +985,10 @@ async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt, atacante
     }
   };
   app.ticker.add(tick);
-  setTimeout(() => {
-    app.ticker.remove(tick);
+  _psAvtTrack(() => {
+    try { app.ticker.remove(tick); } catch (_) {}
     for (const { em } of emitters) { try { if (!em.destroyed) em.destroy(); } catch (_) {} }
-    try { app.destroy(true, { children: true }); } catch (_) {}
-    overlayCanvas.remove();
+    acq.destroy();
   }, durMs + 300);
 }
 
@@ -1026,27 +1057,9 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
   if (!canvas) return;
 
   _avtEnsurePixiParticles().then(() => {
-    const overlayCanvas = document.createElement('canvas');
-    overlayCanvas.width  = canvas.width;
-    overlayCanvas.height = canvas.height;
-    overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
-    canvas.parentElement?.appendChild(overlayCanvas);
-
-    let app;
-    try {
-      app = new PIXI.Application({
-        view: overlayCanvas,
-        width: overlayCanvas.width,
-        height: overlayCanvas.height,
-        backgroundAlpha: 0,
-        antialias: false,
-        resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1),
-        autoDensity: true,
-      });
-    } catch (e) {
-      overlayCanvas.remove();
-      return;
-    }
+    const acq = _psAvtAcquireApp();
+    if (!acq) return;
+    const app = acq.app;
 
     const vfxScale = _avtVfxScale(cfg);
     const _followPose = (cfg.anchor && cfg.anchor.pose) || 'upright';
@@ -1072,7 +1085,7 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
         let emitCfg = _avtScaleEmitterCfg(Object.assign({}, l.emitter), vfxScale);
         if (!Array.isArray(emitCfg.behaviors)) emitCfg.emitterLifetime = -1;
         const tex = l.texture_url
-          ? PIXI.Texture.from(l.texture_url)
+          ? _psAvtTexFrom(l.texture_url)
           : _avtProcTextures(l.texture || 'spark');
         const texArr = [tex || PIXI.Texture.WHITE];
         if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) {
@@ -1084,7 +1097,7 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
         emitters.push(em);
       } else if (l.tipo === 'sprite' && l.texture_url) {
         try {
-          const tex = PIXI.Texture.from(l.texture_url);
+          const tex = _psAvtTexFrom(l.texture_url);
           const sp = new PIXI.Sprite(tex);
           sp.anchor.set(0.5);
           sp.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
@@ -1130,19 +1143,14 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
 
     app.ticker.add(trackFn);
 
-    const cleanup = () => {
-      app.ticker.remove(trackFn);
+    _psAvtTrack(() => {
+      try { app.ticker.remove(trackFn); } catch (_) {}
       for (const em of emitters) {
         if (em._isSprite) continue;
         try { if (!em.destroyed) em.destroy(); } catch (_) {}
       }
-      try { app.destroy(true, { children: true }); } catch (_) {}
-      overlayCanvas.remove();
-      _PS_AVT_ACTIVE = _PS_AVT_ACTIVE.filter(e => e.app !== app);
-    };
-
-    const timerId = setTimeout(cleanup, durMs + 200);
-    _PS_AVT_ACTIVE.push({ app, overlayCanvas, emitters, trackFn, timerId });
+      acq.destroy();
+    }, durMs + 200);
   });
 }
 
@@ -1178,16 +1186,9 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
   const primaryEnt = (posicao === 'atacante') ? (casterEnt || alvoEnt) : (alvoEnt || casterEnt);
   if (!primaryEnt) return;
 
-  const overlayCanvas = document.createElement('canvas');
-  overlayCanvas.width  = canvas.width;
-  overlayCanvas.height = canvas.height;
-  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
-  canvas.parentElement?.appendChild(overlayCanvas);
-
-  let app;
-  try {
-    app = new PIXI.Application({ view: overlayCanvas, width: overlayCanvas.width, height: overlayCanvas.height, backgroundAlpha: 0, antialias: false, resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true });
-  } catch (e) { overlayCanvas.remove(); return; }
+  const acq = _psAvtAcquireApp();
+  if (!acq) return;
+  const app = acq.app;
 
   const vfxScale = _avtVfxScale(cfg);
   const _persistPose = (cfg.anchor && cfg.anchor.pose) || 'upright';
@@ -1217,7 +1218,7 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
       container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
       worldRoot.addChild(container);
       let emitCfg = Object.assign(_avtScaleEmitterCfg(Object.assign({}, l.emitter), vfxScale), { emitterLifetime: -1 });
-      const tex = l.texture_url ? PIXI.Texture.from(l.texture_url) : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
+      const tex = l.texture_url ? _psAvtTexFrom(l.texture_url) : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
       const texArr = [tex || PIXI.Texture.WHITE];
       if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) { try { emitCfg = PIXI.particles.upgradeConfig(emitCfg, texArr); } catch (_) {} }
       try {
@@ -1228,7 +1229,7 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
       } catch (_) {}
     } else if (l.tipo === 'sprite' && l.texture_url) {
       try {
-        const tex = PIXI.Texture.from(l.texture_url);
+        const tex = _psAvtTexFrom(l.texture_url);
         const sp = new PIXI.Sprite(tex);
         sp.anchor.set(0.5);
         sp.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
@@ -1253,10 +1254,23 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
   }
 
   let lastTs = performance.now();
+  const startedPerf = performance.now();
+  const PERSIST_TTL_MS = 5 * 60 * 1000; // teto de segurança contra efeitos órfãos
   const trackFn = () => {
     const now = performance.now();
     const delta = (now - lastTs) / 1000;
     lastTs = now;
+    // Auto-stop: entidade âncora saiu do jogo (morte/troca de fase sem o broadcast
+    // de stop) ou TTL estourado → encerra sozinho em vez de rodar para sempre.
+    if (!trackFn._nextCheck || now > trackFn._nextCheck) {
+      trackFn._nextCheck = now + 2000;
+      const sumiu = (typeof _avtEntById === 'function' && primaryEnt && primaryEnt.id != null)
+        ? !_avtEntById(primaryEnt.id) : false;
+      if (sumiu || (now - startedPerf) > PERSIST_TTL_MS) {
+        try { avtPixiStopPersistent(key); } catch (_) {}
+        return;
+      }
+    }
     tracked.update(_psAvtToScreen(primaryEnt), _persistLift);
     for (const em of emitters) {
       const scr = _psAvtToScreen(em.trackEnt || primaryEnt);
@@ -1319,14 +1333,16 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
 
   app.ticker.add(trackFn);
 
+  let _persistDone = false;
   const cleanup = () => {
-    app.ticker.remove(trackFn);
+    if (_persistDone) return;
+    _persistDone = true;
+    try { app.ticker.remove(trackFn); } catch (_) {}
     for (const em of emitters) {
-      if (!em.em) continue;  // só emitters têm em.em; graphics/sprites são destruídos por app.destroy
+      if (!em.em) continue;  // só emitters têm em.em; graphics/sprites são destruídos pelo destroy do app
       try { if (!em.em.destroyed) em.em.destroy(); } catch (_) {}
     }
-    try { app.destroy(true, { children: true }); } catch (_) {}
-    overlayCanvas.remove();
+    acq.destroy();
     _PS_PERSISTENT.delete(key);
   };
 
@@ -1338,21 +1354,18 @@ function avtPixiStopPersistent(key) {
   if (entry) { entry.cleanup(); }
 }
 
-// ── Cleanup all active follow/channel animations ───────────────────────────
+// ── Cleanup all active animations (one-shots, follow/channel E persistentes) ──
 function avtPixiCleanupAll() {
-  for (const entry of _PS_AVT_ACTIVE) {
-    clearTimeout(entry.timerId);
-    if (entry.app) {
-      if (entry.trackFn && entry.app.ticker) entry.app.ticker.remove(entry.trackFn);
-      for (const em of (entry.emitters || [])) {
-        if (em._isSprite) continue;
-        try { if (!em.destroyed) em.destroy(); } catch (_) {}
-      }
-      try { entry.app.destroy(true, { children: true }); } catch (_) {}
-    }
-    if (entry.overlayCanvas) entry.overlayCanvas.remove();
-  }
+  const entries = _PS_AVT_ACTIVE.slice();
   _PS_AVT_ACTIVE = [];
+  for (const entry of entries) {
+    clearTimeout(entry.timerId);
+    try { if (entry.cleanup) entry.cleanup(); } catch (_) {}
+  }
+  // Persistentes: antes ficavam de fora do teardown global e viravam órfãos
+  for (const key of [..._PS_PERSISTENT.keys()]) {
+    try { avtPixiStopPersistent(key); } catch (_) {}
+  }
 }
 
 window.avtPixiPlayAnimation    = avtPixiPlayAnimation;
