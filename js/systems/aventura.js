@@ -4041,6 +4041,10 @@ window._avtMostrarAventuraScreen = _avtMostrarAventuraScreen;
 async function entrarAventura(rpgId) {
   if (typeof _avtGraficosCarregar === 'function') _avtGraficosCarregar();
   _avtCleanupListeners();
+  // Sala nova: zera contadores/dedupe de movimento. As chaves já são escopadas
+  // por rpgId (_avtSeqKey), mas o reset evita crescimento sem limite ao alternar
+  // aventuras sem recarregar a página.
+  try { window._avtTokenSeq = Object.create(null); window._avtRxMove = Object.create(null); } catch(_) {}
   // Vincula retroativamente cópias antigas do mesmo personagem (uma vez por sessão).
   _avtBackfillLinhagem();
   if (typeof avtMenuAbrir === 'function') {
@@ -11498,7 +11502,13 @@ function avtReceberMovimento(_payload) {
       const isOlder =
         (seq != null && last.seq >= 0 && seq < last.seq) ||
         (ts  != null && last.ts  > 0 && ts  < last.ts);
-      if(isOlder) return;
+      // Peer que recarregou a página reinicia o seq em 1; se o ts do pacote é
+      // claramente mais novo (>30s), aceita e re-baseia o contador em vez de
+      // descartar todos os movimentos dele até o seq alcançar o antigo.
+      const isSeqReset =
+        (seq != null && last.seq >= 0 && seq < last.seq) &&
+        (ts  != null && last.ts  > 0 && (ts - last.ts) > 30000);
+      if(isOlder && !isSeqReset) return;
       window._avtRxMove[_dedupeKey] = {
         seq: (seq != null ? seq : last.seq),
         ts:  (ts  != null ? ts  : last.ts),
@@ -29527,20 +29537,38 @@ try{
   } catch(_) {}
 
   // ─── 8) Hooks de lifecycle: iniciar/parar heartbeat ──────────────────────
-  try {
-    const _origSair = window.sairAventura;
-    if (typeof _origSair === 'function') {
-      window.sairAventura = function() {
-        try { _avtPararHpHeartbeat(); } catch(_) {}
-        try { _avtPararRegenHpPorSegundo(); } catch(_) {}
-        try { _avtPararRegenManaPorSegundo(); } catch(_) {}
-        // Parar timer de flush de HP e persistir estado final
-        try { if (AVT_STATE._charHpFlushTimer) { clearInterval(AVT_STATE._charHpFlushTimer); AVT_STATE._charHpFlushTimer = null; } } catch(_) {}
-        try { if (typeof _avtFlushPersistencia === 'function') _avtFlushPersistencia('sairAventura').catch(()=>{}); } catch(_) {}
-        return _origSair.apply(this, arguments);
-      };
+  // Instalação adiada para a macrotask seguinte: sairAventura/voltarAoMenuDeJogo
+  // são definidos em avt-menu.js, importado DEPOIS deste módulo no main.ts —
+  // capturar window.sairAventura de forma síncrona aqui pegaria undefined e o
+  // hook nunca instalaria (timers de HP/regen e o flush final ficavam sem rodar).
+  function _avtHookTeardown(origem) {
+    try { _avtPararHpHeartbeat(); } catch(_) {}
+    try { _avtPararRegenHpPorSegundo(); } catch(_) {}
+    try { _avtPararRegenManaPorSegundo(); } catch(_) {}
+    try { if (typeof AVT_PERF !== 'undefined' && AVT_PERF && typeof AVT_PERF.pararAdaptativo === 'function') AVT_PERF.pararAdaptativo(); } catch(_) {}
+    // Parar timer de flush de HP e persistir estado final
+    try { if (AVT_STATE._charHpFlushTimer) { clearInterval(AVT_STATE._charHpFlushTimer); AVT_STATE._charHpFlushTimer = null; } } catch(_) {}
+    try { if (typeof _avtFlushPersistencia === 'function') _avtFlushPersistencia(origem).catch(()=>{}); } catch(_) {}
+  }
+  function _avtInstalarHookSaida(nomeFn) {
+    const orig = window[nomeFn];
+    if (typeof orig !== 'function') {
+      try { console.warn('[AVT] hook de saída não instalado: ' + nomeFn + ' indisponível'); } catch(_) {}
+      return;
     }
-  } catch(_) {}
+    // O accessor global de avt-menu.js propaga a atribuição ao binding do módulo,
+    // então chamadores internos também passam pelo wrapper.
+    window[nomeFn] = function() {
+      _avtHookTeardown(nomeFn);
+      return orig.apply(this, arguments);
+    };
+  }
+  setTimeout(() => {
+    try {
+      _avtInstalarHookSaida('sairAventura');
+      _avtInstalarHookSaida('voltarAoMenuDeJogo');
+    } catch(_) {}
+  }, 0);
 
   // Inicia heartbeat e regen assim que houver um personagem ligado (poll leve)
   let _hpHbBootTries = 0;

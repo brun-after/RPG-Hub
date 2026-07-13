@@ -146,6 +146,12 @@ var AVT_PERF = (() => {
     },
     get enabled() { return !!_enabled; },
     fpsAtual() { return _fpsStats().fps; },
+    // Para o timer de qualidade adaptativa ao sair da aventura; frame() o
+    // recria automaticamente quando o render loop voltar a rodar.
+    pararAdaptativo() {
+      if (_adaptTimer) { clearInterval(_adaptTimer); _adaptTimer = null; }
+      _adaptStrikes = 0;
+    },
   };
 })();
 
