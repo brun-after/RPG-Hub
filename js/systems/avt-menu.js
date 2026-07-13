@@ -639,6 +639,7 @@ function _avtMenuFallback(rpgId) {
 
 function sairAventura() {
   _avtCleanupListeners();
+  try { if (typeof avtPixiWorldDestroy === 'function') avtPixiWorldDestroy(); } catch(_) {} // libera o contexto GL da camada de mundo
   try { if (AVT_STATE._autoSaveTimer) { clearInterval(AVT_STATE._autoSaveTimer); AVT_STATE._autoSaveTimer = null; } } catch(_) {}
   try { if (typeof RTNet !== 'undefined' && RTNet.initialized) RTNet.shutdown(); } catch(_) {}
   try { if (typeof _avtNpcSyncShutdown === 'function') _avtNpcSyncShutdown(); } catch(_){}

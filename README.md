@@ -86,6 +86,7 @@ Veja a documentação detalhada em [`docs/architecture.md`](docs/architecture.md
 RPG Hub é um **SPA (Single-Page Application)** com arquitetura **PWA**, usando:
 - **Supabase** como backend (banco de dados, auth e WebSockets em tempo real)
 - **TypeScript/JavaScript** sem frameworks de UI — bundle via **Vite** (módulos ES; núcleo em TypeScript, migração gradual)
+- **PixiJS (WebGL)** na camada de mundo do modo aventura (tiles/fundo/grade na GPU); se algo der errado no seu dispositivo, `?renderer=canvas` na URL restaura o renderer 2D antigo
 - **CSS com variáveis customizadas** para theming consistente
 
 ---
