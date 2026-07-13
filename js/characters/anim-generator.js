@@ -869,3 +869,31 @@ function _apmodTabAnimado(aparencia) {
   </div>
 </div>`;
 }
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "ANIM_CHAR_PROMPT", { configurable: true, get: () => ANIM_CHAR_PROMPT });
+Object.defineProperty(globalThis, "ANIM_EQUIP_PROMPT_TPL", { configurable: true, get: () => ANIM_EQUIP_PROMPT_TPL });
+Object.defineProperty(globalThis, "ANIM_DEFAULTS", { configurable: true, get: () => ANIM_DEFAULTS });
+Object.defineProperty(globalThis, "ANIM_SKELETON", { configurable: true, get: () => ANIM_SKELETON });
+Object.defineProperty(globalThis, "_ANIM_PART_ZINDEX", { configurable: true, get: () => _ANIM_PART_ZINDEX });
+Object.defineProperty(globalThis, "_animBoneParentName", { configurable: true, get: () => _animBoneParentName, set: (__v) => { _animBoneParentName = __v; } });
+Object.defineProperty(globalThis, "_buildBboxFromLines", { configurable: true, get: () => _buildBboxFromLines, set: (__v) => { _buildBboxFromLines = __v; } });
+Object.defineProperty(globalThis, "animGenGetApiKey", { configurable: true, get: () => animGenGetApiKey, set: (__v) => { animGenGetApiKey = __v; } });
+Object.defineProperty(globalThis, "animGenSetApiKey", { configurable: true, get: () => animGenSetApiKey, set: (__v) => { animGenSetApiKey = __v; } });
+Object.defineProperty(globalThis, "animGenFileToBase64", { configurable: true, get: () => animGenFileToBase64, set: (__v) => { animGenFileToBase64 = __v; } });
+Object.defineProperty(globalThis, "animGenFileToDataUrl", { configurable: true, get: () => animGenFileToDataUrl, set: (__v) => { animGenFileToDataUrl = __v; } });
+Object.defineProperty(globalThis, "_animCropPartFromImage", { configurable: true, get: () => _animCropPartFromImage, set: (__v) => { _animCropPartFromImage = __v; } });
+Object.defineProperty(globalThis, "_animGenApiCall", { configurable: true, get: () => _animGenApiCall, set: (__v) => { _animGenApiCall = __v; } });
+Object.defineProperty(globalThis, "animGenFromImage", { configurable: true, get: () => animGenFromImage, set: (__v) => { animGenFromImage = __v; } });
+Object.defineProperty(globalThis, "animGenEquipFromImage", { configurable: true, get: () => animGenEquipFromImage, set: (__v) => { animGenEquipFromImage = __v; } });
+Object.defineProperty(globalThis, "animGenHandleImageSelect", { configurable: true, get: () => animGenHandleImageSelect, set: (__v) => { animGenHandleImageSelect = __v; } });
+Object.defineProperty(globalThis, "animGenHandleGenerate", { configurable: true, get: () => animGenHandleGenerate, set: (__v) => { animGenHandleGenerate = __v; } });
+Object.defineProperty(globalThis, "animGenHandleEquipImage", { configurable: true, get: () => animGenHandleEquipImage, set: (__v) => { animGenHandleEquipImage = __v; } });
+Object.defineProperty(globalThis, "animGenSetPreviewAnim", { configurable: true, get: () => animGenSetPreviewAnim, set: (__v) => { animGenSetPreviewAnim = __v; } });
+Object.defineProperty(globalThis, "animGenCopiarPromptPersonagem", { configurable: true, get: () => animGenCopiarPromptPersonagem, set: (__v) => { animGenCopiarPromptPersonagem = __v; } });
+Object.defineProperty(globalThis, "animGenCopiarPromptEquip", { configurable: true, get: () => animGenCopiarPromptEquip, set: (__v) => { animGenCopiarPromptEquip = __v; } });
+Object.defineProperty(globalThis, "animGenImportarJSON", { configurable: true, get: () => animGenImportarJSON, set: (__v) => { animGenImportarJSON = __v; } });
+Object.defineProperty(globalThis, "animGenToggleImport", { configurable: true, get: () => animGenToggleImport, set: (__v) => { animGenToggleImport = __v; } });
+Object.defineProperty(globalThis, "animGenToggleEquipImport", { configurable: true, get: () => animGenToggleEquipImport, set: (__v) => { animGenToggleEquipImport = __v; } });
+Object.defineProperty(globalThis, "animGenImportarEquipJSON", { configurable: true, get: () => animGenImportarEquipJSON, set: (__v) => { animGenImportarEquipJSON = __v; } });
+Object.defineProperty(globalThis, "_apmodTabAnimado", { configurable: true, get: () => _apmodTabAnimado, set: (__v) => { _apmodTabAnimado = __v; } });

@@ -408,3 +408,10 @@ class _AudioManager {
 }
 
 window.AudioManager = new _AudioManager();
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "DEFAULT_SOUNDTRACKS", { configurable: true, get: () => DEFAULT_SOUNDTRACKS });
+Object.defineProperty(globalThis, "DEFAULT_SFX_LIBRARY", { configurable: true, get: () => DEFAULT_SFX_LIBRARY });
+Object.defineProperty(globalThis, "SOUND_BANK", { configurable: true, get: () => SOUND_BANK });
+Object.defineProperty(globalThis, "_SFX_AUTO_MAP", { configurable: true, get: () => _SFX_AUTO_MAP });
+Object.defineProperty(globalThis, "_AudioManager", { configurable: true, get: () => _AudioManager, set: (__v) => { _AudioManager = __v; } });

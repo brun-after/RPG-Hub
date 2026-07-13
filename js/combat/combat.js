@@ -103,7 +103,7 @@ function rolarFormula(parsed) {
 
 // ── Calcula o bônus fixo de atributo para uma habilidade ─────
 // Retorna inteiro (ceil de pct% do valor do atributo do atacante)
-function calcModAtributo(habilidade, nomeAtacante, contexto) {
+function calcModAtributo__sombreado_9(habilidade, nomeAtacante, contexto) {
   const pct = habilidade.mod_atributo_pct;
   const atributo = habilidade.atributo_base;
   if (!pct || !atributo) return 0;
@@ -197,7 +197,7 @@ function avancarTurnoComCooldowns(contexto) {
  * @param {string} formula - Fórmula de dano (ex: "2d6+3")
  * @returns {{min: number, max: number, media: number}}
  */
-function calcularRangeDano(formula) {
+function calcularRangeDano__sombreado_9(formula) {
   const grupos = parsearFormulaDano(formula);
   if (!grupos) return { min: 0, max: 0, media: 0 };
   
@@ -335,7 +335,7 @@ const COMBATE_LOG = {
 // 🐛 BUG-05 FIX: getCooldownsBatalha Seguro
 // ═══════════════════════════════════════════════════════════════
 
-function getCooldownsBatalhaSeguro(batalhaId) {
+function getCooldownsBatalhaSeguro__sombreado_9(batalhaId) {
   if (!batalhaId) return {};
   
   const batalha = MAPA_STATE.batalhas?.[batalhaId];
@@ -619,7 +619,7 @@ console.log('[Combat] Animações de crítico atualizadas ✓');
 // 💡 FASE 3 - OPT-05: Atalhos de Teclado
 // ═══════════════════════════════════════════════════════════════
 
-function configurarAtalhosCombate() {
+function configurarAtalhosCombate__sombreado_9() {
   document.addEventListener('keydown', function(e) {
     const modalAtk = document.getElementById('modal-ataque');
     if (!modalAtk || modalAtk.style.display === 'none') return;
@@ -661,10 +661,12 @@ function configurarAtalhosCombate() {
 }
 
 // Inicializar atalhos
+// (usa a versão local sombreada: no carregamento clássico, este código rodava com a
+// declaração deste arquivo — hub.js redefine a global depois e também se auto-inicializa)
 if (typeof document !== 'undefined' && document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', configurarAtalhosCombate);
+  document.addEventListener('DOMContentLoaded', configurarAtalhosCombate__sombreado_9);
 } else if (typeof document !== 'undefined') {
-  configurarAtalhosCombate();
+  configurarAtalhosCombate__sombreado_9();
 }
 
 let COMBATE = {
@@ -683,7 +685,7 @@ let ATAQUE_MAPA_STATE = {
 };
 
 // ── 18D: Abrir / fechar modal ────────────────────────────────
-function abrirModalAtaque(atacanteNome, contexto = 'arena') {
+function abrirModalAtaque__sombreado_9(atacanteNome, contexto = 'arena') {
   if (!atacanteNome) { mostrarToast('Nenhum personagem selecionado', 'erro'); return; }
 
   // Verificar estado de batalha para jogadores
@@ -981,7 +983,7 @@ async function gmMatarPersonagem(nome) {
   if (typeof abrirFichaNoMapa === 'function') abrirFichaNoMapa(nome);
 }
 
-function fecharModalAtaque() {
+function fecharModalAtaque__sombreado_9() {
   const modal = document.getElementById('modal-ataque');
   const foiCancelado = !COMBATE._jaAplicado && !COMBATE._pendingTrigger;
   modal.style.display = 'none';
@@ -1323,7 +1325,7 @@ function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
     animation:rangeCirclePulse 1.8s ease-in-out infinite alternate;
   `;
 }
-function mapaHideRangeCircle() {
+function mapaHideRangeCircle__sombreado_9() {
   const el = document.getElementById('atk-range-circle');
   if (el) el.remove();
   if (MAPA_STATE) MAPA_STATE._rangeCircle = null;
@@ -1993,7 +1995,7 @@ function atkUsarAtaquePet(petNome, habilidadeIdx) {
 
 // Após confirmar ataque do pet, restaura o dono no atacante
 const _atkConfirmarOriginal = window.atkConfirmarAtaque;
-async function atkConfirmarAtaque() {
+async function atkConfirmarAtaque__sombreado_9() {
   await _atkConfirmarOriginal?.();
   // Restaurar dono após ataque do pet
   if (COMBATE._donoAtacante) {
@@ -4507,7 +4509,7 @@ window.inventarioReceberAtualização = function(rec, ev) {
   // Atualizar cache local se existir
   if (window.INVENTARIO_CACHE) {
     if (ev === 'DELETE') {
-      INVENTARIO_CACHE = INVENTARIO_CACHE.filter(i => i.id !== rec.id);
+      window.INVENTARIO_CACHE = INVENTARIO_CACHE.filter(i => i.id !== rec.id);
     } else {
       const idx = INVENTARIO_CACHE.findIndex(i => i.id === rec.id);
       if (idx >= 0) INVENTARIO_CACHE[idx] = rec;
@@ -4535,7 +4537,7 @@ window.moedasReceberAtualização = function(rec, ev) {
   // Atualizar cache local
   if (window.MOEDAS_CACHE) {
     if (ev === 'DELETE') {
-      MOEDAS_CACHE = MOEDAS_CACHE.filter(m => m.id !== rec.id);
+      window.MOEDAS_CACHE = MOEDAS_CACHE.filter(m => m.id !== rec.id);
     } else {
       const idx = MOEDAS_CACHE.findIndex(m => m.id === rec.id);
       if (idx >= 0) MOEDAS_CACHE[idx] = rec;
@@ -4559,7 +4561,7 @@ window.lootReceberAtualização = function(rec, ev) {
   // Atualizar cache de loot pendente
   if (window.LOOT_CACHE) {
     if (ev === 'DELETE' || rec.saqueado) {
-      LOOT_CACHE = LOOT_CACHE.filter(l => l.id !== rec.id);
+      window.LOOT_CACHE = LOOT_CACHE.filter(l => l.id !== rec.id);
     } else {
       const idx = LOOT_CACHE.findIndex(l => l.id === rec.id);
       if (idx >= 0) LOOT_CACHE[idx] = rec;
@@ -4583,7 +4585,7 @@ window.mercadoReceberAtualização = function(rec, ev) {
   // Atualizar cache do mercado
   if (window.MERCADO_CACHE) {
     if (ev === 'DELETE') {
-      MERCADO_CACHE = MERCADO_CACHE.filter(m => m.id !== rec.id);
+      window.MERCADO_CACHE = MERCADO_CACHE.filter(m => m.id !== rec.id);
     } else {
       const idx = MERCADO_CACHE.findIndex(m => m.id === rec.id);
       if (idx >= 0) MERCADO_CACHE[idx] = rec;
@@ -4603,7 +4605,7 @@ window.tradesReceberAtualização = function(rec, ev) {
   // Atualizar cache de trades
   if (window.TRADES_CACHE) {
     if (ev === 'DELETE') {
-      TRADES_CACHE = TRADES_CACHE.filter(t => t.id !== rec.id);
+      window.TRADES_CACHE = TRADES_CACHE.filter(t => t.id !== rec.id);
     } else {
       const idx = TRADES_CACHE.findIndex(t => t.id === rec.id);
       if (idx >= 0) TRADES_CACHE[idx] = rec;
@@ -4627,7 +4629,7 @@ window.itemCatalogReceberAtualização = function(rec, ev) {
   // Atualizar cache global de itens
   if (window.ITEMS_CATALOG) {
     if (ev === 'DELETE') {
-      ITEMS_CATALOG = ITEMS_CATALOG.filter(i => i.id !== rec.id);
+      window.ITEMS_CATALOG = ITEMS_CATALOG.filter(i => i.id !== rec.id);
     } else {
       const idx = ITEMS_CATALOG.findIndex(i => i.id === rec.id);
       if (idx >= 0) ITEMS_CATALOG[idx] = rec;
@@ -4832,7 +4834,7 @@ console.log('[Combat] Função batalhaJogarPorOffline registrada ✓');
 // Timer global para auto-avanço de turno
 let _timerAutoAvanco = null;
 
-async function _finalizarAtaqueCampanha() {
+async function _finalizarAtaqueCampanha__sombreado_9() {
   console.log('[Finalizar Ataque] Ataque finalizado em campanha');
   
   // Re-renderizar UI para mostrar HP atualizado
@@ -4887,3 +4889,110 @@ function cancelarTimerAutoAvanco() {
 window.cancelarTimerAutoAvanco = cancelarTimerAutoAvanco;
 
 console.log('[Combat] Função _finalizarAtaqueCampanha com auto-avanço registrada ✓');
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "parsearFormulaDano", { configurable: true, get: () => parsearFormulaDano, set: (__v) => { parsearFormulaDano = __v; } });
+Object.defineProperty(globalThis, "formulaDeGrupos", { configurable: true, get: () => formulaDeGrupos, set: (__v) => { formulaDeGrupos = __v; } });
+Object.defineProperty(globalThis, "rolarGrupos", { configurable: true, get: () => rolarGrupos, set: (__v) => { rolarGrupos = __v; } });
+Object.defineProperty(globalThis, "rolarFormula", { configurable: true, get: () => rolarFormula, set: (__v) => { rolarFormula = __v; } });
+Object.defineProperty(globalThis, "decrementarCooldowns", { configurable: true, get: () => decrementarCooldowns, set: (__v) => { decrementarCooldowns = __v; } });
+Object.defineProperty(globalThis, "avancarTurnoComCooldowns", { configurable: true, get: () => avancarTurnoComCooldowns, set: (__v) => { avancarTurnoComCooldowns = __v; } });
+Object.defineProperty(globalThis, "COMBATE_LOG", { configurable: true, get: () => COMBATE_LOG });
+Object.defineProperty(globalThis, "determinarAlvoEfeito", { configurable: true, get: () => determinarAlvoEfeito, set: (__v) => { determinarAlvoEfeito = __v; } });
+Object.defineProperty(globalThis, "validarEstadoCombate", { configurable: true, get: () => validarEstadoCombate, set: (__v) => { validarEstadoCombate = __v; } });
+Object.defineProperty(globalThis, "resetarEstadoCombate", { configurable: true, get: () => resetarEstadoCombate, set: (__v) => { resetarEstadoCombate = __v; } });
+Object.defineProperty(globalThis, "calcularDanoCritico", { configurable: true, get: () => calcularDanoCritico, set: (__v) => { calcularDanoCritico = __v; } });
+Object.defineProperty(globalThis, "verificarCritico", { configurable: true, get: () => verificarCritico, set: (__v) => { verificarCritico = __v; } });
+Object.defineProperty(globalThis, "aplicarCriticoAoDano", { configurable: true, get: () => aplicarCriticoAoDano, set: (__v) => { aplicarCriticoAoDano = __v; } });
+Object.defineProperty(globalThis, "mostrarAnimacaoCritico", { configurable: true, get: () => mostrarAnimacaoCritico, set: (__v) => { mostrarAnimacaoCritico = __v; } });
+Object.defineProperty(globalThis, "COMBATE", { configurable: true, get: () => COMBATE, set: (__v) => { COMBATE = __v; } });
+Object.defineProperty(globalThis, "NPC_HABILIDADES_TEMP", { configurable: true, get: () => NPC_HABILIDADES_TEMP, set: (__v) => { NPC_HABILIDADES_TEMP = __v; } });
+Object.defineProperty(globalThis, "ATAQUE_MAPA_STATE", { configurable: true, get: () => ATAQUE_MAPA_STATE, set: (__v) => { ATAQUE_MAPA_STATE = __v; } });
+Object.defineProperty(globalThis, "_mostrarPainelSalvaguarda", { configurable: true, get: () => _mostrarPainelSalvaguarda, set: (__v) => { _mostrarPainelSalvaguarda = __v; } });
+Object.defineProperty(globalThis, "gmEstabilizarPersonagem", { configurable: true, get: () => gmEstabilizarPersonagem, set: (__v) => { gmEstabilizarPersonagem = __v; } });
+Object.defineProperty(globalThis, "gmReviverPersonagem", { configurable: true, get: () => gmReviverPersonagem, set: (__v) => { gmReviverPersonagem = __v; } });
+Object.defineProperty(globalThis, "gmMatarPersonagem", { configurable: true, get: () => gmMatarPersonagem, set: (__v) => { gmMatarPersonagem = __v; } });
+Object.defineProperty(globalThis, "_criticoCtx", { configurable: true, get: () => _criticoCtx, set: (__v) => { _criticoCtx = __v; } });
+Object.defineProperty(globalThis, "abrirModalCriticoMestre", { configurable: true, get: () => abrirModalCriticoMestre, set: (__v) => { abrirModalCriticoMestre = __v; } });
+Object.defineProperty(globalThis, "fecharModalCriticoMestre", { configurable: true, get: () => fecharModalCriticoMestre, set: (__v) => { fecharModalCriticoMestre = __v; } });
+Object.defineProperty(globalThis, "criticoEfTipoChange", { configurable: true, get: () => criticoEfTipoChange, set: (__v) => { criticoEfTipoChange = __v; } });
+Object.defineProperty(globalThis, "criticoMestreAplicar", { configurable: true, get: () => criticoMestreAplicar, set: (__v) => { criticoMestreAplicar = __v; } });
+Object.defineProperty(globalThis, "mapaShowRangeCircle", { configurable: true, get: () => mapaShowRangeCircle, set: (__v) => { mapaShowRangeCircle = __v; } });
+Object.defineProperty(globalThis, "mapaAtaqueIniciar", { configurable: true, get: () => mapaAtaqueIniciar, set: (__v) => { mapaAtaqueIniciar = __v; } });
+Object.defineProperty(globalThis, "_mapaAtaqueRenderHabilidades", { configurable: true, get: () => _mapaAtaqueRenderHabilidades, set: (__v) => { _mapaAtaqueRenderHabilidades = __v; } });
+Object.defineProperty(globalThis, "mapaAtaqueCriativoSetTipo", { configurable: true, get: () => mapaAtaqueCriativoSetTipo, set: (__v) => { mapaAtaqueCriativoSetTipo = __v; } });
+Object.defineProperty(globalThis, "mapaAtaqueSelecionarCriativo", { configurable: true, get: () => mapaAtaqueSelecionarCriativo, set: (__v) => { mapaAtaqueSelecionarCriativo = __v; } });
+Object.defineProperty(globalThis, "mapaAtaqueSelecionarHabilidade", { configurable: true, get: () => mapaAtaqueSelecionarHabilidade, set: (__v) => { mapaAtaqueSelecionarHabilidade = __v; } });
+Object.defineProperty(globalThis, "_mapaAtaqueRenderAlvos", { configurable: true, get: () => _mapaAtaqueRenderAlvos, set: (__v) => { _mapaAtaqueRenderAlvos = __v; } });
+Object.defineProperty(globalThis, "_mapaAtaqueDestacarAlvos", { configurable: true, get: () => _mapaAtaqueDestacarAlvos, set: (__v) => { _mapaAtaqueDestacarAlvos = __v; } });
+Object.defineProperty(globalThis, "mapaAtaqueClicarAlvo", { configurable: true, get: () => mapaAtaqueClicarAlvo, set: (__v) => { mapaAtaqueClicarAlvo = __v; } });
+Object.defineProperty(globalThis, "_mapaAtaqueAbrirStep3Overlay", { configurable: true, get: () => _mapaAtaqueAbrirStep3Overlay, set: (__v) => { _mapaAtaqueAbrirStep3Overlay = __v; } });
+Object.defineProperty(globalThis, "mapaAtaqueVoltarFase1", { configurable: true, get: () => mapaAtaqueVoltarFase1, set: (__v) => { mapaAtaqueVoltarFase1 = __v; } });
+Object.defineProperty(globalThis, "mapaAtaqueFechar", { configurable: true, get: () => mapaAtaqueFechar, set: (__v) => { mapaAtaqueFechar = __v; } });
+Object.defineProperty(globalThis, "_mapaAtaqueAtualizarAposMovimento", { configurable: true, get: () => _mapaAtaqueAtualizarAposMovimento, set: (__v) => { _mapaAtaqueAtualizarAposMovimento = __v; } });
+Object.defineProperty(globalThis, "_mapaAdicionarBotaoAtaqueTurno", { configurable: true, get: () => _mapaAdicionarBotaoAtaqueTurno, set: (__v) => { _mapaAdicionarBotaoAtaqueTurno = __v; } });
+Object.defineProperty(globalThis, "petGetHabilidadesPet", { configurable: true, get: () => petGetHabilidadesPet, set: (__v) => { petGetHabilidadesPet = __v; } });
+Object.defineProperty(globalThis, "petGetPetsDoDono", { configurable: true, get: () => petGetPetsDoDono, set: (__v) => { petGetPetsDoDono = __v; } });
+Object.defineProperty(globalThis, "petDonoEstaAtivo", { configurable: true, get: () => petDonoEstaAtivo, set: (__v) => { petDonoEstaAtivo = __v; } });
+Object.defineProperty(globalThis, "atkRenderizarSecaoPets", { configurable: true, get: () => atkRenderizarSecaoPets, set: (__v) => { atkRenderizarSecaoPets = __v; } });
+Object.defineProperty(globalThis, "atkUsarAtaquePet", { configurable: true, get: () => atkUsarAtaquePet, set: (__v) => { atkUsarAtaquePet = __v; } });
+Object.defineProperty(globalThis, "_atkConfirmarOriginal", { configurable: true, get: () => _atkConfirmarOriginal });
+Object.defineProperty(globalThis, "atkGetHabilidadesArena", { configurable: true, get: () => atkGetHabilidadesArena, set: (__v) => { atkGetHabilidadesArena = __v; } });
+Object.defineProperty(globalThis, "atkGetHabilidadesCampanha", { configurable: true, get: () => atkGetHabilidadesCampanha, set: (__v) => { atkGetHabilidadesCampanha = __v; } });
+Object.defineProperty(globalThis, "SK_EFEITOS_TEMP", { configurable: true, get: () => SK_EFEITOS_TEMP, set: (__v) => { SK_EFEITOS_TEMP = __v; } });
+Object.defineProperty(globalThis, "skToggleDotFields", { configurable: true, get: () => skToggleDotFields, set: (__v) => { skToggleDotFields = __v; } });
+Object.defineProperty(globalThis, "skToggleHotFields", { configurable: true, get: () => skToggleHotFields, set: (__v) => { skToggleHotFields = __v; } });
+Object.defineProperty(globalThis, "skToggleBoostFields", { configurable: true, get: () => skToggleBoostFields, set: (__v) => { skToggleBoostFields = __v; } });
+Object.defineProperty(globalThis, "skToggleRecFields", { configurable: true, get: () => skToggleRecFields, set: (__v) => { skToggleRecFields = __v; } });
+Object.defineProperty(globalThis, "skToggleStunFields", { configurable: true, get: () => skToggleStunFields, set: (__v) => { skToggleStunFields = __v; } });
+Object.defineProperty(globalThis, "skToggleMovFields", { configurable: true, get: () => skToggleMovFields, set: (__v) => { skToggleMovFields = __v; } });
+Object.defineProperty(globalThis, "skToggleAtkFields", { configurable: true, get: () => skToggleAtkFields, set: (__v) => { skToggleAtkFields = __v; } });
+Object.defineProperty(globalThis, "skToggleDebFields", { configurable: true, get: () => skToggleDebFields, set: (__v) => { skToggleDebFields = __v; } });
+Object.defineProperty(globalThis, "skToggleSefFields", { configurable: true, get: () => skToggleSefFields, set: (__v) => { skToggleSefFields = __v; } });
+Object.defineProperty(globalThis, "skToggleNecroFields", { configurable: true, get: () => skToggleNecroFields, set: (__v) => { skToggleNecroFields = __v; } });
+Object.defineProperty(globalThis, "skToggleRastroFields", { configurable: true, get: () => skToggleRastroFields, set: (__v) => { skToggleRastroFields = __v; } });
+Object.defineProperty(globalThis, "skAlvoTipoChange", { configurable: true, get: () => skAlvoTipoChange, set: (__v) => { skAlvoTipoChange = __v; } });
+Object.defineProperty(globalThis, "skTipoDanoChange", { configurable: true, get: () => skTipoDanoChange, set: (__v) => { skTipoDanoChange = __v; } });
+Object.defineProperty(globalThis, "skDelayedTipoEfeitoChange", { configurable: true, get: () => skDelayedTipoEfeitoChange, set: (__v) => { skDelayedTipoEfeitoChange = __v; } });
+Object.defineProperty(globalThis, "ncTipoChange", { configurable: true, get: () => ncTipoChange, set: (__v) => { ncTipoChange = __v; } });
+Object.defineProperty(globalThis, "skAbrirFormEfeito", { configurable: true, get: () => skAbrirFormEfeito, set: (__v) => { skAbrirFormEfeito = __v; } });
+Object.defineProperty(globalThis, "skPopularInvocarLista", { configurable: true, get: () => skPopularInvocarLista, set: (__v) => { skPopularInvocarLista = __v; } });
+Object.defineProperty(globalThis, "skToggleInvocarFields", { configurable: true, get: () => skToggleInvocarFields, set: (__v) => { skToggleInvocarFields = __v; } });
+Object.defineProperty(globalThis, "skCancelarEfeito", { configurable: true, get: () => skCancelarEfeito, set: (__v) => { skCancelarEfeito = __v; } });
+Object.defineProperty(globalThis, "skConfirmarEfeito", { configurable: true, get: () => skConfirmarEfeito, set: (__v) => { skConfirmarEfeito = __v; } });
+Object.defineProperty(globalThis, "skRemoverEfeito", { configurable: true, get: () => skRemoverEfeito, set: (__v) => { skRemoverEfeito = __v; } });
+Object.defineProperty(globalThis, "skAbrirPixiPersist", { configurable: true, get: () => skAbrirPixiPersist, set: (__v) => { skAbrirPixiPersist = __v; } });
+Object.defineProperty(globalThis, "skLimparPixiPersist", { configurable: true, get: () => skLimparPixiPersist, set: (__v) => { skLimparPixiPersist = __v; } });
+Object.defineProperty(globalThis, "skRenderEfeitosLista", { configurable: true, get: () => skRenderEfeitosLista, set: (__v) => { skRenderEfeitosLista = __v; } });
+Object.defineProperty(globalThis, "atkDistanciaCelulas", { configurable: true, get: () => atkDistanciaCelulas, set: (__v) => { atkDistanciaCelulas = __v; } });
+Object.defineProperty(globalThis, "atkVerificarBloqueioAtaque", { configurable: true, get: () => atkVerificarBloqueioAtaque, set: (__v) => { atkVerificarBloqueioAtaque = __v; } });
+Object.defineProperty(globalThis, "atkIrParaStep", { configurable: true, get: () => atkIrParaStep, set: (__v) => { atkIrParaStep = __v; } });
+Object.defineProperty(globalThis, "atkVoltarStep", { configurable: true, get: () => atkVoltarStep, set: (__v) => { atkVoltarStep = __v; } });
+Object.defineProperty(globalThis, "atkIrParaMapa", { configurable: true, get: () => atkIrParaMapa, set: (__v) => { atkIrParaMapa = __v; } });
+Object.defineProperty(globalThis, "atkSelecionarHabilidade", { configurable: true, get: () => atkSelecionarHabilidade, set: (__v) => { atkSelecionarHabilidade = __v; } });
+Object.defineProperty(globalThis, "atkAplicarSkillSuporte", { configurable: true, get: () => atkAplicarSkillSuporte, set: (__v) => { atkAplicarSkillSuporte = __v; } });
+Object.defineProperty(globalThis, "atkAplicarCura", { configurable: true, get: () => atkAplicarCura, set: (__v) => { atkAplicarCura = __v; } });
+Object.defineProperty(globalThis, "atkAplicarRecuperacaoAtributo", { configurable: true, get: () => atkAplicarRecuperacaoAtributo, set: (__v) => { atkAplicarRecuperacaoAtributo = __v; } });
+Object.defineProperty(globalThis, "parsearCustoRSV", { configurable: true, get: () => parsearCustoRSV, set: (__v) => { parsearCustoRSV = __v; } });
+Object.defineProperty(globalThis, "verificarCustoSkill", { configurable: true, get: () => verificarCustoSkill, set: (__v) => { verificarCustoSkill = __v; } });
+Object.defineProperty(globalThis, "descontarCustoSkill", { configurable: true, get: () => descontarCustoSkill, set: (__v) => { descontarCustoSkill = __v; } });
+Object.defineProperty(globalThis, "criativoSetTipo", { configurable: true, get: () => criativoSetTipo, set: (__v) => { criativoSetTipo = __v; } });
+Object.defineProperty(globalThis, "criativoSetAlvo", { configurable: true, get: () => criativoSetAlvo, set: (__v) => { criativoSetAlvo = __v; } });
+Object.defineProperty(globalThis, "atkSelecionarCriativo", { configurable: true, get: () => atkSelecionarCriativo, set: (__v) => { atkSelecionarCriativo = __v; } });
+Object.defineProperty(globalThis, "_criativoEnviarParaMestre", { configurable: true, get: () => _criativoEnviarParaMestre, set: (__v) => { _criativoEnviarParaMestre = __v; } });
+Object.defineProperty(globalThis, "atkMontarSelecaoAlvo", { configurable: true, get: () => atkMontarSelecaoAlvo, set: (__v) => { atkMontarSelecaoAlvo = __v; } });
+Object.defineProperty(globalThis, "atkListarAlvos", { configurable: true, get: () => atkListarAlvos, set: (__v) => { atkListarAlvos = __v; } });
+Object.defineProperty(globalThis, "atkSelecionarAlvo", { configurable: true, get: () => atkSelecionarAlvo, set: (__v) => { atkSelecionarAlvo = __v; } });
+Object.defineProperty(globalThis, "atkAplicarAoEInimigos", { configurable: true, get: () => atkAplicarAoEInimigos, set: (__v) => { atkAplicarAoEInimigos = __v; } });
+Object.defineProperty(globalThis, "atkPrepararStep3", { configurable: true, get: () => atkPrepararStep3, set: (__v) => { atkPrepararStep3 = __v; } });
+Object.defineProperty(globalThis, "atkAdicionarDado", { configurable: true, get: () => atkAdicionarDado, set: (__v) => { atkAdicionarDado = __v; } });
+Object.defineProperty(globalThis, "atkRemoverDado", { configurable: true, get: () => atkRemoverDado, set: (__v) => { atkRemoverDado = __v; } });
+Object.defineProperty(globalThis, "atkLimparBuilder", { configurable: true, get: () => atkLimparBuilder, set: (__v) => { atkLimparBuilder = __v; } });
+Object.defineProperty(globalThis, "atkAtualizarBuilder", { configurable: true, get: () => atkAtualizarBuilder, set: (__v) => { atkAtualizarBuilder = __v; } });
+Object.defineProperty(globalThis, "atkRolarDados", { configurable: true, get: () => atkRolarDados, set: (__v) => { atkRolarDados = __v; } });
+Object.defineProperty(globalThis, "atkDelegarAoMestre", { configurable: true, get: () => atkDelegarAoMestre, set: (__v) => { atkDelegarAoMestre = __v; } });
+Object.defineProperty(globalThis, "_atkAplicarDanoFinal", { configurable: true, get: () => _atkAplicarDanoFinal, set: (__v) => { _atkAplicarDanoFinal = __v; } });
+Object.defineProperty(globalThis, "acaoEmpurrar", { configurable: true, get: () => acaoEmpurrar, set: (__v) => { acaoEmpurrar = __v; } });
+Object.defineProperty(globalThis, "_timerAutoAvanco", { configurable: true, get: () => _timerAutoAvanco, set: (__v) => { _timerAutoAvanco = __v; } });
+Object.defineProperty(globalThis, "iniciarTimerAutoAvanco", { configurable: true, get: () => iniciarTimerAutoAvanco, set: (__v) => { iniciarTimerAutoAvanco = __v; } });
+Object.defineProperty(globalThis, "cancelarTimerAutoAvanco", { configurable: true, get: () => cancelarTimerAutoAvanco, set: (__v) => { cancelarTimerAutoAvanco = __v; } });

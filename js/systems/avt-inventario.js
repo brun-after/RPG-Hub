@@ -826,7 +826,7 @@ function avtInvRenderMestreInv(charNome) {
 
 // ─── EXPORTS ──────────────────────────────────────────────────────────────────
 
-window.AVT_INV                   = AVT_INV;
+/* [migração-esm] AVT_INV já exposto pelo rodapé */
 window.avtInvInit                = avtInvInit;
 window.avtInvReset               = avtInvReset;
 window.avtInvCarregarChar        = avtInvCarregarChar;
@@ -843,3 +843,30 @@ window.avtInvRenderPanel         = avtInvRenderPanel;
 window.avtInvRenderSlotsHud      = avtInvRenderSlotsHud;
 window.avtInvRenderConsumiveisHud = avtInvRenderConsumiveisHud;
 window.avtInvRenderMestreInv     = avtInvRenderMestreInv;
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "AVT_INV", { configurable: true, get: () => AVT_INV });
+Object.defineProperty(globalThis, "_AVT_SLOTS", { configurable: true, get: () => _AVT_SLOTS });
+Object.defineProperty(globalThis, "_AVT_RAR_COR", { configurable: true, get: () => _AVT_RAR_COR });
+Object.defineProperty(globalThis, "_avtInvIco", { configurable: true, get: () => _avtInvIco, set: (__v) => { _avtInvIco = __v; } });
+Object.defineProperty(globalThis, "avtInvInit", { configurable: true, get: () => avtInvInit, set: (__v) => { avtInvInit = __v; } });
+Object.defineProperty(globalThis, "avtInvReset", { configurable: true, get: () => avtInvReset, set: (__v) => { avtInvReset = __v; } });
+Object.defineProperty(globalThis, "avtInvCarregarChar", { configurable: true, get: () => avtInvCarregarChar, set: (__v) => { avtInvCarregarChar = __v; } });
+Object.defineProperty(globalThis, "avtInvBroadcastUpdate", { configurable: true, get: () => avtInvBroadcastUpdate, set: (__v) => { avtInvBroadcastUpdate = __v; } });
+Object.defineProperty(globalThis, "avtInvDarItem", { configurable: true, get: () => avtInvDarItem, set: (__v) => { avtInvDarItem = __v; } });
+Object.defineProperty(globalThis, "avtInvRemoverItem", { configurable: true, get: () => avtInvRemoverItem, set: (__v) => { avtInvRemoverItem = __v; } });
+Object.defineProperty(globalThis, "_avtInvEquipando", { configurable: true, get: () => _avtInvEquipando, set: (__v) => { _avtInvEquipando = __v; } });
+Object.defineProperty(globalThis, "avtInvEquipar", { configurable: true, get: () => avtInvEquipar, set: (__v) => { avtInvEquipar = __v; } });
+Object.defineProperty(globalThis, "_avtInvDoEquipar", { configurable: true, get: () => _avtInvDoEquipar, set: (__v) => { _avtInvDoEquipar = __v; } });
+Object.defineProperty(globalThis, "_avtInvDoDesequipar", { configurable: true, get: () => _avtInvDoDesequipar, set: (__v) => { _avtInvDoDesequipar = __v; } });
+Object.defineProperty(globalThis, "avtInvUsarConsumivel", { configurable: true, get: () => avtInvUsarConsumivel, set: (__v) => { avtInvUsarConsumivel = __v; } });
+Object.defineProperty(globalThis, "avtInvAplicarEfeitos", { configurable: true, get: () => avtInvAplicarEfeitos, set: (__v) => { avtInvAplicarEfeitos = __v; } });
+Object.defineProperty(globalThis, "avtInvDarOuro", { configurable: true, get: () => avtInvDarOuro, set: (__v) => { avtInvDarOuro = __v; } });
+Object.defineProperty(globalThis, "avtInvRemoverOuro", { configurable: true, get: () => avtInvRemoverOuro, set: (__v) => { avtInvRemoverOuro = __v; } });
+Object.defineProperty(globalThis, "avtAbrirInventario", { configurable: true, get: () => avtAbrirInventario, set: (__v) => { avtAbrirInventario = __v; } });
+Object.defineProperty(globalThis, "avtFecharInventario", { configurable: true, get: () => avtFecharInventario, set: (__v) => { avtFecharInventario = __v; } });
+Object.defineProperty(globalThis, "avtInvRenderPanel", { configurable: true, get: () => avtInvRenderPanel, set: (__v) => { avtInvRenderPanel = __v; } });
+Object.defineProperty(globalThis, "avtInvRenderSlotsHud", { configurable: true, get: () => avtInvRenderSlotsHud, set: (__v) => { avtInvRenderSlotsHud = __v; } });
+Object.defineProperty(globalThis, "avtInvRenderConsumiveisHud", { configurable: true, get: () => avtInvRenderConsumiveisHud, set: (__v) => { avtInvRenderConsumiveisHud = __v; } });
+Object.defineProperty(globalThis, "_avtInvEfLabel", { configurable: true, get: () => _avtInvEfLabel, set: (__v) => { _avtInvEfLabel = __v; } });
+Object.defineProperty(globalThis, "avtInvRenderMestreInv", { configurable: true, get: () => avtInvRenderMestreInv, set: (__v) => { avtInvRenderMestreInv = __v; } });

@@ -2593,3 +2593,5 @@ window._abrirModalPacote = function() {
 
 // Renderizar painel de sessão ao abrir aba mapas
 HUB_EVENTS.on('cena_carregada', () => sessionRenderPainel());
+
+/* [migração-esm] accessors globais */

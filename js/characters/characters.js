@@ -501,3 +501,32 @@ async function criarNovoPersonagem() {
     mostrarToast(`${nome} criado!`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao criar personagem', 'erro'); }
 }
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "abrirModalLevelUp", { configurable: true, get: () => abrirModalLevelUp, set: (__v) => { abrirModalLevelUp = __v; } });
+Object.defineProperty(globalThis, "executarLevelUp", { configurable: true, get: () => executarLevelUp, set: (__v) => { executarLevelUp = __v; } });
+Object.defineProperty(globalThis, "_xpModalNome", { configurable: true, get: () => _xpModalNome, set: (__v) => { _xpModalNome = __v; } });
+Object.defineProperty(globalThis, "abrirModalXP", { configurable: true, get: () => abrirModalXP, set: (__v) => { abrirModalXP = __v; } });
+Object.defineProperty(globalThis, "fecharModalXP", { configurable: true, get: () => fecharModalXP, set: (__v) => { fecharModalXP = __v; } });
+Object.defineProperty(globalThis, "xpAtualizarModalUI", { configurable: true, get: () => xpAtualizarModalUI, set: (__v) => { xpAtualizarModalUI = __v; } });
+Object.defineProperty(globalThis, "xpDarRapido", { configurable: true, get: () => xpDarRapido, set: (__v) => { xpDarRapido = __v; } });
+Object.defineProperty(globalThis, "xpDarParaTodos", { configurable: true, get: () => xpDarParaTodos, set: (__v) => { xpDarParaTodos = __v; } });
+Object.defineProperty(globalThis, "xpConfirmarTodos", { configurable: true, get: () => xpConfirmarTodos, set: (__v) => { xpConfirmarTodos = __v; } });
+Object.defineProperty(globalThis, "xpSalvarManual", { configurable: true, get: () => xpSalvarManual, set: (__v) => { xpSalvarManual = __v; } });
+Object.defineProperty(globalThis, "xpExecutarLevelUp", { configurable: true, get: () => xpExecutarLevelUp, set: (__v) => { xpExecutarLevelUp = __v; } });
+Object.defineProperty(globalThis, "xpForcarLevelUp", { configurable: true, get: () => xpForcarLevelUp, set: (__v) => { xpForcarLevelUp = __v; } });
+Object.defineProperty(globalThis, "_xpParaNivel", { configurable: true, get: () => _xpParaNivel, set: (__v) => { _xpParaNivel = __v; } });
+Object.defineProperty(globalThis, "xpChecarAutoLevelUp", { configurable: true, get: () => xpChecarAutoLevelUp, set: (__v) => { xpChecarAutoLevelUp = __v; } });
+Object.defineProperty(globalThis, "xpSalvarChar", { configurable: true, get: () => xpSalvarChar, set: (__v) => { xpSalvarChar = __v; } });
+Object.defineProperty(globalThis, "distribuirPontosAttr", { configurable: true, get: () => distribuirPontosAttr, set: (__v) => { distribuirPontosAttr = __v; } });
+Object.defineProperty(globalThis, "renderAttrButtons", { configurable: true, get: () => renderAttrButtons, set: (__v) => { renderAttrButtons = __v; } });
+Object.defineProperty(globalThis, "renderAttrView", { configurable: true, get: () => renderAttrView, set: (__v) => { renderAttrView = __v; } });
+Object.defineProperty(globalThis, "toggleEdit", { configurable: true, get: () => toggleEdit, set: (__v) => { toggleEdit = __v; } });
+Object.defineProperty(globalThis, "toggleEditChar", { configurable: true, get: () => toggleEditChar, set: (__v) => { toggleEditChar = __v; } });
+Object.defineProperty(globalThis, "attrviewToggleOcultarAtribs", { configurable: true, get: () => attrviewToggleOcultarAtribs, set: (__v) => { attrviewToggleOcultarAtribs = __v; } });
+Object.defineProperty(globalThis, "charviewToggleOcultarAtribs", { configurable: true, get: () => charviewToggleOcultarAtribs, set: (__v) => { charviewToggleOcultarAtribs = __v; } });
+Object.defineProperty(globalThis, "salvarAtributos", { configurable: true, get: () => salvarAtributos, set: (__v) => { salvarAtributos = __v; } });
+Object.defineProperty(globalThis, "salvarInfoPersonagem", { configurable: true, get: () => salvarInfoPersonagem, set: (__v) => { salvarInfoPersonagem = __v; } });
+Object.defineProperty(globalThis, "abrirModalNovoChar", { configurable: true, get: () => abrirModalNovoChar, set: (__v) => { abrirModalNovoChar = __v; } });
+Object.defineProperty(globalThis, "fecharModalNovoChar", { configurable: true, get: () => fecharModalNovoChar, set: (__v) => { fecharModalNovoChar = __v; } });
+Object.defineProperty(globalThis, "criarNovoPersonagem", { configurable: true, get: () => criarNovoPersonagem, set: (__v) => { criarNovoPersonagem = __v; } });

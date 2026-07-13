@@ -348,3 +348,29 @@ function chatEscapar(texto) {
   return texto.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "CHAT_TTL", { configurable: true, get: () => CHAT_TTL });
+Object.defineProperty(globalThis, "CHAT_CHAR_CAP", { configurable: true, get: () => CHAT_CHAR_CAP });
+Object.defineProperty(globalThis, "CHAT_LORE_SEC", { configurable: true, get: () => CHAT_LORE_SEC });
+Object.defineProperty(globalThis, "chatSerializar", { configurable: true, get: () => chatSerializar, set: (__v) => { chatSerializar = __v; } });
+Object.defineProperty(globalThis, "chatSalvarLocal", { configurable: true, get: () => chatSalvarLocal, set: (__v) => { chatSalvarLocal = __v; } });
+Object.defineProperty(globalThis, "chatLerLocal", { configurable: true, get: () => chatLerLocal, set: (__v) => { chatLerLocal = __v; } });
+Object.defineProperty(globalThis, "chatAgendarSalvoBanco", { configurable: true, get: () => chatAgendarSalvoBanco, set: (__v) => { chatAgendarSalvoBanco = __v; } });
+Object.defineProperty(globalThis, "chatCarregarDoBanco", { configurable: true, get: () => chatCarregarDoBanco, set: (__v) => { chatCarregarDoBanco = __v; } });
+Object.defineProperty(globalThis, "chatIniciar", { configurable: true, get: () => chatIniciar, set: (__v) => { chatIniciar = __v; } });
+Object.defineProperty(globalThis, "chatAtualizarIdentidade", { configurable: true, get: () => chatAtualizarIdentidade, set: (__v) => { chatAtualizarIdentidade = __v; } });
+Object.defineProperty(globalThis, "chatPopularNPCSel", { configurable: true, get: () => chatPopularNPCSel, set: (__v) => { chatPopularNPCSel = __v; } });
+Object.defineProperty(globalThis, "chatEnviar", { configurable: true, get: () => chatEnviar, set: (__v) => { chatEnviar = __v; } });
+Object.defineProperty(globalThis, "chatReceberMensagem", { configurable: true, get: () => chatReceberMensagem, set: (__v) => { chatReceberMensagem = __v; } });
+Object.defineProperty(globalThis, "chatRenderizar", { configurable: true, get: () => chatRenderizar, set: (__v) => { chatRenderizar = __v; } });
+Object.defineProperty(globalThis, "chatReceberPresenca", { configurable: true, get: () => chatReceberPresenca, set: (__v) => { chatReceberPresenca = __v; } });
+Object.defineProperty(globalThis, "chatAtualizarOnline", { configurable: true, get: () => chatAtualizarOnline, set: (__v) => { chatAtualizarOnline = __v; } });
+Object.defineProperty(globalThis, "chatMostrar", { configurable: true, get: () => chatMostrar, set: (__v) => { chatMostrar = __v; } });
+Object.defineProperty(globalThis, "chatOcultar", { configurable: true, get: () => chatOcultar, set: (__v) => { chatOcultar = __v; } });
+Object.defineProperty(globalThis, "reflashDados", { configurable: true, get: () => reflashDados, set: (__v) => { reflashDados = __v; } });
+Object.defineProperty(globalThis, "chatToggle", { configurable: true, get: () => chatToggle, set: (__v) => { chatToggle = __v; } });
+Object.defineProperty(globalThis, "chatAbrir", { configurable: true, get: () => chatAbrir, set: (__v) => { chatAbrir = __v; } });
+Object.defineProperty(globalThis, "chatAtualizarBadge", { configurable: true, get: () => chatAtualizarBadge, set: (__v) => { chatAtualizarBadge = __v; } });
+Object.defineProperty(globalThis, "chatSalvarLog", { configurable: true, get: () => chatSalvarLog, set: (__v) => { chatSalvarLog = __v; } });
+Object.defineProperty(globalThis, "chatEscapar", { configurable: true, get: () => chatEscapar, set: (__v) => { chatEscapar = __v; } });

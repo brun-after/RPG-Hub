@@ -850,3 +850,32 @@ function _faseRenderDungeonTiles(layer, rd) {
     }
   }
 }
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "_faseTilesetBlocosCanonicos", { configurable: true, get: () => _faseTilesetBlocosCanonicos, set: (__v) => { _faseTilesetBlocosCanonicos = __v; } });
+Object.defineProperty(globalThis, "faseTilesetImgPromptTemplate", { configurable: true, get: () => faseTilesetImgPromptTemplate, set: (__v) => { faseTilesetImgPromptTemplate = __v; } });
+Object.defineProperty(globalThis, "faseTilesetLayoutPromptTemplate", { configurable: true, get: () => faseTilesetLayoutPromptTemplate, set: (__v) => { faseTilesetLayoutPromptTemplate = __v; } });
+Object.defineProperty(globalThis, "_avtPromptCampanhaExterna", { configurable: true, get: () => _avtPromptCampanhaExterna, set: (__v) => { _avtPromptCampanhaExterna = __v; } });
+Object.defineProperty(globalThis, "_avtValidarJSONCampanhaExterna", { configurable: true, get: () => _avtValidarJSONCampanhaExterna, set: (__v) => { _avtValidarJSONCampanhaExterna = __v; } });
+Object.defineProperty(globalThis, "_avtCopiarPromptCampanhaExterna", { configurable: true, get: () => _avtCopiarPromptCampanhaExterna, set: (__v) => { _avtCopiarPromptCampanhaExterna = __v; } });
+Object.defineProperty(globalThis, "_avtCopiarPromptImagemExterna", { configurable: true, get: () => _avtCopiarPromptImagemExterna, set: (__v) => { _avtCopiarPromptImagemExterna = __v; } });
+Object.defineProperty(globalThis, "_avtExtHandleImageSelect", { configurable: true, get: () => _avtExtHandleImageSelect, set: (__v) => { _avtExtHandleImageSelect = __v; } });
+Object.defineProperty(globalThis, "_avtExtHandleJSONPaste", { configurable: true, get: () => _avtExtHandleJSONPaste, set: (__v) => { _avtExtHandleJSONPaste = __v; } });
+Object.defineProperty(globalThis, "faseTilesetValidarJSON", { configurable: true, get: () => faseTilesetValidarJSON, set: (__v) => { faseTilesetValidarJSON = __v; } });
+Object.defineProperty(globalThis, "faseTilesetToDungeonData", { configurable: true, get: () => faseTilesetToDungeonData, set: (__v) => { faseTilesetToDungeonData = __v; } });
+Object.defineProperty(globalThis, "_tilesetImgFile", { configurable: true, get: () => _tilesetImgFile, set: (__v) => { _tilesetImgFile = __v; } });
+Object.defineProperty(globalThis, "faseTilesetCopiarPromptImagem", { configurable: true, get: () => faseTilesetCopiarPromptImagem, set: (__v) => { faseTilesetCopiarPromptImagem = __v; } });
+Object.defineProperty(globalThis, "faseTilesetCopiarPromptLayout", { configurable: true, get: () => faseTilesetCopiarPromptLayout, set: (__v) => { faseTilesetCopiarPromptLayout = __v; } });
+Object.defineProperty(globalThis, "faseTilesetHandleImageSelect", { configurable: true, get: () => faseTilesetHandleImageSelect, set: (__v) => { faseTilesetHandleImageSelect = __v; } });
+Object.defineProperty(globalThis, "faseTilesetTrocarImagem", { configurable: true, get: () => faseTilesetTrocarImagem, set: (__v) => { faseTilesetTrocarImagem = __v; } });
+Object.defineProperty(globalThis, "faseTilesetHandleJSONPaste", { configurable: true, get: () => faseTilesetHandleJSONPaste, set: (__v) => { faseTilesetHandleJSONPaste = __v; } });
+Object.defineProperty(globalThis, "_avtCarregarTileset", { configurable: true, get: () => _avtCarregarTileset, set: (__v) => { _avtCarregarTileset = __v; } });
+Object.defineProperty(globalThis, "_tileRng", { configurable: true, get: () => _tileRng, set: (__v) => { _tileRng = __v; } });
+Object.defineProperty(globalThis, "_avtTipoParede", { configurable: true, get: () => _avtTipoParede, set: (__v) => { _avtTipoParede = __v; } });
+Object.defineProperty(globalThis, "_AVT_CHAVES_PAREDE", { configurable: true, get: () => _AVT_CHAVES_PAREDE });
+Object.defineProperty(globalThis, "_avtChaveEhParede", { configurable: true, get: () => _avtChaveEhParede, set: (__v) => { _avtChaveEhParede = __v; } });
+Object.defineProperty(globalThis, "_avtTilePassavel", { configurable: true, get: () => _avtTilePassavel, set: (__v) => { _avtTilePassavel = __v; } });
+Object.defineProperty(globalThis, "_avtGetTileSemanticKey", { configurable: true, get: () => _avtGetTileSemanticKey, set: (__v) => { _avtGetTileSemanticKey = __v; } });
+Object.defineProperty(globalThis, "_avtNormalizarTilesParedes", { configurable: true, get: () => _avtNormalizarTilesParedes, set: (__v) => { _avtNormalizarTilesParedes = __v; } });
+Object.defineProperty(globalThis, "_faseTilesetCarregar", { configurable: true, get: () => _faseTilesetCarregar, set: (__v) => { _faseTilesetCarregar = __v; } });
+Object.defineProperty(globalThis, "_faseRenderDungeonTiles", { configurable: true, get: () => _faseRenderDungeonTiles, set: (__v) => { _faseRenderDungeonTiles = __v; } });

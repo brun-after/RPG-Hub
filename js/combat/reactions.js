@@ -273,3 +273,23 @@ window.batalhaReceberReacaoExecutada = function(payload) {
 };
 
 console.log('[Reactions] UI de reações e defesa ativa carregado ✓');
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "mostrarPainelReacao", { configurable: true, get: () => mostrarPainelReacao, set: (__v) => { mostrarPainelReacao = __v; } });
+Object.defineProperty(globalThis, "reacaoAceitar", { configurable: true, get: () => reacaoAceitar, set: (__v) => { reacaoAceitar = __v; } });
+Object.defineProperty(globalThis, "reacaoRecusar", { configurable: true, get: () => reacaoRecusar, set: (__v) => { reacaoRecusar = __v; } });
+Object.defineProperty(globalThis, "fecharPainelReacao", { configurable: true, get: () => fecharPainelReacao, set: (__v) => { fecharPainelReacao = __v; } });
+Object.defineProperty(globalThis, "mostrarPainelDefesaAtiva", { configurable: true, get: () => mostrarPainelDefesaAtiva, set: (__v) => { mostrarPainelDefesaAtiva = __v; } });
+Object.defineProperty(globalThis, "defesaRolar", { configurable: true, get: () => defesaRolar, set: (__v) => { defesaRolar = __v; } });
+Object.defineProperty(globalThis, "defesaRecusar", { configurable: true, get: () => defesaRecusar, set: (__v) => { defesaRecusar = __v; } });
+Object.defineProperty(globalThis, "fecharPainelDefesaAtiva", { configurable: true, get: () => fecharPainelDefesaAtiva, set: (__v) => { fecharPainelDefesaAtiva = __v; } });
+Object.defineProperty(globalThis, "abrirModalConfigBatalha", { configurable: true, get: () => abrirModalConfigBatalha, set: (__v) => { abrirModalConfigBatalha = __v; } });
+Object.defineProperty(globalThis, "fecharModalConfigBatalha", { configurable: true, get: () => fecharModalConfigBatalha, set: (__v) => { fecharModalConfigBatalha = __v; } });
+Object.defineProperty(globalThis, "salvarConfigBatalha", { configurable: true, get: () => salvarConfigBatalha, set: (__v) => { salvarConfigBatalha = __v; } });
+Object.defineProperty(globalThis, "bcfgSistemaChange", { configurable: true, get: () => bcfgSistemaChange, set: (__v) => { bcfgSistemaChange = __v; } });
+Object.defineProperty(globalThis, "_escHtml", { configurable: true, get: () => _escHtml, set: (__v) => { _escHtml = __v; } });
+Object.defineProperty(globalThis, "_setVal", { configurable: true, get: () => _setVal, set: (__v) => { _setVal = __v; } });
+Object.defineProperty(globalThis, "_setChk", { configurable: true, get: () => _setChk, set: (__v) => { _setChk = __v; } });
+Object.defineProperty(globalThis, "_getVal", { configurable: true, get: () => _getVal, set: (__v) => { _getVal = __v; } });
+Object.defineProperty(globalThis, "_getChk", { configurable: true, get: () => _getChk, set: (__v) => { _getChk = __v; } });
+Object.defineProperty(globalThis, "_iniciarTimer", { configurable: true, get: () => _iniciarTimer, set: (__v) => { _iniciarTimer = __v; } });

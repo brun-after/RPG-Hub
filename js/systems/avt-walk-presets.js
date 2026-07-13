@@ -251,3 +251,5 @@
   window.AVT_WALK_PRESETS = AVT_WALK_PRESETS;
   window.avtWalkRender = avtWalkRender;
 })();
+
+/* [migração-esm] accessors globais */

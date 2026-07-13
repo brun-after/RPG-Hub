@@ -9,16 +9,9 @@ const FASE_MIN_ZOOM     = 0.25;
 const FASE_MAX_ZOOM     = 3.0;
 const FASE_CHUNK_SIZE   = 512;   // pixels por chunk
 
-// ── Lazy load PixiJS (reusa o já carregado pelo anim-renderer) ────────────
+// ── Lazy load PixiJS (delegado ao core/pixi-lazy.js, via bundle) ──────────
 function _fasePixiEnsureLoaded() {
-  if (window.PIXI) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js';
-    s.onload = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
+  return pixiEnsureCore();
 }
 
 // ── Destruir instância atual de fase ─────────────────────────────────────
@@ -890,3 +883,46 @@ function faseRecusarCombate() {
   const entId = Object.keys(_faseCombateTimerAtivo)[0];
   if (entId) _faseRecusarCombate(entId);
 }
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "FASE_CAM_LERP", { configurable: true, get: () => FASE_CAM_LERP });
+Object.defineProperty(globalThis, "FASE_CAM_MARGIN", { configurable: true, get: () => FASE_CAM_MARGIN });
+Object.defineProperty(globalThis, "FASE_MIN_ZOOM", { configurable: true, get: () => FASE_MIN_ZOOM });
+Object.defineProperty(globalThis, "FASE_MAX_ZOOM", { configurable: true, get: () => FASE_MAX_ZOOM });
+Object.defineProperty(globalThis, "FASE_CHUNK_SIZE", { configurable: true, get: () => FASE_CHUNK_SIZE });
+Object.defineProperty(globalThis, "_fasePixiEnsureLoaded", { configurable: true, get: () => _fasePixiEnsureLoaded, set: (__v) => { _fasePixiEnsureLoaded = __v; } });
+Object.defineProperty(globalThis, "faseDesmontarAtual", { configurable: true, get: () => faseDesmontarAtual, set: (__v) => { faseDesmontarAtual = __v; } });
+Object.defineProperty(globalThis, "faseRendererMount", { configurable: true, get: () => faseRendererMount, set: (__v) => { faseRendererMount = __v; } });
+Object.defineProperty(globalThis, "_faseCameraUpdate", { configurable: true, get: () => _faseCameraUpdate, set: (__v) => { _faseCameraUpdate = __v; } });
+Object.defineProperty(globalThis, "_faseRenderParedes", { configurable: true, get: () => _faseRenderParedes, set: (__v) => { _faseRenderParedes = __v; } });
+Object.defineProperty(globalThis, "_faseRenderPortas", { configurable: true, get: () => _faseRenderPortas, set: (__v) => { _faseRenderPortas = __v; } });
+Object.defineProperty(globalThis, "_faseCriarPortaSprite", { configurable: true, get: () => _faseCriarPortaSprite, set: (__v) => { _faseCriarPortaSprite = __v; } });
+Object.defineProperty(globalThis, "_faseClicarPorta", { configurable: true, get: () => _faseClicarPorta, set: (__v) => { _faseClicarPorta = __v; } });
+Object.defineProperty(globalThis, "_faseRenderBaus", { configurable: true, get: () => _faseRenderBaus, set: (__v) => { _faseRenderBaus = __v; } });
+Object.defineProperty(globalThis, "_faseCriarBauSprite", { configurable: true, get: () => _faseCriarBauSprite, set: (__v) => { _faseCriarBauSprite = __v; } });
+Object.defineProperty(globalThis, "_faseAbrirBau", { configurable: true, get: () => _faseAbrirBau, set: (__v) => { _faseAbrirBau = __v; } });
+Object.defineProperty(globalThis, "_faseRenderSpawnPoints", { configurable: true, get: () => _faseRenderSpawnPoints, set: (__v) => { _faseRenderSpawnPoints = __v; } });
+Object.defineProperty(globalThis, "_faseRenderEntidades", { configurable: true, get: () => _faseRenderEntidades, set: (__v) => { _faseRenderEntidades = __v; } });
+Object.defineProperty(globalThis, "_faseCriarEntidadeSprite", { configurable: true, get: () => _faseCriarEntidadeSprite, set: (__v) => { _faseCriarEntidadeSprite = __v; } });
+Object.defineProperty(globalThis, "_faseClicarEntidade", { configurable: true, get: () => _faseClicarEntidade, set: (__v) => { _faseClicarEntidade = __v; } });
+Object.defineProperty(globalThis, "_faseAtualizarEntidadeSprite", { configurable: true, get: () => _faseAtualizarEntidadeSprite, set: (__v) => { _faseAtualizarEntidadeSprite = __v; } });
+Object.defineProperty(globalThis, "_faseEntidadesLoop", { configurable: true, get: () => _faseEntidadesLoop, set: (__v) => { _faseEntidadesLoop = __v; } });
+Object.defineProperty(globalThis, "_fasePatrularStep", { configurable: true, get: () => _fasePatrularStep, set: (__v) => { _fasePatrularStep = __v; } });
+Object.defineProperty(globalThis, "_fasePerseguirStep", { configurable: true, get: () => _fasePerseguirStep, set: (__v) => { _fasePerseguirStep = __v; } });
+Object.defineProperty(globalThis, "_faseCombateTimerAtivo", { configurable: true, get: () => _faseCombateTimerAtivo, set: (__v) => { _faseCombateTimerAtivo = __v; } });
+Object.defineProperty(globalThis, "_faseTriggerCombate", { configurable: true, get: () => _faseTriggerCombate, set: (__v) => { _faseTriggerCombate = __v; } });
+Object.defineProperty(globalThis, "_faseMostrarCombateTimer", { configurable: true, get: () => _faseMostrarCombateTimer, set: (__v) => { _faseMostrarCombateTimer = __v; } });
+Object.defineProperty(globalThis, "_faseAceitarCombate", { configurable: true, get: () => _faseAceitarCombate, set: (__v) => { _faseAceitarCombate = __v; } });
+Object.defineProperty(globalThis, "_faseRecusarCombate", { configurable: true, get: () => _faseRecusarCombate, set: (__v) => { _faseRecusarCombate = __v; } });
+Object.defineProperty(globalThis, "_faseIniciarCombateTatico", { configurable: true, get: () => _faseIniciarCombateTatico, set: (__v) => { _faseIniciarCombateTatico = __v; } });
+Object.defineProperty(globalThis, "_faseChunksUpdate", { configurable: true, get: () => _faseChunksUpdate, set: (__v) => { _faseChunksUpdate = __v; } });
+Object.defineProperty(globalThis, "_faseInicializarJogadores", { configurable: true, get: () => _faseInicializarJogadores, set: (__v) => { _faseInicializarJogadores = __v; } });
+Object.defineProperty(globalThis, "faseAtualizarPosJogador", { configurable: true, get: () => faseAtualizarPosJogador, set: (__v) => { faseAtualizarPosJogador = __v; } });
+Object.defineProperty(globalThis, "_faseCriarTokenSprite", { configurable: true, get: () => _faseCriarTokenSprite, set: (__v) => { _faseCriarTokenSprite = __v; } });
+Object.defineProperty(globalThis, "_faseMontarInputMovimento", { configurable: true, get: () => _faseMontarInputMovimento, set: (__v) => { _faseMontarInputMovimento = __v; } });
+Object.defineProperty(globalThis, "_faseColisaoParede", { configurable: true, get: () => _faseColisaoParede, set: (__v) => { _faseColisaoParede = __v; } });
+Object.defineProperty(globalThis, "_faseMontarHUD", { configurable: true, get: () => _faseMontarHUD, set: (__v) => { _faseMontarHUD = __v; } });
+Object.defineProperty(globalThis, "faseModoMestreToggle", { configurable: true, get: () => faseModoMestreToggle, set: (__v) => { faseModoMestreToggle = __v; } });
+Object.defineProperty(globalThis, "faseIAToggle", { configurable: true, get: () => faseIAToggle, set: (__v) => { faseIAToggle = __v; } });
+Object.defineProperty(globalThis, "faseAceitarCombate", { configurable: true, get: () => faseAceitarCombate, set: (__v) => { faseAceitarCombate = __v; } });
+Object.defineProperty(globalThis, "faseRecusarCombate", { configurable: true, get: () => faseRecusarCombate, set: (__v) => { faseRecusarCombate = __v; } });

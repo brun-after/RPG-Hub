@@ -594,4 +594,7 @@ const CATALOG_PACKAGES = [
 
 // ─── Funções de instalação de pacotes (chamadas por aventura.js) ──────────────
 // Expor globalmente para acesso a partir do onclick HTML e de outros módulos.
-window.CATALOG_PACKAGES = CATALOG_PACKAGES;
+/* [migração-esm] CATALOG_PACKAGES já exposto pelo rodapé */
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "CATALOG_PACKAGES", { configurable: true, get: () => CATALOG_PACKAGES });

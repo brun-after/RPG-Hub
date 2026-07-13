@@ -317,40 +317,9 @@
     });
   }
 
-  // ── Lazy loader PixiJS + pixi-spine ──────────────────────────────────────
-  let _pixiSpinePromise = null;
-
+  // ── Lazy loader PixiJS + pixi-spine (delegado ao core/pixi-lazy.js) ───────
   function _carregarPixiSpine() {
-    if (_pixiSpinePromise) return _pixiSpinePromise;
-    if (window.PIXI && window.PIXI.spine) {
-      _pixiSpinePromise = Promise.resolve();
-      return _pixiSpinePromise;
-    }
-    _pixiSpinePromise = new Promise((resolve, reject) => {
-      function carregarScript(src, onLoad) {
-        const s = document.createElement('script');
-        s.src = src;
-        s.onload = onLoad;
-        s.onerror = () => reject(new Error('[AnimSpine] Falha ao carregar: ' + src));
-        document.head.appendChild(s);
-      }
-      if (window.PIXI) {
-        // PixiJS já existe, carregar apenas pixi-spine
-        carregarScript(
-          'https://cdn.jsdelivr.net/npm/pixi-spine@4.0.4/dist/pixi-spine.umd.js',
-          resolve
-        );
-      } else {
-        carregarScript(
-          'https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js',
-          () => carregarScript(
-            'https://cdn.jsdelivr.net/npm/pixi-spine@4.0.4/dist/pixi-spine.umd.js',
-            resolve
-          )
-        );
-      }
-    });
-    return _pixiSpinePromise;
+    return pixiEnsureSpine();
   }
 
   // ── Renderer Esquelético Procedural ──────────────────────────────────────
@@ -381,7 +350,7 @@
           return -Math.pow(2, 10 * f - 10) * Math.sin((f * 10 - 10.75) * (2 * Math.PI) / 3);
         }
         case 'bounce': {
-          const t = 1 - f;
+          let t = 1 - f; // let: os branches abaixo reatribuem t (com const era TypeError em runtime)
           if (t < 1 / 2.75) return 1 - 7.5625 * t * t;
           if (t < 2 / 2.75) return 1 - (7.5625 * (t -= 1.5 / 2.75) * t + 0.75);
           if (t < 2.5 / 2.75) return 1 - (7.5625 * (t -= 2.25 / 2.75) * t + 0.9375);
@@ -679,3 +648,5 @@
   }
 
 })();
+
+/* [migração-esm] accessors globais */

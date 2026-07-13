@@ -246,3 +246,22 @@ function tutorialReiniciar() {
   };
 })();
 
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "TUTORIAL_STEPS", { configurable: true, get: () => TUTORIAL_STEPS, set: (__v) => { TUTORIAL_STEPS = __v; } });
+Object.defineProperty(globalThis, "_TUTORIAL_ABA", { configurable: true, get: () => _TUTORIAL_ABA, set: (__v) => { _TUTORIAL_ABA = __v; } });
+Object.defineProperty(globalThis, "_TUTORIAL_PASSO", { configurable: true, get: () => _TUTORIAL_PASSO, set: (__v) => { _TUTORIAL_PASSO = __v; } });
+Object.defineProperty(globalThis, "_TUTORIAL_PASSOS", { configurable: true, get: () => _TUTORIAL_PASSOS, set: (__v) => { _TUTORIAL_PASSOS = __v; } });
+Object.defineProperty(globalThis, "tutorialGetState", { configurable: true, get: () => tutorialGetState, set: (__v) => { tutorialGetState = __v; } });
+Object.defineProperty(globalThis, "tutorialSetState", { configurable: true, get: () => tutorialSetState, set: (__v) => { tutorialSetState = __v; } });
+Object.defineProperty(globalThis, "tutorialIsAtivo", { configurable: true, get: () => tutorialIsAtivo, set: (__v) => { tutorialIsAtivo = __v; } });
+Object.defineProperty(globalThis, "tutorialMostrar", { configurable: true, get: () => tutorialMostrar, set: (__v) => { tutorialMostrar = __v; } });
+Object.defineProperty(globalThis, "_tutorialAtualizarUI", { configurable: true, get: () => _tutorialAtualizarUI, set: (__v) => { _tutorialAtualizarUI = __v; } });
+Object.defineProperty(globalThis, "tutorialAvancar", { configurable: true, get: () => tutorialAvancar, set: (__v) => { tutorialAvancar = __v; } });
+Object.defineProperty(globalThis, "tutorialProximo", { configurable: true, get: () => tutorialProximo, set: (__v) => { tutorialProximo = __v; } });
+Object.defineProperty(globalThis, "tutorialFecharAba", { configurable: true, get: () => tutorialFecharAba, set: (__v) => { tutorialFecharAba = __v; } });
+Object.defineProperty(globalThis, "tutorialPularTudo", { configurable: true, get: () => tutorialPularTudo, set: (__v) => { tutorialPularTudo = __v; } });
+Object.defineProperty(globalThis, "tutorialDesativarPermanente", { configurable: true, get: () => tutorialDesativarPermanente, set: (__v) => { tutorialDesativarPermanente = __v; } });
+Object.defineProperty(globalThis, "_fecharDialogTutorial", { configurable: true, get: () => _fecharDialogTutorial, set: (__v) => { _fecharDialogTutorial = __v; } });
+Object.defineProperty(globalThis, "tutorialToggle", { configurable: true, get: () => tutorialToggle, set: (__v) => { tutorialToggle = __v; } });
+Object.defineProperty(globalThis, "tutorialReiniciar", { configurable: true, get: () => tutorialReiniciar, set: (__v) => { tutorialReiniciar = __v; } });

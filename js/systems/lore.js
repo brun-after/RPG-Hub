@@ -258,3 +258,21 @@ async function removerLore(loreId, titulo) {
     mostrarToast('Entrada removida', 'sucesso');
   } catch(e) { mostrarToast('Erro ao remover lore', 'erro'); }
 }
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "renderHeader", { configurable: true, get: () => renderHeader, set: (__v) => { renderHeader = __v; } });
+Object.defineProperty(globalThis, "renderLore", { configurable: true, get: () => renderLore, set: (__v) => { renderLore = __v; } });
+Object.defineProperty(globalThis, "fmtSec", { configurable: true, get: () => fmtSec, set: (__v) => { fmtSec = __v; } });
+Object.defineProperty(globalThis, "filtrarLore", { configurable: true, get: () => filtrarLore, set: (__v) => { filtrarLore = __v; } });
+Object.defineProperty(globalThis, "CHAR_SEARCH_THRESHOLD", { configurable: true, get: () => CHAR_SEARCH_THRESHOLD });
+Object.defineProperty(globalThis, "renderCharButtons", { configurable: true, get: () => renderCharButtons, set: (__v) => { renderCharButtons = __v; } });
+Object.defineProperty(globalThis, "_charSearchToggle", { configurable: true, get: () => _charSearchToggle, set: (__v) => { _charSearchToggle = __v; } });
+Object.defineProperty(globalThis, "charFiltrar", { configurable: true, get: () => charFiltrar, set: (__v) => { charFiltrar = __v; } });
+Object.defineProperty(globalThis, "charFiltrarLimpar", { configurable: true, get: () => charFiltrarLimpar, set: (__v) => { charFiltrarLimpar = __v; } });
+Object.defineProperty(globalThis, "buildCharBtns", { configurable: true, get: () => buildCharBtns, set: (__v) => { buildCharBtns = __v; } });
+Object.defineProperty(globalThis, "selecionarChar", { configurable: true, get: () => selecionarChar, set: (__v) => { selecionarChar = __v; } });
+Object.defineProperty(globalThis, "renderCharView", { configurable: true, get: () => renderCharView, set: (__v) => { renderCharView = __v; } });
+Object.defineProperty(globalThis, "abrirModalLore", { configurable: true, get: () => abrirModalLore, set: (__v) => { abrirModalLore = __v; } });
+Object.defineProperty(globalThis, "fecharModalLore", { configurable: true, get: () => fecharModalLore, set: (__v) => { fecharModalLore = __v; } });
+Object.defineProperty(globalThis, "salvarLore", { configurable: true, get: () => salvarLore, set: (__v) => { salvarLore = __v; } });
+Object.defineProperty(globalThis, "removerLore", { configurable: true, get: () => removerLore, set: (__v) => { removerLore = __v; } });

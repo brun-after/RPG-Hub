@@ -89,3 +89,14 @@ window._getCharTamanhoEfetivo = function (nome, ca) {
 // a confirmação de e-mail estiver habilitada no Supabase.
 const EMAIL_CONFIRMATION_ENABLED = true;
 // ============================================================
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "SUPABASE_URL", { configurable: true, get: () => SUPABASE_URL });
+Object.defineProperty(globalThis, "SUPABASE_KEY", { configurable: true, get: () => SUPABASE_KEY });
+Object.defineProperty(globalThis, "HCAPTCHA_SITEKEY", { configurable: true, get: () => HCAPTCHA_SITEKEY });
+Object.defineProperty(globalThis, "HUB_EVENTS", { configurable: true, get: () => HUB_EVENTS });
+Object.defineProperty(globalThis, "_isMobile", { configurable: true, writable: true, value: _isMobile });
+Object.defineProperty(globalThis, "_charSizeKey", { configurable: true, writable: true, value: _charSizeKey });
+Object.defineProperty(globalThis, "_getMobileSize", { configurable: true, writable: true, value: _getMobileSize });
+Object.defineProperty(globalThis, "_setMobileSize", { configurable: true, writable: true, value: _setMobileSize });
+Object.defineProperty(globalThis, "EMAIL_CONFIRMATION_ENABLED", { configurable: true, get: () => EMAIL_CONFIRMATION_ENABLED });

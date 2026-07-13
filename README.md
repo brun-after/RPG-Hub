@@ -70,10 +70,12 @@ Veja o guia completo em [`docs/setup.md`](docs/setup.md).
 
 **Resumo rápido:**
 
-1. Clone o repositório
-2. Configure as credenciais Supabase em `js/app.js` (variáveis no topo do arquivo)
-3. Sirva os arquivos com qualquer servidor HTTP estático
-4. Acesse `index.html` no navegador
+1. Clone o repositório e instale as dependências: `npm install`
+2. Configure as credenciais Supabase em `js/config.ts`
+3. Desenvolvimento: `npm run dev` (servidor Vite com hot reload)
+4. Produção: `npm run build` gera o site estático em `dist/`
+   (o deploy no GitHub Pages é automático a cada push na `main` — veja `.github/workflows/deploy.yml`)
+5. Checagem de tipos: `npm run typecheck`
 
 ---
 
@@ -83,7 +85,7 @@ Veja a documentação detalhada em [`docs/architecture.md`](docs/architecture.md
 
 RPG Hub é um **SPA (Single-Page Application)** com arquitetura **PWA**, usando:
 - **Supabase** como backend (banco de dados, auth e WebSockets em tempo real)
-- **Vanilla JavaScript** sem frameworks — sem etapa de build
+- **TypeScript/JavaScript** sem frameworks de UI — bundle via **Vite** (módulos ES; núcleo em TypeScript, migração gradual)
 - **CSS com variáveis customizadas** para theming consistente
 
 ---
