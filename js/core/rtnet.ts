@@ -87,6 +87,9 @@ window.RTNet = (() => {
   const HOST_HB_INTERVAL     = 5_000;   // ms — host heartbeat via signaling
   const HOST_DEAD_THRESH     = 15_000;  // ms — host considerado morto sem heartbeats
   const SNAPSHOT_INTERVAL    = 15_000;  // ms — snapshot persistido em banco
+  const SNAPSHOT_SKIP_MAX_MS = 20_000;  // ms — snapshot inalterado pode pular no máx. 1 tick seguido
+  const DB_HOST_FRESH_MS     = 35_000;  // ms — idade máx. da linha de snapshot p/ aceitar host existente
+                                        //      (cobre o tick pulado: idade real chega a ~30s em idle)
   const STATE_TICK_INTERVAL  = 100;     // ms — tick autoritativo via DataChannel (10 Hz, confiável)
   const ELECTION_WAIT        = 250;     // ms — janela curta de coleta (apenas empate raro)
   const ELECTION_MODE        = 'voluntary'; // 'auto' = primeiro a entrar; 'voluntary' = aguarda host_volunteer
@@ -112,6 +115,7 @@ window.RTNet = (() => {
     avt_skill_selecionada: 'avtReceberSkillSelecionada',
     avt_dado_rolado:       'avtReceberDadoRolado',
     avt_dano_visual:       'avtReceberDanoVisual',
+    avt_dano_visual_batch: 'avtReceberDanoVisualBatch',
     avt_hp_update:         'avtReceberHpUpdate',
     avt_member_linked:     'avtReceberMemberLinked',
     avt_primeiro_ataque:   'avtReceberPrimeiroAtaque',
@@ -179,6 +183,7 @@ window.RTNet = (() => {
     avt_skill_selecionada: { persist: 'never',     reliable: false, relay: true },
     avt_dado_rolado:       { persist: 'never',     reliable: false, relay: true },
     avt_dano_visual:       { persist: 'never',     reliable: false, relay: true },
+    avt_dano_visual_batch: { persist: 'never',     reliable: false, relay: true },
     avt_hp_update:         { persist: 'snapshot',  reliable: true  },
     avt_member_linked:     { persist: 'immediate', reliable: true  },
     avt_primeiro_ataque:   { persist: 'never',     reliable: false, relay: true },
@@ -431,6 +436,34 @@ window.RTNet = (() => {
     if (_s.mode !== prev) {
       try { window.dispatchEvent(new CustomEvent('rtnet:modechange', { detail: { mode: _s.mode, prev } })); } catch(_) {}
     }
+    _avisarFallbackSePersistir();
+  }
+
+  // Aviso único por sessão quando o transporte fica degradado com peers presentes
+  // (mesh P2P incompleta → eventos passam pelo Supabase, com mais latência).
+  // Grace de 15s: durante o handshake WebRTC o modo passa por 'mixed'
+  // legitimamente; só avisa se a degradação persistir. Sessão solo não avisa.
+  let _fallbackAvisado = false;
+  let _fallbackAvisoTimer: ReturnType<typeof setTimeout> | null = null;
+  function _avisarFallbackSePersistir() {
+    const degradado = _s.mode !== 'p2p' && _s.peerJoinTs.size > 0;
+    if (!degradado) {
+      if (_fallbackAvisoTimer) { clearTimeout(_fallbackAvisoTimer); _fallbackAvisoTimer = null; }
+      return;
+    }
+    if (_fallbackAvisado || _fallbackAvisoTimer) return;
+    _fallbackAvisoTimer = setTimeout(() => {
+      _fallbackAvisoTimer = null;
+      if (_fallbackAvisado || !_s.initialized) return;
+      if (_s.mode === 'p2p' || _s.peerJoinTs.size === 0) return;
+      _fallbackAvisado = true;
+      try {
+        const toast = (window as any).mostrarToast;
+        if (typeof toast === 'function') {
+          toast('Sem conexão direta (P2P) com algum jogador — usando fallback Supabase, com mais latência. Um servidor TURN resolve NAT restrito (docs/setup.md).', 'aviso');
+        }
+      } catch(_) {}
+    }, 15000);
   }
 
   // ── ELEIÇÃO DE HOST ─────────────────────────────────────────────
@@ -442,7 +475,10 @@ window.RTNet = (() => {
       if (!rows || !rows[0]) return false;
       const row = rows[0];
       const age = Date.now() - new Date(row.updated_at).getTime();
-      if (age < HOST_DEAD_THRESH) {
+      // Janela maior que HOST_DEAD_THRESH: o updated_at vem do snapshot de 15s,
+      // que pode pular 1 tick quando o estado não muda (ver _saveSnapshot) —
+      // a vitalidade fina do host segue coberta pelo heartbeat P2P de 5s.
+      if (age < DB_HOST_FRESH_MS) {
         _log('host existente:', row.host_user_id, `(${Math.round(age/1000)}s atrás)`);
         _onHostElected(row.host_user_id);
         return true;
@@ -688,14 +724,33 @@ window.RTNet = (() => {
 
   function _startSnapshotTimer() {
     if (_s.snapshotTimer) clearInterval(_s.snapshotTimer);
+    // Host novo escreve já: após transferência/eleição a linha do banco pode estar
+    // com o updated_at do host anterior, e quem entra usa essa idade como frescor.
+    _lastSnapshotJson = null; _lastSnapshotTs = 0;
     _s.snapshotTimer = setInterval(_saveSnapshot, SNAPSHOT_INTERVAL);
+    _saveSnapshot();
   }
 
+  let _lastSnapshotJson = null;
+  let _lastSnapshotTs   = 0;
   async function _saveSnapshot() {
     if (!_s._isHost || !_s.snapshotProvider) return;
     // sessionStateUpdate roteia rpgIds não-UUID para avt_session_state
     // (migration_avt_session_state.sql); erro (ex.: migração não aplicada) é tolerado.
-    try { await sessionStateUpdate(_s.rpgId, _s.snapshotProvider()); } catch(e) { _warn('saveSnapshot:', e); }
+    try {
+      const snapshot = _s.snapshotProvider();
+      let json = null;
+      try { json = JSON.stringify(snapshot); } catch(_) {}
+      // Estado idêntico ao da última escrita (lobby/exploração em idle): pula o
+      // write de dezenas de KB no banco. Nunca pula dois ticks seguidos: o
+      // updated_at da linha também é o sinal de frescor do host para quem entra
+      // (_checkExistingHost/DB_HOST_FRESH_MS) e para a cláusula de takeover (30s)
+      // do RPC update_session_snapshot.
+      if (json !== null && json === _lastSnapshotJson && (Date.now() - _lastSnapshotTs) < SNAPSHOT_SKIP_MAX_MS) return;
+      await sessionStateUpdate(_s.rpgId, snapshot);
+      _lastSnapshotJson = json;
+      _lastSnapshotTs   = Date.now();
+    } catch(e) { _warn('saveSnapshot:', e); }
   }
 
   async function _pushSnapshotTo(peerId) {
@@ -804,7 +859,11 @@ window.RTNet = (() => {
     if (!el) return;
     const map = { p2p: ['🟢', 'P2P ativo'], mixed: ['🟡', 'P2P parcial'], supabase: ['🔴', 'Supabase (fallback)'] };
     const [icon, title] = map[_s.mode] || ['🔴', 'Supabase'];
-    el.textContent = icon; el.title = title;
+    const degradado = _s.mode !== 'p2p' && _s.peerJoinTs.size > 0;
+    el.textContent = icon;
+    el.title = degradado
+      ? title + ' — sem conexão direta com algum jogador (latência maior). Um servidor TURN resolve NAT restrito; veja docs/setup.md.'
+      : title;
     el.style.display = 'inline';
   }
 
@@ -873,6 +932,8 @@ window.RTNet = (() => {
       _s.peerJoinTs.clear();
       _s._volunteers = [];
       if (_s._volunteerTimer) { clearTimeout(_s._volunteerTimer); _s._volunteerTimer = null; }
+      _fallbackAvisado = false;
+      if (_fallbackAvisoTimer) { clearTimeout(_fallbackAvisoTimer); _fallbackAvisoTimer = null; }
       _log('init rpgId:', rpgId, 'userId:', userId, 'joinedAt:', _s.joinedAt);
 
       window.RTNet._signalingActive = true;
@@ -925,6 +986,8 @@ window.RTNet = (() => {
       [_s.snapshotTimer, _s.heartbeatTimer, _s.stateTickTimer, _s.periodicSyncTimer].forEach(t => { if (t) clearInterval(t); });
       [_s._hostDeadTimer, _s._candidateTimer, _s._soloHostTimer].forEach(t => { if (t) clearTimeout(t); });
       _s.snapshotTimer = _s.heartbeatTimer = _s.stateTickTimer = _s._hostDeadTimer = _s._candidateTimer = _s.periodicSyncTimer = null;
+      _lastSnapshotJson = null; _lastSnapshotTs = 0;
+      if (_fallbackAvisoTimer) { clearTimeout(_fallbackAvisoTimer); _fallbackAvisoTimer = null; }
       _stopPingTimer();
 
       for (const pc of _s.peers.values()) { try { pc.close(); } catch(_) {} }

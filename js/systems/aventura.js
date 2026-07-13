@@ -99,7 +99,7 @@ const _AVT_EVENTOS_DE_FASE = new Set([
   'avt_combate_inicio', 'avt_batalha_update', 'avt_combate_fim', 'avt_combate_join',
   'avt_convite_combate', 'avt_bau_aberto', 'avt_obj_spawn', 'avt_obj_pickup',
   'avt_skill_anim', 'avt_attack_anim', 'avt_efeito_anim_start', 'avt_efeito_anim_stop',
-  'avt_dano_visual', 'avt_rastro_marcar', 'avt_entidade_nova',
+  'avt_dano_visual', 'avt_dano_visual_batch', 'avt_rastro_marcar', 'avt_entidade_nova',
 ]);
 
 // Helper central de broadcast para Modo Aventura.
@@ -4041,6 +4041,10 @@ window._avtMostrarAventuraScreen = _avtMostrarAventuraScreen;
 async function entrarAventura(rpgId) {
   if (typeof _avtGraficosCarregar === 'function') _avtGraficosCarregar();
   _avtCleanupListeners();
+  // Sala nova: zera contadores/dedupe de movimento. As chaves já são escopadas
+  // por rpgId (_avtSeqKey), mas o reset evita crescimento sem limite ao alternar
+  // aventuras sem recarregar a página.
+  try { window._avtTokenSeq = Object.create(null); window._avtRxMove = Object.create(null); } catch(_) {}
   // Vincula retroativamente cópias antigas do mesmo personagem (uma vez por sessão).
   _avtBackfillLinhagem();
   if (typeof avtMenuAbrir === 'function') {
@@ -4075,7 +4079,7 @@ async function _avtFlushPersistencia(origem) {
       }).then(() => {
         const dbChar = (AVT_STATE.chars || []).find(c => c.id === charId);
         if (dbChar) dbChar.hp_atual = hp;
-      }).catch(() => {})
+      }).catch(e => { try { console.warn('[AVT][flush] HP buffered do char ' + charId + ' falhou:', e); } catch(_) {} })
     );
   }
   AVT_STATE._charHpBuffer = {};
@@ -4089,7 +4093,7 @@ async function _avtFlushPersistencia(origem) {
     promises.push(
       _avtSb('characters?id=eq.' + encodeURIComponent(ent.dbId), {
         method: 'PATCH', body: JSON.stringify({ hp_atual: ent.hp, custom_attrs: ca })
-      }).catch(() => {})
+      }).catch(e => { try { console.warn('[AVT][flush] posição/HP de "' + ent.nome + '" falhou:', e); } catch(_) {} })
     );
   }
 
@@ -4100,7 +4104,7 @@ async function _avtFlushPersistencia(origem) {
       promises.push(
         (typeof sbRpc === 'function' ? sbRpc('npc_update_position', {
           _rpg: rpgId, _npc: ent.id, _x: ent.x || 0, _y: ent.y || 0, _user: null
-        }) : Promise.resolve()).catch(() => {})
+        }) : Promise.resolve()).catch(e => { try { console.warn('[AVT][flush] posição do NPC "' + ent.id + '" falhou:', e); } catch(_) {} })
       );
     }
   }
@@ -4153,6 +4157,16 @@ function _avtCleanupListeners() {
   avtDpadStop();
   if (typeof avtPixiCleanupAll === 'function') avtPixiCleanupAll();
   _avtVfxHostDestroy();
+  // Texturas procedurais: PIXI.Texture.from(canvas) registra no TextureCache
+  // global do PIXI, então sem destroy explícito elas (e o contexto GL antigo)
+  // ficam retidas entre ciclos de entrar/sair. Aqui é o ponto seguro — depois
+  // do cleanup dos efeitos ativos; _avtProcTextures recria sob demanda.
+  try {
+    for (const k of Object.keys(_AVT_PROC_TEX_CACHE)) {
+      try { _AVT_PROC_TEX_CACHE[k].destroy(true); } catch(_) {}
+    }
+    _AVT_PROC_TEX_CACHE = {};
+  } catch(_) {}
   try { _avtPararSonsAmbiente(); } catch(_) {}
 }
 
@@ -11498,7 +11512,13 @@ function avtReceberMovimento(_payload) {
       const isOlder =
         (seq != null && last.seq >= 0 && seq < last.seq) ||
         (ts  != null && last.ts  > 0 && ts  < last.ts);
-      if(isOlder) return;
+      // Peer que recarregou a página reinicia o seq em 1; se o ts do pacote é
+      // claramente mais novo (>30s), aceita e re-baseia o contador em vez de
+      // descartar todos os movimentos dele até o seq alcançar o antigo.
+      const isSeqReset =
+        (seq != null && last.seq >= 0 && seq < last.seq) &&
+        (ts  != null && last.ts  > 0 && (ts - last.ts) > 30000);
+      if(isOlder && !isSeqReset) return;
       window._avtRxMove[_dedupeKey] = {
         seq: (seq != null ? seq : last.seq),
         ts:  (ts  != null ? ts  : last.ts),
@@ -13676,6 +13696,9 @@ async function _avtExecutarAtaque() {
         // rótulo de área não resolve entidade nos peers e _areaCentro/_areaLinha são locais.
         if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAtacanteAnim||ativo).nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null }); } catch(_) {} }
 
+        // Números de dano nos peers: 1 broadcast em lote (o stagger de 80ms é
+        // reproduzido no receptor) em vez de 1 evento por alvo dentro do loop.
+        try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _alvosAreaFinal.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
         _alvosAreaFinal.forEach((alvA, idxA) => {
           const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id);
           setTimeout(() => {
@@ -13689,7 +13712,6 @@ async function _avtExecutarAtaque() {
             }
             if (isCrit) _avtTokenTremer(entAlvA || alvA);
             _avtMostrarDanoAbaixoHp(entAlvA || alvA, real, isCrit);
-            _avtBroadcast('avt_dano_visual', { alvoNome: alvA.nome, dano: real, isCrit, critMult });
             _avtLog(`  ↳ ${alvA.nome}: ${real} ${tipoDano}${isCrit?' ✦ CRÍTICO':''}`, b.id);
 
             if (sk?.efeitos_bonus?.length) {
@@ -13830,6 +13852,10 @@ async function _avtExecutarAtaque() {
           const _extrasMulti = b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0 && e.id !== alvo.id &&
               Math.max(Math.abs(Math.round(e.x) - _cxM), Math.abs(Math.round(e.y) - _cyM)) <= _raioMulti)
             .slice(0, _abBuffs.multiExtra);
+          // Números de dano nos peers: lote único (stagger reproduzido no receptor).
+          if (_extrasMulti.length) {
+            try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _extrasMulti.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
+          }
           _extrasMulti.forEach((alvX, idxX) => {
             const entAlvX = AVT_STATE.entidades.find(e => e.id === alvX.id);
             setTimeout(() => {
@@ -13853,7 +13879,6 @@ async function _avtExecutarAtaque() {
               }
               if (isCrit) _avtTokenTremer(entAlvX || alvX);
               _avtMostrarDanoAbaixoHp(entAlvX || alvX, real, isCrit);
-              _avtBroadcast('avt_dano_visual', { alvoNome: alvX.nome, dano: real, isCrit, critMult });
               _avtLog(`  ↳ ${alvX.nome}: ${real} ${tipoDano} (multi-alvo)`, b.id);
               if (alvX.hp <= 0) {
                 _avtLog(`💀 ${alvX.nome} derrotado!`, b.id);
@@ -13918,6 +13943,21 @@ function avtReceberDanoVisual({ alvoNome, dano, isCrit, faseId } = {}) {
   if (alvo) _avtMostrarDanoAcimaDaHead(alvo, dano, isCrit);
 }
 window.avtReceberDanoVisual = avtReceberDanoVisual;
+
+// Versão em lote (ataques em área/multi-alvo): um único broadcast com a lista de
+// alvos em vez de N eventos; o stagger visual é reproduzido localmente com
+// stepMs (padrão 80ms, o mesmo dos emissores). O handler unitário acima
+// permanece registrado para compat com hosts em bundle antigo.
+function avtReceberDanoVisualBatch({ alvoNomes, dano, isCrit, stepMs, faseId } = {}) {
+  if (!_avtMinhaFase(faseId)) return;
+  if (!Array.isArray(alvoNomes) || !alvoNomes.length) return;
+  const passo = (typeof stepMs === 'number' && stepMs >= 0) ? stepMs : 80;
+  alvoNomes.forEach((alvoNome, i) => {
+    // faseId re-checado no unitário: a fase local pode mudar durante o stagger.
+    setTimeout(() => avtReceberDanoVisual({ alvoNome, dano, isCrit, faseId }), i * passo);
+  });
+}
+window.avtReceberDanoVisualBatch = avtReceberDanoVisualBatch;
 
 // Receive HP sync broadcast — keeps non-host clients HP bars accurate during chase
 function avtReceberHpUpdate({ nome, hp, hpMax }) {
@@ -14790,6 +14830,8 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
           const _delayMorteNpcArea = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entNpc), _avtEntViva(entNpc), true) : 0;
           if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:_areaLabelNpc }); } catch(_) {} }
 
+          // Números de dano nos peers: lote único (stagger reproduzido no receptor).
+          try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _alvosNpcArea.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
           _alvosNpcArea.forEach((alvA, idxA) => {
             const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id) || alvA;
             const initA   = bat.iniciativa.find(e => e.id === alvA.id);
@@ -14813,7 +14855,6 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
               }
               if (isCrit) _avtTokenTremer(entAlvA);
               _avtMostrarDanoAbaixoHp(entAlvA, real, isCrit);
-              _avtBroadcast('avt_dano_visual', { alvoNome: alvA.nome, dano: real, isCrit, critMult });
               _avtLog(`  ↳ ${alvA.nome}: ${real} ${tipoDano}${isCrit ? ' ✦ CRÍTICO' : ''}`, bat.id);
               // Efeitos de skill por alvo (ignora efeitos self/único como cura/avatar/teleporte_alvo)
               if (sk?.efeitos_bonus?.length) {
@@ -15011,6 +15052,7 @@ async function _avtFlushCharHpBuffer(origem) {
       if (dbChar) { dbChar.hp_atual = hp; _avtSyncLinhagem(dbChar); }
     } catch(e) {
       AVT_STATE._charHpBuffer[charId] = copy[charId]; // re-buffer on failure
+      try { console.warn('[AVT][flush] HP do char ' + charId + ' falhou (re-buffer):', e); } catch(_) {}
     }
   }
   try { console.log('[AVT] HP flush (' + (origem||'?') + '):', ids.length, 'chars'); } catch(_) {}
@@ -19112,10 +19154,10 @@ function _avtVfxHostDestroy() {
   const h = _avtVfxHostState;
   if (!h) return;
   _avtVfxHostState = null;
-  try { h.active.forEach(ad => { try { ad.destroy(); } catch(_) {} }); } catch(_) {}
+  try { h.active.forEach(ad => { try { ad.destroy(); } catch(e) { try { console.warn('[pixi-fx] destroy de adapter falhou:', e); } catch(_) {} } }); } catch(_) {}
   try { h.app.ticker.remove(h._syncFn); } catch(_) {}
   try { h.overlayCanvas.remove(); } catch(_) {}
-  try { h.app.destroy(true); } catch(_) {}
+  try { h.app.destroy(true); } catch(e) { try { console.warn('[pixi-fx] destroy do app host falhou:', e); } catch(_) {} }
 }
 window._avtVfxHostDestroy = _avtVfxHostDestroy;
 
@@ -23328,6 +23370,11 @@ async function _avtCarregarFaseInner(faseId, opts = {}) {
   if (typeof _avtTileBakeInvalidate === 'function') _avtTileBakeInvalidate();
   // Sons ambientes pertencem à fase anterior — o tick recria os da nova.
   try { _avtPararSonsAmbiente(); } catch(_) {}
+  // Efeitos Pixi Studio (one-shot, follow e persistentes) ancorados em entidades
+  // da fase anterior virariam órfãos aqui — limpa; a nova fase re-dispara os seus.
+  // Limitação conhecida: o visual de um buff persistente no próprio personagem
+  // também é encerrado na transição (o estado em status_effects é preservado).
+  try { if (typeof avtPixiCleanupAll === 'function') avtPixiCleanupAll(); } catch(_) {}
 
   // Metadados da fase no dungeon (nível/balanceamento dos NPCs, seed do gerador).
   AVT_STATE.dungeon._npcLevel      = faseObj.npc_level ?? 1;
@@ -28783,8 +28830,18 @@ try{
         } else if (r.pat === null && AVT_STATE.npcTimers[r.id]?._shadow) {
           AVT_STATE.npcTimers[r.id].ativo = false;
         }
+        // [Proposta D] Autoridade única de posição de NPC no fallback Supabase:
+        // com npcSyncEnabled, posições de não-jogadores chegam pelo npc_state
+        // (lease npc_claim_host, com versão/dedupe em _avtNpcOnRemoteUpdate) — e o
+        // host de fase do tick pode ser OUTRO usuário, então aplicar os dois era
+        // dupla autoridade (teleporte/puxão). HP/status/visibilidade acima seguem
+        // vindo do tick. Kill-switch npcSyncEnabled=false restaura o tick como
+        // autoridade também de posição. Jogadores continuam tick-autoritativos.
+        const _npcPosViaNpcState = ent.tipo !== 'jogador'
+          && AVT_STATE.npcSyncEnabled
+          && typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode === 'supabase';
         // Posição: reconciliação autoritativa por sequência de input (server reconciliation)
-        if (typeof r.x === 'number' && typeof r.y === 'number') {
+        if (!_npcPosViaNpcState && typeof r.x === 'number' && typeof r.y === 'number') {
           const dx = Math.abs((ent.x||0) - r.x);
           const dy = Math.abs((ent.y||0) - r.y);
           const maxDiv = Math.max(dx, dy);
@@ -29527,20 +29584,38 @@ try{
   } catch(_) {}
 
   // ─── 8) Hooks de lifecycle: iniciar/parar heartbeat ──────────────────────
-  try {
-    const _origSair = window.sairAventura;
-    if (typeof _origSair === 'function') {
-      window.sairAventura = function() {
-        try { _avtPararHpHeartbeat(); } catch(_) {}
-        try { _avtPararRegenHpPorSegundo(); } catch(_) {}
-        try { _avtPararRegenManaPorSegundo(); } catch(_) {}
-        // Parar timer de flush de HP e persistir estado final
-        try { if (AVT_STATE._charHpFlushTimer) { clearInterval(AVT_STATE._charHpFlushTimer); AVT_STATE._charHpFlushTimer = null; } } catch(_) {}
-        try { if (typeof _avtFlushPersistencia === 'function') _avtFlushPersistencia('sairAventura').catch(()=>{}); } catch(_) {}
-        return _origSair.apply(this, arguments);
-      };
+  // Instalação adiada para a macrotask seguinte: sairAventura/voltarAoMenuDeJogo
+  // são definidos em avt-menu.js, importado DEPOIS deste módulo no main.ts —
+  // capturar window.sairAventura de forma síncrona aqui pegaria undefined e o
+  // hook nunca instalaria (timers de HP/regen e o flush final ficavam sem rodar).
+  function _avtHookTeardown(origem) {
+    try { _avtPararHpHeartbeat(); } catch(_) {}
+    try { _avtPararRegenHpPorSegundo(); } catch(_) {}
+    try { _avtPararRegenManaPorSegundo(); } catch(_) {}
+    try { if (typeof AVT_PERF !== 'undefined' && AVT_PERF && typeof AVT_PERF.pararAdaptativo === 'function') AVT_PERF.pararAdaptativo(); } catch(_) {}
+    // Parar timer de flush de HP e persistir estado final
+    try { if (AVT_STATE._charHpFlushTimer) { clearInterval(AVT_STATE._charHpFlushTimer); AVT_STATE._charHpFlushTimer = null; } } catch(_) {}
+    try { if (typeof _avtFlushPersistencia === 'function') _avtFlushPersistencia(origem).catch(()=>{}); } catch(_) {}
+  }
+  function _avtInstalarHookSaida(nomeFn) {
+    const orig = window[nomeFn];
+    if (typeof orig !== 'function') {
+      try { console.warn('[AVT] hook de saída não instalado: ' + nomeFn + ' indisponível'); } catch(_) {}
+      return;
     }
-  } catch(_) {}
+    // O accessor global de avt-menu.js propaga a atribuição ao binding do módulo,
+    // então chamadores internos também passam pelo wrapper.
+    window[nomeFn] = function() {
+      _avtHookTeardown(nomeFn);
+      return orig.apply(this, arguments);
+    };
+  }
+  setTimeout(() => {
+    try {
+      _avtInstalarHookSaida('sairAventura');
+      _avtInstalarHookSaida('voltarAoMenuDeJogo');
+    } catch(_) {}
+  }, 0);
 
   // Inicia heartbeat e regen assim que houver um personagem ligado (poll leve)
   let _hpHbBootTries = 0;
@@ -30482,6 +30557,7 @@ Object.defineProperty(globalThis, "_avtExecutarAtaque", { configurable: true, ge
 Object.defineProperty(globalThis, "avtReceberSkillSelecionada", { configurable: true, get: () => avtReceberSkillSelecionada, set: (__v) => { avtReceberSkillSelecionada = __v; } });
 Object.defineProperty(globalThis, "avtReceberDadoRolado", { configurable: true, get: () => avtReceberDadoRolado, set: (__v) => { avtReceberDadoRolado = __v; } });
 Object.defineProperty(globalThis, "avtReceberDanoVisual", { configurable: true, get: () => avtReceberDanoVisual, set: (__v) => { avtReceberDanoVisual = __v; } });
+Object.defineProperty(globalThis, "avtReceberDanoVisualBatch", { configurable: true, get: () => avtReceberDanoVisualBatch, set: (__v) => { avtReceberDanoVisualBatch = __v; } });
 Object.defineProperty(globalThis, "avtReceberHpUpdate", { configurable: true, get: () => avtReceberHpUpdate, set: (__v) => { avtReceberHpUpdate = __v; } });
 Object.defineProperty(globalThis, "avtReceberRsvUpdate", { configurable: true, get: () => avtReceberRsvUpdate, set: (__v) => { avtReceberRsvUpdate = __v; } });
 Object.defineProperty(globalThis, "_avtHudUpdate", { configurable: true, get: () => _avtHudUpdate, set: (__v) => { _avtHudUpdate = __v; } });
