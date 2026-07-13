@@ -54,6 +54,7 @@ import './aventura/renderer-pixi';
 import './systems/avt-walk-presets.js';
 import './systems/avt-menu.js';
 import './systems/avt-inventario.js';
+import './systems/avt-perf.js';
 import './systems/catalog-packages.js';
 import './systems/catalog.js';
 import './systems/attribute-mapping.js';

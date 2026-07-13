@@ -33,6 +33,116 @@ let _texCache: Record<string, any> = {};   // key do tileset -> PIXI.Texture
 let _carregandoCore = false;
 let _viewCss = '';                    // último cssText espelhado do canvas 2D
 
+// ── Luz dinâmica GPU (tochas dos jogadores) + poeira ambiente ────────────────
+// Substitui os gradientes radiais Canvas 2D por-jogador-por-frame por sprites
+// aditivos no WebGL (com flicker de tocha e bloom natural da mesclagem ADD).
+// Gate: iso + atmosfera + AVT_GRAFICOS.luzGpu (preset Médio+).
+let _lightRoot: any = null;
+let _lightTex: any = null;
+let _lightSprites: any[] = [];
+let _lightsOn = false;
+let _dustSprites: any[] = [];
+
+function _luzGpuHabilitada(): boolean {
+  const G = (window as any).AVT_GRAFICOS;
+  return !!(G && G.isoAtivo && G.atmosfera && G.luzGpu !== false);
+}
+
+function _texturaLuz(PIXI: any): any {
+  if (_lightTex) return _lightTex;
+  const size = 256;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const g = cv.getContext('2d')!;
+  const grad = g.createRadialGradient(size / 2, size / 2, size * 0.06, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(255,226,170,0.8)');
+  grad.addColorStop(0.5, 'rgba(255,196,120,0.3)');
+  grad.addColorStop(1, 'rgba(255,180,100,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+  _lightTex = PIXI.Texture.from(cv);
+  return _lightTex;
+}
+
+function _atualizarLuzes(PIXI: any, canvas: any, esc: number): void {
+  const on = _luzGpuHabilitada();
+  _lightsOn = on;
+  if (!on) { if (_lightRoot) _lightRoot.visible = false; return; }
+  const ST: any = (window as any).AVT_STATE;
+  if (!_lightRoot) {
+    _lightRoot = new PIXI.Container();
+    _app.stage.addChild(_lightRoot);
+    _lightSprites = [];
+    _dustSprites = [];
+  }
+  _lightRoot.visible = true;
+
+  const ents = (ST.entidades || []).filter((e: any) => e && e.tipo === 'jogador' && !e.escondido && e.hp > 0);
+  while (_lightSprites.length < ents.length) {
+    const sp = new PIXI.Sprite(_texturaLuz(PIXI));
+    sp.anchor.set(0.5);
+    sp.blendMode = PIXI.BLEND_MODES.ADD;
+    _lightRoot.addChild(sp);
+    _lightSprites.push(sp);
+  }
+  const now = performance.now();
+  const raio = TILE * 3.2;
+  for (let i = 0; i < _lightSprites.length; i++) {
+    const sp = _lightSprites[i];
+    const e = ents[i];
+    if (!e) { sp.visible = false; continue; }
+    sp.visible = true;
+    sp.position.set(((e.renderX ?? e.x) + 0.5) * TILE, ((e.renderY ?? e.y) + 0.5) * TILE);
+    sp.width = sp.height = raio * 2;
+    // Flicker de tocha: variação sutil de alpha por jogador
+    sp.alpha = 0.55 + Math.sin(now / 190 + i * 1.7) * 0.07 + Math.sin(now / 47 + i * 3.1) * 0.03;
+  }
+
+  // Poeira ambiente (preset Alto): motas flutuando lentamente no viewport
+  const G = (window as any).AVT_GRAFICOS;
+  const dustOn = !!(G && G.preset === 'alto');
+  const DUST_N = 22;
+  if (dustOn && _dustSprites.length === 0) {
+    for (let i = 0; i < DUST_N; i++) {
+      const sp = new PIXI.Sprite(_texturaLuz(PIXI));
+      sp.anchor.set(0.5);
+      sp.blendMode = PIXI.BLEND_MODES.ADD;
+      sp.tint = 0xcfe0ff;
+      (sp as any)._seed = Math.random() * 1000;
+      _lightRoot.addChild(sp);
+      _dustSprites.push(sp);
+    }
+  }
+  if (_dustSprites.length) {
+    const vw = canvas.width / esc, vh = canvas.height / esc;
+    const camX = -(_tileRoot ? _tileRoot.position.x : 0) / esc, camY = -(_tileRoot ? _tileRoot.position.y : 0) / esc;
+    for (const sp of _dustSprites) {
+      if (!dustOn) { sp.visible = false; continue; }
+      sp.visible = true;
+      const s = (sp as any)._seed;
+      // Deriva lenta e wrap dentro do viewport (coordenadas de mundo)
+      const wx = camX + (((s * 137.7 + now * 0.006 * (0.4 + (s % 1))) % vw) + vw) % vw;
+      const wy = camY + (((s * 91.3 + now * 0.003 * (0.5 + ((s * 1.7) % 1)) + Math.sin(now / 900 + s) * 8) % vh) + vh) % vh;
+      sp.position.set(wx, wy);
+      const sz = TILE * (0.10 + (s % 1) * 0.12);
+      sp.width = sp.height = sz;
+      sp.alpha = 0.10 + Math.abs(Math.sin(now / 1400 + s)) * 0.10;
+    }
+  }
+
+  // Mesmo transform do mundo (os sprites usam coordenadas de bake)
+  if (_tileRoot) {
+    _lightRoot.scale.copyFrom(_tileRoot.scale);
+    _lightRoot.position.copyFrom(_tileRoot.position);
+  }
+}
+
+// Consulta usada pelo aventura.js para pular o desenho 2D das luzes de tocha
+// quando a camada GPU assumiu.
+function avtPixiWorldLightsAtivas(): boolean {
+  return _lightsOn;
+}
+
 function _flagDesativado(): boolean {
   try {
     if (new URLSearchParams(location.search).get('renderer') === 'canvas') return true;
@@ -196,11 +306,19 @@ function avtPixiWorldFrame(canvas: any, camera: any, SZ: number, dungeon: any, g
     _app.renderer.resize(canvas.width, canvas.height);
   }
 
-  // Rebake quando a fase/tileset/grade mudam (assinatura barata por frame)
+  // Rebake quando a fase/tileset/grade/conteúdo mudam (assinatura barata por frame).
+  // _dungeonRev é incrementado quando o mestre edita tiles ao vivo (FIX F7 — antes
+  // uma edição sem mudança de dimensões nunca rebakeava a camada PIXI).
   const ST: any = (window as any).AVT_STATE;
-  const sig = `${dungeon.w}x${dungeon.h}:${ST._faseAtualId || 'principal'}:${ST._tilesetLoaded ? 1 : 0}:${gridStyle?.stroke}|${gridStyle?.op}`;
+  const sig = `${dungeon.w}x${dungeon.h}:${ST._faseAtualId || 'principal'}:${ST._tilesetLoaded ? 1 : 0}:${gridStyle?.stroke}|${gridStyle?.op}:r${ST._dungeonRev || 0}`;
   if (sig !== _bakeSig) {
-    try { _bakeFase(dungeon, gridStyle); _bakeSig = sig; }
+    try {
+      _bakeFase(dungeon, gridStyle);
+      _bakeSig = sig;
+      // FIX F6: o rebake cria um _tileRoot novo sem filtro; sem resetar _hueAtual,
+      // um hue igual ao anterior nunca era reaplicado e a fase perdia o tint.
+      _hueAtual = 0;
+    }
     catch (e) { console.warn('[renderer-pixi] bake falhou, usando canvas:', e); return false; }
   }
 
@@ -229,6 +347,9 @@ function avtPixiWorldFrame(canvas: any, camera: any, SZ: number, dungeon: any, g
     ch.c.visible = !(ch.px + ch.w < vx0 || ch.px > vx1 || ch.py + ch.h < vy0 || ch.py > vy1);
   }
 
+  // Luz dinâmica GPU (tochas + poeira ambiente)
+  try { _atualizarLuzes(PIXI, canvas, esc); } catch (e) { _lightsOn = false; }
+
   _app.renderer.render(_app.stage);
   return true;
 }
@@ -241,7 +362,13 @@ function avtPixiWorldDestroy(): void {
   if (_app) {
     try { _app.destroy(true, { children: true, texture: true }); } catch (e) {}
     _app = null; _tileRoot = null; _chunks = []; _bakeSig = ''; _texCache = {}; _hueFilter = null; _hueAtual = 0; _viewCss = '';
+    _lightRoot = null; _lightTex = null; _lightSprites = []; _dustSprites = []; _lightsOn = false;
   }
 }
 
-Object.assign(window, { avtPixiWorldFrame, avtPixiWorldAtivo, avtPixiWorldDestroy });
+// Reaplica o gate da luz GPU imediatamente (chamado ao trocar preset no menu).
+function _avtLuzGpuAplicar(): void {
+  if (_lightRoot) _lightRoot.visible = _luzGpuHabilitada();
+}
+
+Object.assign(window, { avtPixiWorldFrame, avtPixiWorldAtivo, avtPixiWorldDestroy, avtPixiWorldLightsAtivas, _avtLuzGpuAplicar });

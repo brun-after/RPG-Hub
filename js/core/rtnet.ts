@@ -64,9 +64,26 @@ window.RTNet = (() => {
 
     // Peer leave callbacks
     _peerLeaveCallbacks: [],
+
+    // Telemetria (AVT_PERF): contadores de mensagens e RTT ao host
+    _stats: { in: 0, out: 0, rtt: -1 },
+    _pingTimer: null,
   };
 
-  const STUN_SERVERS         = [{ urls: 'stun:stun.l.google.com:19302' }];
+  // TURN opcional via env (Vite): VITE_TURN_URL / VITE_TURN_USER / VITE_TURN_PASS.
+  // Sem TURN, peers atrás de NAT simétrico caem silenciosamente para o fallback Supabase.
+  const _ICE_ENV = (() => { try { return (import.meta as any).env || {}; } catch(_) { return {}; } })();
+  function _iceServers() {
+    const servers: any[] = [{ urls: 'stun:stun.l.google.com:19302' }];
+    if (_ICE_ENV.VITE_TURN_URL) {
+      servers.push({
+        urls: _ICE_ENV.VITE_TURN_URL,
+        username: _ICE_ENV.VITE_TURN_USER || undefined,
+        credential: _ICE_ENV.VITE_TURN_PASS || undefined,
+      });
+    }
+    return servers;
+  }
   const HOST_HB_INTERVAL     = 5_000;   // ms — host heartbeat via signaling
   const HOST_DEAD_THRESH     = 15_000;  // ms — host considerado morto sem heartbeats
   const SNAPSHOT_INTERVAL    = 15_000;  // ms — snapshot persistido em banco
@@ -74,6 +91,7 @@ window.RTNet = (() => {
   const ELECTION_WAIT        = 250;     // ms — janela curta de coleta (apenas empate raro)
   const ELECTION_MODE        = 'voluntary'; // 'auto' = primeiro a entrar; 'voluntary' = aguarda host_volunteer
   const PERIODIC_SYNC_INTERVAL = 10_000; // ms — ressincronização periódica forçada
+  const PING_INTERVAL        = 2_000;   // ms — medição de RTT ao host (canal fast)
 
   // Mapa: tipo de evento → nome da função global handler (mesmo que realtime.js)
   const AVT_HANDLER_MAP = {
@@ -129,8 +147,16 @@ window.RTNet = (() => {
     // [FASES]
     avt_fase_mudou:           'avtReceberFaseMudou',
     avt_fase_host:            'avtReceberFaseHost',
+    avt_fase_host_release:    'avtReceberFaseHostRelease',
     avt_porta_proxima:        'avtReceberPortaProxima',
     avt_dungeon_update:       'avtReceberDungeonUpdate',
+    // [VFX persistente] efeitos de status ancorados em entidade
+    avt_efeito_anim_start:    'avtReceberEfeitoAnimStart',
+    avt_efeito_anim_stop:     'avtReceberEfeitoAnimStop',
+    // [PERF] medição de RTT (tratados internamente em _dispatch; entradas aqui
+    // permitem que o fallback Supabase os roteie para os stubs do avt-perf)
+    avt_ping:                 'avtReceberPing',
+    avt_pong:                 'avtReceberPong',
   };
 
   // opts padrão por tipo de evento (camada A/B/C conforme plano §5)
@@ -187,6 +213,10 @@ window.RTNet = (() => {
     avt_dungeon_update:       { persist: 'never',     reliable: true  },
     // [FASES] anúncio/reafirmação de host por fase
     avt_fase_host:            { persist: 'never',     reliable: true  },
+    avt_fase_host_release:    { persist: 'never',     reliable: true  },
+    // [PERF] ping/pong de RTT — alta frequência, perda tolerável
+    avt_ping:                 { persist: 'never',     reliable: false },
+    avt_pong:                 { persist: 'never',     reliable: false },
   };
 
   function _log(...a)  { try { console.log('[RTNet]',  ...a); } catch(_) {} }
@@ -197,12 +227,16 @@ window.RTNet = (() => {
   // ── DISPATCH ────────────────────────────────────────────────────
 
   function _dispatch(tipo, payload) {
+    _s._stats.in++;
     // Heartbeat do host via DataChannel — resetar watchdog de host morto
     if (tipo === 'avt_host_heartbeat') {
       const hId = payload?.host_id;
       if (hId && hId === _s.hostId) { _s.lastHostHb = Date.now(); _resetHostWatch(); }
       return;
     }
+    // Ping/pong de RTT — tratados na camada de transporte
+    if (tipo === 'avt_ping') { _onPing(payload); return; }
+    if (tipo === 'avt_pong') { _onPong(payload); return; }
     const hs = _s.handlers.get(tipo);
     if (hs) hs.forEach(h => { try { h(payload); } catch(e) { _warn('handler falhou:', tipo, e); } });
 
@@ -275,7 +309,7 @@ window.RTNet = (() => {
     _log('iniciando conexão WebRTC com', peerId);
 
     try {
-      const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
+      const pc = new RTCPeerConnection({ iceServers: _iceServers() });
       _s.peers.set(peerId, pc);
 
       const ch = pc.createDataChannel('game', { ordered: true });
@@ -308,7 +342,7 @@ window.RTNet = (() => {
     if (_s.peers.has(fromId)) return;
     _log('recebendo offer de', fromId);
 
-    const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: _iceServers() });
     _s.peers.set(fromId, pc);
 
     pc.ondatachannel = e => {
@@ -586,6 +620,49 @@ window.RTNet = (() => {
     try { window.dispatchEvent(new CustomEvent('rtnet:hostlost')); } catch(_) {}
   }
 
+  // ── PING/PONG (medição de RTT ao host) ─────────────────────────
+
+  function _startPingTimer() {
+    _stopPingTimer();
+    _s._pingTimer = setInterval(() => {
+      if (!_s.initialized) return;
+      if (_s._isHost) { _s._stats.rtt = 0; return; }
+      if (!_s.hostId) { _s._stats.rtt = -1; return; }
+      const payload = { from: _s.userId, t: performance.now() };
+      const ch = _s.fastChannels.get(_s.hostId);
+      if (ch && ch.readyState === 'open') {
+        try { ch.send(JSON.stringify({ tipo: 'avt_ping', payload })); _s._stats.out++; return; } catch(_) {}
+      }
+      // Fallback Supabase: mede o round-trip via WS (host ecoa pelo mesmo caminho)
+      if (typeof realtimeBroadcast === 'function') {
+        try { realtimeBroadcast('avt_ping', payload); _s._stats.out++; } catch(_) {}
+      }
+    }, PING_INTERVAL);
+  }
+
+  function _stopPingTimer() {
+    if (_s._pingTimer) { clearInterval(_s._pingTimer); _s._pingTimer = null; }
+    _s._stats.rtt = -1;
+  }
+
+  function _onPing(payload) {
+    // Só o host responde (via Supabase o ping chega a todos os peers)
+    if (!_s._isHost || !payload || !payload.from || payload.from === _s.userId) return;
+    const pong = { to: payload.from, t: payload.t };
+    const ch = _s.fastChannels.get(payload.from);
+    if (ch && ch.readyState === 'open') {
+      try { ch.send(JSON.stringify({ tipo: 'avt_pong', payload: pong })); _s._stats.out++; return; } catch(_) {}
+    }
+    if (typeof realtimeBroadcast === 'function') {
+      try { realtimeBroadcast('avt_pong', pong); _s._stats.out++; } catch(_) {}
+    }
+  }
+
+  function _onPong(payload) {
+    if (!payload || payload.to !== _s.userId || typeof payload.t !== 'number') return;
+    _s._stats.rtt = Math.max(0, Math.round(performance.now() - payload.t));
+  }
+
   // ── TICK AUTORITATIVO (host → todos, 500ms) ────────────────────
 
   function _startStateTick() {
@@ -616,8 +693,8 @@ window.RTNet = (() => {
 
   async function _saveSnapshot() {
     if (!_s._isHost || !_s.snapshotProvider) return;
-    // rpg_session_state.rpg_id é uuid; IDs de aventura (strings) causam erro 400
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(_s.rpgId)) return;
+    // sessionStateUpdate roteia rpgIds não-UUID para avt_session_state
+    // (migration_avt_session_state.sql); erro (ex.: migração não aplicada) é tolerado.
     try { await sessionStateUpdate(_s.rpgId, _s.snapshotProvider()); } catch(e) { _warn('saveSnapshot:', e); }
   }
 
@@ -670,7 +747,7 @@ window.RTNet = (() => {
       const chMap = o.reliable !== false ? _s.channels : _s.fastChannels;
       const hostCh = chMap.get(_s.hostId);
       if (hostCh && hostCh.readyState === 'open') {
-        try { hostCh.send(frame); return; } catch(_) {}
+        try { hostCh.send(frame); _s._stats.out++; return; } catch(_) {}
       }
       // Canal do host indisponível → fallback Supabase (alcança todos os assinantes).
       if (typeof realtimeBroadcast === 'function') {
@@ -685,7 +762,7 @@ window.RTNet = (() => {
       const chMap = o.reliable !== false ? _s.channels : _s.fastChannels;
       let ok = chMap.size > 0;
       for (const ch of chMap.values()) {
-        if (ch.readyState === 'open') { try { ch.send(frame); } catch(e) { ok = false; } }
+        if (ch.readyState === 'open') { try { ch.send(frame); _s._stats.out++; } catch(e) { ok = false; } }
         else ok = false;
       }
       allP2P = ok;
@@ -712,7 +789,7 @@ window.RTNet = (() => {
     if (_s._isHost) { _dispatch(tipo, payload); return; }
     const ch = _s.channels.get(_s.hostId);
     if (ch && ch.readyState === 'open') {
-      try { ch.send(JSON.stringify({ tipo, payload })); return; } catch(_) {}
+      try { ch.send(JSON.stringify({ tipo, payload })); _s._stats.out++; return; } catch(_) {}
     }
     // Fallback: broadcast (host filtra)
     if (typeof realtimeBroadcast === 'function') {
@@ -824,6 +901,9 @@ window.RTNet = (() => {
           _signal('snapshot_request', { target_id: _s.hostId });
         }
       }, _periodMs);
+
+      _s._stats = { in: 0, out: 0, rtt: -1 };
+      _startPingTimer();
     },
 
     shutdown() {
@@ -845,6 +925,7 @@ window.RTNet = (() => {
       [_s.snapshotTimer, _s.heartbeatTimer, _s.stateTickTimer, _s.periodicSyncTimer].forEach(t => { if (t) clearInterval(t); });
       [_s._hostDeadTimer, _s._candidateTimer, _s._soloHostTimer].forEach(t => { if (t) clearTimeout(t); });
       _s.snapshotTimer = _s.heartbeatTimer = _s.stateTickTimer = _s._hostDeadTimer = _s._candidateTimer = _s.periodicSyncTimer = null;
+      _stopPingTimer();
 
       for (const pc of _s.peers.values()) { try { pc.close(); } catch(_) {} }
       _s.peers.clear(); _s.channels.clear(); _s.fastChannels.clear();
@@ -902,6 +983,22 @@ window.RTNet = (() => {
     getHostId() { return _s.hostId; },
     getTransport() { return _s.mode; },
     getUserId() { return _s.userId; },
+
+    // Telemetria para o overlay AVT_PERF: mensagens P2P acumuladas, RTT ao host
+    // e estado por peer (fallback = peer sem canal aberto → tráfego via Supabase).
+    getStats() {
+      const peers = [];
+      for (const [pid] of _s.peers.entries()) {
+        const ch = _s.channels.get(pid);
+        peers.push({ userId: pid, open: !!(ch && ch.readyState === 'open') });
+      }
+      return { in: _s._stats.in, out: _s._stats.out, rtt: _s._stats.rtt, mode: _s.mode, peers };
+    },
+
+    // Handlers de ping/pong para o caminho de fallback Supabase (o caminho P2P
+    // é interceptado em _dispatch antes do lookup global).
+    _onPing(payload) { _onPing(payload); },
+    _onPong(payload) { _onPong(payload); },
 
     listarPeers() {
       const out = [];

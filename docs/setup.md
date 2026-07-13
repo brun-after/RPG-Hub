@@ -254,3 +254,34 @@ Dentro de `js/app.js`, outras constantes que podem ser ajustadas:
 - Certifique-se de que o app está em HTTPS
 - Verifique o manifest.json com `Application → Manifest` no Chrome DevTools
 - Garanta que o `sw.js` está sendo servido com Content-Type correto (`application/javascript`)
+
+## TURN server (opcional — melhora conexão P2P do Modo Aventura)
+
+O Modo Aventura usa WebRTC P2P entre os jogadores, com STUN público do Google.
+Jogadores atrás de NAT simétrico/CGNAT não conseguem abrir DataChannel direto e
+caem silenciosamente para o fallback Supabase (latência maior). Um servidor TURN
+resolve esses casos.
+
+1. Instale um TURN (ex.: [coturn](https://github.com/coturn/coturn)) num VPS:
+   ```bash
+   sudo apt install coturn
+   # /etc/turnserver.conf (mínimo):
+   #   listening-port=3478
+   #   fingerprint
+   #   lt-cred-mech
+   #   user=rpghub:SENHA_FORTE
+   #   realm=seu-dominio.com
+   sudo systemctl enable --now coturn
+   ```
+2. Configure as variáveis de build (Vite) num arquivo `.env` na raiz:
+   ```
+   VITE_TURN_URL=turn:seu-dominio.com:3478
+   VITE_TURN_USER=rpghub
+   VITE_TURN_PASS=SENHA_FORTE
+   ```
+3. `npm run build` — o cliente anexa o TURN ao `iceServers` automaticamente
+   (js/core/rtnet.ts). Sem as variáveis, o comportamento continua STUN-only.
+
+Diagnóstico: ative o overlay de desempenho (`?perf=1` ou menu ⚙ Gráficos →
+"Medidor de desempenho") — ele mostra o modo de rede (P2P/mixed/fallback), o RTT
+ao host e quantos peers estão em fallback WebSocket.

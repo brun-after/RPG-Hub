@@ -252,19 +252,31 @@ class _AudioManager {
 
   // ── SFX ──────────────────────────────────────────────────────────────────
 
-  playSFX(idOrUrl, { volume, pitchVariance = 0 } = {}) {
+  // URL same-origin (assets locais) pode usar Web Audio (html5:false), que habilita
+  // panning estéreo via stereo(); URLs remotas continuam html5:true (evita CORS).
+  _isSameOrigin(url) {
+    try {
+      if (!url) return false;
+      if (url.startsWith('/') || url.startsWith('./')) return true;
+      if (url.startsWith('http')) return url.startsWith(location.origin);
+      return true; // relativa
+    } catch (_) { return false; }
+  }
+
+  playSFX(idOrUrl, { volume, pitchVariance = 0, pan = 0 } = {}) {
     if (this._muted || typeof Howl === 'undefined') return;
     const url = this._resolveId(idOrUrl);
     if (!url) return;
     const vol = Math.min(1, Math.max(0, volume ?? this.volume.sfx));
     let howl = this._sfxCache[url];
     if (!howl) {
+      const local = this._isSameOrigin(url);
       // html5:true avoids CORS issues with cross-origin audio URLs (Web Audio API requires
       // proper CORS headers; HTML5 <audio> element does not for basic playback)
       howl = new Howl({
         src:    [url],
         volume: vol,
-        html5:  true,
+        html5:  !local,
         onloaderror: (_id, err) => {
           console.warn('[SFX] Falha ao carregar:', url, err);
           try { mostrarToast('Falha ao carregar áudio. Verifique se a URL é um link direto para .mp3, .wav ou .ogg.', 'aviso'); } catch (_) {}
@@ -275,10 +287,27 @@ class _AudioManager {
     }
     const id = howl.play();
     howl.volume(vol, id);
+    // Panning estéreo (posicional): só funciona no caminho Web Audio (assets locais)
+    if (pan && typeof howl.stereo === 'function' && howl._webAudio) {
+      try { howl.stereo(Math.max(-1, Math.min(1, pan)), id); } catch (_) {}
+    }
     if (pitchVariance > 0) {
       const rate = 1 + (Math.random() * 2 - 1) * pitchVariance;
       howl.rate(Math.max(0.5, Math.min(2, rate)), id);
     }
+  }
+
+  // Howl em loop para fontes de som ambiente colocadas no mapa (tocha, cachoeira).
+  // O chamador controla o volume por distância a cada tick; retorna o Howl ou null.
+  criarLoopAmbiente(idOrUrl) {
+    if (typeof Howl === 'undefined') return null;
+    const url = this._resolveId(idOrUrl);
+    if (!url) return null;
+    try {
+      const howl = new Howl({ src: [url], loop: true, volume: 0, html5: !this._isSameOrigin(url) });
+      howl.play();
+      return howl;
+    } catch (_) { return null; }
   }
 
   preloadSFX(ids = []) {

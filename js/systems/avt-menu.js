@@ -25,9 +25,88 @@ var AVT_GRAFICOS = {
   polimento: true,    // números arredondados + labels mais legíveis
   vfxProjecao: true,  // efeitos de habilidade posicionados pela projeção iso (tile/profundidade corretos)
   vfxBillboard: true, // efeitos de habilidade "em pé" (sem cisalhamento), acompanhando os personagens
+  // Qualidade unificada (Fase 2): null = personalizado (toggles manuais)
+  preset: null,       // 'baixo' | 'medio' | 'alto' | null
+  adaptativo: true,   // degrada 1 nível de preset (com aviso) quando FPS < 45 por 5s
+  cssFx: true,        // animações CSS decorativas contínuas (glow/pulso de tokens)
+  luzGpu: true,       // camada de luz dinâmica WebGL (tochas/auras) — médio+
+  vfxOverlayUnico: true, // overlay Pixi persistente único p/ VFX (fallback: overlays por efeito)
+  perfOverlay: false, // overlay de FPS/RTT (AVT_PERF)
+  // Áudio (Fase 6)
+  volMusica: null,    // null = padrão do AudioManager (0.45)
+  volSfx: null,       // null = padrão do AudioManager (0.75)
+  sfxPassos: true,    // passos posicionais dos jogadores
 };
 
 const _AVT_GRAFICOS_KEY = 'rpghub_avt_graficos';
+
+// ── PRESETS DE QUALIDADE ─────────────────────────────────────────────────────
+// Cada preset seta em lote os toggles que custam frame time. "baixo" corta os
+// custos por-frame (atmosfera, y-sort, pernas, CSS contínuo, luz GPU).
+const _AVT_QUALIDADE_PRESETS = {
+  baixo: { ativo: false, atmosfera: false, profundidade: false, pernas: false,
+           polimento: false, cssFx: false, luzGpu: false },
+  medio: { atmosfera: true, profundidade: true, pernas: true,
+           polimento: true, cssFx: true, luzGpu: true },
+  alto:  { ativo: true, atmosfera: true, profundidade: true, pernas: true,
+           polimento: true, cssFx: true, luzGpu: true },
+};
+
+function _avtGraficosPreset(nome, opts) {
+  const p = _AVT_QUALIDADE_PRESETS[nome];
+  if (!p) return;
+  Object.assign(AVT_GRAFICOS, p);
+  AVT_GRAFICOS.preset = nome;
+  _avtGraficosSalvar();
+  _avtGraficosAplicarTudo();
+  if (!(opts && opts.silencioso)) {
+    try { if (typeof mostrarToast === 'function') mostrarToast('Qualidade gráfica: ' + nome, 'ok'); } catch(_) {}
+  }
+  // Atualiza a UI do menu se o painel de configurações estiver aberto
+  try {
+    const panel = document.getElementById('avt-menu-panel');
+    if (panel && panel.style.display !== 'none' && panel.style.display !== '') {
+      _avtMenuAbrirConfigMestre(AVT_MENU_STATE.configAba || 'graficos');
+    }
+  } catch(_) {}
+}
+window._avtGraficosPreset = _avtGraficosPreset;
+
+// Reaplica todos os efeitos dependentes dos toggles (iso, atmosfera, CSS, luz GPU).
+function _avtGraficosAplicarTudo() {
+  try { if (typeof _avtGraficosAplicar === 'function') _avtGraficosAplicar(); } catch(_) {}
+  try { _avtGraficosIsoAplicar(); } catch(_) {}
+  try { _avtGraficosCssFxAplicar(); } catch(_) {}
+  try { if (typeof _avtLuzGpuAplicar === 'function') _avtLuzGpuAplicar(); } catch(_) {}
+}
+window._avtGraficosAplicarTudo = _avtGraficosAplicarTudo;
+
+// Gate das animações CSS contínuas (drop-shadow/box-shadow infinitos): quando
+// cssFx=false, body.avt-fx-low pausa os keyframes decorativos (ver styles.css).
+function _avtGraficosCssFxAplicar() {
+  try { document.body.classList.toggle('avt-fx-low', AVT_GRAFICOS.cssFx === false); } catch(_) {}
+}
+window._avtGraficosCssFxAplicar = _avtGraficosCssFxAplicar;
+
+// Qualidade adaptativa: chamado pelo AVT_PERF quando FPS médio < 45 por ~5s.
+// Degrada um nível com aviso; nunca sobe sozinho (o jogador decide subir).
+function _avtGraficosDegradar() {
+  if (AVT_GRAFICOS.adaptativo === false) return false;
+  const ordem = ['alto', 'medio', 'baixo'];
+  const atual = AVT_GRAFICOS.preset;
+  // preset null (personalizado): trata como "alto" para poder degradar
+  const idx = atual ? ordem.indexOf(atual) : 0;
+  if (idx < 0 || idx >= ordem.length - 1) return false;
+  const novo = ordem[idx + 1];
+  _avtGraficosPreset(novo, { silencioso: true });
+  try {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('⚙ FPS baixo — qualidade gráfica reduzida para "' + novo + '". Ajuste no menu ⚙ Gráficos.', '');
+    }
+  } catch(_) {}
+  return true;
+}
+window._avtGraficosDegradar = _avtGraficosDegradar;
 
 // Ângulo/escala isométricos: valores-base (52°) e os efetivos (recalculados conforme
 // o toggle "profundidade", que adota o diamante 2:1 clássico em 60°). São lidos pelas
@@ -75,7 +154,19 @@ function _avtGraficosCarregar() {
     const raw = localStorage.getItem(_AVT_GRAFICOS_KEY);
     if (raw) Object.assign(AVT_GRAFICOS, JSON.parse(raw));
   } catch(e) {}
+  _avtGraficosCssFxAplicar();
+  _avtAudioAplicar();
 }
+
+// Aplica os volumes salvos ao AudioManager (chamado no load e nos sliders do menu).
+function _avtAudioAplicar() {
+  try {
+    if (typeof AudioManager === 'undefined') return;
+    if (typeof AVT_GRAFICOS.volMusica === 'number') AudioManager.setMusicVolume(AVT_GRAFICOS.volMusica);
+    if (typeof AVT_GRAFICOS.volSfx === 'number')    AudioManager.setSfxVolume(AVT_GRAFICOS.volSfx);
+  } catch(_) {}
+}
+window._avtAudioAplicar = _avtAudioAplicar;
 
 function _avtGraficosSalvar() {
   try { localStorage.setItem(_AVT_GRAFICOS_KEY, JSON.stringify(AVT_GRAFICOS)); } catch(e) {}
@@ -278,6 +369,7 @@ function _avtGraficosIsoToggle(ativo) {
 // flag e reaplica a transform iso (o loop de render lê as flags a cada frame).
 function _avtGraficosRefinoToggle(chave, ativo) {
   AVT_GRAFICOS[chave] = !!ativo;
+  AVT_GRAFICOS.preset = null; // ajuste manual → sai do preset em lote
   _avtGraficosSalvar();
   // "profundidade" muda o ângulo 2:1; "atmosfera" liga/desliga a vinheta.
   // Reaplicar a transform recalcula ambos sem reabrir a fase.
@@ -497,7 +589,78 @@ function _avtGraficosNivel(n) {
 function _avtMenuHtmlGraficos() {
   const g = AVT_GRAFICOS;
   const niveisLabel = ['', 'Sutil', 'Moderado', 'Intenso'];
+  const presets = [
+    ['baixo', '🍃 Baixo',  'Máximo desempenho'],
+    ['medio', '⚖ Médio',   'Equilíbrio'],
+    ['alto',  '✨ Alto',    'Todos os efeitos'],
+  ];
   return `
+    <div style="margin-bottom:20px">
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">🎚 Qualidade Gráfica</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        ${presets.map(([id, label, sub]) => `
+          <button onclick="_avtGraficosPreset('${id}')" id="avt-cfg-preset-${id}"
+            style="flex:1;padding:9px 6px;border-radius:7px;cursor:pointer;font-size:0.68rem;font-family:var(--fonte-d);
+                   background:rgba(200,168,75,${g.preset===id ? '0.15' : '0.04'});
+                   border:1px solid rgba(200,168,75,${g.preset===id ? '0.55' : '0.18'});
+                   color:${g.preset===id ? '#f0cc6a' : '#7a92aa'}">
+            <div>${label}</div>
+            <div style="font-size:0.56rem;opacity:0.75;margin-top:2px">${sub}</div>
+          </button>
+        `).join('')}
+      </div>
+      <div style="font-size:0.6rem;color:#5a6b7a;margin-bottom:10px">${g.preset ? '' : 'Personalizado (toggles abaixo). '}Os presets ajustam os refinamentos em lote; você pode refinar manualmente depois.</div>
+
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:9px 10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:8px">
+        <input type="checkbox" id="avt-cfg-adaptativo"
+               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
+               ${g.adaptativo !== false ? 'checked' : ''}
+               onchange="AVT_GRAFICOS.adaptativo = this.checked; _avtGraficosSalvar()">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.8rem;color:var(--texto,#c8d8e8)">Qualidade adaptativa</div>
+          <div style="font-size:0.7rem;color:var(--suave,#7a92aa);margin-top:2px">Reduz a qualidade automaticamente (com aviso) quando o FPS cai abaixo de 45.</div>
+        </div>
+      </label>
+
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:9px 10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:8px">
+        <input type="checkbox" id="avt-cfg-perf-overlay"
+               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
+               ${g.perfOverlay ? 'checked' : ''}
+               onchange="if (typeof avtPerfToggle==='function') avtPerfToggle(this.checked)">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.8rem;color:var(--texto,#c8d8e8)">Medidor de desempenho</div>
+          <div style="font-size:0.7rem;color:var(--suave,#7a92aa);margin-top:2px">Overlay com FPS, latência (RTT) e tráfego de rede — útil para diagnosticar travamentos.</div>
+        </div>
+      </label>
+    </div>
+
+    <div style="margin-bottom:20px">
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">🔊 Áudio</div>
+
+      <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Volume da música</label>
+      <input type="range" min="0" max="1" step="0.05"
+             value="${typeof g.volMusica === 'number' ? g.volMusica : 0.45}"
+             style="width:100%;cursor:pointer;accent-color:#c8a84b;margin-bottom:10px"
+             oninput="AVT_GRAFICOS.volMusica = parseFloat(this.value); _avtAudioAplicar(); _avtGraficosSalvar()">
+
+      <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Volume dos efeitos (SFX)</label>
+      <input type="range" min="0" max="1" step="0.05"
+             value="${typeof g.volSfx === 'number' ? g.volSfx : 0.75}"
+             style="width:100%;cursor:pointer;accent-color:#c8a84b;margin-bottom:10px"
+             oninput="AVT_GRAFICOS.volSfx = parseFloat(this.value); _avtAudioAplicar(); _avtGraficosSalvar()">
+
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:9px 10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:8px">
+        <input type="checkbox" style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
+               ${g.sfxPassos !== false ? 'checked' : ''}
+               onchange="AVT_GRAFICOS.sfxPassos = this.checked; _avtGraficosSalvar()">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.8rem;color:var(--texto,#c8d8e8)">Passos posicionais</div>
+          <div style="font-size:0.7rem;color:var(--suave,#7a92aa);margin-top:2px">Som de passos dos jogadores, mais alto quanto mais perto de você.</div>
+        </div>
+      </label>
+      <div style="font-size:0.6rem;color:#5a6b7a;margin-bottom:4px">Sons de skills, baús e fontes ambientes (tochas/cachoeiras) já atenuam pela distância automaticamente.</div>
+    </div>
+
     <div style="margin-bottom:20px">
       <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">🎨 Filtro de Textura 3D</div>
 

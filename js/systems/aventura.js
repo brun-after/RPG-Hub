@@ -90,11 +90,27 @@ var AVT_STATE = {
 // avt_token_move que cheguem fora de ordem (sub-célula antiga depois do canônico).
 window._avtTokenSeq = window._avtTokenSeq || Object.create(null);
 
+// Eventos de jogo escopados por fase: o payload ganha `faseId` na emissão e os
+// handlers descartam mensagens de outra fase (FIX F2 — antes, matar o boss numa
+// fase escondia o boss homônimo das outras, abria baús alheios, etc., porque os
+// IDs procedurais se repetem entre fases e os handlers não eram isolados).
+const _AVT_EVENTOS_DE_FASE = new Set([
+  'avt_token_move', 'avt_npc_morreu', 'avt_npc_respawn', 'avt_npc_perseguindo',
+  'avt_combate_inicio', 'avt_batalha_update', 'avt_combate_fim', 'avt_combate_join',
+  'avt_convite_combate', 'avt_bau_aberto', 'avt_obj_spawn', 'avt_obj_pickup',
+  'avt_skill_anim', 'avt_attack_anim', 'avt_efeito_anim_start', 'avt_efeito_anim_stop',
+  'avt_dano_visual', 'avt_rastro_marcar', 'avt_entidade_nova',
+]);
+
 // Helper central de broadcast para Modo Aventura.
 // Usa RTNet (P2P + fallback Supabase) quando disponível; caso contrário cai no
 // realtimeBroadcast original. Toda chamada avt_* deve passar por aqui.
 function _avtBroadcast(tipo, payload) {
   try {
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)
+        && payload.faseId == null && _AVT_EVENTOS_DE_FASE.has(tipo)) {
+      payload = Object.assign({}, payload, { faseId: (AVT_STATE && AVT_STATE._faseAtualId) || 'principal' });
+    }
     if (typeof RTNet !== 'undefined' && RTNet.initialized) {
       RTNet.broadcast(tipo, payload);
     } else if (typeof realtimeBroadcast === 'function') {
@@ -124,8 +140,9 @@ function _avtBcastTokenMove(payload){
     if(!payload) return;
     const nome = payload.nome;
     if(nome){
-      const next = ((window._avtTokenSeq[nome] || 0) + 1) >>> 0;
-      window._avtTokenSeq[nome] = next;
+      const sk = _avtSeqKey(nome);
+      const next = ((window._avtTokenSeq[sk] || 0) + 1) >>> 0;
+      window._avtTokenSeq[sk] = next;
       payload = Object.assign({}, payload, { seq: next, ts: Date.now() });
     }
     // Escopo por fase: jogadores em fases diferentes não interferem uns nos outros.
@@ -188,6 +205,35 @@ function _avtMarcarAtividade(){
 }
 window._avtMarcarAtividade = _avtMarcarAtividade;
 
+// ── LOOKUP O(1) DE ENTIDADE POR ID ──────────────────────────────────────────
+// Substitui os .find(e => e.id === id) dos caminhos quentes (render/handlers).
+// O Map é reconstruído no máximo 1x por frame (invalidado por timestamp do frame,
+// identidade do array e tamanho), então adds/removes/replaces são cobertos sem
+// precisar instrumentar cada ponto de escrita de AVT_STATE.entidades.
+function _avtEntById(id) {
+  if (id == null) return null;
+  const st = AVT_STATE;
+  if (!st || !Array.isArray(st.entidades)) return null;
+  const stamp = st._lastFrameTs || 0;
+  if (!st._entById || st._entByIdStamp !== stamp ||
+      st._entByIdArr !== st.entidades || st._entByIdLen !== st.entidades.length) {
+    const m = st._entById || (st._entById = new Map());
+    m.clear();
+    for (const e of st.entidades) { if (e && e.id != null) m.set(e.id, e); }
+    st._entByIdStamp = stamp;
+    st._entByIdArr = st.entidades;
+    st._entByIdLen = st.entidades.length;
+  }
+  return st._entById.get(id) || null;
+}
+window._avtEntById = _avtEntById;
+
+// Chave de sequência escopada por RPG: trocar de aventura sem recarregar a página
+// não pode colidir contadores/dedupe de movimento entre salas.
+function _avtSeqKey(nomeOuId) {
+  return ((AVT_STATE && AVT_STATE.rpgId) || '') + '|' + nomeOuId;
+}
+
 // ─── SALA DE ESPERA (host voluntário) ──────────────────────────────────────
 // Exibe o lobby antes do canvas iniciar. Resolve quando host é eleito.
 // callback: função a chamar assim que host_elected disparar.
@@ -222,7 +268,11 @@ function _avtSalaEspera(rpgNome, callback) {
         linhas += `<div style="color:#7a92aa;padding:2px 0">• ${peerId.slice(0, 12)}…</div>`;
       }
     }
-    lista.innerHTML = linhas;
+    // Diff: só reescreve o DOM quando a lista de fato muda
+    if (lista._avtUltimoHtml !== linhas) {
+      lista._avtUltimoHtml = linhas;
+      lista.innerHTML = linhas;
+    }
   }
   _atualizarLista();
   const listInterval = setInterval(_atualizarLista, 2000);
@@ -374,6 +424,66 @@ const _avtYsortBuf = [];
 // Cache do gradiente radial de atmosfera (luz de tocha). Criado uma vez por raio (SZ),
 // na origem; o posicionamento por jogador é feito via ctx.translate no laço de render.
 let _avtAtmGrad = null, _avtAtmGradR = -1;
+
+// ── SPRITES DE GLOW PRÉ-RENDERIZADOS ─────────────────────────────────────────
+// ctx.shadowBlur é uma das operações 2D mais caras (blur gaussiano por chamada);
+// nos laços por-entidade-por-frame substituímos por drawImage de um canvas
+// offscreen com o glow já pintado. Cache por cor|raio (raio quantizado a 2px para
+// limitar variações por zoom); ~poucas dezenas de entradas por sessão.
+const _avtGlowCache = new Map();
+function _avtGlowSprite(cor, raio) {
+  const r = Math.max(2, Math.round(raio / 2) * 2);
+  const key = cor + '|' + r;
+  let cv = _avtGlowCache.get(key);
+  if (!cv) {
+    const pad = Math.ceil(r * 0.9);
+    const size = (r + pad) * 2;
+    cv = document.createElement('canvas');
+    cv.width = size; cv.height = size;
+    const g = cv.getContext('2d');
+    g.shadowColor = cor;
+    g.shadowBlur = pad;
+    g.fillStyle = cor;
+    g.beginPath();
+    g.arc(size / 2, size / 2, r, 0, Math.PI * 2);
+    g.fill();
+    if (_avtGlowCache.size > 96) _avtGlowCache.clear(); // proteção contra crescimento
+    _avtGlowCache.set(key, cv);
+  }
+  return cv;
+}
+// Desenha o glow cacheado centrado em (cx, cy) com a opacidade dada.
+function _avtGlowDraw(ctx, cor, raio, cx, cy, alpha) {
+  const cv = _avtGlowSprite(cor, raio);
+  const prev = ctx.globalAlpha;
+  if (alpha != null) ctx.globalAlpha = prev * alpha;
+  ctx.drawImage(cv, cx - cv.width / 2, cy - cv.height / 2);
+  if (alpha != null) ctx.globalAlpha = prev;
+}
+// Poda simples de caches objeto-por-URL (evita crescimento sem limite ao longo
+// de uma sessão longa com muitas fases/imagens). Remove os inseridos há mais
+// tempo (ordem de inserção das chaves string).
+function _avtCachePrune(obj, max) {
+  const keys = Object.keys(obj);
+  if (keys.length <= max) return;
+  const remover = keys.length - max;
+  for (let i = 0; i < remover; i++) delete obj[keys[i]];
+}
+
+// Gradiente radial cacheado na origem (posicionar via ctx.translate).
+// stops: [[offset, cor], ...] — a chave inclui os stops serializados.
+const _avtRadGradCache = new Map();
+function _avtRadGrad(ctx, r0, r1, stops) {
+  const key = r0 + '|' + r1 + '|' + stops.map(s => s[0] + s[1]).join(',');
+  let g = _avtRadGradCache.get(key);
+  if (!g) {
+    g = ctx.createRadialGradient(0, 0, r0, 0, 0, r1);
+    for (const [off, cor] of stops) g.addColorStop(off, cor);
+    if (_avtRadGradCache.size > 96) _avtRadGradCache.clear();
+    _avtRadGradCache.set(key, g);
+  }
+  return g;
+}
 
 // ── Cores dos efeitos de status (usados em visuais de canvas e CSS) ──────────
 const AVT_STATUS_COLORS = {
@@ -651,6 +761,7 @@ function _avtRastroPrune() {
 window.avtReceberRastroMarcar = function(p) {
   try {
     if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return;
+    if (!_avtMinhaFase(p.faseId)) return; // isolamento por fase (F2)
     if (p.expiry_ms && Date.now() >= p.expiry_ms) return; // já expirada
     _avtRastroMarcarCelula(p.caster || p.casterId, p.x, p.y, p.formula, p.duracaoTurnos || 3, p.cor, true, p.expiry_ms);
   } catch(_) {}
@@ -4033,13 +4144,16 @@ function sairAventura__sombreado_32() {
 
 function _avtCleanupListeners() {
   if (AVT_STATE.animFrame) { cancelAnimationFrame(AVT_STATE.animFrame); AVT_STATE.animFrame = null; }
-  window.removeEventListener('resize', _avtCanvasResize);
+  window.removeEventListener('resize', _avtCanvasResizeDebounced);
+  if (AVT_STATE._resizeDebounce) { clearTimeout(AVT_STATE._resizeDebounce); AVT_STATE._resizeDebounce = null; }
   window.removeEventListener('keydown', _avtCanvasKey);
   (AVT_STATE._pendingTimeouts || []).forEach(id => clearTimeout(id));
   AVT_STATE._pendingTimeouts = [];
   if (AVT_STATE._resizeObs) { AVT_STATE._resizeObs.disconnect(); AVT_STATE._resizeObs = null; }
   avtDpadStop();
   if (typeof avtPixiCleanupAll === 'function') avtPixiCleanupAll();
+  _avtVfxHostDestroy();
+  try { _avtPararSonsAmbiente(); } catch(_) {}
 }
 
 function _avtSetTimeout(fn, ms) {
@@ -4349,7 +4463,10 @@ function _avtGerarParticleConfigFase(seed) {
   const toHex = v => Math.round(v*255).toString(16).padStart(2,'0');
   const cor = '#' + toHex(hue2rgb(p,q,h+1/3)) + toHex(hue2rgb(p,q,h)) + toHex(hue2rgb(p,q,h-1/3));
   const castPool   = ['arcane_lance','whisper_bolt','silent_dart'];
-  const impactPool = ['fire_impact','ice_shatter','lightning_strike','holy_burst','dark_implosion','precise_strike'];
+  const impactPool = ['fire_impact','ice_shatter','lightning_strike','holy_burst','dark_implosion','precise_strike',
+                      // Fase 7: presets elaborados novos (variedade temática)
+                      'spirit_ray','void_collapse','tide_surge','venom_burst','gale_slash',
+                      'quake_rupture','mind_shatter','storm_vortex','blood_frenzy','gaia_bloom'];
   const intensPool = ['suave','equilibrado','intenso'];
   return {
     cor,
@@ -4690,14 +4807,16 @@ function _avtCanvasInit() {
   AVT_STATE.canvas = canvas;
   if (typeof _avtGraficosAplicar === 'function') _avtGraficosAplicar();
 
-  // ResizeObserver for reliable dimensions
-  AVT_STATE._resizeObs = new ResizeObserver(() => _avtCanvasResize());
+  // ResizeObserver for reliable dimensions.
+  // Debounce compartilhado (~150ms): um drag-resize dispara dezenas de eventos e
+  // cada _avtCanvasResize realoca o backing do canvas — uma realocação basta.
+  AVT_STATE._resizeObs = new ResizeObserver(_avtCanvasResizeDebounced);
   AVT_STATE._resizeObs.observe(wrap);
 
   _avtCanvasResize();
   canvas.addEventListener('click', _avtCanvasClick);
   canvas.addEventListener('dblclick', _avtCanvasDblClick);
-  window.addEventListener('resize', _avtCanvasResize);
+  window.addEventListener('resize', _avtCanvasResizeDebounced);
   window.addEventListener('keydown', _avtCanvasKey);
 
   // ─── PAN do mapa (cursor mãozinha em tiles fora de salas) ───
@@ -4939,6 +5058,16 @@ function _avtCanvasInit() {
   _avtCameraCenter();
 }
 
+// Debounce compartilhado do resize (window resize + ResizeObserver do wrap).
+function _avtCanvasResizeDebounced() {
+  if (AVT_STATE._resizeDebounce) clearTimeout(AVT_STATE._resizeDebounce);
+  AVT_STATE._resizeDebounce = setTimeout(() => {
+    AVT_STATE._resizeDebounce = null;
+    _avtCanvasResize();
+  }, 150);
+}
+window._avtCanvasResizeDebounced = _avtCanvasResizeDebounced;
+
 function _avtCanvasResize() {
   const wrap = document.getElementById('avt-mapa-wrap');
   const canvas = AVT_STATE.canvas;
@@ -5136,6 +5265,97 @@ function _avtRenderLoop() {
   AVT_STATE.animFrame = requestAnimationFrame(frame);
 }
 
+// ── BAKE DOS TILES DO CAMINHO CANVAS 2D LEGADO (?renderer=canvas) ────────────
+// Os tiles são estáticos por fase; desenhá-los tile a tile custava O(w×h) por
+// frame + hue-rotate full-canvas. O bake pinta tudo 1x num offscreen a AVT_SZ
+// base (independente de zoom; blit escala) e por frame é um único drawImage.
+// Mapas gigantes (> ~16MP de bake) caem no loop legado para não estourar memória.
+const _AVT_TILE_BAKE_MAX_PX = 16 * 1024 * 1024;
+function _avtTileBakeInvalidate() {
+  AVT_STATE._tileBake = null;
+  AVT_STATE._mmBake = null; // minimapa compartilha o gatilho de invalidação
+}
+window._avtTileBakeInvalidate = _avtTileBakeInvalidate;
+
+function _avtLegacyTileBake(dungeon, gridStyle, hue) {
+  const SZ = AVT_SZ;
+  const bw = dungeon.w * SZ, bh = dungeon.h * SZ;
+  if (bw * bh > _AVT_TILE_BAKE_MAX_PX) return null;
+  const texCount = AVT_STATE._tilesetTextures ? Object.keys(AVT_STATE._tilesetTextures).length : 0;
+  const key = [
+    AVT_STATE._faseAtualId || 'principal', dungeon.w, dungeon.h,
+    AVT_STATE._tilesetLoaded ? 1 : 0, texCount,
+    gridStyle.op, gridStyle.stroke, hue || 0, AVT_STATE._dungeonRev || 0,
+  ].join('|');
+  let bake = AVT_STATE._tileBake;
+  if (bake && bake._key === key) return bake;
+
+  bake = document.createElement('canvas');
+  bake.width = bw; bake.height = bh;
+  bake._key = key;
+  const ctx = bake.getContext('2d');
+  ctx.fillStyle = '#050810';
+  ctx.fillRect(0, 0, bw, bh);
+  const _hueOn = hue && ('filter' in ctx);
+  if (_hueOn) ctx.filter = `hue-rotate(${hue}deg)`;
+  for (let y = 0; y < dungeon.h; y++) {
+    for (let x = 0; x < dungeon.w; x++) {
+      const t  = dungeon.tiles[y]?.[x];
+      const px = x * SZ, py = y * SZ;
+      if (AVT_STATE._tilesetLoaded) {
+        ctx.imageSmoothingEnabled = false;
+        const tkey = typeof t === 'string' ? t : _avtGetTileSemanticKey(x, y, dungeon);
+        const tileImg = tkey ? AVT_STATE._tilesetTextures[tkey] : null;
+        if (tileImg) { ctx.drawImage(tileImg, px, py, SZ, SZ); continue; }
+        if (t === null || t === undefined) continue;
+        ctx.fillStyle = _avtTilePassavel(x, y, dungeon) ? '#101520' : '#0a0c14';
+        ctx.fillRect(px, py, SZ, SZ);
+      } else if (t === AVT_T.SAIDA) {
+        ctx.fillStyle = '#101520';
+        ctx.fillRect(px, py, SZ, SZ);
+        ctx.fillStyle = 'rgba(79,220,140,0.18)';
+        ctx.fillRect(px+2, py+2, SZ-4, SZ-4);
+        ctx.strokeStyle = 'rgba(79,220,140,0.6)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px+2, py+2, SZ-4, SZ-4);
+        ctx.fillStyle = 'rgba(79,220,140,0.8)';
+        ctx.font = `${Math.round(SZ*0.55)}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🚪', px + SZ/2, py + SZ/2);
+      } else if (t === AVT_T.PISO || (typeof t === 'string' && _avtTilePassavel(x, y, dungeon))) {
+        ctx.fillStyle = '#101520';
+        ctx.fillRect(px, py, SZ, SZ);
+        if (gridStyle.op > 0) {
+          ctx.strokeStyle = gridStyle.stroke;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px+0.5, py+0.5, SZ-1, SZ-1);
+        }
+      } else {
+        ctx.fillStyle = '#0a0c14';
+        ctx.fillRect(px, py, SZ, SZ);
+        ctx.fillStyle = 'rgba(79,163,209,0.04)';
+        ctx.fillRect(px, py, SZ, 3);
+        ctx.fillRect(px, py, 3, SZ);
+      }
+    }
+  }
+  if (_hueOn) ctx.filter = 'none';
+  // Grade fina dos tilesets (antes era um loop de strokes por frame)
+  if (AVT_STATE._tilesetLoaded && gridStyle.op > 0) {
+    ctx.strokeStyle = gridStyle.stroke;
+    ctx.lineWidth = 0.5;
+    for (let gx = 0; gx <= dungeon.w; gx++) {
+      ctx.beginPath(); ctx.moveTo(gx * SZ, 0); ctx.lineTo(gx * SZ, bh); ctx.stroke();
+    }
+    for (let gy = 0; gy <= dungeon.h; gy++) {
+      ctx.beginPath(); ctx.moveTo(0, gy * SZ); ctx.lineTo(bw, gy * SZ); ctx.stroke();
+    }
+  }
+  AVT_STATE._tileBake = bake;
+  return bake;
+}
+
 // Estilo das linhas de grade do mapa, configurável pelo mestre (theme_json).
 // op=0 → grade invisível; defaults reproduzem o visual original (branco, 0.09).
 function _avtGridStyle() {
@@ -5152,6 +5372,7 @@ function _avtObjImg(url) {
   if (!AVT_STATE._objImgCache) AVT_STATE._objImgCache = {};
   const rec = AVT_STATE._objImgCache[url];
   if (rec === undefined) {
+    _avtCachePrune(AVT_STATE._objImgCache, 200);
     const img = new Image();
     img.crossOrigin = 'anonymous';
     AVT_STATE._objImgCache[url] = null; // pendente
@@ -5176,6 +5397,7 @@ function _avtRenderFrame() {
   const now = performance.now();
   const dt = AVT_STATE._lastFrameTs ? now - AVT_STATE._lastFrameTs : 0;
   AVT_STATE._lastFrameTs = now;
+  if (typeof AVT_PERF !== 'undefined') AVT_PERF.frame(dt);
 
   // Câmera centralizada: atualizar alvo a cada frame usando posição interpolada do jogador
   if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo) {
@@ -5249,6 +5471,22 @@ function _avtRenderFrame() {
   // [NPC-SYNC] suaviza divergências de posição vindas do canônico (lerp 250ms)
   if (AVT_STATE.npcSyncEnabled && typeof _avtNpcSyncTickLerp === 'function') {
     try { _avtNpcSyncTickLerp(now); } catch(_) {}
+  }
+
+  // ── Áudio posicional: passos + fontes de som ambiente (~4 Hz) ───────────────
+  if (now - (AVT_STATE._sfxTickTs || 0) >= 250) {
+    AVT_STATE._sfxTickTs = now;
+    try { _avtAtualizarSonsAmbiente(); } catch (_) {}
+    if (typeof AVT_GRAFICOS === 'undefined' || AVT_GRAFICOS?.sfxPassos !== false) {
+      for (const e of entidades) {
+        if (e.tipo !== 'jogador' || e.escondido || e.hp <= 0) continue;
+        const movendo = (e._waypoints && e._waypoints.length) || e._lerpTo;
+        if (!movendo) continue;
+        if (now - (e._lastStepSfx || 0) < 320) continue;
+        e._lastStepSfx = now;
+        _avtSfxPosicional('step_stone', e, 0.28, 0.18);
+      }
+    }
   }
 
   // ── Patrulha contínua de inimigos (fora de combate) ─────────────────────────
@@ -5390,8 +5628,11 @@ function _avtRenderFrame() {
   });
 
   // ── Broadcast de posição fina (sub-célula) do jogador local, throttle ~50ms ──
+  // Só no fallback Supabase: em P2P/mixed a posição de jogador vem do state tick e
+  // avtReceberMovimento descarta estes eventos — enviá-los seria banda desperdiçada.
   try {
-    const _meFine = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
+    const _fineModoSupabase = (typeof RTNet === 'undefined' || !RTNet.initialized || RTNet.mode === 'supabase');
+    const _meFine = (_fineModoSupabase && typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
     if (_meFine && _meFine.renderX != null) {
       const _nowFine = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       AVT_STATE._fineBcast = AVT_STATE._fineBcast || { last: 0, rx: null, ry: null };
@@ -5443,11 +5684,23 @@ function _avtRenderFrame() {
   const _pixiWorld = (typeof avtPixiWorldFrame === 'function')
     && avtPixiWorldFrame(canvas, camera, SZ, dungeon, _gridStyle, _hue);
 
+  let _tileBakeUsado = false;
   if (_pixiWorld) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   } else {
   ctx.fillStyle = '#050810';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Bake estático por fase (inclui hue-rotate e grade); por frame só um blit da
+  // região visível, escalado pelo zoom. Mapas gigantes caem no loop legado.
+  const _bake = _avtLegacyTileBake(dungeon, _gridStyle, _hue);
+  if (_bake) {
+    _tileBakeUsado = true;
+    const _f = AVT_SZ / SZ; // fator tela → bake (bake é a AVT_SZ base)
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(_bake,
+      camera.x * _f, camera.y * _f, canvas.width * _f, canvas.height * _f,
+      0, 0, canvas.width, canvas.height);
+  } else {
   // Aplica a variação de cor da fase mesmo sem tileset carregado (tiles de fundo procedurais também recebem o tint).
   const _hueOn = _hue && ('filter' in ctx);
   if (_hueOn) ctx.filter = `hue-rotate(${_hue}deg)`;
@@ -5499,14 +5752,15 @@ function _avtRenderFrame() {
     }
   }
   if (_hueOn) ctx.filter = 'none';
+  } // fim do loop legado tile-a-tile
   } // fim do caminho Canvas 2D legado (tiles)
 
   // Rastros contaminados (Rastro Persona / Rastro Anima)
   try { _avtRenderRastroCells(ctx, camera, SZ, canvas); } catch(_) {}
 
   // Overlay de grade suave nos tilesets (linhas finas e translúcidas)
-  // (com a camada PIXI ativa, a grade já foi assada junto com os tiles)
-  if (!_pixiWorld && AVT_STATE._tilesetLoaded && _gridStyle.op > 0) {
+  // (com a camada PIXI ativa OU o bake legado, a grade já foi assada junto com os tiles)
+  if (!_pixiWorld && !_tileBakeUsado && AVT_STATE._tilesetLoaded && _gridStyle.op > 0) {
     ctx.strokeStyle = _gridStyle.stroke;
     ctx.lineWidth = 0.5;
     ctx.setLineDash([]);
@@ -5730,7 +5984,10 @@ function _avtRenderFrame() {
   // ── Atmosfera: poços de luz radiais nos jogadores (luz de tocha) ──────────────
   // Desenhados no plano do chão (acompanham a câmera/inclinação) com mesclagem aditiva,
   // antes das entidades, para dar a sensação de iluminação localizada estilo Diablo.
-  if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo && AVT_GRAFICOS?.atmosfera) {
+  // Quando a camada de luz GPU (renderer-pixi) está ativa, ela assume este papel
+  // com flicker e blend ADD reais — pula o gradiente 2D por jogador/frame.
+  const _luzGpuOn = typeof avtPixiWorldLightsAtivas === 'function' && avtPixiWorldLightsAtivas();
+  if (!_luzGpuOn && typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo && AVT_GRAFICOS?.atmosfera) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     const lr = SZ * 3.2;
@@ -5818,31 +6075,23 @@ function _avtRenderFrame() {
       && AVT_GRAFICOS?.bilbordes && typeof _avtIsoBillboardAplicar === 'function');
     if (_bbOn) { ctx.save(); _avtIsoBillboardAplicar(ctx, _footX, _footY); }
 
-    // Silence aura: gradiente escuro atrás do token
+    // Silence aura: gradiente escuro atrás do token (gradiente cacheado na origem)
     if (e._silenciado || e.status_effects?.some(ef => ef.tipo === 'silence' && ((ef._turnos_restantes ?? 0) > 0 || ef._ooc))) {
-      const _silGrad = ctx.createRadialGradient(cx, cy, SZ * 0.18, cx, cy, SZ * 0.72);
-      _silGrad.addColorStop(0,   'rgba(0,0,0,0)');
-      _silGrad.addColorStop(0.6, 'rgba(10,0,20,0.48)');
-      _silGrad.addColorStop(1,   'rgba(5,0,15,0.78)');
       ctx.save();
+      ctx.translate(cx, cy);
       ctx.beginPath();
-      ctx.arc(cx, cy, SZ * 0.72, 0, Math.PI * 2);
-      ctx.fillStyle = _silGrad;
+      ctx.arc(0, 0, SZ * 0.72, 0, Math.PI * 2);
+      ctx.fillStyle = _avtRadGrad(ctx, SZ * 0.18, SZ * 0.72, [
+        [0, 'rgba(0,0,0,0)'], [0.6, 'rgba(10,0,20,0.48)'], [1, 'rgba(5,0,15,0.78)'],
+      ]);
       ctx.fill();
       ctx.restore();
     }
 
-    // Cura glow: brilho verde transitório ao aplicar cura
+    // Cura glow: brilho verde transitório ao aplicar cura (sprite pré-renderizado)
     if (e._curaGlowUntil) {
       if (Date.now() < e._curaGlowUntil) {
-        ctx.save();
-        ctx.shadowColor = '#2ecc71';
-        ctx.shadowBlur  = Math.round(SZ * 0.72);
-        ctx.beginPath();
-        ctx.arc(cx, cy, SZ * 0.44, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(46,204,113,0.22)';
-        ctx.fill();
-        ctx.restore();
+        _avtGlowDraw(ctx, '#2ecc71', SZ * 0.5, cx, cy, 0.35);
       } else {
         delete e._curaGlowUntil;
       }
@@ -5874,6 +6123,7 @@ function _avtRenderFrame() {
       AVT_STATE._isoTokenCache = AVT_STATE._isoTokenCache || {};
       let _isoImg = AVT_STATE._isoTokenCache[_isoUrl];
       if (!_isoImg) {
+        _avtCachePrune(AVT_STATE._isoTokenCache, 200);
         _isoImg = new Image(); _isoImg.src = _isoUrl;
         AVT_STATE._isoTokenCache[_isoUrl] = _isoImg;
       }
@@ -6100,19 +6350,22 @@ function _avtRenderFrame() {
       }
     }
 
-    // Stun ring: anel pulsante ao redor do token, cor configurável no efeito
+    // Stun ring: anel pulsante ao redor do token, cor configurável no efeito.
+    // Glow aproximado por stroke externo translúcido (sem shadowBlur por frame).
     const _stunEf = e.status_effects?.find(ef => ef.tipo === 'stun' && ((ef._turnos_restantes ?? 0) > 0 || ef._ooc));
     if (_stunEf || e._stunned) {
       const _stunCol = _stunEf?.cor || '#9b59b6';
       const _stunPulse = 0.55 + 0.45 * Math.sin(performance.now() / 280);
+      const _stunW = Math.max(2, Math.round(SZ * 0.07));
       ctx.save();
-      ctx.globalAlpha = _stunPulse;
-      ctx.shadowColor = _stunCol;
-      ctx.shadowBlur  = Math.round(SZ * 0.42);
       ctx.beginPath();
       ctx.arc(cx, cy, r + 7, 0, Math.PI * 2);
+      ctx.globalAlpha = _stunPulse * 0.35;
       ctx.strokeStyle = _stunCol;
-      ctx.lineWidth   = Math.max(2, Math.round(SZ * 0.07));
+      ctx.lineWidth   = _stunW * 3;
+      ctx.stroke();
+      ctx.globalAlpha = _stunPulse;
+      ctx.lineWidth   = _stunW;
       ctx.stroke();
       ctx.restore();
     }
@@ -6127,13 +6380,15 @@ function _avtRenderFrame() {
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = _contamPulse * 0.85;
-      ctx.shadowColor = '#2ecc71';
-      ctx.shadowBlur  = Math.round(SZ * 0.3);
+      const _contamW = Math.max(1.5, Math.round(SZ * 0.05));
       ctx.beginPath();
       ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
+      ctx.globalAlpha = _contamPulse * 0.3;
       ctx.strokeStyle = '#2ecc71';
-      ctx.lineWidth   = Math.max(1.5, Math.round(SZ * 0.05));
+      ctx.lineWidth   = _contamW * 3;
+      ctx.stroke();
+      ctx.globalAlpha = _contamPulse * 0.85;
+      ctx.lineWidth   = _contamW;
       ctx.stroke();
       ctx.restore();
     }
@@ -6150,13 +6405,10 @@ function _avtRenderFrame() {
         const _spX     = cx + Math.cos(_spAngle) * _spRad;
         const _spY     = cy + Math.sin(_spAngle) * _spRad;
         const _spSz    = Math.max(1.5, SZ * 0.046);
-        ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(_spT / 300 + _si));
-        ctx.shadowColor = '#3498db';
-        ctx.shadowBlur  = _spSz * 3;
-        ctx.beginPath();
-        ctx.arc(_spX, _spY, _spSz, 0, Math.PI * 2);
-        ctx.fillStyle = _si % 2 === 0 ? '#3498db' : '#74b9ff';
-        ctx.fill();
+        // Sprite de glow cacheado no lugar de shadowBlur (7 blurs/entidade/frame)
+        const _spCor = _si % 2 === 0 ? '#3498db' : '#74b9ff';
+        _avtGlowDraw(ctx, _spCor, _spSz * 2, _spX, _spY,
+          0.4 + 0.6 * Math.abs(Math.sin(_spT / 300 + _si)));
       }
       ctx.restore();
     }
@@ -6177,15 +6429,17 @@ function _avtRenderFrame() {
 
     if (_isAvatar || _isInvocado) ctx.globalAlpha = 1;
 
-    // Aura pulsante para invocados
+    // Aura pulsante para invocados (glow aproximado por stroke duplo, sem shadowBlur)
     if (_isInvocado) {
       const _pulse = 0.5 + 0.5 * Math.sin(performance.now() / 400);
       ctx.save();
-      ctx.shadowColor = '#b07ef0';
-      ctx.shadowBlur  = Math.round(8 + _pulse * 8);
       ctx.beginPath();
       ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
       ctx.strokeStyle = 'rgba(176,126,240,0.6)';
+      ctx.globalAlpha = 0.25 + _pulse * 0.2;
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.restore();
@@ -6241,25 +6495,23 @@ function _avtRenderFrame() {
         }
         ctx.restore();
       } else if (tipo === 'orbe_hp' || tipo === 'orbe_mana') {
+        // Glow via sprite cacheado + gradiente na origem (nada de shadowBlur/gradiente novo por frame)
         const cor = tipo === 'orbe_hp' ? '#2ecc71' : '#4fa3d1';
         const pulse = 0.5 + 0.5 * Math.sin(now / 250 + _ox + _oy);
         const _bob = Math.sin(now / 400 + (_ox + _oy)) * (SZ * 0.06);
         const r = SZ * (0.16 + 0.03 * pulse);
         const oy2 = ocy + _bob;
         ctx.save();
-        ctx.shadowColor = cor;
-        ctx.shadowBlur = Math.round(10 + pulse * 12);
-        const grad = ctx.createRadialGradient(ocx, oy2, 0, ocx, oy2, r * 1.6);
-        grad.addColorStop(0, '#ffffff');
-        grad.addColorStop(0.4, cor);
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = grad;
+        _avtGlowDraw(ctx, cor, r * 1.3, ocx, oy2, 0.5 + pulse * 0.3);
+        ctx.translate(ocx, oy2);
+        ctx.fillStyle = _avtRadGrad(ctx, 0, Math.round(r * 1.6), [
+          [0, '#ffffff'], [0.4, cor], [1, 'rgba(0,0,0,0)'],
+        ]);
         ctx.beginPath();
-        ctx.arc(ocx, oy2, r * 1.6, 0, Math.PI * 2);
+        ctx.arc(0, 0, r * 1.6, 0, Math.PI * 2);
         ctx.fill();
-        ctx.shadowBlur = 0;
         ctx.beginPath();
-        ctx.arc(ocx, oy2, r * 0.55, 0, Math.PI * 2);
+        ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(255,255,255,0.92)';
         ctx.fill();
         ctx.restore();
@@ -6277,6 +6529,12 @@ function _avtRenderFrame() {
   _avtRenderMinimap();
 }
 
+// Invalida o bake de tiles do minimapa (troca de fase, edição de mapa ao vivo).
+function _avtMinimapInvalidate() {
+  AVT_STATE._mmBake = null;
+}
+window._avtMinimapInvalidate = _avtMinimapInvalidate;
+
 function _avtRenderMinimap() {
   const mm = document.getElementById('avt-minimap');
   if (!mm) return;
@@ -6284,77 +6542,89 @@ function _avtRenderMinimap() {
   if (!dungeon || !dungeon.tiles) { mm.style.display = 'none'; return; }
   mm.style.display = 'block';
 
+  // Throttle: pontos do minimapa a 10 Hz são suficientes (e o mapa é estático)
+  const _mmNow = performance.now();
+  if (AVT_STATE._mmLastDraw && _mmNow - AVT_STATE._mmLastDraw < 100) return;
+  AVT_STATE._mmLastDraw = _mmNow;
+
   const W = dungeon.w, H = dungeon.h;
   const mmW = mm.width, mmH = mm.height;
   const scaleX = mmW / W, scaleY = mmH / H;
 
-  const ctx = mm.getContext('2d');
+  const ctx = AVT_STATE._mmCtx && AVT_STATE._mmCtxEl === mm
+    ? AVT_STATE._mmCtx
+    : (AVT_STATE._mmCtxEl = mm, AVT_STATE._mmCtx = mm.getContext('2d'));
   ctx.clearRect(0, 0, mmW, mmH);
 
-  // Background
-  ctx.fillStyle = 'rgba(5,8,16,0.88)';
-  ctx.fillRect(0, 0, mmW, mmH);
-
-  // Tiles
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const t = dungeon.tiles[y]?.[x];
-      const passavel = t === AVT_T.SAIDA || (!_avtChaveEhParede(t) && t !== null && t !== undefined);
-      if (!passavel) continue;
-      ctx.fillStyle = t === AVT_T.SAIDA ? 'rgba(46,204,113,0.55)' : 'rgba(30,58,95,0.75)';
-      ctx.fillRect(
-        Math.floor(x * scaleX), Math.floor(y * scaleY),
-        Math.max(1, Math.ceil(scaleX)), Math.max(1, Math.ceil(scaleY))
-      );
+  // Tiles: bakeados 1x por fase num offscreen (invalidado por _avtMinimapInvalidate
+  // na troca de fase/edição); por frame apenas um drawImage.
+  const bakeKey = (AVT_STATE._faseAtualId || 'principal') + '|' + W + 'x' + H + '|' + mmW + 'x' + mmH + '|r' + (AVT_STATE._dungeonRev || 0);
+  let bake = AVT_STATE._mmBake;
+  if (!bake || bake._key !== bakeKey) {
+    bake = document.createElement('canvas');
+    bake.width = mmW; bake.height = mmH;
+    bake._key = bakeKey;
+    const bctx = bake.getContext('2d');
+    bctx.fillStyle = 'rgba(5,8,16,0.88)';
+    bctx.fillRect(0, 0, mmW, mmH);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const t = dungeon.tiles[y]?.[x];
+        const passavel = t === AVT_T.SAIDA || (!_avtChaveEhParede(t) && t !== null && t !== undefined);
+        if (!passavel) continue;
+        bctx.fillStyle = t === AVT_T.SAIDA ? 'rgba(46,204,113,0.55)' : 'rgba(30,58,95,0.75)';
+        bctx.fillRect(
+          Math.floor(x * scaleX), Math.floor(y * scaleY),
+          Math.max(1, Math.ceil(scaleX)), Math.max(1, Math.ceil(scaleY))
+        );
+      }
     }
+    // Borda (estática — entra no bake)
+    bctx.strokeStyle = 'rgba(100,150,200,0.25)';
+    bctx.lineWidth = 1;
+    bctx.strokeRect(0.5, 0.5, mmW - 1, mmH - 1);
+    AVT_STATE._mmBake = bake;
   }
+  ctx.drawImage(bake, 0, 0);
 
-  // Entidades
+  // Entidades (pontos dinâmicos; glow via sprite cacheado, sem shadowBlur)
   const meuEnt = (typeof _avtEntidadeControlada === 'function') ? _avtEntidadeControlada() : _avtMeuJogador?.();
   entidades.forEach(e => {
     if (e.escondido || (e.tipo === 'inimigo' && e.hp <= 0)) return;
     const ex = Math.round((e.renderX ?? e.x) * scaleX);
     const ey = Math.round((e.renderY ?? e.y) * scaleY);
-    let color, radius;
+    let color, radius, glow = null;
     if (e.id === meuEnt?.id) {
-      color = '#ffffff'; radius = 3;
-      ctx.save();
-      ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 5;
+      color = '#ffffff'; radius = 3; glow = '#ffffff';
     } else if (e.isBoss) {
-      color = '#f1c40f'; radius = 4;
-      ctx.save();
-      ctx.shadowColor = '#f1c40f'; ctx.shadowBlur = 6;
+      color = '#f1c40f'; radius = 4; glow = '#f1c40f';
     } else if (e.tipo === 'inimigo') {
       const timer = npcTimers?.[e.id];
       color = timer?.ativo ? '#e74c3c' : 'rgba(180,80,40,0.6)';
       radius = timer?.ativo ? 2.5 : 1.5;
-      ctx.save();
-      if (timer?.ativo) { ctx.shadowColor = '#e74c3c'; ctx.shadowBlur = 4; }
+      if (timer?.ativo) glow = '#e74c3c';
     } else if (e.tipo === 'jogador' || e.tipo === 'invocado' || e.tipo === 'avatar') {
       color = e.tipo === 'invocado' ? '#b07ef0' : '#27ae60';
       radius = 2.5;
-      ctx.save();
     } else {
       return;
     }
+    if (glow) _avtGlowDraw(ctx, glow, radius + 2, ex, ey, 0.6);
     ctx.beginPath();
     ctx.arc(ex, ey, radius, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-    ctx.restore();
   });
-
-  // Borda
-  ctx.strokeStyle = 'rgba(100,150,200,0.25)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(0.5, 0.5, mmW - 1, mmH - 1);
 }
 
 function _avtRenderEffectCountersOverlay() {
   const overlay = document.getElementById('avt-dados-overlay');
   if (!overlay || !AVT_STATE.canvas) return;
 
-  overlay.querySelectorAll('.avt-ef-counter-wrap').forEach(el => el.remove());
+  // Nós persistentes por entidade: reposicionados via transform (composited, sem
+  // layout); o innerHTML só é reconstruído quando o conjunto de efeitos muda.
+  const pool = AVT_STATE._efCounterNodes || (AVT_STATE._efCounterNodes = new Map());
+  const vivos = new Set();
 
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const canvasW = AVT_STATE.canvas.width;
@@ -6371,17 +6641,34 @@ function _avtRenderEffectCountersOverlay() {
 
     if (px < -80 || px > canvasW + 80 || py < -80 || py > canvasH + 80) return;
 
-    const wrap = document.createElement('div');
-    wrap.className = 'avt-ef-counter-wrap';
-    wrap.style.left = (px + SZ / 2) + 'px';
-    wrap.style.top  = Math.max(2, py - Math.round(SZ * 0.28)) + 'px';
+    const key = ent.id || ent.nome;
+    vivos.add(key);
+    let wrap = pool.get(key);
+    if (!wrap || !wrap.isConnected) {
+      wrap = document.createElement('div');
+      wrap.className = 'avt-ef-counter-wrap';
+      wrap.style.left = '0px';
+      wrap.style.top = '0px';
+      wrap.style.willChange = 'transform';
+      pool.set(key, wrap);
+      overlay.appendChild(wrap);
+    }
 
-    wrap.innerHTML = efeitos.map(ef =>
-      `<span class="avt-ef-count-badge" style="color:${ef.cor};border-color:${ef.cor}60;text-shadow:0 0 5px ${ef.cor}80">${ef.label}</span>`
-    ).join('');
-
-    overlay.appendChild(wrap);
+    const sig = efeitos.map(ef => ef.label + '|' + ef.cor).join(';');
+    if (wrap.dataset.sig !== sig) {
+      wrap.dataset.sig = sig;
+      wrap.innerHTML = efeitos.map(ef =>
+        `<span class="avt-ef-count-badge" style="color:${ef.cor};border-color:${ef.cor}60;text-shadow:0 0 5px ${ef.cor}80">${ef.label}</span>`
+      ).join('');
+    }
+    // translateX(-50%) preserva a centralização que antes vinha do CSS da classe
+    wrap.style.transform =
+      `translate(${px + SZ / 2}px, ${Math.max(2, py - Math.round(SZ * 0.28))}px) translateX(-50%)`;
   });
+
+  for (const [key, node] of pool) {
+    if (!vivos.has(key)) { try { node.remove(); } catch (_) {} pool.delete(key); }
+  }
 }
 
 function _avtAtualizarPosRollInimigos() {
@@ -6392,12 +6679,12 @@ function _avtAtualizarPosRollInimigos() {
   const { camera } = AVT_STATE;
   const SZ = Math.round(AVT_SZ * (camera.zoom || 1));
   els.forEach(el => {
-    const ent = AVT_STATE.entidades.find(e => e.id === el.dataset.avtRollEnt);
+    const ent = _avtEntById(el.dataset.avtRollEnt);
     if (!ent) return;
     const px = Math.round((ent.renderX ?? ent.x) * SZ - camera.x);
     const py = Math.round((ent.renderY ?? ent.y) * SZ - camera.y);
-    el.style.left = (px + SZ + 2) + 'px';
-    el.style.top  = (py + Math.round(SZ * 0.25)) + 'px';
+    // transform (composited) em vez de left/top para não forçar layout por frame
+    el.style.transform = `translate(${px + SZ + 2}px, ${py + Math.round(SZ * 0.25)}px)`;
   });
 }
 
@@ -6427,8 +6714,10 @@ function _avtMostrarRollInimigo(entNpc, resultado, isCrit) {
     'flex-direction:column',
     'align-items:center',
     'gap:1px',
-    `left:${px + SZ + 2}px`,
-    `top:${py + Math.round(SZ * 0.25)}px`,
+    'left:0px',
+    'top:0px',
+    `transform:translate(${px + SZ + 2}px, ${py + Math.round(SZ * 0.25)}px)`,
+    'will-change:transform',
     `width:${halfSZ}px`,
     'transition:opacity 0.4s',
   ].join(';');
@@ -6741,7 +7030,7 @@ function _avtDesenharIsoIa(ctx, ent, footX, footY, SZ, data) {
   if (!url) return;
   AVT_STATE._isoTokenCache = AVT_STATE._isoTokenCache || {};
   let img = AVT_STATE._isoTokenCache[url];
-  if (!img) { img = new Image(); img.crossOrigin = 'anonymous'; img.src = url; AVT_STATE._isoTokenCache[url] = img; }
+  if (!img) { _avtCachePrune(AVT_STATE._isoTokenCache, 200); img = new Image(); img.crossOrigin = 'anonymous'; img.src = url; AVT_STATE._isoTokenCache[url] = img; }
   if (!(img.complete && img.naturalWidth > 0)) {
     ctx.beginPath(); ctx.arc(footX, footY - SZ * 0.3, SZ * 0.3, 0, Math.PI * 2);
     ctx.fillStyle = ent.cor || '#4fa3d1'; ctx.fill();
@@ -7549,9 +7838,13 @@ function _avtAtualizarPosBotaoRolar() {
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera?.zoom || 1));
   const btnLeft = Math.min(Math.max(pos.x - 60, 8), window.innerWidth - 140);
   const btnTop  = Math.max(pos.y - SZ - 44, 8);
-  btn.style.left = btnLeft + 'px';
-  btn.style.top  = btnTop  + 'px';
-  btn.style.transform = 'none';
+  // Só escreve estilo quando a posição muda — evita invalidação de layout por frame
+  if (btn._avtPosL !== btnLeft || btn._avtPosT !== btnTop) {
+    btn._avtPosL = btnLeft; btn._avtPosT = btnTop;
+    btn.style.left = btnLeft + 'px';
+    btn.style.top  = btnTop  + 'px';
+    btn.style.transform = 'none';
+  }
 }
 
 // Patrulha contínua de inimigos fora de combate
@@ -8446,6 +8739,74 @@ function _avtSfxVolDist(baseVol, fonte) {
   return v;
 }
 
+// SFX posicional: toca um efeito da biblioteca com volume atenuado pela distância
+// (reutiliza _avtSfxVolDist) e panning estéreo derivado da direção fonte→ouvinte
+// (o pan só tem efeito em SFX de assets locais; remotos tocam sem pan por CORS).
+// fonte: entidade ou {x, y} em células. Retorna true se tocou.
+function _avtSfxPosicional(sfxId, fonte, baseVol, pitchVar) {
+  try {
+    if (typeof AudioManager === 'undefined' || !sfxId) return false;
+    const vol = _avtSfxVolDist(baseVol != null ? baseVol : 0.7, fonte);
+    if (vol <= 0.001) return false;
+    let pan = 0;
+    const ouv = _avtSfxOuvinte();
+    if (ouv && fonte && typeof fonte.x === 'number') {
+      pan = Math.max(-1, Math.min(1, (fonte.x - ouv.x) / 10));
+    }
+    AudioManager.playSFX(sfxId, { volume: vol, pitchVariance: pitchVar != null ? pitchVar : 0.06, pan });
+    return true;
+  } catch (_) { return false; }
+}
+window._avtSfxPosicional = _avtSfxPosicional;
+
+// Fontes de som ambiente colocadas no mapa: objetos de render_data.objetos com
+// campo opcional `som = { sfxId, raio, vol }` ganham um loop cujo volume segue a
+// distância do ouvinte (tocha crepitando, cachoeira, fogueira...). Atualizado a
+// ~4 Hz pelo render loop; loops de objetos removidos/da fase anterior são parados.
+function _avtAtualizarSonsAmbiente() {
+  const reg = AVT_STATE._ambSounds || (AVT_STATE._ambSounds = new Map());
+  const objs = AVT_STATE.dungeon?.render_data?.objetos;
+  const vivos = new Set();
+  if (Array.isArray(objs) && typeof AudioManager !== 'undefined' && AVT_STATE.dungeon) {
+    for (const o of objs) {
+      if (!o || !o.som || !o.som.sfxId) continue;
+      const id = o.id || (o.som.sfxId + '@' + o.x + ',' + o.y);
+      vivos.add(id);
+      let rec = reg.get(id);
+      if (!rec) {
+        const howl = AudioManager.criarLoopAmbiente(o.som.sfxId);
+        if (!howl) continue;
+        rec = { howl };
+        reg.set(id, rec);
+      }
+      const fonte = { x: (o.x ?? 0) * AVT_STATE.dungeon.w, y: (o.y ?? 0) * AVT_STATE.dungeon.h };
+      const raio = o.som.raio || 12;
+      const ouv = _avtSfxOuvinte();
+      let vol = 0;
+      if (ouv && !AudioManager._muted) {
+        const d = Math.max(Math.abs(fonte.x - ouv.x), Math.abs(fonte.y - ouv.y));
+        vol = Math.max(0, 1 - d / raio) * (o.som.vol ?? 0.55) * AudioManager.volume.sfx;
+      }
+      try { rec.howl.volume(Math.min(1, vol)); } catch (_) {}
+    }
+  }
+  for (const [id, rec] of reg) {
+    if (!vivos.has(id)) {
+      try { rec.howl.stop(); rec.howl.unload(); } catch (_) {}
+      reg.delete(id);
+    }
+  }
+}
+window._avtAtualizarSonsAmbiente = _avtAtualizarSonsAmbiente;
+
+function _avtPararSonsAmbiente() {
+  const reg = AVT_STATE._ambSounds;
+  if (!reg) return;
+  for (const [, rec] of reg) { try { rec.howl.stop(); rec.howl.unload(); } catch (_) {} }
+  reg.clear();
+}
+window._avtPararSonsAmbiente = _avtPararSonsAmbiente;
+
 // Isolamento por fase: true se o faseId recebido pertence à minha fase atual.
 // faseId ausente (null/undefined) conta como "minha", preservando o comportamento
 // legado de handlers que recebiam payloads sem fase.
@@ -9018,12 +9379,14 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
       const cdMs = (AVT_STATE._oocCooldowns[key] || 0) - Date.now();
       const cdEl = el.querySelector('.avt-cd-label');
       if (!cdEl) return;
+      // Só escreve no DOM quando o texto exibido muda (evita invalidação a cada tick)
+      const txt = cdMs > 0 ? ` ⏳${Math.ceil(cdMs/1000)}s` : '';
+      if (cdEl.textContent === txt) return;
+      cdEl.textContent = txt;
       if (cdMs > 0) {
-        cdEl.textContent = ` ⏳${Math.ceil(cdMs/1000)}s`;
         el.style.opacity = '0.45';
         el.style.pointerEvents = 'none';
       } else {
-        cdEl.textContent = '';
         el.style.opacity = '';
         el.style.pointerEvents = '';
       }
@@ -9571,7 +9934,10 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     const alvoEl = _avtElPosicaoCanvas(ini);
     // Dispara após a animação de dados (slot machine) terminar — mesmo padrão dos ataques de NPC
     if (atacEl && alvoEl)
-      setTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animFinal, dano: 0 }), AVT_SLOT_MACHINE_MS);
+      setTimeout(() => {
+        animarAtaque({ atacEl, alvoEl, animacao: animFinal, dano: 0 });
+        _avtSfxPosicional('hit_physical', ini, 0.5);
+      }, AVT_SLOT_MACHINE_MS);
     try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: ini.nome, animacao: animFinal, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
   }
 
@@ -10907,7 +11273,10 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     const atacEl = _avtElPosicaoCanvas(ini);
     const alvoEl = _avtElPosicaoCanvas(alvo);
     if (atacEl && alvoEl)
-      setTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholder, dano: 0 }), AVT_SLOT_MACHINE_MS);
+      setTimeout(() => {
+        animarAtaque({ atacEl, alvoEl, animacao: animPlaceholder, dano: 0 });
+        _avtSfxPosicional('hit_physical', alvo, 0.5);
+      }, AVT_SLOT_MACHINE_MS);
       try { _avtBroadcast('avt_attack_anim', { atacanteNome: ini.nome, alvoNome: alvo.nome, animacao: animPlaceholder, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
   }
 
@@ -11123,7 +11492,7 @@ function avtReceberMovimento(_payload) {
   if (!_avtMinhaFase(faseId)) return;
   try{
     if(nome && (seq != null || ts != null)){
-      const _dedupeKey = id || nome;
+      const _dedupeKey = _avtSeqKey(id || nome);
       window._avtRxMove = window._avtRxMove || Object.create(null);
       const last = window._avtRxMove[_dedupeKey] || { seq: -1, ts: 0 };
       const isOlder =
@@ -11138,7 +11507,7 @@ function avtReceberMovimento(_payload) {
   }catch(_){}
   // Accept even if adventure not fully loaded — entities may still exist
   // Resolver por id primeiro (mais robusto a homônimos), depois nome
-  const ent = (id && AVT_STATE.entidades.find(e => e.id === id))
+  const ent = (id && _avtEntById(id))
     || AVT_STATE.entidades.find(e => e.nome === nome);
   if (!ent) return;
   // Em modo P2P: posições de jogadores chegam pelo tick autoritativo (avt_state_tick).
@@ -11214,9 +11583,8 @@ function avtReceberMovimento(_payload) {
     }
   }
 
-  // Force repaint so other clients see the token move immediately
-  if (typeof _avtCameraUpdate === 'function') _avtCameraUpdate();
-  if (typeof _avtRender === 'function') _avtRender();
+  // O rAF do render loop pinta o movimento no próximo frame; renderizar aqui por
+  // mensagem recebida multiplicava renders sob rajadas de avt_token_move.
 
   // Todos os clientes reavaliam proximidade de NPCs quando jogadores remotos se movem.
   // Entrada em combate ativo NÃO é verificada aqui — cada jogador verifica a si próprio
@@ -11232,6 +11600,7 @@ window.avtReceberMovimento = avtReceberMovimento;
 // Receive combat-start broadcast from master
 function avtReceberCombateInicio(payload) {
   if (!AVT_STATE.rpgId) return;
+  if (!_avtMinhaFase(payload?.faseId)) return; // isolamento por fase (F2)
   // Apply positions from payload first
   if (payload.posicoes) {
     payload.posicoes.forEach(({ nome, x, y }) => {
@@ -11324,6 +11693,7 @@ function _avtBroadcastBatalha(bat) {
 // Receive battle-state update from any client
 function avtReceberBatalhaUpdate(payload) {
   if (!AVT_STATE.rpgId || !payload?.id) return;
+  if (!_avtMinhaFase(payload?.faseId)) return; // isolamento por fase (F2)
   const bat = AVT_STATE.batalhas.find(b => b.id === payload.id);
   if (!bat) return;
   // Descartar broadcasts fora de ordem (fix P6)
@@ -11427,7 +11797,8 @@ function avtReceberColisaoConfig({ colisaoJogJog, colisaoJogNpc }) {
 window.avtReceberColisaoConfig = avtReceberColisaoConfig;
 
 // Broadcast / receive new entity (avatar, etc.)
-function avtReceberEntidadeNova({ entidade, casterId }) {
+function avtReceberEntidadeNova({ entidade, casterId, faseId } = {}) {
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   if (!entidade || AVT_STATE.entidades.some(e => e.id === entidade.id)) return;
   AVT_STATE.entidades.push(entidade);
   if (casterId && AVT_STATE.aparencias[casterId]) AVT_STATE.aparencias[entidade.id] = AVT_STATE.aparencias[casterId];
@@ -11438,8 +11809,9 @@ window.avtReceberEntidadeNova = avtReceberEntidadeNova;
 function _avtBroadcastFimBatalha(batalhaId) {
   _avtBroadcast('avt_combate_fim', { batalhaId });
 }
-function avtReceberFimBatalha({ batalhaId }) {
+function avtReceberFimBatalha({ batalhaId, faseId } = {}) {
   if (!AVT_STATE.rpgId) return;
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   AVT_STATE.batalhas = AVT_STATE.batalhas.filter(b => b.id !== batalhaId);
   _avtHudMostrar(!!_avtMinhaBatalha());
   _avtHudUpdate();
@@ -11454,8 +11826,9 @@ function _avtBroadcastJoinBatalha(batalhaId, jogadorId, jogadorNome) {
   const initRoll = Math.floor(Math.random()*20)+1+4;
   _avtBroadcast('avt_combate_join', { batalhaId, jogadorId, jogadorNome, initRoll });
 }
-function avtReceberJoinBatalha({ batalhaId, jogadorId, jogadorNome, initRoll }) {
+function avtReceberJoinBatalha({ batalhaId, jogadorId, jogadorNome, initRoll, faseId } = {}) {
   if (!AVT_STATE.rpgId) return;
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   const bat = AVT_STATE.batalhas.find(b => b.id === batalhaId);
   if (!bat || bat.envolvidos.includes(jogadorId)) return;
   const ent = AVT_STATE.entidades.find(e => e.id === jogadorId);
@@ -11474,8 +11847,9 @@ window.avtReceberJoinBatalha = avtReceberJoinBatalha;
 function _avtBroadcastNpcMorreu(npcId) {
   _avtBroadcastNpc('avt_npc_morreu', { npcId });
 }
-function avtReceberNpcMorreu({ npcId }) {
+function avtReceberNpcMorreu({ npcId, faseId } = {}) {
   if (!AVT_STATE.rpgId) return;
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   const ent = AVT_STATE.entidades.find(e => e.id === npcId);
   if (ent) ent.escondido = true;
 }
@@ -11485,8 +11859,9 @@ window.avtReceberNpcMorreu = avtReceberNpcMorreu;
 function _avtBroadcastNpcRespawn(npcId, x, y, hp) {
   _avtBroadcastNpc('avt_npc_respawn', { npcId, x, y, hp });
 }
-function avtReceberNpcRespawn({ npcId, x, y, hp }) {
+function avtReceberNpcRespawn({ npcId, x, y, hp, faseId } = {}) {
   if (!AVT_STATE.rpgId) return;
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   const ent = AVT_STATE.entidades.find(e => e.id === npcId);
   if (!ent) return;
   ent.escondido = false;
@@ -11498,8 +11873,9 @@ function avtReceberNpcRespawn({ npcId, x, y, hp }) {
 }
 window.avtReceberNpcRespawn = avtReceberNpcRespawn;
 
-function avtReceberNpcPerseguindo({ id, targetId }) {
+function avtReceberNpcPerseguindo({ id, targetId, faseId } = {}) {
   if (!AVT_STATE.rpgId) return;
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   if (!AVT_STATE.npcTimers[id]) {
     const ini = AVT_STATE.entidades.find(e => e.id === id);
     const maxMs = (ini?.pacienciaSecs ?? 5) * 1000;
@@ -11515,8 +11891,9 @@ function avtReceberNpcPerseguindo({ id, targetId }) {
 }
 window.avtReceberNpcPerseguindo = avtReceberNpcPerseguindo;
 
-function avtReceberConviteCombate({ batId, expiry, aliadoIds }) {
+function avtReceberConviteCombate({ batId, expiry, aliadoIds, faseId } = {}) {
   if (!AVT_STATE.rpgId) return;
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   const meJog = _avtMeuJogador();
   if (!meJog || !aliadoIds?.includes(meJog.id)) return;
   AVT_STATE._convitesCombate[meJog.id] = { batId, expiry };
@@ -11566,6 +11943,8 @@ function avtReceberLevelUp({ charNome, novoNivel }) {
     char.nivel = novoNivel;
     if (char.custom_attrs) char.custom_attrs.nivel = novoNivel;
   }
+  const _entLv = (AVT_STATE.entidades || []).find(e => e.nome === charNome);
+  if (_entLv) _avtSfxPosicional('level_up', _entLv, 0.65, 0);
   _avtLevelUpParticleEffect(charNome, novoNivel);
   _avtHudUpdate();
 }
@@ -13533,7 +13912,8 @@ function avtReceberDadoRolado({ atacanteNome, alvoNome, skillNome, dados, total,
 window.avtReceberDadoRolado = avtReceberDadoRolado;
 
 // Receive damage visual broadcast (floating number above target)
-function avtReceberDanoVisual({ alvoNome, dano, isCrit }) {
+function avtReceberDanoVisual({ alvoNome, dano, isCrit, faseId } = {}) {
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   const alvo = AVT_STATE.entidades.find(e => e.nome === alvoNome);
   if (alvo) _avtMostrarDanoAcimaDaHead(alvo, dano, isCrit);
 }
@@ -14639,20 +15019,43 @@ window._avtFlushCharHpBuffer = _avtFlushCharHpBuffer;
 
 // Debounced UPSERT de estado de inimigos procedurais em rpg_registry.theme_json
 var _avtEstadoInimigosTimer = null;
+// Slot de dungeon_data da fase corrente (principal → theme_json.dungeon_data;
+// fase extra → fases_extras[id].dungeon_data). Criado sob demanda quando `criar`.
+function _avtDungeonDataSlot(t, criar) {
+  const faseId = AVT_STATE._faseAtualId || 'principal';
+  if (faseId === 'principal') {
+    if (!t.dungeon_data && criar) t.dungeon_data = {};
+    return t.dungeon_data || null;
+  }
+  const fa = (t.fases_extras || []).find(f => f.id === faseId);
+  if (!fa) return null;
+  if (!fa.dungeon_data && criar) fa.dungeon_data = {};
+  return fa.dungeon_data || null;
+}
+
 function _avtPersistirEstadoInimigos() {
   if (!AVT_STATE.rpgId || !AVT_STATE.rpg) return;
   clearTimeout(_avtEstadoInimigosTimer);
+  // Captura a fase no AGENDAMENTO: se o host trocar de fase durante o debounce,
+  // não podemos gravar o estado da fase nova no slot da antiga (nem vice-versa).
+  const _faseAgendada = AVT_STATE._faseAtualId || 'principal';
   _avtEstadoInimigosTimer = setTimeout(async () => {
     try {
+      if ((AVT_STATE._faseAtualId || 'principal') !== _faseAgendada) return; // fase mudou — descarta
       const t = AVT_STATE.rpg.theme_json || {};
-      if (!t.dungeon_data) t.dungeon_data = {};
+      // FIX F1: gravar no slot da FASE CORRENTE. Antes gravava sempre em
+      // t.dungeon_data (fase principal) e, como os IDs de inimigo são idênticos
+      // entre fases ('ini_boss_fase', 'ini_N'), matar o boss na fase 2 apagava o
+      // boss da principal no próximo load — e a fase 2 nunca persistia progresso.
+      const slot = _avtDungeonDataSlot(t, true);
+      if (!slot) return;
       const estado = {};
       (AVT_STATE.entidades || []).forEach(e => {
         if (e.tipo !== 'inimigo' || e.dbId) return; // dbId vai pro characters
         // BUG-05 FIX: incluir vezes_morto para preservar o decay de XP entre sessões.
         estado[e.id] = { hp: e.hp, morto: !!e.escondido || e.hp <= 0, x: e.x, y: e.y, vezes_morto: e.vezes_morto || 0 };
       });
-      t.dungeon_data._estadoInimigos = estado;
+      slot._estadoInimigos = estado;
       AVT_STATE.rpg.theme_json = t;
       await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
         method: 'PATCH', body: JSON.stringify({ theme_json: t })
@@ -14805,7 +15208,11 @@ async function _avtCarregarBatalhasAtivas() {
 
 // Aplica estado persistido de inimigos procedurais às entidades já geradas
 function _avtAplicarEstadoInimigosPersistido() {
-  const estado = AVT_STATE.rpg?.theme_json?.dungeon_data?._estadoInimigos;
+  // FIX F1: ler do slot da fase corrente (retrocompatível — o formato antigo
+  // gravava só em theme_json.dungeon_data, que É o slot da fase principal).
+  const t = AVT_STATE.rpg?.theme_json || {};
+  const slot = _avtDungeonDataSlot(t, false);
+  const estado = slot?._estadoInimigos;
   if (!estado || typeof estado !== 'object') return;
   // Remove inimigos mortos e ajusta HP dos vivos
   AVT_STATE.entidades = AVT_STATE.entidades.filter(e => {
@@ -15964,6 +16371,7 @@ async function _avtColetarObjsNaPosicao(jogador) {
     const idx = rd.objetos.findIndex(o => String(o.id) === String(obj.id));
     if (idx >= 0) rd.objetos.splice(idx, 1);
 
+    _avtSfxPosicional(obj.tipo === 'loot' ? 'coin_pickup' : 'buff_activate', jogador, 0.55);
     if (obj.tipo === 'loot') {
       if (char?.id && obj.item_id) {
         if (typeof avtInvDarItem === 'function') {
@@ -16013,6 +16421,7 @@ async function avtAbrirBau(bauId) {
   if (!bau) { mostrarToast('Baú não encontrado', 'erro'); return; }
   if (bau.aberto) { mostrarToast('Este baú já foi aberto', 'aviso'); return; }
   bau.aberto = true;
+  _avtSfxPosicional('chest_open', jogador, 0.7);
 
   const char = AVT_STATE.chars.find(c => c.nome === jogador.nome);
   if (!char) return;
@@ -16065,12 +16474,18 @@ async function avtAbrirBau(bauId) {
 window.avtAbrirBau = avtAbrirBau;
 
 // Receber notificação de baú aberto por outro jogador: marcar como aberto localmente
-function avtReceberBauAberto({ bauId, jogadorNome } = {}) {
+function avtReceberBauAberto({ bauId, jogadorNome, faseId } = {}) {
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     const rd = AVT_STATE.dungeon?.render_data;
     if (!rd || !bauId) return;
     const bau = (rd.objetos || []).find(o => o.id === bauId || String(o.id) === String(bauId));
-    if (bau) bau.aberto = true;
+    if (bau) {
+      bau.aberto = true;
+      // Som posicional: rangido do baú atenuado pela distância do ouvinte
+      const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+      _avtSfxPosicional('chest_open', { x: (bau.x ?? 0) * dw, y: (bau.y ?? 0) * dh }, 0.7);
+    }
     if (jogadorNome) {
       try { mostrarToast(`📦 ${jogadorNome} abriu um baú!`, 'ok'); } catch(_) {}
     }
@@ -16079,7 +16494,8 @@ function avtReceberBauAberto({ bauId, jogadorNome } = {}) {
 window.avtReceberBauAberto = avtReceberBauAberto;
 
 // Receber spawn de objeto (loot no chão / orbe de recurso) de outro cliente.
-function avtReceberObjSpawn({ obj } = {}) {
+function avtReceberObjSpawn({ obj, faseId } = {}) {
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (!obj || !AVT_STATE.dungeon) return;
     if (!AVT_STATE.dungeon.render_data) AVT_STATE.dungeon.render_data = {};
@@ -16091,12 +16507,19 @@ function avtReceberObjSpawn({ obj } = {}) {
 window.avtReceberObjSpawn = avtReceberObjSpawn;
 
 // Receber coleta/remoção de objeto por outro cliente.
-function avtReceberObjPickup({ objId } = {}) {
+function avtReceberObjPickup({ objId, faseId } = {}) {
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     const rd = AVT_STATE.dungeon?.render_data;
     if (!rd?.objetos || !objId) return;
     const idx = rd.objetos.findIndex(o => String(o.id) === String(objId));
-    if (idx >= 0) rd.objetos.splice(idx, 1);
+    if (idx >= 0) {
+      const o = rd.objetos[idx];
+      const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+      _avtSfxPosicional(o.tipo === 'loot' ? 'coin_pickup' : 'buff_activate',
+        { x: (o.x ?? 0) * dw, y: (o.y ?? 0) * dh }, 0.5);
+      rd.objetos.splice(idx, 1);
+    }
     try { if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender(); } catch(_) {}
   } catch(_) {}
 }
@@ -16671,35 +17094,35 @@ function _avtCanvasEfeito(tipo, x1, y1, x2, y2, cor, dur, tamanho, trilha, icone
 }
 
 function _avtCanvasFlash(screenX, screenY, cor, tipo) {
-  const canvas = AVT_STATE.canvas;
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+  // Antes: rAF próprio desenhando no #avt-canvas — o clearRect do loop principal
+  // apagava os frames (flash "piscava" ou sumia) e eram dois rAF concorrentes.
+  // Agora: div overlay com animação CSS de opacity/scale (composited, sem raça).
+  const wrap = document.getElementById('avt-mapa-wrap');
+  if (!wrap) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  // Billboard: efeito desenhado no canvas inclinado; contra-transforma p/ ficar "em pé".
-  // Requer projeção (posição) + billboard (em pé) ligados.
-  const _bb = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
-    && AVT_GRAFICOS?.vfxProjecao && AVT_GRAFICOS?.vfxBillboard && typeof _avtIsoBillboardAplicar === 'function');
-
-  let frame = 0;
-  const FRAMES = 8;
-  function draw() {
-    if (frame >= FRAMES) return;
-    frame++;
-    const alpha = 1 - frame / FRAMES;
-    const radius = SZ * 0.5 * (1 + frame * 0.15);
-    ctx.save();
-    if (_bb) _avtIsoBillboardAplicar(ctx, screenX, screenY);
-    ctx.globalAlpha = alpha;
-    ctx.beginPath();
-    ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
-    ctx.fillStyle = cor;
-    ctx.shadowColor = cor;
-    ctx.shadowBlur = 20;
-    ctx.fill();
-    ctx.restore();
-    requestAnimationFrame(draw);
-  }
-  draw();
+  const d = Math.round(SZ * 1.6);
+  const el = document.createElement('div');
+  el.style.cssText = [
+    'position:absolute',
+    'pointer-events:none',
+    'z-index:35',
+    `left:${Math.round(screenX - d / 2)}px`,
+    `top:${Math.round(screenY - d / 2)}px`,
+    `width:${d}px`,
+    `height:${d}px`,
+    'border-radius:50%',
+    `background:radial-gradient(circle, ${cor} 0%, transparent 70%)`,
+    'opacity:0.95',
+    'transform:scale(0.6)',
+    'transition:opacity 140ms ease-out, transform 140ms ease-out',
+    'will-change:opacity,transform',
+  ].join(';');
+  wrap.appendChild(el);
+  requestAnimationFrame(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'scale(1.25)';
+  });
+  setTimeout(() => { try { el.remove(); } catch (_) {} }, 220);
 }
 
 // Lazy-load PIXI core itself (the rest of the pipeline assumes window.PIXI exists).
@@ -16826,16 +17249,8 @@ function _avtLoadPixiTextures(urls) {
 }
 
 function _avtEnsurePixiSpine() {
-  return _avtEnsurePixiCore().then(() => {
-    if (PIXI.spine && PIXI.spine.Spine) return;
-    return new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/pixi-spine@4/dist/pixi-spine.umd.js';
-      s.onload = () => res();
-      s.onerror = () => rej(new Error('Falha ao carregar pixi-spine'));
-      document.head.appendChild(s);
-    });
-  });
+  // pixi-spine está no bundle (chunk lazy do Vite) — sem dependência de CDN em runtime.
+  return pixiEnsureSpine();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -17041,6 +17456,40 @@ function _avtProcTextures(name) {
         g.beginPath(); g.moveTo(bx,by); g.lineTo(bx+Math.cos(a+0.5)*r*0.22, by+Math.sin(a+0.5)*r*0.22); g.stroke();
         g.beginPath(); g.moveTo(bx,by); g.lineTo(bx+Math.cos(a-0.5)*r*0.22, by+Math.sin(a-0.5)*r*0.22); g.stroke();
       }
+    });
+    case 'leaf': return make(64, (g,s) => {
+      const r = s/2;
+      g.fillStyle = 'rgba(255,255,255,0.92)';
+      g.beginPath(); g.moveTo(r, s*0.06);
+      g.bezierCurveTo(s*0.9, s*0.3, s*0.82, s*0.78, r, s*0.94);
+      g.bezierCurveTo(s*0.18, s*0.78, s*0.1, s*0.3, r, s*0.06); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(r, s*0.1); g.lineTo(r, s*0.9); g.stroke();
+      for (let i=1;i<4;i++){ const y=s*(0.2+i*0.18);
+        g.beginPath(); g.moveTo(r,y); g.lineTo(r+s*0.2, y+s*0.1); g.stroke();
+        g.beginPath(); g.moveTo(r,y); g.lineTo(r-s*0.2, y+s*0.1); g.stroke(); }
+    });
+    case 'droplet': return make(64, (g,s) => {
+      const r = s/2;
+      g.fillStyle = 'rgba(255,255,255,0.95)';
+      g.beginPath(); g.moveTo(r, s*0.06);
+      g.bezierCurveTo(s*0.82, s*0.5, s*0.78, s*0.72, r, s*0.92);
+      g.bezierCurveTo(s*0.22, s*0.72, s*0.18, s*0.5, r, s*0.06); g.fill();
+      const hl = g.createRadialGradient(s*0.4, s*0.55, 0, s*0.4, s*0.55, s*0.16);
+      hl.addColorStop(0, 'rgba(255,255,255,1)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = hl; g.beginPath(); g.arc(s*0.4, s*0.55, s*0.16, 0, Math.PI*2); g.fill();
+    });
+    case 'skull_wisp': return make(80, (g,s) => {
+      const r = s/2;
+      const gr = g.createRadialGradient(r, r*0.8, 0, r, r*0.8, r*0.85);
+      gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.6, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr;
+      g.beginPath(); g.arc(r, r*0.75, r*0.55, 0, Math.PI*2); g.fill();
+      g.beginPath(); g.moveTo(r*0.6, r*1.1); g.quadraticCurveTo(r*0.85, s*0.95, r, s*0.98);
+      g.quadraticCurveTo(r*1.15, s*0.95, r*1.4, r*1.1); g.closePath(); g.fill();
+      g.fillStyle = 'rgba(0,0,0,0.85)';
+      g.beginPath(); g.arc(r*0.78, r*0.72, r*0.14, 0, Math.PI*2); g.fill();
+      g.beginPath(); g.arc(r*1.22, r*0.72, r*0.14, 0, Math.PI*2); g.fill();
     });
     default: return PIXI.Texture.WHITE;
   }
@@ -17766,6 +18215,414 @@ var AVT_FX_PRESETS = {
           spawnType:'point' } },
     ],
   },
+
+  // ═══ PRESETS ELABORADOS (Fase 7) ═══════════════════════════════════════════
+  // Usam capacidades que os presets antigos ignoravam: envelopes multi-fase
+  // (cast→travel→impact com corpo de projétil), filtros de tela (shockwave,
+  // godray, displacement, rgbsplit), trails, subEmitters e spawn em anel.
+
+  // ── FOGO/TERRA: meteoro em arco com runas de conjuração e cratera ──────────
+  meteor_fall: {
+    intensidade: 'equilibrado', cor: '#ff8842',
+    cast: { ms: 420, lighting:{ bloom:{threshold:0.6,intensity:0.7,quality:4}, tone:'filmic' },
+      layers: [
+        { role:'runas', texture:'rune', blendMode:'add', z:3, glow:{distance:8,outerStrength:1.4,color:'#ffb060'},
+          emitter:{ alpha:{list:[{value:0,time:0},{value:0.9,time:0.4},{value:0,time:1}]},
+                    scale:{list:[{value:0.35,time:0},{value:0.5,time:1}]},
+                    color:{list:[{value:'ffd9a0',time:0},{value:'ff7020',time:1}]},
+                    speed:{start:10,end:2}, rotationSpeed:{min:40,max:90},
+                    lifetime:{min:0.35,max:0.45}, frequency:0.05, emitterLifetime:0.4,
+                    maxParticles:9, spawnType:'ring', spawnCircle:{x:0,y:0,r:26,minR:22} } },
+        { role:'brasas', texture:'ember', blendMode:'add', z:4,
+          emitter:{ alpha:{list:[{value:0.8,time:0},{value:0,time:1}]},
+                    scale:{list:[{value:0.2,time:0},{value:0.04,time:1}]},
+                    color:{list:[{value:'fff0c2',time:0},{value:'ff7a1c',time:1}]},
+                    speed:{start:60,end:10}, acceleration:{x:0,y:-120},
+                    lifetime:{min:0.3,max:0.5}, frequency:0.02, emitterLifetime:0.4,
+                    maxParticles:18, spawnType:'circle', spawnCircle:{x:0,y:0,r:14} } },
+      ] },
+    travel: { ms: 480, path:'arc', arcHeight: 90, trail:{ length:10, fade:0.86 },
+      body: { rotate:'velocity', parts:[
+        { kind:'orb', radius:15, color:'#ffb255', alpha:0.95, glow:{distance:12,outerStrength:2,color:'#ff8842'} },
+        { kind:'rune_ring', radius:21, color:'#ff9040', alpha:0.6, spin:180, symbols:4 },
+      ] } },
+    impact: { ms: 700, preset:'fire_impact',
+      camera:{ shake:{amp:11,decay:0.9,freq:34}, hitstop:{ms:70,at:0.12}, zoomPunch:{scale:1.04,ms:220} },
+      filters:[ { type:'shockwave', amplitude:38, wavelength:150, speed:620 } ],
+      lighting:{ bloom:{threshold:0.45,intensity:1.2,quality:5}, tone:'aces' } },
+  },
+
+  // ── GELO: lança de gelo com conjuração cristalina e estilhaço ──────────────
+  frost_lance: {
+    intensidade: 'equilibrado', cor: '#9fd9ff',
+    cast: { ms: 320, lighting:{ bloom:{threshold:0.65,intensity:0.55,quality:4}, tone:'filmic' },
+      layers: [
+        { role:'cristais', texture:'snowflake', blendMode:'add', z:3,
+          emitter:{ alpha:{list:[{value:0,time:0},{value:0.85,time:0.4},{value:0,time:1}]},
+                    scale:{list:[{value:0.15,time:0},{value:0.32,time:1}]},
+                    color:{list:[{value:'ffffff',time:0},{value:'7fc8ff',time:1}]},
+                    speed:{start:-70,end:-8}, rotationSpeed:{min:-120,max:120},
+                    lifetime:{min:0.28,max:0.36}, frequency:0.02, emitterLifetime:0.3,
+                    maxParticles:16, spawnType:'circle', spawnCircle:{x:0,y:0,r:34} } },
+      ] },
+    travel: { ms: 320, path:'linear', trail:{ length:8, fade:0.8 },
+      body: { rotate:'velocity', parts:[
+        { kind:'shaft', length:34, width:5, color:'#cfeaff', alpha:0.95 },
+        { kind:'head', length:15, width:11, color:'#ffffff', glow:{distance:10,outerStrength:1.6,color:'#9fd9ff'} },
+      ] } },
+    impact: { ms: 650, preset:'ice_shatter',
+      camera:{ shake:{amp:6,decay:0.9,freq:32}, hitstop:{ms:45,at:0.12} },
+      layers: [
+        { role:'estilhacos', texture:'shard', blendMode:'add', z:4, trail:{length:5,fade:0.8},
+          emitter:{ alpha:{list:[{value:0.95,time:0},{value:0,time:1}]},
+                    scale:{list:[{value:0.34,time:0},{value:0.06,time:1}]},
+                    color:{list:[{value:'ffffff',time:0},{value:'7fc8ff',time:1}]},
+                    speed:{start:320,end:60}, acceleration:{x:0,y:240},
+                    startRotation:{min:0,max:360}, rotationSpeed:{min:-260,max:260},
+                    lifetime:{min:0.35,max:0.6}, frequency:0.01, emitterLifetime:0.25,
+                    maxParticles:34, spawnType:'circle', spawnCircle:{x:0,y:0,r:5} } },
+      ] },
+  },
+
+  // ── SAGRADO: pilar de julgamento com godray ────────────────────────────────
+  spirit_ray: {
+    duration: 1000,
+    lighting:{ bloom:{threshold:0.5,intensity:1.0,quality:5}, tone:'aces' },
+    camera:{ shake:{amp:4,decay:0.94,freq:26}, flash:{color:'#fff3d0',alpha:0.3,ms:140} },
+    background:{ darken:0.22, radialDim:true },
+    filters:[ { type:'godray', angle: 88, gain: 0.45, lacunarity: 2.4 } ],
+    layers: [
+      { role:'pilar', texture:'streak', blendMode:'add', z:3, glow:{distance:14,outerStrength:1.8,color:'#ffe18a'},
+        emitter:{ alpha:{list:[{value:0,time:0},{value:0.95,time:0.25},{value:0,time:1}]},
+                  scale:{list:[{value:1.6,time:0},{value:2.4,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'ffd47a',time:1}]},
+                  speed:{start:8,end:2}, startRotation:{min:88,max:92},
+                  lifetime:{min:0.5,max:0.8}, frequency:0.03, emitterLifetime:0.55,
+                  maxParticles:22, spawnType:'circle', spawnCircle:{x:0,y:0,r:8} } },
+      { role:'ascensao', texture:'sparkle', blendMode:'add', z:4,
+        emitter:{ alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.28,time:0},{value:0.05,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'ffe9b0',time:1}]},
+                  speed:{start:110,end:30}, acceleration:{x:0,y:-220},
+                  lifetime:{min:0.5,max:0.9}, frequency:0.012, emitterLifetime:0.6,
+                  maxParticles:40, spawnType:'circle', spawnCircle:{x:0,y:0,r:20} } },
+      { role:'halo', texture:'ring', blendMode:'add', z:5,
+        emitter:{ alpha:{list:[{value:0.75,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.25,time:0},{value:1.9,time:1}]},
+                  color:{list:[{value:'fff6dd',time:0},{value:'e8b84a',time:1}]},
+                  speed:{start:0,end:0}, lifetime:{min:0.55,max:0.6},
+                  frequency:0.3, emitterLifetime:0.35, maxParticles:2, spawnType:'point' } },
+    ],
+  },
+  spirit_ray_epic: {
+    duration: 1250,
+    lighting:{ bloom:{threshold:0.35,intensity:1.7,quality:6}, tone:'aces' },
+    camera:{ shake:{amp:8,decay:0.92,freq:28}, flash:{color:'#fff3d0',alpha:0.6,ms:150},
+             zoomPunch:{scale:1.04,ms:260}, hitstop:{ms:60,at:0.2} },
+    background:{ darken:0.4, radialDim:true },
+    filters:[ { type:'godray', angle: 88, gain: 0.6, lacunarity: 2.2 } ],
+    layers: [
+      { role:'pilar', texture:'streak', blendMode:'add', z:3, glow:{distance:18,outerStrength:2.4,color:'#ffe18a'},
+        emitter:{ alpha:{list:[{value:0,time:0},{value:1,time:0.2},{value:0,time:1}]},
+                  scale:{list:[{value:2.2,time:0},{value:3.2,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'ffd47a',time:1}]},
+                  speed:{start:8,end:2}, startRotation:{min:88,max:92},
+                  lifetime:{min:0.6,max:0.95}, frequency:0.02, emitterLifetime:0.7,
+                  maxParticles:36, spawnType:'circle', spawnCircle:{x:0,y:0,r:10} } },
+      { role:'ascensao', texture:'sparkle', blendMode:'add', z:4, trail:{length:6,fade:0.85},
+        emitter:{ alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.36,time:0},{value:0.05,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'ffe9b0',time:1}]},
+                  speed:{start:160,end:40}, acceleration:{x:0,y:-300},
+                  lifetime:{min:0.6,max:1.0}, frequency:0.008, emitterLifetime:0.7,
+                  maxParticles:70, spawnType:'circle', spawnCircle:{x:0,y:0,r:24} } },
+      { role:'halo', texture:'ring', blendMode:'add', z:5,
+        emitter:{ alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.3,time:0},{value:3,time:1}]},
+                  color:{list:[{value:'fff6dd',time:0},{value:'e8b84a',time:1}]},
+                  speed:{start:0,end:0}, lifetime:{min:0.6,max:0.65},
+                  frequency:0.25, emitterLifetime:0.5, maxParticles:3, spawnType:'point' } },
+    ],
+  },
+
+  // ── VAZIO/SOMBRA: colapso com distorção de tela e aberração ────────────────
+  void_collapse: {
+    duration: 1100,
+    lighting:{ bloom:{threshold:0.6,intensity:0.8,quality:4}, tone:'filmic' },
+    camera:{ shake:{amp:5,decay:0.93,freq:28}, hitstop:{ms:70,at:0.55} },
+    background:{ darken:0.3, radialDim:true },
+    filters:[ { type:'displacement', scaleX: 26, scaleY: 26 }, { type:'rgbsplit', rx:-3, bx:3 } ],
+    layers: [
+      { role:'sucao', texture:'skull_wisp', blendMode:'add', z:3, tint:'#b070ff',
+        emitter:{ alpha:{list:[{value:0,time:0},{value:0.8,time:0.4},{value:0,time:1}]},
+                  scale:{list:[{value:0.4,time:0},{value:0.08,time:1}]},
+                  color:{list:[{value:'d0a0ff',time:0},{value:'40108a',time:1}]},
+                  speed:{start:-220,end:-40}, startRotation:{min:0,max:360},
+                  lifetime:{min:0.5,max:0.85}, frequency:0.012, emitterLifetime:0.55,
+                  maxParticles:38, spawnType:'ring', spawnCircle:{x:0,y:0,r:80,minR:60} } },
+      { role:'nucleo', texture:'glow', blendMode:'add', z:4, tint:'#7030d0',
+        emitter:{ alpha:{list:[{value:0,time:0},{value:1,time:0.6},{value:0,time:1}]},
+                  scale:{list:[{value:0.1,time:0},{value:0.9,time:0.6},{value:0.05,time:1}]},
+                  color:{list:[{value:'c8a0ff',time:0},{value:'30006a',time:1}]},
+                  speed:{start:0,end:0}, lifetime:{min:0.8,max:0.95},
+                  frequency:0.4, emitterLifetime:0.15, maxParticles:2, spawnType:'point' } },
+      { role:'anel_final', texture:'ring', blendMode:'add', z:5,
+        emitter:{ alpha:{list:[{value:0,time:0},{value:0,time:0.55},{value:0.9,time:0.6},{value:0,time:1}]},
+                  scale:{list:[{value:0.2,time:0.55},{value:2.6,time:1}]},
+                  color:{list:[{value:'e0c8ff',time:0},{value:'6020c0',time:1}]},
+                  speed:{start:0,end:0}, lifetime:{min:0.5,max:0.55},
+                  frequency:0.5, emitterLifetime:0.08, maxParticles:1, spawnType:'point' } },
+    ],
+  },
+
+  // ── ÁGUA: onda com gotas e distorção líquida ───────────────────────────────
+  tide_surge: {
+    duration: 950,
+    lighting:{ bloom:{threshold:0.55,intensity:0.8,quality:4}, tone:'filmic' },
+    camera:{ shake:{amp:5,decay:0.92,freq:26} },
+    background:{ darken:0.12 },
+    filters:[ { type:'displacement', scaleX: 20, scaleY: 12 } ],
+    layers: [
+      { role:'onda', texture:'crescent', blendMode:'add', z:3, glow:{distance:10,outerStrength:1.4,color:'#66ccff'},
+        emitter:{ alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.5,time:0},{value:1.4,time:1}]},
+                  color:{list:[{value:'d8f2ff',time:0},{value:'1f7ec8',time:1}]},
+                  speed:{start:120,end:20}, startRotation:{min:-20,max:20},
+                  lifetime:{min:0.45,max:0.6}, frequency:0.06, emitterLifetime:0.35,
+                  maxParticles:8, spawnType:'circle', spawnCircle:{x:0,y:0,r:6} } },
+      { role:'gotas', texture:'droplet', blendMode:'add', z:4,
+        subEmitters:[{ on:'death', preset:'micro_sparks', chance:0.15 }],
+        emitter:{ alpha:{list:[{value:0.95,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.3,time:0},{value:0.08,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'5fb8ef',time:1}]},
+                  speed:{start:280,end:60}, acceleration:{x:0,y:340},
+                  startRotation:{min:200,max:340},
+                  lifetime:{min:0.4,max:0.75}, frequency:0.01, emitterLifetime:0.35,
+                  maxParticles:42, spawnType:'circle', spawnCircle:{x:0,y:0,r:8} } },
+      { role:'espuma', texture:'smoke', blendMode:'screen', z:2,
+        emitter:{ alpha:{list:[{value:0,time:0},{value:0.4,time:0.3},{value:0,time:1}]},
+                  scale:{list:[{value:0.4,time:0},{value:1.3,time:1}]},
+                  color:{list:[{value:'bfe8ff',time:0},{value:'2a5f8f',time:1}]},
+                  speed:{start:60,end:15}, lifetime:{min:0.6,max:0.9},
+                  frequency:0.03, emitterLifetime:0.45, maxParticles:16,
+                  spawnType:'circle', spawnCircle:{x:0,y:0,r:14} } },
+    ],
+  },
+
+  // ── NATUREZA: florescer com folhas e cura ──────────────────────────────────
+  gaia_bloom: {
+    duration: 1100,
+    lighting:{ bloom:{threshold:0.6,intensity:0.7,quality:4}, tone:'filmic' },
+    camera:{},
+    layers: [
+      { role:'folhas', texture:'leaf', blendMode:'add', z:3,
+        emitter:{ alpha:{list:[{value:0,time:0},{value:0.85,time:0.3},{value:0,time:1}]},
+                  scale:{list:[{value:0.28,time:0},{value:0.12,time:1}]},
+                  color:{list:[{value:'d8ffb0',time:0},{value:'2f9e44',time:1}]},
+                  speed:{start:130,end:25}, acceleration:{x:0,y:-60},
+                  startRotation:{min:0,max:360}, rotationSpeed:{min:-160,max:160},
+                  lifetime:{min:0.6,max:1.0}, frequency:0.014, emitterLifetime:0.6,
+                  maxParticles:36, spawnType:'ring', spawnCircle:{x:0,y:0,r:20,minR:8} } },
+      { role:'petalas', texture:'petal', blendMode:'add', z:4,
+        emitter:{ alpha:{list:[{value:0.8,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.2,time:0},{value:0.05,time:1}]},
+                  color:{list:[{value:'ffe9f2',time:0},{value:'ff8ab8',time:1}]},
+                  speed:{start:70,end:12}, acceleration:{x:0,y:-90},
+                  rotationSpeed:{min:-120,max:120},
+                  lifetime:{min:0.7,max:1.1}, frequency:0.03, emitterLifetime:0.7,
+                  maxParticles:20, spawnType:'circle', spawnCircle:{x:0,y:0,r:16} } },
+      { role:'brilho', texture:'glow', blendMode:'add', z:2, tint:'#a0ffb8', lightCast:{ color:'#a0ffb8', radius:70, alpha:0.4 },
+        emitter:{ alpha:{list:[{value:0,time:0},{value:0.5,time:0.4},{value:0,time:1}]},
+                  scale:{list:[{value:0.6,time:0},{value:1.2,time:1}]},
+                  color:{list:[{value:'d0ffd8',time:0},{value:'2f9e44',time:1}]},
+                  speed:{start:0,end:0}, lifetime:{min:0.9,max:1.0},
+                  frequency:0.4, emitterLifetime:0.12, maxParticles:2, spawnType:'point' } },
+    ],
+  },
+
+  // ── VENENO: explosão tóxica com bolhas e névoa ─────────────────────────────
+  venom_burst: {
+    duration: 950,
+    lighting:{ bloom:{threshold:0.6,intensity:0.7,quality:4}, tone:'filmic' },
+    camera:{ shake:{amp:4,decay:0.92,freq:28} },
+    background:{ darken:0.15 },
+    layers: [
+      { role:'bolhas', texture:'droplet', blendMode:'add', z:3, tint:'#80ff40',
+        subEmitters:[{ on:'death', preset:'micro_sparks', chance:0.2 }],
+        emitter:{ alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.26,time:0},{value:0.06,time:1}]},
+                  color:{list:[{value:'d8ff90',time:0},{value:'3f8f10',time:1}]},
+                  speed:{start:240,end:50}, acceleration:{x:0,y:180},
+                  startRotation:{min:0,max:360},
+                  lifetime:{min:0.4,max:0.7}, frequency:0.012, emitterLifetime:0.3,
+                  maxParticles:34, spawnType:'circle', spawnCircle:{x:0,y:0,r:6} } },
+      { role:'nevoa', texture:'smoke', blendMode:'screen', z:2,
+        emitter:{ alpha:{list:[{value:0,time:0},{value:0.5,time:0.25},{value:0,time:1}]},
+                  scale:{list:[{value:0.4,time:0},{value:1.6,time:1}]},
+                  color:{list:[{value:'86c81e',time:0},{value:'1e3a08',time:1}]},
+                  speed:{start:50,end:12}, lifetime:{min:0.7,max:1.1},
+                  frequency:0.02, emitterLifetime:0.5, maxParticles:22,
+                  spawnType:'circle', spawnCircle:{x:0,y:0,r:12} } },
+    ],
+  },
+
+  // ── VENTO: lâmina de vento em crescente com rastro ─────────────────────────
+  gale_slash: {
+    duration: 600,
+    lighting:{ bloom:{threshold:0.65,intensity:0.6,quality:4}, tone:'filmic' },
+    camera:{ shake:{amp:4,decay:0.9,freq:38}, hitstop:{ms:35,at:0.12} },
+    layers: [
+      { role:'crescentes', texture:'crescent', blendMode:'add', z:3, trail:{length:7,fade:0.82},
+        emitter:{ alpha:{list:[{value:0.95,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.6,time:0},{value:0.15,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'b8e8d8',time:1}]},
+                  speed:{start:300,end:80},
+                  startRotation:{min:-25,max:25}, rotationSpeed:{min:-90,max:90},
+                  lifetime:{min:0.25,max:0.45}, frequency:0.02, emitterLifetime:0.22,
+                  maxParticles:12, spawnType:'circle', spawnCircle:{x:0,y:0,r:4} } },
+      { role:'folhas_soltas', texture:'leaf', blendMode:'add', z:4,
+        emitter:{ alpha:{list:[{value:0.7,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.14,time:0},{value:0.03,time:1}]},
+                  color:{list:[{value:'d8ffd0',time:0},{value:'6aa84f',time:1}]},
+                  speed:{start:220,end:40}, rotationSpeed:{min:-300,max:300},
+                  lifetime:{min:0.3,max:0.5}, frequency:0.02, emitterLifetime:0.25,
+                  maxParticles:14, spawnType:'circle', spawnCircle:{x:0,y:0,r:8} } },
+    ],
+  },
+
+  // ── TERRA: ruptura sísmica com onda de choque e detritos ───────────────────
+  quake_rupture: {
+    duration: 1000,
+    lighting:{ bloom:{threshold:0.7,intensity:0.5,quality:4}, tone:'filmic' },
+    camera:{ shake:{amp:12,decay:0.9,freq:22}, hitstop:{ms:80,at:0.1}, zoomPunch:{scale:1.035,ms:260} },
+    background:{ darken:0.2 },
+    filters:[ { type:'shockwave', amplitude: 42, wavelength: 190, speed: 480 } ],
+    layers: [
+      { role:'detritos', texture:'shard', blendMode:'normal', z:3, tint:'#a88860',
+        emitter:{ alpha:{list:[{value:1,time:0},{value:0.85,time:0.6},{value:0,time:1}]},
+                  scale:{list:[{value:0.36,time:0},{value:0.12,time:1}]},
+                  color:{list:[{value:'c8a878',time:0},{value:'5a4630',time:1}]},
+                  speed:{start:340,end:80}, acceleration:{x:0,y:420},
+                  startRotation:{min:200,max:340}, rotationSpeed:{min:-320,max:320},
+                  lifetime:{min:0.5,max:0.85}, frequency:0.009, emitterLifetime:0.3,
+                  maxParticles:40, spawnType:'circle', spawnCircle:{x:0,y:0,r:10} } },
+      { role:'poeira', texture:'smoke', blendMode:'normal', z:2,
+        emitter:{ alpha:{list:[{value:0,time:0},{value:0.5,time:0.2},{value:0,time:1}]},
+                  scale:{list:[{value:0.5,time:0},{value:2.0,time:1}]},
+                  color:{list:[{value:'8a7658',time:0},{value:'2e2418',time:1}]},
+                  speed:{start:80,end:20}, lifetime:{min:0.8,max:1.3},
+                  frequency:0.02, emitterLifetime:0.5, maxParticles:26,
+                  spawnType:'circle', spawnCircle:{x:0,y:0,r:16} } },
+      { role:'rachadura', texture:'ring', blendMode:'add', z:4,
+        emitter:{ alpha:{list:[{value:0.8,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.2,time:0},{value:2.4,time:1}]},
+                  color:{list:[{value:'e8c890',time:0},{value:'a06020',time:1}]},
+                  speed:{start:0,end:0}, lifetime:{min:0.5,max:0.55},
+                  frequency:0.5, emitterLifetime:0.06, maxParticles:1, spawnType:'point' } },
+    ],
+  },
+
+  // ── PSÍQUICO: fratura mental com aberração cromática e hexágonos ───────────
+  mind_shatter: {
+    duration: 850,
+    lighting:{ bloom:{threshold:0.55,intensity:0.9,quality:5}, tone:'aces' },
+    camera:{ shake:{amp:5,decay:0.9,freq:44}, chromaticAberration:{amount:6,ms:220} },
+    background:{ darken:0.2, radialDim:true },
+    filters:[ { type:'rgbsplit', rx:-4, bx:4 } ],
+    layers: [
+      { role:'fragmentos', texture:'hexagon', blendMode:'add', z:3, glow:{distance:8,outerStrength:1.4,color:'#e080ff'},
+        emitter:{ alpha:{list:[{value:0.95,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.3,time:0},{value:0.06,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'d060ff',time:0.5},{value:'6020a0',time:1}]},
+                  speed:{start:260,end:50},
+                  startRotation:{min:0,max:360}, rotationSpeed:{min:-200,max:200},
+                  lifetime:{min:0.35,max:0.6}, frequency:0.01, emitterLifetime:0.3,
+                  maxParticles:36, spawnType:'ring', spawnCircle:{x:0,y:0,r:14,minR:4} } },
+      { role:'ondas', texture:'ring', blendMode:'add', z:4,
+        emitter:{ alpha:{list:[{value:0.7,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.15,time:0},{value:2.0,time:1}]},
+                  color:{list:[{value:'f0d8ff',time:0},{value:'8030c0',time:1}]},
+                  speed:{start:0,end:0}, lifetime:{min:0.4,max:0.5},
+                  frequency:0.18, emitterLifetime:0.4, maxParticles:3, spawnType:'point' } },
+    ],
+  },
+
+  // ── RAIO: vórtice elétrico giratório ───────────────────────────────────────
+  storm_vortex: {
+    duration: 950,
+    lighting:{ bloom:{threshold:0.45,intensity:1.1,quality:5}, tone:'filmic' },
+    camera:{ shake:{amp:7,decay:0.9,freq:46}, chromaticAberration:{amount:5,ms:180} },
+    background:{ darken:0.25 },
+    layers: [
+      { role:'raios', texture:'bolt', blendMode:'add', z:3, glow:{distance:12,outerStrength:1.8,color:'#cfe4ff'},
+        emitter:{ alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.4,time:0},{value:0.08,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'9ec8ff',time:1}]},
+                  speed:{start:60,end:15}, rotationSpeed:{min:200,max:420},
+                  lifetime:{min:0.25,max:0.45}, frequency:0.008, emitterLifetime:0.5,
+                  maxParticles:46, spawnType:'ring', spawnCircle:{x:0,y:0,r:34,minR:18} } },
+      { role:'faiscas_centro', texture:'spark', blendMode:'add', z:4,
+        subEmitters:[{ on:'death', preset:'micro_sparks', chance:0.18 }],
+        emitter:{ alpha:{list:[{value:0.95,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.3,time:0},{value:0.04,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'6aa8ff',time:1}]},
+                  speed:{start:180,end:30}, lifetime:{min:0.25,max:0.5},
+                  frequency:0.008, emitterLifetime:0.5, maxParticles:44,
+                  spawnType:'circle', spawnCircle:{x:0,y:0,r:6} } },
+    ],
+  },
+
+  // ── SANGUE: frenesi com lâminas e gotículas persistentes ───────────────────
+  blood_frenzy: {
+    duration: 800,
+    lighting:{ bloom:{threshold:0.6,intensity:0.7,quality:4}, tone:'aces' },
+    camera:{ shake:{amp:9,decay:0.88,freq:42}, hitstop:{ms:60,at:0.1}, flash:{color:'#3a0000',alpha:0.35,ms:100} },
+    background:{ darken:0.22, radialDim:true },
+    layers: [
+      { role:'laminas', texture:'blade_slice', blendMode:'screen', z:3, trail:{length:6,fade:0.8},
+        emitter:{ alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.9,time:0},{value:0.2,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'ff3333',time:1}]},
+                  speed:{start:180,end:40}, startRotation:{min:0,max:360},
+                  rotationSpeed:{min:-160,max:160},
+                  lifetime:{min:0.2,max:0.4}, frequency:0.02, emitterLifetime:0.35,
+                  maxParticles:12, spawnType:'circle', spawnCircle:{x:0,y:0,r:10} } },
+      { role:'gotas', texture:'droplet', blendMode:'normal', z:2, tint:'#c01818',
+        subEmitters:[{ on:'death', preset:'micro_sparks', chance:0.12 }],
+        emitter:{ alpha:{list:[{value:1,time:0},{value:0.8,time:0.6},{value:0,time:1}]},
+                  scale:{list:[{value:0.24,time:0},{value:0.1,time:1}]},
+                  color:{list:[{value:'ff2020',time:0},{value:'6a0000',time:1}]},
+                  speed:{start:220,end:50}, acceleration:{x:0,y:300},
+                  startRotation:{min:200,max:340},
+                  lifetime:{min:0.4,max:0.75}, frequency:0.01, emitterLifetime:0.3,
+                  maxParticles:36, spawnType:'circle', spawnCircle:{x:0,y:0,r:8} } },
+    ],
+  },
+
+  // ── FOGO: mergulho de fênix (fase envelope alternativo ao meteoro) ─────────
+  phoenix_dive: {
+    intensidade: 'equilibrado', cor: '#ffb255',
+    cast: { ms: 300,
+      layers: [
+        { role:'penas', texture:'petal', blendMode:'add', z:3, tint:'#ffb060',
+          emitter:{ alpha:{list:[{value:0,time:0},{value:0.85,time:0.4},{value:0,time:1}]},
+                    scale:{list:[{value:0.22,time:0},{value:0.06,time:1}]},
+                    color:{list:[{value:'ffe9b0',time:0},{value:'ff7020',time:1}]},
+                    speed:{start:90,end:20}, acceleration:{x:0,y:-140},
+                    rotationSpeed:{min:-160,max:160},
+                    lifetime:{min:0.3,max:0.5}, frequency:0.02, emitterLifetime:0.28,
+                    maxParticles:18, spawnType:'circle', spawnCircle:{x:0,y:0,r:12} } },
+      ] },
+    travel: { ms: 380, path:'arc', arcHeight: 60, trail:{ length:12, fade:0.88 },
+      body: { rotate:'velocity', parts:[
+        { kind:'orb', radius:12, color:'#ffd080', glow:{distance:14,outerStrength:2.2,color:'#ff9040'} },
+        { kind:'crescent', radius:17, color:'#ffcf70', alpha:0.7 },
+        { kind:'rune_ring', radius:19, color:'#ffcf70', alpha:0.5, spin:-240, symbols:3 },
+      ] } },
+    impact: { ms: 650, preset:'fire_impact',
+      camera:{ shake:{amp:9,decay:0.9,freq:36}, flash:{color:'#ffd28a',alpha:0.3,ms:110} },
+      lighting:{ bloom:{threshold:0.5,intensity:1.1,quality:5}, tone:'aces' } },
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18197,7 +19054,111 @@ function _fxTintMatrix(hex) {
 }
 if (typeof window !== 'undefined') { window._fxUpdateTrail = _fxUpdateTrail; window._fxTintMatrix = _fxTintMatrix; }
 
-// ── Semáforo de instâncias PIXI.Application ───────────────────────────────────
+// ── HOST VFX PERSISTENTE (overlay Pixi único) ────────────────────────────────
+// Antes: cada efeito criava um <canvas> WebGL descartável (churn de contexto ao
+// disparar skills em rajada + cap de 3 simultâneos). Agora: UMA PIXI.Application
+// persistente sobre o mapa; cada efeito vira um Container com ticker próprio
+// rastreado. Sem cap de efeitos simultâneos e zero criação/destruição de contexto.
+// Fallback: AVT_GRAFICOS.vfxOverlayUnico=false volta aos overlays por efeito.
+let _avtVfxHostState = null;
+
+function _avtVfxHostAtivo() {
+  return !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS && AVT_GRAFICOS.vfxOverlayUnico === false);
+}
+
+function _avtVfxHost() {
+  const canvas = AVT_STATE.canvas;
+  if (!canvas || !canvas.parentElement || typeof PIXI === 'undefined') return null;
+  let h = _avtVfxHostState;
+  if (h && h.canvasRef !== canvas) { _avtVfxHostDestroy(); h = null; }
+  if (h) return h;
+  try {
+    const overlayCanvas = document.createElement('canvas');
+    overlayCanvas.id = 'avt-vfx-host';
+    overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+    overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
+    canvas.parentElement.style.position = 'relative';
+    canvas.parentElement.appendChild(overlayCanvas);
+    const app = new PIXI.Application({
+      view: overlayCanvas, backgroundAlpha: 0,
+      antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
+      resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1),
+      autoDensity: true,
+      width: canvas.width, height: canvas.height, powerPreference: 'high-performance',
+    });
+    h = _avtVfxHostState = { app, canvasRef: canvas, overlayCanvas, active: new Set() };
+    // Sincroniza tamanho/posição com o canvas do mapa (barato; roda só com efeitos ativos)
+    h._syncFn = () => {
+      const c = h.canvasRef;
+      if (!c || !c.isConnected) return;
+      if (h.overlayCanvas.width !== c.width || h.overlayCanvas.height !== c.height) {
+        try { h.app.renderer.resize(c.width, c.height); } catch(_) {}
+      }
+      const l = c.offsetLeft + 'px', t = c.offsetTop + 'px';
+      if (h.overlayCanvas.style.left !== l) h.overlayCanvas.style.left = l;
+      if (h.overlayCanvas.style.top !== t)  h.overlayCanvas.style.top = t;
+    };
+    h.app.ticker.add(h._syncFn);
+    h.app.ticker.stop(); // fica parado até o primeiro efeito
+    return h;
+  } catch (e) {
+    console.warn('[pixi-fx] host único indisponível, usando overlays por efeito:', e);
+    _avtVfxHostState = null;
+    return null;
+  }
+}
+
+function _avtVfxHostDestroy() {
+  const h = _avtVfxHostState;
+  if (!h) return;
+  _avtVfxHostState = null;
+  try { h.active.forEach(ad => { try { ad.destroy(); } catch(_) {} }); } catch(_) {}
+  try { h.app.ticker.remove(h._syncFn); } catch(_) {}
+  try { h.overlayCanvas.remove(); } catch(_) {}
+  try { h.app.destroy(true); } catch(_) {}
+}
+window._avtVfxHostDestroy = _avtVfxHostDestroy;
+
+// Adquire um "app" lógico (Container + ticker rastreado) dentro do host único.
+// Interface compatível com o subconjunto usado pelo pipeline de VFX:
+// stage, renderer, ticker.{add,remove,deltaMS}, view, destroy().
+function _avtVfxAcquireApp() {
+  if (!_avtVfxHostAtivo()) return null;
+  const h = _avtVfxHost();
+  if (!h) return null;
+  const stage = new PIXI.Container();
+  h.app.stage.addChild(stage);
+  const tickFns = [];
+  const adapter = {
+    _hostAdapter: true,
+    stage,
+    renderer: h.app.renderer,
+    view: h.overlayCanvas,
+    ticker: {
+      add(fn) { tickFns.push(fn); h.app.ticker.add(fn); },
+      remove(fn) { const i = tickFns.indexOf(fn); if (i >= 0) tickFns.splice(i, 1); try { h.app.ticker.remove(fn); } catch(_) {} },
+      get deltaMS() { return h.app.ticker.deltaMS; },
+    },
+    destroy() {
+      if (!h.active.has(adapter)) return;
+      h.active.delete(adapter);
+      tickFns.splice(0).forEach(fn => { try { h.app.ticker.remove(fn); } catch(_) {} });
+      try { stage.destroy({ children: true }); } catch(_) {}
+      // Sem efeitos ativos → para o ticker (host ocioso não custa frame)
+      if (h.active.size === 0 && _avtVfxHostState === h) {
+        try { h.app.renderer.render(h.app.stage); } catch(_) {} // limpa o último frame
+        try { h.app.ticker.stop(); } catch(_) {}
+      }
+    },
+  };
+  h.active.add(adapter);
+  try { if (!h.app.ticker.started) h.app.ticker.start(); } catch(_) {}
+  return adapter;
+}
+window._avtVfxAcquireApp = _avtVfxAcquireApp;
+window._avtVfxHostAtivo = _avtVfxHostAtivo;
+
+// ── Semáforo de instâncias PIXI.Application (fallback por efeito) ─────────────
 // Browsers limitam contextos WebGL simultâneos (~8-16). Limitar a 3 evita travamentos
 // quando skills são usadas rapidamente em sequência.
 let _avtPixiActiveApps = 0;
@@ -18234,6 +19195,16 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
   // ── Novo envelope com fases (cast → travel → impact) ──────────────────────
   if (particleConfig && (particleConfig.phases || particleConfig.cast || particleConfig.travel || particleConfig.impact)) {
     return _avtPlayPhases(particleConfig, atacScr, alvoScr, posicao);
+  }
+  // Preset com envelope multi-fase (ex.: meteor_fall): o check acima olha só o cfg
+  // cru; expande o preset e delega ao orquestrador de fases.
+  if (particleConfig && particleConfig.preset) {
+    const _pd = AVT_FX_PRESETS[particleConfig.preset];
+    if (_pd && (_pd.phases || _pd.cast || _pd.travel || _pd.impact)) {
+      const env = Object.assign({}, _pd, particleConfig);
+      delete env.preset;
+      return _avtPlayPhases(env, atacScr, alvoScr, posicao);
+    }
   }
   const midX = Math.round((atacScr.x + alvoScr.x) / 2);
   const midY = Math.round((atacScr.y + alvoScr.y) / 2);
@@ -18317,26 +19288,35 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
     _avtEnsurePixiParticles(),
     ...[...allFilterTypes].map(t => _avtEnsurePixiFilter(t)),
   ]).then(() => {
-    const overlayCanvas = document.createElement('canvas');
-    overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
-    overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
-    canvas.parentElement.style.position = 'relative';
-    canvas.parentElement.appendChild(overlayCanvas);
+    // Caminho preferencial: host persistente — efeito é um Container no app único
+    // (sem novo contexto WebGL, sem cap de simultâneos, sem fila).
+    let app = _avtVfxAcquireApp();
+    const _usaHost = !!app;
+    let overlayCanvas = null;
 
-    // Limitar instâncias simultâneas: se já estamos no máximo, enfileira e sai
-    if (_avtPixiActiveApps >= _AVT_PIXI_MAX_CONCURRENT) {
-      overlayCanvas.remove();
-      _avtPixiQueue.push(() => _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl));
-      return;
+    if (!_usaHost) {
+      overlayCanvas = document.createElement('canvas');
+      overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+      overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
+      canvas.parentElement.style.position = 'relative';
+      canvas.parentElement.appendChild(overlayCanvas);
+
+      // Limitar instâncias simultâneas: se já estamos no máximo, enfileira e sai
+      if (_avtPixiActiveApps >= _AVT_PIXI_MAX_CONCURRENT) {
+        overlayCanvas.remove();
+        _avtPixiQueue.push(() => _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl));
+        return;
+      }
+      _avtPixiActiveApps++;
     }
-    _avtPixiActiveApps++;
 
-    let app;
     try {
-      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0,
-        antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
-        resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
-        width: canvas.width, height: canvas.height, powerPreference:'high-performance' });
+      if (!_usaHost) {
+        app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0,
+          antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
+          resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
+          width: canvas.width, height: canvas.height, powerPreference:'high-performance' });
+      }
 
       // ── Stage tree ────────────────────────────────────────────────────────
       const worldRoot = new PIXI.Container();
@@ -18560,11 +19540,14 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
             cy = lerp(startY, endY, t) + Math.sin(angle) * radius;
           }
 
-          // updateOwnerPos: follow DOM token position each frame
+          // updateOwnerPos: follow DOM token position each frame.
+          // O rect do canvas é estável durante o efeito (câmera move o mundo, não o
+          // canvas) — cacheado 1x por animação em vez de getBoundingClientRect/frame.
           if (ownerEl) {
             try {
               const r = ownerEl.getBoundingClientRect();
-              const canvR = canvas.getBoundingClientRect();
+              if (!tickFn._canvR) tickFn._canvR = canvas.getBoundingClientRect();
+              const canvR = tickFn._canvR;
               startX = r.left + r.width / 2 - canvR.left;
               startY = r.top + r.height / 2 - canvR.top;
               if (mode === 'static' || mode === 'emanation') { cx = startX; cy = startY; }
@@ -18649,20 +19632,28 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
           packs.forEach(p => p.emitters.forEach(em => {
             try { em.emit = false; em.destroy(); } catch(_) {}
           }));
-          overlayCanvas.remove();
-          try { app.destroy(true); } catch(_) {}
+          if (_usaHost) {
+            try { app.destroy(); } catch(_) {} // adapter: destrói o Container e libera o host
+          } else {
+            overlayCanvas.remove();
+            try { app.destroy(true); } catch(_) {}
+            _avtPixiActiveApps--;
+            _avtPixiDrainQueue();
+          }
           AVT_STATE._fxFreezeUntil = 0;
-          _avtPixiActiveApps--;
-          _avtPixiDrainQueue();
         }, totalDuration + 1100);
       });
     } catch(e) {
       console.warn('[pixi-fx] erro ao iniciar:', e);
-      overlayCanvas.remove();
-      try { if (app) app.destroy(true); } catch(_) {}
+      if (_usaHost) {
+        try { if (app) app.destroy(); } catch(_) {}
+      } else {
+        if (overlayCanvas) overlayCanvas.remove();
+        try { if (app) app.destroy(true); } catch(_) {}
+        _avtPixiActiveApps--;
+        _avtPixiDrainQueue();
+      }
       AVT_STATE._fxFreezeUntil = 0;
-      _avtPixiActiveApps--;
-      _avtPixiDrainQueue();
       _avtCanvasFlash(endX, endY, '#e74c3c', 'Impacto');
     }
   }).catch((err) => {
@@ -18725,29 +19716,35 @@ function _avtPlayTravelBody(travelCfg, atacScr, alvoScr, cor, intensidade) {
   const dur = travelCfg.ms || 500;
   const path = travelCfg.path || 'linear';
 
-  // Overlay próprio para o corpo (não compartilha com particle anim para evitar conflito)
-  const existing = document.getElementById('avt-pixi-body-overlay-' + Date.now());
-  const overlayCanvas = document.createElement('canvas');
-  overlayCanvas.id = 'avt-pixi-body-overlay-' + Math.random().toString(36).slice(2,8);
-  overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
-  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:99`;
-  canvas.parentElement.style.position = 'relative';
-  canvas.parentElement.appendChild(overlayCanvas);
-
   // Lazy-load filters needed by body
   const filterTypes = new Set();
   if (travelCfg.body.sprite && travelCfg.body.sprite.glow) filterTypes.add('glow');
   (travelCfg.body.parts || []).forEach(p => { if (p.glow) filterTypes.add('glow'); });
 
   Promise.all([...filterTypes].map(t => _avtEnsurePixiFilter(t))).then(() => {
-    let app;
+    // Host persistente quando disponível; fallback: overlay descartável (legado)
+    let app = _avtVfxAcquireApp();
+    const _usaHost = !!app;
+    let overlayCanvas = null;
     try {
-      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha:0,
-        antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
-        resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
-        width: canvas.width, height: canvas.height });
+      if (!_usaHost) {
+        overlayCanvas = document.createElement('canvas');
+        overlayCanvas.id = 'avt-pixi-body-overlay-' + Math.random().toString(36).slice(2,8);
+        overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+        overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:99`;
+        canvas.parentElement.style.position = 'relative';
+        canvas.parentElement.appendChild(overlayCanvas);
+        app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha:0,
+          antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
+          resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
+          width: canvas.width, height: canvas.height });
+      }
+      const _destroyApp = () => {
+        if (_usaHost) { try { app.destroy(); } catch(_) {} }
+        else { try { app.destroy(true); } catch(_) {} try { overlayCanvas.remove(); } catch(_) {} }
+      };
       const body = _avtBuildBody(travelCfg.body, cor);
-      if (!body) { app.destroy(true); overlayCanvas.remove(); return; }
+      if (!body) { _destroyApp(); return; }
       // Billboard iso: envolve o conteúdo num container contra-transformado (ancorado no
       // midpoint) p/ o projétil viajar "em pé" entre os pontos projetados.
       const _isoBB = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
@@ -18821,17 +19818,14 @@ function _avtPlayTravelBody(travelCfg, atacScr, alvoScr, cor, intensidade) {
 
         if (t >= 1) {
           try { app.ticker.remove(tick); } catch(_) {}
-          setTimeout(() => {
-            try { app.destroy(true); } catch(_) {}
-            overlayCanvas.remove();
-          }, 200);
+          setTimeout(_destroyApp, 200);
         }
       };
       app.ticker.add(tick);
     } catch(e) {
       console.warn('[phases] travel body falhou:', e);
-      try { if (app) app.destroy(true); } catch(_) {}
-      overlayCanvas.remove();
+      if (_usaHost) { try { if (app) app.destroy(); } catch(_) {} }
+      else { try { if (app) app.destroy(true); } catch(_) {} try { overlayCanvas && overlayCanvas.remove(); } catch(_) {} }
     }
   });
 }
@@ -20420,6 +21414,9 @@ async function _avtMestreSalvarMapaUnificado() {
   } catch(e) {
     mostrarToast('Mapa atualizado localmente (erro ao persistir: ' + (e?.message || e) + ')', 'aviso');
   }
+  // Invalida os bakes estáticos locais do próprio mestre (o broadcast não ecoa de volta)
+  AVT_STATE._dungeonRev = (AVT_STATE._dungeonRev || 0) + 1;
+  if (typeof _avtTileBakeInvalidate === 'function') _avtTileBakeInvalidate();
   // Broadcast p/ os outros clientes (escopo por fase)
   try {
     _avtBroadcast?.('avt_dungeon_update', {
@@ -20442,6 +21439,10 @@ function avtReceberDungeonUpdate(p) {
   AVT_STATE.dungeon = p.dungeon;
   AVT_STATE.dungeon._portasInternas = p.dungeon._portasInternas || [];
   AVT_STATE._tilesetConfig = AVT_STATE.dungeon.tileset_config || AVT_STATE._tilesetConfig;
+  // FIX F7: edição de tiles em sessão precisa invalidar os bakes estáticos
+  // (camada PIXI, tiles 2D legados e minimapa) mesmo sem mudar dimensões/fase.
+  AVT_STATE._dungeonRev = (AVT_STATE._dungeonRev || 0) + 1;
+  if (typeof _avtTileBakeInvalidate === 'function') _avtTileBakeInvalidate();
   mostrarToast?.('🗺 O mestre atualizou o mapa', 'ok');
 }
 window.avtReceberDungeonUpdate = avtReceberDungeonUpdate;
@@ -20811,7 +21812,8 @@ function avtReceberLevelConfigUpdate({ config } = {}) {
 window.avtReceberLevelConfigUpdate = avtReceberLevelConfigUpdate;
 
 // Receber broadcast de animação de skill — re-toca localmente
-function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, animacao, areaCentro, areaLinha } = {}) {
+function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, animacao, areaCentro, areaLinha, faseId } = {}) {
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof _avtPlaySkillAnim !== 'function') return;
     let sk = skillId ? (AVT_STATE.skills || []).find(s => s.id === skillId) : null;
@@ -20844,7 +21846,8 @@ window.avtReceberSkillAnim = avtReceberSkillAnim;
 // Receber broadcast de início de animação persistente de efeito (Rastro Persona,
 // Atravessar, modificadores de ataque básico, etc.). Espelha avtReceberSkillAnim:
 // resolve as entidades por nome e reconstrói a chave local antes de tocar.
-function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome } = {}) {
+function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome, faseId } = {}) {
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof avtPixiPlayPersistent !== 'function' || !animId || !tipo) return;
     const alvo = alvoNome ? AVT_STATE.entidades.find(e => e.nome === alvoNome) : null;
@@ -20857,7 +21860,8 @@ function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome
 window.avtReceberEfeitoAnimStart = avtReceberEfeitoAnimStart;
 
 // Receber broadcast de parada de animação persistente de efeito.
-function avtReceberEfeitoAnimStop({ tipo, alvoNome } = {}) {
+function avtReceberEfeitoAnimStop({ tipo, alvoNome, faseId } = {}) {
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof avtPixiStopPersistent !== 'function' || !tipo) return;
     const alvo = alvoNome ? AVT_STATE.entidades.find(e => e.nome === alvoNome) : null;
@@ -20868,7 +21872,8 @@ function avtReceberEfeitoAnimStop({ tipo, alvoNome } = {}) {
 window.avtReceberEfeitoAnimStop = avtReceberEfeitoAnimStop;
 
 // Receber broadcast de animação de ataque placeholder
-function avtReceberAttackAnim({ atacanteNome, alvoNome, animacao, delay } = {}) {
+function avtReceberAttackAnim({ atacanteNome, alvoNome, animacao, delay, faseId } = {}) {
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof animarAtaque !== 'function' || !animacao) return;
     const atac = AVT_STATE.entidades.find(e => e.nome === atacanteNome);
@@ -20877,7 +21882,11 @@ function avtReceberAttackAnim({ atacanteNome, alvoNome, animacao, delay } = {}) 
     const atacEl = _avtElPosicaoCanvas(atac);
     const alvoEl = _avtElPosicaoCanvas(alvo);
     if (!atacEl || !alvoEl) return;
-    const _go = () => { try { animarAtaque({ atacEl, alvoEl, animacao, dano: 0 }); } catch(_) {} };
+    // Ataque básico remoto era mudo: impacto físico leve, atenuado pela distância
+    const _go = () => {
+      try { animarAtaque({ atacEl, alvoEl, animacao, dano: 0 }); } catch(_) {}
+      _avtSfxPosicional('hit_physical', alvo, 0.45);
+    };
     if (delay > 0) setTimeout(_go, delay); else _go();
   } catch(e) { try { console.warn('[AVT] avtReceberAttackAnim:', e); } catch(_) {} }
 }
@@ -22199,6 +23208,9 @@ function _avtSnapshotFaseAtual() {
     dungeon:         AVT_STATE.dungeon,
     entidades:       (AVT_STATE.entidades || []).map(e => _avtDeepClone(e)),
     npcTimers:       _avtDeepClone(AVT_STATE.npcTimers) || {},
+    // FIX F5: batalhas ativas fazem parte do estado da fase — antes ficavam em
+    // AVT_STATE.batalhas apontando para entidades da fase antiga.
+    batalhas:        _avtDeepClone(AVT_STATE.batalhas) || [],
     tilesetImgUrl:   AVT_STATE._tilesetImgUrl || null,
     tilesetConfig:   AVT_STATE._tilesetConfig || null,
     tilesetTextures: AVT_STATE._tilesetTextures || {},
@@ -22235,6 +23247,17 @@ function _avtAplicarTilesetFase(faseObj) {
 
 async function _avtCarregarFase(faseId, opts = {}) {
   if (!faseId) return;
+  // FIX F8: guard de reentrância — a função tem awaits antes do snapshot; duas
+  // chamadas sobrepostas (porta + _avtIrParaFase) corrompiam pilha/snapshot.
+  if (AVT_STATE._carregandoFase) return;
+  AVT_STATE._carregandoFase = true;
+  try {
+    await _avtCarregarFaseInner(faseId, opts);
+  } finally {
+    AVT_STATE._carregandoFase = false;
+  }
+}
+async function _avtCarregarFaseInner(faseId, opts = {}) {
   const atualId = AVT_STATE._faseAtualId || 'principal';
   if (faseId === atualId) { mostrarToast('Já está nesta fase', ''); return; }
 
@@ -22267,6 +23290,19 @@ async function _avtCarregarFase(faseId, opts = {}) {
   // O jogador atual viaja entre fases preservando o estado vivo (HP/XP/itens).
   const jogadorVivo = _avtMeuJogador();
   const jogadorClone = jogadorVivo ? _avtDeepClone(jogadorVivo) : null;
+  // FIX F8: o clone não pode carregar estado de movimento/predição da fase antiga
+  // (waypoints/inputs pendentes causavam um "deslize" após o teleporte de spawn).
+  if (jogadorClone) {
+    delete jogadorClone._waypoints;
+    delete jogadorClone._pendingInputs;
+    delete jogadorClone._lerpTo;
+    delete jogadorClone.renderX;
+    delete jogadorClone.renderY;
+  }
+
+  // FIX F3: se eu era o host da fase que estou deixando, libero explicitamente
+  // para o próximo host assumir sem esperar a expiração.
+  try { _avtReleaseHostFase(atualId); } catch(_) {}
 
   // 1) Snapshot da fase atual antes de trocar.
   _avtSnapshotFaseAtual();
@@ -22277,11 +23313,21 @@ async function _avtCarregarFase(faseId, opts = {}) {
     AVT_STATE.dungeon   = _avtDeepClone(snap.dungeon);
     AVT_STATE.entidades = (snap.entidades || []).filter(e => e.tipo !== 'jogador').map(e => _avtDeepClone(e));
     AVT_STATE.npcTimers = _avtDeepClone(snap.npcTimers) || {};
+    AVT_STATE.batalhas  = _avtDeepClone(snap.batalhas) || [];
   } else {
     AVT_STATE.dungeon   = _avtDeepClone(faseObj.dungeon_data);
     AVT_STATE.entidades = [];
     AVT_STATE.npcTimers = {};
+    // FIX F5: batalhas pertencem à fase — não arrastar a batalha da fase anterior
+    // (apontaria para entidades que não existem aqui).
+    AVT_STATE.batalhas  = [];
   }
+  // FIX F8: porta boss→próxima fase da fase anterior não vale nesta.
+  AVT_STATE._portaProximaFase = null;
+  // Bakes estáticos (tiles 2D legado + minimapa) são por fase.
+  if (typeof _avtTileBakeInvalidate === 'function') _avtTileBakeInvalidate();
+  // Sons ambientes pertencem à fase anterior — o tick recria os da nova.
+  try { _avtPararSonsAmbiente(); } catch(_) {}
 
   // Metadados da fase no dungeon (nível/balanceamento dos NPCs, seed do gerador).
   AVT_STATE.dungeon._npcLevel      = faseObj.npc_level ?? 1;
@@ -22359,8 +23405,15 @@ window._avtPhaseHostCheck = _avtPhaseHostCheck;
 // host ou aguardar. O host da fase roda todo o broadcast autoritativo daquela
 // fase (tick/snapshot escopados por faseId). Registro leve sincronizado por
 // 'avt_fase_host'; entradas expiram (FASE_HOST_DEAD) para permitir nova eleição.
-const FASE_HOST_DEAD = 16_000; // ms sem reafirmação → host da fase considerado morto
-const FASE_HOST_REASSERT = 5_000;
+// FIX F3: 16s de NPCs congelados quando o host da fase caía era longo demais.
+// 8s de expiração + reafirmação a cada 3s + release explícito (avt_fase_host_release
+// no unload/troca de fase) tornam o handoff quase imediato no caso comum.
+const FASE_HOST_DEAD = 8_000; // ms sem reafirmação → host da fase considerado morto
+const FASE_HOST_REASSERT = 3_000;
+// FIX F4: janela mínima entre reivindicar host e começar a emitir ticks — dá tempo
+// de o broadcast avt_fase_host cruzar e o desempate por menor uid resolver, evitando
+// dois hosts simultâneos emitindo ticks para a mesma fase.
+const FASE_HOST_CLAIM_WARMUP = 1_200;
 
 function _avtMeuUid() { try { return SESSION?.user?.id || null; } catch(_) { return null; } }
 window._avtMeuUid = _avtMeuUid;
@@ -22379,7 +23432,20 @@ function _avtFaseHostFresco(faseId) {
 function _avtSouHostDaFaseAtual() {
   const fid = AVT_STATE._faseAtualId || 'principal';
   const uid = _avtFaseHostFresco(fid);
-  if (uid) return uid === _avtMeuUid();
+  if (uid) {
+    if (uid !== _avtMeuUid()) return false;
+    // [F4] Warm-up pós-claim com peers presentes: aguarda 1 round de broadcast
+    // antes de emitir ticks, para o desempate de claims concorrentes resolver.
+    const claimTs = (AVT_STATE._faseHostClaimTs || {})[fid] || 0;
+    if (claimTs && Date.now() - claimTs < FASE_HOST_CLAIM_WARMUP) {
+      const temPeers = (() => {
+        try { return typeof RTNet !== 'undefined' && RTNet.initialized && RTNet._peerJoinTs && RTNet._peerJoinTs().size > 0; }
+        catch(_) { return false; }
+      })();
+      if (temPeers) return false;
+    }
+    return true;
+  }
   try { return (typeof RTNet !== 'undefined' && RTNet.isHost && RTNet.isHost()); } catch(_) { return false; }
 }
 window._avtSouHostDaFaseAtual = _avtSouHostDaFaseAtual;
@@ -22399,11 +23465,36 @@ function _avtRegistrarHostFase(faseId, uid) {
 function _avtClaimHostFase(faseId) {
   const uid = _avtMeuUid();
   if (!faseId || !uid) return;
+  // [F4] Marca o instante do claim (warm-up antes de emitir ticks com peers).
+  AVT_STATE._faseHostClaimTs = AVT_STATE._faseHostClaimTs || {};
+  if ((AVT_STATE._faseHosts || {})[faseId] !== uid) AVT_STATE._faseHostClaimTs[faseId] = Date.now();
   _avtRegistrarHostFase(faseId, uid);
   try { _avtBroadcast('avt_fase_host', { faseId, uid }); } catch(_) {}
   try { _avtMestrePainelRender(); } catch(_) {}
 }
 window._avtClaimHostFase = _avtClaimHostFase;
+
+// [F3] Release explícito do host da fase: emitido ao sair da fase/da aventura.
+// Os outros clientes zeram o registro na hora e o loop de reafirmação (3s)
+// reivindica um novo host quase imediatamente, sem esperar a expiração de 8s.
+function _avtReleaseHostFase(faseId) {
+  const uid = _avtMeuUid();
+  if (!faseId || !uid) return;
+  if ((AVT_STATE._faseHosts || {})[faseId] !== uid) return; // só o host libera
+  delete AVT_STATE._faseHosts[faseId];
+  if (AVT_STATE._faseHostsTs) delete AVT_STATE._faseHostsTs[faseId];
+  try { _avtBroadcast('avt_fase_host_release', { faseId, uid }); } catch(_) {}
+}
+window._avtReleaseHostFase = _avtReleaseHostFase;
+
+function avtReceberFaseHostRelease(payload) {
+  const { faseId, uid } = payload || {};
+  if (!faseId || !uid) return;
+  if ((AVT_STATE._faseHosts || {})[faseId] !== uid) return; // release de quem não é host — ignora
+  delete AVT_STATE._faseHosts[faseId];
+  if (AVT_STATE._faseHostsTs) delete AVT_STATE._faseHostsTs[faseId];
+}
+window.avtReceberFaseHostRelease = avtReceberFaseHostRelease;
 
 function _avtReafirmarHostFase(faseId) {
   const uid = _avtMeuUid();
@@ -22423,6 +23514,14 @@ window.avtReceberFaseHost = avtReceberFaseHost;
 // Loop de reafirmação: enquanto eu for host da minha fase, renovo o registro
 // nos outros clientes; ao parar (saí da fase / caí), a entrada expira sozinha.
 function _avtIniciarFaseHostLoop() {
+  // [F3] Release do host da fase ao fechar a aba (best-effort; o fallback continua
+  // sendo a expiração de 8s quando o unload não chega a emitir).
+  if (!window._avtFaseHostUnloadBound) {
+    window._avtFaseHostUnloadBound = true;
+    window.addEventListener('beforeunload', () => {
+      try { _avtReleaseHostFase(AVT_STATE._faseAtualId || 'principal'); } catch(_) {}
+    });
+  }
   if (AVT_STATE._faseHostLoop) return;
   AVT_STATE._faseHostLoop = setInterval(() => {
     try {
@@ -27569,9 +28668,19 @@ try{
     } catch(_) {}
     return _isHost();
   }
+  // [DELTA-TICK v2] Em vez de serializar TODAS as entidades a cada 100ms, o host
+  // envia só as que mudaram desde o último tick + um keyframe completo (full:true)
+  // a cada N ticks (1s) para late-join/perda de pacote. Receptores antigos aplicam
+  // ticks parciais sem problema: entidade ausente do payload = entidade sem mudança.
+  const _TICK_KEYFRAME_EVERY = 10;
+  let _tickBase = null; // { faseId, map: Map<id, json>, n }
   window._avtBuildStateTick = function() {
     try {
-      if (!_souHostDaFase() || !AVT_STATE || !Array.isArray(AVT_STATE.entidades)) return null;
+      if (!_souHostDaFase() || !AVT_STATE || !Array.isArray(AVT_STATE.entidades)) {
+        _tickBase = null; // perdeu a autoridade → próximo tick meu será keyframe
+        return null;
+      }
+      const faseId = AVT_STATE._faseAtualId || 'principal';
       const ents = [];
       for (const e of AVT_STATE.entidades) {
         if (!e || !e.id) continue;
@@ -27596,8 +28705,27 @@ try{
           pat: (AVT_STATE.npcTimers?.[e.id]?.ativo) ? Math.max(0, Math.round(AVT_STATE.npcTimers[e.id].patience || 0)) : null,
         });
       }
-      return { t: Date.now(), entidades: ents, hostId: _myUid(),
-               faseId: (AVT_STATE._faseAtualId || 'principal') };
+
+      const keyframe = !_tickBase || _tickBase.faseId !== faseId || _tickBase.n >= _TICK_KEYFRAME_EVERY - 1;
+      if (keyframe) {
+        const map = new Map();
+        for (const r of ents) map.set(r.id, JSON.stringify(r));
+        _tickBase = { faseId, map, n: 0 };
+        return { t: Date.now(), entidades: ents, hostId: _myUid(), faseId, v: 2, full: true };
+      }
+
+      // Delta: só entidades cujo snapshot serializado mudou desde o último tick
+      _tickBase.n++;
+      const mudadas = [];
+      for (const r of ents) {
+        const j = JSON.stringify(r);
+        if (_tickBase.map.get(r.id) !== j) {
+          _tickBase.map.set(r.id, j);
+          mudadas.push(r);
+        }
+      }
+      if (!mudadas.length) return null; // nada mudou → nada a enviar neste tick
+      return { t: Date.now(), entidades: mudadas, hostId: _myUid(), faseId, v: 2, full: false };
     } catch(_) { return null; }
   };
 
