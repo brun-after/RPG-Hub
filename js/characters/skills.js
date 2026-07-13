@@ -842,3 +842,36 @@ function skLimparPixiStudio() {
   if (idEl)   idEl.value = '';
   if (nomeEl) nomeEl.textContent = 'Nenhuma selecionada';
 }
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "SK_FB", { configurable: true, get: () => SK_FB, set: (__v) => { SK_FB = __v; } });
+Object.defineProperty(globalThis, "skFBAdicionarDado", { configurable: true, get: () => skFBAdicionarDado, set: (__v) => { skFBAdicionarDado = __v; } });
+Object.defineProperty(globalThis, "skFBRemoverDado", { configurable: true, get: () => skFBRemoverDado, set: (__v) => { skFBRemoverDado = __v; } });
+Object.defineProperty(globalThis, "skFBMostrarInputBonus", { configurable: true, get: () => skFBMostrarInputBonus, set: (__v) => { skFBMostrarInputBonus = __v; } });
+Object.defineProperty(globalThis, "skFBConfirmarBonus", { configurable: true, get: () => skFBConfirmarBonus, set: (__v) => { skFBConfirmarBonus = __v; } });
+Object.defineProperty(globalThis, "skFBCancelarBonus", { configurable: true, get: () => skFBCancelarBonus, set: (__v) => { skFBCancelarBonus = __v; } });
+Object.defineProperty(globalThis, "skFBAdicionarBonus", { configurable: true, get: () => skFBAdicionarBonus, set: (__v) => { skFBAdicionarBonus = __v; } });
+Object.defineProperty(globalThis, "skFBLimpar", { configurable: true, get: () => skFBLimpar, set: (__v) => { skFBLimpar = __v; } });
+Object.defineProperty(globalThis, "skFBAtualizarUI", { configurable: true, get: () => skFBAtualizarUI, set: (__v) => { skFBAtualizarUI = __v; } });
+Object.defineProperty(globalThis, "skFBCarregarFormula", { configurable: true, get: () => skFBCarregarFormula, set: (__v) => { skFBCarregarFormula = __v; } });
+Object.defineProperty(globalThis, "skPopularAtributos", { configurable: true, get: () => skPopularAtributos, set: (__v) => { skPopularAtributos = __v; } });
+Object.defineProperty(globalThis, "abrirModalSkill", { configurable: true, get: () => abrirModalSkill, set: (__v) => { abrirModalSkill = __v; } });
+Object.defineProperty(globalThis, "fecharModalSkill", { configurable: true, get: () => fecharModalSkill, set: (__v) => { fecharModalSkill = __v; } });
+Object.defineProperty(globalThis, "_skAplicarModoAtaqueBasico", { configurable: true, get: () => _skAplicarModoAtaqueBasico, set: (__v) => { _skAplicarModoAtaqueBasico = __v; } });
+Object.defineProperty(globalThis, "abrirModalSkillAtaqueBasico", { configurable: true, get: () => abrirModalSkillAtaqueBasico, set: (__v) => { abrirModalSkillAtaqueBasico = __v; } });
+Object.defineProperty(globalThis, "_skSalvarAtaqueBasicoRico", { configurable: true, get: () => _skSalvarAtaqueBasicoRico, set: (__v) => { _skSalvarAtaqueBasicoRico = __v; } });
+Object.defineProperty(globalThis, "skPreencherAnimacaoNoForm", { configurable: true, get: () => skPreencherAnimacaoNoForm, set: (__v) => { skPreencherAnimacaoNoForm = __v; } });
+Object.defineProperty(globalThis, "skLerAnimacaoDoForm", { configurable: true, get: () => skLerAnimacaoDoForm, set: (__v) => { skLerAnimacaoDoForm = __v; } });
+Object.defineProperty(globalThis, "skTipoHabilidadeChange", { configurable: true, get: () => skTipoHabilidadeChange, set: (__v) => { skTipoHabilidadeChange = __v; } });
+Object.defineProperty(globalThis, "salvarSkill", { configurable: true, get: () => salvarSkill, set: (__v) => { salvarSkill = __v; } });
+Object.defineProperty(globalThis, "removerSkill", { configurable: true, get: () => removerSkill, set: (__v) => { removerSkill = __v; } });
+Object.defineProperty(globalThis, "skToggleAudioSection", { configurable: true, get: () => skToggleAudioSection, set: (__v) => { skToggleAudioSection = __v; } });
+Object.defineProperty(globalThis, "_skPopularSelectSfx", { configurable: true, get: () => _skPopularSelectSfx, set: (__v) => { _skPopularSelectSfx = __v; } });
+Object.defineProperty(globalThis, "_skAtualizarAutoSfx", { configurable: true, get: () => _skAtualizarAutoSfx, set: (__v) => { _skAtualizarAutoSfx = __v; } });
+Object.defineProperty(globalThis, "skTestarSfx", { configurable: true, get: () => skTestarSfx, set: (__v) => { skTestarSfx = __v; } });
+Object.defineProperty(globalThis, "_skCarregarCamposReativos", { configurable: true, get: () => _skCarregarCamposReativos, set: (__v) => { _skCarregarCamposReativos = __v; } });
+Object.defineProperty(globalThis, "skTipoReativaChange", { configurable: true, get: () => skTipoReativaChange, set: (__v) => { skTipoReativaChange = __v; } });
+Object.defineProperty(globalThis, "skToggleReativaSection", { configurable: true, get: () => skToggleReativaSection, set: (__v) => { skToggleReativaSection = __v; } });
+Object.defineProperty(globalThis, "skInvocacaoIlimitadoChange", { configurable: true, get: () => skInvocacaoIlimitadoChange, set: (__v) => { skInvocacaoIlimitadoChange = __v; } });
+Object.defineProperty(globalThis, "skEscolherPixiStudio", { configurable: true, get: () => skEscolherPixiStudio, set: (__v) => { skEscolherPixiStudio = __v; } });
+Object.defineProperty(globalThis, "skLimparPixiStudio", { configurable: true, get: () => skLimparPixiStudio, set: (__v) => { skLimparPixiStudio = __v; } });

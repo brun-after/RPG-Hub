@@ -96,3 +96,7 @@ async function descansoGrupo(tipo) {
     if (entry && typeof mapaRenderTokens === 'function') mapaRenderTokens(entry.mapa);
   }
 }
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "descansoExecutar", { configurable: true, get: () => descansoExecutar, set: (__v) => { descansoExecutar = __v; } });
+Object.defineProperty(globalThis, "descansoGrupo", { configurable: true, get: () => descansoGrupo, set: (__v) => { descansoGrupo = __v; } });

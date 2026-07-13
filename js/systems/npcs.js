@@ -155,8 +155,8 @@ function npcGenericoProximoPlacement() {
   const handler = (e) => {
     if (e.target.closest('.mapa-token') || e.target.closest('.mapa-zona')) return;
     const rect = wrap.getBoundingClientRect();
-    const x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width  * 100));
-    const y = Math.max(2, Math.min(98, (e.clientY - rect.top)  / rect.height * 100));
+    let x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width  * 100));
+    let y = Math.max(2, Math.min(98, (e.clientY - rect.top)  / rect.height * 100)); // let: o snap abaixo reatribui (com const era TypeError em runtime)
     wrap.classList.remove('placement-ativo');
     wrap.removeEventListener('click', handler);
     // Snap para centro da célula: converter %→célula→% exato
@@ -174,3 +174,11 @@ function npcGenericoProximoPlacement() {
   wrap.addEventListener('click', handler);
   wrap._npcPlacementHandler = handler;
 }
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "abrirModalNpcGenerico", { configurable: true, get: () => abrirModalNpcGenerico, set: (__v) => { abrirModalNpcGenerico = __v; } });
+Object.defineProperty(globalThis, "fecharModalNpcGenerico", { configurable: true, get: () => fecharModalNpcGenerico, set: (__v) => { fecharModalNpcGenerico = __v; } });
+Object.defineProperty(globalThis, "criarNpcGenerico", { configurable: true, get: () => criarNpcGenerico, set: (__v) => { criarNpcGenerico = __v; } });
+Object.defineProperty(globalThis, "NPC_PLACEMENT_QUEUE", { configurable: true, get: () => NPC_PLACEMENT_QUEUE, set: (__v) => { NPC_PLACEMENT_QUEUE = __v; } });
+Object.defineProperty(globalThis, "npcGenericoIniciarPlacement", { configurable: true, get: () => npcGenericoIniciarPlacement, set: (__v) => { npcGenericoIniciarPlacement = __v; } });
+Object.defineProperty(globalThis, "npcGenericoProximoPlacement", { configurable: true, get: () => npcGenericoProximoPlacement, set: (__v) => { npcGenericoProximoPlacement = __v; } });

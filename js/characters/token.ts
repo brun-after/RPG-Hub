@@ -469,7 +469,7 @@ function tokenMountAnimado(mountEl, charOrName) {
 
 // ── Destruir todos os controllers ativos ──────────────────────────────────────
 function tokenDestroyAll() {
-  Object.values(window._animCtrlMap).forEach(c => { try { c.destroy(); } catch(e) {} });
+  Object.values(window._animCtrlMap).forEach((c: any) => { try { c.destroy(); } catch(e) {} });
   window._animCtrlMap = {};
 }
 
@@ -563,7 +563,7 @@ function tokenRenderizarNoMapa(tokensEl, chars, mapId, mapaObj) {
     if (isProjected) el.dataset.projected = '1';
 
     const fator = Math.max(0.4, ca.aparencia?.tamanho || 1.0);
-    el.dataset.baseTamanho = fator;
+    el.dataset.baseTamanho = String(fator);
 
     const { html, isAnimado, cssClass } = tokenBuildHtml(c, { isNpc, isProjected, tamanhoFator: fator });
 
@@ -608,17 +608,17 @@ function _tokAplicarPatches() {
     window._animCtrlMap?.[nome]?.setFacing?.(dir);
   }
 
-  if (typeof window.mapaIniciarDrag === 'function' && !window.mapaIniciarDrag.__tokPatchado) {
+  if (typeof window.mapaIniciarDrag === 'function' && !(window.mapaIniciarDrag as any).__tokPatchado) {
     const _orig = window.mapaIniciarDrag;
     window.mapaIniciarDrag = function(nome, el, e) {
       _tokDragStartX[nome] = e?.clientX;
       window._animCtrlMap?.[nome]?.setAnimation('walk');
       return _orig.apply(this, arguments);
     };
-    window.mapaIniciarDrag.__tokPatchado = true;
+    (window.mapaIniciarDrag as any).__tokPatchado = true;
   }
 
-  if (typeof window.mapaFimDrag === 'function' && !window.mapaFimDrag.__tokPatchado) {
+  if (typeof window.mapaFimDrag === 'function' && !(window.mapaFimDrag as any).__tokPatchado) {
     const _orig = window.mapaFimDrag;
     window.mapaFimDrag = async function(e) {
       const nome = window.MAPA_STATE?.dragging;
@@ -631,10 +631,10 @@ function _tokAplicarPatches() {
       if (nome) window._animCtrlMap?.[nome]?.setAnimation('idle');
       return result;
     };
-    window.mapaFimDrag.__tokPatchado = true;
+    (window.mapaFimDrag as any).__tokPatchado = true;
   }
 
-  if (typeof window.tokenMoveReceber === 'function' && !window.tokenMoveReceber.__tokPatchado) {
+  if (typeof window.tokenMoveReceber === 'function' && !(window.tokenMoveReceber as any).__tokPatchado) {
     const _orig = window.tokenMoveReceber;
     window.tokenMoveReceber = function(payload) {
       const result = _orig.apply(this, arguments);
@@ -651,10 +651,10 @@ function _tokAplicarPatches() {
       }
       return result;
     };
-    window.tokenMoveReceber.__tokPatchado = true;
+    (window.tokenMoveReceber as any).__tokPatchado = true;
   }
 
-  if (typeof window.animarAtaque === 'function' && !window.animarAtaque.__tokPatchado) {
+  if (typeof window.animarAtaque === 'function' && !(window.animarAtaque as any).__tokPatchado) {
     const _orig = window.animarAtaque;
     window.animarAtaque = function({ atacEl, alvoEl, animacao, dano }) {
       const atacNome = atacEl?.dataset?.nome;
@@ -670,7 +670,7 @@ function _tokAplicarPatches() {
         ? _orig.call(this, { atacEl, alvoEl, animacao, dano })
         : Promise.resolve();
     };
-    window.animarAtaque.__tokPatchado = true;
+    (window.animarAtaque as any).__tokPatchado = true;
   }
 }
 
@@ -696,8 +696,8 @@ function tokenStartWatchers() {
         for (const n of m.addedNodes) {
           if (n.nodeType !== 1) continue;
           if (
-            n.matches?.('.animado-token-mount,.mapa-token[data-nome]')
-            || n.querySelector?.('.animado-token-mount,.mapa-token[data-nome]')
+            (n as any).matches?.('.animado-token-mount,.mapa-token[data-nome]')
+            || (n as any).querySelector?.('.animado-token-mount,.mapa-token[data-nome]')
           ) {
             _tokScheduleMount(false);
             return;
@@ -748,3 +748,28 @@ if (document.readyState === 'loading') {
 } else {
   tokenStartWatchers();
 }
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "tokenImgUrl", { configurable: true, writable: true, value: tokenImgUrl });
+Object.defineProperty(globalThis, "tokenTintOverlayHtml", { configurable: true, writable: true, value: tokenTintOverlayHtml });
+Object.defineProperty(globalThis, "tokenEquipOverlayHtml", { configurable: true, writable: true, value: tokenEquipOverlayHtml });
+Object.defineProperty(globalThis, "_tokParseCorRgb", { configurable: true, writable: true, value: _tokParseCorRgb });
+Object.defineProperty(globalThis, "_tokGlowDiv", { configurable: true, writable: true, value: _tokGlowDiv });
+Object.defineProperty(globalThis, "_tokHpState", { configurable: true, writable: true, value: _tokHpState });
+Object.defineProperty(globalThis, "_tokMortoHtml", { configurable: true, writable: true, value: _tokMortoHtml });
+Object.defineProperty(globalThis, "_tokBadges", { configurable: true, writable: true, value: _tokBadges });
+Object.defineProperty(globalThis, "tokenBuildSentinel", { configurable: true, writable: true, value: tokenBuildSentinel });
+Object.defineProperty(globalThis, "tokenBuildHtml", { configurable: true, writable: true, value: tokenBuildHtml });
+Object.defineProperty(globalThis, "_tokRPGData", { configurable: true, writable: true, value: _tokRPGData });
+Object.defineProperty(globalThis, "tokenFindChar", { configurable: true, writable: true, value: tokenFindChar });
+Object.defineProperty(globalThis, "tokenCharNameFromNode", { configurable: true, writable: true, value: tokenCharNameFromNode });
+Object.defineProperty(globalThis, "tokenPrepareMountNode", { configurable: true, writable: true, value: tokenPrepareMountNode });
+Object.defineProperty(globalThis, "tokenMountAnimado", { configurable: true, writable: true, value: tokenMountAnimado });
+Object.defineProperty(globalThis, "tokenDestroyAll", { configurable: true, writable: true, value: tokenDestroyAll });
+Object.defineProperty(globalThis, "_tokMountScheduled", { configurable: true, get: () => _tokMountScheduled, set: (__v) => { _tokMountScheduled = __v; } });
+Object.defineProperty(globalThis, "_tokMountForceNext", { configurable: true, get: () => _tokMountForceNext, set: (__v) => { _tokMountForceNext = __v; } });
+Object.defineProperty(globalThis, "_tokScheduleMount", { configurable: true, writable: true, value: _tokScheduleMount });
+Object.defineProperty(globalThis, "tokenMountAll", { configurable: true, writable: true, value: tokenMountAll });
+Object.defineProperty(globalThis, "tokenRenderizarNoMapa", { configurable: true, writable: true, value: tokenRenderizarNoMapa });
+Object.defineProperty(globalThis, "_tokAplicarPatches", { configurable: true, writable: true, value: _tokAplicarPatches });
+Object.defineProperty(globalThis, "tokenStartWatchers", { configurable: true, writable: true, value: tokenStartWatchers });

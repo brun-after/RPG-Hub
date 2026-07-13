@@ -209,7 +209,7 @@ window.RTNet = (() => {
     const fnName = AVT_HANDLER_MAP[tipo];
     if (fnName) {
       const fn = window[fnName];
-      if (typeof fn === 'function') { try { fn(payload); } catch(e) { _warn('global handler:', fnName, e); } }
+      if (typeof fn === 'function') { try { (fn as any)(payload); } catch(e) { _warn('global handler:', fnName, e); } }
       else {
         try {
           window.__avtPendingBroadcasts = window.__avtPendingBroadcasts || [];
@@ -656,7 +656,7 @@ window.RTNet = (() => {
 
   // ── BROADCAST ───────────────────────────────────────────────────
 
-  function _broadcast(tipo, payload, opts) {
+  function _broadcast(tipo: any, payload: any, opts?: any) {
     const defaults = EVENT_OPTS[tipo] || { persist: 'never', reliable: true };
     const o = { ...defaults, ...opts };
 
@@ -985,3 +985,5 @@ window.RTNet = (() => {
   };
 
 })();
+
+/* [migração-esm] accessors globais */

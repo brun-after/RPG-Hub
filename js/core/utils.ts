@@ -62,3 +62,9 @@ function getLoadingAnimSVG(tipo, customSVG) {
 }
 
 
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "injectCustomCSS", { configurable: true, writable: true, value: injectCustomCSS });
+Object.defineProperty(globalThis, "processCustomSVG", { configurable: true, writable: true, value: processCustomSVG });
+Object.defineProperty(globalThis, "getCardIconSVG", { configurable: true, writable: true, value: getCardIconSVG });
+Object.defineProperty(globalThis, "getLoadingAnimSVG", { configurable: true, writable: true, value: getLoadingAnimSVG });

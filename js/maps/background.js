@@ -5,7 +5,7 @@
 
 // ── Declarações antecipadas — usadas por supabase.js antes deste arquivo carregar por completo ──
 // ATTR_MAPPING_CACHE é referenciado em _carregarProgressivo (supabase.js) na fase0
-var ATTR_MAPPING_CACHE = window.ATTR_MAPPING_CACHE || {};
+var ATTR_MAPPING_CACHE__sombreado_19 = window.ATTR_MAPPING_CACHE || {};
 
 // tintOverlayHtml e _limparNotifCreativo são usadas por maps.js — declarar stub
 // para evitar ReferenceError enquanto catalog.js ainda não inicializou por completo
@@ -718,3 +718,41 @@ function nmceUpdateIsoGuide() {
 }
 
 console.log('ISO Grid + NM BG Tabs loaded ✓');
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "_nmBgTab", { configurable: true, get: () => _nmBgTab, set: (__v) => { _nmBgTab = __v; } });
+Object.defineProperty(globalThis, "_nmUploadDataUrl", { configurable: true, get: () => _nmUploadDataUrl, set: (__v) => { _nmUploadDataUrl = __v; } });
+Object.defineProperty(globalThis, "_nmSvgDataUrl", { configurable: true, get: () => _nmSvgDataUrl, set: (__v) => { _nmSvgDataUrl = __v; } });
+Object.defineProperty(globalThis, "nmBgTab", { configurable: true, get: () => nmBgTab, set: (__v) => { nmBgTab = __v; } });
+Object.defineProperty(globalThis, "nmBgGetFinal", { configurable: true, get: () => nmBgGetFinal, set: (__v) => { nmBgGetFinal = __v; } });
+Object.defineProperty(globalThis, "nmceFullscreenAbrir", { configurable: true, get: () => nmceFullscreenAbrir, set: (__v) => { nmceFullscreenAbrir = __v; } });
+Object.defineProperty(globalThis, "nmceFullscreenFechar", { configurable: true, get: () => nmceFullscreenFechar, set: (__v) => { nmceFullscreenFechar = __v; } });
+Object.defineProperty(globalThis, "nmceFullscreenConcluir", { configurable: true, get: () => nmceFullscreenConcluir, set: (__v) => { nmceFullscreenConcluir = __v; } });
+Object.defineProperty(globalThis, "_nmceRestaurarCanvas", { configurable: true, get: () => _nmceRestaurarCanvas, set: (__v) => { _nmceRestaurarCanvas = __v; } });
+Object.defineProperty(globalThis, "nmBgUrlPreview", { configurable: true, get: () => nmBgUrlPreview, set: (__v) => { nmBgUrlPreview = __v; } });
+Object.defineProperty(globalThis, "nmBgUpload", { configurable: true, get: () => nmBgUpload, set: (__v) => { nmBgUpload = __v; } });
+Object.defineProperty(globalThis, "nmBgClearUpload", { configurable: true, get: () => nmBgClearUpload, set: (__v) => { nmBgClearUpload = __v; } });
+Object.defineProperty(globalThis, "_NM_SVG_PROMPT", { configurable: true, get: () => _NM_SVG_PROMPT });
+Object.defineProperty(globalThis, "nmBgSvgPreview", { configurable: true, get: () => nmBgSvgPreview, set: (__v) => { nmBgSvgPreview = __v; } });
+Object.defineProperty(globalThis, "nmCopiarPromptSVG", { configurable: true, get: () => nmCopiarPromptSVG, set: (__v) => { nmCopiarPromptSVG = __v; } });
+Object.defineProperty(globalThis, "nmCopiarPromptContextual", { configurable: true, get: () => nmCopiarPromptContextual, set: (__v) => { nmCopiarPromptContextual = __v; } });
+Object.defineProperty(globalThis, "nmCE", { configurable: true, get: () => nmCE });
+Object.defineProperty(globalThis, "nmceInit", { configurable: true, get: () => nmceInit, set: (__v) => { nmceInit = __v; } });
+Object.defineProperty(globalThis, "nmceBgRender", { configurable: true, get: () => nmceBgRender, set: (__v) => { nmceBgRender = __v; } });
+Object.defineProperty(globalThis, "nmceBgLoad", { configurable: true, get: () => nmceBgLoad, set: (__v) => { nmceBgLoad = __v; } });
+Object.defineProperty(globalThis, "nmceSetTool", { configurable: true, get: () => nmceSetTool, set: (__v) => { nmceSetTool = __v; } });
+Object.defineProperty(globalThis, "nmcePickColor", { configurable: true, get: () => nmcePickColor, set: (__v) => { nmcePickColor = __v; } });
+Object.defineProperty(globalThis, "nmcePushHistory", { configurable: true, get: () => nmcePushHistory, set: (__v) => { nmcePushHistory = __v; } });
+Object.defineProperty(globalThis, "nmceUndo", { configurable: true, get: () => nmceUndo, set: (__v) => { nmceUndo = __v; } });
+Object.defineProperty(globalThis, "nmceClear", { configurable: true, get: () => nmceClear, set: (__v) => { nmceClear = __v; } });
+Object.defineProperty(globalThis, "nmceExport", { configurable: true, get: () => nmceExport, set: (__v) => { nmceExport = __v; } });
+Object.defineProperty(globalThis, "nmceCoords", { configurable: true, get: () => nmceCoords, set: (__v) => { nmceCoords = __v; } });
+Object.defineProperty(globalThis, "nmceDown", { configurable: true, get: () => nmceDown, set: (__v) => { nmceDown = __v; } });
+Object.defineProperty(globalThis, "nmceMove", { configurable: true, get: () => nmceMove, set: (__v) => { nmceMove = __v; } });
+Object.defineProperty(globalThis, "nmceUp", { configurable: true, get: () => nmceUp, set: (__v) => { nmceUp = __v; } });
+Object.defineProperty(globalThis, "nmceTDown", { configurable: true, get: () => nmceTDown, set: (__v) => { nmceTDown = __v; } });
+Object.defineProperty(globalThis, "nmceTMove", { configurable: true, get: () => nmceTMove, set: (__v) => { nmceTMove = __v; } });
+Object.defineProperty(globalThis, "nmceFill", { configurable: true, get: () => nmceFill, set: (__v) => { nmceFill = __v; } });
+Object.defineProperty(globalThis, "_nmceHex2rgb", { configurable: true, get: () => _nmceHex2rgb, set: (__v) => { _nmceHex2rgb = __v; } });
+Object.defineProperty(globalThis, "_drawIsoGrid", { configurable: true, get: () => _drawIsoGrid, set: (__v) => { _drawIsoGrid = __v; } });
+Object.defineProperty(globalThis, "nmceUpdateIsoGuide", { configurable: true, get: () => nmceUpdateIsoGuide, set: (__v) => { nmceUpdateIsoGuide = __v; } });

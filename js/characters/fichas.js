@@ -568,3 +568,20 @@ function fichasRefreshAtributos(nome) {
 }
 window.fichasRefreshAtributos = fichasRefreshAtributos;
 
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "fichasSelectChar", { configurable: true, get: () => fichasSelectChar, set: (__v) => { fichasSelectChar = __v; } });
+Object.defineProperty(globalThis, "fichasFiltrar", { configurable: true, get: () => fichasFiltrar, set: (__v) => { fichasFiltrar = __v; } });
+Object.defineProperty(globalThis, "fichasFiltrarLimpar", { configurable: true, get: () => fichasFiltrarLimpar, set: (__v) => { fichasFiltrarLimpar = __v; } });
+Object.defineProperty(globalThis, "buildFichasBtns", { configurable: true, get: () => buildFichasBtns, set: (__v) => { buildFichasBtns = __v; } });
+Object.defineProperty(globalThis, "renderFichasBtns", { configurable: true, get: () => renderFichasBtns, set: (__v) => { renderFichasBtns = __v; } });
+Object.defineProperty(globalThis, "fichasToggleSection", { configurable: true, get: () => fichasToggleSection, set: (__v) => { fichasToggleSection = __v; } });
+Object.defineProperty(globalThis, "_fichasAccordion", { configurable: true, get: () => _fichasAccordion, set: (__v) => { _fichasAccordion = __v; } });
+Object.defineProperty(globalThis, "fichasToggleEditPersonagem", { configurable: true, get: () => fichasToggleEditPersonagem, set: (__v) => { fichasToggleEditPersonagem = __v; } });
+Object.defineProperty(globalThis, "fichasToggleEditAtributos", { configurable: true, get: () => fichasToggleEditAtributos, set: (__v) => { fichasToggleEditAtributos = __v; } });
+Object.defineProperty(globalThis, "fichasHpStep", { configurable: true, get: () => fichasHpStep, set: (__v) => { fichasHpStep = __v; } });
+Object.defineProperty(globalThis, "_fichasSecAparencia", { configurable: true, get: () => _fichasSecAparencia, set: (__v) => { _fichasSecAparencia = __v; } });
+Object.defineProperty(globalThis, "_fichasSecPersonagem", { configurable: true, get: () => _fichasSecPersonagem, set: (__v) => { _fichasSecPersonagem = __v; } });
+Object.defineProperty(globalThis, "_fichasSecAtributos", { configurable: true, get: () => _fichasSecAtributos, set: (__v) => { _fichasSecAtributos = __v; } });
+Object.defineProperty(globalThis, "renderFichaView", { configurable: true, get: () => renderFichaView, set: (__v) => { renderFichaView = __v; } });
+Object.defineProperty(globalThis, "fichasRefreshAtributos", { configurable: true, get: () => fichasRefreshAtributos, set: (__v) => { fichasRefreshAtributos = __v; } });

@@ -546,3 +546,33 @@ async function faseExportarCombate(batalhaId) {
 
   return export_data;
 }
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "faseGenGetApiKey", { configurable: true, get: () => faseGenGetApiKey, set: (__v) => { faseGenGetApiKey = __v; } });
+Object.defineProperty(globalThis, "faseGenSetApiKey", { configurable: true, get: () => faseGenSetApiKey, set: (__v) => { faseGenSetApiKey = __v; } });
+Object.defineProperty(globalThis, "FASE_IMG_PROMPT_TEMPLATE", { configurable: true, get: () => FASE_IMG_PROMPT_TEMPLATE });
+Object.defineProperty(globalThis, "FASE_COORD_PROMPT", { configurable: true, get: () => FASE_COORD_PROMPT });
+Object.defineProperty(globalThis, "faseGenPromptExterno", { configurable: true, get: () => faseGenPromptExterno, set: (__v) => { faseGenPromptExterno = __v; } });
+Object.defineProperty(globalThis, "_faseGenApiCall", { configurable: true, get: () => _faseGenApiCall, set: (__v) => { _faseGenApiCall = __v; } });
+Object.defineProperty(globalThis, "_faseFileToBase64", { configurable: true, get: () => _faseFileToBase64, set: (__v) => { _faseFileToBase64 = __v; } });
+Object.defineProperty(globalThis, "faseGenFromImage", { configurable: true, get: () => faseGenFromImage, set: (__v) => { faseGenFromImage = __v; } });
+Object.defineProperty(globalThis, "faseGenValidarJSON", { configurable: true, get: () => faseGenValidarJSON, set: (__v) => { faseGenValidarJSON = __v; } });
+Object.defineProperty(globalThis, "_faseGenModalData", { configurable: true, get: () => _faseGenModalData, set: (__v) => { _faseGenModalData = __v; } });
+Object.defineProperty(globalThis, "_faseGenImgFile", { configurable: true, get: () => _faseGenImgFile, set: (__v) => { _faseGenImgFile = __v; } });
+Object.defineProperty(globalThis, "_faseGenMapId", { configurable: true, get: () => _faseGenMapId, set: (__v) => { _faseGenMapId = __v; } });
+Object.defineProperty(globalThis, "abrirModalFaseConfig", { configurable: true, get: () => abrirModalFaseConfig, set: (__v) => { abrirModalFaseConfig = __v; } });
+Object.defineProperty(globalThis, "fecharModalFaseConfig", { configurable: true, get: () => fecharModalFaseConfig, set: (__v) => { fecharModalFaseConfig = __v; } });
+Object.defineProperty(globalThis, "_faseGenAtualizarPreview", { configurable: true, get: () => _faseGenAtualizarPreview, set: (__v) => { _faseGenAtualizarPreview = __v; } });
+Object.defineProperty(globalThis, "faseGenHandleImageSelect", { configurable: true, get: () => faseGenHandleImageSelect, set: (__v) => { faseGenHandleImageSelect = __v; } });
+Object.defineProperty(globalThis, "faseGenTiltChange", { configurable: true, get: () => faseGenTiltChange, set: (__v) => { faseGenTiltChange = __v; } });
+Object.defineProperty(globalThis, "faseGenCopiarPromptImagem", { configurable: true, get: () => faseGenCopiarPromptImagem, set: (__v) => { faseGenCopiarPromptImagem = __v; } });
+Object.defineProperty(globalThis, "faseGenGerarCoordenadas", { configurable: true, get: () => faseGenGerarCoordenadas, set: (__v) => { faseGenGerarCoordenadas = __v; } });
+Object.defineProperty(globalThis, "_faseGenGerarCatalogoEPopularBaus", { configurable: true, get: () => _faseGenGerarCatalogoEPopularBaus, set: (__v) => { _faseGenGerarCatalogoEPopularBaus = __v; } });
+Object.defineProperty(globalThis, "faseGenCopiarPromptExterno", { configurable: true, get: () => faseGenCopiarPromptExterno, set: (__v) => { faseGenCopiarPromptExterno = __v; } });
+Object.defineProperty(globalThis, "faseGenToggleImportExterno", { configurable: true, get: () => faseGenToggleImportExterno, set: (__v) => { faseGenToggleImportExterno = __v; } });
+Object.defineProperty(globalThis, "faseGenImportarJSONExterno", { configurable: true, get: () => faseGenImportarJSONExterno, set: (__v) => { faseGenImportarJSONExterno = __v; } });
+Object.defineProperty(globalThis, "_faseGenRenderEditorJSON", { configurable: true, get: () => _faseGenRenderEditorJSON, set: (__v) => { _faseGenRenderEditorJSON = __v; } });
+Object.defineProperty(globalThis, "faseGenJSONEditado", { configurable: true, get: () => faseGenJSONEditado, set: (__v) => { faseGenJSONEditado = __v; } });
+Object.defineProperty(globalThis, "faseGenSalvar", { configurable: true, get: () => faseGenSalvar, set: (__v) => { faseGenSalvar = __v; } });
+Object.defineProperty(globalThis, "faseGenAdicionarEntidade", { configurable: true, get: () => faseGenAdicionarEntidade, set: (__v) => { faseGenAdicionarEntidade = __v; } });
+Object.defineProperty(globalThis, "faseExportarCombate", { configurable: true, get: () => faseExportarCombate, set: (__v) => { faseExportarCombate = __v; } });

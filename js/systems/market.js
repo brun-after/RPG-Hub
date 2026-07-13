@@ -295,3 +295,12 @@ async function verInformacoesCompradas() {
 })();
 
 console.log('✓ Sistema de informações secretas do mercado carregado');
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "mercadoSelecionarTipo", { configurable: true, get: () => mercadoSelecionarTipo, set: (__v) => { mercadoSelecionarTipo = __v; } });
+Object.defineProperty(globalThis, "mercadoCriarInformacao", { configurable: true, get: () => mercadoCriarInformacao, set: (__v) => { mercadoCriarInformacao = __v; } });
+Object.defineProperty(globalThis, "_limparFormularioInformacao", { configurable: true, get: () => _limparFormularioInformacao, set: (__v) => { _limparFormularioInformacao = __v; } });
+Object.defineProperty(globalThis, "confirmarCompraInfo", { configurable: true, get: () => confirmarCompraInfo, set: (__v) => { confirmarCompraInfo = __v; } });
+Object.defineProperty(globalThis, "comprarInformacao", { configurable: true, get: () => comprarInformacao, set: (__v) => { comprarInformacao = __v; } });
+Object.defineProperty(globalThis, "mostrarInformacaoAdquirida", { configurable: true, get: () => mostrarInformacaoAdquirida, set: (__v) => { mostrarInformacaoAdquirida = __v; } });
+Object.defineProperty(globalThis, "verInformacoesCompradas", { configurable: true, get: () => verInformacoesCompradas, set: (__v) => { verInformacoesCompradas = __v; } });

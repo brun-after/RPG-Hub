@@ -783,3 +783,11 @@ if (typeof window.atkAplicarEfeitoPassiva === 'undefined') {
 }
 
 console.log('[BattleSystem] Sistema de batalha avançado carregado ✓ (versão corrigida com validações)');
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "_BS_DEFAULTS", { configurable: true, get: () => _BS_DEFAULTS });
+Object.defineProperty(globalThis, "TRIGGER_TYPES", { configurable: true, get: () => TRIGGER_TYPES });
+Object.defineProperty(globalThis, "DEBUG_MODE", { configurable: true, get: () => DEBUG_MODE });
+Object.defineProperty(globalThis, "BATTLE_SYSTEM", { configurable: true, get: () => BATTLE_SYSTEM });
+Object.defineProperty(globalThis, "battleDispatchEvento", { configurable: true, get: () => battleDispatchEvento, set: (__v) => { battleDispatchEvento = __v; } });
+Object.defineProperty(globalThis, "battleRecuperarRecursosTurno", { configurable: true, get: () => battleRecuperarRecursosTurno, set: (__v) => { battleRecuperarRecursosTurno = __v; } });

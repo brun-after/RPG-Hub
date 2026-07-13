@@ -2630,3 +2630,61 @@ function _marcarAlvosDisponiveis(atacanteNome) {
 // ══════════════════════════════════════════════════════════════════════════
 // FIM DO ARQUIVO - TODAS AS 20 FUNCIONALIDADES IMPLEMENTADAS
 // ══════════════════════════════════════════════════════════════════════════
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "mesaModoVerificar", { configurable: true, get: () => mesaModoVerificar, set: (__v) => { mesaModoVerificar = __v; } });
+Object.defineProperty(globalThis, "_mesaInjetarColunas", { configurable: true, get: () => _mesaInjetarColunas, set: (__v) => { _mesaInjetarColunas = __v; } });
+Object.defineProperty(globalThis, "_mesaRenderizarColunas", { configurable: true, get: () => _mesaRenderizarColunas, set: (__v) => { _mesaRenderizarColunas = __v; } });
+Object.defineProperty(globalThis, "_mesaAjustarMapa", { configurable: true, get: () => _mesaAjustarMapa, set: (__v) => { _mesaAjustarMapa = __v; } });
+Object.defineProperty(globalThis, "_mesaToolbarSetup", { configurable: true, get: () => _mesaToolbarSetup, set: (__v) => { _mesaToolbarSetup = __v; } });
+Object.defineProperty(globalThis, "mesaPinToggle", { configurable: true, get: () => mesaPinToggle, set: (__v) => { mesaPinToggle = __v; } });
+Object.defineProperty(globalThis, "_mesaHudDraggableInit", { configurable: true, get: () => _mesaHudDraggableInit, set: (__v) => { _mesaHudDraggableInit = __v; } });
+Object.defineProperty(globalThis, "_mesaHudAutoPositionar", { configurable: true, get: () => _mesaHudAutoPositionar, set: (__v) => { _mesaHudAutoPositionar = __v; } });
+Object.defineProperty(globalThis, "mesaTogglePainel", { configurable: true, get: () => mesaTogglePainel, set: (__v) => { mesaTogglePainel = __v; } });
+Object.defineProperty(globalThis, "_mesaRenderCombatHud", { configurable: true, get: () => _mesaRenderCombatHud, set: (__v) => { _mesaRenderCombatHud = __v; } });
+Object.defineProperty(globalThis, "_mesaRenderChars", { configurable: true, get: () => _mesaRenderChars, set: (__v) => { _mesaRenderChars = __v; } });
+Object.defineProperty(globalThis, "_mesaRenderIniciativa", { configurable: true, get: () => _mesaRenderIniciativa, set: (__v) => { _mesaRenderIniciativa = __v; } });
+Object.defineProperty(globalThis, "_mesaRenderBarraSkills", { configurable: true, get: () => _mesaRenderBarraSkills, set: (__v) => { _mesaRenderBarraSkills = __v; } });
+Object.defineProperty(globalThis, "_mesaRenderAcoes", { configurable: true, get: () => _mesaRenderAcoes, set: (__v) => { _mesaRenderAcoes = __v; } });
+Object.defineProperty(globalThis, "_mesaAtacarHab", { configurable: true, get: () => _mesaAtacarHab, set: (__v) => { _mesaAtacarHab = __v; } });
+Object.defineProperty(globalThis, "FEED_MESA", { configurable: true, get: () => FEED_MESA });
+Object.defineProperty(globalThis, "feedAdicionarEntrada", { configurable: true, get: () => feedAdicionarEntrada, set: (__v) => { feedAdicionarEntrada = __v; } });
+Object.defineProperty(globalThis, "feedRenderizar", { configurable: true, get: () => feedRenderizar, set: (__v) => { feedRenderizar = __v; } });
+Object.defineProperty(globalThis, "barraContextoInicializar", { configurable: true, get: () => barraContextoInicializar, set: (__v) => { barraContextoInicializar = __v; } });
+Object.defineProperty(globalThis, "barraContextoAtualizar", { configurable: true, get: () => barraContextoAtualizar, set: (__v) => { barraContextoAtualizar = __v; } });
+Object.defineProperty(globalThis, "NOTIFICACOES", { configurable: true, get: () => NOTIFICACOES });
+Object.defineProperty(globalThis, "notifAdicionar", { configurable: true, get: () => notifAdicionar, set: (__v) => { notifAdicionar = __v; } });
+Object.defineProperty(globalThis, "notifRenderizar", { configurable: true, get: () => notifRenderizar, set: (__v) => { notifRenderizar = __v; } });
+Object.defineProperty(globalThis, "_origCombateBroadcast5", { configurable: true, get: () => _origCombateBroadcast5 });
+Object.defineProperty(globalThis, "entrarRPG", { configurable: true, get: () => entrarRPG, set: (__v) => { entrarRPG = __v; } });
+Object.defineProperty(globalThis, "_origEntrarRPGF5", { configurable: true, get: () => _origEntrarRPGF5 });
+Object.defineProperty(globalThis, "aplicarTema", { configurable: true, get: () => aplicarTema, set: (__v) => { aplicarTema = __v; } });
+Object.defineProperty(globalThis, "LOADING_START", { configurable: true, get: () => LOADING_START, set: (__v) => { LOADING_START = __v; } });
+Object.defineProperty(globalThis, "mostrarLoading", { configurable: true, get: () => mostrarLoading, set: (__v) => { mostrarLoading = __v; } });
+Object.defineProperty(globalThis, "loadingEscapar", { configurable: true, get: () => loadingEscapar, set: (__v) => { loadingEscapar = __v; } });
+Object.defineProperty(globalThis, "ocultarLoading", { configurable: true, get: () => ocultarLoading, set: (__v) => { ocultarLoading = __v; } });
+Object.defineProperty(globalThis, "mostrarApp", { configurable: true, get: () => mostrarApp, set: (__v) => { mostrarApp = __v; } });
+Object.defineProperty(globalThis, "voltarHub", { configurable: true, get: () => voltarHub, set: (__v) => { voltarHub = __v; } });
+Object.defineProperty(globalThis, "_TRIGGER_CARD_STATE", { configurable: true, get: () => _TRIGGER_CARD_STATE, set: (__v) => { _TRIGGER_CARD_STATE = __v; } });
+Object.defineProperty(globalThis, "_mesaDispararAnimacao", { configurable: true, get: () => _mesaDispararAnimacao, set: (__v) => { _mesaDispararAnimacao = __v; } });
+Object.defineProperty(globalThis, "_mesaRenderAtaqueInline", { configurable: true, get: () => _mesaRenderAtaqueInline, set: (__v) => { _mesaRenderAtaqueInline = __v; } });
+Object.defineProperty(globalThis, "_mesaAtaqueInlineGetAlvos", { configurable: true, get: () => _mesaAtaqueInlineGetAlvos, set: (__v) => { _mesaAtaqueInlineGetAlvos = __v; } });
+Object.defineProperty(globalThis, "_mesaPetGetHabilidades", { configurable: true, get: () => _mesaPetGetHabilidades, set: (__v) => { _mesaPetGetHabilidades = __v; } });
+Object.defineProperty(globalThis, "_mesaPetGetPetsDoDono", { configurable: true, get: () => _mesaPetGetPetsDoDono, set: (__v) => { _mesaPetGetPetsDoDono = __v; } });
+Object.defineProperty(globalThis, "_mesaPetDonoEstaAtivo", { configurable: true, get: () => _mesaPetDonoEstaAtivo, set: (__v) => { _mesaPetDonoEstaAtivo = __v; } });
+Object.defineProperty(globalThis, "_calcularDistanciaSegura", { configurable: true, get: () => _calcularDistanciaSegura, set: (__v) => { _calcularDistanciaSegura = __v; } });
+Object.defineProperty(globalThis, "calcularRangeDano", { configurable: true, get: () => calcularRangeDano, set: (__v) => { calcularRangeDano = __v; } });
+Object.defineProperty(globalThis, "calcModAtributo", { configurable: true, get: () => calcModAtributo, set: (__v) => { calcModAtributo = __v; } });
+Object.defineProperty(globalThis, "rolarFormulaDano", { configurable: true, get: () => rolarFormulaDano, set: (__v) => { rolarFormulaDano = __v; } });
+Object.defineProperty(globalThis, "getCooldownsBatalhaSeguro", { configurable: true, get: () => getCooldownsBatalhaSeguro, set: (__v) => { getCooldownsBatalhaSeguro = __v; } });
+Object.defineProperty(globalThis, "_mesaShowRangeCircle", { configurable: true, get: () => _mesaShowRangeCircle, set: (__v) => { _mesaShowRangeCircle = __v; } });
+Object.defineProperty(globalThis, "mapaHideRangeCircle", { configurable: true, get: () => mapaHideRangeCircle, set: (__v) => { mapaHideRangeCircle = __v; } });
+Object.defineProperty(globalThis, "mapaShowAoECircle", { configurable: true, get: () => mapaShowAoECircle, set: (__v) => { mapaShowAoECircle = __v; } });
+Object.defineProperty(globalThis, "mapaHideAoECircle", { configurable: true, get: () => mapaHideAoECircle, set: (__v) => { mapaHideAoECircle = __v; } });
+Object.defineProperty(globalThis, "_estadoBatalhaJogador", { configurable: true, get: () => _estadoBatalhaJogador, set: (__v) => { _estadoBatalhaJogador = __v; } });
+Object.defineProperty(globalThis, "abrirModalAtaque", { configurable: true, get: () => abrirModalAtaque, set: (__v) => { abrirModalAtaque = __v; } });
+Object.defineProperty(globalThis, "fecharModalAtaque", { configurable: true, get: () => fecharModalAtaque, set: (__v) => { fecharModalAtaque = __v; } });
+Object.defineProperty(globalThis, "configurarAtalhosCombate", { configurable: true, get: () => configurarAtalhosCombate, set: (__v) => { configurarAtalhosCombate = __v; } });
+Object.defineProperty(globalThis, "ativarModoAtaqueMapa", { configurable: true, get: () => ativarModoAtaqueMapa, set: (__v) => { ativarModoAtaqueMapa = __v; } });
+Object.defineProperty(globalThis, "desativarModoAtaqueMapa", { configurable: true, get: () => desativarModoAtaqueMapa, set: (__v) => { desativarModoAtaqueMapa = __v; } });
+Object.defineProperty(globalThis, "_marcarAlvosDisponiveis", { configurable: true, get: () => _marcarAlvosDisponiveis, set: (__v) => { _marcarAlvosDisponiveis = __v; } });

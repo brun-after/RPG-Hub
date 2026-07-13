@@ -700,3 +700,7 @@ var PIXI_STUDIO_PRESET_META = {
   runa_projetil:    { nome: 'Runa — Projétil',         categoria: 'Arcano',  cor: '#b060ff' },
   mao_do_chao:      { nome: 'Mão do Chão',             categoria: 'Terra',   cor: '#6a4a2a' },
 };
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "PIXI_STUDIO_PRESETS", { configurable: true, get: () => PIXI_STUDIO_PRESETS, set: (__v) => { PIXI_STUDIO_PRESETS = __v; } });
+Object.defineProperty(globalThis, "PIXI_STUDIO_PRESET_META", { configurable: true, get: () => PIXI_STUDIO_PRESET_META, set: (__v) => { PIXI_STUDIO_PRESET_META = __v; } });

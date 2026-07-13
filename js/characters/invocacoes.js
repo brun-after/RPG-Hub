@@ -511,3 +511,27 @@ function invocacoesPopularSelectInvocacoes(selectId) {
     + INV_OCACOES.catalogo.map(i => `<option value="${i.id}"${i.id === cur ? ' selected' : ''}>🔮 ${i.nome}</option>`).join('');
 }
 window.invocacoesPopularSelectInvocacoes = invocacoesPopularSelectInvocacoes;
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "INV_OCACOES", { configurable: true, get: () => INV_OCACOES });
+Object.defineProperty(globalThis, "_invModalId", { configurable: true, get: () => _invModalId, set: (__v) => { _invModalId = __v; } });
+Object.defineProperty(globalThis, "_invDarCharNome", { configurable: true, get: () => _invDarCharNome, set: (__v) => { _invDarCharNome = __v; } });
+Object.defineProperty(globalThis, "invocacoesCarregarDados", { configurable: true, get: () => invocacoesCarregarDados, set: (__v) => { invocacoesCarregarDados = __v; } });
+Object.defineProperty(globalThis, "renderSecaoInvocacoes", { configurable: true, get: () => renderSecaoInvocacoes, set: (__v) => { renderSecaoInvocacoes = __v; } });
+Object.defineProperty(globalThis, "_invComportamentoBadge", { configurable: true, get: () => _invComportamentoBadge, set: (__v) => { _invComportamentoBadge = __v; } });
+Object.defineProperty(globalThis, "_invFileUpload", { configurable: true, get: () => _invFileUpload, set: (__v) => { _invFileUpload = __v; } });
+Object.defineProperty(globalThis, "_invAtualizarTokenPreview", { configurable: true, get: () => _invAtualizarTokenPreview, set: (__v) => { _invAtualizarTokenPreview = __v; } });
+Object.defineProperty(globalThis, "_invAtualizarPerfilPreview", { configurable: true, get: () => _invAtualizarPerfilPreview, set: (__v) => { _invAtualizarPerfilPreview = __v; } });
+Object.defineProperty(globalThis, "_invRenderSkillsChecklist", { configurable: true, get: () => _invRenderSkillsChecklist, set: (__v) => { _invRenderSkillsChecklist = __v; } });
+Object.defineProperty(globalThis, "abrirModalInvocacao", { configurable: true, get: () => abrirModalInvocacao, set: (__v) => { abrirModalInvocacao = __v; } });
+Object.defineProperty(globalThis, "fecharModalInvocacao", { configurable: true, get: () => fecharModalInvocacao, set: (__v) => { fecharModalInvocacao = __v; } });
+Object.defineProperty(globalThis, "_invComportamentoChange", { configurable: true, get: () => _invComportamentoChange, set: (__v) => { _invComportamentoChange = __v; } });
+Object.defineProperty(globalThis, "_invPopularAtributosSelects", { configurable: true, get: () => _invPopularAtributosSelects, set: (__v) => { _invPopularAtributosSelects = __v; } });
+Object.defineProperty(globalThis, "salvarInvocacao", { configurable: true, get: () => salvarInvocacao, set: (__v) => { salvarInvocacao = __v; } });
+Object.defineProperty(globalThis, "removerInvocacaoGlobal", { configurable: true, get: () => removerInvocacaoGlobal, set: (__v) => { removerInvocacaoGlobal = __v; } });
+Object.defineProperty(globalThis, "invocacaoDarAPersonagem", { configurable: true, get: () => invocacaoDarAPersonagem, set: (__v) => { invocacaoDarAPersonagem = __v; } });
+Object.defineProperty(globalThis, "invocacaoRemoverDePersonagem", { configurable: true, get: () => invocacaoRemoverDePersonagem, set: (__v) => { invocacaoRemoverDePersonagem = __v; } });
+Object.defineProperty(globalThis, "abrirModalDarInvocacao", { configurable: true, get: () => abrirModalDarInvocacao, set: (__v) => { abrirModalDarInvocacao = __v; } });
+Object.defineProperty(globalThis, "fecharModalDarInvocacao", { configurable: true, get: () => fecharModalDarInvocacao, set: (__v) => { fecharModalDarInvocacao = __v; } });
+Object.defineProperty(globalThis, "_invRenderListaDarInvocacao", { configurable: true, get: () => _invRenderListaDarInvocacao, set: (__v) => { _invRenderListaDarInvocacao = __v; } });
+Object.defineProperty(globalThis, "invocacoesPopularSelectInvocacoes", { configurable: true, get: () => invocacoesPopularSelectInvocacoes, set: (__v) => { invocacoesPopularSelectInvocacoes = __v; } });

@@ -38,19 +38,9 @@ const _NATIVE_H = 180;
 // Texturas pré-renderizadas em 2× para nitidez; exibidas em 0.5× no espaço nativo
 const _TEX_SCALE = 0.5;
 
-// ── PixiJS Lazy Loader ───────────────────────────────────────────────────────
-let _pixiLoadPromise = null;
+// ── PixiJS Lazy Loader (delegado ao core/pixi-lazy.js, via bundle) ───────────
 function _pixiEnsureLoaded() {
-  if (_pixiLoadPromise) return _pixiLoadPromise;
-  if (window.PIXI) { _pixiLoadPromise = Promise.resolve(); return _pixiLoadPromise; }
-  _pixiLoadPromise = new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js';
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('[AnimRenderer] Falha ao carregar PixiJS'));
-    document.head.appendChild(s);
-  });
-  return _pixiLoadPromise;
+  return pixiEnsureCore();
 }
 
 // ── SVG → PIXI.Texture ───────────────────────────────────────────────────────
@@ -700,3 +690,26 @@ window.animRendererMount          = animRendererMount;
 window.animRendererStaticFrame    = animRendererStaticFrame;
 window.animRendererUpdateEquipment = animRendererUpdateEquipment;
 // Mounting e patches movidos para token.js
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "_ANIM_BONE_CFG", { configurable: true, get: () => _ANIM_BONE_CFG });
+Object.defineProperty(globalThis, "_DRAW_BACK", { configurable: true, get: () => _DRAW_BACK });
+Object.defineProperty(globalThis, "_DRAW_FRONT", { configurable: true, get: () => _DRAW_FRONT });
+Object.defineProperty(globalThis, "_ANIM_DRAW_ORDER", { configurable: true, get: () => _ANIM_DRAW_ORDER });
+Object.defineProperty(globalThis, "_EQUIP_ATTACH", { configurable: true, get: () => _EQUIP_ATTACH });
+Object.defineProperty(globalThis, "_NATIVE_W", { configurable: true, get: () => _NATIVE_W });
+Object.defineProperty(globalThis, "_NATIVE_H", { configurable: true, get: () => _NATIVE_H });
+Object.defineProperty(globalThis, "_TEX_SCALE", { configurable: true, get: () => _TEX_SCALE });
+Object.defineProperty(globalThis, "_pixiEnsureLoaded", { configurable: true, get: () => _pixiEnsureLoaded, set: (__v) => { _pixiEnsureLoaded = __v; } });
+Object.defineProperty(globalThis, "_svgToTexture", { configurable: true, get: () => _svgToTexture, set: (__v) => { _svgToTexture = __v; } });
+Object.defineProperty(globalThis, "_safeTextureFrom", { configurable: true, get: () => _safeTextureFrom, set: (__v) => { _safeTextureFrom = __v; } });
+Object.defineProperty(globalThis, "_preloadTextures", { configurable: true, get: () => _preloadTextures, set: (__v) => { _preloadTextures = __v; } });
+Object.defineProperty(globalThis, "_animLerp", { configurable: true, get: () => _animLerp, set: (__v) => { _animLerp = __v; } });
+Object.defineProperty(globalThis, "_animComputeTransforms", { configurable: true, get: () => _animComputeTransforms, set: (__v) => { _animComputeTransforms = __v; } });
+Object.defineProperty(globalThis, "_buildScene", { configurable: true, get: () => _buildScene, set: (__v) => { _buildScene = __v; } });
+Object.defineProperty(globalThis, "_updateSprites", { configurable: true, get: () => _updateSprites, set: (__v) => { _updateSprites = __v; } });
+Object.defineProperty(globalThis, "_buildSceneV2", { configurable: true, get: () => _buildSceneV2, set: (__v) => { _buildSceneV2 = __v; } });
+Object.defineProperty(globalThis, "_updateContainersV2", { configurable: true, get: () => _updateContainersV2, set: (__v) => { _updateContainersV2 = __v; } });
+Object.defineProperty(globalThis, "animRendererMount", { configurable: true, get: () => animRendererMount, set: (__v) => { animRendererMount = __v; } });
+Object.defineProperty(globalThis, "animRendererStaticFrame", { configurable: true, get: () => animRendererStaticFrame, set: (__v) => { animRendererStaticFrame = __v; } });
+Object.defineProperty(globalThis, "animRendererUpdateEquipment", { configurable: true, get: () => animRendererUpdateEquipment, set: (__v) => { animRendererUpdateEquipment = __v; } });

@@ -385,3 +385,15 @@ function _animHexToRgb(hex) {
   const b = parseInt(hex.slice(4,6),16);
   return `${r},${g},${b}`;
 }
+
+/* [migração-esm] accessors globais */
+Object.defineProperty(globalThis, "combateBroadcast", { configurable: true, get: () => combateBroadcast, set: (__v) => { combateBroadcast = __v; } });
+Object.defineProperty(globalThis, "combateReceberBroadcast", { configurable: true, get: () => combateReceberBroadcast, set: (__v) => { combateReceberBroadcast = __v; } });
+Object.defineProperty(globalThis, "_ANIM_SID", { configurable: true, get: () => _ANIM_SID });
+Object.defineProperty(globalThis, "animBroadcast", { configurable: true, get: () => animBroadcast, set: (__v) => { animBroadcast = __v; } });
+Object.defineProperty(globalThis, "animReceberBroadcast", { configurable: true, get: () => animReceberBroadcast, set: (__v) => { animReceberBroadcast = __v; } });
+Object.defineProperty(globalThis, "_atkRodarAnimacao", { configurable: true, get: () => _atkRodarAnimacao, set: (__v) => { _atkRodarAnimacao = __v; } });
+Object.defineProperty(globalThis, "resolverTokenEl", { configurable: true, get: () => resolverTokenEl, set: (__v) => { resolverTokenEl = __v; } });
+Object.defineProperty(globalThis, "_animCriarCanvas", { configurable: true, get: () => _animCriarCanvas, set: (__v) => { _animCriarCanvas = __v; } });
+Object.defineProperty(globalThis, "_animCentro", { configurable: true, get: () => _animCentro, set: (__v) => { _animCentro = __v; } });
+Object.defineProperty(globalThis, "_animHexToRgb", { configurable: true, get: () => _animHexToRgb, set: (__v) => { _animHexToRgb = __v; } });
