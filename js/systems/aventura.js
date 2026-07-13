@@ -499,6 +499,12 @@ const AVT_STATUS_COLORS = {
   sem_ataque:   '#e67e22',
   esquiva:      '#74b9ff',
   rec:          '#b07ef0',
+  rec_atributo: '#b07ef0',
+  imune_dano:   '#74b9ff',
+  ab_cd_reduzir:   '#f39c12',
+  ab_dano_buff:    '#f0cc6a',
+  ab_multi_alvo:   '#e67e22',
+  ab_alcance_buff: '#27ae60',
   fantasma:     '#74b9ff',
   teleporte:    '#a29bfe',
   invocacao:    '#b07ef0',
@@ -511,6 +517,98 @@ function _avtHexRgb(hex) {
   if (!hex || hex.length < 7) return '122,146,170';
   const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
   return `${r},${g},${b}`;
+}
+
+// Normaliza efeitos_bonus autorados no editor para o formato canônico do
+// registry (um objeto por tipo, com `tipo` e `duracao_turnos` definidos).
+// O editor combina vários componentes num objeto só e usa campos de duração
+// próprios (dot_turnos, boost_dano_turnos, …) que o runtime não lê — sem esta
+// normalização, DOT/HOT autorados expiram em 1 turno e buffs como boost_dano
+// nunca são reconhecidos pelo tick. Idempotente (marca _canonico).
+function _avtNormalizarEfeitosSkill(efeitos) {
+  if (!Array.isArray(efeitos) || !efeitos.length) return efeitos || [];
+  if (typeof EFFECT_REGISTRY === 'undefined') return efeitos;
+  try { return EFFECT_REGISTRY.normalizarEfeitos(efeitos); } catch(_) { return efeitos; }
+}
+
+// Agrega buffs/debuffs de combate ativos em status_effects de uma entidade.
+// boost_dano/mod_dano modificam o dano CAUSADO pela entidade (aditivos);
+// imune_dano zera o dano RECEBIDO enquanto ativo. Estes campos eram gravados
+// em status_effects mas nunca lidos no modo aventura.
+function _avtBuffsCombateEnt(ent) {
+  const out = { boostDano: 0, modDano: 0, imune: false };
+  if (!ent?.status_effects?.length) return out;
+  const now = Date.now();
+  ent.status_effects.forEach(ef => {
+    const ativo = ef._ooc
+      ? (!ef.expiry_ms || now < ef.expiry_ms)
+      : (ef._turnos_restantes ?? 0) > 0;
+    if (!ativo) return;
+    if (ef.tipo === 'boost_dano' || (ef.boost_dano != null && ef.tipo == null)) out.boostDano += Number(ef.boost_dano) || 0;
+    if (ef.tipo === 'mod_dano'   || (ef.mod_dano   != null && ef.tipo == null)) out.modDano   += Number(ef.mod_dano)   || 0;
+    if (ef.tipo === 'imune_dano' || ef.imune_dano) out.imune = true;
+  });
+  return out;
+}
+
+// Dano de saída com buffs da entidade aplicados (nunca abaixo de 0).
+function _avtAplicarBuffsDanoSaida(ent, dano) {
+  const b = _avtBuffsCombateEnt(ent);
+  const mod = b.boostDano + b.modDano;
+  if (!mod) return dano;
+  return Math.max(0, dano + mod);
+}
+
+// Dano de entrada considerando imunidade do defensor. Retorna o dano final.
+function _avtAplicarImunidadeDano(ent, dano) {
+  if (dano <= 0) return dano;
+  if (!_avtBuffsCombateEnt(ent).imune) return dano;
+  try { mostrarToast(`🛡 ${ent.nome} está imune a dano!`, '', 1800); } catch(_) {}
+  return 0;
+}
+
+// Tipos de efeito que entram em status_effects, derivados do registry central —
+// um efeito novo registrado em effect-registry.js entra automaticamente em todos
+// os caminhos de aplicação que usam esta lista. `opts.positivos` filtra por
+// polaridade (aliados só recebem positivos); `extras` preserva tipos com fluxo
+// próprio que historicamente entram em status_effects num caminho específico.
+function _avtStatusTipos(opts = {}, extras = []) {
+  let base = ['dot', 'hot', 'stun', 'silence', 'fantasma', 'atravessar'];
+  if (typeof EFFECT_REGISTRY !== 'undefined') {
+    try { base = EFFECT_REGISTRY.statusTipos(opts); } catch(_) {}
+  }
+  // Necromante tem gatilho próprio (dominação na morte) — nunca entra genérico.
+  base = base.filter(t => t !== 'necromante');
+  return extras.length ? base.concat(extras) : base;
+}
+
+// Tick de rec_atributo: recupera o recurso configurado no personagem-jogador
+// (rec_atributo vazio = primeiro recurso; ex.: orbe de efeito). Mesma persistência
+// do pickup de orbe de mana (custom_attrs.atributos + avt_rsv_update).
+function _avtAplicarRecAtributo(ent, ef) {
+  if (!ent || ent.tipo !== 'jogador') return;
+  const char = AVT_STATE.chars.find(c => c.nome === ent.nome || c.id === ent.dbId);
+  if (!char) return;
+  const recursos = _avtRecursosDoChar(char);
+  if (!recursos?.length) return;
+  const alvoNome = (ef.rec_atributo || '').trim();
+  const rec = alvoNome
+    ? recursos.find(r => r.nome.toLowerCase() === alvoNome.toLowerCase())
+    : (recursos.find(r => /mana/i.test(r.nome)) || recursos[0]);
+  if (!rec) return;
+  const rolado = _avtRolarFormula(ef.rec_formula || '5');
+  const add = ef.rec_modo === 'pct' ? Math.round(rec.max * rolado / 100) : rolado;
+  if (add <= 0) return;
+  const novo = Math.min(rec.max, rec.atual + add);
+  if (novo === rec.atual) return;
+  if (!char.custom_attrs) char.custom_attrs = {};
+  const atrs = char.custom_attrs.atributos || (char.custom_attrs.atributos = {});
+  atrs[rec.nome] = novo;
+  _avtSb(`characters?id=eq.${encodeURIComponent(char.id)}`, {
+    method: 'PATCH', body: JSON.stringify({ custom_attrs: char.custom_attrs })
+  }).catch(() => {});
+  try { _avtBroadcast('avt_rsv_update', { nome: ent.nome, atributos: { ...atrs } }); } catch(_) {}
+  try { mostrarToast(`🔋 +${add} ${rec.nome}`, '', 1500); } catch(_) {}
 }
 
 function _avtEfetosAtivosEnt(ent) {
@@ -533,7 +631,8 @@ function _avtEfetosAtivosEnt(ent) {
       tipo:  ef.tipo,
       nome:  ef.nome || ef.tipo,
       cor:   ef.cor || AVT_STATUS_COLORS[ef.tipo] || '#7a92aa',
-      label: String(ef._turnos_restantes),
+      // Orbe por cargas: mostra "n⚡" (skills restantes) em vez de turnos
+      label: ef._cargas_restantes != null ? `${ef._cargas_restantes}⚡` : String(ef._turnos_restantes),
       isOoc: false,
     });
   });
@@ -549,7 +648,8 @@ function _avtEfetosAtivosEnt(ent) {
         tipo:  ef.tipo,
         nome:  ef.nome || ef.tipo,
         cor:   ef.cor || AVT_STATUS_COLORS[ef.tipo] || '#7a92aa',
-        label: secsLeft + 's',
+        // Orbe por cargas: mostra "n⚡" (skills restantes) em vez de segundos
+        label: ef._cargas_restantes != null ? `${ef._cargas_restantes}⚡` : secsLeft + 's',
         isOoc: true,
       });
     });
@@ -3709,6 +3809,46 @@ function _avtBausPreDungeonParaMapa() {
   mostrarToast(`${bausPre.length} baú(s) preparado(s) adicionado(s) ao mapa`, 'ok');
 }
 
+// Ponte gerador → runtime: dungeons geradas (fase-generator) guardam baús em
+// render_data.baus[] e itens em itens_no_chao[], mas todo o runtime da aventura
+// (render, abrir, coleta, painéis) lê apenas render_data.objetos[]. Espelha os
+// dois arrays em objetos[] sem removê-los (o fase-renderer da campanha ainda os
+// lê). Idempotente por id e determinístico — cada cliente converge sozinho, sem
+// broadcast nem save.
+function _avtNormalizarObjetosDungeon(dungeon) {
+  if (!dungeon?.render_data) return;
+  const rd = dungeon.render_data;
+  if (!rd.objetos) rd.objetos = [];
+  const ids = new Set(rd.objetos.map(o => String(o.id)));
+  for (const b of (rd.baus || [])) {
+    if (b?.id == null || ids.has(String(b.id))) continue;
+    ids.add(String(b.id));
+    rd.objetos.push({
+      id: b.id, tipo: 'bau', nome: b.nome || 'Baú',
+      x: b.x ?? 0, y: b.y ?? 0,
+      trancado: !!b.trancado, chave_palavra: b.chave_palavra || null,
+      loot_itens: b.loot_itens || b.loot || [],
+      ouro: b.ouro || 0, aberto: !!b.aberto,
+    });
+  }
+  for (const it of (rd.itens_no_chao || [])) {
+    if (it?.id == null || ids.has(String(it.id))) continue;
+    ids.add(String(it.id));
+    rd.objetos.push({
+      id: it.id, tipo: 'loot', x: it.x ?? 0, y: it.y ?? 0,
+      item_id: it.item_id || null, quantidade: it.quantidade || 1,
+      nome: it.nome || 'Item',
+    });
+  }
+  // Baús fechados viram peça 'bau' do tileset (leitura em _avtGetTileSemanticKey),
+  // que compara em coordenadas de tile — objetos guardam coordenadas 0–1.
+  const dw = dungeon.w || 1, dh = dungeon.h || 1;
+  dungeon._chestPositions = rd.objetos
+    .filter(o => (o.tipo === 'bau' || o.tipo === 'chest') && !o.aberto)
+    .map(o => ({ x: Math.round((o.x ?? 0) * dw), y: Math.round((o.y ?? 0) * dh) }));
+}
+window._avtNormalizarObjetosDungeon = _avtNormalizarObjetosDungeon;
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Grava AVT_STATE.dungeon no slot certo do theme_json conforme a fase atual:
@@ -3882,6 +4022,7 @@ async function _avtCarregarDados(rpgId) {
       if (typeof s.efeitos_bonus === 'string') { try { s.efeitos_bonus = JSON.parse(s.efeitos_bonus); } catch(_) { s.efeitos_bonus = []; } }
       else s.efeitos_bonus = [];
     }
+    s.efeitos_bonus = _avtNormalizarEfeitosSkill(s.efeitos_bonus);
     return s;
   });
   AVT_STATE.itemCatalog = itemCatalog || [];
@@ -3909,6 +4050,8 @@ async function _avtCarregarDados(rpgId) {
     AVT_STATE.dungeon = _avtGerarDungeon(60, 40, 8);
   }
   _avtBausPreDungeonParaMapa();
+  _avtNormalizarObjetosDungeon(AVT_STATE.dungeon);
+  AVT_STATE._dynSpawnNextAt = 0;
   // Início é sempre a fase inicial (fase 1). Entrar/Jogar nunca herda a fase de
   // outro jogador — o isolamento por fase cuida do resto.
   AVT_STATE._faseAtualId = 'principal';
@@ -5506,6 +5649,9 @@ function _avtRenderFrame() {
   // ── Patrulha contínua de inimigos (fora de combate) ─────────────────────────
   _avtNpcPatrulharFrame(now);
 
+  // ── Spawns dinâmicos de baús/loot/orbes (host da fase, com throttle interno) ─
+  try { _avtDynSpawnTick(now); } catch(_) {}
+
   // ── Caminho do jogador local: drena _caminhoDestino para _waypoints ──────────
   // Roda ANTES do loop de animação para que os waypoints recém-adicionados sejam
   // processados (e _onWaypointReached → _avtCameraUpdate disparado) neste mesmo
@@ -5527,6 +5673,11 @@ function _avtRenderFrame() {
         if (_rpWp) _avtRastroMarcarCelula(_jPlayer, cell.x, cell.y, _rpWp.rastro_formula || '1d6', _rpWp.duracao_turnos ?? 3, _rpWp.rastro_cor);
         _avtRecuperarPorMovimento(_jPlayer, 1);
         try { _avtColetarObjsNaPosicao(_jPlayer); } catch(_) {}
+        // Pisar num baú precisa repintar o painel para o botão "Abrir Baú"
+        // aparecer (baús não são auto-coletados, então a coleta não repinta).
+        try {
+          if (_avtBauNaPosicao(Math.round(cell.x), Math.round(cell.y))) avtJogadorPainelRender();
+        } catch(_) {}
         _avtCameraUpdate();
         const fimDoCaminho = restantes === 0 &&
           (!AVT_STATE._caminhoDestino || AVT_STATE._caminhoDestino.length === 0);
@@ -6508,9 +6659,9 @@ function _avtRenderFrame() {
           ctx.fillText(o.icone || '🎁', ocx, ocy + _bob);
         }
         ctx.restore();
-      } else if (tipo === 'orbe_hp' || tipo === 'orbe_mana') {
+      } else if (tipo === 'orbe_hp' || tipo === 'orbe_mana' || tipo === 'orbe_efeito') {
         // Glow via sprite cacheado + gradiente na origem (nada de shadowBlur/gradiente novo por frame)
-        const cor = tipo === 'orbe_hp' ? '#2ecc71' : '#4fa3d1';
+        const cor = tipo === 'orbe_hp' ? '#2ecc71' : tipo === 'orbe_mana' ? '#4fa3d1' : (o.cor || '#b07ef0');
         const pulse = 0.5 + 0.5 * Math.sin(now / 250 + _ox + _oy);
         const _bob = Math.sin(now / 400 + (_ox + _oy)) * (SZ * 0.06);
         const r = SZ * (0.16 + 0.03 * pulse);
@@ -9293,7 +9444,10 @@ function _avtEnquadrarAlvosCamera(alvos, jogador) {
 
 // Exibe o seletor de skills do primeiro ataque (sem alvo pré-selecionado)
 function _avtMostrarPrimeiroAtaqueModal(jogador) {
-  if (typeof RPG_DATA !== 'undefined' && RPG_DATA?.skills?.length) AVT_STATE.skills = RPG_DATA.skills;
+  if (typeof RPG_DATA !== 'undefined' && RPG_DATA?.skills?.length) {
+    RPG_DATA.skills.forEach(s => { if (Array.isArray(s.efeitos_bonus)) s.efeitos_bonus = _avtNormalizarEfeitosSkill(s.efeitos_bonus); });
+    AVT_STATE.skills = RPG_DATA.skills;
+  }
   document.getElementById('avt-skill-overlay')?.remove();
   AVT_STATE._primeiroAtaqueAberto = true;
   // No modo controle dispositivo: usar a UI fixa (zones direita/central) em vez de overlay flutuante
@@ -9485,7 +9639,7 @@ async function _avtPrimeiroAtaqueSelecionarSkill(skId) {
           AVT_STATE._modoTeleporte = { entId: entJog.id };
           _avtAtivarIndicadorTeleporte(entJog, sk);
           mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
-        } else if (['dot','hot','stun','silence','teleporte','fantasma','atravessar','ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo)) {
+        } else if (_avtStatusTipos().includes(ef.tipo)) {
           const _oocEf = {...ef, _turnos_restantes: ef.duracao_turnos??1,
             expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs(), _ooc:true};
           if (!entJog.status_effects) entJog.status_effects = [];
@@ -9511,6 +9665,7 @@ async function _avtPrimeiroAtaqueSelecionarSkill(skId) {
         }
       });
     }
+    try { _avtOrbConsumirCargas(entJog); } catch(_) {}
     const _oocKey = (jogador.id || jogador.nome) + '_' + skId;
     _avtSetOocCooldown(_oocKey, Date.now() + (sk.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000);
     _avtRenderHpBar();
@@ -9575,7 +9730,7 @@ async function _avtAplicarSkillAliadoOoc(skId, alvoId) {
           _avtAtivarIndicadorTeleporte(entAlvo, sk);
           mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
         }
-      } else if (['hot','fantasma','atravessar','ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo)) {
+      } else if (_avtStatusTipos({ positivos: true }).includes(ef.tipo)) {
         // Apenas efeitos positivos/neutros são aplicados a aliados (negativos como dot/stun/silence são ignorados)
         const _oocEfAl = {...ef, _turnos_restantes: ef.duracao_turnos??1,
           expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs(), _ooc:true};
@@ -9600,6 +9755,7 @@ async function _avtAplicarSkillAliadoOoc(skId, alvoId) {
       }
     });
   }
+  try { _avtOrbConsumirCargas(AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador); } catch(_) {}
   const _oocKey = (jogador.id || jogador.nome) + '_' + skId;
   _avtSetOocCooldown(_oocKey, Date.now() + (sk.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000);
   _avtRenderHpBar();
@@ -9776,6 +9932,23 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   const _tipoAreaOoc       = sk?.tipo_area || null;
   const _isTodosInimigoOoc = sk?.alvo_tipo === 'todos_inimigos';
   const _isAreaOoc         = _tipoAreaOoc === 'quadrado' || _tipoAreaOoc === 'linha' || _isTodosInimigoOoc;
+
+  // Efeito sem_ataque ativo bloqueia o ataque OOC conforme o tipo configurado
+  // (checado ANTES do desconto de custo).
+  {
+    const _entSemAtkOoc = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
+    const _semAtkOoc = _entSemAtkOoc?.status_effects?.find(ef =>
+      ef.tipo === 'sem_ataque' && (ef._turnos_restantes ?? 0) > 0 &&
+      (!ef._ooc || !ef.expiry_ms || Date.now() < ef.expiry_ms));
+    if (_semAtkOoc) {
+      const _tipoDanoOoc = sk?.tipo_dano || 'fisico';
+      const _bloqOoc = _semAtkOoc.sem_ataque_tipo || 'todos';
+      if (_bloqOoc === 'todos' || _bloqOoc === _tipoDanoOoc) {
+        mostrarToast(`🚫 ${jogador.nome} não pode atacar agora`, 'aviso');
+        return;
+      }
+    }
+  }
 
   // Deduzir custo de recurso (mana) para skills de ataque OOC (síncrono — não bloqueia ataque)
   if (sk?.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
@@ -9967,6 +10140,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
 
   setTimeout(() => {
     if (critMult === 0) {
+      // Skill usada (mesmo errando) consome carga de orbe
+      try { _avtOrbConsumirCargas(AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador); } catch(_) {}
       mostrarToast(`💨 ${jogador.nome} errou o ataque! (d20: ${hitRoll})`, '');
       // Erro: colocar inimigo em perseguição
       const timer = AVT_STATE.npcTimers[ini.id];
@@ -9979,7 +10154,11 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       _avtIniciarPerseguicao(ini.id);
       return;
     }
-    const real = Math.ceil(danoTotal * critMult);
+    // Buffs de combate ativos no atacante (boost_dano/mod_dano em status_effects);
+    // a carga do orbe é consumida DEPOIS da leitura — a última carga ainda vale aqui.
+    const _entJogCargasOoc = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
+    const real = _avtAplicarBuffsDanoSaida(_entJogCargasOoc, Math.ceil(danoTotal * critMult));
+    try { _avtOrbConsumirCargas(_entJogCargasOoc); } catch(_) {}
 
     if (_isAreaOoc && _alvosAreaOoc?.length) {
       // ── PATH DE ÁREA OOC ────────────────────────────────────────────────
@@ -10011,13 +10190,14 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
           const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id) || alvA;
           if (entAlvA.hp <= 0) return;
 
-          entAlvA.hp = Math.max(0, entAlvA.hp - real);
+          const realAlvoOoc = _avtAplicarImunidadeDano(entAlvA, real);
+          entAlvA.hp = Math.max(0, entAlvA.hp - realAlvoOoc);
           _avtAplicarDanoPersistir(entAlvA, entAlvA.hp);
           const _batSyncA = _avtBatalhaDeEnt(entAlvA.id);
           if (_batSyncA) { const _ie = _batSyncA.iniciativa.find(e => e.id === entAlvA.id); if (_ie) _ie.hp = entAlvA.hp; }
           try { _avtBroadcast('avt_hp_update', { nome: entAlvA.nome, hp: entAlvA.hp, hpMax: entAlvA.hpMax }); } catch(_) {}
           if (isCrit) _avtTokenTremer(entAlvA);
-          _avtMostrarDanoAbaixoHp(entAlvA, real, isCrit);
+          _avtMostrarDanoAbaixoHp(entAlvA, realAlvoOoc, isCrit);
 
           if (sk?.efeitos_bonus?.length) {
             const entJogOocA = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
@@ -10041,7 +10221,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
                 _avtAplicarRastroEfeito(ef, entJogOocA, entAlvA);
               } else if (ef.tipo === 'empurrao') {
                 _avtAplicarEmpurrao(ef, entJogOocA, entAlvA, _avtBatalhaDeEnt?.(entAlvA.id) || null);
-              } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar','necromante'].includes(ef.tipo)) {
+              } else if (_avtStatusTipos({}, ['teleporte', 'necromante']).includes(ef.tipo)) {
                 if (!alvoProcA.status_effects) alvoProcA.status_effects = [];
                 const _oocEfA = { ...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
                   expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * cooldownEfMsA, _ooc: true,
@@ -10096,16 +10276,17 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
 
     } else {
       // ── PATH DE ALVO ÚNICO (original) ────────────────────────────────────
-      ini.hp = Math.max(0, ini.hp - real);
+      const realIni = _avtAplicarImunidadeDano(AVT_STATE.entidades.find(e=>e.id===ini.id) || ini, real);
+      ini.hp = Math.max(0, ini.hp - realIni);
       _avtAplicarDanoPersistir(ini, ini.hp);
       // Sincronizar HP no b.iniciativa para o caso do inimigo já estar em batalha
       const _batSyncPa = _avtBatalhaDeEnt(ini.id);
       if (_batSyncPa) { const _ieBat = _batSyncPa.iniciativa.find(e => e.id === ini.id); if (_ieBat) _ieBat.hp = ini.hp; }
       try { _avtBroadcast('avt_hp_update', { nome: ini.nome, hp: ini.hp, hpMax: ini.hpMax }); } catch(_) {}
       if (isCrit) _avtTokenTremer(AVT_STATE.entidades.find(e=>e.id===ini.id) || ini);
-      _avtMostrarDanoAbaixoHp(ini, real, isCrit);
+      _avtMostrarDanoAbaixoHp(ini, realIni, isCrit);
       const _critMsg = critMult === 2 ? ' ✦✦ CRÍTICO TOTAL!' : critMult === 1.5 ? ' ✦ CRÍTICO!' : critMult === 1.2 ? ' ⭐ CRÍTICO MENOR!' : '';
-      mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${_critMsg}`, 'ok');
+      mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${realIni} HP${_critMsg}`, 'ok');
       // Modificador: ataque básico em múltiplos alvos (OOC) — atinge alvos extras no alcance.
       if (!sk && (_abBuffs?.multiExtra || 0) > 0) {
         const _baseAlcOoc = (_abCfg?.alcance_celulas ?? _defAbCore.alcance_celulas) + (_abBuffs.alcanceBonus || 0);
@@ -10163,7 +10344,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
             _avtAplicarRastroEfeito(ef, entJogOoc, entIniOoc);
           } else if (ef.tipo === 'empurrao') {
             _avtAplicarEmpurrao(ef, entJogOoc, entIniOoc, _avtBatalhaDeEnt?.(entIniOoc.id) || null);
-          } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar','necromante','ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo)) {
+          } else if (_avtStatusTipos({}, ['teleporte', 'necromante']).includes(ef.tipo)) {
             if (!alvoProcOoc.status_effects) alvoProcOoc.status_effects = [];
             const _oocEfPa = {...ef, _turnos_restantes: ef.duracao_turnos??1,
               expiry_ms: Date.now() + (ef.duracao_turnos??1)*cooldownEfMs, _ooc:true,
@@ -11197,6 +11378,8 @@ function _avtTickEfeitosOOC(now) {
         _avtAplicarDanoPersistir(ent, ent.hp);
         _avtMostrarCuraAcimaDaHead(ent, cura);
         try { _avtBroadcast('avt_hp_update', { nome: ent.nome, hp: ent.hp, hpMax: ent.hpMax }); } catch(_) {}
+      } else if (ef.tipo === 'rec_atributo') {
+        try { _avtAplicarRecAtributo(ent, ef); } catch(_) {}
       }
       _avtRenderHpBar();
     }
@@ -11300,11 +11483,14 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
       timer.inactionTimer = 0;
       return;
     }
-    const dano = Math.ceil(danoTotal * critMult);
+    // Buffs de saída do NPC atacante + imunidade do defensor (para alvos não-jogador;
+    // jogadores aplicam a própria imunidade no dono, em _avtAplicarPlayerDamageLocal).
+    let dano = _avtAplicarBuffsDanoSaida(ini, Math.ceil(danoTotal * critMult));
     if (alvo.tipo === 'jogador') {
       // HP authority do dono — só emite intent
       try { _avtRTBroadcastPlayerDamage(alvo.nome, dano, ini.nome); } catch(_) {}
     } else {
+      dano = _avtAplicarImunidadeDano(AVT_STATE.entidades.find(e => e.id === alvo.id) || alvo, dano);
       alvo.hp = Math.max(0, alvo.hp - dano);
       _avtAplicarDanoPersistir(alvo, alvo.hp);
     }
@@ -11323,7 +11509,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
       sk.efeitos_bonus.forEach(ef => {
         if (ef.tipo === 'empurrao') {
           _avtAplicarEmpurrao(ef, ini, _entAlvoNpc, _avtBatalhaDeEnt?.(_entAlvoNpc.id) || null);
-        } else if (['stun','silence','dot','hot','fantasma','atravessar'].includes(ef.tipo)) {
+        } else if (_avtStatusTipos().includes(ef.tipo)) {
           if (!_entAlvoNpc.status_effects) _entAlvoNpc.status_effects = [];
           const _efNpc = {...ef, _turnos_restantes: ef.duracao_turnos??1,
             expiry_ms: Date.now()+(ef.duracao_turnos??1)*_coolEfNpc, _ooc:true};
@@ -12616,10 +12802,13 @@ function _avtProcessarDropsNpc(npcEnt) {
   const dropChance = lc.drop_item_chance != null ? lc.drop_item_chance : 0.10;
   if (Math.random() < dropChance) _avtGerarDropNpc(npcEnt);
   // Orbes de recurso (verde = HP, azul = mana)
-  const hpChance = lc.orbe_hp_chance != null ? lc.orbe_hp_chance : 0;
+  const hpChance = lc.orbe_hp_chance != null ? lc.orbe_hp_chance : 0.10;
   if (Math.random() < hpChance) _avtGerarOrbeNpc(npcEnt, 'orbe_hp', lc.orbe_hp_tiers);
-  const manaChance = lc.orbe_mana_chance != null ? lc.orbe_mana_chance : 0;
+  const manaChance = lc.orbe_mana_chance != null ? lc.orbe_mana_chance : 0.08;
   if (Math.random() < manaChance) _avtGerarOrbeNpc(npcEnt, 'orbe_mana', lc.orbe_mana_tiers);
+  // Orbe de efeito (roxo): concede um efeito de skill temporário ao coletor
+  const efChance = lc.orbe_efeito_chance != null ? lc.orbe_efeito_chance : 0.08;
+  if (Math.random() < efChance) _avtGerarOrbeEfeito(npcEnt);
 }
 
 // Gera um saco de loot no chão, na posição do NPC. Item ponderado por drop_rate.
@@ -12646,7 +12835,7 @@ function _avtGerarDropNpc(npcEnt) {
 
 // Gera um orbe de recurso (HP/mana) na posição do NPC, escolhendo um tier por
 // raridade. Tiers: [{ valor, modo:'abs'|'pct', raridade_pct }]. Default 1 tier.
-function _avtGerarOrbeNpc(npcEnt, tipo, tiers) {
+function _avtGerarOrbeNpc(npcEnt, tipo, tiers, idPrefix) {
   const lista = (Array.isArray(tiers) && tiers.length)
     ? tiers
     : [{ valor: tipo === 'orbe_hp' ? 25 : 20, modo: 'pct', raridade_pct: 100 }];
@@ -12654,7 +12843,7 @@ function _avtGerarOrbeNpc(npcEnt, tipo, tiers) {
   if (!tier) return;
   const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
   _avtSpawnObjMapa({
-    id: (tipo === 'orbe_hp' ? 'orbh_' : 'orbm_') + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    id: (idPrefix || (tipo === 'orbe_hp' ? 'orbh_' : 'orbm_')) + Date.now() + '_' + Math.floor(Math.random() * 1000),
     tipo,
     x: (npcEnt.x || 0) / dw,
     y: (npcEnt.y || 0) / dh,
@@ -12662,6 +12851,173 @@ function _avtGerarOrbeNpc(npcEnt, tipo, tiers) {
     modo: tier.modo === 'abs' ? 'abs' : 'pct',
   });
 }
+
+// Config efetiva dos orbes de efeito: defaults do registry mesclados com a
+// config salva em level_config.orbe_efeito.efeitos. Efeitos novos registrados
+// no effect-registry entram automaticamente com seus defaults.
+function _avtOrbeEfeitoPool() {
+  if (typeof EFFECT_REGISTRY === 'undefined') return [];
+  const salvo = AVT_STATE.rpg?.theme_json?.level_config?.orbe_efeito?.efeitos || {};
+  return EFFECT_REGISTRY.orbEligible().map(t => {
+    const cfg = salvo[t.id] || {};
+    return {
+      def: t,
+      ativo: cfg.ativo != null ? !!cfg.ativo : true,
+      peso: cfg.peso != null ? cfg.peso : (t.defaultWeight ?? 1),
+      modo: cfg.modo === 'cargas' || (cfg.modo == null && t.defaultModo === 'cargas') ? 'cargas' : 'tempo',
+      duracao_turnos: cfg.duracao_turnos != null ? cfg.duracao_turnos : (t.defaultDuracaoTurnos ?? 3),
+      cargas: cfg.cargas != null ? cfg.cargas : (t.defaultCargas ?? 3),
+    };
+  });
+}
+
+// Gera um orbe de efeito na posição dada (entidade morta ou célula {x,y} em
+// tiles). O payload completo do efeito viaja no objeto — os peers não precisam
+// de lookup no registry para renderizar/aplicar.
+function _avtGerarOrbeEfeito(posEnt, idPrefix) {
+  const pool = _avtOrbeEfeitoPool().filter(p => p.ativo && p.peso > 0);
+  if (!pool.length) return;
+  const sorteado = _avtEscolherPorPeso(pool, p => p.peso);
+  if (!sorteado) return;
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  _avtSpawnObjMapa({
+    id: (idPrefix || 'orbe_') + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    tipo: 'orbe_efeito',
+    x: (posEnt.x || 0) / dw,
+    y: (posEnt.y || 0) / dh,
+    efeito_id: sorteado.def.id,
+    efeito: { nome: sorteado.def.label, ...sorteado.def.buildEfeito() },
+    modo: sorteado.modo,
+    duracao_turnos: sorteado.duracao_turnos,
+    cargas: sorteado.cargas,
+    nome: sorteado.def.label,
+    icone: sorteado.def.icone || '🔮',
+    cor: sorteado.def.cor || '#b07ef0',
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spawns dinâmicos: o host da fase semeia baús, loot e orbes em células livres
+// do mapa, e repõe periodicamente. Objetos dinâmicos são contados por prefixo
+// de id (dynb_/dynl_/dyno_) para respeitar os máximos configurados.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Célula passável aleatória, sem entidade, sem objeto e longe dos jogadores.
+function _avtCelulaLivreAleatoria(opts = {}) {
+  const dungeon = AVT_STATE.dungeon;
+  if (!dungeon?.tiles) return null;
+  const tentativas = opts.tentativas ?? 40;
+  const distMin = opts.distMinJogador ?? 4;
+  const dw = dungeon.w || 1, dh = dungeon.h || 1;
+  const objetos = dungeon.render_data?.objetos || [];
+  const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && !e.escondido);
+  for (let i = 0; i < tentativas; i++) {
+    const x = Math.floor(Math.random() * dw);
+    const y = Math.floor(Math.random() * dh);
+    if (!_avtTilePassavel(x, y, dungeon)) continue;
+    if (_avtCelulaOcupada(x, y, null, null, false)) continue;
+    if (objetos.some(o => Math.round((o.x ?? 0) * dw) === x && Math.round((o.y ?? 0) * dh) === y)) continue;
+    if (jogadores.some(j => Math.max(Math.abs(Math.round(j.x) - x), Math.abs(Math.round(j.y) - y)) < distMin)) continue;
+    return { x, y };
+  }
+  return null;
+}
+
+// Config dos spawns dinâmicos com defaults balanceados.
+function _avtDynSpawnConfig() {
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  return {
+    ativo:       lc.dyn_spawn_ativo != null ? !!lc.dyn_spawn_ativo : true,
+    intervaloS:  lc.dyn_spawn_intervalo_s != null ? lc.dyn_spawn_intervalo_s : 90,
+    bauMax:      lc.dyn_bau_max   != null ? lc.dyn_bau_max   : 3,
+    bauChance:   lc.dyn_bau_chance != null ? lc.dyn_bau_chance : 0.35,
+    lootMax:     lc.dyn_loot_max   != null ? lc.dyn_loot_max   : 4,
+    lootChance:  lc.dyn_loot_chance != null ? lc.dyn_loot_chance : 0.50,
+    orbeMax:     lc.dyn_orbe_max   != null ? lc.dyn_orbe_max   : 3,
+    orbeChance:  lc.dyn_orbe_chance != null ? lc.dyn_orbe_chance : 0.30,
+  };
+}
+
+// Baú dinâmico: 1–2 itens droppable do catálogo + ouro escalado pelo nível da fase.
+function _avtGerarBauDinamico(pos) {
+  const catalog = (AVT_STATE.itemCatalog || []).filter(i => i.droppable);
+  const loot = [];
+  const nItens = catalog.length ? (1 + (Math.random() < 0.35 ? 1 : 0)) : 0;
+  for (let i = 0; i < nItens; i++) {
+    const item = _avtEscolherPorPeso(catalog, it => (it.drop_rate != null ? it.drop_rate : 1));
+    if (item) loot.push({ item_catalog_id: item.id, nome: item.nome, quantidade: 1 });
+  }
+  const nivel = AVT_STATE.dungeon?._npcLevel || 1;
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  _avtSpawnObjMapa({
+    id: 'dynb_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    tipo: 'bau', nome: 'Baú', aberto: false, trancado: false,
+    x: pos.x / dw, y: pos.y / dh,
+    loot_itens: loot,
+    ouro: (5 + Math.floor(Math.random() * 21)) * nivel,
+  });
+}
+
+// Saco de loot dinâmico (mesma forma do drop de NPC).
+function _avtGerarLootDinamico(pos) {
+  const catalog = (AVT_STATE.itemCatalog || []).filter(i => i.droppable);
+  if (!catalog.length) return;
+  const item = _avtEscolherPorPeso(catalog, i => (i.drop_rate != null ? i.drop_rate : 1));
+  if (!item) return;
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  _avtSpawnObjMapa({
+    id: 'dynl_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    tipo: 'loot',
+    x: pos.x / dw, y: pos.y / dh,
+    item_id: item.id, nome: item.nome,
+    icone: item.icone || '🎁', img_url: item.img_url || null,
+    quantidade: 1,
+  });
+}
+
+// Tick do spawner (host da fase). Primeiro tick após o load preenche até os
+// máximos (um roll de chance por vaga); depois repõe a cada intervalo.
+function _avtDynSpawnTick(now) {
+  if (!AVT_STATE.rpgId || !AVT_STATE.dungeon?.render_data) return;
+  if (now < (AVT_STATE._dynSpawnNextAt || 0)) return;
+  const cfg = _avtDynSpawnConfig();
+  AVT_STATE._dynSpawnNextAt = now + Math.max(15, cfg.intervaloS) * 1000;
+  if (!cfg.ativo) return;
+  if (typeof _avtSouHostDaFaseAtual === 'function' && !_avtSouHostDaFaseAtual()) return;
+
+  const rd = AVT_STATE.dungeon.render_data;
+  // Baús dinâmicos já abertos saem do mapa (mantém objetos[] enxuto).
+  const abertos = (rd.objetos || []).filter(o => String(o.id).startsWith('dynb_') && o.aberto);
+  if (abertos.length) {
+    rd.objetos = rd.objetos.filter(o => !(String(o.id).startsWith('dynb_') && o.aberto));
+    try { _avtNormalizarObjetosDungeon(AVT_STATE.dungeon); _avtSalvarDungeon(); } catch(_) {}
+    abertos.forEach(o => { try { _avtBroadcast('avt_obj_pickup', { objId: o.id }); } catch(_) {} });
+  }
+
+  const conta = (pfx) => (rd.objetos || []).filter(o => String(o.id).startsWith(pfx)).length;
+  for (let i = conta('dynb_'); i < cfg.bauMax; i++) {
+    if (Math.random() >= cfg.bauChance) continue;
+    const pos = _avtCelulaLivreAleatoria();
+    if (pos) _avtGerarBauDinamico(pos);
+  }
+  for (let i = conta('dynl_'); i < cfg.lootMax; i++) {
+    if (Math.random() >= cfg.lootChance) continue;
+    const pos = _avtCelulaLivreAleatoria();
+    if (pos) _avtGerarLootDinamico(pos);
+  }
+  for (let i = conta('dyno_'); i < cfg.orbeMax; i++) {
+    if (Math.random() >= cfg.orbeChance) continue;
+    const pos = _avtCelulaLivreAleatoria();
+    if (!pos) continue;
+    const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+    const r = Math.random();
+    if (r < 0.40) _avtGerarOrbeNpc(pos, 'orbe_hp', lc.orbe_hp_tiers, 'dyno_');
+    else if (r < 0.70) _avtGerarOrbeNpc(pos, 'orbe_mana', lc.orbe_mana_tiers, 'dyno_');
+    else if (typeof _avtGerarOrbeEfeito === 'function') _avtGerarOrbeEfeito(pos, 'dyno_');
+    else _avtGerarOrbeNpc(pos, 'orbe_hp', lc.orbe_hp_tiers, 'dyno_');
+  }
+}
+window._avtDynSpawnTick = _avtDynSpawnTick;
 
 // Debounced save of dungeon position to DB (so late-joining players see correct positions)
 var _avtSavePosTimers = {};
@@ -12990,7 +13346,10 @@ function _avtMostrarListaAlvosMobile(bat) {
 }
 
 function _avtMostrarSkillOverlay() {
-  if (typeof RPG_DATA !== 'undefined' && RPG_DATA?.skills?.length) AVT_STATE.skills = RPG_DATA.skills;
+  if (typeof RPG_DATA !== 'undefined' && RPG_DATA?.skills?.length) {
+    RPG_DATA.skills.forEach(s => { if (Array.isArray(s.efeitos_bonus)) s.efeitos_bonus = _avtNormalizarEfeitosSkill(s.efeitos_bonus); });
+    AVT_STATE.skills = RPG_DATA.skills;
+  }
   document.getElementById('avt-skill-overlay')?.remove();
   const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
@@ -13128,7 +13487,7 @@ async function _avtSkillOverlaySel(skId) {
           AVT_STATE._modoTeleporte = { entId: casterEnt.id };
           _avtAtivarIndicadorTeleporte(casterEnt, sk);
           mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
-        } else if (['dot','hot','stun','silence','fantasma','atravessar'].includes(ef.tipo)) {
+        } else if (_avtStatusTipos().includes(ef.tipo)) {
           const _efSelf = {...ef, _turnos_restantes: ef.duracao_turnos??1,
             expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs()};
           if (!casterEnt.status_effects) casterEnt.status_effects = [];
@@ -13161,6 +13520,7 @@ async function _avtSkillOverlaySel(skId) {
       _avtLog(`✨ ${casterEnt.nome} cura a si mesmo em ${val} HP`, b.id);
       try { _avtBroadcast('avt_hp_update', { nome: casterEnt.nome, hp: casterEnt.hp, hpMax: casterEnt.hpMax }); } catch(_) {}
     }
+    try { _avtOrbConsumirCargas(casterEnt); } catch(_) {}
     if (sk.cooldown_turnos > 0) {
       if (!b._cooldowns) b._cooldowns = {};
       b._cooldowns[ativo.id + '_' + skId] = sk.cooldown_turnos;
@@ -13347,6 +13707,19 @@ async function _avtExecutarAtaque() {
   if (_ativoSilEnt?._silenciado) {
     mostrarToast('🔇 Silenciado! Não pode atacar nem usar habilidades.', 'aviso');
     return;
+  }
+  // Efeito sem_ataque ativo bloqueia o ataque conforme o tipo configurado
+  // (todos | fisico | magico — comparado ao tipo_dano da skill/ataque escolhido).
+  const _semAtkEf = _ativoSilEnt?.status_effects?.find(ef =>
+    ef.tipo === 'sem_ataque' && (ef._turnos_restantes ?? 0) > 0);
+  if (_semAtkEf) {
+    const _skSemAtk = AVT_STATE._pendingSkillId ? AVT_STATE.skills.find(s => s.id === AVT_STATE._pendingSkillId) : null;
+    const _tipoDanoAtual = _skSemAtk?.tipo_dano || 'fisico';
+    const _bloqueiaTipo = _semAtkEf.sem_ataque_tipo || 'todos';
+    if (_bloqueiaTipo === 'todos' || _bloqueiaTipo === _tipoDanoAtual) {
+      mostrarToast(`🚫 ${ativo.nome} não pode atacar (${_bloqueiaTipo === 'todos' ? 'ataques bloqueados' : 'ataques ' + _bloqueiaTipo + 's bloqueados'})`, 'aviso');
+      return;
+    }
   }
 
   // Para invocações: resolve o nome do dono para dedução de recursos
@@ -13668,7 +14041,10 @@ async function _avtExecutarAtaque() {
 
   // ── Após animação dos dados, aplicar dano ───────────────────────────────
   _avtSetTimeout(() => {
+    const _entCasterCargas = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
     if (critMult === 0) {
+      // Skill usada (mesmo errando) consome carga de orbe
+      try { _avtOrbConsumirCargas(_entCasterCargas); } catch(_) {}
       const msg = `💨 ${ativo.nome} errou! (d20: ${hitRoll})${skEfetiva?.critico_negativo ? ' — ' + skEfetiva.critico_negativo : ''}`;
       _avtLog(msg, b.id);
       if (!_mobileAvtDisp) mostrarToast(msg, '');
@@ -13681,6 +14057,10 @@ async function _avtExecutarAtaque() {
         if (multConf > 0 && nivelAtivo > 1) real = Math.floor(real * (1 + (nivelAtivo - 1) * multConf));
       }
       real = Math.floor(real);
+      // Buffs de combate ativos no atacante (boost_dano/mod_dano em status_effects);
+      // a carga do orbe é consumida DEPOIS da leitura — a última carga ainda vale aqui.
+      real = _avtAplicarBuffsDanoSaida(_entCasterCargas, real);
+      try { _avtOrbConsumirCargas(_entCasterCargas); } catch(_) {}
       const tipoDano = skEfetiva?.tipo_dano || 'fisico';
 
       if (_isAreaAttack && _alvosAreaFinal) {
@@ -13703,16 +14083,17 @@ async function _avtExecutarAtaque() {
           const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id);
           setTimeout(() => {
             if (alvA.hp <= 0) return;
+            const realAlvo = _avtAplicarImunidadeDano(entAlvA || alvA, real);
             if (alvA.tipo === 'jogador') {
-              try { _avtRTBroadcastPlayerDamage(alvA.nome, real, ativo.nome); } catch(_) {}
+              try { _avtRTBroadcastPlayerDamage(alvA.nome, realAlvo, ativo.nome); } catch(_) {}
             } else {
-              alvA.hp = Math.max(0, alvA.hp - real);
+              alvA.hp = Math.max(0, alvA.hp - realAlvo);
               if (entAlvA) { entAlvA.hp = alvA.hp; _avtAplicarDanoPersistir(entAlvA, entAlvA.hp); }
               try { _avtBroadcast('avt_hp_update', { nome: alvA.nome, hp: alvA.hp, hpMax: alvA.hpMax }); } catch(_) {}
             }
             if (isCrit) _avtTokenTremer(entAlvA || alvA);
-            _avtMostrarDanoAbaixoHp(entAlvA || alvA, real, isCrit);
-            _avtLog(`  ↳ ${alvA.nome}: ${real} ${tipoDano}${isCrit?' ✦ CRÍTICO':''}`, b.id);
+            _avtMostrarDanoAbaixoHp(entAlvA || alvA, realAlvo, isCrit);
+            _avtLog(`  ↳ ${alvA.nome}: ${realAlvo} ${tipoDano}${isCrit?' ✦ CRÍTICO':''}`, b.id);
 
             if (sk?.efeitos_bonus?.length) {
               const entCasterAoe = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
@@ -13778,6 +14159,7 @@ async function _avtExecutarAtaque() {
         setTimeout(() => { _avtBroadcastBatalha(b); }, (_alvosAreaFinal.length * 80) + 100);
       } else {
         // ── Alvo único ────────────────────────────────────────────────────
+        real = _avtAplicarImunidadeDano(entAlvo || alvo, real);
         if (alvo.tipo === 'jogador') {
           try { _avtRTBroadcastPlayerDamage(alvo.nome, real, ativo.nome); } catch(_) {}
         } else {
@@ -14295,6 +14677,13 @@ function _avtProcessarStatusEffects(bat, ent) {
       case 'silence':
         if (entObj) entObj._silenciado = true;
         break;
+      case 'sem_movimento':
+        if (bat) bat.movimentoRestante[ent.id] = 0;
+        _avtLog(`🦶 ${ent.nome} está sem movimento.`, bat?.id);
+        break;
+      case 'rec_atributo':
+        try { _avtAplicarRecAtributo(entObj || ent, ef); } catch(_) {}
+        break;
       case 'teleporte':
         // Teleporte é ativado no início do turno (ver _avtTurnoAvancar), não aqui
         break;
@@ -14416,6 +14805,7 @@ async function _avtExecutarSkillEmAliado(skId, alvoId) {
     const ok = await _avtDescontarCustoSkill(ativo.nome, sk.custo_rsv);
     if (!ok) return;
   }
+  try { _avtOrbConsumirCargas(caster); } catch(_) {}
 
   // Aplicar efeitos da skill no aliado
   if (sk.efeitos_bonus?.length) {
@@ -14459,8 +14849,9 @@ async function _avtExecutarSkillEmAliado(skId, alvoId) {
             entAlvoObj.status_effects.push({..._efTpAl});
           }
         }
-      } else if (['fantasma','atravessar'].includes(ef.tipo)) {
-        // Apenas efeitos neutros são aplicados a aliados (negativos como stun/silence/dot são ignorados)
+      } else if (ef.tipo !== 'hot' && _avtStatusTipos({ positivos: true }).includes(ef.tipo)) {
+        // Apenas efeitos positivos/neutros são aplicados a aliados (hot tem ramo próprio acima;
+        // negativos como stun/silence/dot são ignorados)
         const _efEntryAl = {...ef, _turnos_restantes: ef.duracao_turnos??1,
           expiry_ms: Date.now() + (ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs()};
         if (!entAlvo.status_effects) entAlvo.status_effects = [];
@@ -14635,7 +15026,13 @@ function _avtTurnoAvancar(bat) {
       }
     }
 
-    bat.movimentoRestante[novoAtivo.id] = _hasActiveStun ? 0 : _avtGetMovimentoMax(novoAtivo);
+    const _hasSemMov = novoAtivo.status_effects?.some(
+      ef => ef.tipo === 'sem_movimento' && (ef._turnos_restantes ?? 0) > 0
+    );
+    bat.movimentoRestante[novoAtivo.id] = (_hasActiveStun || _hasSemMov) ? 0 : _avtGetMovimentoMax(novoAtivo);
+    if (_hasSemMov && !_hasActiveStun && novoAtivo.tipo === 'jogador') {
+      mostrarToast(`🦶 ${novoAtivo.nome} está sem movimento neste turno.`, 'aviso', 1500);
+    }
 
     // Avatar: pular turno automaticamente
     if (novoAtivo.tipo === 'avatar') {
@@ -14797,6 +15194,8 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         _avtLog(`💨 ${npc.nome} errou! (d20: ${hitRoll})`, bat.id);
       } else {
         let real = Math.ceil(danoTotal * critMult);
+        // Buffs de combate ativos no NPC atacante (boost_dano/mod_dano)
+        real = _avtAplicarBuffsDanoSaida(entNpc || npc, real);
 
         // ── Ataque em área do NPC: aplica dano a TODOS os alvos na área ─────────
         const _npcTipoArea = sk?.tipo_area || null;
@@ -14845,17 +15244,18 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
                 _avtRenderHpBar();
                 return;
               }
+              const realNpcAlvo = _avtAplicarImunidadeDano(entAlvA, real);
               if (alvA.tipo === 'jogador') {
-                try { _avtRTBroadcastPlayerDamage(alvA.nome, real, npc.nome); } catch(_) {}
+                try { _avtRTBroadcastPlayerDamage(alvA.nome, realNpcAlvo, npc.nome); } catch(_) {}
               } else {
-                alvA.hp = Math.max(0, alvA.hp - real);
+                alvA.hp = Math.max(0, alvA.hp - realNpcAlvo);
                 if (entAlvA) { entAlvA.hp = alvA.hp; _avtAplicarDanoPersistir(entAlvA, entAlvA.hp); }
                 if (initA) initA.hp = alvA.hp;
                 try { _avtBroadcast('avt_hp_update', { nome: alvA.nome, hp: alvA.hp, hpMax: alvA.hpMax }); } catch(_) {}
               }
               if (isCrit) _avtTokenTremer(entAlvA);
-              _avtMostrarDanoAbaixoHp(entAlvA, real, isCrit);
-              _avtLog(`  ↳ ${alvA.nome}: ${real} ${tipoDano}${isCrit ? ' ✦ CRÍTICO' : ''}`, bat.id);
+              _avtMostrarDanoAbaixoHp(entAlvA, realNpcAlvo, isCrit);
+              _avtLog(`  ↳ ${alvA.nome}: ${realNpcAlvo} ${tipoDano}${isCrit ? ' ✦ CRÍTICO' : ''}`, bat.id);
               // Efeitos de skill por alvo (ignora efeitos self/único como cura/avatar/teleporte_alvo)
               if (sk?.efeitos_bonus?.length) {
                 sk.efeitos_bonus.forEach(ef => {
@@ -14890,6 +15290,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         }
 
         const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
+        real = _avtAplicarImunidadeDano(entAlvo || skillAlvo, real);
         if (skillAlvo.tipo === 'jogador') {
           try { _avtRTBroadcastPlayerDamage(skillAlvo.nome, real, npc.nome); } catch(_) {}
         } else {
@@ -16402,7 +16803,7 @@ async function _avtColetarObjsNaPosicao(jogador) {
   const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
   const jx = Math.round(jogador.x), jy = Math.round(jogador.y);
   const coletaveis = rd.objetos.filter(o => {
-    if (o.tipo !== 'loot' && o.tipo !== 'orbe_hp' && o.tipo !== 'orbe_mana') return false;
+    if (o.tipo !== 'loot' && o.tipo !== 'orbe_hp' && o.tipo !== 'orbe_mana' && o.tipo !== 'orbe_efeito') return false;
     return Math.round((o.x ?? 0) * dw) === jx && Math.round((o.y ?? 0) * dh) === jy;
   });
   if (!coletaveis.length) return;
@@ -16447,11 +16848,90 @@ async function _avtColetarObjsNaPosicao(jogador) {
         try { _avtBroadcast('avt_rsv_update', { nome: jogador.nome, atributos: { ...atrs } }); } catch(_) {}
         mostrarToast(`💙 +${add} ${rec.nome}`, 'sucesso');
       }
+    } else if (obj.tipo === 'orbe_efeito' && obj.efeito) {
+      _avtAplicarOrbeEfeito(jogador, obj);
     }
     try { _avtBroadcast('avt_obj_pickup', { objId: obj.id }); } catch(_) {}
   }
   try { _avtSalvarDungeon(); } catch(_) {}
   try { if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender(); } catch(_) {}
+}
+
+// Aplica o efeito de um orbe de efeito coletado ao jogador, pelo mesmo pipeline
+// de status_effects do self-cast OOC. Suporta dois modos:
+//  - 'tempo':  dura N turnos em combate / N * cooldown-de-efeito fora de combate;
+//  - 'cargas': dura até as próximas N skills usadas (_cargas_restantes, consumidas
+//              em _avtOrbConsumirCargas nos pontos de cast).
+function _avtAplicarOrbeEfeito(entJog, obj) {
+  if (!entJog || !obj?.efeito) return;
+  const modo = obj.modo === 'cargas' ? 'cargas' : 'tempo';
+  const dur = Math.max(1, parseInt(obj.duracao_turnos) || 3);
+  const cargas = Math.max(1, parseInt(obj.cargas) || 3);
+  // Cargas não expiram por tempo: TTL longo (1h) apenas como salvaguarda.
+  const expiryMs = modo === 'cargas'
+    ? Date.now() + 3600 * 1000
+    : Date.now() + dur * _avtGetEfeitoCooldownMs();
+  const ef = {
+    ...obj.efeito,
+    nome: obj.nome || obj.efeito.nome || 'Orbe de Efeito',
+    cor: obj.cor || obj.efeito.cor,
+    duracao_turnos: dur,
+    _turnos_restantes: modo === 'cargas' ? 999 : dur,
+    expiry_ms: expiryMs,
+    _ooc: true,
+    _orb: true,
+    ...(modo === 'cargas' ? { _cargas_restantes: cargas } : {}),
+  };
+  if (!entJog.status_effects) entJog.status_effects = [];
+  // Reaplicar o mesmo tipo substitui a instância anterior do orbe (não empilha).
+  entJog.status_effects = entJog.status_effects.filter(e => !(e._orb && e.tipo === ef.tipo));
+  entJog.status_effects.push(ef);
+  if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+  AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects.filter(r => !(r.entId === entJog.id && r.ef?._orb && r.ef?.tipo === ef.tipo));
+  const oocEntry = { entId: entJog.id, entNome: entJog.nome, ef: { ...ef }, lastTickAt: Date.now() };
+  AVT_STATE._oocStatusEffects.push(oocEntry);
+  if (ef.tipo === 'fantasma')   entJog._fantasma   = true;
+  if (ef.tipo === 'atravessar') entJog._atravessar = true;
+  // P2P não-host: registrar no host (autoridade de ticks OOC), mesmo fluxo do self-cast
+  if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost()) {
+    try {
+      RTNet.sendToHost('avt_player_action', {
+        tipo: 'ooc_effect_apply',
+        entId: entJog.id, entNome: entJog.nome,
+        oocEntry,
+        statusEffect: ef,
+        atravessar: ef.tipo === 'atravessar', fantasma: ef.tipo === 'fantasma',
+      });
+    } catch(_) {}
+  }
+  const durLabel = modo === 'cargas' ? `próximas ${cargas} skills` : `${dur} turnos`;
+  mostrarToast(`🔮 ${ef.nome}! (${durLabel})`, 'sucesso');
+  try { _avtRenderHpBar(); } catch(_) {}
+}
+
+// Consome 1 carga de cada efeito de orbe "por skills usadas" do conjurador.
+// Chamado uma vez por cast confirmado (combate e OOC). Em 0 cargas o efeito
+// é removido (status_effects + _oocStatusEffects + flags derivadas).
+function _avtOrbConsumirCargas(casterEnt) {
+  if (!casterEnt?.status_effects?.length) return;
+  const esgotados = [];
+  casterEnt.status_effects.forEach(ef => {
+    if (!ef._orb || ef._cargas_restantes == null) return;
+    ef._cargas_restantes -= 1;
+    // Espelhar contagem no registro OOC (HUD lê de lá fora de combate)
+    const rec = (AVT_STATE._oocStatusEffects || []).find(r => r.entId === casterEnt.id && r.ef?._orb && r.ef?.tipo === ef.tipo);
+    if (rec) rec.ef._cargas_restantes = ef._cargas_restantes;
+    if (ef._cargas_restantes <= 0) esgotados.push(ef.tipo);
+  });
+  if (!esgotados.length) return;
+  casterEnt.status_effects = casterEnt.status_effects.filter(ef => !(ef._orb && ef._cargas_restantes != null && ef._cargas_restantes <= 0));
+  AVT_STATE._oocStatusEffects = (AVT_STATE._oocStatusEffects || []).filter(r =>
+    !(r.entId === casterEnt.id && r.ef?._orb && esgotados.includes(r.ef.tipo)));
+  esgotados.forEach(t => {
+    if (t === 'fantasma')   delete casterEnt._fantasma;
+    if (t === 'atravessar') delete casterEnt._atravessar;
+  });
+  mostrarToast('🔮 Efeito de orbe esgotado', 'aviso', 2000);
 }
 
 // Open a chest at player's position
@@ -16462,7 +16942,32 @@ async function avtAbrirBau(bauId) {
   const bau = rd?.objetos?.find(o => o.id === bauId || String(o.id) === String(bauId));
   if (!bau) { mostrarToast('Baú não encontrado', 'erro'); return; }
   if (bau.aberto) { mostrarToast('Este baú já foi aberto', 'aviso'); return; }
+  // O botão pode ficar no painel após o jogador sair da célula — revalida posição.
+  const bauAqui = _avtBauNaPosicao(Math.round(jogador.x), Math.round(jogador.y));
+  if (!bauAqui || String(bauAqui.id) !== String(bau.id)) {
+    mostrarToast('Aproxime-se do baú para abri-lo', 'aviso');
+    avtJogadorPainelRender();
+    return;
+  }
+  if (bau.trancado) {
+    const resp = prompt(`🔐 ${bau.nome || 'Baú'} está trancado. Palavra-chave:`);
+    if (resp == null) return;
+    if (resp.trim().toLowerCase() !== String(bau.chave_palavra || '').trim().toLowerCase()) {
+      mostrarToast('🔐 Palavra-chave incorreta', 'aviso');
+      return;
+    }
+    bau.trancado = false;
+    mostrarToast('🔓 Baú destrancado!', 'sucesso');
+  }
   bau.aberto = true;
+  // Mantém o array de origem do gerador (render_data.baus) coerente para o
+  // fase-renderer da campanha e recomputa _chestPositions (arte de tile).
+  try {
+    const bSrc = (rd.baus || []).find(b => String(b.id) === String(bau.id));
+    if (bSrc) bSrc.aberto = true;
+    _avtNormalizarObjetosDungeon(AVT_STATE.dungeon);
+    _avtSalvarDungeon();
+  } catch(_) {}
   _avtSfxPosicional('chest_open', jogador, 0.7);
 
   const char = AVT_STATE.chars.find(c => c.nome === jogador.nome);
@@ -16524,6 +17029,9 @@ function avtReceberBauAberto({ bauId, jogadorNome, faseId } = {}) {
     const bau = (rd.objetos || []).find(o => o.id === bauId || String(o.id) === String(bauId));
     if (bau) {
       bau.aberto = true;
+      const bSrc = (rd.baus || []).find(b => String(b.id) === String(bau.id));
+      if (bSrc) bSrc.aberto = true;
+      _avtNormalizarObjetosDungeon(AVT_STATE.dungeon);
       // Som posicional: rangido do baú atenuado pela distância do ouvinte
       const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
       _avtSfxPosicional('chest_open', { x: (bau.x ?? 0) * dw, y: (bau.y ?? 0) * dh }, 0.7);
@@ -20606,12 +21114,15 @@ function _avtMpConteudoAba() {
       const hpAttrAtual   = lc.hp_attr ?? 'Constituição';
       const hpMultAtual   = lc.hp_attr_mult ?? 4;
       const dropItemPct = Math.round((lc.drop_item_chance != null ? lc.drop_item_chance : 0.10) * 100);
-      const orbeHpPct   = Math.round((lc.orbe_hp_chance != null ? lc.orbe_hp_chance : 0) * 100);
-      const orbeManaPct = Math.round((lc.orbe_mana_chance != null ? lc.orbe_mana_chance : 0) * 100);
+      const orbeHpPct   = Math.round((lc.orbe_hp_chance != null ? lc.orbe_hp_chance : 0.10) * 100);
+      const orbeManaPct = Math.round((lc.orbe_mana_chance != null ? lc.orbe_mana_chance : 0.08) * 100);
+      const orbeEfPct   = Math.round((lc.orbe_efeito_chance != null ? lc.orbe_efeito_chance : 0.08) * 100);
+      const semDroppable = !(AVT_STATE.itemCatalog || []).some(i => i.droppable);
       return `
       <div class="avt-mp-secao">
         <div class="avt-mp-label">💀 Drops de Inimigos (chances)</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">Chance de cada inimigo, ao morrer, deixar cair um item (entre os marcados como "Pode dropar" no catálogo) e/ou orbes de recurso no chão. Os jogadores coletam ao passar por cima. Configure o valor de cada orbe na aba 🎒 Itens.</div>
+        ${semDroppable ? `<div style="font-size:0.62rem;color:#e0a54a;margin-bottom:8px">⚠ Nenhum item do catálogo está marcado como "Pode dropar" — inimigos não deixarão itens no chão.</div>` : ''}
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <input type="number" id="avt-mp-drop-item-pct" min="0" max="100" step="1" value="${dropItemPct}"
             style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
@@ -20622,13 +21133,52 @@ function _avtMpConteudoAba() {
             style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(46,204,113,0.3);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
           <span style="font-size:0.7rem;color:#2ecc71">💚 % chance de orbe de HP</span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <input type="number" id="avt-mp-orbe-mana-pct" min="0" max="100" step="1" value="${orbeManaPct}"
             style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
           <span style="font-size:0.7rem;color:#4fa3d1">💙 % chance de orbe de mana</span>
         </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-orbe-efeito-pct" min="0" max="100" step="1" value="${orbeEfPct}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(176,126,240,0.35);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#b07ef0">🔮 % chance de orbe de efeito</span>
+        </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDropsConfig()" style="width:100%">💾 Salvar</button>
       </div>
+      ${(() => {
+        const d = _avtDynSpawnConfig();
+        const inCss = 'width:64px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center';
+        return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🌱 Spawns Dinâmicos no Mapa</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">O host da fase semeia baús, loot e orbes em células livres ao carregar o mapa e repõe a cada intervalo. "Chance" é a probabilidade de preencher cada vaga livre por ciclo.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="checkbox" id="avt-mp-dyn-ativo" ${d.ativo ? 'checked' : ''}>
+          <span style="font-size:0.7rem;color:#7a92aa">Ativado</span>
+          <input type="number" id="avt-mp-dyn-intervalo" min="15" max="3600" step="5" value="${d.intervaloS}" style="${inCss};margin-left:auto">
+          <span style="font-size:0.7rem;color:#7a92aa">intervalo (s)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="number" id="avt-mp-dyn-bau-max" min="0" max="20" value="${d.bauMax}" style="${inCss}">
+          <span style="font-size:0.7rem;color:#c8a84b">📦 máx. baús</span>
+          <input type="number" id="avt-mp-dyn-bau-pct" min="0" max="100" value="${Math.round(d.bauChance * 100)}" style="${inCss}">
+          <span style="font-size:0.7rem;color:#7a92aa">% chance</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="number" id="avt-mp-dyn-loot-max" min="0" max="20" value="${d.lootMax}" style="${inCss}">
+          <span style="font-size:0.7rem;color:#e0c04a">🎁 máx. loot</span>
+          <input type="number" id="avt-mp-dyn-loot-pct" min="0" max="100" value="${Math.round(d.lootChance * 100)}" style="${inCss}">
+          <span style="font-size:0.7rem;color:#7a92aa">% chance</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-dyn-orbe-max" min="0" max="20" value="${d.orbeMax}" style="${inCss}">
+          <span style="font-size:0.7rem;color:#b07ef0">🔮 máx. orbes</span>
+          <input type="number" id="avt-mp-dyn-orbe-pct" min="0" max="100" value="${Math.round(d.orbeChance * 100)}" style="${inCss}">
+          <span style="font-size:0.7rem;color:#7a92aa">% chance</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDynSpawnConfig()" style="width:100%">💾 Salvar</button>
+      </div>`;
+      })()}
       <div class="avt-mp-secao">
         <div class="avt-mp-label">🏃 Velocidade de Corrida (ms/célula)</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">Tempo base (ms) para percorrer uma célula a 100% de velocidade (Destreza 10). Define também a velocidade de perseguição dos NPCs. Menor = mais rápido.</div>
@@ -21480,6 +22030,7 @@ function avtReceberDungeonUpdate(p) {
   if (p.faseId !== minhaFase || !p.dungeon) return;
   AVT_STATE.dungeon = p.dungeon;
   AVT_STATE.dungeon._portasInternas = p.dungeon._portasInternas || [];
+  try { _avtNormalizarObjetosDungeon(AVT_STATE.dungeon); } catch(_) {}
   AVT_STATE._tilesetConfig = AVT_STATE.dungeon.tileset_config || AVT_STATE._tilesetConfig;
   // FIX F7: edição de tiles em sessão precisa invalidar os bakes estáticos
   // (camada PIXI, tiles 2D legados e minimapa) mesmo sem mudar dimensões/fase.
@@ -21633,9 +22184,10 @@ async function _avtSalvarDropsConfig() {
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
   const clamp = (id, def) => Math.max(0, Math.min(100, parseInt(document.getElementById(id)?.value))) / 100;
   const cfg = {
-    drop_item_chance: isNaN(clamp('avt-mp-drop-item-pct')) ? 0.10 : clamp('avt-mp-drop-item-pct'),
-    orbe_hp_chance:   isNaN(clamp('avt-mp-orbe-hp-pct'))   ? 0    : clamp('avt-mp-orbe-hp-pct'),
-    orbe_mana_chance: isNaN(clamp('avt-mp-orbe-mana-pct')) ? 0    : clamp('avt-mp-orbe-mana-pct'),
+    drop_item_chance:   isNaN(clamp('avt-mp-drop-item-pct'))   ? 0.10 : clamp('avt-mp-drop-item-pct'),
+    orbe_hp_chance:     isNaN(clamp('avt-mp-orbe-hp-pct'))     ? 0.10 : clamp('avt-mp-orbe-hp-pct'),
+    orbe_mana_chance:   isNaN(clamp('avt-mp-orbe-mana-pct'))   ? 0.08 : clamp('avt-mp-orbe-mana-pct'),
+    orbe_efeito_chance: isNaN(clamp('avt-mp-orbe-efeito-pct')) ? 0.08 : clamp('avt-mp-orbe-efeito-pct'),
   };
   Object.assign(rpg.theme_json.level_config, cfg);
   try {
@@ -21645,6 +22197,40 @@ async function _avtSalvarDropsConfig() {
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarDropsConfig = _avtSalvarDropsConfig;
+
+// Salva a config dos spawns dinâmicos de baús/loot/orbes.
+async function _avtSalvarDynSpawnConfig() {
+  const rpg = AVT_STATE.rpg;
+  if (!rpg || !AVT_STATE.rpgId) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  const pct = (id, def) => {
+    const v = parseInt(document.getElementById(id)?.value);
+    return isNaN(v) ? def : Math.max(0, Math.min(100, v)) / 100;
+  };
+  const num = (id, def, min, max) => {
+    const v = parseInt(document.getElementById(id)?.value);
+    return isNaN(v) ? def : Math.max(min, Math.min(max, v));
+  };
+  const cfg = {
+    dyn_spawn_ativo:       !!document.getElementById('avt-mp-dyn-ativo')?.checked,
+    dyn_spawn_intervalo_s: num('avt-mp-dyn-intervalo', 90, 15, 3600),
+    dyn_bau_max:           num('avt-mp-dyn-bau-max', 3, 0, 20),
+    dyn_bau_chance:        pct('avt-mp-dyn-bau-pct', 0.35),
+    dyn_loot_max:          num('avt-mp-dyn-loot-max', 4, 0, 20),
+    dyn_loot_chance:       pct('avt-mp-dyn-loot-pct', 0.50),
+    dyn_orbe_max:          num('avt-mp-dyn-orbe-max', 3, 0, 20),
+    dyn_orbe_chance:       pct('avt-mp-dyn-orbe-pct', 0.30),
+  };
+  Object.assign(rpg.theme_json.level_config, cfg);
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    try { _avtBroadcast('avt_level_config_update', { config: cfg }); } catch(_) {}
+    AVT_STATE._dynSpawnNextAt = 0; // aplica já no próximo frame
+    mostrarToast('Spawns dinâmicos salvos!', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtSalvarDynSpawnConfig = _avtSalvarDynSpawnConfig;
 
 // Editor das variantes (tiers) de orbes de HP/mana: até 3 por recurso.
 // Cada tier: { valor, modo:'abs'|'pct', raridade_pct }.
@@ -21692,6 +22278,21 @@ function _avtOrbeConfigEditor() {
         <div style="font-size:0.72rem;color:#4fa3d1;margin-bottom:6px">💙 Orbes de Mana</div>
         ${rowsFor('mana', lc.orbe_mana_tiers, '#4fa3d1')}
       </div>
+      <div style="margin-bottom:14px">
+        <div style="font-size:0.72rem;color:#b07ef0;margin-bottom:4px">🔮 Orbes de Efeito</div>
+        <div style="font-size:0.6rem;color:#7a92aa;margin-bottom:6px">Concedem um efeito de skill ao coletor, por turnos (⏱) ou pelas próximas N skills usadas (⚡). O <b>peso</b> é a raridade relativa. Efeitos de skill novos criados no sistema entram aqui automaticamente.</div>
+        ${_avtOrbeEfeitoPool().map(p => `
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+            <input type="checkbox" id="avt-orbe-ef-on-${p.def.id}" ${p.ativo ? 'checked' : ''}>
+            <span style="font-size:0.62rem;color:${p.def.cor || '#b07ef0'};flex:1;min-width:120px">${p.def.icone || '🔮'} ${p.def.label}</span>
+            <input type="number" id="avt-orbe-ef-peso-${p.def.id}" min="0" value="${p.peso}" title="peso" style="width:52px;${inputCss}">
+            <select id="avt-orbe-ef-modo-${p.def.id}" style="width:66px;${inputCss}">
+              <option value="tempo" ${p.modo === 'tempo' ? 'selected' : ''}>⏱ turnos</option>
+              <option value="cargas" ${p.modo === 'cargas' ? 'selected' : ''}>⚡ skills</option>
+            </select>
+            <input type="number" id="avt-orbe-ef-dur-${p.def.id}" min="1" value="${p.modo === 'cargas' ? p.cargas : p.duracao_turnos}" title="duração/cargas" style="width:46px;${inputCss}">
+          </div>`).join('')}
+      </div>
       <div style="display:flex;gap:8px">
         <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtSalvarOrbeTiers()">💾 Salvar</button>
         <button class="avt-mp-btn" style="flex:1" onclick="document.getElementById('avt-orbe-config-overlay').remove()">Cancelar</button>
@@ -21717,6 +22318,26 @@ async function _avtSalvarOrbeTiers() {
     return tiers;
   };
   const cfg = { orbe_hp_tiers: coletar('hp'), orbe_mana_tiers: coletar('mana') };
+  // Orbes de efeito: uma entrada por tipo elegível do registry (novos tipos
+  // aparecem sozinhos no editor; só o que difere dos defaults precisa existir aqui)
+  if (typeof EFFECT_REGISTRY !== 'undefined') {
+    const efeitos = {};
+    EFFECT_REGISTRY.orbEligible().forEach(t => {
+      const on   = document.getElementById(`avt-orbe-ef-on-${t.id}`);
+      const peso = parseFloat(document.getElementById(`avt-orbe-ef-peso-${t.id}`)?.value);
+      const modo = document.getElementById(`avt-orbe-ef-modo-${t.id}`)?.value === 'cargas' ? 'cargas' : 'tempo';
+      const dur  = parseInt(document.getElementById(`avt-orbe-ef-dur-${t.id}`)?.value);
+      if (!on) return; // linha não renderizada: mantém defaults
+      efeitos[t.id] = {
+        ativo: !!on.checked,
+        peso: isNaN(peso) ? (t.defaultWeight ?? 1) : peso,
+        modo,
+        duracao_turnos: modo === 'tempo' && !isNaN(dur) ? Math.max(1, dur) : (t.defaultDuracaoTurnos ?? 3),
+        cargas: modo === 'cargas' && !isNaN(dur) ? Math.max(1, dur) : (t.defaultCargas ?? 3),
+      };
+    });
+    cfg.orbe_efeito = { efeitos };
+  }
   Object.assign(rpg.theme_json.level_config, cfg);
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
@@ -23364,6 +23985,8 @@ async function _avtCarregarFaseInner(faseId, opts = {}) {
     // (apontaria para entidades que não existem aqui).
     AVT_STATE.batalhas  = [];
   }
+  _avtNormalizarObjetosDungeon(AVT_STATE.dungeon);
+  AVT_STATE._dynSpawnNextAt = 0;
   // FIX F8: porta boss→próxima fase da fase anterior não vale nesta.
   AVT_STATE._portaProximaFase = null;
   // Bakes estáticos (tiles 2D legado + minimapa) são por fase.
@@ -29390,6 +30013,7 @@ try{
       const ent = AVT_STATE.entidades.find(e => e.nome === nome && e.tipo === 'jogador');
       if (ent) {
         const hpAntes = ent.hp;
+        dano = typeof _avtAplicarImunidadeDano === 'function' ? _avtAplicarImunidadeDano(ent, dano) : dano;
         ent.hp = Math.max(0, ent.hp - dano);
         if (typeof _avtAplicarDanoPersistir === 'function') {
           try { _avtAplicarDanoPersistir(ent, ent.hp); } catch(_) {}
@@ -29421,6 +30045,7 @@ try{
     const ent = AVT_STATE.entidades.find(e => e.nome === nome && e.tipo === 'jogador');
     if (!ent) return;
     const hpAntes = ent.hp;
+    dano = typeof _avtAplicarImunidadeDano === 'function' ? _avtAplicarImunidadeDano(ent, dano) : dano;
     ent.hp = Math.max(0, ent.hp - dano);
     if (typeof _avtAplicarDanoPersistir === 'function') {
       try { _avtAplicarDanoPersistir(ent, ent.hp); } catch(_) {}
