@@ -99,7 +99,7 @@ const _AVT_EVENTOS_DE_FASE = new Set([
   'avt_combate_inicio', 'avt_batalha_update', 'avt_combate_fim', 'avt_combate_join',
   'avt_convite_combate', 'avt_bau_aberto', 'avt_obj_spawn', 'avt_obj_pickup',
   'avt_skill_anim', 'avt_attack_anim', 'avt_efeito_anim_start', 'avt_efeito_anim_stop',
-  'avt_dano_visual', 'avt_rastro_marcar', 'avt_entidade_nova',
+  'avt_dano_visual', 'avt_dano_visual_batch', 'avt_rastro_marcar', 'avt_entidade_nova',
 ]);
 
 // Helper central de broadcast para Modo Aventura.
@@ -13696,6 +13696,9 @@ async function _avtExecutarAtaque() {
         // rótulo de área não resolve entidade nos peers e _areaCentro/_areaLinha são locais.
         if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAtacanteAnim||ativo).nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null }); } catch(_) {} }
 
+        // Números de dano nos peers: 1 broadcast em lote (o stagger de 80ms é
+        // reproduzido no receptor) em vez de 1 evento por alvo dentro do loop.
+        try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _alvosAreaFinal.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
         _alvosAreaFinal.forEach((alvA, idxA) => {
           const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id);
           setTimeout(() => {
@@ -13709,7 +13712,6 @@ async function _avtExecutarAtaque() {
             }
             if (isCrit) _avtTokenTremer(entAlvA || alvA);
             _avtMostrarDanoAbaixoHp(entAlvA || alvA, real, isCrit);
-            _avtBroadcast('avt_dano_visual', { alvoNome: alvA.nome, dano: real, isCrit, critMult });
             _avtLog(`  ↳ ${alvA.nome}: ${real} ${tipoDano}${isCrit?' ✦ CRÍTICO':''}`, b.id);
 
             if (sk?.efeitos_bonus?.length) {
@@ -13850,6 +13852,10 @@ async function _avtExecutarAtaque() {
           const _extrasMulti = b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0 && e.id !== alvo.id &&
               Math.max(Math.abs(Math.round(e.x) - _cxM), Math.abs(Math.round(e.y) - _cyM)) <= _raioMulti)
             .slice(0, _abBuffs.multiExtra);
+          // Números de dano nos peers: lote único (stagger reproduzido no receptor).
+          if (_extrasMulti.length) {
+            try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _extrasMulti.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
+          }
           _extrasMulti.forEach((alvX, idxX) => {
             const entAlvX = AVT_STATE.entidades.find(e => e.id === alvX.id);
             setTimeout(() => {
@@ -13873,7 +13879,6 @@ async function _avtExecutarAtaque() {
               }
               if (isCrit) _avtTokenTremer(entAlvX || alvX);
               _avtMostrarDanoAbaixoHp(entAlvX || alvX, real, isCrit);
-              _avtBroadcast('avt_dano_visual', { alvoNome: alvX.nome, dano: real, isCrit, critMult });
               _avtLog(`  ↳ ${alvX.nome}: ${real} ${tipoDano} (multi-alvo)`, b.id);
               if (alvX.hp <= 0) {
                 _avtLog(`💀 ${alvX.nome} derrotado!`, b.id);
@@ -13938,6 +13943,21 @@ function avtReceberDanoVisual({ alvoNome, dano, isCrit, faseId } = {}) {
   if (alvo) _avtMostrarDanoAcimaDaHead(alvo, dano, isCrit);
 }
 window.avtReceberDanoVisual = avtReceberDanoVisual;
+
+// Versão em lote (ataques em área/multi-alvo): um único broadcast com a lista de
+// alvos em vez de N eventos; o stagger visual é reproduzido localmente com
+// stepMs (padrão 80ms, o mesmo dos emissores). O handler unitário acima
+// permanece registrado para compat com hosts em bundle antigo.
+function avtReceberDanoVisualBatch({ alvoNomes, dano, isCrit, stepMs, faseId } = {}) {
+  if (!_avtMinhaFase(faseId)) return;
+  if (!Array.isArray(alvoNomes) || !alvoNomes.length) return;
+  const passo = (typeof stepMs === 'number' && stepMs >= 0) ? stepMs : 80;
+  alvoNomes.forEach((alvoNome, i) => {
+    // faseId re-checado no unitário: a fase local pode mudar durante o stagger.
+    setTimeout(() => avtReceberDanoVisual({ alvoNome, dano, isCrit, faseId }), i * passo);
+  });
+}
+window.avtReceberDanoVisualBatch = avtReceberDanoVisualBatch;
 
 // Receive HP sync broadcast — keeps non-host clients HP bars accurate during chase
 function avtReceberHpUpdate({ nome, hp, hpMax }) {
@@ -14810,6 +14830,8 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
           const _delayMorteNpcArea = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entNpc), _avtEntViva(entNpc), true) : 0;
           if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:_areaLabelNpc }); } catch(_) {} }
 
+          // Números de dano nos peers: lote único (stagger reproduzido no receptor).
+          try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _alvosNpcArea.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
           _alvosNpcArea.forEach((alvA, idxA) => {
             const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id) || alvA;
             const initA   = bat.iniciativa.find(e => e.id === alvA.id);
@@ -14833,7 +14855,6 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
               }
               if (isCrit) _avtTokenTremer(entAlvA);
               _avtMostrarDanoAbaixoHp(entAlvA, real, isCrit);
-              _avtBroadcast('avt_dano_visual', { alvoNome: alvA.nome, dano: real, isCrit, critMult });
               _avtLog(`  ↳ ${alvA.nome}: ${real} ${tipoDano}${isCrit ? ' ✦ CRÍTICO' : ''}`, bat.id);
               // Efeitos de skill por alvo (ignora efeitos self/único como cura/avatar/teleporte_alvo)
               if (sk?.efeitos_bonus?.length) {
@@ -30526,6 +30547,7 @@ Object.defineProperty(globalThis, "_avtExecutarAtaque", { configurable: true, ge
 Object.defineProperty(globalThis, "avtReceberSkillSelecionada", { configurable: true, get: () => avtReceberSkillSelecionada, set: (__v) => { avtReceberSkillSelecionada = __v; } });
 Object.defineProperty(globalThis, "avtReceberDadoRolado", { configurable: true, get: () => avtReceberDadoRolado, set: (__v) => { avtReceberDadoRolado = __v; } });
 Object.defineProperty(globalThis, "avtReceberDanoVisual", { configurable: true, get: () => avtReceberDanoVisual, set: (__v) => { avtReceberDanoVisual = __v; } });
+Object.defineProperty(globalThis, "avtReceberDanoVisualBatch", { configurable: true, get: () => avtReceberDanoVisualBatch, set: (__v) => { avtReceberDanoVisualBatch = __v; } });
 Object.defineProperty(globalThis, "avtReceberHpUpdate", { configurable: true, get: () => avtReceberHpUpdate, set: (__v) => { avtReceberHpUpdate = __v; } });
 Object.defineProperty(globalThis, "avtReceberRsvUpdate", { configurable: true, get: () => avtReceberRsvUpdate, set: (__v) => { avtReceberRsvUpdate = __v; } });
 Object.defineProperty(globalThis, "_avtHudUpdate", { configurable: true, get: () => _avtHudUpdate, set: (__v) => { _avtHudUpdate = __v; } });
