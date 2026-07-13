@@ -285,3 +285,8 @@ resolve esses casos.
 Diagnóstico: ative o overlay de desempenho (`?perf=1` ou menu ⚙ Gráficos →
 "Medidor de desempenho") — ele mostra o modo de rede (P2P/mixed/fallback), o RTT
 ao host e quantos peers estão em fallback WebSocket.
+
+No jogo, o indicador de transporte ao lado do nome da sala resume o estado:
+🟢 P2P completo, 🟡 P2P parcial e 🔴 fallback Supabase — quando 🟡/🔴 persistem
+com jogadores conectados, é o sintoma clássico de NAT restrito que o TURN acima
+resolve (o cliente também mostra um aviso único por sessão nesse caso).

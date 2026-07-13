@@ -431,6 +431,34 @@ window.RTNet = (() => {
     if (_s.mode !== prev) {
       try { window.dispatchEvent(new CustomEvent('rtnet:modechange', { detail: { mode: _s.mode, prev } })); } catch(_) {}
     }
+    _avisarFallbackSePersistir();
+  }
+
+  // Aviso único por sessão quando o transporte fica degradado com peers presentes
+  // (mesh P2P incompleta → eventos passam pelo Supabase, com mais latência).
+  // Grace de 15s: durante o handshake WebRTC o modo passa por 'mixed'
+  // legitimamente; só avisa se a degradação persistir. Sessão solo não avisa.
+  let _fallbackAvisado = false;
+  let _fallbackAvisoTimer: ReturnType<typeof setTimeout> | null = null;
+  function _avisarFallbackSePersistir() {
+    const degradado = _s.mode !== 'p2p' && _s.peerJoinTs.size > 0;
+    if (!degradado) {
+      if (_fallbackAvisoTimer) { clearTimeout(_fallbackAvisoTimer); _fallbackAvisoTimer = null; }
+      return;
+    }
+    if (_fallbackAvisado || _fallbackAvisoTimer) return;
+    _fallbackAvisoTimer = setTimeout(() => {
+      _fallbackAvisoTimer = null;
+      if (_fallbackAvisado || !_s.initialized) return;
+      if (_s.mode === 'p2p' || _s.peerJoinTs.size === 0) return;
+      _fallbackAvisado = true;
+      try {
+        const toast = (window as any).mostrarToast;
+        if (typeof toast === 'function') {
+          toast('Sem conexão direta (P2P) com algum jogador — usando fallback Supabase, com mais latência. Um servidor TURN resolve NAT restrito (docs/setup.md).', 'aviso');
+        }
+      } catch(_) {}
+    }, 15000);
   }
 
   // ── ELEIÇÃO DE HOST ─────────────────────────────────────────────
@@ -804,7 +832,11 @@ window.RTNet = (() => {
     if (!el) return;
     const map = { p2p: ['🟢', 'P2P ativo'], mixed: ['🟡', 'P2P parcial'], supabase: ['🔴', 'Supabase (fallback)'] };
     const [icon, title] = map[_s.mode] || ['🔴', 'Supabase'];
-    el.textContent = icon; el.title = title;
+    const degradado = _s.mode !== 'p2p' && _s.peerJoinTs.size > 0;
+    el.textContent = icon;
+    el.title = degradado
+      ? title + ' — sem conexão direta com algum jogador (latência maior). Um servidor TURN resolve NAT restrito; veja docs/setup.md.'
+      : title;
     el.style.display = 'inline';
   }
 
@@ -873,6 +905,8 @@ window.RTNet = (() => {
       _s.peerJoinTs.clear();
       _s._volunteers = [];
       if (_s._volunteerTimer) { clearTimeout(_s._volunteerTimer); _s._volunteerTimer = null; }
+      _fallbackAvisado = false;
+      if (_fallbackAvisoTimer) { clearTimeout(_fallbackAvisoTimer); _fallbackAvisoTimer = null; }
       _log('init rpgId:', rpgId, 'userId:', userId, 'joinedAt:', _s.joinedAt);
 
       window.RTNet._signalingActive = true;
@@ -925,6 +959,7 @@ window.RTNet = (() => {
       [_s.snapshotTimer, _s.heartbeatTimer, _s.stateTickTimer, _s.periodicSyncTimer].forEach(t => { if (t) clearInterval(t); });
       [_s._hostDeadTimer, _s._candidateTimer, _s._soloHostTimer].forEach(t => { if (t) clearTimeout(t); });
       _s.snapshotTimer = _s.heartbeatTimer = _s.stateTickTimer = _s._hostDeadTimer = _s._candidateTimer = _s.periodicSyncTimer = null;
+      if (_fallbackAvisoTimer) { clearTimeout(_fallbackAvisoTimer); _fallbackAvisoTimer = null; }
       _stopPingTimer();
 
       for (const pc of _s.peers.values()) { try { pc.close(); } catch(_) {} }
