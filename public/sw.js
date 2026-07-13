@@ -7,7 +7,11 @@
 //     sempre recebe o deploy mais novo quando online, e o app abre offline.
 //   • Qualquer requisição cross-origin (Supabase, CDNs de áudio) → passa direto.
 
-const CACHE = 'rpghub-v1';
+// O token __BUILD_ID__ é substituído no build pelo plugin sw-build-id
+// (vite.config.ts) por um id único por deploy (SHA curto do git). Em dev o
+// public/ é servido sem build, então o token sobrevive e cai no 'dev'.
+const BUILD_ID = '__BUILD_ID__';
+const CACHE = 'rpghub-' + (BUILD_ID.indexOf('__') === 0 ? 'dev' : BUILD_ID);
 
 self.addEventListener('install', () => self.skipWaiting());
 

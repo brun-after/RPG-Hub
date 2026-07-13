@@ -21,6 +21,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/node": "^26.1.1",
     "acorn": "^8.17.0",
     "eslint": "^10.7.0",
     "globals": "^17.7.0",

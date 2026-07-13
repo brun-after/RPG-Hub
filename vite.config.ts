@@ -1,6 +1,31 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+import { execSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+// Substitui o token __BUILD_ID__ do public/sw.js por um id único por deploy,
+// para que o nome do cache do service worker mude a cada build (antes era
+// 'rpghub-v1' fixo, bumpado manualmente).
+function swBuildId(): Plugin {
+  return {
+    name: 'sw-build-id',
+    apply: 'build',
+    closeBundle() {
+      const swPath = resolve('dist/sw.js');
+      if (!existsSync(swPath)) return;
+      let id: string;
+      try {
+        id = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+      } catch {
+        id = Date.now().toString(36);
+      }
+      writeFileSync(swPath, readFileSync(swPath, 'utf8').replaceAll('__BUILD_ID__', id));
+    },
+  };
+}
 
 export default defineConfig({
+  plugins: [swBuildId()],
   // Paths relativos: funciona no GitHub Pages (subdiretório /RPG-Hub/) e em qualquer host estático
   base: './',
   build: {
