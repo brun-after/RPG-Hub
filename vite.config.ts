@@ -32,10 +32,22 @@ export default defineConfig({
     outDir: 'dist',
     target: 'es2020',
     // O bundle principal é grande por natureza (app inteiro); PIXI e extensões ficam em chunks lazy.
-    // NOTA: manualChunks foi testado e REVERTIDO — os módulos comunicam-se por globals
-    // definidos em ordem (main.ts importa por side-effect); extrair um módulo do meio
-    // da sequência para um chunk próprio hoisteia sua execução para antes de config/
-    // state/rtnet (imports são hasteados), quebrando o boot (ex.: HUB_EVENTS undefined).
+    // NOTA: manualChunks de módulos do APP foi testado e REVERTIDO — os módulos
+    // comunicam-se por globals definidos em ordem (main.ts importa por side-effect);
+    // extrair um módulo do meio da sequência para um chunk próprio hoisteia sua
+    // execução para antes de config/state/rtnet (imports são hasteados), quebrando
+    // o boot (ex.: HUB_EVENTS undefined). A exceção segura abaixo é restrita a
+    // bibliotecas de terceiros SEM dependência de ordem (gsap/howler, consumidas
+    // só por core/vendor.ts, o primeiro import): ganham cache de longo prazo entre
+    // deploys sem tocar na sequência de boot. Não incluir pixi aqui — ele já é
+    // lazy via core/pixi-lazy.ts e o match indevido quebraria esses chunks.
     chunkSizeWarningLimit: 4000,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (/node_modules[\\/](gsap|howler)[\\/]/.test(id)) return 'vendor';
+        },
+      },
+    },
   },
 });
