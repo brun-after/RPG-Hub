@@ -28830,8 +28830,18 @@ try{
         } else if (r.pat === null && AVT_STATE.npcTimers[r.id]?._shadow) {
           AVT_STATE.npcTimers[r.id].ativo = false;
         }
+        // [Proposta D] Autoridade única de posição de NPC no fallback Supabase:
+        // com npcSyncEnabled, posições de não-jogadores chegam pelo npc_state
+        // (lease npc_claim_host, com versão/dedupe em _avtNpcOnRemoteUpdate) — e o
+        // host de fase do tick pode ser OUTRO usuário, então aplicar os dois era
+        // dupla autoridade (teleporte/puxão). HP/status/visibilidade acima seguem
+        // vindo do tick. Kill-switch npcSyncEnabled=false restaura o tick como
+        // autoridade também de posição. Jogadores continuam tick-autoritativos.
+        const _npcPosViaNpcState = ent.tipo !== 'jogador'
+          && AVT_STATE.npcSyncEnabled
+          && typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode === 'supabase';
         // Posição: reconciliação autoritativa por sequência de input (server reconciliation)
-        if (typeof r.x === 'number' && typeof r.y === 'number') {
+        if (!_npcPosViaNpcState && typeof r.x === 'number' && typeof r.y === 'number') {
           const dx = Math.abs((ent.x||0) - r.x);
           const dy = Math.abs((ent.y||0) - r.y);
           const maxDiv = Math.max(dx, dy);
