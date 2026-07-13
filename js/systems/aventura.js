@@ -4157,6 +4157,16 @@ function _avtCleanupListeners() {
   avtDpadStop();
   if (typeof avtPixiCleanupAll === 'function') avtPixiCleanupAll();
   _avtVfxHostDestroy();
+  // Texturas procedurais: PIXI.Texture.from(canvas) registra no TextureCache
+  // global do PIXI, então sem destroy explícito elas (e o contexto GL antigo)
+  // ficam retidas entre ciclos de entrar/sair. Aqui é o ponto seguro — depois
+  // do cleanup dos efeitos ativos; _avtProcTextures recria sob demanda.
+  try {
+    for (const k of Object.keys(_AVT_PROC_TEX_CACHE)) {
+      try { _AVT_PROC_TEX_CACHE[k].destroy(true); } catch(_) {}
+    }
+    _AVT_PROC_TEX_CACHE = {};
+  } catch(_) {}
   try { _avtPararSonsAmbiente(); } catch(_) {}
 }
 
@@ -23338,6 +23348,11 @@ async function _avtCarregarFaseInner(faseId, opts = {}) {
   if (typeof _avtTileBakeInvalidate === 'function') _avtTileBakeInvalidate();
   // Sons ambientes pertencem à fase anterior — o tick recria os da nova.
   try { _avtPararSonsAmbiente(); } catch(_) {}
+  // Efeitos Pixi Studio (one-shot, follow e persistentes) ancorados em entidades
+  // da fase anterior virariam órfãos aqui — limpa; a nova fase re-dispara os seus.
+  // Limitação conhecida: o visual de um buff persistente no próprio personagem
+  // também é encerrado na transição (o estado em status_effects é preservado).
+  try { if (typeof avtPixiCleanupAll === 'function') avtPixiCleanupAll(); } catch(_) {}
 
   // Metadados da fase no dungeon (nível/balanceamento dos NPCs, seed do gerador).
   AVT_STATE.dungeon._npcLevel      = faseObj.npc_level ?? 1;
