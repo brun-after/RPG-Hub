@@ -21,6 +21,9 @@ import './core/events';
 import './chat/chat.js';
 import './systems/audio.js';
 
+// Registry central de tipos de efeito de skill (consumido por combate/aventura)
+import './systems/effect-registry.js';
+
 // Combate
 import './combat/combat.js';
 import './combat/animations.js';
