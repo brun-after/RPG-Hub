@@ -2,3 +2,8 @@ node_modules/
 dist/
 *.local
 .DS_Store
+
+# Artefatos de teste
+coverage/
+test-results/
+playwright-report/
