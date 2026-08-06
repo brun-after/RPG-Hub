@@ -15234,11 +15234,16 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
           // Alvos do NPC = jogadores e aliados dos jogadores (avatares/dominados)
           const _ehAlvoNpc = e => (e.tipo === 'jogador' || e.tipo === 'avatar' || e.tipo === 'invocado') && e.hp > 0;
           const _cx = Math.round(skillAlvo.x), _cy = Math.round(skillAlvo.y);
-          let _alvosNpcArea;
+          // Geometria da área p/ animação local e broadcast — o caminho do NPC não
+          // passa pelo seletor de área do jogador, então _areaCentro/_areaLinha
+          // nunca são preenchidos aqui; sem isso a animação ancorava no NPC e os
+          // peers não recebiam geometria nenhuma.
+          let _alvosNpcArea, _areaGeoC = null, _areaGeoL = null;
           if (_npcTodos) {
             _alvosNpcArea = bat.iniciativa.filter(_ehAlvoNpc);
           } else if (_npcTipoArea === 'quadrado') {
             const _t = sk?.tamanho_area || 1;
+            _areaGeoC = { x: _cx, y: _cy, tamanho: _t };
             _alvosNpcArea = bat.iniciativa.filter(e => _ehAlvoNpc(e) &&
               Math.max(Math.abs(Math.round(e.x) - _cx), Math.abs(Math.round(e.y) - _cy)) <= _t);
           } else { // linha: do NPC em direção ao alvo primário
@@ -15247,6 +15252,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
             const _dyL = _cy === _ay ? 0 : (_cy > _ay ? 1 : -1);
             const _cells = [];
             for (let i = 1; i <= (skillAlcance || 1); i++) _cells.push({ x: _ax + _dxL * i, y: _ay + _dyL * i });
+            _areaGeoL = { cells: _cells };
             _alvosNpcArea = bat.iniciativa.filter(e => _ehAlvoNpc(e) &&
               _cells.some(c => c.x === Math.round(e.x) && c.y === Math.round(e.y)));
           }
@@ -15256,8 +15262,17 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
           const _areaLabelNpc = _npcTipoArea === 'linha' ? '▬ Linha' : '◼ Área';
           _avtLog(`👹 ${npc.nome} usa ${skillNome} [${_areaLabelNpc}] → ${_alvosNpcArea.length} alvo(s)`, bat.id);
           mostrarToast(`👹 ${npc.nome} usa ${skillNome} e atinge ${_alvosNpcArea.length} alvo(s)!`, 'aviso');
-          const _delayMorteNpcArea = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entNpc), _avtEntViva(entNpc), true) : 0;
-          if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:_areaLabelNpc }); } catch(_) {} }
+          // Animação local com a geometria da área (save/restore espelha o receptor
+          // avtReceberSkillAnim) e broadcast com geometria + âncora no conjurador —
+          // o rótulo "◼ Área"/"▬ Linha" não resolve entidade nos peers.
+          let _delayMorteNpcArea = 0;
+          if (sk) {
+            const _savedC = AVT_STATE._areaCentro, _savedL = AVT_STATE._areaLinha;
+            AVT_STATE._areaCentro = _areaGeoC; AVT_STATE._areaLinha = _areaGeoL;
+            try { _delayMorteNpcArea = _avtPlaySkillAnim(sk, _avtEntViva(entNpc), _avtEntViva(entNpc), true) || 0; }
+            finally { AVT_STATE._areaCentro = _savedC; AVT_STATE._areaLinha = _savedL; }
+            try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:(entNpc||npc).nome, areaCentro: _areaGeoC, areaLinha: _areaGeoL }); } catch(e) { console.warn('[avt-fx] broadcast área NPC:', e); }
+          }
 
           // Números de dano nos peers: lote único (stagger reproduzido no receptor).
           try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _alvosNpcArea.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
