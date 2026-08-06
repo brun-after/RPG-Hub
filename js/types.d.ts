@@ -55,18 +55,28 @@ declare global {
   var TOKEN_CTRL: any;
   var TRADES_CACHE: any;
   var _aoeObterAlvosAtingidos: any;
+  var _aplicarAnimacaoSkill: any;
+  var _avtCtrlRolarDados: any;
+  var _avtCtrlSelecionarAlvo: any;
+  var _avtCtrlSelecionarSkill: any;
   var _avtIrParaFase: any;
   var _avtNpcSyncShutdown: any;
   var _dataUrlToBlob: any;
   var _isMestre: any;
   var _mesaAtaqueInlineConfirmar: any;
   var _mesaAtaqueInlineRolar: any;
+  var _origMostrarPropostaRecebidaOrig: any;
+  var _personagemPodeAtacar: any;
+  var abrirModalDanoCriativo: any;
   var abrirModalLoot: any;
+  var abrirModalLootNPC: any;
   var abrirModalLootToken: any;
+  var aceitarTrade: any;
   var adicionarItemInventario: any;
   var aplicarBuffCampanha: any;
   var aplicarDanoBatalha: any;
   var arLog: any;
+  var assertHpConsistente: any;
   var atualizarDisplayMoedas: any;
   var atualizarInventarioUI: any;
   var atualizarMapaLoot: any;
@@ -74,11 +84,18 @@ declare global {
   var battleStateBroadcast: any;
   var cenaRenderizarObjetos: any;
   var chatEnviarNarrador: any;
+  var comprarItemMercado: any;
+  var emitirEvento: any;
   var executarAnimacaoAtaque: any;
   var executarAnimacaoDados: any;
+  var executarEfeitoCriativo: any;
+  var fecharModalDanoCriativo: any;
+  var fecharModalLoot: any;
+  var fecharModalTrade: any;
   var gridTacticalShowMoveRange: any;
   var inicializarSistemaAprovacoes: any;
   var iniciarBatalha: any;
+  var itemAtualizarPreview: any;
   var logCombate: any;
   var mapa: any;
   var mapaCarregar: any;
@@ -86,9 +103,11 @@ declare global {
   var mostrarTelaVitoria: any;
   var mostrarTriggerVisual: any;
   var navegarParaMapa: any;
+  var nmcePush: any;
   var notifExecutar: any;
   var ocultarTriggerVisual: any;
   var recalcularHpMax: any;
+  var recusarTrade: any;
   var renderBaus: any;
   var renderCatalogo: any;
   var renderEquipamentos: any;
@@ -101,5 +120,6 @@ declare global {
   var selecionado: any;
   var setCooldownBatalha: any;
   var skAnimPixiPosicaoChange: any;
+  var ws: any;
   // [migração-ts:auto-globals:fim]
 }

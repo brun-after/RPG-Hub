@@ -138,7 +138,7 @@ function _avtVfxScale(cfg) {
 }
 
 // Normalize a raw anchor config, falling back to a legacy source keyword.
-function _psNormAnchor(anchorCfg, fallbackSource) {
+function _psNormAnchor(anchorCfg, fallbackSource?) {
   const a = anchorCfg || {};
   return {
     source: a.source || fallbackSource || 'target',
@@ -1262,8 +1262,8 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
     lastTs = now;
     // Auto-stop: entidade âncora saiu do jogo (morte/troca de fase sem o broadcast
     // de stop) ou TTL estourado → encerra sozinho em vez de rodar para sempre.
-    if (!trackFn._nextCheck || now > trackFn._nextCheck) {
-      trackFn._nextCheck = now + 2000;
+    if (!(trackFn as any)._nextCheck || now > (trackFn as any)._nextCheck) {
+      (trackFn as any)._nextCheck = now + 2000;
       const sumiu = (typeof _avtEntById === 'function' && primaryEnt && primaryEnt.id != null)
         ? !_avtEntById(primaryEnt.id) : false;
       if (sumiu || (now - startedPerf) > PERSIST_TTL_MS) {
@@ -1378,41 +1378,41 @@ Object.defineProperty(globalThis, "_PS_AVT_ACTIVE", { configurable: true, get: (
 Object.defineProperty(globalThis, "_PS_PERSISTENT", { configurable: true, get: () => _PS_PERSISTENT, set: (__v) => { _PS_PERSISTENT = __v; } });
 Object.defineProperty(globalThis, "_PS_ATAC_REF", { configurable: true, get: () => _PS_ATAC_REF });
 Object.defineProperty(globalThis, "_PS_ALVO_REF", { configurable: true, get: () => _PS_ALVO_REF });
-Object.defineProperty(globalThis, "_psStudioToScreen", { configurable: true, get: () => _psStudioToScreen, set: (__v) => { _psStudioToScreen = __v; } });
+Object.defineProperty(globalThis, "_psStudioToScreen", { configurable: true, writable: true, value: _psStudioToScreen });
 Object.defineProperty(globalThis, "_PS_CHEST_FRAC", { configurable: true, get: () => _PS_CHEST_FRAC });
 Object.defineProperty(globalThis, "_PS_Z_FRAC", { configurable: true, get: () => _PS_Z_FRAC });
 Object.defineProperty(globalThis, "_PS_LEAN", { configurable: true, get: () => _PS_LEAN });
-Object.defineProperty(globalThis, "_avtVfxIsoOn", { configurable: true, get: () => _avtVfxIsoOn, set: (__v) => { _avtVfxIsoOn = __v; } });
-Object.defineProperty(globalThis, "_avtVfxBillboardOn", { configurable: true, get: () => _avtVfxBillboardOn, set: (__v) => { _avtVfxBillboardOn = __v; } });
-Object.defineProperty(globalThis, "_avtVfxTokenPx", { configurable: true, get: () => _avtVfxTokenPx, set: (__v) => { _avtVfxTokenPx = __v; } });
-Object.defineProperty(globalThis, "_avtVfxAutoScale", { configurable: true, get: () => _avtVfxAutoScale, set: (__v) => { _avtVfxAutoScale = __v; } });
-Object.defineProperty(globalThis, "_avtVfxScale", { configurable: true, get: () => _avtVfxScale, set: (__v) => { _avtVfxScale = __v; } });
-Object.defineProperty(globalThis, "_psNormAnchor", { configurable: true, get: () => _psNormAnchor, set: (__v) => { _psNormAnchor = __v; } });
-Object.defineProperty(globalThis, "_psSourceEnt", { configurable: true, get: () => _psSourceEnt, set: (__v) => { _psSourceEnt = __v; } });
-Object.defineProperty(globalThis, "_psPlanarAnchor", { configurable: true, get: () => _psPlanarAnchor, set: (__v) => { _psPlanarAnchor = __v; } });
-Object.defineProperty(globalThis, "_psAnchorLift", { configurable: true, get: () => _psAnchorLift, set: (__v) => { _psAnchorLift = __v; } });
-Object.defineProperty(globalThis, "_avtResolveAnchor", { configurable: true, get: () => _avtResolveAnchor, set: (__v) => { _avtResolveAnchor = __v; } });
-Object.defineProperty(globalThis, "_avtVfxRoot", { configurable: true, get: () => _avtVfxRoot, set: (__v) => { _avtVfxRoot = __v; } });
-Object.defineProperty(globalThis, "_avtVfxTrackedRoot", { configurable: true, get: () => _avtVfxTrackedRoot, set: (__v) => { _avtVfxTrackedRoot = __v; } });
-Object.defineProperty(globalThis, "_psHandPath", { configurable: true, get: () => _psHandPath, set: (__v) => { _psHandPath = __v; } });
-Object.defineProperty(globalThis, "_psBeamPath", { configurable: true, get: () => _psBeamPath, set: (__v) => { _psBeamPath = __v; } });
-Object.defineProperty(globalThis, "_psToAvtConfig", { configurable: true, get: () => _psToAvtConfig, set: (__v) => { _psToAvtConfig = __v; } });
-Object.defineProperty(globalThis, "_psAvtLoadCfg", { configurable: true, get: () => _psAvtLoadCfg, set: (__v) => { _psAvtLoadCfg = __v; } });
-Object.defineProperty(globalThis, "_psAvtToScreen", { configurable: true, get: () => _psAvtToScreen, set: (__v) => { _psAvtToScreen = __v; } });
-Object.defineProperty(globalThis, "_psAvtLiveEnds", { configurable: true, get: () => _psAvtLiveEnds, set: (__v) => { _psAvtLiveEnds = __v; } });
-Object.defineProperty(globalThis, "_psAvtInterpKf", { configurable: true, get: () => _psAvtInterpKf, set: (__v) => { _psAvtInterpKf = __v; } });
-Object.defineProperty(globalThis, "_psAvtRenderSprites", { configurable: true, get: () => _psAvtRenderSprites, set: (__v) => { _psAvtRenderSprites = __v; } });
-Object.defineProperty(globalThis, "_psAvtInterpGeneric", { configurable: true, get: () => _psAvtInterpGeneric, set: (__v) => { _psAvtInterpGeneric = __v; } });
-Object.defineProperty(globalThis, "_psAvtRenderShapes", { configurable: true, get: () => _psAvtRenderShapes, set: (__v) => { _psAvtRenderShapes = __v; } });
-Object.defineProperty(globalThis, "_psAvtLayerAnchor", { configurable: true, get: () => _psAvtLayerAnchor, set: (__v) => { _psAvtLayerAnchor = __v; } });
-Object.defineProperty(globalThis, "_avtScaleEmitterCfg", { configurable: true, get: () => _avtScaleEmitterCfg, set: (__v) => { _avtScaleEmitterCfg = __v; } });
-Object.defineProperty(globalThis, "_psAvtRenderWithSpawnPath", { configurable: true, get: () => _psAvtRenderWithSpawnPath, set: (__v) => { _psAvtRenderWithSpawnPath = __v; } });
-Object.defineProperty(globalThis, "avtPixiPlayAnimation", { configurable: true, get: () => avtPixiPlayAnimation, set: (__v) => { avtPixiPlayAnimation = __v; } });
-Object.defineProperty(globalThis, "_psAvtPathPos", { configurable: true, get: () => _psAvtPathPos, set: (__v) => { _psAvtPathPos = __v; } });
-Object.defineProperty(globalThis, "_psAvtRenderTravel", { configurable: true, get: () => _psAvtRenderTravel, set: (__v) => { _psAvtRenderTravel = __v; } });
-Object.defineProperty(globalThis, "_psAvtProjectile", { configurable: true, get: () => _psAvtProjectile, set: (__v) => { _psAvtProjectile = __v; } });
-Object.defineProperty(globalThis, "_psAvtFollow", { configurable: true, get: () => _psAvtFollow, set: (__v) => { _psAvtFollow = __v; } });
-Object.defineProperty(globalThis, "_psAvtChain", { configurable: true, get: () => _psAvtChain, set: (__v) => { _psAvtChain = __v; } });
-Object.defineProperty(globalThis, "avtPixiPlayPersistent", { configurable: true, get: () => avtPixiPlayPersistent, set: (__v) => { avtPixiPlayPersistent = __v; } });
-Object.defineProperty(globalThis, "avtPixiStopPersistent", { configurable: true, get: () => avtPixiStopPersistent, set: (__v) => { avtPixiStopPersistent = __v; } });
-Object.defineProperty(globalThis, "avtPixiCleanupAll", { configurable: true, get: () => avtPixiCleanupAll, set: (__v) => { avtPixiCleanupAll = __v; } });
+Object.defineProperty(globalThis, "_avtVfxIsoOn", { configurable: true, writable: true, value: _avtVfxIsoOn });
+Object.defineProperty(globalThis, "_avtVfxBillboardOn", { configurable: true, writable: true, value: _avtVfxBillboardOn });
+Object.defineProperty(globalThis, "_avtVfxTokenPx", { configurable: true, writable: true, value: _avtVfxTokenPx });
+Object.defineProperty(globalThis, "_avtVfxAutoScale", { configurable: true, writable: true, value: _avtVfxAutoScale });
+Object.defineProperty(globalThis, "_avtVfxScale", { configurable: true, writable: true, value: _avtVfxScale });
+Object.defineProperty(globalThis, "_psNormAnchor", { configurable: true, writable: true, value: _psNormAnchor });
+Object.defineProperty(globalThis, "_psSourceEnt", { configurable: true, writable: true, value: _psSourceEnt });
+Object.defineProperty(globalThis, "_psPlanarAnchor", { configurable: true, writable: true, value: _psPlanarAnchor });
+Object.defineProperty(globalThis, "_psAnchorLift", { configurable: true, writable: true, value: _psAnchorLift });
+Object.defineProperty(globalThis, "_avtResolveAnchor", { configurable: true, writable: true, value: _avtResolveAnchor });
+Object.defineProperty(globalThis, "_avtVfxRoot", { configurable: true, writable: true, value: _avtVfxRoot });
+Object.defineProperty(globalThis, "_avtVfxTrackedRoot", { configurable: true, writable: true, value: _avtVfxTrackedRoot });
+Object.defineProperty(globalThis, "_psHandPath", { configurable: true, writable: true, value: _psHandPath });
+Object.defineProperty(globalThis, "_psBeamPath", { configurable: true, writable: true, value: _psBeamPath });
+Object.defineProperty(globalThis, "_psToAvtConfig", { configurable: true, writable: true, value: _psToAvtConfig });
+Object.defineProperty(globalThis, "_psAvtLoadCfg", { configurable: true, writable: true, value: _psAvtLoadCfg });
+Object.defineProperty(globalThis, "_psAvtToScreen", { configurable: true, writable: true, value: _psAvtToScreen });
+Object.defineProperty(globalThis, "_psAvtLiveEnds", { configurable: true, writable: true, value: _psAvtLiveEnds });
+Object.defineProperty(globalThis, "_psAvtInterpKf", { configurable: true, writable: true, value: _psAvtInterpKf });
+Object.defineProperty(globalThis, "_psAvtRenderSprites", { configurable: true, writable: true, value: _psAvtRenderSprites });
+Object.defineProperty(globalThis, "_psAvtInterpGeneric", { configurable: true, writable: true, value: _psAvtInterpGeneric });
+Object.defineProperty(globalThis, "_psAvtRenderShapes", { configurable: true, writable: true, value: _psAvtRenderShapes });
+Object.defineProperty(globalThis, "_psAvtLayerAnchor", { configurable: true, writable: true, value: _psAvtLayerAnchor });
+Object.defineProperty(globalThis, "_avtScaleEmitterCfg", { configurable: true, writable: true, value: _avtScaleEmitterCfg });
+Object.defineProperty(globalThis, "_psAvtRenderWithSpawnPath", { configurable: true, writable: true, value: _psAvtRenderWithSpawnPath });
+Object.defineProperty(globalThis, "avtPixiPlayAnimation", { configurable: true, writable: true, value: avtPixiPlayAnimation });
+Object.defineProperty(globalThis, "_psAvtPathPos", { configurable: true, writable: true, value: _psAvtPathPos });
+Object.defineProperty(globalThis, "_psAvtRenderTravel", { configurable: true, writable: true, value: _psAvtRenderTravel });
+Object.defineProperty(globalThis, "_psAvtProjectile", { configurable: true, writable: true, value: _psAvtProjectile });
+Object.defineProperty(globalThis, "_psAvtFollow", { configurable: true, writable: true, value: _psAvtFollow });
+Object.defineProperty(globalThis, "_psAvtChain", { configurable: true, writable: true, value: _psAvtChain });
+Object.defineProperty(globalThis, "avtPixiPlayPersistent", { configurable: true, writable: true, value: avtPixiPlayPersistent });
+Object.defineProperty(globalThis, "avtPixiStopPersistent", { configurable: true, writable: true, value: avtPixiStopPersistent });
+Object.defineProperty(globalThis, "avtPixiCleanupAll", { configurable: true, writable: true, value: avtPixiCleanupAll });

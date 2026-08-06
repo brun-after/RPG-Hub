@@ -274,7 +274,7 @@ function arRolarEfetividade() {
     document.getElementById('ar-atk-rl-btn-rolar').style.display = 'none';
     document.getElementById('ar-atk-rl-btn-confirmar').style.display = '';
     // Guardar temporariamente
-    document.getElementById('ar-atk-rl-btn-confirmar').dataset.rolagem = rolagemFinal;
+    (document.getElementById('ar-atk-rl-btn-confirmar') as any).dataset.rolagem = rolagemFinal;
   }, 150);
 }
 
@@ -372,7 +372,7 @@ function arAtkDnRolarDado() {
   for (let i = 0; i < qtd; i++) { const r = Math.floor(Math.random()*faces)+1; rolls.push(r); total += r; }
   const el = document.getElementById('ar-atk-dn-resultado-dado');
   el.textContent = total + (rolls.length > 1 ? ` (${rolls.join('+')})` : '');
-  el.dataset.total = total;
+  (el as any).dataset.total = total;
 }
 
 async function arMestreAplicarDano() {
@@ -399,16 +399,16 @@ async function arMestreAplicarDano() {
   const arAnimTipo = document.getElementById('ar-atk-dn-anim-tipo')?.value || 'nenhuma';
   if (arAnimTipo !== 'nenhuma') {
     const _arIsMidia = ['gif','imagem','svg','iframe'].includes(arAnimTipo);
-    const arAnim = { tipo: arAnimTipo };
+    const arAnim: any = { tipo: arAnimTipo };
     if (_arIsMidia) {
-      arAnim.url     = (arAnimTipo !== 'svg' ? document.getElementById('ar-atk-dn-anim-url')?.value.trim() : '') || '';
-      arAnim.svg     = arAnimTipo === 'svg' ? document.getElementById('ar-atk-dn-anim-svg')?.value.trim() : '';
-      arAnim.tamanho = parseInt(document.getElementById('ar-atk-dn-anim-tamanho')?.value) || 120;
-      arAnim.duracao = parseInt(document.getElementById('ar-atk-dn-anim-duracao')?.value) || 1500;
-      arAnim.posicao = document.getElementById('ar-atk-dn-anim-posicao')?.value || 'alvo';
+      (arAnim as any).url     = (arAnimTipo !== 'svg' ? document.getElementById('ar-atk-dn-anim-url')?.value.trim() : '') || '';
+      (arAnim as any).svg     = arAnimTipo === 'svg' ? document.getElementById('ar-atk-dn-anim-svg')?.value.trim() : '';
+      (arAnim as any).tamanho = parseInt(document.getElementById('ar-atk-dn-anim-tamanho')?.value) || 120;
+      (arAnim as any).duracao = parseInt(document.getElementById('ar-atk-dn-anim-duracao')?.value) || 1500;
+      (arAnim as any).posicao = document.getElementById('ar-atk-dn-anim-posicao')?.value || 'alvo';
     } else {
-      arAnim.cor    = document.getElementById('ar-atk-dn-anim-cor')?.value   || '#e74c3c';
-      arAnim.icone  = document.getElementById('ar-atk-dn-anim-icone')?.value.trim() || '';
+      (arAnim as any).cor    = document.getElementById('ar-atk-dn-anim-cor')?.value   || '#e74c3c';
+      (arAnim as any).icone  = document.getElementById('ar-atk-dn-anim-icone')?.value.trim() || '';
       arAnim.trilha = document.getElementById('ar-atk-dn-anim-trilha')?.checked || false;
     }
     // Para cada alvo, animar atacante→alvo
@@ -1789,13 +1789,13 @@ function _lerEfeitosModal() {
   // Efeito crítico extra
   var critTipo = document.getElementById('apr-efeito-critico')?.value || '';
   if (critTipo) {
-    var critObj = { tipo: critTipo };
+    var critObj: any = { tipo: critTipo };
     if (critTipo === 'dot') {
-      critObj.formula = document.getElementById('apr-crit-dot-formula')?.value?.trim() || '1d4';
-      critObj.turnos  = parseInt(document.getElementById('apr-crit-dot-turnos')?.value) || 2;
+      (critObj as any).formula = document.getElementById('apr-crit-dot-formula')?.value?.trim() || '1d4';
+      (critObj as any).turnos  = parseInt(document.getElementById('apr-crit-dot-turnos')?.value) || 2;
     }
     if (critTipo === 'hot') {
-      critObj.formula = document.getElementById('apr-crit-hot-formula')?.value?.trim() || '1d4';
+      (critObj as any).formula = document.getElementById('apr-crit-hot-formula')?.value?.trim() || '1d4';
       critObj.turnos  = parseInt(document.getElementById('apr-crit-hot-turnos')?.value) || 2;
     }
     efeitoCritico = critObj;
@@ -2023,7 +2023,7 @@ function rolarDanoCriativo() {
       <div style="font-size:1.1rem;font-weight:bold;color:#4fa3d1;margin-top:5px">Subtotal: ${subtotal}</div>
     </div>`;
 
-  const resultado = typeof calcularDanoCritico === 'function'
+  const resultado: any = typeof calcularDanoCritico === 'function'
     ? calcularDanoCritico(subtotal, criativo._d20)
     : { dano: subtotal, tipo: 'normal', mensagem: null };
   criativo._danoFinal = resultado.dano;
@@ -2214,69 +2214,69 @@ window.finalizarExecucaoCriativo    = finalizarExecucaoCriativo;
 window.fecharModalExecucaoCriativo  = fecharModalExecucaoCriativo;
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "arGetTheme", { configurable: true, get: () => arGetTheme, set: (__v) => { arGetTheme = __v; } });
-Object.defineProperty(globalThis, "arGetDadoEfetividade", { configurable: true, get: () => arGetDadoEfetividade, set: (__v) => { arGetDadoEfetividade = __v; } });
-Object.defineProperty(globalThis, "arGetPenalidades", { configurable: true, get: () => arGetPenalidades, set: (__v) => { arGetPenalidades = __v; } });
-Object.defineProperty(globalThis, "arCalcularPenalidadeHP", { configurable: true, get: () => arCalcularPenalidadeHP, set: (__v) => { arCalcularPenalidadeHP = __v; } });
+Object.defineProperty(globalThis, "arGetTheme", { configurable: true, writable: true, value: arGetTheme });
+Object.defineProperty(globalThis, "arGetDadoEfetividade", { configurable: true, writable: true, value: arGetDadoEfetividade });
+Object.defineProperty(globalThis, "arGetPenalidades", { configurable: true, writable: true, value: arGetPenalidades });
+Object.defineProperty(globalThis, "arCalcularPenalidadeHP", { configurable: true, writable: true, value: arCalcularPenalidadeHP });
 Object.defineProperty(globalThis, "_origArCarregarTudo", { configurable: true, get: () => _origArCarregarTudo, set: (__v) => { _origArCarregarTudo = __v; } });
-Object.defineProperty(globalThis, "abrirModalSolicitarAtaque", { configurable: true, get: () => abrirModalSolicitarAtaque, set: (__v) => { abrirModalSolicitarAtaque = __v; } });
-Object.defineProperty(globalThis, "arEnviarSolicitacaoAtaque", { configurable: true, get: () => arEnviarSolicitacaoAtaque, set: (__v) => { arEnviarSolicitacaoAtaque = __v; } });
-Object.defineProperty(globalThis, "mostrarAtaqueAguardando", { configurable: true, get: () => mostrarAtaqueAguardando, set: (__v) => { mostrarAtaqueAguardando = __v; } });
-Object.defineProperty(globalThis, "arRenderAtaquesArenaMestre", { configurable: true, get: () => arRenderAtaquesArenaMestre, set: (__v) => { arRenderAtaquesArenaMestre = __v; } });
-Object.defineProperty(globalThis, "abrirModalAvaliarAtaque", { configurable: true, get: () => abrirModalAvaliarAtaque, set: (__v) => { abrirModalAvaliarAtaque = __v; } });
-Object.defineProperty(globalThis, "arMestreAprovarAtaque", { configurable: true, get: () => arMestreAprovarAtaque, set: (__v) => { arMestreAprovarAtaque = __v; } });
-Object.defineProperty(globalThis, "arMestreRejeitarAtaque", { configurable: true, get: () => arMestreRejeitarAtaque, set: (__v) => { arMestreRejeitarAtaque = __v; } });
-Object.defineProperty(globalThis, "arMestreRejeitarAtaqueId", { configurable: true, get: () => arMestreRejeitarAtaqueId, set: (__v) => { arMestreRejeitarAtaqueId = __v; } });
-Object.defineProperty(globalThis, "arMestreSemDanoFechar", { configurable: true, get: () => arMestreSemDanoFechar, set: (__v) => { arMestreSemDanoFechar = __v; } });
-Object.defineProperty(globalThis, "abrirModalRolarEfetividade", { configurable: true, get: () => abrirModalRolarEfetividade, set: (__v) => { abrirModalRolarEfetividade = __v; } });
-Object.defineProperty(globalThis, "arRolarEfetividade", { configurable: true, get: () => arRolarEfetividade, set: (__v) => { arRolarEfetividade = __v; } });
-Object.defineProperty(globalThis, "arConfirmarRolagemEfetividade", { configurable: true, get: () => arConfirmarRolagemEfetividade, set: (__v) => { arConfirmarRolagemEfetividade = __v; } });
-Object.defineProperty(globalThis, "abrirModalDefinirDano", { configurable: true, get: () => abrirModalDefinirDano, set: (__v) => { abrirModalDefinirDano = __v; } });
-Object.defineProperty(globalThis, "arAtkDnModo", { configurable: true, get: () => arAtkDnModo, set: (__v) => { arAtkDnModo = __v; } });
-Object.defineProperty(globalThis, "arAtkDnRolarDado", { configurable: true, get: () => arAtkDnRolarDado, set: (__v) => { arAtkDnRolarDado = __v; } });
-Object.defineProperty(globalThis, "arMestreAplicarDano", { configurable: true, get: () => arMestreAplicarDano, set: (__v) => { arMestreAplicarDano = __v; } });
+Object.defineProperty(globalThis, "abrirModalSolicitarAtaque", { configurable: true, writable: true, value: abrirModalSolicitarAtaque });
+Object.defineProperty(globalThis, "arEnviarSolicitacaoAtaque", { configurable: true, writable: true, value: arEnviarSolicitacaoAtaque });
+Object.defineProperty(globalThis, "mostrarAtaqueAguardando", { configurable: true, writable: true, value: mostrarAtaqueAguardando });
+Object.defineProperty(globalThis, "arRenderAtaquesArenaMestre", { configurable: true, writable: true, value: arRenderAtaquesArenaMestre });
+Object.defineProperty(globalThis, "abrirModalAvaliarAtaque", { configurable: true, writable: true, value: abrirModalAvaliarAtaque });
+Object.defineProperty(globalThis, "arMestreAprovarAtaque", { configurable: true, writable: true, value: arMestreAprovarAtaque });
+Object.defineProperty(globalThis, "arMestreRejeitarAtaque", { configurable: true, writable: true, value: arMestreRejeitarAtaque });
+Object.defineProperty(globalThis, "arMestreRejeitarAtaqueId", { configurable: true, writable: true, value: arMestreRejeitarAtaqueId });
+Object.defineProperty(globalThis, "arMestreSemDanoFechar", { configurable: true, writable: true, value: arMestreSemDanoFechar });
+Object.defineProperty(globalThis, "abrirModalRolarEfetividade", { configurable: true, writable: true, value: abrirModalRolarEfetividade });
+Object.defineProperty(globalThis, "arRolarEfetividade", { configurable: true, writable: true, value: arRolarEfetividade });
+Object.defineProperty(globalThis, "arConfirmarRolagemEfetividade", { configurable: true, writable: true, value: arConfirmarRolagemEfetividade });
+Object.defineProperty(globalThis, "abrirModalDefinirDano", { configurable: true, writable: true, value: abrirModalDefinirDano });
+Object.defineProperty(globalThis, "arAtkDnModo", { configurable: true, writable: true, value: arAtkDnModo });
+Object.defineProperty(globalThis, "arAtkDnRolarDado", { configurable: true, writable: true, value: arAtkDnRolarDado });
+Object.defineProperty(globalThis, "arMestreAplicarDano", { configurable: true, writable: true, value: arMestreAplicarDano });
 Object.defineProperty(globalThis, "_origArAcaoAtacar", { configurable: true, get: () => _origArAcaoAtacar, set: (__v) => { _origArAcaoAtacar = __v; } });
-Object.defineProperty(globalThis, "arPreviewCenarioListaImg", { configurable: true, get: () => arPreviewCenarioListaImg, set: (__v) => { arPreviewCenarioListaImg = __v; } });
-Object.defineProperty(globalThis, "abrirModalCriarCenarioLista", { configurable: true, get: () => abrirModalCriarCenarioLista, set: (__v) => { abrirModalCriarCenarioLista = __v; } });
-Object.defineProperty(globalThis, "salvarCenarioLista", { configurable: true, get: () => salvarCenarioLista, set: (__v) => { salvarCenarioLista = __v; } });
-Object.defineProperty(globalThis, "arAtivarCenarioLista", { configurable: true, get: () => arAtivarCenarioLista, set: (__v) => { arAtivarCenarioLista = __v; } });
-Object.defineProperty(globalThis, "renderCenariosLista", { configurable: true, get: () => renderCenariosLista, set: (__v) => { renderCenariosLista = __v; } });
-Object.defineProperty(globalThis, "arDeletarCenario", { configurable: true, get: () => arDeletarCenario, set: (__v) => { arDeletarCenario = __v; } });
+Object.defineProperty(globalThis, "arPreviewCenarioListaImg", { configurable: true, writable: true, value: arPreviewCenarioListaImg });
+Object.defineProperty(globalThis, "abrirModalCriarCenarioLista", { configurable: true, writable: true, value: abrirModalCriarCenarioLista });
+Object.defineProperty(globalThis, "salvarCenarioLista", { configurable: true, writable: true, value: salvarCenarioLista });
+Object.defineProperty(globalThis, "arAtivarCenarioLista", { configurable: true, writable: true, value: arAtivarCenarioLista });
+Object.defineProperty(globalThis, "renderCenariosLista", { configurable: true, writable: true, value: renderCenariosLista });
+Object.defineProperty(globalThis, "arDeletarCenario", { configurable: true, writable: true, value: arDeletarCenario });
 Object.defineProperty(globalThis, "_arCenBgTab", { configurable: true, get: () => _arCenBgTab, set: (__v) => { _arCenBgTab = __v; } });
 Object.defineProperty(globalThis, "_arCenUploadDataUrl", { configurable: true, get: () => _arCenUploadDataUrl, set: (__v) => { _arCenUploadDataUrl = __v; } });
 Object.defineProperty(globalThis, "_arCenSvgDataUrl", { configurable: true, get: () => _arCenSvgDataUrl, set: (__v) => { _arCenSvgDataUrl = __v; } });
 Object.defineProperty(globalThis, "_arCenCanvasDataUrl", { configurable: true, get: () => _arCenCanvasDataUrl, set: (__v) => { _arCenCanvasDataUrl = __v; } });
-Object.defineProperty(globalThis, "arCenBgTab", { configurable: true, get: () => arCenBgTab, set: (__v) => { arCenBgTab = __v; } });
-Object.defineProperty(globalThis, "arCenBgGetFinal", { configurable: true, get: () => arCenBgGetFinal, set: (__v) => { arCenBgGetFinal = __v; } });
-Object.defineProperty(globalThis, "arCenBgUrlPreview", { configurable: true, get: () => arCenBgUrlPreview, set: (__v) => { arCenBgUrlPreview = __v; } });
-Object.defineProperty(globalThis, "arCenBgUpload", { configurable: true, get: () => arCenBgUpload, set: (__v) => { arCenBgUpload = __v; } });
-Object.defineProperty(globalThis, "arCenBgClearUpload", { configurable: true, get: () => arCenBgClearUpload, set: (__v) => { arCenBgClearUpload = __v; } });
-Object.defineProperty(globalThis, "arCenBgSvgPreview", { configurable: true, get: () => arCenBgSvgPreview, set: (__v) => { arCenBgSvgPreview = __v; } });
-Object.defineProperty(globalThis, "arCenCopiarPromptSVG", { configurable: true, get: () => arCenCopiarPromptSVG, set: (__v) => { arCenCopiarPromptSVG = __v; } });
+Object.defineProperty(globalThis, "arCenBgTab", { configurable: true, writable: true, value: arCenBgTab });
+Object.defineProperty(globalThis, "arCenBgGetFinal", { configurable: true, writable: true, value: arCenBgGetFinal });
+Object.defineProperty(globalThis, "arCenBgUrlPreview", { configurable: true, writable: true, value: arCenBgUrlPreview });
+Object.defineProperty(globalThis, "arCenBgUpload", { configurable: true, writable: true, value: arCenBgUpload });
+Object.defineProperty(globalThis, "arCenBgClearUpload", { configurable: true, writable: true, value: arCenBgClearUpload });
+Object.defineProperty(globalThis, "arCenBgSvgPreview", { configurable: true, writable: true, value: arCenBgSvgPreview });
+Object.defineProperty(globalThis, "arCenCopiarPromptSVG", { configurable: true, writable: true, value: arCenCopiarPromptSVG });
 Object.defineProperty(globalThis, "_nmceContext", { configurable: true, get: () => _nmceContext, set: (__v) => { _nmceContext = __v; } });
-Object.defineProperty(globalThis, "arCenAbrirCanvas", { configurable: true, get: () => arCenAbrirCanvas, set: (__v) => { arCenAbrirCanvas = __v; } });
+Object.defineProperty(globalThis, "arCenAbrirCanvas", { configurable: true, writable: true, value: arCenAbrirCanvas });
 Object.defineProperty(globalThis, "_origRenderPropostas", { configurable: true, get: () => _origRenderPropostas, set: (__v) => { _origRenderPropostas = __v; } });
-Object.defineProperty(globalThis, "arAprovarPropostaCenarioLista", { configurable: true, get: () => arAprovarPropostaCenarioLista, set: (__v) => { arAprovarPropostaCenarioLista = __v; } });
+Object.defineProperty(globalThis, "arAprovarPropostaCenarioLista", { configurable: true, writable: true, value: arAprovarPropostaCenarioLista });
 Object.defineProperty(globalThis, "_origRenderArenaCenario", { configurable: true, get: () => _origRenderArenaCenario, set: (__v) => { _origRenderArenaCenario = __v; } });
 Object.defineProperty(globalThis, "_origArAtualizarUIpeloPapel", { configurable: true, get: () => _origArAtualizarUIpeloPapel, set: (__v) => { _origArAtualizarUIpeloPapel = __v; } });
 Object.defineProperty(globalThis, "_origArTab", { configurable: true, get: () => _origArTab, set: (__v) => { _origArTab = __v; } });
 Object.defineProperty(globalThis, "_origRenderMesa", { configurable: true, get: () => _origRenderMesa, set: (__v) => { _origRenderMesa = __v; } });
-Object.defineProperty(globalThis, "abrirModalAprovacaoCompleta", { configurable: true, get: () => abrirModalAprovacaoCompleta, set: (__v) => { abrirModalAprovacaoCompleta = __v; } });
-Object.defineProperty(globalThis, "aprSkillToggle", { configurable: true, get: () => aprSkillToggle, set: (__v) => { aprSkillToggle = __v; } });
-Object.defineProperty(globalThis, "atualizarFormulaPreview", { configurable: true, get: () => atualizarFormulaPreview, set: (__v) => { atualizarFormulaPreview = __v; } });
-Object.defineProperty(globalThis, "aprSelecionarDado", { configurable: true, get: () => aprSelecionarDado, set: (__v) => { aprSelecionarDado = __v; } });
-Object.defineProperty(globalThis, "aprDCPreview", { configurable: true, get: () => aprDCPreview, set: (__v) => { aprDCPreview = __v; } });
-Object.defineProperty(globalThis, "aprBuilderAdd", { configurable: true, get: () => aprBuilderAdd, set: (__v) => { aprBuilderAdd = __v; } });
-Object.defineProperty(globalThis, "aprBuilderRemove", { configurable: true, get: () => aprBuilderRemove, set: (__v) => { aprBuilderRemove = __v; } });
-Object.defineProperty(globalThis, "aprBuilderAtualizar", { configurable: true, get: () => aprBuilderAtualizar, set: (__v) => { aprBuilderAtualizar = __v; } });
-Object.defineProperty(globalThis, "aprEfeitoCriticoChange", { configurable: true, get: () => aprEfeitoCriticoChange, set: (__v) => { aprEfeitoCriticoChange = __v; } });
-Object.defineProperty(globalThis, "_lerEfeitosModal", { configurable: true, get: () => _lerEfeitosModal, set: (__v) => { _lerEfeitosModal = __v; } });
-Object.defineProperty(globalThis, "aprovarCriativoCompleto", { configurable: true, get: () => aprovarCriativoCompleto, set: (__v) => { aprovarCriativoCompleto = __v; } });
-Object.defineProperty(globalThis, "fecharModalAprovacaoCompleta", { configurable: true, get: () => fecharModalAprovacaoCompleta, set: (__v) => { fecharModalAprovacaoCompleta = __v; } });
+Object.defineProperty(globalThis, "abrirModalAprovacaoCompleta", { configurable: true, writable: true, value: abrirModalAprovacaoCompleta });
+Object.defineProperty(globalThis, "aprSkillToggle", { configurable: true, writable: true, value: aprSkillToggle });
+Object.defineProperty(globalThis, "atualizarFormulaPreview", { configurable: true, writable: true, value: atualizarFormulaPreview });
+Object.defineProperty(globalThis, "aprSelecionarDado", { configurable: true, writable: true, value: aprSelecionarDado });
+Object.defineProperty(globalThis, "aprDCPreview", { configurable: true, writable: true, value: aprDCPreview });
+Object.defineProperty(globalThis, "aprBuilderAdd", { configurable: true, writable: true, value: aprBuilderAdd });
+Object.defineProperty(globalThis, "aprBuilderRemove", { configurable: true, writable: true, value: aprBuilderRemove });
+Object.defineProperty(globalThis, "aprBuilderAtualizar", { configurable: true, writable: true, value: aprBuilderAtualizar });
+Object.defineProperty(globalThis, "aprEfeitoCriticoChange", { configurable: true, writable: true, value: aprEfeitoCriticoChange });
+Object.defineProperty(globalThis, "_lerEfeitosModal", { configurable: true, writable: true, value: _lerEfeitosModal });
+Object.defineProperty(globalThis, "aprovarCriativoCompleto", { configurable: true, writable: true, value: aprovarCriativoCompleto });
+Object.defineProperty(globalThis, "fecharModalAprovacaoCompleta", { configurable: true, writable: true, value: fecharModalAprovacaoCompleta });
 Object.defineProperty(globalThis, "EXEC_CRIATIVO_ATUAL", { configurable: true, get: () => EXEC_CRIATIVO_ATUAL, set: (__v) => { EXEC_CRIATIVO_ATUAL = __v; } });
-Object.defineProperty(globalThis, "abrirModalExecucaoCriativo", { configurable: true, get: () => abrirModalExecucaoCriativo, set: (__v) => { abrirModalExecucaoCriativo = __v; } });
-Object.defineProperty(globalThis, "rolarAcertoCriativo", { configurable: true, get: () => rolarAcertoCriativo, set: (__v) => { rolarAcertoCriativo = __v; } });
-Object.defineProperty(globalThis, "rolarDanoCriativo", { configurable: true, get: () => rolarDanoCriativo, set: (__v) => { rolarDanoCriativo = __v; } });
-Object.defineProperty(globalThis, "aplicarDanoFinalCriativo", { configurable: true, get: () => aplicarDanoFinalCriativo, set: (__v) => { aplicarDanoFinalCriativo = __v; } });
-Object.defineProperty(globalThis, "finalizarExecucaoCriativo", { configurable: true, get: () => finalizarExecucaoCriativo, set: (__v) => { finalizarExecucaoCriativo = __v; } });
-Object.defineProperty(globalThis, "fecharModalExecucaoCriativo", { configurable: true, get: () => fecharModalExecucaoCriativo, set: (__v) => { fecharModalExecucaoCriativo = __v; } });
+Object.defineProperty(globalThis, "abrirModalExecucaoCriativo", { configurable: true, writable: true, value: abrirModalExecucaoCriativo });
+Object.defineProperty(globalThis, "rolarAcertoCriativo", { configurable: true, writable: true, value: rolarAcertoCriativo });
+Object.defineProperty(globalThis, "rolarDanoCriativo", { configurable: true, writable: true, value: rolarDanoCriativo });
+Object.defineProperty(globalThis, "aplicarDanoFinalCriativo", { configurable: true, writable: true, value: aplicarDanoFinalCriativo });
+Object.defineProperty(globalThis, "finalizarExecucaoCriativo", { configurable: true, writable: true, value: finalizarExecucaoCriativo });
+Object.defineProperty(globalThis, "fecharModalExecucaoCriativo", { configurable: true, writable: true, value: fecharModalExecucaoCriativo });

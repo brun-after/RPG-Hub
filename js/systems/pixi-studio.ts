@@ -25,7 +25,7 @@ function _psEase(name, t) { const f = PS_EASING[name] || PS_EASING.linear; retur
 /* [migração-esm] PS_EASING e _psEase já expostos pelo rodapé */
 
 // ══ A — STATE ═════════════════════════════════════════════════════════════════
-var PIXI_STUDIO_STATE = {
+var PIXI_STUDIO_STATE: any = {
   rpgId:          null,
   animacoes:      [],
   atual:          null,        // { id, nome, descricao, config_json, ... }
@@ -212,7 +212,7 @@ async function psCarregarLista() {
 }
 
 function psFilterAnimList(query) {
-  PIXI_STUDIO_STATE._animFilter = (query || '').toLowerCase();
+  (PIXI_STUDIO_STATE as any)._animFilter = (query || '').toLowerCase();
   _psRenderAnimList();
 }
 
@@ -220,7 +220,7 @@ function _psRenderAnimList() {
   const el = document.getElementById('ps-anim-list');
   if (!el) return;
   const all = PIXI_STUDIO_STATE.animacoes || [];
-  const q = PIXI_STUDIO_STATE._animFilter || '';
+  const q = (PIXI_STUDIO_STATE as any)._animFilter || '';
   const list = q ? all.filter(a => `${a.nome||''} ${a.behavior||''} ${a.config_json?.categoria||''}`.toLowerCase().includes(q)) : all;
   if (!all.length) {
     el.innerHTML = '<div style="font-size:0.75rem;color:var(--suave);font-style:italic;padding:4px 0">Nenhuma animação. Crie uma!</div>';
@@ -411,10 +411,10 @@ function psAddLayer(tipo) {
   if (!cur) return;
   const id = 'l_' + Date.now();
   const maxZ = cur.config_json.layers.reduce((m, l) => Math.max(m, l.z || 0), 0);
-  let layer = { id, tipo, nome: tipo.charAt(0).toUpperCase() + tipo.slice(1), visivel: true, z: maxZ + 1, blendMode: 'add', keyframes: [], behavior_override: null, posicao_override: null };
+  let layer: any = { id, tipo, nome: tipo.charAt(0).toUpperCase() + tipo.slice(1), visivel: true, z: maxZ + 1, blendMode: 'add', keyframes: [], behavior_override: null, posicao_override: null };
   if (tipo === 'emitter') {
-    layer.texture = 'spark'; layer.texture_url = null; layer.glow = null;
-    layer.emitter = {
+    layer.texture = 'spark'; layer.texture_url = null; (layer as any).glow = null;
+    (layer as any).emitter = {
       alpha: { list: [{ value: 0.9, time: 0 }, { value: 0, time: 1 }] },
       scale: { list: [{ value: 0.4, time: 0 }, { value: 0.05, time: 1 }] },
       color: { list: [{ value: 'ffffff', time: 0 }, { value: 'ff8040', time: 1 }] },
@@ -424,27 +424,27 @@ function psAddLayer(tipo) {
       maxParticles: 60, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 5 }
     };
   } else if (tipo === 'sprite') {
-    layer.texture_url = null; layer.blendMode = 'add';
-    layer.base_scale = 1; layer.flip_x = false; layer.flip_y = false;
+    (layer as any).texture_url = null; layer.blendMode = 'add';
+    layer.base_scale = 1; layer.flip_x = false; (layer as any).flip_y = false;
     layer.keyframes = [
       { t: 0, x: 0, y: 0, scale: 1, alpha: 1, rotation: 0 },
       { t: 1, x: 0, y: 0, scale: 2, alpha: 0, rotation: 0 }
     ];
   } else if (tipo === 'shape') {
-    layer.shape_type = 'circle'; layer.blendMode = 'add';
+    (layer as any).shape_type = 'circle'; layer.blendMode = 'add';
     layer.keyframes = [
       { t: 0, radius: 5,  stroke_color: '#ff8842', stroke_alpha: 1, stroke_width: 3, fill_alpha: 0 },
       { t: 1, radius: 60, stroke_color: '#ff4422', stroke_alpha: 0, stroke_width: 1, fill_alpha: 0 }
     ];
   } else if (tipo === 'light') {
-    layer.blendMode = 'add'; layer.color = '#ffd27f';
+    layer.blendMode = 'add'; (layer as any).color = '#ffd27f';
     layer.keyframes = [
       { t: 0, x: 0, y: 0, radius: 30, alpha: 0,   color: '#ffe9b0' },
       { t: 0.2, x: 0, y: 0, radius: 110, alpha: 0.85, color: '#ffd27f' },
       { t: 1, x: 0, y: 0, radius: 70, alpha: 0, color: '#ff9a3c' }
     ];
   } else if (tipo === 'background') {
-    layer.bg_type = 'solid'; layer.bg_color = '#000000'; layer.bg_alpha = 0;
+    layer.bg_type = 'solid'; (layer as any).bg_color = '#000000'; layer.bg_alpha = 0;
   }
   cur.config_json.layers.push(layer);
   _psSetDirty(true);
@@ -710,7 +710,7 @@ function _psSfxOptions(selected) {
   list.forEach(s => { (cats[s.cat || 'outros'] = cats[s.cat || 'outros'] || []).push(s); });
   const isCustom = selected && !list.some(s => s.id === selected);
   return `<option value="">— nenhum —</option>` +
-    Object.entries(cats).map(([cat, arr]) => `<optgroup label="${cat}">${arr.map(s => `<option value="${s.id}"${selected === s.id ? ' selected' : ''}>${_esc(s.label)}</option>`).join('')}</optgroup>`).join('') +
+    Object.entries<any>(cats).map(([cat, arr]) => `<optgroup label="${cat}">${arr.map(s => `<option value="${s.id}"${selected === s.id ? ' selected' : ''}>${_esc(s.label)}</option>`).join('')}</optgroup>`).join('') +
     `<option value="__url__"${isCustom ? ' selected' : ''}>URL personalizada…</option>`;
 }
 function _psSfxFieldHtml(label, which, val) {
@@ -1069,7 +1069,7 @@ function _psLayerAnchorHtml(layer) {
   const zFrac = (typeof a.zFrac === 'number') ? a.zFrac : 0.62;
   // height presets (name → zFrac); highlight the closest match
   const heights = [['Chão', 0], ['Cintura', 0.42], ['Peito', 0.62], ['Cabeça', 0.9], ['Acima', 1.05], ['Flutuar', 0.5]];
-  const hKey = (heights.find(([, v]) => Math.abs(v - zFrac) < 0.02) || [])[0] || '';
+  const hKey = (heights.find(([, v]: any) => Math.abs(v - zFrac) < 0.02) || [])[0] || '';
   const hBtns = heights.map(([l, v]) =>
     `<button onclick="psSetAnchorHeight('${id}',${v})" style="flex:1;min-width:fit-content;padding:4px 6px;border-radius:5px;cursor:pointer;font-size:0.62rem;border:1px solid ${hKey === l ? 'var(--primario)' : 'var(--borda)'};background:${hKey === l ? 'rgba(79,163,209,0.15)' : 'var(--painel)'};color:${hKey === l ? 'var(--primario)' : 'var(--suave)'}">${l}</button>`).join('');
   return `<div style="border-top:1px solid var(--borda);padding-top:10px;margin-top:4px;display:flex;flex-direction:column;gap:8px">
@@ -1481,7 +1481,7 @@ function _psCheckWebGLOK() {
   try {
     const c = document.createElement('canvas');
     const tryCtx = (name) => { try { return c.getContext(name); } catch (_) { return null; } };
-    const gl = tryCtx('webgl2') || tryCtx('webgl') || tryCtx('experimental-webgl');
+    const gl: any = tryCtx('webgl2') || tryCtx('webgl') || tryCtx('experimental-webgl');
     if (!gl) return false;
     const frag = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) || 0;
     const vary = gl.getParameter(gl.MAX_VARYING_VECTORS) || 0;
@@ -1624,9 +1624,9 @@ function _psDoPlay() {
   PIXI_STUDIO_STATE.previewTime = 0;
   PIXI_STUDIO_STATE.previewPlaying = true;
   PIXI_STUDIO_STATE._lastTs = 0;
-  PIXI_STUDIO_STATE._hitstopDone = false;
-  PIXI_STUDIO_STATE._hitstopUntil = 0;
-  PIXI_STUDIO_STATE._shakeSeed = Math.random() * 1000;
+  (PIXI_STUDIO_STATE as any)._hitstopDone = false;
+  (PIXI_STUDIO_STATE as any)._hitstopUntil = 0;
+  (PIXI_STUDIO_STATE as any)._shakeSeed = Math.random() * 1000;
   _psPlayPreviewAudio();
   psPreviewRebuildAll();
   const loopBtn = document.getElementById('ps-loop-btn');
@@ -1639,7 +1639,7 @@ function _psPlayPreviewAudio() {
   if (!cfg || typeof AudioManager === 'undefined') return;
   const a = cfg.audio || {};
   const vol = a.volume ?? 0.75;
-  const play = (id, v) => { try { AudioManager.playSFX(id, { volume: v ?? vol }); } catch (_) {} };
+  const play = (id, v?) => { try { AudioManager.playSFX(id, { volume: v ?? vol }); } catch (_) {} };
   if (a.cast) play(a.cast);
   if (a.impact) {
     const delay = (cfg.behavior === 'projectile') ? (cfg.behavior_config?.projectile_speed_ms || 500) : 0;
@@ -1685,9 +1685,9 @@ function _psPreviewTick(ts) {
   const delta = Math.min(ts - last, 100);
   const cfg = PIXI_STUDIO_STATE.atual?.config_json;
   const dur = cfg?.duracao_ms || 1000;
-  const fxOn = PIXI_STUDIO_STATE._fxEnabled !== false;
+  const fxOn = (PIXI_STUDIO_STATE as any)._fxEnabled !== false;
   const worldRoot = PIXI_STUDIO_STATE._worldRoot;
-  const frozen = PIXI_STUDIO_STATE.previewPlaying && PIXI_STUDIO_STATE._hitstopUntil && ts < PIXI_STUDIO_STATE._hitstopUntil;
+  const frozen = PIXI_STUDIO_STATE.previewPlaying && PIXI_STUDIO_STATE._hitstopUntil && ts < (PIXI_STUDIO_STATE as any)._hitstopUntil;
 
   // Always update emitters (idle + playing) — no ticker.add needed
   for (const [layerId, em] of PIXI_STUDIO_STATE._emitterMap) {
@@ -1719,14 +1719,14 @@ function _psPreviewTick(ts) {
       const tms = PIXI_STUDIO_STATE.previewTime;
       const amp = sh.amp * Math.pow(sh.decay || 0.9, tms / 16);
       const freq = (sh.freq || 30) / 1000;
-      const seed = PIXI_STUDIO_STATE._shakeSeed || 0;
+      const seed = (PIXI_STUDIO_STATE as any)._shakeSeed || 0;
       worldRoot.position.set(Math.sin(tms * freq + seed) * amp, Math.cos(tms * freq * 1.13 + seed) * amp);
     } else if (worldRoot.position.x !== 0 || worldRoot.position.y !== 0) {
       worldRoot.position.set(0, 0);
     }
     // Parallax: cada camada desloca-se extra proporcional ao shake (profundidade)
-    if (PIXI_STUDIO_STATE._layerContainers) {
-      for (const [lid, cont] of PIXI_STUDIO_STATE._layerContainers) {
+    if ((PIXI_STUDIO_STATE as any)._layerContainers) {
+      for (const [lid, cont] of (PIXI_STUDIO_STATE as any)._layerContainers) {
         const lyr = _psGetLayer(lid);
         const px = lyr?.parallax || 0;
         const baseX = cont._psBaseX ?? cont.position.x, baseY = cont._psBaseY ?? cont.position.y;
@@ -1741,17 +1741,17 @@ function _psPreviewTick(ts) {
     const t = Math.min(1, PIXI_STUDIO_STATE.previewTime / dur);
     // Hitstop: freeze briefly at the configured impact moment
     const hs = cfg?.camera?.hitstop;
-    if (fxOn && hs && hs.ms && !PIXI_STUDIO_STATE._hitstopDone && t >= (hs.at ?? 0.2)) {
-      PIXI_STUDIO_STATE._hitstopUntil = ts + Math.min(hs.ms, 400);
-      PIXI_STUDIO_STATE._hitstopDone = true;
+    if (fxOn && hs && hs.ms && !(PIXI_STUDIO_STATE as any)._hitstopDone && t >= (hs.at ?? 0.2)) {
+      (PIXI_STUDIO_STATE as any)._hitstopUntil = ts + Math.min(hs.ms, 400);
+      (PIXI_STUDIO_STATE as any)._hitstopDone = true;
     }
     _psPreviewRenderFrame(t);
     _psUpdateTimeDisplay(t, dur);
     if (t >= 1) {
       if (PIXI_STUDIO_STATE.previewLooping) {
         PIXI_STUDIO_STATE.previewTime = 0;
-        PIXI_STUDIO_STATE._hitstopDone = false;
-        PIXI_STUDIO_STATE._hitstopUntil = 0;
+        (PIXI_STUDIO_STATE as any)._hitstopDone = false;
+        (PIXI_STUDIO_STATE as any)._hitstopUntil = 0;
         psPreviewRebuildAll();
       } else {
         PIXI_STUDIO_STATE.previewPlaying = false;
@@ -1761,7 +1761,7 @@ function _psPreviewTick(ts) {
   PIXI_STUDIO_STATE._rafId = requestAnimationFrame(_psPreviewTick); // always re-request
 }
 
-function _psUpdateTimeDisplay(t, dur) {
+function _psUpdateTimeDisplay(t, dur?) {
   dur = dur || PIXI_STUDIO_STATE.atual?.config_json?.duracao_ms || 1000;
   const el = document.getElementById('ps-preview-time');
   if (el) el.textContent = `${((t * dur) / 1000).toFixed(1)}s / ${(dur / 1000).toFixed(1)}s`;
@@ -1775,7 +1775,7 @@ function _psPreviewRenderFrame(t) {
   const worldRoot = PIXI_STUDIO_STATE._worldRoot;
   if (!worldRoot) return;
 
-  if (PIXI_STUDIO_STATE._sceneMode) _psApplySceneFrame(t);
+  if ((PIXI_STUDIO_STATE as any)._sceneMode) _psApplySceneFrame(t);
 
   for (const layer of layers) {
     if (!layer.visivel) continue;
@@ -1905,8 +1905,8 @@ function _psDragMove(e) {
     const em = PIXI_STUDIO_STATE._emitterMap.get(drag.layerId);
     if (em && !em.destroyed) em.updateSpawnPos(nx, ny);
     const app = PIXI_STUDIO_STATE.previewApp;
-    if (app && PIXI_STUDIO_STATE._originGizmo)
-      PIXI_STUDIO_STATE._originGizmo.position.set(app.renderer.width / 2 + nx, app.renderer.height / 2 + ny);
+    if (app && (PIXI_STUDIO_STATE as any)._originGizmo)
+      (PIXI_STUDIO_STATE as any)._originGizmo.position.set(app.renderer.width / 2 + nx, app.renderer.height / 2 + ny);
     _psSetDirty(true);
     return;
   }
@@ -2096,16 +2096,16 @@ function psPreviewRebuildAll() {
   });
   PIXI_STUDIO_STATE._spriteMap.clear();
   PIXI_STUDIO_STATE._shapeMap.clear();
-  if (!PIXI_STUDIO_STATE._layerContainers) PIXI_STUDIO_STATE._layerContainers = new Map();
-  PIXI_STUDIO_STATE._layerContainers.clear();
-  PIXI_STUDIO_STATE._sceneDummies = null;
+  if (!PIXI_STUDIO_STATE._layerContainers) (PIXI_STUDIO_STATE as any)._layerContainers = new Map();
+  (PIXI_STUDIO_STATE as any)._layerContainers.clear();
+  (PIXI_STUDIO_STATE as any)._sceneDummies = null;
   PIXI_STUDIO_STATE._bgSprite = null;
 
   const cfg = PIXI_STUDIO_STATE.atual?.config_json;
   if (!cfg) return;
   const cx = app.renderer.width / 2, cy = app.renderer.height / 2;
-  const sceneMode = !!PIXI_STUDIO_STATE._sceneMode;
-  const faseMode  = !!PIXI_STUDIO_STATE._faseMode;
+  const sceneMode = !!(PIXI_STUDIO_STATE as any)._sceneMode;
+  const faseMode  = !!(PIXI_STUDIO_STATE as any)._faseMode;
   // Fase mode: simulate the actual stage (iso/topdown grid + character tokens). Effect sizes
   // get the same auto-scale used in game so the preview is WYSIWYG.
   const faseScale = faseMode ? ((typeof _avtVfxAutoScale === 'function' ? _avtVfxAutoScale() : 1) * (cfg.iso_scale || 1)) : 1;
@@ -2161,8 +2161,8 @@ function psPreviewRebuildAll() {
     }
   }
 
-  const fxOn = PIXI_STUDIO_STATE._fxEnabled !== false;
-  PIXI_STUDIO_STATE._originGizmo = null;
+  const fxOn = (PIXI_STUDIO_STATE as any)._fxEnabled !== false;
+  (PIXI_STUDIO_STATE as any)._originGizmo = null;
 
   // Background darken (parity with runtime _avtPixiParticleAnim) — behind effect layers
   if (fxOn && cfg.background && cfg.background.darken) {
@@ -2177,7 +2177,7 @@ function psPreviewRebuildAll() {
     container.position.set(cx, cy);
     container.blendMode = bm[layer.blendMode] ?? PIXI.BLEND_MODES.ADD;
     worldRoot.addChild(container);
-    PIXI_STUDIO_STATE._layerContainers.set(layer.id, container);
+    (PIXI_STUDIO_STATE as any)._layerContainers.set(layer.id, container);
     if (faseMode) _psFaseStyleLayer(container, layer, faseScale);
 
     if (layer.tipo === 'emitter' && layer.emitter) {
@@ -2194,7 +2194,7 @@ function psPreviewRebuildAll() {
         giz.eventMode = 'static'; giz.cursor = 'move';
         giz.on('pointerdown', (e) => { e.stopPropagation(); _psBeginDragOrigin(layer.id, e); });
         worldRoot.addChild(giz);
-        PIXI_STUDIO_STATE._originGizmo = giz;
+        (PIXI_STUDIO_STATE as any)._originGizmo = giz;
       }
     } else if (layer.tipo === 'sprite') {
       const texUrl = layer.texture_url;
@@ -2340,7 +2340,7 @@ function _psBuildSceneDummies(cx, cy) {
     t.anchor.set(0.5); t.position.set(x, y); t.alpha = 0.92;
     worldRoot.addChild(t); return t;
   };
-  PIXI_STUDIO_STATE._sceneDummies = {
+  (PIXI_STUDIO_STATE as any)._sceneDummies = {
     atk:    mk('🧝', cx + PS_ATAC_REF.x, cy),
     target: mk('👹', cx + PS_ALVO_REF.x, cy),
   };
@@ -2376,33 +2376,33 @@ function _psSceneAnchor(t, cfg, cx, cy) {
 }
 
 function _psApplySceneFrame(t) {
-  if (!PIXI_STUDIO_STATE._sceneMode) return;
+  if (!(PIXI_STUDIO_STATE as any)._sceneMode) return;
   const cfg = PIXI_STUDIO_STATE.atual?.config_json;
   const app = PIXI_STUDIO_STATE.previewApp;
   if (!cfg || !app) return;
   const cx = app.renderer.width / 2, cy = app.renderer.height / 2;
   const a = _psSceneAnchor(t, cfg, cx, cy);
-  if (PIXI_STUDIO_STATE._layerContainers) {
-    for (const [, c] of PIXI_STUDIO_STATE._layerContainers) {
+  if ((PIXI_STUDIO_STATE as any)._layerContainers) {
+    for (const [, c] of (PIXI_STUDIO_STATE as any)._layerContainers) {
       if (c && !c.destroyed) c.position.set(a.x, a.y);
     }
   }
-  const d = PIXI_STUDIO_STATE._sceneDummies;
+  const d = (PIXI_STUDIO_STATE as any)._sceneDummies;
   if (d) { if (d.target) d.target.position.set(a.tgX, a.tgY); if (d.atk) d.atk.position.set(a.ax, a.ay); }
 }
 
 function psToggleFx() {
-  PIXI_STUDIO_STATE._fxEnabled = (PIXI_STUDIO_STATE._fxEnabled === false);
-  const on = PIXI_STUDIO_STATE._fxEnabled !== false;
+  PIXI_STUDIO_STATE._fxEnabled = ((PIXI_STUDIO_STATE as any)._fxEnabled === false);
+  const on = (PIXI_STUDIO_STATE as any)._fxEnabled !== false;
   const btn = document.getElementById('ps-fx-btn');
   if (btn) { btn.style.color = on ? 'var(--primario)' : 'var(--suave)'; btn.style.borderColor = on ? 'var(--primario)' : 'var(--borda)'; }
   psPreviewRebuildAll();
 }
 
 function psToggleScene() {
-  PIXI_STUDIO_STATE._sceneMode = !PIXI_STUDIO_STATE._sceneMode;
-  const on = PIXI_STUDIO_STATE._sceneMode;
-  if (on) { PIXI_STUDIO_STATE._faseMode = false; _psFaseBtnSync(); }
+  PIXI_STUDIO_STATE._sceneMode = !(PIXI_STUDIO_STATE as any)._sceneMode;
+  const on = (PIXI_STUDIO_STATE as any)._sceneMode;
+  if (on) { (PIXI_STUDIO_STATE as any)._faseMode = false; _psFaseBtnSync(); }
   const btn = document.getElementById('ps-scene-btn');
   if (btn) { btn.style.color = on ? 'var(--primario)' : 'var(--suave)'; btn.style.borderColor = on ? 'var(--primario)' : 'var(--borda)'; }
   psPreviewRebuildAll();
@@ -2410,24 +2410,24 @@ function psToggleScene() {
 
 // ── Fase mode: preview as a real stage (iso/topdown grid + character tokens) ──
 function _psFaseBtnSync() {
-  const on = !!PIXI_STUDIO_STATE._faseMode;
+  const on = !!(PIXI_STUDIO_STATE as any)._faseMode;
   const btn = document.getElementById('ps-fase-btn');
   if (btn) { btn.style.color = on ? 'var(--primario)' : 'var(--suave)'; btn.style.borderColor = on ? 'var(--primario)' : 'var(--borda)'; }
   const sel = document.getElementById('ps-fase-char');
   if (sel) sel.style.display = on ? '' : 'none';
 }
 function psToggleFase() {
-  PIXI_STUDIO_STATE._faseMode = !PIXI_STUDIO_STATE._faseMode;
-  if (PIXI_STUDIO_STATE._faseMode) PIXI_STUDIO_STATE._sceneMode = false;
+  PIXI_STUDIO_STATE._faseMode = !(PIXI_STUDIO_STATE as any)._faseMode;
+  if (PIXI_STUDIO_STATE._faseMode) (PIXI_STUDIO_STATE as any)._sceneMode = false;
   const sel = document.getElementById('ps-fase-char');
-  if (PIXI_STUDIO_STATE._faseMode && sel) _psFasePopulateChars(sel);
+  if ((PIXI_STUDIO_STATE as any)._faseMode && sel) _psFasePopulateChars(sel);
   const sceneBtn = document.getElementById('ps-scene-btn');
   if (sceneBtn) { sceneBtn.style.color = 'var(--suave)'; sceneBtn.style.borderColor = 'var(--borda)'; }
   _psFaseBtnSync();
   psPreviewRebuildAll();
 }
 function psFaseSetChar(id) {
-  PIXI_STUDIO_STATE._faseCharId = id || null;
+  (PIXI_STUDIO_STATE as any)._faseCharId = id || null;
   psPreviewRebuildAll();
 }
 // Adventure characters/entities that have an isometric token, for the dummy picker.
@@ -2446,13 +2446,13 @@ function _psFasePopulateChars(sel) {
   sel.innerHTML = list.length
     ? list.map(c => `<option value="${_esc(String(c.id))}">${_esc(c.nome)}</option>`).join('')
     : '<option value="">(sem token iso)</option>';
-  if (list.length && !PIXI_STUDIO_STATE._faseCharId) PIXI_STUDIO_STATE._faseCharId = list[0].id;
-  if (PIXI_STUDIO_STATE._faseCharId != null) sel.value = String(PIXI_STUDIO_STATE._faseCharId);
+  if (list.length && !PIXI_STUDIO_STATE._faseCharId) (PIXI_STUDIO_STATE as any)._faseCharId = list[0].id;
+  if (PIXI_STUDIO_STATE._faseCharId != null) sel.value = String((PIXI_STUDIO_STATE as any)._faseCharId);
 }
 function _psFaseTokenUrl() {
   const list = _psFaseCharList();
   if (!list.length) return null;
-  const c = list.find(x => String(x.id) === String(PIXI_STUDIO_STATE._faseCharId)) || list[0];
+  const c = list.find(x => String(x.id) === String((PIXI_STUDIO_STATE as any)._faseCharId)) || list[0];
   return c ? c.url : null;
 }
 // Apply iso auto-scale + floor-pose projection to an effect layer container in fase preview.
@@ -2667,12 +2667,12 @@ function psPreviewSyncEmitter(layerId) {
   PIXI_STUDIO_STATE._trailHosts.delete(layerId);
   // Tear down the layer's previous container (+ its filters) so repeated edits don't
   // orphan containers/filters on the GPU → gray preview.
-  if (!PIXI_STUDIO_STATE._layerContainers) PIXI_STUDIO_STATE._layerContainers = new Map();
-  const prev = PIXI_STUDIO_STATE._layerContainers.get(layerId);
+  if (!PIXI_STUDIO_STATE._layerContainers) (PIXI_STUDIO_STATE as any)._layerContainers = new Map();
+  const prev = (PIXI_STUDIO_STATE as any)._layerContainers.get(layerId);
   if (prev) {
     _psDestroyFilters(prev);
     try { prev.destroy({ children: true, texture: false }); } catch (_) {}
-    PIXI_STUDIO_STATE._layerContainers.delete(layerId);
+    (PIXI_STUDIO_STATE as any)._layerContainers.delete(layerId);
   }
   const layer = _psGetLayer(layerId);
   if (!layer || !layer.emitter || !PIXI_STUDIO_STATE._worldRoot) return;
@@ -2683,7 +2683,7 @@ function psPreviewSyncEmitter(layerId) {
   container.position.set(app.renderer.width / 2, app.renderer.height / 2);
   container.blendMode = bm[layer.blendMode] ?? PIXI.BLEND_MODES.ADD;
   PIXI_STUDIO_STATE._worldRoot.addChild(container);
-  PIXI_STUDIO_STATE._layerContainers.set(layerId, container);
+  (PIXI_STUDIO_STATE as any)._layerContainers.set(layerId, container);
   _psCreateEmitter(layer, container, layer.offset?.x || 0, layer.offset?.y || 0);
   if (PIXI_STUDIO_STATE._fxEnabled !== false) _psApplyContainerFilters(container, layer);
 }
@@ -3324,184 +3324,184 @@ Object.defineProperty(globalThis, "PS_ATAC_REF", { configurable: true, get: () =
 Object.defineProperty(globalThis, "PS_ALVO_REF", { configurable: true, get: () => PS_ALVO_REF });
 Object.defineProperty(globalThis, "PS_EASING", { configurable: true, get: () => PS_EASING });
 Object.defineProperty(globalThis, "PS_EASING_NAMES", { configurable: true, get: () => PS_EASING_NAMES });
-Object.defineProperty(globalThis, "_psEase", { configurable: true, get: () => _psEase, set: (__v) => { _psEase = __v; } });
+Object.defineProperty(globalThis, "_psEase", { configurable: true, writable: true, value: _psEase });
 Object.defineProperty(globalThis, "PIXI_STUDIO_STATE", { configurable: true, get: () => PIXI_STUDIO_STATE, set: (__v) => { PIXI_STUDIO_STATE = __v; } });
-Object.defineProperty(globalThis, "_psValidateEmitterCfg", { configurable: true, get: () => _psValidateEmitterCfg, set: (__v) => { _psValidateEmitterCfg = __v; } });
-Object.defineProperty(globalThis, "_psPushHistory", { configurable: true, get: () => _psPushHistory, set: (__v) => { _psPushHistory = __v; } });
-Object.defineProperty(globalThis, "_psHistoryReset", { configurable: true, get: () => _psHistoryReset, set: (__v) => { _psHistoryReset = __v; } });
-Object.defineProperty(globalThis, "psUndo", { configurable: true, get: () => psUndo, set: (__v) => { psUndo = __v; } });
-Object.defineProperty(globalThis, "psRedo", { configurable: true, get: () => psRedo, set: (__v) => { psRedo = __v; } });
-Object.defineProperty(globalThis, "pixiStudioInit", { configurable: true, get: () => pixiStudioInit, set: (__v) => { pixiStudioInit = __v; } });
-Object.defineProperty(globalThis, "psRenderShell", { configurable: true, get: () => psRenderShell, set: (__v) => { psRenderShell = __v; } });
-Object.defineProperty(globalThis, "psCarregarLista", { configurable: true, get: () => psCarregarLista, set: (__v) => { psCarregarLista = __v; } });
-Object.defineProperty(globalThis, "psFilterAnimList", { configurable: true, get: () => psFilterAnimList, set: (__v) => { psFilterAnimList = __v; } });
-Object.defineProperty(globalThis, "_psRenderAnimList", { configurable: true, get: () => _psRenderAnimList, set: (__v) => { _psRenderAnimList = __v; } });
-Object.defineProperty(globalThis, "psDuplicarAnimacao", { configurable: true, get: () => psDuplicarAnimacao, set: (__v) => { psDuplicarAnimacao = __v; } });
-Object.defineProperty(globalThis, "psCarregarAnimacao", { configurable: true, get: () => psCarregarAnimacao, set: (__v) => { psCarregarAnimacao = __v; } });
-Object.defineProperty(globalThis, "psNova", { configurable: true, get: () => psNova, set: (__v) => { psNova = __v; } });
-Object.defineProperty(globalThis, "_psDefaultConfig", { configurable: true, get: () => _psDefaultConfig, set: (__v) => { _psDefaultConfig = __v; } });
-Object.defineProperty(globalThis, "psSalvar", { configurable: true, get: () => psSalvar, set: (__v) => { psSalvar = __v; } });
-Object.defineProperty(globalThis, "psExcluirAtual", { configurable: true, get: () => psExcluirAtual, set: (__v) => { psExcluirAtual = __v; } });
-Object.defineProperty(globalThis, "_psSetDirty", { configurable: true, get: () => _psSetDirty, set: (__v) => { _psSetDirty = __v; } });
-Object.defineProperty(globalThis, "psAddLayer", { configurable: true, get: () => psAddLayer, set: (__v) => { psAddLayer = __v; } });
-Object.defineProperty(globalThis, "psDuplicateLayer", { configurable: true, get: () => psDuplicateLayer, set: (__v) => { psDuplicateLayer = __v; } });
-Object.defineProperty(globalThis, "psRemoveLayer", { configurable: true, get: () => psRemoveLayer, set: (__v) => { psRemoveLayer = __v; } });
-Object.defineProperty(globalThis, "psMoveLayer", { configurable: true, get: () => psMoveLayer, set: (__v) => { psMoveLayer = __v; } });
-Object.defineProperty(globalThis, "psSelectLayer", { configurable: true, get: () => psSelectLayer, set: (__v) => { psSelectLayer = __v; } });
-Object.defineProperty(globalThis, "psUpdateLayerProp", { configurable: true, get: () => psUpdateLayerProp, set: (__v) => { psUpdateLayerProp = __v; } });
-Object.defineProperty(globalThis, "psUpdateEmitterProp", { configurable: true, get: () => psUpdateEmitterProp, set: (__v) => { psUpdateEmitterProp = __v; } });
-Object.defineProperty(globalThis, "psAddKeyframe", { configurable: true, get: () => psAddKeyframe, set: (__v) => { psAddKeyframe = __v; } });
-Object.defineProperty(globalThis, "psUpdateKeyframe", { configurable: true, get: () => psUpdateKeyframe, set: (__v) => { psUpdateKeyframe = __v; } });
-Object.defineProperty(globalThis, "psRemoveKeyframe", { configurable: true, get: () => psRemoveKeyframe, set: (__v) => { psRemoveKeyframe = __v; } });
-Object.defineProperty(globalThis, "_psGetLayer", { configurable: true, get: () => _psGetLayer, set: (__v) => { _psGetLayer = __v; } });
-Object.defineProperty(globalThis, "_psDefaultKeyframe", { configurable: true, get: () => _psDefaultKeyframe, set: (__v) => { _psDefaultKeyframe = __v; } });
-Object.defineProperty(globalThis, "_psRenderLayerList", { configurable: true, get: () => _psRenderLayerList, set: (__v) => { _psRenderLayerList = __v; } });
-Object.defineProperty(globalThis, "_psRenderPropsPanel", { configurable: true, get: () => _psRenderPropsPanel, set: (__v) => { _psRenderPropsPanel = __v; } });
-Object.defineProperty(globalThis, "_psLightPanelHtml", { configurable: true, get: () => _psLightPanelHtml, set: (__v) => { _psLightPanelHtml = __v; } });
-Object.defineProperty(globalThis, "_psIsoConfigHtml", { configurable: true, get: () => _psIsoConfigHtml, set: (__v) => { _psIsoConfigHtml = __v; } });
-Object.defineProperty(globalThis, "_esc", { configurable: true, get: () => _esc, set: (__v) => { _esc = __v; } });
-Object.defineProperty(globalThis, "psUpdateConfigProp", { configurable: true, get: () => psUpdateConfigProp, set: (__v) => { psUpdateConfigProp = __v; } });
-Object.defineProperty(globalThis, "_psSfxOptions", { configurable: true, get: () => _psSfxOptions, set: (__v) => { _psSfxOptions = __v; } });
-Object.defineProperty(globalThis, "_psSfxFieldHtml", { configurable: true, get: () => _psSfxFieldHtml, set: (__v) => { _psSfxFieldHtml = __v; } });
-Object.defineProperty(globalThis, "_psAudioHtml", { configurable: true, get: () => _psAudioHtml, set: (__v) => { _psAudioHtml = __v; } });
-Object.defineProperty(globalThis, "psSetAudio", { configurable: true, get: () => psSetAudio, set: (__v) => { psSetAudio = __v; } });
-Object.defineProperty(globalThis, "psSetSfx", { configurable: true, get: () => psSetSfx, set: (__v) => { psSetSfx = __v; } });
-Object.defineProperty(globalThis, "psTestSfx", { configurable: true, get: () => psTestSfx, set: (__v) => { psTestSfx = __v; } });
-Object.defineProperty(globalThis, "psTestSfxId", { configurable: true, get: () => psTestSfxId, set: (__v) => { psTestSfxId = __v; } });
-Object.defineProperty(globalThis, "psAddAudioEvent", { configurable: true, get: () => psAddAudioEvent, set: (__v) => { psAddAudioEvent = __v; } });
-Object.defineProperty(globalThis, "psUpdateAudioEvent", { configurable: true, get: () => psUpdateAudioEvent, set: (__v) => { psUpdateAudioEvent = __v; } });
-Object.defineProperty(globalThis, "psRemoveAudioEvent", { configurable: true, get: () => psRemoveAudioEvent, set: (__v) => { psRemoveAudioEvent = __v; } });
-Object.defineProperty(globalThis, "_psLightingHtml", { configurable: true, get: () => _psLightingHtml, set: (__v) => { _psLightingHtml = __v; } });
-Object.defineProperty(globalThis, "psToggleBloom", { configurable: true, get: () => psToggleBloom, set: (__v) => { psToggleBloom = __v; } });
-Object.defineProperty(globalThis, "psSetLighting", { configurable: true, get: () => psSetLighting, set: (__v) => { psSetLighting = __v; } });
-Object.defineProperty(globalThis, "_psScreenFxHtml", { configurable: true, get: () => _psScreenFxHtml, set: (__v) => { _psScreenFxHtml = __v; } });
-Object.defineProperty(globalThis, "_psQualityHtml", { configurable: true, get: () => _psQualityHtml, set: (__v) => { _psQualityHtml = __v; } });
-Object.defineProperty(globalThis, "_psEmitterPanelHtml", { configurable: true, get: () => _psEmitterPanelHtml, set: (__v) => { _psEmitterPanelHtml = __v; } });
-Object.defineProperty(globalThis, "_psLayerFxHtml", { configurable: true, get: () => _psLayerFxHtml, set: (__v) => { _psLayerFxHtml = __v; } });
-Object.defineProperty(globalThis, "psToggleLayerGlow", { configurable: true, get: () => psToggleLayerGlow, set: (__v) => { psToggleLayerGlow = __v; } });
-Object.defineProperty(globalThis, "psToggleLayerTrail", { configurable: true, get: () => psToggleLayerTrail, set: (__v) => { psToggleLayerTrail = __v; } });
-Object.defineProperty(globalThis, "psToggleLayerLightCast", { configurable: true, get: () => psToggleLayerLightCast, set: (__v) => { psToggleLayerLightCast = __v; } });
-Object.defineProperty(globalThis, "psToggleSpritesheet", { configurable: true, get: () => psToggleSpritesheet, set: (__v) => { psToggleSpritesheet = __v; } });
+Object.defineProperty(globalThis, "_psValidateEmitterCfg", { configurable: true, writable: true, value: _psValidateEmitterCfg });
+Object.defineProperty(globalThis, "_psPushHistory", { configurable: true, writable: true, value: _psPushHistory });
+Object.defineProperty(globalThis, "_psHistoryReset", { configurable: true, writable: true, value: _psHistoryReset });
+Object.defineProperty(globalThis, "psUndo", { configurable: true, writable: true, value: psUndo });
+Object.defineProperty(globalThis, "psRedo", { configurable: true, writable: true, value: psRedo });
+Object.defineProperty(globalThis, "pixiStudioInit", { configurable: true, writable: true, value: pixiStudioInit });
+Object.defineProperty(globalThis, "psRenderShell", { configurable: true, writable: true, value: psRenderShell });
+Object.defineProperty(globalThis, "psCarregarLista", { configurable: true, writable: true, value: psCarregarLista });
+Object.defineProperty(globalThis, "psFilterAnimList", { configurable: true, writable: true, value: psFilterAnimList });
+Object.defineProperty(globalThis, "_psRenderAnimList", { configurable: true, writable: true, value: _psRenderAnimList });
+Object.defineProperty(globalThis, "psDuplicarAnimacao", { configurable: true, writable: true, value: psDuplicarAnimacao });
+Object.defineProperty(globalThis, "psCarregarAnimacao", { configurable: true, writable: true, value: psCarregarAnimacao });
+Object.defineProperty(globalThis, "psNova", { configurable: true, writable: true, value: psNova });
+Object.defineProperty(globalThis, "_psDefaultConfig", { configurable: true, writable: true, value: _psDefaultConfig });
+Object.defineProperty(globalThis, "psSalvar", { configurable: true, writable: true, value: psSalvar });
+Object.defineProperty(globalThis, "psExcluirAtual", { configurable: true, writable: true, value: psExcluirAtual });
+Object.defineProperty(globalThis, "_psSetDirty", { configurable: true, writable: true, value: _psSetDirty });
+Object.defineProperty(globalThis, "psAddLayer", { configurable: true, writable: true, value: psAddLayer });
+Object.defineProperty(globalThis, "psDuplicateLayer", { configurable: true, writable: true, value: psDuplicateLayer });
+Object.defineProperty(globalThis, "psRemoveLayer", { configurable: true, writable: true, value: psRemoveLayer });
+Object.defineProperty(globalThis, "psMoveLayer", { configurable: true, writable: true, value: psMoveLayer });
+Object.defineProperty(globalThis, "psSelectLayer", { configurable: true, writable: true, value: psSelectLayer });
+Object.defineProperty(globalThis, "psUpdateLayerProp", { configurable: true, writable: true, value: psUpdateLayerProp });
+Object.defineProperty(globalThis, "psUpdateEmitterProp", { configurable: true, writable: true, value: psUpdateEmitterProp });
+Object.defineProperty(globalThis, "psAddKeyframe", { configurable: true, writable: true, value: psAddKeyframe });
+Object.defineProperty(globalThis, "psUpdateKeyframe", { configurable: true, writable: true, value: psUpdateKeyframe });
+Object.defineProperty(globalThis, "psRemoveKeyframe", { configurable: true, writable: true, value: psRemoveKeyframe });
+Object.defineProperty(globalThis, "_psGetLayer", { configurable: true, writable: true, value: _psGetLayer });
+Object.defineProperty(globalThis, "_psDefaultKeyframe", { configurable: true, writable: true, value: _psDefaultKeyframe });
+Object.defineProperty(globalThis, "_psRenderLayerList", { configurable: true, writable: true, value: _psRenderLayerList });
+Object.defineProperty(globalThis, "_psRenderPropsPanel", { configurable: true, writable: true, value: _psRenderPropsPanel });
+Object.defineProperty(globalThis, "_psLightPanelHtml", { configurable: true, writable: true, value: _psLightPanelHtml });
+Object.defineProperty(globalThis, "_psIsoConfigHtml", { configurable: true, writable: true, value: _psIsoConfigHtml });
+Object.defineProperty(globalThis, "_esc", { configurable: true, writable: true, value: _esc });
+Object.defineProperty(globalThis, "psUpdateConfigProp", { configurable: true, writable: true, value: psUpdateConfigProp });
+Object.defineProperty(globalThis, "_psSfxOptions", { configurable: true, writable: true, value: _psSfxOptions });
+Object.defineProperty(globalThis, "_psSfxFieldHtml", { configurable: true, writable: true, value: _psSfxFieldHtml });
+Object.defineProperty(globalThis, "_psAudioHtml", { configurable: true, writable: true, value: _psAudioHtml });
+Object.defineProperty(globalThis, "psSetAudio", { configurable: true, writable: true, value: psSetAudio });
+Object.defineProperty(globalThis, "psSetSfx", { configurable: true, writable: true, value: psSetSfx });
+Object.defineProperty(globalThis, "psTestSfx", { configurable: true, writable: true, value: psTestSfx });
+Object.defineProperty(globalThis, "psTestSfxId", { configurable: true, writable: true, value: psTestSfxId });
+Object.defineProperty(globalThis, "psAddAudioEvent", { configurable: true, writable: true, value: psAddAudioEvent });
+Object.defineProperty(globalThis, "psUpdateAudioEvent", { configurable: true, writable: true, value: psUpdateAudioEvent });
+Object.defineProperty(globalThis, "psRemoveAudioEvent", { configurable: true, writable: true, value: psRemoveAudioEvent });
+Object.defineProperty(globalThis, "_psLightingHtml", { configurable: true, writable: true, value: _psLightingHtml });
+Object.defineProperty(globalThis, "psToggleBloom", { configurable: true, writable: true, value: psToggleBloom });
+Object.defineProperty(globalThis, "psSetLighting", { configurable: true, writable: true, value: psSetLighting });
+Object.defineProperty(globalThis, "_psScreenFxHtml", { configurable: true, writable: true, value: _psScreenFxHtml });
+Object.defineProperty(globalThis, "_psQualityHtml", { configurable: true, writable: true, value: _psQualityHtml });
+Object.defineProperty(globalThis, "_psEmitterPanelHtml", { configurable: true, writable: true, value: _psEmitterPanelHtml });
+Object.defineProperty(globalThis, "_psLayerFxHtml", { configurable: true, writable: true, value: _psLayerFxHtml });
+Object.defineProperty(globalThis, "psToggleLayerGlow", { configurable: true, writable: true, value: psToggleLayerGlow });
+Object.defineProperty(globalThis, "psToggleLayerTrail", { configurable: true, writable: true, value: psToggleLayerTrail });
+Object.defineProperty(globalThis, "psToggleLayerLightCast", { configurable: true, writable: true, value: psToggleLayerLightCast });
+Object.defineProperty(globalThis, "psToggleSpritesheet", { configurable: true, writable: true, value: psToggleSpritesheet });
 Object.defineProperty(globalThis, "_PS_FILTER_PARAMS", { configurable: true, get: () => _PS_FILTER_PARAMS });
 Object.defineProperty(globalThis, "_PS_FILTER_TYPES", { configurable: true, get: () => _PS_FILTER_TYPES });
-Object.defineProperty(globalThis, "_psFilterArr", { configurable: true, get: () => _psFilterArr, set: (__v) => { _psFilterArr = __v; } });
-Object.defineProperty(globalThis, "_psFilterStackHtml", { configurable: true, get: () => _psFilterStackHtml, set: (__v) => { _psFilterStackHtml = __v; } });
-Object.defineProperty(globalThis, "_psFilterStackHtmlFor", { configurable: true, get: () => _psFilterStackHtmlFor, set: (__v) => { _psFilterStackHtmlFor = __v; } });
-Object.defineProperty(globalThis, "psAddFilter", { configurable: true, get: () => psAddFilter, set: (__v) => { psAddFilter = __v; } });
-Object.defineProperty(globalThis, "psRemoveFilter", { configurable: true, get: () => psRemoveFilter, set: (__v) => { psRemoveFilter = __v; } });
-Object.defineProperty(globalThis, "psUpdateFilterParam", { configurable: true, get: () => psUpdateFilterParam, set: (__v) => { psUpdateFilterParam = __v; } });
-Object.defineProperty(globalThis, "_psLayerCommonHtml", { configurable: true, get: () => _psLayerCommonHtml, set: (__v) => { _psLayerCommonHtml = __v; } });
-Object.defineProperty(globalThis, "_psAnchorBtnGroup", { configurable: true, get: () => _psAnchorBtnGroup, set: (__v) => { _psAnchorBtnGroup = __v; } });
-Object.defineProperty(globalThis, "_psAnchorCellGrid", { configurable: true, get: () => _psAnchorCellGrid, set: (__v) => { _psAnchorCellGrid = __v; } });
-Object.defineProperty(globalThis, "_psLayerAnchorHtml", { configurable: true, get: () => _psLayerAnchorHtml, set: (__v) => { _psLayerAnchorHtml = __v; } });
-Object.defineProperty(globalThis, "psSetAnchor", { configurable: true, get: () => psSetAnchor, set: (__v) => { psSetAnchor = __v; } });
-Object.defineProperty(globalThis, "psSetAnchorCell", { configurable: true, get: () => psSetAnchorCell, set: (__v) => { psSetAnchorCell = __v; } });
-Object.defineProperty(globalThis, "psSetAnchorHeight", { configurable: true, get: () => psSetAnchorHeight, set: (__v) => { psSetAnchorHeight = __v; } });
-Object.defineProperty(globalThis, "_psRangeHtml", { configurable: true, get: () => _psRangeHtml, set: (__v) => { _psRangeHtml = __v; } });
-Object.defineProperty(globalThis, "_psColorGradientHtml", { configurable: true, get: () => _psColorGradientHtml, set: (__v) => { _psColorGradientHtml = __v; } });
-Object.defineProperty(globalThis, "_psCurveRowsHtml", { configurable: true, get: () => _psCurveRowsHtml, set: (__v) => { _psCurveRowsHtml = __v; } });
-Object.defineProperty(globalThis, "_psAlphaCurveHtml", { configurable: true, get: () => _psAlphaCurveHtml, set: (__v) => { _psAlphaCurveHtml = __v; } });
-Object.defineProperty(globalThis, "_psScaleCurveHtml", { configurable: true, get: () => _psScaleCurveHtml, set: (__v) => { _psScaleCurveHtml = __v; } });
-Object.defineProperty(globalThis, "_psSpawnFieldsHtml", { configurable: true, get: () => _psSpawnFieldsHtml, set: (__v) => { _psSpawnFieldsHtml = __v; } });
-Object.defineProperty(globalThis, "_psSpriteShapeHtml", { configurable: true, get: () => _psSpriteShapeHtml, set: (__v) => { _psSpriteShapeHtml = __v; } });
-Object.defineProperty(globalThis, "_psBgPanelHtml", { configurable: true, get: () => _psBgPanelHtml, set: (__v) => { _psBgPanelHtml = __v; } });
-Object.defineProperty(globalThis, "psUpdateColorStop", { configurable: true, get: () => psUpdateColorStop, set: (__v) => { psUpdateColorStop = __v; } });
-Object.defineProperty(globalThis, "psAddColorStop", { configurable: true, get: () => psAddColorStop, set: (__v) => { psAddColorStop = __v; } });
-Object.defineProperty(globalThis, "psRemoveColorStop", { configurable: true, get: () => psRemoveColorStop, set: (__v) => { psRemoveColorStop = __v; } });
-Object.defineProperty(globalThis, "psUpdateAlphaStop", { configurable: true, get: () => psUpdateAlphaStop, set: (__v) => { psUpdateAlphaStop = __v; } });
-Object.defineProperty(globalThis, "psUpdateScaleStop", { configurable: true, get: () => psUpdateScaleStop, set: (__v) => { psUpdateScaleStop = __v; } });
-Object.defineProperty(globalThis, "psAddAlphaStop", { configurable: true, get: () => psAddAlphaStop, set: (__v) => { psAddAlphaStop = __v; } });
-Object.defineProperty(globalThis, "psRemoveAlphaStop", { configurable: true, get: () => psRemoveAlphaStop, set: (__v) => { psRemoveAlphaStop = __v; } });
-Object.defineProperty(globalThis, "psUpdateAlphaStopTime", { configurable: true, get: () => psUpdateAlphaStopTime, set: (__v) => { psUpdateAlphaStopTime = __v; } });
-Object.defineProperty(globalThis, "psAddScaleStop", { configurable: true, get: () => psAddScaleStop, set: (__v) => { psAddScaleStop = __v; } });
-Object.defineProperty(globalThis, "psRemoveScaleStop", { configurable: true, get: () => psRemoveScaleStop, set: (__v) => { psRemoveScaleStop = __v; } });
-Object.defineProperty(globalThis, "psUpdateScaleStopTime", { configurable: true, get: () => psUpdateScaleStopTime, set: (__v) => { psUpdateScaleStopTime = __v; } });
-Object.defineProperty(globalThis, "psUpdateLayerOffset", { configurable: true, get: () => psUpdateLayerOffset, set: (__v) => { psUpdateLayerOffset = __v; } });
-Object.defineProperty(globalThis, "psUpdateEmitterDir", { configurable: true, get: () => psUpdateEmitterDir, set: (__v) => { psUpdateEmitterDir = __v; } });
-Object.defineProperty(globalThis, "psSetSpawnType", { configurable: true, get: () => psSetSpawnType, set: (__v) => { psSetSpawnType = __v; } });
-Object.defineProperty(globalThis, "psUpdateSpawnRect", { configurable: true, get: () => psUpdateSpawnRect, set: (__v) => { psUpdateSpawnRect = __v; } });
-Object.defineProperty(globalThis, "_psBeginDragOrigin", { configurable: true, get: () => _psBeginDragOrigin, set: (__v) => { _psBeginDragOrigin = __v; } });
-Object.defineProperty(globalThis, "_psCheckWebGLOK", { configurable: true, get: () => _psCheckWebGLOK, set: (__v) => { _psCheckWebGLOK = __v; } });
-Object.defineProperty(globalThis, "_psDrawUnsupportedMessage", { configurable: true, get: () => _psDrawUnsupportedMessage, set: (__v) => { _psDrawUnsupportedMessage = __v; } });
+Object.defineProperty(globalThis, "_psFilterArr", { configurable: true, writable: true, value: _psFilterArr });
+Object.defineProperty(globalThis, "_psFilterStackHtml", { configurable: true, writable: true, value: _psFilterStackHtml });
+Object.defineProperty(globalThis, "_psFilterStackHtmlFor", { configurable: true, writable: true, value: _psFilterStackHtmlFor });
+Object.defineProperty(globalThis, "psAddFilter", { configurable: true, writable: true, value: psAddFilter });
+Object.defineProperty(globalThis, "psRemoveFilter", { configurable: true, writable: true, value: psRemoveFilter });
+Object.defineProperty(globalThis, "psUpdateFilterParam", { configurable: true, writable: true, value: psUpdateFilterParam });
+Object.defineProperty(globalThis, "_psLayerCommonHtml", { configurable: true, writable: true, value: _psLayerCommonHtml });
+Object.defineProperty(globalThis, "_psAnchorBtnGroup", { configurable: true, writable: true, value: _psAnchorBtnGroup });
+Object.defineProperty(globalThis, "_psAnchorCellGrid", { configurable: true, writable: true, value: _psAnchorCellGrid });
+Object.defineProperty(globalThis, "_psLayerAnchorHtml", { configurable: true, writable: true, value: _psLayerAnchorHtml });
+Object.defineProperty(globalThis, "psSetAnchor", { configurable: true, writable: true, value: psSetAnchor });
+Object.defineProperty(globalThis, "psSetAnchorCell", { configurable: true, writable: true, value: psSetAnchorCell });
+Object.defineProperty(globalThis, "psSetAnchorHeight", { configurable: true, writable: true, value: psSetAnchorHeight });
+Object.defineProperty(globalThis, "_psRangeHtml", { configurable: true, writable: true, value: _psRangeHtml });
+Object.defineProperty(globalThis, "_psColorGradientHtml", { configurable: true, writable: true, value: _psColorGradientHtml });
+Object.defineProperty(globalThis, "_psCurveRowsHtml", { configurable: true, writable: true, value: _psCurveRowsHtml });
+Object.defineProperty(globalThis, "_psAlphaCurveHtml", { configurable: true, writable: true, value: _psAlphaCurveHtml });
+Object.defineProperty(globalThis, "_psScaleCurveHtml", { configurable: true, writable: true, value: _psScaleCurveHtml });
+Object.defineProperty(globalThis, "_psSpawnFieldsHtml", { configurable: true, writable: true, value: _psSpawnFieldsHtml });
+Object.defineProperty(globalThis, "_psSpriteShapeHtml", { configurable: true, writable: true, value: _psSpriteShapeHtml });
+Object.defineProperty(globalThis, "_psBgPanelHtml", { configurable: true, writable: true, value: _psBgPanelHtml });
+Object.defineProperty(globalThis, "psUpdateColorStop", { configurable: true, writable: true, value: psUpdateColorStop });
+Object.defineProperty(globalThis, "psAddColorStop", { configurable: true, writable: true, value: psAddColorStop });
+Object.defineProperty(globalThis, "psRemoveColorStop", { configurable: true, writable: true, value: psRemoveColorStop });
+Object.defineProperty(globalThis, "psUpdateAlphaStop", { configurable: true, writable: true, value: psUpdateAlphaStop });
+Object.defineProperty(globalThis, "psUpdateScaleStop", { configurable: true, writable: true, value: psUpdateScaleStop });
+Object.defineProperty(globalThis, "psAddAlphaStop", { configurable: true, writable: true, value: psAddAlphaStop });
+Object.defineProperty(globalThis, "psRemoveAlphaStop", { configurable: true, writable: true, value: psRemoveAlphaStop });
+Object.defineProperty(globalThis, "psUpdateAlphaStopTime", { configurable: true, writable: true, value: psUpdateAlphaStopTime });
+Object.defineProperty(globalThis, "psAddScaleStop", { configurable: true, writable: true, value: psAddScaleStop });
+Object.defineProperty(globalThis, "psRemoveScaleStop", { configurable: true, writable: true, value: psRemoveScaleStop });
+Object.defineProperty(globalThis, "psUpdateScaleStopTime", { configurable: true, writable: true, value: psUpdateScaleStopTime });
+Object.defineProperty(globalThis, "psUpdateLayerOffset", { configurable: true, writable: true, value: psUpdateLayerOffset });
+Object.defineProperty(globalThis, "psUpdateEmitterDir", { configurable: true, writable: true, value: psUpdateEmitterDir });
+Object.defineProperty(globalThis, "psSetSpawnType", { configurable: true, writable: true, value: psSetSpawnType });
+Object.defineProperty(globalThis, "psUpdateSpawnRect", { configurable: true, writable: true, value: psUpdateSpawnRect });
+Object.defineProperty(globalThis, "_psBeginDragOrigin", { configurable: true, writable: true, value: _psBeginDragOrigin });
+Object.defineProperty(globalThis, "_psCheckWebGLOK", { configurable: true, writable: true, value: _psCheckWebGLOK });
+Object.defineProperty(globalThis, "_psDrawUnsupportedMessage", { configurable: true, writable: true, value: _psDrawUnsupportedMessage });
 Object.defineProperty(globalThis, "_psResizeTimer", { configurable: true, get: () => _psResizeTimer, set: (__v) => { _psResizeTimer = __v; } });
-Object.defineProperty(globalThis, "psPreviewMount", { configurable: true, get: () => psPreviewMount, set: (__v) => { psPreviewMount = __v; } });
-Object.defineProperty(globalThis, "psPreviewUnmount", { configurable: true, get: () => psPreviewUnmount, set: (__v) => { psPreviewUnmount = __v; } });
-Object.defineProperty(globalThis, "_psDestroyFilters", { configurable: true, get: () => _psDestroyFilters, set: (__v) => { _psDestroyFilters = __v; } });
-Object.defineProperty(globalThis, "_psRemountOrRebuild", { configurable: true, get: () => _psRemountOrRebuild, set: (__v) => { _psRemountOrRebuild = __v; } });
-Object.defineProperty(globalThis, "psPreviewPlay", { configurable: true, get: () => psPreviewPlay, set: (__v) => { psPreviewPlay = __v; } });
-Object.defineProperty(globalThis, "_psDoPlay", { configurable: true, get: () => _psDoPlay, set: (__v) => { _psDoPlay = __v; } });
-Object.defineProperty(globalThis, "_psPlayPreviewAudio", { configurable: true, get: () => _psPlayPreviewAudio, set: (__v) => { _psPlayPreviewAudio = __v; } });
-Object.defineProperty(globalThis, "psPreviewPause", { configurable: true, get: () => psPreviewPause, set: (__v) => { psPreviewPause = __v; } });
-Object.defineProperty(globalThis, "psPreviewStop", { configurable: true, get: () => psPreviewStop, set: (__v) => { psPreviewStop = __v; } });
-Object.defineProperty(globalThis, "psPreviewToggleLoop", { configurable: true, get: () => psPreviewToggleLoop, set: (__v) => { psPreviewToggleLoop = __v; } });
-Object.defineProperty(globalThis, "psPreviewZoom", { configurable: true, get: () => psPreviewZoom, set: (__v) => { psPreviewZoom = __v; } });
-Object.defineProperty(globalThis, "_psPreviewTick", { configurable: true, get: () => _psPreviewTick, set: (__v) => { _psPreviewTick = __v; } });
-Object.defineProperty(globalThis, "_psUpdateTimeDisplay", { configurable: true, get: () => _psUpdateTimeDisplay, set: (__v) => { _psUpdateTimeDisplay = __v; } });
-Object.defineProperty(globalThis, "_psPreviewRenderFrame", { configurable: true, get: () => _psPreviewRenderFrame, set: (__v) => { _psPreviewRenderFrame = __v; } });
-Object.defineProperty(globalThis, "_psBeginDragSprite", { configurable: true, get: () => _psBeginDragSprite, set: (__v) => { _psBeginDragSprite = __v; } });
-Object.defineProperty(globalThis, "_psDragMove", { configurable: true, get: () => _psDragMove, set: (__v) => { _psDragMove = __v; } });
-Object.defineProperty(globalThis, "_psDragEnd", { configurable: true, get: () => _psDragEnd, set: (__v) => { _psDragEnd = __v; } });
-Object.defineProperty(globalThis, "psToggleGravar", { configurable: true, get: () => psToggleGravar, set: (__v) => { psToggleGravar = __v; } });
-Object.defineProperty(globalThis, "_psRecordSelectOrigin", { configurable: true, get: () => _psRecordSelectOrigin, set: (__v) => { _psRecordSelectOrigin = __v; } });
-Object.defineProperty(globalThis, "_psRecordStart", { configurable: true, get: () => _psRecordStart, set: (__v) => { _psRecordStart = __v; } });
-Object.defineProperty(globalThis, "_psRecordPoint", { configurable: true, get: () => _psRecordPoint, set: (__v) => { _psRecordPoint = __v; } });
-Object.defineProperty(globalThis, "_psRecordFinish", { configurable: true, get: () => _psRecordFinish, set: (__v) => { _psRecordFinish = __v; } });
-Object.defineProperty(globalThis, "_psSmoothPath", { configurable: true, get: () => _psSmoothPath, set: (__v) => { _psSmoothPath = __v; } });
-Object.defineProperty(globalThis, "_psInterpKf", { configurable: true, get: () => _psInterpKf, set: (__v) => { _psInterpKf = __v; } });
-Object.defineProperty(globalThis, "psPreviewRebuildAll", { configurable: true, get: () => psPreviewRebuildAll, set: (__v) => { psPreviewRebuildAll = __v; } });
-Object.defineProperty(globalThis, "_psBuildSprite", { configurable: true, get: () => _psBuildSprite, set: (__v) => { _psBuildSprite = __v; } });
-Object.defineProperty(globalThis, "_psDrawBackground", { configurable: true, get: () => _psDrawBackground, set: (__v) => { _psDrawBackground = __v; } });
-Object.defineProperty(globalThis, "_psBuildSceneDummies", { configurable: true, get: () => _psBuildSceneDummies, set: (__v) => { _psBuildSceneDummies = __v; } });
-Object.defineProperty(globalThis, "_psSceneAnchor", { configurable: true, get: () => _psSceneAnchor, set: (__v) => { _psSceneAnchor = __v; } });
-Object.defineProperty(globalThis, "_psApplySceneFrame", { configurable: true, get: () => _psApplySceneFrame, set: (__v) => { _psApplySceneFrame = __v; } });
-Object.defineProperty(globalThis, "psToggleFx", { configurable: true, get: () => psToggleFx, set: (__v) => { psToggleFx = __v; } });
-Object.defineProperty(globalThis, "psToggleScene", { configurable: true, get: () => psToggleScene, set: (__v) => { psToggleScene = __v; } });
-Object.defineProperty(globalThis, "_psFaseBtnSync", { configurable: true, get: () => _psFaseBtnSync, set: (__v) => { _psFaseBtnSync = __v; } });
-Object.defineProperty(globalThis, "psToggleFase", { configurable: true, get: () => psToggleFase, set: (__v) => { psToggleFase = __v; } });
-Object.defineProperty(globalThis, "psFaseSetChar", { configurable: true, get: () => psFaseSetChar, set: (__v) => { psFaseSetChar = __v; } });
-Object.defineProperty(globalThis, "_psFaseCharList", { configurable: true, get: () => _psFaseCharList, set: (__v) => { _psFaseCharList = __v; } });
-Object.defineProperty(globalThis, "_psFasePopulateChars", { configurable: true, get: () => _psFasePopulateChars, set: (__v) => { _psFasePopulateChars = __v; } });
-Object.defineProperty(globalThis, "_psFaseTokenUrl", { configurable: true, get: () => _psFaseTokenUrl, set: (__v) => { _psFaseTokenUrl = __v; } });
-Object.defineProperty(globalThis, "_psFaseStyleLayer", { configurable: true, get: () => _psFaseStyleLayer, set: (__v) => { _psFaseStyleLayer = __v; } });
-Object.defineProperty(globalThis, "_psFaseCosX", { configurable: true, get: () => _psFaseCosX, set: (__v) => { _psFaseCosX = __v; } });
-Object.defineProperty(globalThis, "_psFaseDrawFloor", { configurable: true, get: () => _psFaseDrawFloor, set: (__v) => { _psFaseDrawFloor = __v; } });
-Object.defineProperty(globalThis, "_psFaseStandToken", { configurable: true, get: () => _psFaseStandToken, set: (__v) => { _psFaseStandToken = __v; } });
-Object.defineProperty(globalThis, "_psBuildFaseStage", { configurable: true, get: () => _psBuildFaseStage, set: (__v) => { _psBuildFaseStage = __v; } });
-Object.defineProperty(globalThis, "_psHexToInt", { configurable: true, get: () => _psHexToInt, set: (__v) => { _psHexToInt = __v; } });
-Object.defineProperty(globalThis, "_psApplyContainerFilters", { configurable: true, get: () => _psApplyContainerFilters, set: (__v) => { _psApplyContainerFilters = __v; } });
-Object.defineProperty(globalThis, "_psEnsureFiltersForCfg", { configurable: true, get: () => _psEnsureFiltersForCfg, set: (__v) => { _psEnsureFiltersForCfg = __v; } });
-Object.defineProperty(globalThis, "_psCreateEmitter", { configurable: true, get: () => _psCreateEmitter, set: (__v) => { _psCreateEmitter = __v; } });
-Object.defineProperty(globalThis, "psPreviewSyncEmitter", { configurable: true, get: () => psPreviewSyncEmitter, set: (__v) => { psPreviewSyncEmitter = __v; } });
-Object.defineProperty(globalThis, "_psDestroyAllEmitters", { configurable: true, get: () => _psDestroyAllEmitters, set: (__v) => { _psDestroyAllEmitters = __v; } });
-Object.defineProperty(globalThis, "_psCaptureThumbnail", { configurable: true, get: () => _psCaptureThumbnail, set: (__v) => { _psCaptureThumbnail = __v; } });
-Object.defineProperty(globalThis, "psTimelineRender", { configurable: true, get: () => psTimelineRender, set: (__v) => { psTimelineRender = __v; } });
-Object.defineProperty(globalThis, "psTimelineScrubStart", { configurable: true, get: () => psTimelineScrubStart, set: (__v) => { psTimelineScrubStart = __v; } });
-Object.defineProperty(globalThis, "psTimelineScrubMove", { configurable: true, get: () => psTimelineScrubMove, set: (__v) => { psTimelineScrubMove = __v; } });
-Object.defineProperty(globalThis, "psTimelineScrubEnd", { configurable: true, get: () => psTimelineScrubEnd, set: (__v) => { psTimelineScrubEnd = __v; } });
-Object.defineProperty(globalThis, "psTimelineKfDragStart", { configurable: true, get: () => psTimelineKfDragStart, set: (__v) => { psTimelineKfDragStart = __v; } });
-Object.defineProperty(globalThis, "_psKfDragMove", { configurable: true, get: () => _psKfDragMove, set: (__v) => { _psKfDragMove = __v; } });
-Object.defineProperty(globalThis, "_psKfDragEnd", { configurable: true, get: () => _psKfDragEnd, set: (__v) => { _psKfDragEnd = __v; } });
-Object.defineProperty(globalThis, "psTimelineLayerDragStart", { configurable: true, get: () => psTimelineLayerDragStart, set: (__v) => { psTimelineLayerDragStart = __v; } });
-Object.defineProperty(globalThis, "_psLayerDragMove", { configurable: true, get: () => _psLayerDragMove, set: (__v) => { _psLayerDragMove = __v; } });
-Object.defineProperty(globalThis, "_psLayerDragEnd", { configurable: true, get: () => _psLayerDragEnd, set: (__v) => { _psLayerDragEnd = __v; } });
-Object.defineProperty(globalThis, "psTimelineSpawnPathDragStart", { configurable: true, get: () => psTimelineSpawnPathDragStart, set: (__v) => { psTimelineSpawnPathDragStart = __v; } });
-Object.defineProperty(globalThis, "_psSpawnPathDragMove", { configurable: true, get: () => _psSpawnPathDragMove, set: (__v) => { _psSpawnPathDragMove = __v; } });
-Object.defineProperty(globalThis, "_psSpawnPathDragEnd", { configurable: true, get: () => _psSpawnPathDragEnd, set: (__v) => { _psSpawnPathDragEnd = __v; } });
-Object.defineProperty(globalThis, "_psRenderBehaviorPanel", { configurable: true, get: () => _psRenderBehaviorPanel, set: (__v) => { _psRenderBehaviorPanel = __v; } });
-Object.defineProperty(globalThis, "psSetTravel", { configurable: true, get: () => psSetTravel, set: (__v) => { psSetTravel = __v; } });
-Object.defineProperty(globalThis, "_psChainBuilderHtml", { configurable: true, get: () => _psChainBuilderHtml, set: (__v) => { _psChainBuilderHtml = __v; } });
-Object.defineProperty(globalThis, "_psChainSeq", { configurable: true, get: () => _psChainSeq, set: (__v) => { _psChainSeq = __v; } });
-Object.defineProperty(globalThis, "psChainAdd", { configurable: true, get: () => psChainAdd, set: (__v) => { psChainAdd = __v; } });
-Object.defineProperty(globalThis, "psChainSetDelay", { configurable: true, get: () => psChainSetDelay, set: (__v) => { psChainSetDelay = __v; } });
-Object.defineProperty(globalThis, "psChainRemove", { configurable: true, get: () => psChainRemove, set: (__v) => { psChainRemove = __v; } });
-Object.defineProperty(globalThis, "psChainMove", { configurable: true, get: () => psChainMove, set: (__v) => { psChainMove = __v; } });
-Object.defineProperty(globalThis, "psPresetsAbrir", { configurable: true, get: () => psPresetsAbrir, set: (__v) => { psPresetsAbrir = __v; } });
-Object.defineProperty(globalThis, "psLoadPreset", { configurable: true, get: () => psLoadPreset, set: (__v) => { psLoadPreset = __v; } });
-Object.defineProperty(globalThis, "psImportarAbrir", { configurable: true, get: () => psImportarAbrir, set: (__v) => { psImportarAbrir = __v; } });
-Object.defineProperty(globalThis, "psImportarJson", { configurable: true, get: () => psImportarJson, set: (__v) => { psImportarJson = __v; } });
-Object.defineProperty(globalThis, "psImportarArquivo", { configurable: true, get: () => psImportarArquivo, set: (__v) => { psImportarArquivo = __v; } });
-Object.defineProperty(globalThis, "psExportarJson", { configurable: true, get: () => psExportarJson, set: (__v) => { psExportarJson = __v; } });
-Object.defineProperty(globalThis, "psUploadTexture", { configurable: true, get: () => psUploadTexture, set: (__v) => { psUploadTexture = __v; } });
-Object.defineProperty(globalThis, "psPickerAbrir", { configurable: true, get: () => psPickerAbrir, set: (__v) => { psPickerAbrir = __v; } });
-Object.defineProperty(globalThis, "_psRenderPickerList", { configurable: true, get: () => _psRenderPickerList, set: (__v) => { _psRenderPickerList = __v; } });
-Object.defineProperty(globalThis, "psPickerSelecionar", { configurable: true, get: () => psPickerSelecionar, set: (__v) => { psPickerSelecionar = __v; } });
+Object.defineProperty(globalThis, "psPreviewMount", { configurable: true, writable: true, value: psPreviewMount });
+Object.defineProperty(globalThis, "psPreviewUnmount", { configurable: true, writable: true, value: psPreviewUnmount });
+Object.defineProperty(globalThis, "_psDestroyFilters", { configurable: true, writable: true, value: _psDestroyFilters });
+Object.defineProperty(globalThis, "_psRemountOrRebuild", { configurable: true, writable: true, value: _psRemountOrRebuild });
+Object.defineProperty(globalThis, "psPreviewPlay", { configurable: true, writable: true, value: psPreviewPlay });
+Object.defineProperty(globalThis, "_psDoPlay", { configurable: true, writable: true, value: _psDoPlay });
+Object.defineProperty(globalThis, "_psPlayPreviewAudio", { configurable: true, writable: true, value: _psPlayPreviewAudio });
+Object.defineProperty(globalThis, "psPreviewPause", { configurable: true, writable: true, value: psPreviewPause });
+Object.defineProperty(globalThis, "psPreviewStop", { configurable: true, writable: true, value: psPreviewStop });
+Object.defineProperty(globalThis, "psPreviewToggleLoop", { configurable: true, writable: true, value: psPreviewToggleLoop });
+Object.defineProperty(globalThis, "psPreviewZoom", { configurable: true, writable: true, value: psPreviewZoom });
+Object.defineProperty(globalThis, "_psPreviewTick", { configurable: true, writable: true, value: _psPreviewTick });
+Object.defineProperty(globalThis, "_psUpdateTimeDisplay", { configurable: true, writable: true, value: _psUpdateTimeDisplay });
+Object.defineProperty(globalThis, "_psPreviewRenderFrame", { configurable: true, writable: true, value: _psPreviewRenderFrame });
+Object.defineProperty(globalThis, "_psBeginDragSprite", { configurable: true, writable: true, value: _psBeginDragSprite });
+Object.defineProperty(globalThis, "_psDragMove", { configurable: true, writable: true, value: _psDragMove });
+Object.defineProperty(globalThis, "_psDragEnd", { configurable: true, writable: true, value: _psDragEnd });
+Object.defineProperty(globalThis, "psToggleGravar", { configurable: true, writable: true, value: psToggleGravar });
+Object.defineProperty(globalThis, "_psRecordSelectOrigin", { configurable: true, writable: true, value: _psRecordSelectOrigin });
+Object.defineProperty(globalThis, "_psRecordStart", { configurable: true, writable: true, value: _psRecordStart });
+Object.defineProperty(globalThis, "_psRecordPoint", { configurable: true, writable: true, value: _psRecordPoint });
+Object.defineProperty(globalThis, "_psRecordFinish", { configurable: true, writable: true, value: _psRecordFinish });
+Object.defineProperty(globalThis, "_psSmoothPath", { configurable: true, writable: true, value: _psSmoothPath });
+Object.defineProperty(globalThis, "_psInterpKf", { configurable: true, writable: true, value: _psInterpKf });
+Object.defineProperty(globalThis, "psPreviewRebuildAll", { configurable: true, writable: true, value: psPreviewRebuildAll });
+Object.defineProperty(globalThis, "_psBuildSprite", { configurable: true, writable: true, value: _psBuildSprite });
+Object.defineProperty(globalThis, "_psDrawBackground", { configurable: true, writable: true, value: _psDrawBackground });
+Object.defineProperty(globalThis, "_psBuildSceneDummies", { configurable: true, writable: true, value: _psBuildSceneDummies });
+Object.defineProperty(globalThis, "_psSceneAnchor", { configurable: true, writable: true, value: _psSceneAnchor });
+Object.defineProperty(globalThis, "_psApplySceneFrame", { configurable: true, writable: true, value: _psApplySceneFrame });
+Object.defineProperty(globalThis, "psToggleFx", { configurable: true, writable: true, value: psToggleFx });
+Object.defineProperty(globalThis, "psToggleScene", { configurable: true, writable: true, value: psToggleScene });
+Object.defineProperty(globalThis, "_psFaseBtnSync", { configurable: true, writable: true, value: _psFaseBtnSync });
+Object.defineProperty(globalThis, "psToggleFase", { configurable: true, writable: true, value: psToggleFase });
+Object.defineProperty(globalThis, "psFaseSetChar", { configurable: true, writable: true, value: psFaseSetChar });
+Object.defineProperty(globalThis, "_psFaseCharList", { configurable: true, writable: true, value: _psFaseCharList });
+Object.defineProperty(globalThis, "_psFasePopulateChars", { configurable: true, writable: true, value: _psFasePopulateChars });
+Object.defineProperty(globalThis, "_psFaseTokenUrl", { configurable: true, writable: true, value: _psFaseTokenUrl });
+Object.defineProperty(globalThis, "_psFaseStyleLayer", { configurable: true, writable: true, value: _psFaseStyleLayer });
+Object.defineProperty(globalThis, "_psFaseCosX", { configurable: true, writable: true, value: _psFaseCosX });
+Object.defineProperty(globalThis, "_psFaseDrawFloor", { configurable: true, writable: true, value: _psFaseDrawFloor });
+Object.defineProperty(globalThis, "_psFaseStandToken", { configurable: true, writable: true, value: _psFaseStandToken });
+Object.defineProperty(globalThis, "_psBuildFaseStage", { configurable: true, writable: true, value: _psBuildFaseStage });
+Object.defineProperty(globalThis, "_psHexToInt", { configurable: true, writable: true, value: _psHexToInt });
+Object.defineProperty(globalThis, "_psApplyContainerFilters", { configurable: true, writable: true, value: _psApplyContainerFilters });
+Object.defineProperty(globalThis, "_psEnsureFiltersForCfg", { configurable: true, writable: true, value: _psEnsureFiltersForCfg });
+Object.defineProperty(globalThis, "_psCreateEmitter", { configurable: true, writable: true, value: _psCreateEmitter });
+Object.defineProperty(globalThis, "psPreviewSyncEmitter", { configurable: true, writable: true, value: psPreviewSyncEmitter });
+Object.defineProperty(globalThis, "_psDestroyAllEmitters", { configurable: true, writable: true, value: _psDestroyAllEmitters });
+Object.defineProperty(globalThis, "_psCaptureThumbnail", { configurable: true, writable: true, value: _psCaptureThumbnail });
+Object.defineProperty(globalThis, "psTimelineRender", { configurable: true, writable: true, value: psTimelineRender });
+Object.defineProperty(globalThis, "psTimelineScrubStart", { configurable: true, writable: true, value: psTimelineScrubStart });
+Object.defineProperty(globalThis, "psTimelineScrubMove", { configurable: true, writable: true, value: psTimelineScrubMove });
+Object.defineProperty(globalThis, "psTimelineScrubEnd", { configurable: true, writable: true, value: psTimelineScrubEnd });
+Object.defineProperty(globalThis, "psTimelineKfDragStart", { configurable: true, writable: true, value: psTimelineKfDragStart });
+Object.defineProperty(globalThis, "_psKfDragMove", { configurable: true, writable: true, value: _psKfDragMove });
+Object.defineProperty(globalThis, "_psKfDragEnd", { configurable: true, writable: true, value: _psKfDragEnd });
+Object.defineProperty(globalThis, "psTimelineLayerDragStart", { configurable: true, writable: true, value: psTimelineLayerDragStart });
+Object.defineProperty(globalThis, "_psLayerDragMove", { configurable: true, writable: true, value: _psLayerDragMove });
+Object.defineProperty(globalThis, "_psLayerDragEnd", { configurable: true, writable: true, value: _psLayerDragEnd });
+Object.defineProperty(globalThis, "psTimelineSpawnPathDragStart", { configurable: true, writable: true, value: psTimelineSpawnPathDragStart });
+Object.defineProperty(globalThis, "_psSpawnPathDragMove", { configurable: true, writable: true, value: _psSpawnPathDragMove });
+Object.defineProperty(globalThis, "_psSpawnPathDragEnd", { configurable: true, writable: true, value: _psSpawnPathDragEnd });
+Object.defineProperty(globalThis, "_psRenderBehaviorPanel", { configurable: true, writable: true, value: _psRenderBehaviorPanel });
+Object.defineProperty(globalThis, "psSetTravel", { configurable: true, writable: true, value: psSetTravel });
+Object.defineProperty(globalThis, "_psChainBuilderHtml", { configurable: true, writable: true, value: _psChainBuilderHtml });
+Object.defineProperty(globalThis, "_psChainSeq", { configurable: true, writable: true, value: _psChainSeq });
+Object.defineProperty(globalThis, "psChainAdd", { configurable: true, writable: true, value: psChainAdd });
+Object.defineProperty(globalThis, "psChainSetDelay", { configurable: true, writable: true, value: psChainSetDelay });
+Object.defineProperty(globalThis, "psChainRemove", { configurable: true, writable: true, value: psChainRemove });
+Object.defineProperty(globalThis, "psChainMove", { configurable: true, writable: true, value: psChainMove });
+Object.defineProperty(globalThis, "psPresetsAbrir", { configurable: true, writable: true, value: psPresetsAbrir });
+Object.defineProperty(globalThis, "psLoadPreset", { configurable: true, writable: true, value: psLoadPreset });
+Object.defineProperty(globalThis, "psImportarAbrir", { configurable: true, writable: true, value: psImportarAbrir });
+Object.defineProperty(globalThis, "psImportarJson", { configurable: true, writable: true, value: psImportarJson });
+Object.defineProperty(globalThis, "psImportarArquivo", { configurable: true, writable: true, value: psImportarArquivo });
+Object.defineProperty(globalThis, "psExportarJson", { configurable: true, writable: true, value: psExportarJson });
+Object.defineProperty(globalThis, "psUploadTexture", { configurable: true, writable: true, value: psUploadTexture });
+Object.defineProperty(globalThis, "psPickerAbrir", { configurable: true, writable: true, value: psPickerAbrir });
+Object.defineProperty(globalThis, "_psRenderPickerList", { configurable: true, writable: true, value: _psRenderPickerList });
+Object.defineProperty(globalThis, "psPickerSelecionar", { configurable: true, writable: true, value: psPickerSelecionar });
