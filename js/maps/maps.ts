@@ -378,7 +378,7 @@ async function atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto) {
   if (ef.rec_atributo && ef.rec_modo === 'imediato') {
     const emArena = contexto === 'arena';
     const chars = emArena ? (AR?.chars || []) : (RPG_DATA?.characters || []);
-    const c = chars.find(x => x.nome === nomeAlvo);
+    const c: any = chars.find(x => x.nome === nomeAlvo);
     if (c) {
       const grupos = parsearFormulaDano(ef.rec_formula || '0');
       const r = grupos ? rolarGrupos(grupos) : { total: parseInt(ef.rec_formula)||0 };
@@ -468,7 +468,7 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
   const turnoAtual = contexto === 'arena' ? (AR.estado?.turno || 0) : 0;
   // AC-05-G2: HP temporário — aplica diretamente sem criar buff
   if (efeitoConfig.hp_temp) {
-    const c = contexto === 'arena'
+    const c: any = contexto === 'arena'
       ? AR.chars.find(x => x.nome === nomeAlvo)
       : RPG_DATA?.characters?.find(x => x.nome === nomeAlvo);
     if (c) {
@@ -485,7 +485,7 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
   }
   // AC-05-G2: Remover debuff
   if (efeitoConfig.remover_debuff) {
-    const c = contexto === 'arena'
+    const c: any = contexto === 'arena'
       ? AR.chars.find(x => x.nome === nomeAlvo)
       : RPG_DATA?.characters?.find(x => x.nome === nomeAlvo);
     if (c && Array.isArray(c.buffs)) {
@@ -572,14 +572,14 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
   if (buff.turnos_restantes <= 0) return;
 
   if (contexto === 'arena') {
-    const c = AR.chars.find(x => x.nome === nomeAlvo);
+    const c: any = AR.chars.find(x => x.nome === nomeAlvo);
     if (!c) return;
     if (!Array.isArray(c.buffs)) c.buffs = [];
     c.buffs.push(buff);
     await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
       { method: 'PATCH', body: JSON.stringify({ buffs: c.buffs, custom_attrs: c.custom_attrs }) });
   } else {
-    const c = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
+    const c: any = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
     if (!c) return;
     if (!Array.isArray(c.buffs)) c.buffs = [];
     c.buffs.push(buff);
@@ -905,7 +905,7 @@ async function _atkInvocarPersonagem(skill, invocadorNome, contexto, critico) {
     } catch(e) { arToast('Erro ao invocar personagem', 'erro'); }
   } else {
     // Campanha: ativa o personagem existente como pet temporário
-    const c = RPG_DATA?.characters.find(x => x.nome === nomeInvocado);
+    const c: any = RPG_DATA?.characters.find(x => x.nome === nomeInvocado);
     if (c) {
       c.hp_atual = hp;
       if (!c.custom_attrs) c.custom_attrs = {};
@@ -968,36 +968,36 @@ function calcularDanoFinal(danoBruto, tipoDano, char, attrDefs, atacanteChar) {
 
   // 1. Processar armaduras (reduzem todo dano + bônus para físico)
   for (const def of resistDefs) {
-    let cfg = {};
+    let cfg: any = {};
     try { cfg = JSON.parse(def.opcoes || '{}'); } catch(e) { continue; }
-    if (cfg.tipo !== 'armadura') continue;
+    if ((cfg as any).tipo !== 'armadura') continue;
     const valorArmadura = parseFloat(atribs[def.nome]) || 0;
     if (!valorArmadura) continue;
 
     // Redução geral (% do valor da armadura aplicada a todo dano)
-    if (cfg.pct_geral) {
-      const reducaoGeral = Math.ceil(valorArmadura * cfg.pct_geral / 100);
+    if ((cfg as any).pct_geral) {
+      const reducaoGeral = Math.ceil(valorArmadura * (cfg as any).pct_geral / 100);
       danoAtual = Math.max(0, danoAtual - reducaoGeral);
     }
     // Redução adicional para dano físico
-    if (cfg.pct_fisico && tipoDano === 'fisico') {
-      const reducaoFisica = Math.ceil(valorArmadura * cfg.pct_fisico / 100);
+    if ((cfg as any).pct_fisico && tipoDano === 'fisico') {
+      const reducaoFisica = Math.ceil(valorArmadura * (cfg as any).pct_fisico / 100);
       danoAtual = Math.max(0, danoAtual - reducaoFisica);
     }
     // Redução adicional para dano mágico
-    if (cfg.pct_magico && tipoDano === 'magico') {
-      const reducaoMagica = Math.ceil(valorArmadura * cfg.pct_magico / 100);
+    if ((cfg as any).pct_magico && tipoDano === 'magico') {
+      const reducaoMagica = Math.ceil(valorArmadura * (cfg as any).pct_magico / 100);
       danoAtual = Math.max(0, danoAtual - reducaoMagica);
     }
   }
 
   // 2. Processar resistências elementais/por tipo
   for (const def of resistDefs) {
-    let cfg = {};
+    let cfg: any = {};
     try { cfg = JSON.parse(def.opcoes || '{}'); } catch(e) { continue; }
-    if (cfg.tipo !== 'resistencia') continue;
+    if ((cfg as any).tipo !== 'resistencia') continue;
     // Verificar se este tipo de resistência se aplica ao dano
-    const dmgTypes = Array.isArray(cfg.damage_type) ? cfg.damage_type : [cfg.damage_type];
+    const dmgTypes = Array.isArray(cfg.damage_type) ? (cfg as any).damage_type : [cfg.damage_type];
     if (!dmgTypes.includes(tipoDano)) continue;
     const valorRes = parseFloat(atribs[def.nome]) || 0;
     if (!valorRes) continue;
@@ -1190,7 +1190,7 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
   const attrDefs = getAttrDefsParaDano(contexto);
   const atacanteNome = COMBATE.atacanteNome;
   if (contexto === 'arena') {
-    const c = AR.chars.find(x => x.nome === nomeAlvo);
+    const c: any = AR.chars.find(x => x.nome === nomeAlvo);
     if (!c) return;
     if ((c.buffs || []).some(b => b.imune_dano && (b.imune_dano_turnos_restantes ?? 0) > 0)) {
       mostrarToast(`🛡 ${nomeAlvo} é imune a dano!`, 'sucesso');
@@ -1205,7 +1205,7 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
     await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
       { method: 'PATCH', body: JSON.stringify({ hp_atual: novoHp }) });
   } else {
-    const c = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
+    const c: any = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
     if (!c) return;
     if ((c.buffs || []).some(b => b.imune_dano && (b.imune_dano_turnos_restantes ?? 0) > 0)) {
       mostrarToast(`🛡 ${nomeAlvo} é imune a dano!`, 'sucesso');
@@ -1578,7 +1578,7 @@ async function criativoInserir(pendente) {
 
 function criativoReceberLinhaRemota(rec) {
   if (!rec || !rec.id) return;
-  const c = {
+  const c: any = {
     id:rec.id, atacante:rec.atacante, alvo:rec.alvo, descricao:rec.descricao,
     turno:rec.turno, status:rec.status,
     formula_aprovada:rec.formula_aprovada||null,
@@ -1595,27 +1595,27 @@ function criativoReceberLinhaRemota(rec) {
   // Extrair dados de DC se formula_aprovada tiver prefixo __DC__
   const dcData = _parseDCData(c.formula_aprovada);
   if (dcData) {
-    c._dc = dcData;  // {dado, dc, eh_ataque, mensagem_fase1, resultado, critico, natural_max, mensagem_fase2}
+    (c as any)._dc = dcData;  // {dado, dc, eh_ataque, mensagem_fase1, resultado, critico, natural_max, mensagem_fase2}
   } else {
-    c._dc = null;
+    (c as any)._dc = null;
   }
   // Restaurar _alvos_area do custo_cobrado (persistido pelo mestre na Fase 2)
   if (c.custo_cobrado && typeof c.custo_cobrado === 'object' && Array.isArray(c.custo_cobrado._alvos_area)) {
-    c._alvos_area = c.custo_cobrado._alvos_area;
+    (c as any)._alvos_area = c.custo_cobrado._alvos_area;
   }
   // Detectar combate_pedido a partir do prefixo [COMBATE_PEDIDO]
   const combateMatch = (rec.descricao || '').match(/^\[COMBATE_PEDIDO\]/);
   if (combateMatch) {
-    c.tipo = 'combate_pedido';
+    (c as any).tipo = 'combate_pedido';
     const mapaMatch = (rec.descricao || '').match(/mapa:([^\s|]+)/);
-    c.mapa_id_pedido = mapaMatch ? mapaMatch[1] : null;
+    (c as any).mapa_id_pedido = mapaMatch ? mapaMatch[1] : null;
   }
   // Detectar skill request a partir do prefixo [SKILL:{...}]
   const skillMatch = (rec.descricao || '').match(/^\[SKILL:(\{.*?\})\]/);
   if (skillMatch) {
     try {
       const sk = JSON.parse(skillMatch[1]);
-      c.tipo = 'skill_request';
+      (c as any).tipo = 'skill_request';
       c.skill_nome    = sk.nome    || null;
       c.skill_formula = sk.formula || null;
       c.skill_atributo= sk.atributo|| null;
@@ -2543,7 +2543,7 @@ function mestreAbrirModalCombatePedido(id) {
     if (!ch.active_map_id || ch.active_map_id !== mapaId) return false;
     const hp = Number(ch.custom_attrs?.atributos?.HP ?? ch.custom_attrs?.hp ?? ch.custom_attrs?.['HP'] ?? 1);
     if (hp <= 0) return false;
-    const jaEmBatalha = Object.values(MAPA_STATE?.batalhas || {}).some(b =>
+    const jaEmBatalha = Object.values<any>(MAPA_STATE?.batalhas || {}).some(b =>
       b.ativa && b.participantes?.some(p => p.nome === ch.nome)
     );
     return !jaEmBatalha;
@@ -3465,14 +3465,14 @@ async function criativoJogadorRolarDC() {
   const resultado = Math.floor(Math.random() * dado) + 1;
   const dadoEl = document.getElementById('dc-dado-valor');
   
-  await new Promise(resolve => {
+  await new Promise<void>(resolve => {
     let elapsed = 0;
     const iv = setInterval(() => {
-      if (dadoEl) dadoEl.textContent = Math.floor(Math.random() * dado) + 1;
+      if (dadoEl) (dadoEl as any).textContent = Math.floor(Math.random() * dado) + 1;
       elapsed += 70;
       if (elapsed >= 490) {
         clearInterval(iv);
-        if (dadoEl) dadoEl.textContent = resultado;
+        if (dadoEl) (dadoEl as any).textContent = resultado;
         resolve();
       }
     }, 70);
@@ -3495,7 +3495,7 @@ async function criativoJogadorRolarDC() {
   
   // UX-04: Para resultados dramaticos (critico/falha), mostrar botao manual
   if (critico || !sucesso) {
-    await new Promise(resolve => {
+    await new Promise<void>(resolve => {
       const modal = document.getElementById('modal-dc-rolagem');
       if (!modal) { setTimeout(resolve, 2000); return; }
       const btnCont = document.createElement('div');
@@ -3970,7 +3970,7 @@ function _atkMostrarTrigger() {
   // ── Contagem regressiva ─────────────────────────────────────────
   _atkAnimTriggerSeg = 10;
   const segEl = document.getElementById('atk-anim-trigger-seg');
-  if (segEl) segEl.textContent = _atkAnimTriggerSeg;
+  if (segEl) (segEl as any).textContent = _atkAnimTriggerSeg;
   // Só exibir overlay no mapa se sidebar indisponível
   if (!_trigSidebar) el.style.display = 'block';
   clearInterval(_atkAnimTriggerTimer);
@@ -3993,9 +3993,9 @@ function _atkMostrarTrigger() {
   _atkAnimTriggerTimer = setInterval(() => {
     _atkAnimTriggerSeg--;
     const s = document.getElementById('atk-anim-trigger-seg');
-    if (s) s.textContent = _atkAnimTriggerSeg;
+    if (s) (s as any).textContent = _atkAnimTriggerSeg;
     const s2 = document.getElementById('atk-sb-trig-seg');
-    if (s2) s2.textContent = _atkAnimTriggerSeg;
+    if (s2) (s2 as any).textContent = _atkAnimTriggerSeg;
     if (_atkAnimTriggerSeg <= 0) _atkTriggerAnimacao();
   }, 1000);
 
@@ -4070,7 +4070,7 @@ function _atkMostrarTriggerRemoto(p) {
 }
 
 function _atkMostrarCalcDano() {
-  return new Promise(resolve => {
+  return new Promise<void>(resolve => {
     const res = COMBATE.dadosRolados;
     if (!res) {
       console.warn('[ATK] _atkMostrarCalcDano: dadosRolados vazio, pulando diálogo');
@@ -4161,7 +4161,7 @@ function _atkMostrarCalcDano() {
         chipWrap.style.display = 'flex';
         let elapsed = 0;
         const iv = setInterval(() => {
-          chip.textContent = Math.floor(Math.random() * 20) + 1;
+          (chip as any).textContent = Math.floor(Math.random() * 20) + 1;
           elapsed += 60;
           if (elapsed >= 350) {
             clearInterval(iv);
@@ -4512,7 +4512,7 @@ async function excluirPersonagemCompleto(nome, isGenerico) {
   } catch(e) {}
   RPG_DATA.characters = (RPG_DATA.characters || []).filter(c => c.nome !== nome);
   // Remove de batalhas ativas
-  Object.values(MAPA_STATE.batalhas || {}).forEach(b => {
+  Object.values<any>(MAPA_STATE.batalhas || {}).forEach(b => {
     if (b.participantes) b.participantes = b.participantes.filter(p => p.nome !== nome);
     if (b.iniciativasRoladas) delete b.iniciativasRoladas[nome];
   });
@@ -4753,7 +4753,7 @@ function selecionarDado(d,btn){DADO_SEL=d;document.querySelectorAll('.dado-btn')
 function rolarDado(){
  if(!DADO_SEL){mostrarToast('Selecione um dado','erro');return;}
  const r=Math.floor(Math.random()*DADO_SEL)+1,nEl=document.getElementById('resultado-num'),cEl=document.getElementById('resultado-critico');
- nEl.classList.remove('girar');void nEl.offsetWidth;nEl.classList.add('girar');nEl.textContent=r;
+ nEl.classList.remove('girar');void nEl.offsetWidth;nEl.classList.add('girar');(nEl as any).textContent=r;
  document.getElementById('resultado-tipo').textContent=`d${DADO_SEL}`;
  cEl.style.display='none';cEl.className='resultado-critico';
  if(DADO_SEL===20&&r===20){cEl.style.display='inline-block';cEl.classList.add('critico-pos');cEl.textContent='Crítico Perfeito!';}
@@ -5023,7 +5023,7 @@ function renderMapaViewer() {
   // Click no fundo para medição / limpar / criar zona
   const wrap = document.getElementById('mapa-wrap');
   wrap.onclick = (e) => {
-    if (e.target === wrap || e.target.id === 'mapa-img' || e.target.id === 'mapa-canvas') {
+    if ((e.target as any) === wrap || (e.target as any).id === 'mapa-img' || (e.target as any).id === 'mapa-canvas') {
       // Modo placement de mapa local
       if (PLACEMENT_STATE) {
         const _bgR = document.getElementById('mapa-img').getBoundingClientRect();
@@ -5077,7 +5077,7 @@ function renderMapaViewer() {
 }
 
 // mapaAplicarTransform3D removido — sem suporte isométrico
-function mapaAplicarTransform3D(wrapper) {
+function mapaAplicarTransform3D(wrapper, _opts?) {
   if (!wrapper) return;
   wrapper.style.transform = '';
   wrapper.style.perspective = '';
@@ -5666,9 +5666,9 @@ function mapaConfigAtualizarPreview() {
   if (!preview) return;
   if (largReal && paiLarg) {
     const dispW = (largReal * reprPct / 100).toFixed(1);
-    const pctW  = (dispW / paiLarg * 100).toFixed(1);
+    const pctW  = ((dispW as any) / paiLarg * 100).toFixed(1);
     const dispH = altReal ? (altReal * reprPct / 100).toFixed(1) : '—';
-    const pctH  = (altReal && paiAlt) ? (dispH / paiAlt * 100).toFixed(1) + '%' : '—';
+    const pctH  = (altReal && paiAlt) ? ((dispH as any) / paiAlt * 100).toFixed(1) + '%' : '—';
     preview.style.display = 'block';
     preview.innerHTML = `📐 Exibido como <strong>${dispW}${unit} × ${dispH}${unit}</strong> no mapa pai — ocupa ~<strong>${pctW}%</strong> × ${pctH} da área.`;
   } else if (largReal && reprPct !== 100) {
@@ -6002,7 +6002,7 @@ function fogRenderizar(mapId) {
   // Células 'visivel_agora' ficam 100 % visíveis via gradiente no passo 3
   const fog = FOG_STATE.mapas[mapId] || {};
   ctx.globalCompositeOperation = 'destination-out';
-  for (const [chave, estado] of Object.entries(fog)) {
+  for (const [chave, estado] of Object.entries<any>(fog)) {
     if (estado === 'oculta') continue;
     const [cs, rs] = chave.split('_').map(Number);
     ctx.globalAlpha = estado === 'visivel_agora' ? 1.0 : 0.45;
@@ -6424,14 +6424,14 @@ function batalhaNovaId(mapaId) {
 }
 
 function batalhaDoMapa(mapaId) {
-  return Object.values(MAPA_STATE.batalhas).find(b => b.mapa_id === mapaId && b.ativa) || null;
+  return Object.values<any>(MAPA_STATE.batalhas).find(b => b.mapa_id === mapaId && b.ativa) || null;
 }
 
 function batalhaBuscaMinhaAtiva() {
   // Retorna batalhas nas quais o jogador atual participa
   const meuNome = RPG_DATA?.linked;
   const isMestre = RPG_DATA?.myRole === 'mestre';
-  return Object.values(MAPA_STATE.batalhas).filter(b => {
+  return Object.values<any>(MAPA_STATE.batalhas).filter(b => {
     if (!b.ativa) return false;
     if (isMestre) return true;
     return b.participantes?.some(p => p.nome === meuNome);
@@ -6475,7 +6475,7 @@ function batalhaIdMinha() {
   if (RPG_DATA?.myRole === 'mestre') return BATALHA_ATUAL_ID;
   const meuNome = RPG_DATA?.linked;
   if (!meuNome) return BATALHA_ATUAL_ID;
-  const entrada = Object.entries(MAPA_STATE.batalhas).find(([, b]) =>
+  const entrada = Object.entries<any>(MAPA_STATE.batalhas).find(([, b]) =>
     b.ativa && b.participantes?.some(p => p.nome === meuNome)
   );
   return entrada ? entrada[0] : null;
@@ -6568,7 +6568,7 @@ function batalhaReceberEstadoRemoto(raw) {
     const isMestre = RPG_DATA?.myRole === 'mestre';
 
     // Detectar mudanças relevantes para este cliente
-    Object.entries(bd).forEach(([bid, bs]) => {
+    Object.entries<any>(bd).forEach(([bid, bs]) => {
       const anterior = MAPA_STATE.batalhas[bid];
 
       // Batalha encerrada remotamente
@@ -6609,7 +6609,7 @@ function batalhaReceberEstadoRemoto(raw) {
 
     // Verificar TODAS as batalhas em fase iniciativa (não só a atual)
     if (RPG_DATA?.myRole === 'mestre') {
-      Object.entries(MAPA_STATE.batalhas).forEach(([bid, bs]) => {
+      Object.entries<any>(MAPA_STATE.batalhas).forEach(([bid, bs]) => {
         if (bs.ativa && (bs.fase === 'iniciativa' || bs.fase === 'empate')) {
           batalhaVerificarIniciativasCompletas(bid);
         }
@@ -6664,7 +6664,7 @@ function _atualizarBadgeMesa() {
   const meuNome = RPG_DATA?.linked;
   const isMestre = RPG_DATA?.myRole === 'mestre';
   // Contar batalhas onde é minha vez agora
-  const minhaVez = Object.values(MAPA_STATE.batalhas).filter(b => {
+  const minhaVez = Object.values<any>(MAPA_STATE.batalhas).filter(b => {
     if (!b.ativa || b.fase !== 'combate' || b.pausada) return false;
     const atual = b.participantes?.[b.ordemAtual];
     if (!atual) return false;
@@ -6672,7 +6672,7 @@ function _atualizarBadgeMesa() {
   });
   const count = minhaVez.length;
   // Também mostrar se há batalha ativa com fase iniciativa onde ainda não rolei
-  const pendIniciativa = Object.values(MAPA_STATE.batalhas).filter(b => {
+  const pendIniciativa = Object.values<any>(MAPA_STATE.batalhas).filter(b => {
     if (!b.ativa || (b.fase !== 'iniciativa' && b.fase !== 'empate')) return false;
     if (!meuNome) return false;
     const participo = b.participantes?.some(p => p.nome === meuNome);
@@ -6681,7 +6681,7 @@ function _atualizarBadgeMesa() {
   }).length;
   const total = count + pendIniciativa;
   badge.style.display = total > 0 ? 'flex' : 'none';
-  badge.textContent = total > 1 ? total : '⚔';
+  (badge as any).textContent = total > 1 ? total : '⚔';
 }
 
 // ── SELETOR DE BATALHAS (mestre) ──────────────────────────────
@@ -6689,7 +6689,7 @@ function _atualizarSeletorBatalhas() {
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const wrap = document.getElementById('batalhas-selector');
   if (!wrap) return;
-  const batalhasAtivas = Object.entries(MAPA_STATE.batalhas).filter(([,b]) => b.ativa);
+  const batalhasAtivas = Object.entries<any>(MAPA_STATE.batalhas).filter(([,b]) => b.ativa);
 
   if (!isMestre) {
     // Jogador: ocultar o seletor — eles não navegam entre batalhas
@@ -6824,7 +6824,7 @@ function _parseLinha(raw, cenaAtual) {
     return { status:'ok', acao:{ tipo:'fog', modo:'revelar_rect', rect, cena_id: cenaAtual } };
   }
   if (/^ZONA:/i.test(raw)) {
-    const body = raw.replace(/^ZONA:\s*/i,'');
+    const body: any = raw.replace(/^ZONA:\s*/i,'');
     const labelM = body.match(/"([^"]+)"/);
     const label  = labelM?.[1] || 'Zona';
     const partes = body.replace(/"[^"]*"/, '').trim().split(/\s+/);
@@ -6887,7 +6887,7 @@ async function pacoteAplicar(resultado) {
         }
         break;
       }
-      case 'organograma': SESSAO_ATUAL.organograma.nome = a.nome; break;
+      case 'organograma': (SESSAO_ATUAL.organograma as any).nome = a.nome; break;
     }
   }
   const ef = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapId);
@@ -6998,7 +6998,7 @@ window.abrirModalGeracaoCena = function() {
     modal = document.createElement('div');
     modal.id = 'modal-gerar-cena';
     modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);align-items:flex-end;justify-content:center';
-    modal.innerHTML = `<div style="background:var(--painel,#141d2b);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:580px;max-height:80vh;overflow-y:auto"><div style="font-family:var(--fonte-d);font-size:0.85rem;color:var(--texto);margin-bottom:14px">⚄ Gerar Cena Aleatória</div>'+Object.entries(BIBLIOTECA_CENA).map(([cat, itens]) => '<div style="margin-bottom:10px"><div style="font-size:0.6rem;color:var(--destaque);font-family:var(--fonte-d);text-transform:uppercase;margin-bottom:5px">'+cat+'</div><div style="display:flex;flex-wrap:wrap;gap:5px">'+itens.map(item => '<label style="display:flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid var(--borda);border-radius:12px;cursor:pointer;font-size:0.65rem;color:var(--suave)"><input type="checkbox" value="'+item+'" data-cat="'+cat+'" style="accent-color:var(--destaque)"> '+item+'</label>').join('')+'</div></div>').join('')+'<button onclick="_confirmarGeracaoCena()" style="width:100%;margin-top:12px;padding:11px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.35);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">⚄ Gerar</button><button onclick="document.getElementById('modal-gerar-cena').style.display='none'" style="width:100%;margin-top:6px;padding:8px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">Cancelar</button></div>`;
+    modal.innerHTML = `<div style="background:var(--painel,#141d2b);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:580px;max-height:80vh;overflow-y:auto"><div style="font-family:var(--fonte-d);font-size:0.85rem;color:var(--texto);margin-bottom:14px">⚄ Gerar Cena Aleatória</div>'+Object.entries<any>(BIBLIOTECA_CENA).map(([cat, itens]) => '<div style="margin-bottom:10px"><div style="font-size:0.6rem;color:var(--destaque);font-family:var(--fonte-d);text-transform:uppercase;margin-bottom:5px">'+cat+'</div><div style="display:flex;flex-wrap:wrap;gap:5px">'+itens.map(item => '<label style="display:flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid var(--borda);border-radius:12px;cursor:pointer;font-size:0.65rem;color:var(--suave)"><input type="checkbox" value="'+item+'" data-cat="'+cat+'" style="accent-color:var(--destaque)"> '+item+'</label>').join('')+'</div></div>').join('')+'<button onclick="_confirmarGeracaoCena()" style="width:100%;margin-top:12px;padding:11px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.35);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">⚄ Gerar</button><button onclick="document.getElementById('modal-gerar-cena').style.display='none'" style="width:100%;margin-top:6px;padding:8px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">Cancelar</button></div>`;
 
     document.body.appendChild(modal);
   }
@@ -7255,7 +7255,7 @@ window._invEquipar = async function(nomeChar, invItem, def) {
     const c  = (RPG_DATA?.characters||[]).find(x=>x.nome===nomeChar);
     const ca = c?.custom_attrs||{};
     const impactos = [];
-    for (const [attr, val] of Object.entries(tradeOffs)) {
+    for (const [attr, val] of Object.entries<any>(tradeOffs)) {
       const delta = typeof val==='object' ? val.valor : parseFloat(val)||0;
       if (delta>=0) continue;
       for (const h of habilidades) {
@@ -7347,7 +7347,7 @@ function abrirModalIniciarBatalha() {
 
   // Excluir personagens que já estão em outra batalha ativa
   const chars = allCharsHere.filter(c => {
-    const jaEmBatalha = Object.values(MAPA_STATE.batalhas).some(b =>
+    const jaEmBatalha = Object.values<any>(MAPA_STATE.batalhas).some(b =>
       b.ativa && b.mapa_id !== mapaId && b.participantes?.some(p => p.nome === c.nome)
     );
     return !jaEmBatalha;
@@ -7516,7 +7516,7 @@ function batalhaRenderFaseIniciativa() {
   }
 }
 
-function abrirModalIniciativa(nomePersonagem) {
+function abrirModalIniciativa(nomePersonagem?) {
   // nomePersonagem: nome explícito (mestre rolando por NPC/personagem sem vínculo)
   // se omitido, usa o personagem vinculado ao jogador atual
   const nome = nomePersonagem || RPG_DATA?.linked;
@@ -7623,7 +7623,7 @@ function batalhaVerificarIniciativasCompletas(bid) {
     grupos[v].push(p);
   });
   const empatados = [];
-  Object.values(grupos).forEach(grp => { if (grp.length > 1) grp.forEach(p => empatados.push(p.nome)); });
+  Object.values<any>(grupos).forEach(grp => { if (grp.length > 1) grp.forEach(p => empatados.push(p.nome)); });
 
   if (empatados.length) {
     bs.empatados = empatados;
@@ -8016,14 +8016,14 @@ async function _batalhaProcessarEventoReativo(tipoEvento, ctx) {
 }
 
 function _mostrarDialogReacao(reativa, ctx, tipo) {
-  return new Promise(resolve => {
+  return new Promise<any>(resolve => {
     const bid = typeof BATALHA_ATUAL_ID !== 'undefined' ? BATALHA_ATUAL_ID : null;
     const bs = bid ? MAPA_STATE.batalhas[bid] : null;
     const rec = bs?.recursos_participantes?.[reativa.personagem];
-    if (!rec?.reacao_disponivel) { resolve(); return; }
+    if (!rec?.reacao_disponivel) { resolve(undefined); return; }
 
     const meuChar = RPG_DATA?.linked;
-    if (meuChar !== reativa.personagem && RPG_DATA?.myRole !== 'mestre') { resolve(); return; }
+    if (meuChar !== reativa.personagem && RPG_DATA?.myRole !== 'mestre') { resolve(undefined); return; }
 
     const hab = reativa.habilidade;
     const overlay = document.createElement('div');
@@ -8040,7 +8040,7 @@ function _mostrarDialogReacao(reativa, ctx, tipo) {
         </div>
       </div>`;
 
-    let autoTimer = setTimeout(() => { overlay.remove(); resolve(); }, 15000);
+    let autoTimer = setTimeout(() => { overlay.remove(); resolve(undefined); }, 15000);
 
     overlay.querySelector('#dialog-reacao-usar').onclick = () => {
       clearTimeout(autoTimer);
@@ -8056,7 +8056,7 @@ function _mostrarDialogReacao(reativa, ctx, tipo) {
     overlay.querySelector('#dialog-reacao-ignorar').onclick = () => {
       clearTimeout(autoTimer);
       overlay.remove();
-      resolve();
+      resolve(undefined);
     };
     document.body.appendChild(overlay);
   });
@@ -8241,7 +8241,7 @@ async function _processarEfeitosCampanha() {
     }
     if (mudou) {
       c.buffs = manter;
-      const body = { buffs: c.buffs };
+      const body: any = { buffs: c.buffs };
       if (hpMudou) body.hp_atual = c.hp_atual;
       // Sempre salvar custom_attrs para capturar mudanças de rec_atributo
       body.custom_attrs = c.custom_attrs;
@@ -8407,23 +8407,23 @@ function _mostrarTelaVitoria(bs) {
   const danoRecebidoMap = stats.danoRecebido || {};
 
   // Quem causou mais dano
-  const rankDano = Object.entries(danoMap).sort((a,b) => b[1]-a[1]);
+  const rankDano = Object.entries<any>(danoMap).sort((a,b) => b[1]-a[1]);
   const mvpDano = rankDano[0];
 
   // Habilidade mais usada
-  const rankSkills = Object.entries(habilidadesMap).sort((a,b) => b[1]-a[1]);
+  const rankSkills = Object.entries<any>(habilidadesMap).sort((a,b) => b[1]-a[1]);
   const skillTop = rankSkills[0];
 
   // Maior dano único
   const maiorDano = stats.maiorDano;
 
   // Quem recebeu mais dano (tanker)
-  const rankRecebidoNpc = Object.entries(stats.danoRecebidoNpc || {}).sort((a,b) => b[1]-a[1]);
-  const rankRecebido = Object.entries(danoRecebidoMap).sort((a,b) => b[1]-a[1]);
+  const rankRecebidoNpc = Object.entries<any>(stats.danoRecebidoNpc || {}).sort((a,b) => b[1]-a[1]);
+  const rankRecebido = Object.entries<any>(danoRecebidoMap).sort((a,b) => b[1]-a[1]);
   const melhorTanker = rankRecebido[0]; // mais dano dos inimigos absorvido
 
   // Total de dano causado
-  const danoTotal = Object.values(danoMap).reduce((acc, v) => acc + v, 0);
+  const danoTotal = Object.values<any>(danoMap).reduce((acc, v) => acc + v, 0);
   const rounds = bs.turnoRound || 1;
 
   // Construir linhas do relatório
@@ -8556,7 +8556,7 @@ async function _encerrarBatalhaAposVitoria() {
 // Navega para o mapa da primeira batalha ativa encontrada (exceto o atual)
 function _irParaBatalhaAtiva() {
   const mapaId = MAPA_STATE.mapaAtualId;
-  const outra = Object.values(MAPA_STATE.batalhas).find(b => b.ativa && b.mapa_id !== mapaId);
+  const outra = Object.values<any>(MAPA_STATE.batalhas).find(b => b.ativa && b.mapa_id !== mapaId);
   if (outra?.mapa_id) selecionarMapa(outra.mapa_id);
 }
 
@@ -8609,7 +8609,7 @@ function _aplicarEstadoBatalhaUI() {
 
   if (btnOutro) {
     if (isMestre && !batalhaEDoMapaAtual) {
-      const outrasBatalhas = Object.values(MAPA_STATE.batalhas).filter(b => b.ativa && b.mapa_id !== mapaId);
+      const outrasBatalhas = Object.values<any>(MAPA_STATE.batalhas).filter(b => b.ativa && b.mapa_id !== mapaId);
       if (outrasBatalhas.length) {
         const nomes = outrasBatalhas.map(b => b.mapa_nome || b.mapa_id).join(', ');
         btnOutro.style.display = '';
@@ -8701,7 +8701,7 @@ function batalhaRolarDado() {
   const lbl = document.getElementById('mapa-batalha-res-label');
   if (!res || !num || !lbl) return;
   res.style.display = 'block';
-  num.textContent = r;
+  (num as any).textContent = r;
   num.style.color = (d===20&&r===20)?'#f0cc6a':(d===20&&r===1)?'#e74c3c':'var(--primario-v)';
   lbl.textContent = (d===20&&r===20)?'✦ Crítico!':(d===20&&r===1)?'✦ Falha!':`d${d}`;
   num.style.transform = 'scale(1.3)';
@@ -10351,7 +10351,7 @@ function _adStatusJsonToForm(jsonStr) {
   let base = '', mult = '', attr = '';
   if (jsonStr) {
     try {
-      const obj = JSON.parse(jsonStr);
+      const obj: any = JSON.parse(jsonStr);
       base = obj.max_base != null ? String(obj.max_base) : '';
       mult = obj.max_mult != null ? String(obj.max_mult) : '';
       attr = obj.max_attr || '';
@@ -10372,7 +10372,7 @@ function _adStatusFormToJson() {
   const base = parseFloat(document.getElementById('ad-status-base')?.value) || 0;
   const mult = parseFloat(document.getElementById('ad-status-mult')?.value) || 0;
   const attr = (document.getElementById('ad-status-attr')?.value || '').trim();
-  const obj = { max_base: base };
+  const obj: any = { max_base: base };
   if (attr) { obj.max_attr = attr; obj.max_mult = mult; }
   // Return null if all defaults (no formula configured)
   if (!base && !attr) return null;
@@ -10526,7 +10526,7 @@ function ctxHighlightTurno(charNome) {
   celsMov.forEach(({c: col, r: row}) => {
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.setAttribute('x', col); rect.setAttribute('y', row);
-    rect.setAttribute('width', 1); rect.setAttribute('height', 1);
+    rect.setAttribute('width', ((1) as any) as any); rect.setAttribute('height', ((1) as any) as any);
     rect.setAttribute('fill', 'rgba(79,163,209,0.22)');
     rect.setAttribute('stroke', 'rgba(79,163,209,0.5)');
     rect.setAttribute('stroke-width', '0.04');
@@ -10535,7 +10535,7 @@ function ctxHighlightTurno(charNome) {
   celsAtk.forEach(({c: col, r: row}) => {
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.setAttribute('x', col); rect.setAttribute('y', row);
-    rect.setAttribute('width', 1); rect.setAttribute('height', 1);
+    rect.setAttribute('width', ((1) as any) as any); rect.setAttribute('height', ((1) as any) as any);
     rect.setAttribute('fill', 'rgba(231,76,60,0.3)');
     rect.setAttribute('stroke', 'rgba(231,76,60,0.6)');
     rect.setAttribute('stroke-width', '0.05');
@@ -10878,9 +10878,9 @@ function nmAtualizarPreview() {
   if (!preview) return;
   if (largReal && paiLarg) {
     const dispW = (largReal * reprPct / 100).toFixed(1);
-    const pctW  = (dispW / paiLarg * 100).toFixed(1);
+    const pctW  = ((dispW as any) / paiLarg * 100).toFixed(1);
     const dispH = altReal ? (altReal * reprPct / 100).toFixed(1) : '—';
-    const pctH  = (altReal && paiAlt) ? (dispH / paiAlt * 100).toFixed(1) + '%' : '—';
+    const pctH  = (altReal && paiAlt) ? ((dispH as any) / paiAlt * 100).toFixed(1) + '%' : '—';
     preview.style.display = 'block';
     preview.innerHTML = `📐 Exibido como <strong>${dispW}${unit} × ${dispH}${unit}</strong> — ocupa ~<strong>${pctW}%</strong> × ${pctH} do mapa pai.`;
   } else if (largReal) {
@@ -11163,7 +11163,7 @@ let PLACEMENT_STATE = null;
   // ───────────────────────────────────────────────────────────────────
   // BFS / Dijkstra
   // ───────────────────────────────────────────────────────────────────
-  function _calcularMoveRange(m, origem, velocidade, opts) {
+  function _calcularMoveRange(m, origem, velocidade, opts?) {
     opts = opts || {};
     const { cols, rows } = _gridDims(m, 1, 1);
     const visit = new Map();
@@ -11430,7 +11430,7 @@ let PLACEMENT_STATE = null;
     wrap.addEventListener('mouseleave', function () { GRID.hover = null; _renderSvgLayer(); });
 
     wrap.addEventListener('click', function (e) {
-      const tgt = e.target;
+      const tgt: any = e.target;
       const okFundo = (tgt === wrap) || tgt.id === 'mapa-img' || tgt.id === 'mapa-canvas' || (tgt.classList && tgt.classList.contains('grid-tactical-svg'));
       if (!okFundo) return;
       const m = _mapaAtual();
@@ -11586,7 +11586,7 @@ let PLACEMENT_STATE = null;
 
     try {
       // PATCH 1: mapaDesenharGrade
-      if (typeof window.mapaDesenharGrade === 'function' && !window.mapaDesenharGrade.__gtPatched) {
+      if (typeof window.mapaDesenharGrade === 'function' && !(window.mapaDesenharGrade as any).__gtPatched) {
         const _orig = window.mapaDesenharGrade;
         window.mapaDesenharGrade = function (m) {
           try { 
@@ -11601,12 +11601,12 @@ let PLACEMENT_STATE = null;
             _renderPortasClicaveis();
           }
         };
-        window.mapaDesenharGrade.__gtPatched = true;
+        (window.mapaDesenharGrade as any).__gtPatched = true;
         console.log('[grid] ✅ mapaDesenharGrade patcheado com throttling');
       }
 
       // PATCH 2: mapaRenderTokens
-      if (typeof window.mapaRenderTokens === 'function' && !window.mapaRenderTokens.__gtPatched) {
+      if (typeof window.mapaRenderTokens === 'function' && !(window.mapaRenderTokens as any).__gtPatched) {
         const _orig = window.mapaRenderTokens;
         window.mapaRenderTokens = function (m) {
           const r = _orig.apply(this, arguments);
@@ -11652,12 +11652,12 @@ let PLACEMENT_STATE = null;
           }
           return r;
         };
-        window.mapaRenderTokens.__gtPatched = true;
+        (window.mapaRenderTokens as any).__gtPatched = true;
         console.log('[grid] ✅ mapaRenderTokens patcheado com throttling');
       }
 
       // PATCH 3: renderMapaViewer
-      if (typeof window.renderMapaViewer === 'function' && !window.renderMapaViewer.__gtPatched) {
+      if (typeof window.renderMapaViewer === 'function' && !(window.renderMapaViewer as any).__gtPatched) {
         const _orig = window.renderMapaViewer;
         window.renderMapaViewer = function () {
           const r = _orig.apply(this, arguments);
@@ -11671,7 +11671,7 @@ let PLACEMENT_STATE = null;
           }
           return r;
         };
-        window.renderMapaViewer.__gtPatched = true;
+        (window.renderMapaViewer as any).__gtPatched = true;
         console.log('[grid] ✅ renderMapaViewer patcheado com throttling');
       }
     } finally {
@@ -11685,9 +11685,9 @@ let PLACEMENT_STATE = null;
   function _waitAndPatch() {
     _patchWhenReady();
     const need = !window.mapaDesenharGrade || !window.mapaRenderTokens || !window.renderMapaViewer
-              || !window.mapaDesenharGrade.__gtPatched
-              || !window.mapaRenderTokens.__gtPatched
-              || !window.renderMapaViewer.__gtPatched;
+              || !(window.mapaDesenharGrade as any).__gtPatched
+              || !(window.mapaRenderTokens as any).__gtPatched
+              || !(window.renderMapaViewer as any).__gtPatched;
     
     if (need && _retryCount < MAX_RETRIES) {
       _retryCount++;
@@ -11726,356 +11726,356 @@ let PLACEMENT_STATE = null;
 })();
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "_animMedia", { configurable: true, get: () => _animMedia, set: (__v) => { _animMedia = __v; } });
-Object.defineProperty(globalThis, "_animImpacto", { configurable: true, get: () => _animImpacto, set: (__v) => { _animImpacto = __v; } });
-Object.defineProperty(globalThis, "skAnimValidarDuracao", { configurable: true, get: () => skAnimValidarDuracao, set: (__v) => { skAnimValidarDuracao = __v; } });
+Object.defineProperty(globalThis, "_animMedia", { configurable: true, writable: true, value: _animMedia });
+Object.defineProperty(globalThis, "_animImpacto", { configurable: true, writable: true, value: _animImpacto });
+Object.defineProperty(globalThis, "skAnimValidarDuracao", { configurable: true, writable: true, value: skAnimValidarDuracao });
 Object.defineProperty(globalThis, "_maps_skAnimPreviewRaf", { configurable: true, get: () => _maps_skAnimPreviewRaf, set: (__v) => { _maps_skAnimPreviewRaf = __v; } });
-Object.defineProperty(globalThis, "skAnimTipoChange", { configurable: true, get: () => skAnimTipoChange, set: (__v) => { skAnimTipoChange = __v; } });
-Object.defineProperty(globalThis, "skAnimMidiaPreview", { configurable: true, get: () => skAnimMidiaPreview, set: (__v) => { skAnimMidiaPreview = __v; } });
-Object.defineProperty(globalThis, "criativoAnimTipoChange", { configurable: true, get: () => criativoAnimTipoChange, set: (__v) => { criativoAnimTipoChange = __v; } });
-Object.defineProperty(globalThis, "arAnimDnTipoChange", { configurable: true, get: () => arAnimDnTipoChange, set: (__v) => { arAnimDnTipoChange = __v; } });
-Object.defineProperty(globalThis, "skAnimPreview", { configurable: true, get: () => skAnimPreview, set: (__v) => { skAnimPreview = __v; } });
-Object.defineProperty(globalThis, "skAnimPreviewPlay", { configurable: true, get: () => skAnimPreviewPlay, set: (__v) => { skAnimPreviewPlay = __v; } });
-Object.defineProperty(globalThis, "atkConfirmarAtaque", { configurable: true, get: () => atkConfirmarAtaque, set: (__v) => { atkConfirmarAtaque = __v; } });
-Object.defineProperty(globalThis, "atkAplicarEfeitoComRecuperacao", { configurable: true, get: () => atkAplicarEfeitoComRecuperacao, set: (__v) => { atkAplicarEfeitoComRecuperacao = __v; } });
-Object.defineProperty(globalThis, "atkAplicarEfeito", { configurable: true, get: () => atkAplicarEfeito, set: (__v) => { atkAplicarEfeito = __v; } });
+Object.defineProperty(globalThis, "skAnimTipoChange", { configurable: true, writable: true, value: skAnimTipoChange });
+Object.defineProperty(globalThis, "skAnimMidiaPreview", { configurable: true, writable: true, value: skAnimMidiaPreview });
+Object.defineProperty(globalThis, "criativoAnimTipoChange", { configurable: true, writable: true, value: criativoAnimTipoChange });
+Object.defineProperty(globalThis, "arAnimDnTipoChange", { configurable: true, writable: true, value: arAnimDnTipoChange });
+Object.defineProperty(globalThis, "skAnimPreview", { configurable: true, writable: true, value: skAnimPreview });
+Object.defineProperty(globalThis, "skAnimPreviewPlay", { configurable: true, writable: true, value: skAnimPreviewPlay });
+Object.defineProperty(globalThis, "atkConfirmarAtaque", { configurable: true, writable: true, value: atkConfirmarAtaque });
+Object.defineProperty(globalThis, "atkAplicarEfeitoComRecuperacao", { configurable: true, writable: true, value: atkAplicarEfeitoComRecuperacao });
+Object.defineProperty(globalThis, "atkAplicarEfeito", { configurable: true, writable: true, value: atkAplicarEfeito });
 Object.defineProperty(globalThis, "_AOE_STATE", { configurable: true, get: () => _AOE_STATE, set: (__v) => { _AOE_STATE = __v; } });
-Object.defineProperty(globalThis, "atkIniciarModoArea", { configurable: true, get: () => atkIniciarModoArea, set: (__v) => { atkIniciarModoArea = __v; } });
-Object.defineProperty(globalThis, "_aoeRenderCircle", { configurable: true, get: () => _aoeRenderCircle, set: (__v) => { _aoeRenderCircle = __v; } });
-Object.defineProperty(globalThis, "atkAtivarAoECriativo", { configurable: true, get: () => atkAtivarAoECriativo, set: (__v) => { atkAtivarAoECriativo = __v; } });
-Object.defineProperty(globalThis, "atkConfirmarAoECriativo", { configurable: true, get: () => atkConfirmarAoECriativo, set: (__v) => { atkConfirmarAoECriativo = __v; } });
-Object.defineProperty(globalThis, "_aoeStartDrag", { configurable: true, get: () => _aoeStartDrag, set: (__v) => { _aoeStartDrag = __v; } });
-Object.defineProperty(globalThis, "_aoeDrag", { configurable: true, get: () => _aoeDrag, set: (__v) => { _aoeDrag = __v; } });
-Object.defineProperty(globalThis, "_aoeEndDrag", { configurable: true, get: () => _aoeEndDrag, set: (__v) => { _aoeEndDrag = __v; } });
-Object.defineProperty(globalThis, "_aoeRemoverBadges", { configurable: true, get: () => _aoeRemoverBadges, set: (__v) => { _aoeRemoverBadges = __v; } });
-Object.defineProperty(globalThis, "_aoeAtualizarAlvos", { configurable: true, get: () => _aoeAtualizarAlvos, set: (__v) => { _aoeAtualizarAlvos = __v; } });
-Object.defineProperty(globalThis, "atkConfirmarAoE", { configurable: true, get: () => atkConfirmarAoE, set: (__v) => { atkConfirmarAoE = __v; } });
-Object.defineProperty(globalThis, "_atkInvocarPersonagem", { configurable: true, get: () => _atkInvocarPersonagem, set: (__v) => { _atkInvocarPersonagem = __v; } });
-Object.defineProperty(globalThis, "_skEhInvocacao", { configurable: true, get: () => _skEhInvocacao, set: (__v) => { _skEhInvocacao = __v; } });
-Object.defineProperty(globalThis, "calcularDanoFinal", { configurable: true, get: () => calcularDanoFinal, set: (__v) => { calcularDanoFinal = __v; } });
-Object.defineProperty(globalThis, "getAttrDefsParaDano", { configurable: true, get: () => getAttrDefsParaDano, set: (__v) => { getAttrDefsParaDano = __v; } });
-Object.defineProperty(globalThis, "obterHpAtualSeguro", { configurable: true, get: () => obterHpAtualSeguro, set: (__v) => { obterHpAtualSeguro = __v; } });
-Object.defineProperty(globalThis, "calcularDanoComResistencia", { configurable: true, get: () => calcularDanoComResistencia, set: (__v) => { calcularDanoComResistencia = __v; } });
-Object.defineProperty(globalThis, "aplicarDanoComHpTemporario", { configurable: true, get: () => aplicarDanoComHpTemporario, set: (__v) => { aplicarDanoComHpTemporario = __v; } });
-Object.defineProperty(globalThis, "carregarEstadoBatalha", { configurable: true, get: () => carregarEstadoBatalha, set: (__v) => { carregarEstadoBatalha = __v; } });
-Object.defineProperty(globalThis, "salvarEstadoBatalha", { configurable: true, get: () => salvarEstadoBatalha, set: (__v) => { salvarEstadoBatalha = __v; } });
-Object.defineProperty(globalThis, "atkAplicarDano", { configurable: true, get: () => atkAplicarDano, set: (__v) => { atkAplicarDano = __v; } });
-Object.defineProperty(globalThis, "atkEnviarAtaqueCriativo", { configurable: true, get: () => atkEnviarAtaqueCriativo, set: (__v) => { atkEnviarAtaqueCriativo = __v; } });
-Object.defineProperty(globalThis, "atkEnviarSolicitacaoSkill", { configurable: true, get: () => atkEnviarSolicitacaoSkill, set: (__v) => { atkEnviarSolicitacaoSkill = __v; } });
-Object.defineProperty(globalThis, "renderAtaquesPendentes", { configurable: true, get: () => renderAtaquesPendentes, set: (__v) => { renderAtaquesPendentes = __v; } });
-Object.defineProperty(globalThis, "atkRolarParaPendente", { configurable: true, get: () => atkRolarParaPendente, set: (__v) => { atkRolarParaPendente = __v; } });
-Object.defineProperty(globalThis, "atkMestreAprovar", { configurable: true, get: () => atkMestreAprovar, set: (__v) => { atkMestreAprovar = __v; } });
-Object.defineProperty(globalThis, "atkMestreRejeitar", { configurable: true, get: () => atkMestreRejeitar, set: (__v) => { atkMestreRejeitar = __v; } });
-Object.defineProperty(globalThis, "_parseDCData", { configurable: true, get: () => _parseDCData, set: (__v) => { _parseDCData = __v; } });
-Object.defineProperty(globalThis, "criativoSalvar", { configurable: true, get: () => criativoSalvar, set: (__v) => { criativoSalvar = __v; } });
-Object.defineProperty(globalThis, "criativoInserir", { configurable: true, get: () => criativoInserir, set: (__v) => { criativoInserir = __v; } });
-Object.defineProperty(globalThis, "criativoReceberLinhaRemota", { configurable: true, get: () => criativoReceberLinhaRemota, set: (__v) => { criativoReceberLinhaRemota = __v; } });
-Object.defineProperty(globalThis, "criativoRenderMestre", { configurable: true, get: () => criativoRenderMestre, set: (__v) => { criativoRenderMestre = __v; } });
-Object.defineProperty(globalThis, "_adicionarBadgeCriticoModalFase2", { configurable: true, get: () => _adicionarBadgeCriticoModalFase2, set: (__v) => { _adicionarBadgeCriticoModalFase2 = __v; } });
-Object.defineProperty(globalThis, "abrirModalCriativoMestre", { configurable: true, get: () => abrirModalCriativoMestre, set: (__v) => { abrirModalCriativoMestre = __v; } });
-Object.defineProperty(globalThis, "_abrirModalAprovacaoPorStatus", { configurable: true, get: () => _abrirModalAprovacaoPorStatus, set: (__v) => { _abrirModalAprovacaoPorStatus = __v; } });
-Object.defineProperty(globalThis, "criativoCobrarCustoToggle", { configurable: true, get: () => criativoCobrarCustoToggle, set: (__v) => { criativoCobrarCustoToggle = __v; } });
-Object.defineProperty(globalThis, "criativoCustoAtributoMudou", { configurable: true, get: () => criativoCustoAtributoMudou, set: (__v) => { criativoCustoAtributoMudou = __v; } });
-Object.defineProperty(globalThis, "fecharModalCriativoMestre", { configurable: true, get: () => fecharModalCriativoMestre, set: (__v) => { fecharModalCriativoMestre = __v; } });
-Object.defineProperty(globalThis, "_injetarCriativoExtrasPanel", { configurable: true, get: () => _injetarCriativoExtrasPanel, set: (__v) => { _injetarCriativoExtrasPanel = __v; } });
-Object.defineProperty(globalThis, "abrirModalAcao", { configurable: true, get: () => abrirModalAcao, set: (__v) => { abrirModalAcao = __v; } });
-Object.defineProperty(globalThis, "fecharModalAcao", { configurable: true, get: () => fecharModalAcao, set: (__v) => { fecharModalAcao = __v; } });
-Object.defineProperty(globalThis, "_acaoMostrarPainel", { configurable: true, get: () => _acaoMostrarPainel, set: (__v) => { _acaoMostrarPainel = __v; } });
-Object.defineProperty(globalThis, "acaoVoltarRaiz", { configurable: true, get: () => acaoVoltarRaiz, set: (__v) => { acaoVoltarRaiz = __v; } });
-Object.defineProperty(globalThis, "acaoMostrarCriativa", { configurable: true, get: () => acaoMostrarCriativa, set: (__v) => { acaoMostrarCriativa = __v; } });
-Object.defineProperty(globalThis, "acaoSelecionarTipo", { configurable: true, get: () => acaoSelecionarTipo, set: (__v) => { acaoSelecionarTipo = __v; } });
-Object.defineProperty(globalThis, "acaoSelecionarAlvo", { configurable: true, get: () => acaoSelecionarAlvo, set: (__v) => { acaoSelecionarAlvo = __v; } });
-Object.defineProperty(globalThis, "modalAcaoCriativa", { configurable: true, get: () => modalAcaoCriativa, set: (__v) => { modalAcaoCriativa = __v; } });
-Object.defineProperty(globalThis, "modalAcaoSolicitarCombate", { configurable: true, get: () => modalAcaoSolicitarCombate, set: (__v) => { modalAcaoSolicitarCombate = __v; } });
-Object.defineProperty(globalThis, "modalAcaoItem", { configurable: true, get: () => modalAcaoItem, set: (__v) => { modalAcaoItem = __v; } });
-Object.defineProperty(globalThis, "usarItemConsumivel", { configurable: true, get: () => usarItemConsumivel, set: (__v) => { usarItemConsumivel = __v; } });
-Object.defineProperty(globalThis, "acaoEnviarCriativa", { configurable: true, get: () => acaoEnviarCriativa, set: (__v) => { acaoEnviarCriativa = __v; } });
-Object.defineProperty(globalThis, "acaoEnviarPedidoCombate", { configurable: true, get: () => acaoEnviarPedidoCombate, set: (__v) => { acaoEnviarPedidoCombate = __v; } });
-Object.defineProperty(globalThis, "mestreAbrirModalCombatePedido", { configurable: true, get: () => mestreAbrirModalCombatePedido, set: (__v) => { mestreAbrirModalCombatePedido = __v; } });
-Object.defineProperty(globalThis, "fecharModalCombatePedido", { configurable: true, get: () => fecharModalCombatePedido, set: (__v) => { fecharModalCombatePedido = __v; } });
-Object.defineProperty(globalThis, "mestreAprovarCombatePedido", { configurable: true, get: () => mestreAprovarCombatePedido, set: (__v) => { mestreAprovarCombatePedido = __v; } });
-Object.defineProperty(globalThis, "mestreRejeitarCombatePedido", { configurable: true, get: () => mestreRejeitarCombatePedido, set: (__v) => { mestreRejeitarCombatePedido = __v; } });
-Object.defineProperty(globalThis, "criativoCadastrarSkillToggle", { configurable: true, get: () => criativoCadastrarSkillToggle, set: (__v) => { criativoCadastrarSkillToggle = __v; } });
-Object.defineProperty(globalThis, "criativoMestreBuilderAdd", { configurable: true, get: () => criativoMestreBuilderAdd, set: (__v) => { criativoMestreBuilderAdd = __v; } });
-Object.defineProperty(globalThis, "criativoMestreBuilderRemove", { configurable: true, get: () => criativoMestreBuilderRemove, set: (__v) => { criativoMestreBuilderRemove = __v; } });
-Object.defineProperty(globalThis, "criativoMestreBuilderAtualizar", { configurable: true, get: () => criativoMestreBuilderAtualizar, set: (__v) => { criativoMestreBuilderAtualizar = __v; } });
-Object.defineProperty(globalThis, "criativoMestreAtributoMudou", { configurable: true, get: () => criativoMestreAtributoMudou, set: (__v) => { criativoMestreAtributoMudou = __v; } });
-Object.defineProperty(globalThis, "criativoSelecionarDado", { configurable: true, get: () => criativoSelecionarDado, set: (__v) => { criativoSelecionarDado = __v; } });
-Object.defineProperty(globalThis, "criativoToggleAtaque", { configurable: true, get: () => criativoToggleAtaque, set: (__v) => { criativoToggleAtaque = __v; } });
-Object.defineProperty(globalThis, "criativoEhAtaqueChange", { configurable: true, get: () => criativoEhAtaqueChange, set: (__v) => { criativoEhAtaqueChange = __v; } });
-Object.defineProperty(globalThis, "criativoDCPreview", { configurable: true, get: () => criativoDCPreview, set: (__v) => { criativoDCPreview = __v; } });
-Object.defineProperty(globalThis, "_criativoAbrirModalOverlay", { configurable: true, get: () => _criativoAbrirModalOverlay, set: (__v) => { _criativoAbrirModalOverlay = __v; } });
-Object.defineProperty(globalThis, "criativoMestreConcluirFase1", { configurable: true, get: () => criativoMestreConcluirFase1, set: (__v) => { criativoMestreConcluirFase1 = __v; } });
-Object.defineProperty(globalThis, "crLabelAcao", { configurable: true, get: () => crLabelAcao, set: (__v) => { crLabelAcao = __v; } });
-Object.defineProperty(globalThis, "criativoMestreDefinirDano", { configurable: true, get: () => criativoMestreDefinirDano, set: (__v) => { criativoMestreDefinirDano = __v; } });
-Object.defineProperty(globalThis, "criativoMestreRejeitar", { configurable: true, get: () => criativoMestreRejeitar, set: (__v) => { criativoMestreRejeitar = __v; } });
-Object.defineProperty(globalThis, "criativoMestreRejeitarDireto", { configurable: true, get: () => criativoMestreRejeitarDireto, set: (__v) => { criativoMestreRejeitarDireto = __v; } });
-Object.defineProperty(globalThis, "criativoMestreLimparTodas", { configurable: true, get: () => criativoMestreLimparTodas, set: (__v) => { criativoMestreLimparTodas = __v; } });
-Object.defineProperty(globalThis, "criativoReclassificar", { configurable: true, get: () => criativoReclassificar, set: (__v) => { criativoReclassificar = __v; } });
+Object.defineProperty(globalThis, "atkIniciarModoArea", { configurable: true, writable: true, value: atkIniciarModoArea });
+Object.defineProperty(globalThis, "_aoeRenderCircle", { configurable: true, writable: true, value: _aoeRenderCircle });
+Object.defineProperty(globalThis, "atkAtivarAoECriativo", { configurable: true, writable: true, value: atkAtivarAoECriativo });
+Object.defineProperty(globalThis, "atkConfirmarAoECriativo", { configurable: true, writable: true, value: atkConfirmarAoECriativo });
+Object.defineProperty(globalThis, "_aoeStartDrag", { configurable: true, writable: true, value: _aoeStartDrag });
+Object.defineProperty(globalThis, "_aoeDrag", { configurable: true, writable: true, value: _aoeDrag });
+Object.defineProperty(globalThis, "_aoeEndDrag", { configurable: true, writable: true, value: _aoeEndDrag });
+Object.defineProperty(globalThis, "_aoeRemoverBadges", { configurable: true, writable: true, value: _aoeRemoverBadges });
+Object.defineProperty(globalThis, "_aoeAtualizarAlvos", { configurable: true, writable: true, value: _aoeAtualizarAlvos });
+Object.defineProperty(globalThis, "atkConfirmarAoE", { configurable: true, writable: true, value: atkConfirmarAoE });
+Object.defineProperty(globalThis, "_atkInvocarPersonagem", { configurable: true, writable: true, value: _atkInvocarPersonagem });
+Object.defineProperty(globalThis, "_skEhInvocacao", { configurable: true, writable: true, value: _skEhInvocacao });
+Object.defineProperty(globalThis, "calcularDanoFinal", { configurable: true, writable: true, value: calcularDanoFinal });
+Object.defineProperty(globalThis, "getAttrDefsParaDano", { configurable: true, writable: true, value: getAttrDefsParaDano });
+Object.defineProperty(globalThis, "obterHpAtualSeguro", { configurable: true, writable: true, value: obterHpAtualSeguro });
+Object.defineProperty(globalThis, "calcularDanoComResistencia", { configurable: true, writable: true, value: calcularDanoComResistencia });
+Object.defineProperty(globalThis, "aplicarDanoComHpTemporario", { configurable: true, writable: true, value: aplicarDanoComHpTemporario });
+Object.defineProperty(globalThis, "carregarEstadoBatalha", { configurable: true, writable: true, value: carregarEstadoBatalha });
+Object.defineProperty(globalThis, "salvarEstadoBatalha", { configurable: true, writable: true, value: salvarEstadoBatalha });
+Object.defineProperty(globalThis, "atkAplicarDano", { configurable: true, writable: true, value: atkAplicarDano });
+Object.defineProperty(globalThis, "atkEnviarAtaqueCriativo", { configurable: true, writable: true, value: atkEnviarAtaqueCriativo });
+Object.defineProperty(globalThis, "atkEnviarSolicitacaoSkill", { configurable: true, writable: true, value: atkEnviarSolicitacaoSkill });
+Object.defineProperty(globalThis, "renderAtaquesPendentes", { configurable: true, writable: true, value: renderAtaquesPendentes });
+Object.defineProperty(globalThis, "atkRolarParaPendente", { configurable: true, writable: true, value: atkRolarParaPendente });
+Object.defineProperty(globalThis, "atkMestreAprovar", { configurable: true, writable: true, value: atkMestreAprovar });
+Object.defineProperty(globalThis, "atkMestreRejeitar", { configurable: true, writable: true, value: atkMestreRejeitar });
+Object.defineProperty(globalThis, "_parseDCData", { configurable: true, writable: true, value: _parseDCData });
+Object.defineProperty(globalThis, "criativoSalvar", { configurable: true, writable: true, value: criativoSalvar });
+Object.defineProperty(globalThis, "criativoInserir", { configurable: true, writable: true, value: criativoInserir });
+Object.defineProperty(globalThis, "criativoReceberLinhaRemota", { configurable: true, writable: true, value: criativoReceberLinhaRemota });
+Object.defineProperty(globalThis, "criativoRenderMestre", { configurable: true, writable: true, value: criativoRenderMestre });
+Object.defineProperty(globalThis, "_adicionarBadgeCriticoModalFase2", { configurable: true, writable: true, value: _adicionarBadgeCriticoModalFase2 });
+Object.defineProperty(globalThis, "abrirModalCriativoMestre", { configurable: true, writable: true, value: abrirModalCriativoMestre });
+Object.defineProperty(globalThis, "_abrirModalAprovacaoPorStatus", { configurable: true, writable: true, value: _abrirModalAprovacaoPorStatus });
+Object.defineProperty(globalThis, "criativoCobrarCustoToggle", { configurable: true, writable: true, value: criativoCobrarCustoToggle });
+Object.defineProperty(globalThis, "criativoCustoAtributoMudou", { configurable: true, writable: true, value: criativoCustoAtributoMudou });
+Object.defineProperty(globalThis, "fecharModalCriativoMestre", { configurable: true, writable: true, value: fecharModalCriativoMestre });
+Object.defineProperty(globalThis, "_injetarCriativoExtrasPanel", { configurable: true, writable: true, value: _injetarCriativoExtrasPanel });
+Object.defineProperty(globalThis, "abrirModalAcao", { configurable: true, writable: true, value: abrirModalAcao });
+Object.defineProperty(globalThis, "fecharModalAcao", { configurable: true, writable: true, value: fecharModalAcao });
+Object.defineProperty(globalThis, "_acaoMostrarPainel", { configurable: true, writable: true, value: _acaoMostrarPainel });
+Object.defineProperty(globalThis, "acaoVoltarRaiz", { configurable: true, writable: true, value: acaoVoltarRaiz });
+Object.defineProperty(globalThis, "acaoMostrarCriativa", { configurable: true, writable: true, value: acaoMostrarCriativa });
+Object.defineProperty(globalThis, "acaoSelecionarTipo", { configurable: true, writable: true, value: acaoSelecionarTipo });
+Object.defineProperty(globalThis, "acaoSelecionarAlvo", { configurable: true, writable: true, value: acaoSelecionarAlvo });
+Object.defineProperty(globalThis, "modalAcaoCriativa", { configurable: true, writable: true, value: modalAcaoCriativa });
+Object.defineProperty(globalThis, "modalAcaoSolicitarCombate", { configurable: true, writable: true, value: modalAcaoSolicitarCombate });
+Object.defineProperty(globalThis, "modalAcaoItem", { configurable: true, writable: true, value: modalAcaoItem });
+Object.defineProperty(globalThis, "usarItemConsumivel", { configurable: true, writable: true, value: usarItemConsumivel });
+Object.defineProperty(globalThis, "acaoEnviarCriativa", { configurable: true, writable: true, value: acaoEnviarCriativa });
+Object.defineProperty(globalThis, "acaoEnviarPedidoCombate", { configurable: true, writable: true, value: acaoEnviarPedidoCombate });
+Object.defineProperty(globalThis, "mestreAbrirModalCombatePedido", { configurable: true, writable: true, value: mestreAbrirModalCombatePedido });
+Object.defineProperty(globalThis, "fecharModalCombatePedido", { configurable: true, writable: true, value: fecharModalCombatePedido });
+Object.defineProperty(globalThis, "mestreAprovarCombatePedido", { configurable: true, writable: true, value: mestreAprovarCombatePedido });
+Object.defineProperty(globalThis, "mestreRejeitarCombatePedido", { configurable: true, writable: true, value: mestreRejeitarCombatePedido });
+Object.defineProperty(globalThis, "criativoCadastrarSkillToggle", { configurable: true, writable: true, value: criativoCadastrarSkillToggle });
+Object.defineProperty(globalThis, "criativoMestreBuilderAdd", { configurable: true, writable: true, value: criativoMestreBuilderAdd });
+Object.defineProperty(globalThis, "criativoMestreBuilderRemove", { configurable: true, writable: true, value: criativoMestreBuilderRemove });
+Object.defineProperty(globalThis, "criativoMestreBuilderAtualizar", { configurable: true, writable: true, value: criativoMestreBuilderAtualizar });
+Object.defineProperty(globalThis, "criativoMestreAtributoMudou", { configurable: true, writable: true, value: criativoMestreAtributoMudou });
+Object.defineProperty(globalThis, "criativoSelecionarDado", { configurable: true, writable: true, value: criativoSelecionarDado });
+Object.defineProperty(globalThis, "criativoToggleAtaque", { configurable: true, writable: true, value: criativoToggleAtaque });
+Object.defineProperty(globalThis, "criativoEhAtaqueChange", { configurable: true, writable: true, value: criativoEhAtaqueChange });
+Object.defineProperty(globalThis, "criativoDCPreview", { configurable: true, writable: true, value: criativoDCPreview });
+Object.defineProperty(globalThis, "_criativoAbrirModalOverlay", { configurable: true, writable: true, value: _criativoAbrirModalOverlay });
+Object.defineProperty(globalThis, "criativoMestreConcluirFase1", { configurable: true, writable: true, value: criativoMestreConcluirFase1 });
+Object.defineProperty(globalThis, "crLabelAcao", { configurable: true, writable: true, value: crLabelAcao });
+Object.defineProperty(globalThis, "criativoMestreDefinirDano", { configurable: true, writable: true, value: criativoMestreDefinirDano });
+Object.defineProperty(globalThis, "criativoMestreRejeitar", { configurable: true, writable: true, value: criativoMestreRejeitar });
+Object.defineProperty(globalThis, "criativoMestreRejeitarDireto", { configurable: true, writable: true, value: criativoMestreRejeitarDireto });
+Object.defineProperty(globalThis, "criativoMestreLimparTodas", { configurable: true, writable: true, value: criativoMestreLimparTodas });
+Object.defineProperty(globalThis, "criativoReclassificar", { configurable: true, writable: true, value: criativoReclassificar });
 Object.defineProperty(globalThis, "_criativoNotifId", { configurable: true, get: () => _criativoNotifId, set: (__v) => { _criativoNotifId = __v; } });
-Object.defineProperty(globalThis, "criativoNotifMostrar", { configurable: true, get: () => criativoNotifMostrar, set: (__v) => { criativoNotifMostrar = __v; } });
-Object.defineProperty(globalThis, "criativoNotifFechar", { configurable: true, get: () => criativoNotifFechar, set: (__v) => { criativoNotifFechar = __v; } });
-Object.defineProperty(globalThis, "criativoNotifAcao", { configurable: true, get: () => criativoNotifAcao, set: (__v) => { criativoNotifAcao = __v; } });
-Object.defineProperty(globalThis, "_criativoHideAllPendente", { configurable: true, get: () => _criativoHideAllPendente, set: (__v) => { _criativoHideAllPendente = __v; } });
-Object.defineProperty(globalThis, "criativoAtualizarStepJogador", { configurable: true, get: () => criativoAtualizarStepJogador, set: (__v) => { criativoAtualizarStepJogador = __v; } });
+Object.defineProperty(globalThis, "criativoNotifMostrar", { configurable: true, writable: true, value: criativoNotifMostrar });
+Object.defineProperty(globalThis, "criativoNotifFechar", { configurable: true, writable: true, value: criativoNotifFechar });
+Object.defineProperty(globalThis, "criativoNotifAcao", { configurable: true, writable: true, value: criativoNotifAcao });
+Object.defineProperty(globalThis, "_criativoHideAllPendente", { configurable: true, writable: true, value: _criativoHideAllPendente });
+Object.defineProperty(globalThis, "criativoAtualizarStepJogador", { configurable: true, writable: true, value: criativoAtualizarStepJogador });
 Object.defineProperty(globalThis, "_criativoPollingTimer", { configurable: true, get: () => _criativoPollingTimer, set: (__v) => { _criativoPollingTimer = __v; } });
-Object.defineProperty(globalThis, "criativoIniciarPolling", { configurable: true, get: () => criativoIniciarPolling, set: (__v) => { criativoIniciarPolling = __v; } });
-Object.defineProperty(globalThis, "criativoStopPolling", { configurable: true, get: () => criativoStopPolling, set: (__v) => { criativoStopPolling = __v; } });
-Object.defineProperty(globalThis, "criativoJogadorRolarDC", { configurable: true, get: () => criativoJogadorRolarDC, set: (__v) => { criativoJogadorRolarDC = __v; } });
-Object.defineProperty(globalThis, "_aplicarConsequenciaFalhaCritica", { configurable: true, get: () => _aplicarConsequenciaFalhaCritica, set: (__v) => { _aplicarConsequenciaFalhaCritica = __v; } });
-Object.defineProperty(globalThis, "_dcMostrarModalRolagem", { configurable: true, get: () => _dcMostrarModalRolagem, set: (__v) => { _dcMostrarModalRolagem = __v; } });
-Object.defineProperty(globalThis, "_dcMostrarResultado", { configurable: true, get: () => _dcMostrarResultado, set: (__v) => { _dcMostrarResultado = __v; } });
-Object.defineProperty(globalThis, "_dcFecharModalRolagem", { configurable: true, get: () => _dcFecharModalRolagem, set: (__v) => { _dcFecharModalRolagem = __v; } });
-Object.defineProperty(globalThis, "criativoJogadorRolarDano", { configurable: true, get: () => criativoJogadorRolarDano, set: (__v) => { criativoJogadorRolarDano = __v; } });
-Object.defineProperty(globalThis, "criativoJogadorRolar", { configurable: true, get: () => criativoJogadorRolar, set: (__v) => { criativoJogadorRolar = __v; } });
-Object.defineProperty(globalThis, "criativoJogadorRolarMapa", { configurable: true, get: () => criativoJogadorRolarMapa, set: (__v) => { criativoJogadorRolarMapa = __v; } });
+Object.defineProperty(globalThis, "criativoIniciarPolling", { configurable: true, writable: true, value: criativoIniciarPolling });
+Object.defineProperty(globalThis, "criativoStopPolling", { configurable: true, writable: true, value: criativoStopPolling });
+Object.defineProperty(globalThis, "criativoJogadorRolarDC", { configurable: true, writable: true, value: criativoJogadorRolarDC });
+Object.defineProperty(globalThis, "_aplicarConsequenciaFalhaCritica", { configurable: true, writable: true, value: _aplicarConsequenciaFalhaCritica });
+Object.defineProperty(globalThis, "_dcMostrarModalRolagem", { configurable: true, writable: true, value: _dcMostrarModalRolagem });
+Object.defineProperty(globalThis, "_dcMostrarResultado", { configurable: true, writable: true, value: _dcMostrarResultado });
+Object.defineProperty(globalThis, "_dcFecharModalRolagem", { configurable: true, writable: true, value: _dcFecharModalRolagem });
+Object.defineProperty(globalThis, "criativoJogadorRolarDano", { configurable: true, writable: true, value: criativoJogadorRolarDano });
+Object.defineProperty(globalThis, "criativoJogadorRolar", { configurable: true, writable: true, value: criativoJogadorRolar });
+Object.defineProperty(globalThis, "criativoJogadorRolarMapa", { configurable: true, writable: true, value: criativoJogadorRolarMapa });
 Object.defineProperty(globalThis, "_atkAnimTriggerTimer", { configurable: true, get: () => _atkAnimTriggerTimer, set: (__v) => { _atkAnimTriggerTimer = __v; } });
 Object.defineProperty(globalThis, "_atkAnimTriggerSeg", { configurable: true, get: () => _atkAnimTriggerSeg, set: (__v) => { _atkAnimTriggerSeg = __v; } });
-Object.defineProperty(globalThis, "calcMaxFormula", { configurable: true, get: () => calcMaxFormula, set: (__v) => { calcMaxFormula = __v; } });
-Object.defineProperty(globalThis, "calcCriticoThreshold", { configurable: true, get: () => calcCriticoThreshold, set: (__v) => { calcCriticoThreshold = __v; } });
-Object.defineProperty(globalThis, "_atkDarkenColor", { configurable: true, get: () => _atkDarkenColor, set: (__v) => { _atkDarkenColor = __v; } });
-Object.defineProperty(globalThis, "_atkMostrarTrigger", { configurable: true, get: () => _atkMostrarTrigger, set: (__v) => { _atkMostrarTrigger = __v; } });
-Object.defineProperty(globalThis, "_atkOcultarTrigger", { configurable: true, get: () => _atkOcultarTrigger, set: (__v) => { _atkOcultarTrigger = __v; } });
-Object.defineProperty(globalThis, "_atkMostrarTriggerRemoto", { configurable: true, get: () => _atkMostrarTriggerRemoto, set: (__v) => { _atkMostrarTriggerRemoto = __v; } });
-Object.defineProperty(globalThis, "_atkMostrarCalcDano", { configurable: true, get: () => _atkMostrarCalcDano, set: (__v) => { _atkMostrarCalcDano = __v; } });
-Object.defineProperty(globalThis, "_atkTriggerAnimacao", { configurable: true, get: () => _atkTriggerAnimacao, set: (__v) => { _atkTriggerAnimacao = __v; } });
-Object.defineProperty(globalThis, "atkRenderHabilidadesNPC", { configurable: true, get: () => atkRenderHabilidadesNPC, set: (__v) => { atkRenderHabilidadesNPC = __v; } });
-Object.defineProperty(globalThis, "atkAdicionarHabilidadeNPC", { configurable: true, get: () => atkAdicionarHabilidadeNPC, set: (__v) => { atkAdicionarHabilidadeNPC = __v; } });
-Object.defineProperty(globalThis, "atkRemoverHabilidadeNPC", { configurable: true, get: () => atkRemoverHabilidadeNPC, set: (__v) => { atkRemoverHabilidadeNPC = __v; } });
-Object.defineProperty(globalThis, "mapaFilhos", { configurable: true, get: () => mapaFilhos, set: (__v) => { mapaFilhos = __v; } });
-Object.defineProperty(globalThis, "mapaZonaNoParent", { configurable: true, get: () => mapaZonaNoParent, set: (__v) => { mapaZonaNoParent = __v; } });
-Object.defineProperty(globalThis, "projetarPosicaoNoParent", { configurable: true, get: () => projetarPosicaoNoParent, set: (__v) => { projetarPosicaoNoParent = __v; } });
-Object.defineProperty(globalThis, "normalizarPosicao", { configurable: true, get: () => normalizarPosicao, set: (__v) => { normalizarPosicao = __v; } });
-Object.defineProperty(globalThis, "pctParaCelula", { configurable: true, get: () => pctParaCelula, set: (__v) => { pctParaCelula = __v; } });
-Object.defineProperty(globalThis, "_getMapaById", { configurable: true, get: () => _getMapaById, set: (__v) => { _getMapaById = __v; } });
-Object.defineProperty(globalThis, "_imgToken", { configurable: true, get: () => _imgToken, set: (__v) => { _imgToken = __v; } });
-Object.defineProperty(globalThis, "_imgFicha", { configurable: true, get: () => _imgFicha, set: (__v) => { _imgFicha = __v; } });
-Object.defineProperty(globalThis, "getPosicaoNoMapa", { configurable: true, get: () => getPosicaoNoMapa, set: (__v) => { getPosicaoNoMapa = __v; } });
-Object.defineProperty(globalThis, "setCharActiveMap", { configurable: true, get: () => setCharActiveMap, set: (__v) => { setCharActiveMap = __v; } });
-Object.defineProperty(globalThis, "removeCharFromMap", { configurable: true, get: () => removeCharFromMap, set: (__v) => { removeCharFromMap = __v; } });
-Object.defineProperty(globalThis, "excluirPersonagemCompleto", { configurable: true, get: () => excluirPersonagemCompleto, set: (__v) => { excluirPersonagemCompleto = __v; } });
-Object.defineProperty(globalThis, "excluirNpcGenerico", { configurable: true, get: () => excluirNpcGenerico, set: (__v) => { excluirNpcGenerico = __v; } });
-Object.defineProperty(globalThis, "resetarHpNpcGenerico", { configurable: true, get: () => resetarHpNpcGenerico, set: (__v) => { resetarHpNpcGenerico = __v; } });
-Object.defineProperty(globalThis, "ativarModoPlacement", { configurable: true, get: () => ativarModoPlacement, set: (__v) => { ativarModoPlacement = __v; } });
-Object.defineProperty(globalThis, "cancelarPlacement", { configurable: true, get: () => cancelarPlacement, set: (__v) => { cancelarPlacement = __v; } });
-Object.defineProperty(globalThis, "confirmarPlacement", { configurable: true, get: () => confirmarPlacement, set: (__v) => { confirmarPlacement = __v; } });
-Object.defineProperty(globalThis, "toggleMapaTool", { configurable: true, get: () => toggleMapaTool, set: (__v) => { toggleMapaTool = __v; } });
-Object.defineProperty(globalThis, "abrirModalZona", { configurable: true, get: () => abrirModalZona, set: (__v) => { abrirModalZona = __v; } });
-Object.defineProperty(globalThis, "fecharModalZona", { configurable: true, get: () => fecharModalZona, set: (__v) => { fecharModalZona = __v; } });
-Object.defineProperty(globalThis, "salvarZona", { configurable: true, get: () => salvarZona, set: (__v) => { salvarZona = __v; } });
-Object.defineProperty(globalThis, "removerZona", { configurable: true, get: () => removerZona, set: (__v) => { removerZona = __v; } });
-Object.defineProperty(globalThis, "renderDados", { configurable: true, get: () => renderDados, set: (__v) => { renderDados = __v; } });
-Object.defineProperty(globalThis, "renderDiceConfig", { configurable: true, get: () => renderDiceConfig, set: (__v) => { renderDiceConfig = __v; } });
-Object.defineProperty(globalThis, "toggleDadoCampanha", { configurable: true, get: () => toggleDadoCampanha, set: (__v) => { toggleDadoCampanha = __v; } });
-Object.defineProperty(globalThis, "svgDado", { configurable: true, get: () => svgDado, set: (__v) => { svgDado = __v; } });
-Object.defineProperty(globalThis, "selecionarDado", { configurable: true, get: () => selecionarDado, set: (__v) => { selecionarDado = __v; } });
-Object.defineProperty(globalThis, "rolarDado", { configurable: true, get: () => rolarDado, set: (__v) => { rolarDado = __v; } });
-Object.defineProperty(globalThis, "renderMapasTab", { configurable: true, get: () => renderMapasTab, set: (__v) => { renderMapasTab = __v; } });
-Object.defineProperty(globalThis, "selecionarMapa", { configurable: true, get: () => selecionarMapa, set: (__v) => { selecionarMapa = __v; } });
-Object.defineProperty(globalThis, "_faseAtivarViewerMode", { configurable: true, get: () => _faseAtivarViewerMode, set: (__v) => { _faseAtivarViewerMode = __v; } });
-Object.defineProperty(globalThis, "_faseDesativarViewerMode", { configurable: true, get: () => _faseDesativarViewerMode, set: (__v) => { _faseDesativarViewerMode = __v; } });
-Object.defineProperty(globalThis, "renderMapaViewer", { configurable: true, get: () => renderMapaViewer, set: (__v) => { renderMapaViewer = __v; } });
-Object.defineProperty(globalThis, "mapaAplicarTransform3D", { configurable: true, get: () => mapaAplicarTransform3D, set: (__v) => { mapaAplicarTransform3D = __v; } });
-Object.defineProperty(globalThis, "mp3dAtualizar", { configurable: true, get: () => mp3dAtualizar, set: (__v) => { mp3dAtualizar = __v; } });
-Object.defineProperty(globalThis, "mapaPreset3D", { configurable: true, get: () => mapaPreset3D, set: (__v) => { mapaPreset3D = __v; } });
-Object.defineProperty(globalThis, "mapaDesenharGrade", { configurable: true, get: () => mapaDesenharGrade, set: (__v) => { mapaDesenharGrade = __v; } });
-Object.defineProperty(globalThis, "mapaRenderTokens", { configurable: true, get: () => mapaRenderTokens, set: (__v) => { mapaRenderTokens = __v; } });
-Object.defineProperty(globalThis, "_mapaAdicionarBadgesBuffTokens", { configurable: true, get: () => _mapaAdicionarBadgesBuffTokens, set: (__v) => { _mapaAdicionarBadgesBuffTokens = __v; } });
-Object.defineProperty(globalThis, "mapaRenderStatus", { configurable: true, get: () => mapaRenderStatus, set: (__v) => { mapaRenderStatus = __v; } });
-Object.defineProperty(globalThis, "abrirModalMapaConfig", { configurable: true, get: () => abrirModalMapaConfig, set: (__v) => { abrirModalMapaConfig = __v; } });
-Object.defineProperty(globalThis, "modalMapaPreviewImg", { configurable: true, get: () => modalMapaPreviewImg, set: (__v) => { modalMapaPreviewImg = __v; } });
-Object.defineProperty(globalThis, "fecharModalMapaConfig", { configurable: true, get: () => fecharModalMapaConfig, set: (__v) => { fecharModalMapaConfig = __v; } });
-Object.defineProperty(globalThis, "pedirConfirmacaoExcluirMapa", { configurable: true, get: () => pedirConfirmacaoExcluirMapa, set: (__v) => { pedirConfirmacaoExcluirMapa = __v; } });
-Object.defineProperty(globalThis, "deletarMapaDoModal", { configurable: true, get: () => deletarMapaDoModal, set: (__v) => { deletarMapaDoModal = __v; } });
-Object.defineProperty(globalThis, "reposicionarMapaLocal", { configurable: true, get: () => reposicionarMapaLocal, set: (__v) => { reposicionarMapaLocal = __v; } });
-Object.defineProperty(globalThis, "mapaConfigAtualizarPreview", { configurable: true, get: () => mapaConfigAtualizarPreview, set: (__v) => { mapaConfigAtualizarPreview = __v; } });
-Object.defineProperty(globalThis, "salvarConfigMapa", { configurable: true, get: () => salvarConfigMapa, set: (__v) => { salvarConfigMapa = __v; } });
+Object.defineProperty(globalThis, "calcMaxFormula", { configurable: true, writable: true, value: calcMaxFormula });
+Object.defineProperty(globalThis, "calcCriticoThreshold", { configurable: true, writable: true, value: calcCriticoThreshold });
+Object.defineProperty(globalThis, "_atkDarkenColor", { configurable: true, writable: true, value: _atkDarkenColor });
+Object.defineProperty(globalThis, "_atkMostrarTrigger", { configurable: true, writable: true, value: _atkMostrarTrigger });
+Object.defineProperty(globalThis, "_atkOcultarTrigger", { configurable: true, writable: true, value: _atkOcultarTrigger });
+Object.defineProperty(globalThis, "_atkMostrarTriggerRemoto", { configurable: true, writable: true, value: _atkMostrarTriggerRemoto });
+Object.defineProperty(globalThis, "_atkMostrarCalcDano", { configurable: true, writable: true, value: _atkMostrarCalcDano });
+Object.defineProperty(globalThis, "_atkTriggerAnimacao", { configurable: true, writable: true, value: _atkTriggerAnimacao });
+Object.defineProperty(globalThis, "atkRenderHabilidadesNPC", { configurable: true, writable: true, value: atkRenderHabilidadesNPC });
+Object.defineProperty(globalThis, "atkAdicionarHabilidadeNPC", { configurable: true, writable: true, value: atkAdicionarHabilidadeNPC });
+Object.defineProperty(globalThis, "atkRemoverHabilidadeNPC", { configurable: true, writable: true, value: atkRemoverHabilidadeNPC });
+Object.defineProperty(globalThis, "mapaFilhos", { configurable: true, writable: true, value: mapaFilhos });
+Object.defineProperty(globalThis, "mapaZonaNoParent", { configurable: true, writable: true, value: mapaZonaNoParent });
+Object.defineProperty(globalThis, "projetarPosicaoNoParent", { configurable: true, writable: true, value: projetarPosicaoNoParent });
+Object.defineProperty(globalThis, "normalizarPosicao", { configurable: true, writable: true, value: normalizarPosicao });
+Object.defineProperty(globalThis, "pctParaCelula", { configurable: true, writable: true, value: pctParaCelula });
+Object.defineProperty(globalThis, "_getMapaById", { configurable: true, writable: true, value: _getMapaById });
+Object.defineProperty(globalThis, "_imgToken", { configurable: true, writable: true, value: _imgToken });
+Object.defineProperty(globalThis, "_imgFicha", { configurable: true, writable: true, value: _imgFicha });
+Object.defineProperty(globalThis, "getPosicaoNoMapa", { configurable: true, writable: true, value: getPosicaoNoMapa });
+Object.defineProperty(globalThis, "setCharActiveMap", { configurable: true, writable: true, value: setCharActiveMap });
+Object.defineProperty(globalThis, "removeCharFromMap", { configurable: true, writable: true, value: removeCharFromMap });
+Object.defineProperty(globalThis, "excluirPersonagemCompleto", { configurable: true, writable: true, value: excluirPersonagemCompleto });
+Object.defineProperty(globalThis, "excluirNpcGenerico", { configurable: true, writable: true, value: excluirNpcGenerico });
+Object.defineProperty(globalThis, "resetarHpNpcGenerico", { configurable: true, writable: true, value: resetarHpNpcGenerico });
+Object.defineProperty(globalThis, "ativarModoPlacement", { configurable: true, writable: true, value: ativarModoPlacement });
+Object.defineProperty(globalThis, "cancelarPlacement", { configurable: true, writable: true, value: cancelarPlacement });
+Object.defineProperty(globalThis, "confirmarPlacement", { configurable: true, writable: true, value: confirmarPlacement });
+Object.defineProperty(globalThis, "toggleMapaTool", { configurable: true, writable: true, value: toggleMapaTool });
+Object.defineProperty(globalThis, "abrirModalZona", { configurable: true, writable: true, value: abrirModalZona });
+Object.defineProperty(globalThis, "fecharModalZona", { configurable: true, writable: true, value: fecharModalZona });
+Object.defineProperty(globalThis, "salvarZona", { configurable: true, writable: true, value: salvarZona });
+Object.defineProperty(globalThis, "removerZona", { configurable: true, writable: true, value: removerZona });
+Object.defineProperty(globalThis, "renderDados", { configurable: true, writable: true, value: renderDados });
+Object.defineProperty(globalThis, "renderDiceConfig", { configurable: true, writable: true, value: renderDiceConfig });
+Object.defineProperty(globalThis, "toggleDadoCampanha", { configurable: true, writable: true, value: toggleDadoCampanha });
+Object.defineProperty(globalThis, "svgDado", { configurable: true, writable: true, value: svgDado });
+Object.defineProperty(globalThis, "selecionarDado", { configurable: true, writable: true, value: selecionarDado });
+Object.defineProperty(globalThis, "rolarDado", { configurable: true, writable: true, value: rolarDado });
+Object.defineProperty(globalThis, "renderMapasTab", { configurable: true, writable: true, value: renderMapasTab });
+Object.defineProperty(globalThis, "selecionarMapa", { configurable: true, writable: true, value: selecionarMapa });
+Object.defineProperty(globalThis, "_faseAtivarViewerMode", { configurable: true, writable: true, value: _faseAtivarViewerMode });
+Object.defineProperty(globalThis, "_faseDesativarViewerMode", { configurable: true, writable: true, value: _faseDesativarViewerMode });
+Object.defineProperty(globalThis, "renderMapaViewer", { configurable: true, writable: true, value: renderMapaViewer });
+Object.defineProperty(globalThis, "mapaAplicarTransform3D", { configurable: true, writable: true, value: mapaAplicarTransform3D });
+Object.defineProperty(globalThis, "mp3dAtualizar", { configurable: true, writable: true, value: mp3dAtualizar });
+Object.defineProperty(globalThis, "mapaPreset3D", { configurable: true, writable: true, value: mapaPreset3D });
+Object.defineProperty(globalThis, "mapaDesenharGrade", { configurable: true, writable: true, value: mapaDesenharGrade });
+Object.defineProperty(globalThis, "mapaRenderTokens", { configurable: true, writable: true, value: mapaRenderTokens });
+Object.defineProperty(globalThis, "_mapaAdicionarBadgesBuffTokens", { configurable: true, writable: true, value: _mapaAdicionarBadgesBuffTokens });
+Object.defineProperty(globalThis, "mapaRenderStatus", { configurable: true, writable: true, value: mapaRenderStatus });
+Object.defineProperty(globalThis, "abrirModalMapaConfig", { configurable: true, writable: true, value: abrirModalMapaConfig });
+Object.defineProperty(globalThis, "modalMapaPreviewImg", { configurable: true, writable: true, value: modalMapaPreviewImg });
+Object.defineProperty(globalThis, "fecharModalMapaConfig", { configurable: true, writable: true, value: fecharModalMapaConfig });
+Object.defineProperty(globalThis, "pedirConfirmacaoExcluirMapa", { configurable: true, writable: true, value: pedirConfirmacaoExcluirMapa });
+Object.defineProperty(globalThis, "deletarMapaDoModal", { configurable: true, writable: true, value: deletarMapaDoModal });
+Object.defineProperty(globalThis, "reposicionarMapaLocal", { configurable: true, writable: true, value: reposicionarMapaLocal });
+Object.defineProperty(globalThis, "mapaConfigAtualizarPreview", { configurable: true, writable: true, value: mapaConfigAtualizarPreview });
+Object.defineProperty(globalThis, "salvarConfigMapa", { configurable: true, writable: true, value: salvarConfigMapa });
 Object.defineProperty(globalThis, "_TOKEN_MOVE_SID", { configurable: true, get: () => _TOKEN_MOVE_SID, set: (__v) => { _TOKEN_MOVE_SID = __v; } });
-Object.defineProperty(globalThis, "tokenMoveBroadcast", { configurable: true, get: () => tokenMoveBroadcast, set: (__v) => { tokenMoveBroadcast = __v; } });
-Object.defineProperty(globalThis, "tokenMoveReceber", { configurable: true, get: () => tokenMoveReceber, set: (__v) => { tokenMoveReceber = __v; } });
+Object.defineProperty(globalThis, "tokenMoveBroadcast", { configurable: true, writable: true, value: tokenMoveBroadcast });
+Object.defineProperty(globalThis, "tokenMoveReceber", { configurable: true, writable: true, value: tokenMoveReceber });
 Object.defineProperty(globalThis, "FOG_STATE", { configurable: true, get: () => FOG_STATE, set: (__v) => { FOG_STATE = __v; } });
-Object.defineProperty(globalThis, "fogGetEstado", { configurable: true, get: () => fogGetEstado, set: (__v) => { fogGetEstado = __v; } });
-Object.defineProperty(globalThis, "fogSetEstado", { configurable: true, get: () => fogSetEstado, set: (__v) => { fogSetEstado = __v; } });
-Object.defineProperty(globalThis, "fogInicializar", { configurable: true, get: () => fogInicializar, set: (__v) => { fogInicializar = __v; } });
-Object.defineProperty(globalThis, "fogCarregarDoServidor", { configurable: true, get: () => fogCarregarDoServidor, set: (__v) => { fogCarregarDoServidor = __v; } });
-Object.defineProperty(globalThis, "fogRevealAround", { configurable: true, get: () => fogRevealAround, set: (__v) => { fogRevealAround = __v; } });
-Object.defineProperty(globalThis, "fogRevealRect", { configurable: true, get: () => fogRevealRect, set: (__v) => { fogRevealRect = __v; } });
-Object.defineProperty(globalThis, "fogRenderizar", { configurable: true, get: () => fogRenderizar, set: (__v) => { fogRenderizar = __v; } });
+Object.defineProperty(globalThis, "fogGetEstado", { configurable: true, writable: true, value: fogGetEstado });
+Object.defineProperty(globalThis, "fogSetEstado", { configurable: true, writable: true, value: fogSetEstado });
+Object.defineProperty(globalThis, "fogInicializar", { configurable: true, writable: true, value: fogInicializar });
+Object.defineProperty(globalThis, "fogCarregarDoServidor", { configurable: true, writable: true, value: fogCarregarDoServidor });
+Object.defineProperty(globalThis, "fogRevealAround", { configurable: true, writable: true, value: fogRevealAround });
+Object.defineProperty(globalThis, "fogRevealRect", { configurable: true, writable: true, value: fogRevealRect });
+Object.defineProperty(globalThis, "fogRenderizar", { configurable: true, writable: true, value: fogRenderizar });
 Object.defineProperty(globalThis, "_fogSaveTimer", { configurable: true, get: () => _fogSaveTimer, set: (__v) => { _fogSaveTimer = __v; } });
-Object.defineProperty(globalThis, "fogSalvarDebounced", { configurable: true, get: () => fogSalvarDebounced, set: (__v) => { fogSalvarDebounced = __v; } });
+Object.defineProperty(globalThis, "fogSalvarDebounced", { configurable: true, writable: true, value: fogSalvarDebounced });
 Object.defineProperty(globalThis, "CAMERA_RAIO_MAX", { configurable: true, get: () => CAMERA_RAIO_MAX, set: (__v) => { CAMERA_RAIO_MAX = __v; } });
-Object.defineProperty(globalThis, "cameraVerificarRaio", { configurable: true, get: () => cameraVerificarRaio, set: (__v) => { cameraVerificarRaio = __v; } });
-Object.defineProperty(globalThis, "cameraBloqueioFeedback", { configurable: true, get: () => cameraBloqueioFeedback, set: (__v) => { cameraBloqueioFeedback = __v; } });
-Object.defineProperty(globalThis, "mapaIniciarDrag", { configurable: true, get: () => mapaIniciarDrag, set: (__v) => { mapaIniciarDrag = __v; } });
-Object.defineProperty(globalThis, "mapaOnDrag", { configurable: true, get: () => mapaOnDrag, set: (__v) => { mapaOnDrag = __v; } });
-Object.defineProperty(globalThis, "mapaFimDrag", { configurable: true, get: () => mapaFimDrag, set: (__v) => { mapaFimDrag = __v; } });
-Object.defineProperty(globalThis, "mapaPosicionarChar", { configurable: true, get: () => mapaPosicionarChar, set: (__v) => { mapaPosicionarChar = __v; } });
-Object.defineProperty(globalThis, "mapaTeleportarPersonagem", { configurable: true, get: () => mapaTeleportarPersonagem, set: (__v) => { mapaTeleportarPersonagem = __v; } });
-Object.defineProperty(globalThis, "mapaAdjacenteAlvo", { configurable: true, get: () => mapaAdjacenteAlvo, set: (__v) => { mapaAdjacenteAlvo = __v; } });
-Object.defineProperty(globalThis, "mapaForcedMovement", { configurable: true, get: () => mapaForcedMovement, set: (__v) => { mapaForcedMovement = __v; } });
+Object.defineProperty(globalThis, "cameraVerificarRaio", { configurable: true, writable: true, value: cameraVerificarRaio });
+Object.defineProperty(globalThis, "cameraBloqueioFeedback", { configurable: true, writable: true, value: cameraBloqueioFeedback });
+Object.defineProperty(globalThis, "mapaIniciarDrag", { configurable: true, writable: true, value: mapaIniciarDrag });
+Object.defineProperty(globalThis, "mapaOnDrag", { configurable: true, writable: true, value: mapaOnDrag });
+Object.defineProperty(globalThis, "mapaFimDrag", { configurable: true, writable: true, value: mapaFimDrag });
+Object.defineProperty(globalThis, "mapaPosicionarChar", { configurable: true, writable: true, value: mapaPosicionarChar });
+Object.defineProperty(globalThis, "mapaTeleportarPersonagem", { configurable: true, writable: true, value: mapaTeleportarPersonagem });
+Object.defineProperty(globalThis, "mapaAdjacenteAlvo", { configurable: true, writable: true, value: mapaAdjacenteAlvo });
+Object.defineProperty(globalThis, "mapaForcedMovement", { configurable: true, writable: true, value: mapaForcedMovement });
 Object.defineProperty(globalThis, "BATTLE_CONFIG_DEFAULTS", { configurable: true, get: () => BATTLE_CONFIG_DEFAULTS });
-Object.defineProperty(globalThis, "getBattleConfig", { configurable: true, get: () => getBattleConfig, set: (__v) => { getBattleConfig = __v; } });
-Object.defineProperty(globalThis, "salvarBattleConfig", { configurable: true, get: () => salvarBattleConfig, set: (__v) => { salvarBattleConfig = __v; } });
-Object.defineProperty(globalThis, "batalhaNovaId", { configurable: true, get: () => batalhaNovaId, set: (__v) => { batalhaNovaId = __v; } });
-Object.defineProperty(globalThis, "batalhaDoMapa", { configurable: true, get: () => batalhaDoMapa, set: (__v) => { batalhaDoMapa = __v; } });
-Object.defineProperty(globalThis, "batalhaBuscaMinhaAtiva", { configurable: true, get: () => batalhaBuscaMinhaAtiva, set: (__v) => { batalhaBuscaMinhaAtiva = __v; } });
-Object.defineProperty(globalThis, "jogadorEstaOnline", { configurable: true, get: () => jogadorEstaOnline, set: (__v) => { jogadorEstaOnline = __v; } });
-Object.defineProperty(globalThis, "personagemTemJogador", { configurable: true, get: () => personagemTemJogador, set: (__v) => { personagemTemJogador = __v; } });
-Object.defineProperty(globalThis, "mestreDeveJogarPor", { configurable: true, get: () => mestreDeveJogarPor, set: (__v) => { mestreDeveJogarPor = __v; } });
-Object.defineProperty(globalThis, "batalhaParticipantesDoMapa", { configurable: true, get: () => batalhaParticipantesDoMapa, set: (__v) => { batalhaParticipantesDoMapa = __v; } });
-Object.defineProperty(globalThis, "batalhaIdMinha", { configurable: true, get: () => batalhaIdMinha, set: (__v) => { batalhaIdMinha = __v; } });
-Object.defineProperty(globalThis, "batalhaMinha", { configurable: true, get: () => batalhaMinha, set: (__v) => { batalhaMinha = __v; } });
-Object.defineProperty(globalThis, "getCooldownsBatalha", { configurable: true, get: () => getCooldownsBatalha, set: (__v) => { getCooldownsBatalha = __v; } });
-Object.defineProperty(globalThis, "criarBatalhaRemota", { configurable: true, get: () => criarBatalhaRemota, set: (__v) => { criarBatalhaRemota = __v; } });
-Object.defineProperty(globalThis, "batalhaReceberLinhaRemota", { configurable: true, get: () => batalhaReceberLinhaRemota, set: (__v) => { batalhaReceberLinhaRemota = __v; } });
-Object.defineProperty(globalThis, "batalhaReceberEstadoRemoto", { configurable: true, get: () => batalhaReceberEstadoRemoto, set: (__v) => { batalhaReceberEstadoRemoto = __v; } });
-Object.defineProperty(globalThis, "_notificarVez", { configurable: true, get: () => _notificarVez, set: (__v) => { _notificarVez = __v; } });
-Object.defineProperty(globalThis, "_atualizarBadgeMesa", { configurable: true, get: () => _atualizarBadgeMesa, set: (__v) => { _atualizarBadgeMesa = __v; } });
-Object.defineProperty(globalThis, "_atualizarSeletorBatalhas", { configurable: true, get: () => _atualizarSeletorBatalhas, set: (__v) => { _atualizarSeletorBatalhas = __v; } });
-Object.defineProperty(globalThis, "batalhaAlternarPara", { configurable: true, get: () => batalhaAlternarPara, set: (__v) => { batalhaAlternarPara = __v; } });
+Object.defineProperty(globalThis, "getBattleConfig", { configurable: true, writable: true, value: getBattleConfig });
+Object.defineProperty(globalThis, "salvarBattleConfig", { configurable: true, writable: true, value: salvarBattleConfig });
+Object.defineProperty(globalThis, "batalhaNovaId", { configurable: true, writable: true, value: batalhaNovaId });
+Object.defineProperty(globalThis, "batalhaDoMapa", { configurable: true, writable: true, value: batalhaDoMapa });
+Object.defineProperty(globalThis, "batalhaBuscaMinhaAtiva", { configurable: true, writable: true, value: batalhaBuscaMinhaAtiva });
+Object.defineProperty(globalThis, "jogadorEstaOnline", { configurable: true, writable: true, value: jogadorEstaOnline });
+Object.defineProperty(globalThis, "personagemTemJogador", { configurable: true, writable: true, value: personagemTemJogador });
+Object.defineProperty(globalThis, "mestreDeveJogarPor", { configurable: true, writable: true, value: mestreDeveJogarPor });
+Object.defineProperty(globalThis, "batalhaParticipantesDoMapa", { configurable: true, writable: true, value: batalhaParticipantesDoMapa });
+Object.defineProperty(globalThis, "batalhaIdMinha", { configurable: true, writable: true, value: batalhaIdMinha });
+Object.defineProperty(globalThis, "batalhaMinha", { configurable: true, writable: true, value: batalhaMinha });
+Object.defineProperty(globalThis, "getCooldownsBatalha", { configurable: true, writable: true, value: getCooldownsBatalha });
+Object.defineProperty(globalThis, "criarBatalhaRemota", { configurable: true, writable: true, value: criarBatalhaRemota });
+Object.defineProperty(globalThis, "batalhaReceberLinhaRemota", { configurable: true, writable: true, value: batalhaReceberLinhaRemota });
+Object.defineProperty(globalThis, "batalhaReceberEstadoRemoto", { configurable: true, writable: true, value: batalhaReceberEstadoRemoto });
+Object.defineProperty(globalThis, "_notificarVez", { configurable: true, writable: true, value: _notificarVez });
+Object.defineProperty(globalThis, "_atualizarBadgeMesa", { configurable: true, writable: true, value: _atualizarBadgeMesa });
+Object.defineProperty(globalThis, "_atualizarSeletorBatalhas", { configurable: true, writable: true, value: _atualizarSeletorBatalhas });
+Object.defineProperty(globalThis, "batalhaAlternarPara", { configurable: true, writable: true, value: batalhaAlternarPara });
 Object.defineProperty(globalThis, "SESSAO_ATUAL", { configurable: true, get: () => SESSAO_ATUAL, set: (__v) => { SESSAO_ATUAL = __v; } });
-Object.defineProperty(globalThis, "_parseCoordenada", { configurable: true, get: () => _parseCoordenada, set: (__v) => { _parseCoordenada = __v; } });
-Object.defineProperty(globalThis, "_parseRetangulo", { configurable: true, get: () => _parseRetangulo, set: (__v) => { _parseRetangulo = __v; } });
-Object.defineProperty(globalThis, "parsePacote", { configurable: true, get: () => parsePacote, set: (__v) => { parsePacote = __v; } });
-Object.defineProperty(globalThis, "_parseLinha", { configurable: true, get: () => _parseLinha, set: (__v) => { _parseLinha = __v; } });
-Object.defineProperty(globalThis, "pacoteAplicar", { configurable: true, get: () => pacoteAplicar, set: (__v) => { pacoteAplicar = __v; } });
-Object.defineProperty(globalThis, "pacoteMostrarConfirmacao", { configurable: true, get: () => pacoteMostrarConfirmacao, set: (__v) => { pacoteMostrarConfirmacao = __v; } });
-Object.defineProperty(globalThis, "sessionRenderPainel", { configurable: true, get: () => sessionRenderPainel, set: (__v) => { sessionRenderPainel = __v; } });
-Object.defineProperty(globalThis, "sessionAtivarCena", { configurable: true, get: () => sessionAtivarCena, set: (__v) => { sessionAtivarCena = __v; } });
-Object.defineProperty(globalThis, "orgAddNo", { configurable: true, get: () => orgAddNo, set: (__v) => { orgAddNo = __v; } });
-Object.defineProperty(globalThis, "orgNavegar", { configurable: true, get: () => orgNavegar, set: (__v) => { orgNavegar = __v; } });
+Object.defineProperty(globalThis, "_parseCoordenada", { configurable: true, writable: true, value: _parseCoordenada });
+Object.defineProperty(globalThis, "_parseRetangulo", { configurable: true, writable: true, value: _parseRetangulo });
+Object.defineProperty(globalThis, "parsePacote", { configurable: true, writable: true, value: parsePacote });
+Object.defineProperty(globalThis, "_parseLinha", { configurable: true, writable: true, value: _parseLinha });
+Object.defineProperty(globalThis, "pacoteAplicar", { configurable: true, writable: true, value: pacoteAplicar });
+Object.defineProperty(globalThis, "pacoteMostrarConfirmacao", { configurable: true, writable: true, value: pacoteMostrarConfirmacao });
+Object.defineProperty(globalThis, "sessionRenderPainel", { configurable: true, writable: true, value: sessionRenderPainel });
+Object.defineProperty(globalThis, "sessionAtivarCena", { configurable: true, writable: true, value: sessionAtivarCena });
+Object.defineProperty(globalThis, "orgAddNo", { configurable: true, writable: true, value: orgAddNo });
+Object.defineProperty(globalThis, "orgNavegar", { configurable: true, writable: true, value: orgNavegar });
 Object.defineProperty(globalThis, "BIBLIOTECA_CENA", { configurable: true, get: () => BIBLIOTECA_CENA, set: (__v) => { BIBLIOTECA_CENA = __v; } });
-Object.defineProperty(globalThis, "bibliotecaCarregarDoLore", { configurable: true, get: () => bibliotecaCarregarDoLore, set: (__v) => { bibliotecaCarregarDoLore = __v; } });
-Object.defineProperty(globalThis, "gerarCenaAleatoria", { configurable: true, get: () => gerarCenaAleatoria, set: (__v) => { gerarCenaAleatoria = __v; } });
-Object.defineProperty(globalThis, "sessaoMarcarCenasAfetadas", { configurable: true, get: () => sessaoMarcarCenasAfetadas, set: (__v) => { sessaoMarcarCenasAfetadas = __v; } });
+Object.defineProperty(globalThis, "bibliotecaCarregarDoLore", { configurable: true, writable: true, value: bibliotecaCarregarDoLore });
+Object.defineProperty(globalThis, "gerarCenaAleatoria", { configurable: true, writable: true, value: gerarCenaAleatoria });
+Object.defineProperty(globalThis, "sessaoMarcarCenasAfetadas", { configurable: true, writable: true, value: sessaoMarcarCenasAfetadas });
 Object.defineProperty(globalThis, "_batalhaAtualIdInterno", { configurable: true, get: () => _batalhaAtualIdInterno, set: (__v) => { _batalhaAtualIdInterno = __v; } });
 Object.defineProperty(globalThis, "NPC_PILOTO", { configurable: true, get: () => NPC_PILOTO, set: (__v) => { NPC_PILOTO = __v; } });
-Object.defineProperty(globalThis, "npcTogglePiloto", { configurable: true, get: () => npcTogglePiloto, set: (__v) => { npcTogglePiloto = __v; } });
-Object.defineProperty(globalThis, "npcExecutarTurnoAuto", { configurable: true, get: () => npcExecutarTurnoAuto, set: (__v) => { npcExecutarTurnoAuto = __v; } });
-Object.defineProperty(globalThis, "_npcCalcAcao", { configurable: true, get: () => _npcCalcAcao, set: (__v) => { _npcCalcAcao = __v; } });
+Object.defineProperty(globalThis, "npcTogglePiloto", { configurable: true, writable: true, value: npcTogglePiloto });
+Object.defineProperty(globalThis, "npcExecutarTurnoAuto", { configurable: true, writable: true, value: npcExecutarTurnoAuto });
+Object.defineProperty(globalThis, "_npcCalcAcao", { configurable: true, writable: true, value: _npcCalcAcao });
 Object.defineProperty(globalThis, "_origConfirmarUsarItem", { configurable: true, get: () => _origConfirmarUsarItem, set: (__v) => { _origConfirmarUsarItem = __v; } });
-Object.defineProperty(globalThis, "renderItensPendentes6", { configurable: true, get: () => renderItensPendentes6, set: (__v) => { renderItensPendentes6 = __v; } });
+Object.defineProperty(globalThis, "renderItensPendentes6", { configurable: true, writable: true, value: renderItensPendentes6 });
 Object.defineProperty(globalThis, "_origExecutarDropNPC", { configurable: true, get: () => _origExecutarDropNPC, set: (__v) => { _origExecutarDropNPC = __v; } });
 Object.defineProperty(globalThis, "LOOT_RECLAMOS", { configurable: true, get: () => LOOT_RECLAMOS, set: (__v) => { LOOT_RECLAMOS = __v; } });
-Object.defineProperty(globalThis, "lootMostrarJanela", { configurable: true, get: () => lootMostrarJanela, set: (__v) => { lootMostrarJanela = __v; } });
-Object.defineProperty(globalThis, "lootResolverReclamo", { configurable: true, get: () => lootResolverReclamo, set: (__v) => { lootResolverReclamo = __v; } });
+Object.defineProperty(globalThis, "lootMostrarJanela", { configurable: true, writable: true, value: lootMostrarJanela });
+Object.defineProperty(globalThis, "lootResolverReclamo", { configurable: true, writable: true, value: lootResolverReclamo });
 Object.defineProperty(globalThis, "_origMRBadges6", { configurable: true, get: () => _origMRBadges6, set: (__v) => { _origMRBadges6 = __v; } });
 Object.defineProperty(globalThis, "_origInvEquipar6", { configurable: true, get: () => _origInvEquipar6, set: (__v) => { _origInvEquipar6 = __v; } });
-Object.defineProperty(globalThis, "bloqueadoPorNivel", { configurable: true, get: () => bloqueadoPorNivel, set: (__v) => { bloqueadoPorNivel = __v; } });
+Object.defineProperty(globalThis, "bloqueadoPorNivel", { configurable: true, writable: true, value: bloqueadoPorNivel });
 Object.defineProperty(globalThis, "_origRenderInvCompleto6", { configurable: true, get: () => _origRenderInvCompleto6, set: (__v) => { _origRenderInvCompleto6 = __v; } });
 Object.defineProperty(globalThis, "_origCtxGerarBotoes6", { configurable: true, get: () => _origCtxGerarBotoes6, set: (__v) => { _origCtxGerarBotoes6 = __v; } });
-Object.defineProperty(globalThis, "abrirModalIniciarBatalha", { configurable: true, get: () => abrirModalIniciarBatalha, set: (__v) => { abrirModalIniciarBatalha = __v; } });
-Object.defineProperty(globalThis, "fecharModalIniciarBatalha", { configurable: true, get: () => fecharModalIniciarBatalha, set: (__v) => { fecharModalIniciarBatalha = __v; } });
-Object.defineProperty(globalThis, "confirmarIniciarBatalha", { configurable: true, get: () => confirmarIniciarBatalha, set: (__v) => { confirmarIniciarBatalha = __v; } });
-Object.defineProperty(globalThis, "batalhaRenderFaseIniciativa", { configurable: true, get: () => batalhaRenderFaseIniciativa, set: (__v) => { batalhaRenderFaseIniciativa = __v; } });
-Object.defineProperty(globalThis, "abrirModalIniciativa", { configurable: true, get: () => abrirModalIniciativa, set: (__v) => { abrirModalIniciativa = __v; } });
-Object.defineProperty(globalThis, "fecharModalIniciativa", { configurable: true, get: () => fecharModalIniciativa, set: (__v) => { fecharModalIniciativa = __v; } });
-Object.defineProperty(globalThis, "iniciativaRolarDado", { configurable: true, get: () => iniciativaRolarDado, set: (__v) => { iniciativaRolarDado = __v; } });
-Object.defineProperty(globalThis, "iniciativaConfirmar", { configurable: true, get: () => iniciativaConfirmar, set: (__v) => { iniciativaConfirmar = __v; } });
-Object.defineProperty(globalThis, "batalhaVerificarIniciativasCompletas", { configurable: true, get: () => batalhaVerificarIniciativasCompletas, set: (__v) => { batalhaVerificarIniciativasCompletas = __v; } });
-Object.defineProperty(globalThis, "batalhaRenderOrdemStrip", { configurable: true, get: () => batalhaRenderOrdemStrip, set: (__v) => { batalhaRenderOrdemStrip = __v; } });
-Object.defineProperty(globalThis, "batalhaRenderVezLabel", { configurable: true, get: () => batalhaRenderVezLabel, set: (__v) => { batalhaRenderVezLabel = __v; } });
-Object.defineProperty(globalThis, "batalhaRenderReordenarLista", { configurable: true, get: () => batalhaRenderReordenarLista, set: (__v) => { batalhaRenderReordenarLista = __v; } });
-Object.defineProperty(globalThis, "batalhaDefinirVez", { configurable: true, get: () => batalhaDefinirVez, set: (__v) => { batalhaDefinirVez = __v; } });
-Object.defineProperty(globalThis, "_finalizarAtaqueCampanha", { configurable: true, get: () => _finalizarAtaqueCampanha, set: (__v) => { _finalizarAtaqueCampanha = __v; } });
-Object.defineProperty(globalThis, "batalhaPassarVez", { configurable: true, get: () => batalhaPassarVez, set: (__v) => { batalhaPassarVez = __v; } });
-Object.defineProperty(globalThis, "_buffAtivo", { configurable: true, get: () => _buffAtivo, set: (__v) => { _buffAtivo = __v; } });
-Object.defineProperty(globalThis, "_logExpiracaoEfeito", { configurable: true, get: () => _logExpiracaoEfeito, set: (__v) => { _logExpiracaoEfeito = __v; } });
-Object.defineProperty(globalThis, "_batalhaProcessarEventoReativo", { configurable: true, get: () => _batalhaProcessarEventoReativo, set: (__v) => { _batalhaProcessarEventoReativo = __v; } });
-Object.defineProperty(globalThis, "_mostrarDialogReacao", { configurable: true, get: () => _mostrarDialogReacao, set: (__v) => { _mostrarDialogReacao = __v; } });
-Object.defineProperty(globalThis, "_processarEfeitosCampanha", { configurable: true, get: () => _processarEfeitosCampanha, set: (__v) => { _processarEfeitosCampanha = __v; } });
-Object.defineProperty(globalThis, "batalhaAtacarVez", { configurable: true, get: () => batalhaAtacarVez, set: (__v) => { batalhaAtacarVez = __v; } });
-Object.defineProperty(globalThis, "batalhaJogarPorOffline", { configurable: true, get: () => batalhaJogarPorOffline, set: (__v) => { batalhaJogarPorOffline = __v; } });
-Object.defineProperty(globalThis, "batalhaAvancarTurno", { configurable: true, get: () => batalhaAvancarTurno, set: (__v) => { batalhaAvancarTurno = __v; } });
-Object.defineProperty(globalThis, "batalhaAtualizarTurno", { configurable: true, get: () => batalhaAtualizarTurno, set: (__v) => { batalhaAtualizarTurno = __v; } });
-Object.defineProperty(globalThis, "pausarOuRetomarBatalha", { configurable: true, get: () => pausarOuRetomarBatalha, set: (__v) => { pausarOuRetomarBatalha = __v; } });
-Object.defineProperty(globalThis, "encerrarBatalha", { configurable: true, get: () => encerrarBatalha, set: (__v) => { encerrarBatalha = __v; } });
-Object.defineProperty(globalThis, "entrarBatalha", { configurable: true, get: () => entrarBatalha, set: (__v) => { entrarBatalha = __v; } });
-Object.defineProperty(globalThis, "_verificarVitoriaBatalha", { configurable: true, get: () => _verificarVitoriaBatalha, set: (__v) => { _verificarVitoriaBatalha = __v; } });
-Object.defineProperty(globalThis, "_mostrarTelaVitoria", { configurable: true, get: () => _mostrarTelaVitoria, set: (__v) => { _mostrarTelaVitoria = __v; } });
-Object.defineProperty(globalThis, "_encerrarBatalhaAposVitoria", { configurable: true, get: () => _encerrarBatalhaAposVitoria, set: (__v) => { _encerrarBatalhaAposVitoria = __v; } });
-Object.defineProperty(globalThis, "_irParaBatalhaAtiva", { configurable: true, get: () => _irParaBatalhaAtiva, set: (__v) => { _irParaBatalhaAtiva = __v; } });
-Object.defineProperty(globalThis, "_aplicarEstadoBatalhaUI", { configurable: true, get: () => _aplicarEstadoBatalhaUI, set: (__v) => { _aplicarEstadoBatalhaUI = __v; } });
-Object.defineProperty(globalThis, "batalhaRenderDados", { configurable: true, get: () => batalhaRenderDados, set: (__v) => { batalhaRenderDados = __v; } });
-Object.defineProperty(globalThis, "batalhaSelDado", { configurable: true, get: () => batalhaSelDado, set: (__v) => { batalhaSelDado = __v; } });
-Object.defineProperty(globalThis, "batalhaRolarDado", { configurable: true, get: () => batalhaRolarDado, set: (__v) => { batalhaRolarDado = __v; } });
-Object.defineProperty(globalThis, "deletarMapaAtual", { configurable: true, get: () => deletarMapaAtual, set: (__v) => { deletarMapaAtual = __v; } });
-Object.defineProperty(globalThis, "toggleNpcVisivelGeral", { configurable: true, get: () => toggleNpcVisivelGeral, set: (__v) => { toggleNpcVisivelGeral = __v; } });
+Object.defineProperty(globalThis, "abrirModalIniciarBatalha", { configurable: true, writable: true, value: abrirModalIniciarBatalha });
+Object.defineProperty(globalThis, "fecharModalIniciarBatalha", { configurable: true, writable: true, value: fecharModalIniciarBatalha });
+Object.defineProperty(globalThis, "confirmarIniciarBatalha", { configurable: true, writable: true, value: confirmarIniciarBatalha });
+Object.defineProperty(globalThis, "batalhaRenderFaseIniciativa", { configurable: true, writable: true, value: batalhaRenderFaseIniciativa });
+Object.defineProperty(globalThis, "abrirModalIniciativa", { configurable: true, writable: true, value: abrirModalIniciativa });
+Object.defineProperty(globalThis, "fecharModalIniciativa", { configurable: true, writable: true, value: fecharModalIniciativa });
+Object.defineProperty(globalThis, "iniciativaRolarDado", { configurable: true, writable: true, value: iniciativaRolarDado });
+Object.defineProperty(globalThis, "iniciativaConfirmar", { configurable: true, writable: true, value: iniciativaConfirmar });
+Object.defineProperty(globalThis, "batalhaVerificarIniciativasCompletas", { configurable: true, writable: true, value: batalhaVerificarIniciativasCompletas });
+Object.defineProperty(globalThis, "batalhaRenderOrdemStrip", { configurable: true, writable: true, value: batalhaRenderOrdemStrip });
+Object.defineProperty(globalThis, "batalhaRenderVezLabel", { configurable: true, writable: true, value: batalhaRenderVezLabel });
+Object.defineProperty(globalThis, "batalhaRenderReordenarLista", { configurable: true, writable: true, value: batalhaRenderReordenarLista });
+Object.defineProperty(globalThis, "batalhaDefinirVez", { configurable: true, writable: true, value: batalhaDefinirVez });
+Object.defineProperty(globalThis, "_finalizarAtaqueCampanha", { configurable: true, writable: true, value: _finalizarAtaqueCampanha });
+Object.defineProperty(globalThis, "batalhaPassarVez", { configurable: true, writable: true, value: batalhaPassarVez });
+Object.defineProperty(globalThis, "_buffAtivo", { configurable: true, writable: true, value: _buffAtivo });
+Object.defineProperty(globalThis, "_logExpiracaoEfeito", { configurable: true, writable: true, value: _logExpiracaoEfeito });
+Object.defineProperty(globalThis, "_batalhaProcessarEventoReativo", { configurable: true, writable: true, value: _batalhaProcessarEventoReativo });
+Object.defineProperty(globalThis, "_mostrarDialogReacao", { configurable: true, writable: true, value: _mostrarDialogReacao });
+Object.defineProperty(globalThis, "_processarEfeitosCampanha", { configurable: true, writable: true, value: _processarEfeitosCampanha });
+Object.defineProperty(globalThis, "batalhaAtacarVez", { configurable: true, writable: true, value: batalhaAtacarVez });
+Object.defineProperty(globalThis, "batalhaJogarPorOffline", { configurable: true, writable: true, value: batalhaJogarPorOffline });
+Object.defineProperty(globalThis, "batalhaAvancarTurno", { configurable: true, writable: true, value: batalhaAvancarTurno });
+Object.defineProperty(globalThis, "batalhaAtualizarTurno", { configurable: true, writable: true, value: batalhaAtualizarTurno });
+Object.defineProperty(globalThis, "pausarOuRetomarBatalha", { configurable: true, writable: true, value: pausarOuRetomarBatalha });
+Object.defineProperty(globalThis, "encerrarBatalha", { configurable: true, writable: true, value: encerrarBatalha });
+Object.defineProperty(globalThis, "entrarBatalha", { configurable: true, writable: true, value: entrarBatalha });
+Object.defineProperty(globalThis, "_verificarVitoriaBatalha", { configurable: true, writable: true, value: _verificarVitoriaBatalha });
+Object.defineProperty(globalThis, "_mostrarTelaVitoria", { configurable: true, writable: true, value: _mostrarTelaVitoria });
+Object.defineProperty(globalThis, "_encerrarBatalhaAposVitoria", { configurable: true, writable: true, value: _encerrarBatalhaAposVitoria });
+Object.defineProperty(globalThis, "_irParaBatalhaAtiva", { configurable: true, writable: true, value: _irParaBatalhaAtiva });
+Object.defineProperty(globalThis, "_aplicarEstadoBatalhaUI", { configurable: true, writable: true, value: _aplicarEstadoBatalhaUI });
+Object.defineProperty(globalThis, "batalhaRenderDados", { configurable: true, writable: true, value: batalhaRenderDados });
+Object.defineProperty(globalThis, "batalhaSelDado", { configurable: true, writable: true, value: batalhaSelDado });
+Object.defineProperty(globalThis, "batalhaRolarDado", { configurable: true, writable: true, value: batalhaRolarDado });
+Object.defineProperty(globalThis, "deletarMapaAtual", { configurable: true, writable: true, value: deletarMapaAtual });
+Object.defineProperty(globalThis, "toggleNpcVisivelGeral", { configurable: true, writable: true, value: toggleNpcVisivelGeral });
 Object.defineProperty(globalThis, "_TECLAS_ATIVAS", { configurable: true, get: () => _TECLAS_ATIVAS, set: (__v) => { _TECLAS_ATIVAS = __v; } });
-Object.defineProperty(globalThis, "_processarSetinhaMapa", { configurable: true, get: () => _processarSetinhaMapa, set: (__v) => { _processarSetinhaMapa = __v; } });
-Object.defineProperty(globalThis, "_moverTokenPorSeta", { configurable: true, get: () => _moverTokenPorSeta, set: (__v) => { _moverTokenPorSeta = __v; } });
-Object.defineProperty(globalThis, "_getTokenControleAtual", { configurable: true, get: () => _getTokenControleAtual, set: (__v) => { _getTokenControleAtual = __v; } });
-Object.defineProperty(globalThis, "_tokenCliqueSimples", { configurable: true, get: () => _tokenCliqueSimples, set: (__v) => { _tokenCliqueSimples = __v; } });
-Object.defineProperty(globalThis, "_ctxAtualizarPainelDesktop", { configurable: true, get: () => _ctxAtualizarPainelDesktop, set: (__v) => { _ctxAtualizarPainelDesktop = __v; } });
-Object.defineProperty(globalThis, "_tokenDuploClique", { configurable: true, get: () => _tokenDuploClique, set: (__v) => { _tokenDuploClique = __v; } });
-Object.defineProperty(globalThis, "movCalcVelocidade", { configurable: true, get: () => movCalcVelocidade, set: (__v) => { movCalcVelocidade = __v; } });
-Object.defineProperty(globalThis, "movResetTurno", { configurable: true, get: () => movResetTurno, set: (__v) => { movResetTurno = __v; } });
-Object.defineProperty(globalThis, "movGetRestante", { configurable: true, get: () => movGetRestante, set: (__v) => { movGetRestante = __v; } });
-Object.defineProperty(globalThis, "movConsumirAcao", { configurable: true, get: () => movConsumirAcao, set: (__v) => { movConsumirAcao = __v; } });
-Object.defineProperty(globalThis, "movConsumirMovimento", { configurable: true, get: () => movConsumirMovimento, set: (__v) => { movConsumirMovimento = __v; } });
-Object.defineProperty(globalThis, "movAdicionarMovimento", { configurable: true, get: () => movAdicionarMovimento, set: (__v) => { movAdicionarMovimento = __v; } });
-Object.defineProperty(globalThis, "ctxGerarBotoes", { configurable: true, get: () => ctxGerarBotoes, set: (__v) => { ctxGerarBotoes = __v; } });
-Object.defineProperty(globalThis, "ctxPriorizar", { configurable: true, get: () => ctxPriorizar, set: (__v) => { ctxPriorizar = __v; } });
-Object.defineProperty(globalThis, "ctxExecutarAcao", { configurable: true, get: () => ctxExecutarAcao, set: (__v) => { ctxExecutarAcao = __v; } });
-Object.defineProperty(globalThis, "ctxRenderizarPainelBotoes", { configurable: true, get: () => ctxRenderizarPainelBotoes, set: (__v) => { ctxRenderizarPainelBotoes = __v; } });
-Object.defineProperty(globalThis, "ctxMostrarOcultos", { configurable: true, get: () => ctxMostrarOcultos, set: (__v) => { ctxMostrarOcultos = __v; } });
-Object.defineProperty(globalThis, "mapaClicarToken", { configurable: true, get: () => mapaClicarToken, set: (__v) => { mapaClicarToken = __v; } });
-Object.defineProperty(globalThis, "fecharFichaNoMapa", { configurable: true, get: () => fecharFichaNoMapa, set: (__v) => { fecharFichaNoMapa = __v; } });
-Object.defineProperty(globalThis, "abrirFichaNoMapa", { configurable: true, get: () => abrirFichaNoMapa, set: (__v) => { abrirFichaNoMapa = __v; } });
-Object.defineProperty(globalThis, "fichaToggleOcultarAtribs", { configurable: true, get: () => fichaToggleOcultarAtribs, set: (__v) => { fichaToggleOcultarAtribs = __v; } });
-Object.defineProperty(globalThis, "abrirModalAdicionarAoMapa", { configurable: true, get: () => abrirModalAdicionarAoMapa, set: (__v) => { abrirModalAdicionarAoMapa = __v; } });
-Object.defineProperty(globalThis, "mapaDesenharDistancia", { configurable: true, get: () => mapaDesenharDistancia, set: (__v) => { mapaDesenharDistancia = __v; } });
-Object.defineProperty(globalThis, "limparMedicaoMapa", { configurable: true, get: () => limparMedicaoMapa, set: (__v) => { limparMedicaoMapa = __v; } });
-Object.defineProperty(globalThis, "entrarMapaLocal", { configurable: true, get: () => entrarMapaLocal, set: (__v) => { entrarMapaLocal = __v; } });
-Object.defineProperty(globalThis, "voltarMapaGeral", { configurable: true, get: () => voltarMapaGeral, set: (__v) => { voltarMapaGeral = __v; } });
-Object.defineProperty(globalThis, "renderConfig", { configurable: true, get: () => renderConfig, set: (__v) => { renderConfig = __v; } });
-Object.defineProperty(globalThis, "salvarPvpConfig", { configurable: true, get: () => salvarPvpConfig, set: (__v) => { salvarPvpConfig = __v; } });
-Object.defineProperty(globalThis, "salvarFogoAmigoConfig", { configurable: true, get: () => salvarFogoAmigoConfig, set: (__v) => { salvarFogoAmigoConfig = __v; } });
-Object.defineProperty(globalThis, "cfgBattleInit", { configurable: true, get: () => cfgBattleInit, set: (__v) => { cfgBattleInit = __v; } });
-Object.defineProperty(globalThis, "cfgBattleSistemaChange", { configurable: true, get: () => cfgBattleSistemaChange, set: (__v) => { cfgBattleSistemaChange = __v; } });
-Object.defineProperty(globalThis, "_cfgBattlePopularCampos", { configurable: true, get: () => _cfgBattlePopularCampos, set: (__v) => { _cfgBattlePopularCampos = __v; } });
-Object.defineProperty(globalThis, "cfgBattleSalvar", { configurable: true, get: () => cfgBattleSalvar, set: (__v) => { cfgBattleSalvar = __v; } });
-Object.defineProperty(globalThis, "renderCfgMembros", { configurable: true, get: () => renderCfgMembros, set: (__v) => { renderCfgMembros = __v; } });
-Object.defineProperty(globalThis, "abrirModalAtribuirPersonagem", { configurable: true, get: () => abrirModalAtribuirPersonagem, set: (__v) => { abrirModalAtribuirPersonagem = __v; } });
-Object.defineProperty(globalThis, "atribuirPersonagemAMembro", { configurable: true, get: () => atribuirPersonagemAMembro, set: (__v) => { atribuirPersonagemAMembro = __v; } });
-Object.defineProperty(globalThis, "cfgAdicionarMembro", { configurable: true, get: () => cfgAdicionarMembro, set: (__v) => { cfgAdicionarMembro = __v; } });
+Object.defineProperty(globalThis, "_processarSetinhaMapa", { configurable: true, writable: true, value: _processarSetinhaMapa });
+Object.defineProperty(globalThis, "_moverTokenPorSeta", { configurable: true, writable: true, value: _moverTokenPorSeta });
+Object.defineProperty(globalThis, "_getTokenControleAtual", { configurable: true, writable: true, value: _getTokenControleAtual });
+Object.defineProperty(globalThis, "_tokenCliqueSimples", { configurable: true, writable: true, value: _tokenCliqueSimples });
+Object.defineProperty(globalThis, "_ctxAtualizarPainelDesktop", { configurable: true, writable: true, value: _ctxAtualizarPainelDesktop });
+Object.defineProperty(globalThis, "_tokenDuploClique", { configurable: true, writable: true, value: _tokenDuploClique });
+Object.defineProperty(globalThis, "movCalcVelocidade", { configurable: true, writable: true, value: movCalcVelocidade });
+Object.defineProperty(globalThis, "movResetTurno", { configurable: true, writable: true, value: movResetTurno });
+Object.defineProperty(globalThis, "movGetRestante", { configurable: true, writable: true, value: movGetRestante });
+Object.defineProperty(globalThis, "movConsumirAcao", { configurable: true, writable: true, value: movConsumirAcao });
+Object.defineProperty(globalThis, "movConsumirMovimento", { configurable: true, writable: true, value: movConsumirMovimento });
+Object.defineProperty(globalThis, "movAdicionarMovimento", { configurable: true, writable: true, value: movAdicionarMovimento });
+Object.defineProperty(globalThis, "ctxGerarBotoes", { configurable: true, writable: true, value: ctxGerarBotoes });
+Object.defineProperty(globalThis, "ctxPriorizar", { configurable: true, writable: true, value: ctxPriorizar });
+Object.defineProperty(globalThis, "ctxExecutarAcao", { configurable: true, writable: true, value: ctxExecutarAcao });
+Object.defineProperty(globalThis, "ctxRenderizarPainelBotoes", { configurable: true, writable: true, value: ctxRenderizarPainelBotoes });
+Object.defineProperty(globalThis, "ctxMostrarOcultos", { configurable: true, writable: true, value: ctxMostrarOcultos });
+Object.defineProperty(globalThis, "mapaClicarToken", { configurable: true, writable: true, value: mapaClicarToken });
+Object.defineProperty(globalThis, "fecharFichaNoMapa", { configurable: true, writable: true, value: fecharFichaNoMapa });
+Object.defineProperty(globalThis, "abrirFichaNoMapa", { configurable: true, writable: true, value: abrirFichaNoMapa });
+Object.defineProperty(globalThis, "fichaToggleOcultarAtribs", { configurable: true, writable: true, value: fichaToggleOcultarAtribs });
+Object.defineProperty(globalThis, "abrirModalAdicionarAoMapa", { configurable: true, writable: true, value: abrirModalAdicionarAoMapa });
+Object.defineProperty(globalThis, "mapaDesenharDistancia", { configurable: true, writable: true, value: mapaDesenharDistancia });
+Object.defineProperty(globalThis, "limparMedicaoMapa", { configurable: true, writable: true, value: limparMedicaoMapa });
+Object.defineProperty(globalThis, "entrarMapaLocal", { configurable: true, writable: true, value: entrarMapaLocal });
+Object.defineProperty(globalThis, "voltarMapaGeral", { configurable: true, writable: true, value: voltarMapaGeral });
+Object.defineProperty(globalThis, "renderConfig", { configurable: true, writable: true, value: renderConfig });
+Object.defineProperty(globalThis, "salvarPvpConfig", { configurable: true, writable: true, value: salvarPvpConfig });
+Object.defineProperty(globalThis, "salvarFogoAmigoConfig", { configurable: true, writable: true, value: salvarFogoAmigoConfig });
+Object.defineProperty(globalThis, "cfgBattleInit", { configurable: true, writable: true, value: cfgBattleInit });
+Object.defineProperty(globalThis, "cfgBattleSistemaChange", { configurable: true, writable: true, value: cfgBattleSistemaChange });
+Object.defineProperty(globalThis, "_cfgBattlePopularCampos", { configurable: true, writable: true, value: _cfgBattlePopularCampos });
+Object.defineProperty(globalThis, "cfgBattleSalvar", { configurable: true, writable: true, value: cfgBattleSalvar });
+Object.defineProperty(globalThis, "renderCfgMembros", { configurable: true, writable: true, value: renderCfgMembros });
+Object.defineProperty(globalThis, "abrirModalAtribuirPersonagem", { configurable: true, writable: true, value: abrirModalAtribuirPersonagem });
+Object.defineProperty(globalThis, "atribuirPersonagemAMembro", { configurable: true, writable: true, value: atribuirPersonagemAMembro });
+Object.defineProperty(globalThis, "cfgAdicionarMembro", { configurable: true, writable: true, value: cfgAdicionarMembro });
 Object.defineProperty(globalThis, "PERMISSOES_CONFIG", { configurable: true, get: () => PERMISSOES_CONFIG, set: (__v) => { PERMISSOES_CONFIG = __v; } });
-Object.defineProperty(globalThis, "abrirModalPermissoes", { configurable: true, get: () => abrirModalPermissoes, set: (__v) => { abrirModalPermissoes = __v; } });
-Object.defineProperty(globalThis, "salvarPermissoes", { configurable: true, get: () => salvarPermissoes, set: (__v) => { salvarPermissoes = __v; } });
-Object.defineProperty(globalThis, "cfgRemoverMembro", { configurable: true, get: () => cfgRemoverMembro, set: (__v) => { cfgRemoverMembro = __v; } });
-Object.defineProperty(globalThis, "abrirModalVincularPersonagem", { configurable: true, get: () => abrirModalVincularPersonagem, set: (__v) => { abrirModalVincularPersonagem = __v; } });
-Object.defineProperty(globalThis, "vincularPersonagem", { configurable: true, get: () => vincularPersonagem, set: (__v) => { vincularPersonagem = __v; } });
-Object.defineProperty(globalThis, "renderCfgAttrDefs", { configurable: true, get: () => renderCfgAttrDefs, set: (__v) => { renderCfgAttrDefs = __v; } });
-Object.defineProperty(globalThis, "abrirModalAttrDef", { configurable: true, get: () => abrirModalAttrDef, set: (__v) => { abrirModalAttrDef = __v; } });
-Object.defineProperty(globalThis, "fecharModalAttrDef", { configurable: true, get: () => fecharModalAttrDef, set: (__v) => { fecharModalAttrDef = __v; } });
-Object.defineProperty(globalThis, "attrDefTipoChange", { configurable: true, get: () => attrDefTipoChange, set: (__v) => { attrDefTipoChange = __v; } });
-Object.defineProperty(globalThis, "attrDefCategoriaChange", { configurable: true, get: () => attrDefCategoriaChange, set: (__v) => { attrDefCategoriaChange = __v; } });
-Object.defineProperty(globalThis, "_adStatusJsonToForm", { configurable: true, get: () => _adStatusJsonToForm, set: (__v) => { _adStatusJsonToForm = __v; } });
-Object.defineProperty(globalThis, "_adStatusFormToJson", { configurable: true, get: () => _adStatusFormToJson, set: (__v) => { _adStatusFormToJson = __v; } });
-Object.defineProperty(globalThis, "salvarAttrDef", { configurable: true, get: () => salvarAttrDef, set: (__v) => { salvarAttrDef = __v; } });
-Object.defineProperty(globalThis, "removerAttrDefModal", { configurable: true, get: () => removerAttrDefModal, set: (__v) => { removerAttrDefModal = __v; } });
-Object.defineProperty(globalThis, "removerAttrDef", { configurable: true, get: () => removerAttrDef, set: (__v) => { removerAttrDef = __v; } });
-Object.defineProperty(globalThis, "selecionarOpcaoConfig", { configurable: true, get: () => selecionarOpcaoConfig, set: (__v) => { selecionarOpcaoConfig = __v; } });
-Object.defineProperty(globalThis, "salvarConfig", { configurable: true, get: () => salvarConfig, set: (__v) => { salvarConfig = __v; } });
-Object.defineProperty(globalThis, "confirmarDeleteRPG", { configurable: true, get: () => confirmarDeleteRPG, set: (__v) => { confirmarDeleteRPG = __v; } });
+Object.defineProperty(globalThis, "abrirModalPermissoes", { configurable: true, writable: true, value: abrirModalPermissoes });
+Object.defineProperty(globalThis, "salvarPermissoes", { configurable: true, writable: true, value: salvarPermissoes });
+Object.defineProperty(globalThis, "cfgRemoverMembro", { configurable: true, writable: true, value: cfgRemoverMembro });
+Object.defineProperty(globalThis, "abrirModalVincularPersonagem", { configurable: true, writable: true, value: abrirModalVincularPersonagem });
+Object.defineProperty(globalThis, "vincularPersonagem", { configurable: true, writable: true, value: vincularPersonagem });
+Object.defineProperty(globalThis, "renderCfgAttrDefs", { configurable: true, writable: true, value: renderCfgAttrDefs });
+Object.defineProperty(globalThis, "abrirModalAttrDef", { configurable: true, writable: true, value: abrirModalAttrDef });
+Object.defineProperty(globalThis, "fecharModalAttrDef", { configurable: true, writable: true, value: fecharModalAttrDef });
+Object.defineProperty(globalThis, "attrDefTipoChange", { configurable: true, writable: true, value: attrDefTipoChange });
+Object.defineProperty(globalThis, "attrDefCategoriaChange", { configurable: true, writable: true, value: attrDefCategoriaChange });
+Object.defineProperty(globalThis, "_adStatusJsonToForm", { configurable: true, writable: true, value: _adStatusJsonToForm });
+Object.defineProperty(globalThis, "_adStatusFormToJson", { configurable: true, writable: true, value: _adStatusFormToJson });
+Object.defineProperty(globalThis, "salvarAttrDef", { configurable: true, writable: true, value: salvarAttrDef });
+Object.defineProperty(globalThis, "removerAttrDefModal", { configurable: true, writable: true, value: removerAttrDefModal });
+Object.defineProperty(globalThis, "removerAttrDef", { configurable: true, writable: true, value: removerAttrDef });
+Object.defineProperty(globalThis, "selecionarOpcaoConfig", { configurable: true, writable: true, value: selecionarOpcaoConfig });
+Object.defineProperty(globalThis, "salvarConfig", { configurable: true, writable: true, value: salvarConfig });
+Object.defineProperty(globalThis, "confirmarDeleteRPG", { configurable: true, writable: true, value: confirmarDeleteRPG });
 Object.defineProperty(globalThis, "_highlightLayer", { configurable: true, get: () => _highlightLayer, set: (__v) => { _highlightLayer = __v; } });
 Object.defineProperty(globalThis, "_highlightModoAtivo", { configurable: true, get: () => _highlightModoAtivo, set: (__v) => { _highlightModoAtivo = __v; } });
-Object.defineProperty(globalThis, "ctxHighlightToggle", { configurable: true, get: () => ctxHighlightToggle, set: (__v) => { ctxHighlightToggle = __v; } });
-Object.defineProperty(globalThis, "ctxHighlightTurno", { configurable: true, get: () => ctxHighlightTurno, set: (__v) => { ctxHighlightTurno = __v; } });
-Object.defineProperty(globalThis, "ctxHighlightLimpar", { configurable: true, get: () => ctxHighlightLimpar, set: (__v) => { ctxHighlightLimpar = __v; } });
-Object.defineProperty(globalThis, "_bfsCelulas", { configurable: true, get: () => _bfsCelulas, set: (__v) => { _bfsCelulas = __v; } });
-Object.defineProperty(globalThis, "_celulasComAlvo", { configurable: true, get: () => _celulasComAlvo, set: (__v) => { _celulasComAlvo = __v; } });
-Object.defineProperty(globalThis, "losVerificar", { configurable: true, get: () => losVerificar, set: (__v) => { losVerificar = __v; } });
-Object.defineProperty(globalThis, "_segIntersect", { configurable: true, get: () => _segIntersect, set: (__v) => { _segIntersect = __v; } });
-Object.defineProperty(globalThis, "superficieRenderizar", { configurable: true, get: () => superficieRenderizar, set: (__v) => { superficieRenderizar = __v; } });
-Object.defineProperty(globalThis, "superficieVerificarEntrada", { configurable: true, get: () => superficieVerificarEntrada, set: (__v) => { superficieVerificarEntrada = __v; } });
-Object.defineProperty(globalThis, "verificarAtaqueOportunidade", { configurable: true, get: () => verificarAtaqueOportunidade, set: (__v) => { verificarAtaqueOportunidade = __v; } });
-Object.defineProperty(globalThis, "batalhaConfirmarPosicionamento", { configurable: true, get: () => batalhaConfirmarPosicionamento, set: (__v) => { batalhaConfirmarPosicionamento = __v; } });
-Object.defineProperty(globalThis, "aoePreviewAtualizar", { configurable: true, get: () => aoePreviewAtualizar, set: (__v) => { aoePreviewAtualizar = __v; } });
-Object.defineProperty(globalThis, "abrirModalNovoMapa", { configurable: true, get: () => abrirModalNovoMapa, set: (__v) => { abrirModalNovoMapa = __v; } });
-Object.defineProperty(globalThis, "nmTipoChange", { configurable: true, get: () => nmTipoChange, set: (__v) => { nmTipoChange = __v; } });
-Object.defineProperty(globalThis, "nmParentChange", { configurable: true, get: () => nmParentChange, set: (__v) => { nmParentChange = __v; } });
-Object.defineProperty(globalThis, "nmAtualizarPreview", { configurable: true, get: () => nmAtualizarPreview, set: (__v) => { nmAtualizarPreview = __v; } });
-Object.defineProperty(globalThis, "fecharModalNovoMapa", { configurable: true, get: () => fecharModalNovoMapa, set: (__v) => { fecharModalNovoMapa = __v; } });
-Object.defineProperty(globalThis, "criarNovoMapa", { configurable: true, get: () => criarNovoMapa, set: (__v) => { criarNovoMapa = __v; } });
+Object.defineProperty(globalThis, "ctxHighlightToggle", { configurable: true, writable: true, value: ctxHighlightToggle });
+Object.defineProperty(globalThis, "ctxHighlightTurno", { configurable: true, writable: true, value: ctxHighlightTurno });
+Object.defineProperty(globalThis, "ctxHighlightLimpar", { configurable: true, writable: true, value: ctxHighlightLimpar });
+Object.defineProperty(globalThis, "_bfsCelulas", { configurable: true, writable: true, value: _bfsCelulas });
+Object.defineProperty(globalThis, "_celulasComAlvo", { configurable: true, writable: true, value: _celulasComAlvo });
+Object.defineProperty(globalThis, "losVerificar", { configurable: true, writable: true, value: losVerificar });
+Object.defineProperty(globalThis, "_segIntersect", { configurable: true, writable: true, value: _segIntersect });
+Object.defineProperty(globalThis, "superficieRenderizar", { configurable: true, writable: true, value: superficieRenderizar });
+Object.defineProperty(globalThis, "superficieVerificarEntrada", { configurable: true, writable: true, value: superficieVerificarEntrada });
+Object.defineProperty(globalThis, "verificarAtaqueOportunidade", { configurable: true, writable: true, value: verificarAtaqueOportunidade });
+Object.defineProperty(globalThis, "batalhaConfirmarPosicionamento", { configurable: true, writable: true, value: batalhaConfirmarPosicionamento });
+Object.defineProperty(globalThis, "aoePreviewAtualizar", { configurable: true, writable: true, value: aoePreviewAtualizar });
+Object.defineProperty(globalThis, "abrirModalNovoMapa", { configurable: true, writable: true, value: abrirModalNovoMapa });
+Object.defineProperty(globalThis, "nmTipoChange", { configurable: true, writable: true, value: nmTipoChange });
+Object.defineProperty(globalThis, "nmParentChange", { configurable: true, writable: true, value: nmParentChange });
+Object.defineProperty(globalThis, "nmAtualizarPreview", { configurable: true, writable: true, value: nmAtualizarPreview });
+Object.defineProperty(globalThis, "fecharModalNovoMapa", { configurable: true, writable: true, value: fecharModalNovoMapa });
+Object.defineProperty(globalThis, "criarNovoMapa", { configurable: true, writable: true, value: criarNovoMapa });
 Object.defineProperty(globalThis, "PLACEMENT_STATE", { configurable: true, get: () => PLACEMENT_STATE, set: (__v) => { PLACEMENT_STATE = __v; } });

@@ -43,6 +43,7 @@ declare global {
   // Bloco regenerado automaticamente durante a Entrega 2; esvazia conforme os
   // módulos donos são convertidos. (Sobras no fim = globals de runtime puro.)
   // [migração-ts:auto-globals:início]
+  var FASE_TILE_SZ: any;
   var INVENTARIO_CACHE: any;
   var ITEMS_CATALOG: any;
   var LOOT_CACHE: any;
@@ -50,15 +51,29 @@ declare global {
   var MOEDAS_CACHE: any;
   var TOKEN_CTRL: any;
   var TRADES_CACHE: any;
+  var _aoeObterAlvosAtingidos: any;
+  var abrirModalLoot: any;
+  var abrirModalLootToken: any;
+  var adicionarItemInventario: any;
+  var aplicarBuffCampanha: any;
   var arLog: any;
   var atualizarDisplayMoedas: any;
   var atualizarInventarioUI: any;
   var atualizarMapaLoot: any;
   var atualizarTradesUI: any;
+  var battleStateBroadcast: any;
+  var cenaRenderizarObjetos: any;
   var executarAnimacaoAtaque: any;
   var executarAnimacaoDados: any;
+  var gridTacticalShowMoveRange: any;
+  var iniciarBatalha: any;
+  var logCombate: any;
+  var mapa: any;
+  var mapaCarregar: any;
+  var mapaRenderizar: any;
   var mostrarTelaVitoria: any;
   var mostrarTriggerVisual: any;
+  var navegarParaMapa: any;
   var ocultarTriggerVisual: any;
   var renderBaus: any;
   var renderCatalogo: any;

@@ -32,12 +32,12 @@ import './combat/reactions';
 
 // Mapas
 import './maps/camera';
-import './maps/fase-renderer.js';
-import './maps/fase-generator.js';
-import './maps/fase-tileset.js';
-import './maps/maps.js';
-import './maps/tactical.js';
-import './maps/background.js';
+import './maps/fase-renderer';
+import './maps/fase-generator';
+import './maps/fase-tileset';
+import './maps/maps';
+import './maps/tactical';
+import './maps/background';
 
 // Auth, hub e sistemas
 import './auth/auth';

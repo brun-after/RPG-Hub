@@ -88,7 +88,7 @@ function mapaIsTatico(mapa) { return mapaGetTipo(mapa) === 'tatico'; }
 function mapaIsFase(mapa)   { return mapaGetTipo(mapa) === 'fase'; }
 
 // ── Estado global do mapa de fase ────────────────────────────────────────────
-let FASE_STATE = {
+let FASE_STATE: any = {
   faseAtualId:  null,
   app:          null,   // instância PIXI.Application ativa
   worldContainer: null, // container raiz do mundo (câmera aplica transform aqui)

@@ -736,7 +736,7 @@ HUB_EVENTS.on('turno_avancou', ({ personagem }) => {
 // ── 5.4 Painel de notificações ────────────────────────────────────────────
 const NOTIFICACOES = { fila: [] };
 
-function notifAdicionar({ tipo, prioridade, titulo, descricao, acao, dados }) {
+function notifAdicionar(_notif) { const { tipo, prioridade, titulo, descricao, acao, dados } = _notif;
   const notif = { id:'notif_'+Date.now()+'_'+Math.random().toString(36).slice(2,5), tipo:tipo||'info', prioridade:prioridade||'media', titulo:titulo||'', descricao:descricao||'', acao:acao||null, dados:dados||{}, ts:Date.now() };
   if (notif.prioridade === 'baixa') {
     const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
