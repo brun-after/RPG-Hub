@@ -7568,7 +7568,16 @@ function _avtMostrarDotDrip(ent, variante) {
 // para críticos. Substitui a exibição anterior imediatamente; some após 2 s.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AVT_SLOT_MACHINE_MS = 12 * 42; // 504ms — duração da animação de sorteio dos dados
+const AVT_SLOT_MACHINE_MS = 12 * 42; // 504ms — duração default da animação de sorteio dos dados
+
+// Duração REAL do sorteio de dados: o mestre pode configurar duracao_anim_dados_ms
+// (100–2000ms) e _avtMostrarRollCenter gira em ticks de 42ms — dano/animações devem
+// esperar o mesmo tempo, senão disparam com o dado ainda girando. Espelha a fórmula
+// de ticks do HUD (Math.max(4, round(ms/42)) × 42 → 504 no default 500).
+function _avtSlotMachineMs() {
+  const ms = AVT_STATE?.rpg?.theme_json?.level_config?.duracao_anim_dados_ms ?? 500;
+  return Math.max(4, Math.round(ms / 42)) * 42;
+}
 
 (function _injetarCssEfeitoStatus() {
   if (document.getElementById('css-efeito-status')) return;
@@ -10129,8 +10138,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       setTimeout(() => {
         animarAtaque({ atacEl, alvoEl, animacao: animFinal, dano: 0 });
         _avtSfxPosicional('hit_physical', ini, 0.5);
-      }, AVT_SLOT_MACHINE_MS);
-    try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: ini.nome, animacao: animFinal, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+      }, _avtSlotMachineMs());
+    try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: ini.nome, animacao: animFinal, delay: _avtSlotMachineMs() }); } catch(_) {}
   }
 
   // Aplicar cooldown OOC (multiplica turnos pelo tempo por turno).
@@ -11282,8 +11291,8 @@ function _avtTickEfeitosOOC(now) {
                 if (_animOoc && typeof animarAtaque === 'function') {
                   const _atacElOoc = _avtElPosicaoCanvas(ent);
                   const _alvoElOoc = _avtElPosicaoCanvas(_alvoDom);
-                  if (_atacElOoc && _alvoElOoc) setTimeout(() => animarAtaque({ atacEl: _atacElOoc, alvoEl: _alvoElOoc, animacao: _animOoc, dano: 0 }), AVT_SLOT_MACHINE_MS);
-                  try { _avtBroadcast('avt_attack_anim', { atacanteNome: ent.nome, alvoNome: _alvoDom.nome, animacao: _animOoc, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+                  if (_atacElOoc && _alvoElOoc) setTimeout(() => animarAtaque({ atacEl: _atacElOoc, alvoEl: _alvoElOoc, animacao: _animOoc, dano: 0 }), _avtSlotMachineMs());
+                  try { _avtBroadcast('avt_attack_anim', { atacanteNome: ent.nome, alvoNome: _alvoDom.nome, animacao: _animOoc, delay: _avtSlotMachineMs() }); } catch(_) {}
                 }
                 if (_skUsadaOoc && typeof _avtPlaySkillAnim === 'function') {
                   _avtPlaySkillAnim(_skUsadaOoc, _alvoDom, ent);
@@ -11478,8 +11487,8 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
       setTimeout(() => {
         animarAtaque({ atacEl, alvoEl, animacao: animPlaceholder, dano: 0 });
         _avtSfxPosicional('hit_physical', alvo, 0.5);
-      }, AVT_SLOT_MACHINE_MS);
-      try { _avtBroadcast('avt_attack_anim', { atacanteNome: ini.nome, alvoNome: alvo.nome, animacao: animPlaceholder, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+      }, _avtSlotMachineMs());
+      try { _avtBroadcast('avt_attack_anim', { atacanteNome: ini.nome, alvoNome: alvo.nome, animacao: animPlaceholder, delay: _avtSlotMachineMs() }); } catch(_) {}
   }
 
   setTimeout(() => {
@@ -11534,7 +11543,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
       _avtCancelarPerseguicao(enemyId);
       if (alvo.tipo === 'jogador') _avtProcessarMorteJogador(alvo, null);
     }
-  }, AVT_SLOT_MACHINE_MS + 200);
+  }, _avtSlotMachineMs() + 200);
 }
 
 function _avtMostrarBannerAceitarCombate() {
@@ -13973,8 +13982,8 @@ async function _avtExecutarAtaque() {
     const atacEl = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
     const alvoEl = _avtElPosicaoCanvas(entAlvoAnim || alvo);
     if (atacEl && alvoEl)
-      setTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholderAtk, dano: 0 }), AVT_SLOT_MACHINE_MS);
-    try { _avtBroadcast('avt_attack_anim', { atacanteNome: (entAtacanteAnim||ativo).nome, alvoNome: alvo.nome, animacao: animPlaceholderAtk, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+      setTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholderAtk, dano: 0 }), _avtSlotMachineMs());
+    try { _avtBroadcast('avt_attack_anim', { atacanteNome: (entAtacanteAnim||ativo).nome, alvoNome: alvo.nome, animacao: animPlaceholderAtk, delay: _avtSlotMachineMs() }); } catch(_) {}
   }
 
   // Broadcast para todos verem a animação de dados
@@ -14302,7 +14311,7 @@ async function _avtExecutarAtaque() {
         _avtTurnoAvancar(b);
       }
     });
-  }, AVT_SLOT_MACHINE_MS + _animDuracao);
+  }, _avtSlotMachineMs() + _animDuracao);
 }
 
 // Receive skill-selected broadcast from another player
@@ -15177,8 +15186,8 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
       const atacElNpc = _avtElPosicaoCanvas(entNpc || npc);
       const alvoElNpc = _avtElPosicaoCanvas(entAlvoNpcAnim || skillAlvo);
       if (atacElNpc && alvoElNpc)
-        setTimeout(() => animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 }), AVT_SLOT_MACHINE_MS);
-      try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entNpc||npc).nome, alvoNome: skillAlvo.nome, animacao: animPlaceholderNpc, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+        setTimeout(() => animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 }), _avtSlotMachineMs());
+      try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entNpc||npc).nome, alvoNome: skillAlvo.nome, animacao: animPlaceholderNpc, delay: _avtSlotMachineMs() }); } catch(_) {}
     }
 
     _avtBroadcast('avt_dado_rolado', {
@@ -15369,7 +15378,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
       }
       // Cooldown já foi gravado antes da animação (fix UI lag); nada a fazer aqui.
       _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat));
-    }, AVT_SLOT_MACHINE_MS + _animDuracaoNpc);
+    }, _avtSlotMachineMs() + _animDuracaoNpc);
   }, 800);
 }
 
@@ -30704,8 +30713,8 @@ function _avtNpcTurnoInvocado(bat) {
       const _atacElInv = _avtElPosicaoCanvas(entInv);
       const _alvoElInv = _avtElPosicaoCanvas(alvo);
       if (_atacElInv && _alvoElInv)
-        setTimeout(() => animarAtaque({ atacEl: _atacElInv, alvoEl: _alvoElInv, animacao: _animInv, dano: 0 }), AVT_SLOT_MACHINE_MS);
-      try { _avtBroadcast('avt_attack_anim', { atacanteNome: entInv.nome, alvoNome: alvo.nome, animacao: _animInv, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+        setTimeout(() => animarAtaque({ atacEl: _atacElInv, alvoEl: _alvoElInv, animacao: _animInv, dano: 0 }), _avtSlotMachineMs());
+      try { _avtBroadcast('avt_attack_anim', { atacanteNome: entInv.nome, alvoNome: alvo.nome, animacao: _animInv, delay: _avtSlotMachineMs() }); } catch(_) {}
     }
 
     _avtSetTimeout(() => {
@@ -30786,7 +30795,7 @@ function _avtNpcTurnoInvocado(bat) {
 
       _avtBroadcastBatalha(bat);
       _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
-    }, AVT_SLOT_MACHINE_MS + _animDuracaoInv);
+    }, _avtSlotMachineMs() + _animDuracaoInv);
     return;
   }
 
