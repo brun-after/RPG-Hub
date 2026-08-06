@@ -4318,7 +4318,14 @@ function _avtCleanupListeners() {
 }
 
 function _avtSetTimeout(fn, ms) {
-  const id = setTimeout(fn, ms);
+  // Auto-prune: sem remover o id ao disparar, _pendingTimeouts cresce sem limite
+  // (agora timers de dano/efeito de alta frequência também passam por aqui).
+  const id = setTimeout(() => {
+    const arr = AVT_STATE._pendingTimeouts;
+    const i = arr ? arr.indexOf(id) : -1;
+    if (i >= 0) arr.splice(i, 1);
+    fn();
+  }, ms);
   AVT_STATE._pendingTimeouts.push(id);
   return id;
 }
@@ -10142,7 +10149,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     const alvoEl = _avtElPosicaoCanvas(ini);
     // Dispara após a animação de dados (slot machine) terminar — mesmo padrão dos ataques de NPC
     if (atacEl && alvoEl)
-      setTimeout(() => {
+      _avtSetTimeout(() => {
         animarAtaque({ atacEl, alvoEl, animacao: animFinal, dano: 0 });
         _avtSfxPosicional('hit_physical', ini, 0.5);
       }, _avtSlotMachineMs());
@@ -10159,7 +10166,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   if (!sk && _abBuffs?.cdOocMs) _oocMs = Math.min(_oocMs, _abBuffs.cdOocMs);
   _avtSetOocCooldown(_oocKey, Date.now() + _oocMs);
 
-  setTimeout(() => {
+  _avtSetTimeout(() => {
     if (critMult === 0) {
       // Skill usada (mesmo errando) consome carga de orbe
       try { _avtOrbConsumirCargas(AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador); } catch(_) {}
@@ -10207,7 +10214,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       });
 
       _alvosAreaOoc.forEach((alvA, idxA) => {
-        setTimeout(() => {
+        _avtSetTimeout(() => {
           const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id) || alvA;
           if (entAlvA.hp <= 0) return;
 
@@ -10316,7 +10323,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
             Math.max(Math.abs(Math.round(e.x) - _jxM), Math.abs(Math.round(e.y) - _jyM)) <= _baseAlcOoc)
           .slice(0, _abBuffs.multiExtra);
         _extrasOoc.forEach((alvX, idxX) => {
-          setTimeout(() => {
+          _avtSetTimeout(() => {
             const entAlvX = AVT_STATE.entidades.find(e => e.id === alvX.id) || alvX;
             if (entAlvX.hp <= 0) return;
             // Anima o ataque básico em cada alvo extra (modificador multi-alvo).
@@ -11298,7 +11305,7 @@ function _avtTickEfeitosOOC(now) {
                 if (_animOoc && typeof animarAtaque === 'function') {
                   const _atacElOoc = _avtElPosicaoCanvas(ent);
                   const _alvoElOoc = _avtElPosicaoCanvas(_alvoDom);
-                  if (_atacElOoc && _alvoElOoc) setTimeout(() => animarAtaque({ atacEl: _atacElOoc, alvoEl: _alvoElOoc, animacao: _animOoc, dano: 0 }), _avtSlotMachineMs());
+                  if (_atacElOoc && _alvoElOoc) _avtSetTimeout(() => animarAtaque({ atacEl: _atacElOoc, alvoEl: _alvoElOoc, animacao: _animOoc, dano: 0 }), _avtSlotMachineMs());
                   try { _avtBroadcast('avt_attack_anim', { atacanteNome: ent.nome, alvoNome: _alvoDom.nome, animacao: _animOoc, delay: _avtSlotMachineMs() }); } catch(_) {}
                 }
                 if (_skUsadaOoc && typeof _avtPlaySkillAnim === 'function') {
@@ -11495,14 +11502,14 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     const atacEl = _avtElPosicaoCanvas(ini);
     const alvoEl = _avtElPosicaoCanvas(alvo);
     if (atacEl && alvoEl)
-      setTimeout(() => {
+      _avtSetTimeout(() => {
         animarAtaque({ atacEl, alvoEl, animacao: animPlaceholder, dano: 0 });
         _avtSfxPosicional('hit_physical', alvo, 0.5);
       }, _avtSlotMachineMs());
       try { _avtBroadcast('avt_attack_anim', { atacanteNome: ini.nome, alvoNome: alvo.nome, animacao: animPlaceholder, delay: _avtSlotMachineMs() }); } catch(_) {}
   }
 
-  setTimeout(() => {
+  _avtSetTimeout(() => {
     if (isFumble) {
       mostrarToast(`💨 ${ini.nome} errou o ataque! (d20: ${hitRoll})`, '');
       timer.inactionTimer = 0;
@@ -13997,7 +14004,7 @@ async function _avtExecutarAtaque() {
     const atacEl = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
     const alvoEl = _avtElPosicaoCanvas(entAlvoAnim || alvo);
     if (atacEl && alvoEl)
-      setTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholderAtk, dano: 0 }), _avtSlotMachineMs());
+      _avtSetTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholderAtk, dano: 0 }), _avtSlotMachineMs());
     try { _avtBroadcast('avt_attack_anim', { atacanteNome: (entAtacanteAnim||ativo).nome, alvoNome: alvo.nome, animacao: animPlaceholderAtk, delay: _avtSlotMachineMs() }); } catch(_) {}
   }
 
@@ -14110,7 +14117,7 @@ async function _avtExecutarAtaque() {
         try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _alvosAreaFinal.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
         _alvosAreaFinal.forEach((alvA, idxA) => {
           const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id);
-          setTimeout(() => {
+          _avtSetTimeout(() => {
             if (alvA.hp <= 0) return;
             const realAlvo = _avtAplicarImunidadeDano(entAlvA || alvA, real);
             if (alvA.tipo === 'jogador') {
@@ -14175,7 +14182,7 @@ async function _avtExecutarAtaque() {
 
             if (alvA.hp <= 0) {
               _avtLog(`💀 ${alvA.nome} derrotado!`, b.id);
-              setTimeout(() => {
+              _avtSetTimeout(() => {
                 if (alvA.tipo === 'inimigo') { _avtNpcMorreu(entAlvA || alvA, b); _avtCheckVitoria(b); }
               }, _delayMorteArea + 100);
             }
@@ -14185,7 +14192,7 @@ async function _avtExecutarAtaque() {
 
         AVT_STATE._areaCentro = null;
         AVT_STATE._areaLinha  = null;
-        setTimeout(() => { _avtBroadcastBatalha(b); }, (_alvosAreaFinal.length * 80) + 100);
+        _avtSetTimeout(() => { _avtBroadcastBatalha(b); }, (_alvosAreaFinal.length * 80) + 100);
       } else {
         // ── Alvo único ────────────────────────────────────────────────────
         real = _avtAplicarImunidadeDano(entAlvo || alvo, real);
@@ -14269,7 +14276,7 @@ async function _avtExecutarAtaque() {
           }
           _extrasMulti.forEach((alvX, idxX) => {
             const entAlvX = AVT_STATE.entidades.find(e => e.id === alvX.id);
-            setTimeout(() => {
+            _avtSetTimeout(() => {
               if (alvX.hp <= 0) return;
               // Anima o ataque em cada alvo extra (modificador multi-alvo): animação rica
               // (skill/ataque básico configurado) ou placeholder, conforme o ataque primário.
@@ -14293,7 +14300,7 @@ async function _avtExecutarAtaque() {
               _avtLog(`  ↳ ${alvX.nome}: ${real} ${tipoDano} (multi-alvo)`, b.id);
               if (alvX.hp <= 0) {
                 _avtLog(`💀 ${alvX.nome} derrotado!`, b.id);
-                setTimeout(() => { if (alvX.tipo === 'inimigo') { _avtNpcMorreu(entAlvX || alvX, b); _avtCheckVitoria(b); } }, 100);
+                _avtSetTimeout(() => { if (alvX.tipo === 'inimigo') { _avtNpcMorreu(entAlvX || alvX, b); _avtCheckVitoria(b); } }, 100);
               }
               _avtRenderHpBar();
             }, (idxX + 1) * 80);
@@ -14306,7 +14313,7 @@ async function _avtExecutarAtaque() {
         if (_playAnimAtk) { try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAlvo||alvo).nome }); } catch(_) {} }
         if (alvo.hp <= 0) {
           _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
-          setTimeout(() => {
+          _avtSetTimeout(() => {
             if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
             else { _avtCheckDerrota(b); _avtProcessarMorteJogador(entAlvo || alvo, b); }
             if (AVT_STATE.alvoSelecionado === alvo.id) AVT_STATE.alvoSelecionado = null;
@@ -15205,7 +15212,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
       const atacElNpc = _avtElPosicaoCanvas(entNpc || npc);
       const alvoElNpc = _avtElPosicaoCanvas(entAlvoNpcAnim || skillAlvo);
       if (atacElNpc && alvoElNpc)
-        setTimeout(() => animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 }), _avtSlotMachineMs());
+        _avtSetTimeout(() => animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 }), _avtSlotMachineMs());
       try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entNpc||npc).nome, alvoNome: skillAlvo.nome, animacao: animPlaceholderNpc, delay: _avtSlotMachineMs() }); } catch(_) {}
     }
 
@@ -15282,7 +15289,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
           _alvosNpcArea.forEach((alvA, idxA) => {
             const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id) || alvA;
             const initA   = bat.iniciativa.find(e => e.id === alvA.id);
-            setTimeout(() => {
+            _avtSetTimeout(() => {
               if (alvA.hp <= 0) return;
               // Avatar: conta hit, não aplica dano em HP
               if (entAlvA?.tipo === 'avatar') {
@@ -15323,17 +15330,17 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
               if (alvA.hp <= 0) {
                 _avtLog(`💀 ${alvA.nome} caiu!`, bat.id);
                 if (alvA._dominado || entAlvA._dominado) {
-                  setTimeout(() => { _avtNpcMorreu(entAlvA, bat); _avtCheckVitoria(bat); }, _delayMorteNpcArea);
+                  _avtSetTimeout(() => { _avtNpcMorreu(entAlvA, bat); _avtCheckVitoria(bat); }, _delayMorteNpcArea);
                 } else if (alvA.tipo === 'jogador') {
-                  setTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(alvA, bat); }, _delayMorteNpcArea);
+                  _avtSetTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(alvA, bat); }, _delayMorteNpcArea);
                 }
               }
               _avtRenderHpBar();
             }, idxA * 80);
           });
 
-          setTimeout(() => { _avtBroadcastBatalha(bat); }, (_alvosNpcArea.length * 80) + 100);
-          setTimeout(() => _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat)), (_alvosNpcArea.length * 80) + 150);
+          _avtSetTimeout(() => { _avtBroadcastBatalha(bat); }, (_alvosNpcArea.length * 80) + 100);
+          _avtSetTimeout(() => _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat)), (_alvosNpcArea.length * 80) + 150);
           return;
         }
 
@@ -15404,9 +15411,9 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
           _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id);
           if (skillAlvo._dominado || (entAlvo && entAlvo._dominado)) {
             // Dominado por Necromante morreu — tratar como NPC morto
-            setTimeout(() => { _avtNpcMorreu(entAlvo || skillAlvo, bat); _avtCheckVitoria(bat); }, _delayMorteNpc);
+            _avtSetTimeout(() => { _avtNpcMorreu(entAlvo || skillAlvo, bat); _avtCheckVitoria(bat); }, _delayMorteNpc);
           } else {
-            setTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }, _delayMorteNpc);
+            _avtSetTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }, _delayMorteNpc);
           }
         }
       }
@@ -17398,7 +17405,7 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
         if (typeof dSync === 'number') impactDelay = dSync;
       }
       if (impactDelay > 0) {
-        setTimeout(() => AudioManager.playSFX(impactSfx, { volume: volImp, pitchVariance: 0.06 }), impactDelay);
+        _avtSetTimeout(() => AudioManager.playSFX(impactSfx, { volume: volImp, pitchVariance: 0.06 }), impactDelay);
       } else {
         AudioManager.playSFX(impactSfx, { volume: volImp, pitchVariance: 0.06 });
       }
@@ -17477,7 +17484,7 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
     const icone = anim.icone || '';
 
     for (let r = 0; r < repeticoes; r++) {
-      setTimeout(() => {
+      _avtSetTimeout(() => {
         // Posições recalculadas no disparo de cada repetição: entidades e câmera
         // podem ter se movido desde o cast.
         const aScr = toScreen(alvoEnt);
@@ -20342,7 +20349,7 @@ function _avtPlayPhases(env, atacScr, alvoScr, posicao) {
   if (env.cast) {
     const castCfg = Object.assign({}, env.cast, { intensidade, cor });
     if (!castCfg.layers && !castCfg.preset) castCfg.preset = 'arcane_lance';
-    setTimeout(() => {
+    _avtSetTimeout(() => {
       _avtPixiParticleAnim(castCfg, atacScr, atacScr, 'atacante');
     }, 0);
   }
@@ -20350,7 +20357,7 @@ function _avtPlayPhases(env, atacScr, alvoScr, posicao) {
 
   // TRAVEL: corpo viajando + trail
   if (env.travel) {
-    setTimeout(() => _avtPlayTravelBody(env.travel, atacScr, alvoScr, cor, intensidade), castMs);
+    _avtSetTimeout(() => _avtPlayTravelBody(env.travel, atacScr, alvoScr, cor, intensidade), castMs);
   }
   const travelMs = (env.travel && env.travel.ms) || 0;
 
@@ -20358,7 +20365,7 @@ function _avtPlayPhases(env, atacScr, alvoScr, posicao) {
   if (env.impact) {
     const impactCfg = Object.assign({}, env.impact, { intensidade, cor });
     if (!impactCfg.layers && !impactCfg.preset) impactCfg.preset = 'precise_strike';
-    setTimeout(() => {
+    _avtSetTimeout(() => {
       _avtPixiParticleAnim(impactCfg, atacScr, alvoScr, 'alvo');
     }, castMs + travelMs);
   }
@@ -30782,7 +30789,7 @@ function _avtNpcTurnoInvocado(bat) {
       const _atacElInv = _avtElPosicaoCanvas(entInv);
       const _alvoElInv = _avtElPosicaoCanvas(alvo);
       if (_atacElInv && _alvoElInv)
-        setTimeout(() => animarAtaque({ atacEl: _atacElInv, alvoEl: _alvoElInv, animacao: _animInv, dano: 0 }), _avtSlotMachineMs());
+        _avtSetTimeout(() => animarAtaque({ atacEl: _atacElInv, alvoEl: _alvoElInv, animacao: _animInv, dano: 0 }), _avtSlotMachineMs());
       try { _avtBroadcast('avt_attack_anim', { atacanteNome: entInv.nome, alvoNome: alvo.nome, animacao: _animInv, delay: _avtSlotMachineMs() }); } catch(_) {}
     }
 
