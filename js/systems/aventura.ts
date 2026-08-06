@@ -22255,7 +22255,7 @@ window._avtSalvarSkillScalingAttrs = _avtSalvarSkillScalingAttrs;
 // ─── Excluir campanha ────────────────────────────────────────────────────────
 async function _avtSalvarPontosAttrPorNivel() {
   const raw = document.getElementById('avt-mp-pontos-attr')?.value ?? 3;
-  const val = Math.max(0, Math.floor(parseFloat(raw) || 0));
+  const val = Math.max(0, Math.floor(parseFloat((raw as any)) || 0));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22274,7 +22274,7 @@ async function _avtSalvarPontosAttrPorNivel() {
 
 async function _avtSalvarJanelaMovimento() {
   const raw = document.getElementById('avt-mp-janela-mov')?.value ?? 3000;
-  const val = Math.max(500, Math.min(15000, parseInt(raw) || 3000));
+  const val = Math.max(500, Math.min(15000, parseInt((raw as any)) || 3000));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -23169,7 +23169,7 @@ window._avtBulkNpcSkillAplicar = _avtBulkNpcSkillAplicar;
 
 async function _avtSalvarNpcPortaChance() {
   const raw = document.getElementById('avt-mp-npc-porta-chance')?.value ?? 50;
-  const val = Math.max(0, Math.min(100, parseInt(raw) || 0));
+  const val = Math.max(0, Math.min(100, parseInt((raw as any)) || 0));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};

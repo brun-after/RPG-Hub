@@ -129,7 +129,7 @@ function xpAtualizarModalUI(nome: any) {
     : `XP: ${xp} (nivel maximo)`;
   document.getElementById('xp-modal-pct').textContent = xp_proximo ? `${pct}%` : 'Max';
   document.getElementById('xp-modal-barra').style.width = `${pct}%`;
-  document.getElementById('xp-manual-input').value = xp;
+  document.getElementById('xp-manual-input').value = (xp) as any;
 
   // Mostrar botao de level up se XP suficiente
   const levelupWrap = document.getElementById('xp-modal-levelup-wrap');
@@ -280,7 +280,7 @@ async function distribuirPontosAttr(nome: any){
  attrDefs.filter(a=>a.tipo==='number'&&(a.categoria==='basico'||a.categoria==='especial'||!a.categoria)).forEach(a=>{
    const k='pa-'+a.nome.replace(/[^a-z0-9]/gi,'_');
    const el=document.getElementById(k);
-   const v=parseInt(el?.value||0);
+   const v=parseInt((el?.value||0 as any));
    if(v>0){aumentos[a.nome]=v;total+=v;}
  });
  if(total===0){mostrarToast('Informe ao menos +1 em algum atributo','erro');return;}
@@ -451,7 +451,7 @@ function abrirModalNovoChar() {
   document.getElementById('nc-tipo').value = 'jogador';
   const lc=(CURRENT_RPG?.theme?.level_config)||{};
   const hp_base=lc.hp_base||100;
-  document.getElementById('nc-nivel').value = 1;
+  document.getElementById('nc-nivel').value = (1) as any;
   document.getElementById('nc-hp').value = hp_base;
   document.getElementById('nc-classe').value = '';
   document.getElementById('nc-raca').value = '';

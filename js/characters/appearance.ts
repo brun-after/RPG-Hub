@@ -1447,14 +1447,14 @@ function _aeqPositionDrag() {
     }
   }
   // Sync numeric inputs
-  const xi = document.getElementById('aeq-x'); if (xi) xi.value = Math.round(w.x);
-  const yi = document.getElementById('aeq-y'); if (yi) yi.value = Math.round(w.y);
-  const ei = document.getElementById('aeq-escala'); if (ei) ei.value = Math.round(w.escala);
-  const ri = document.getElementById('aeq-rot-num'); if (ri) ri.value = Math.round(w.rotacao);
-  const rhi = document.getElementById('aeq-roth-num'); if (rhi) rhi.value = Math.round(w.rotacaoH || 0);
-  const rhr = document.getElementById('aeq-roth-range'); if (rhr) rhr.value = Math.round(w.rotacaoH || 0);
-  const sxi = document.getElementById('aeq-skewx-num'); if (sxi) sxi.value = Math.round(w.skewX || 0);
-  const syi = document.getElementById('aeq-skewy-num'); if (syi) syi.value = Math.round(w.skewY || 0);
+  const xi = document.getElementById('aeq-x'); if (xi) xi.value = (Math.round(w.x)) as any;
+  const yi = document.getElementById('aeq-y'); if (yi) yi.value = (Math.round(w.y)) as any;
+  const ei = document.getElementById('aeq-escala'); if (ei) ei.value = (Math.round(w.escala)) as any;
+  const ri = document.getElementById('aeq-rot-num'); if (ri) ri.value = (Math.round(w.rotacao)) as any;
+  const rhi = document.getElementById('aeq-roth-num'); if (rhi) rhi.value = (Math.round(w.rotacaoH || 0)) as any;
+  const rhr = document.getElementById('aeq-roth-range'); if (rhr) rhr.value = (Math.round(w.rotacaoH || 0)) as any;
+  const sxi = document.getElementById('aeq-skewx-num'); if (sxi) sxi.value = (Math.round(w.skewX || 0)) as any;
+  const syi = document.getElementById('aeq-skewy-num'); if (syi) syi.value = (Math.round(w.skewY || 0)) as any;
 }
 
 function _aeqFromInputs() {

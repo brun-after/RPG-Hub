@@ -216,11 +216,94 @@ declare global {
 
   // Shim de migração: o app acessa .value/.checked/.disabled etc. em elementos
   // sem narrowing; remover exige ~284 narrowings (Entrega 5).
+  // Augmentação ESTREITA de DOM (Entrega 5) — substitui os antigos index
+  // signatures [key: string]: any. O app acessa controles de formulário e
+  // canvas obtidos por getElementById/querySelector sem narrowing; declarar
+  // as propriedades reais como opcionais mantém o padrão compilando E passa
+  // a pegar erro de tipo no valor (antes tudo era any). Remoção completa
+  // exige helpers tipados ($id<HTMLInputElement>) — fila da Entrega 6.
   interface HTMLElement {
-    [key: string]: any;
+    // controles de formulário (getElementById sem narrowing)
+    value?: string;
+    checked?: boolean;
+    disabled?: boolean;
+    type?: string;
+    max?: string | number;
+    min?: string | number;
+    step?: string | number;
+    options?: any;
+    selectedIndex?: number;
+    files?: FileList | null;
+    select?(): void;
+    // canvas / mídia
+    width?: number;
+    height?: number;
+    src?: string;
+    getContext?(contextId: string, options?: any): any;
+    // expandos do app: estado pendurado em elementos (timers, observers,
+    // valores anteriores de estilo). Candidatos a WeakMap na Entrega 6.
+    _timerInterval?: any;
+    _prevDisplay?: any;
+    _prevWidth?: any;
+    _prevPosition?: any;
+    _prevOverflow?: any;
+    _atkModo?: any;
+    _resizeObserver?: any;
+    _escHandler?: any;
+    _isoLayoutPrev?: any;
+    _esqueleticoStop?: any;
+    defaultValue?: any;
+    href?: any;
+    mozRequestFullScreen?: any;
+    naturalHeight?: number;
+    naturalWidth?: number;
+    rel?: string;
+    setSelectionRange?: (s: number, e: number) => void;
+    toDataURL?: (t?: string, q?: any) => string;
+    webkitRequestFullscreen?: () => void;
+    __gtBound?: any;
+    __gtClick?: any;
+    __gtResize?: any;
+    _aspectRatio?: any;
+    _avtPosL?: any;
+    _avtPosT?: any;
+    _avtUltimoHtml?: any;
+    _bauId?: any;
+    _countdown?: any;
+    _fixFactionPatched?: any;
+    _manuallyPositioned?: any;
+    _nmceInited?: any;
+    _npcPlacementHandler?: any;
+    _preWrapPatched?: any;
+    _prevHeight?: any;
+    _prevPointerEvents?: any;
+    _previewLoopStop?: any;
+    _timeout?: any;
+    _vinculo?: any;
   }
+  // querySelector devolve Element; o app o trata como HTMLElement.
   interface Element {
-    [key: string]: any;
+    __gtClick?: any;
+    _vinculo?: any;
+    style?: CSSStyleDeclaration;
+    dataset?: DOMStringMap;
+    onclick?: ((this: GlobalEventHandlers, ev: MouseEvent) => any) | null;
+    value?: string;
+    checked?: boolean;
+    disabled?: boolean;
+    click?: any;
+    complete?: any;
+    focus?: () => void;
+    getContext?: any;
+    height?: number;
+    naturalWidth?: number;
+    offsetHeight?: number;
+    offsetWidth?: number;
+    onerror?: any;
+    onload?: any;
+    src?: string;
+    title?: string;
+    width?: number;
   }
 
   // Bibliotecas de terceiros expostas pelo core/vendor.ts e core/pixi-lazy.ts

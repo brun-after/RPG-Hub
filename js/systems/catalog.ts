@@ -142,9 +142,9 @@ function abrirFormItem(id: any) {
     document.getElementById('fi-grupo').value = '';
     document.getElementById('fi-descricao').value = '';
     document.getElementById('fi-aceita-amuleto').checked = true;
-    document.getElementById('fi-nivel').value = 1;
+    document.getElementById('fi-nivel').value = (1) as any;
     document.getElementById('fi-nivel-val').textContent = '1';
-    document.getElementById('fi-nivel-min').value = 1;
+    document.getElementById('fi-nivel-min').value = (1) as any;
     document.getElementById('fi-nivel-min-val').textContent = '1';
     document.getElementById('fi-unico').checked = false;
     document.getElementById('fi-droppable').checked = false;
@@ -1785,7 +1785,7 @@ function abrirTxMoeda(tipo: any, denomDefault: any) {
   const denoms = CURRENT_RPG?.theme?.denominacoes_moeda || MOEDAS_DEFAULTS;
   const sel = document.getElementById('moeda-tx-denom');
   sel.innerHTML = denoms.map((d: any)=>`<option value="${d.nome}" ${d.nome===denomDefault?'selected':''}>${d.emoji} ${d.nome}</option>`).join('');
-  document.getElementById('moeda-tx-qtd').value = 1;
+  document.getElementById('moeda-tx-qtd').value = (1) as any;
   document.getElementById('moeda-tx-desc').value = '';
   const destWrap = document.getElementById('moeda-tx-destino-wrap');
   destWrap.style.display = tipo === 'transferir' ? '' : 'none';
@@ -5438,7 +5438,7 @@ function _mercPreencherDenomSelect() {
 function _mercPreencherTaxaRevenda() {
   const sl = document.getElementById('mercado-taxa-revenda');
   const vl = document.getElementById('mercado-taxa-val');
-  if (sl) sl.value = MERCADO_STATE.config.taxaRevenda;
+  if (sl) sl.value = (MERCADO_STATE.config.taxaRevenda) as any;
   if (vl) vl.textContent = MERCADO_STATE.config.taxaRevenda + '%';
 }
 

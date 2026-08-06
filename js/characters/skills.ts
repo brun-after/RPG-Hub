@@ -131,12 +131,12 @@ function abrirModalSkill(skillId: any, personagemNome: any) {
     document.getElementById('modal-skill-titulo').textContent = 'Editar Habilidade';
     document.getElementById('modal-skill-personagem').value = s.personagem;
     document.getElementById('sk-habilidade').value = s.habilidade || '';
-    document.getElementById('sk-custo').value = s.custo_rsv || '';
+    document.getElementById('sk-custo').value = (s.custo_rsv || '') as any;
     document.getElementById('sk-efeito').value = s.efeito || '';
     skFBCarregarFormula(s.formula_dano || ''); skPopularAtributos();
-    document.getElementById('sk-cooldown').value        = s.cooldown_turnos || 0;
+    document.getElementById('sk-cooldown').value        = (s.cooldown_turnos || 0) as any;
     document.getElementById('sk-tipo-dano').value       = s.tipo_dano || 'fisico';
-    document.getElementById('sk-alcance').value         = s.alcance_celulas != null ? s.alcance_celulas : '';
+    document.getElementById('sk-alcance').value         = (s.alcance_celulas != null ? s.alcance_celulas : '') as any;
     document.getElementById('sk-atributo-base').value   = s.atributo_base || '';
     document.getElementById('sk-mod-atributo-pct').value = s.mod_atributo_pct != null ? s.mod_atributo_pct : '';
     document.getElementById('sk-alvo-tipo').value       = s.alvo_tipo || 'inimigo';
@@ -221,7 +221,7 @@ function abrirModalSkill(skillId: any, personagemNome: any) {
     document.getElementById('sk-custo').value            = '';
     document.getElementById('sk-efeito').value           = '';
     skFBLimpar(); skPopularAtributos();
-    document.getElementById('sk-cooldown').value         = 0;
+    document.getElementById('sk-cooldown').value         = (0) as any;
     document.getElementById('sk-tipo-dano').value        = 'fisico';
     document.getElementById('sk-alcance').value          = '';
     document.getElementById('sk-atributo-base').value    = '';
@@ -259,11 +259,11 @@ function abrirModalSkill(skillId: any, personagemNome: any) {
     document.getElementById('sk-anim-trilha').checked = false;
     document.getElementById('sk-anim-url').value      = '';
     document.getElementById('sk-anim-svg-code').value = '';
-    document.getElementById('sk-anim-tamanho').value  = 120;
-    document.getElementById('sk-anim-duracao').value  = 1500;
-    document.getElementById('sk-anim-repeticao').value = 1;
-    document.getElementById('sk-anim-duracao-canvas').value = 600;
-    document.getElementById('sk-anim-repeticao-canvas').value = 1;
+    document.getElementById('sk-anim-tamanho').value  = (120) as any;
+    document.getElementById('sk-anim-duracao').value  = (1500) as any;
+    document.getElementById('sk-anim-repeticao').value = (1) as any;
+    document.getElementById('sk-anim-duracao-canvas').value = (600) as any;
+    document.getElementById('sk-anim-repeticao-canvas').value = (1) as any;
     document.getElementById('sk-anim-posicao').value  = 'alvo';
     // GSAP (nova skill — valores padrão)
     const _gcPre = document.getElementById('sk-anim-gsap-preset');
@@ -271,9 +271,9 @@ function abrirModalSkill(skillId: any, personagemNome: any) {
     const _gcCor = document.getElementById('sk-anim-gsap-cor');
     if (_gcCor) _gcCor.value = '#e74c3c';
     const _gcDur = document.getElementById('sk-anim-gsap-duracao');
-    if (_gcDur) _gcDur.value = 800;
+    if (_gcDur) _gcDur.value = (800) as any;
     const _gcInt = document.getElementById('sk-anim-gsap-intensidade');
-    if (_gcInt) _gcInt.value = 1.0;
+    if (_gcInt) _gcInt.value = (1.0) as any;
     const _gcAlvo = document.getElementById('sk-anim-gsap-alvo');
     if (_gcAlvo) _gcAlvo.value = 'alvo';
     // Spine (nova skill — limpar)
@@ -304,7 +304,7 @@ function abrirModalSkill(skillId: any, personagemNome: any) {
   const _maxDur = _isMestre ? 10000 : 3000;
   ['sk-anim-duracao','sk-anim-duracao-canvas'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) { el.max = _maxDur; if (parseInt(el.value) > _maxDur) el.value = _maxDur; }
+    if (el) { el.max = _maxDur; if (parseInt(el.value) > _maxDur) el.value = (_maxDur) as any; }
   });
   skAnimValidarDuracao();
 }
@@ -367,7 +367,7 @@ function abrirModalSkillAtaqueBasico(entId: any) {
   overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
   const _isMestre = RPG_DATA?.myRole === 'mestre';
   const _maxDur = _isMestre ? 10000 : 3000;
-  ['sk-anim-duracao','sk-anim-duracao-canvas'].forEach(id => { const el = document.getElementById(id); if (el) { el.max = _maxDur; if (parseInt(el.value) > _maxDur) el.value = _maxDur; } });
+  ['sk-anim-duracao','sk-anim-duracao-canvas'].forEach(id => { const el = document.getElementById(id); if (el) { el.max = _maxDur; if (parseInt(el.value) > _maxDur) el.value = (_maxDur) as any; } });
   if (typeof skAnimValidarDuracao === 'function') skAnimValidarDuracao();
 }
 window.abrirModalSkillAtaqueBasico = abrirModalSkillAtaqueBasico;

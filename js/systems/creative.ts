@@ -343,8 +343,8 @@ function abrirModalDefinirDano(id: any) {
   if (_arRId('ar-atk-dn-anim-trilha'))  _arRId('ar-atk-dn-anim-trilha').checked = false;
   if (_arRId('ar-atk-dn-anim-url'))     _arRId('ar-atk-dn-anim-url').value    = '';
   if (_arRId('ar-atk-dn-anim-svg'))     _arRId('ar-atk-dn-anim-svg').value    = '';
-  if (_arRId('ar-atk-dn-anim-tamanho')) _arRId('ar-atk-dn-anim-tamanho').value = 120;
-  if (_arRId('ar-atk-dn-anim-duracao')) _arRId('ar-atk-dn-anim-duracao').value = 1500;
+  if (_arRId('ar-atk-dn-anim-tamanho')) _arRId('ar-atk-dn-anim-tamanho').value = (120) as any;
+  if (_arRId('ar-atk-dn-anim-duracao')) _arRId('ar-atk-dn-anim-duracao').value = (1500) as any;
   if (_arRId('ar-atk-dn-anim-posicao')) _arRId('ar-atk-dn-anim-posicao').value = 'alvo';
   abrirModal('ar-modal-atk-mestre-dano');
 }

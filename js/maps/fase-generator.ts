@@ -193,7 +193,7 @@ function abrirModalFaseConfig(mapId: any) {
   // Atualizar tilt slider
   const tiltSlider = document.getElementById('fase-tilt-slider');
   if (tiltSlider) {
-    tiltSlider.value = Math.round((_faseGenModalData.perspective.tilt_y || 0.72) * 100);
+    tiltSlider.value = (Math.round((_faseGenModalData.perspective.tilt_y || 0.72) * 100)) as any;
     document.getElementById('fase-tilt-val').textContent = tiltSlider.value + '%';
   }
   // Renderizar editor JSON

@@ -10,8 +10,8 @@ function abrirModalNpcGenerico() {
     return;
   }
   document.getElementById('ng-nome').value = '';
-  document.getElementById('ng-qtd').value = 1;
-  document.getElementById('ng-hp').value = 100;
+  document.getElementById('ng-qtd').value = (1) as any;
+  document.getElementById('ng-hp').value = (100) as any;
   document.getElementById('ng-cor').value = '#e8604c';
   document.getElementById('ng-img').value = '';
   document.getElementById('ng-posicionar').checked = true;

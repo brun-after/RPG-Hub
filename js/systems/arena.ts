@@ -671,21 +671,21 @@ function abrirModalHP(nome: any) {
 function arHpSliderChange() {
   const sl = document.getElementById('ar-hp-slider');
   const v = parseInt(sl.value);
-  const hpMax = parseInt(sl.max)||100;
+  const hpMax = parseInt((sl.max as any))||100;
   document.getElementById('ar-hp-val').textContent = v + ' / ' + hpMax;
   arAtualizarBarraHP(v, hpMax);
 }
 
 function arHpDelta(delta: any) {
   const sl = document.getElementById('ar-hp-slider');
-  const hpMax = parseInt(sl.max)||100;
+  const hpMax = parseInt((sl.max as any))||100;
   const novo = Math.max(0, Math.min(hpMax, parseInt(sl.value) + delta));
-  sl.value = novo;
+  sl.value = (novo) as any;
   arHpSliderChange();
 }
 
 function arAtualizarBarraHP(hp: any, hpMax: any) {
-  hpMax = hpMax || parseInt(document.getElementById('ar-hp-slider').max)||100;
+  hpMax = hpMax || parseInt((document.getElementById('ar-hp-slider').max as any))||100;
   const pct = Math.round((hp/hpMax)*100);
   const fill = document.getElementById('ar-hp-bar-fill');
   const cls = pct >= 60 ? 'ar-hp-high' : pct >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
@@ -786,7 +786,7 @@ async function salvarChar() {
   const nome = document.getElementById('ar-char-nome').value.trim();
   const desc = document.getElementById('ar-char-desc').value.trim();
   const hp = parseInt(document.getElementById('ar-char-hp').value);
-  const hpMax = parseInt(document.getElementById('ar-char-hp').max) || hp || 100;
+  const hpMax = parseInt((document.getElementById('ar-char-hp').max as any)) || hp || 100;
   const tipo = document.getElementById('ar-char-tipo').value;
   const cor = getCorSelecionada();
   const img = document.getElementById('ar-char-img').value.trim();
@@ -3032,7 +3032,7 @@ function salvarEscala() {
 // ── MAPA DA ARENA: configurar imagem de fundo ─────────────────
 // ═══ EDITOR 3D DA ARENA ════════════════════════════════════════════════════
 function arMp3dAtualizar() {
-  const _get = (id: any) => parseFloat(document.getElementById(id)?.value ?? 0);
+  const _get = (id: any) => parseFloat((document.getElementById(id)?.value ?? 0 as any));
   const rx = _get('ar-mp3d-rx'), ry = _get('ar-mp3d-ry'), rz = _get('ar-mp3d-rz');
   const persp = _get('ar-mp3d-persp'), ox = _get('ar-mp3d-ox'), oy = _get('ar-mp3d-oy'), sc = _get('ar-mp3d-sc');
 

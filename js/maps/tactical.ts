@@ -1076,8 +1076,8 @@ function _cenaHandleClick(e: any) {
     }
   } else if (f === 'porta' || f === 'porta_trancada') {
     // Abrir modal de configuração
-    document.getElementById('cfg-porta-col').value = col;
-    document.getElementById('cfg-porta-row').value = row;
+    document.getElementById('cfg-porta-col').value = (col) as any;
+    document.getElementById('cfg-porta-row').value = (row) as any;
     document.getElementById('cfg-porta-tipo').value = f;
     document.getElementById('cfg-porta-nome').value = '';
     document.getElementById('cfg-porta-chave').value = '';
@@ -1085,8 +1085,8 @@ function _cenaHandleClick(e: any) {
     document.getElementById('cfg-porta-chave-wrap').style.display = f==='porta_trancada' ? 'block' : 'none';
     document.getElementById('modal-cfg-porta').style.display = 'flex';
   } else if (f === 'chave') {
-    document.getElementById('cfg-chave-col').value = col;
-    document.getElementById('cfg-chave-row').value = row;
+    document.getElementById('cfg-chave-col').value = (col) as any;
+    document.getElementById('cfg-chave-row').value = (row) as any;
     document.getElementById('cfg-chave-nome').value = '';
     document.getElementById('cfg-chave-palavra').value = '';
     document.getElementById('modal-cfg-chave').style.display = 'flex';
@@ -1096,8 +1096,8 @@ function _cenaHandleClick(e: any) {
     CENA_ED.undoStack.push({tipo:'add_obj',id});
     cenaRenderizarSVG();
   } else if (f === 'bau') {
-    document.getElementById('cfg-bau-col').value = col;
-    document.getElementById('cfg-bau-row').value = row;
+    document.getElementById('cfg-bau-col').value = (col) as any;
+    document.getElementById('cfg-bau-row').value = (row) as any;
     document.getElementById('cfg-bau-id').value = '';
     document.getElementById('cfg-bau-nome').value = 'Baú';
     CENA_ED.cfgBauItens = [];

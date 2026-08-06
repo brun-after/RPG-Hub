@@ -262,19 +262,19 @@ function abrirModalInvocacao(invId: any, charNomeHint: any) {
     document.getElementById('inv-dummy-explosivo').checked = false;
     document.getElementById('inv-dano-formula').value = '1d6';
     document.getElementById('inv-dano-attr').value = '';
-    document.getElementById('inv-dano-pct').value = 0;
-    document.getElementById('inv-resist-base').value = 0;
+    document.getElementById('inv-dano-pct').value = (0) as any;
+    document.getElementById('inv-resist-base').value = (0) as any;
     document.getElementById('inv-resist-attr').value = '';
-    document.getElementById('inv-resist-pct').value = 0;
+    document.getElementById('inv-resist-pct').value = (0) as any;
     document.getElementById('inv-cura-formula').value = '';
     document.getElementById('inv-cura-attr').value = '';
-    document.getElementById('inv-cura-pct').value = 0;
-    document.getElementById('inv-hp-base').value = 20;
+    document.getElementById('inv-cura-pct').value = (0) as any;
+    document.getElementById('inv-hp-base').value = (20) as any;
     document.getElementById('inv-hp-attr').value = '';
-    document.getElementById('inv-hp-pct').value = 0;
-    document.getElementById('inv-duracao-base').value = 3;
-    document.getElementById('inv-sab-mult').value = 0;
-    document.getElementById('inv-init-bonus').value = 0;
+    document.getElementById('inv-hp-pct').value = (0) as any;
+    document.getElementById('inv-duracao-base').value = (3) as any;
+    document.getElementById('inv-sab-mult').value = (0) as any;
+    document.getElementById('inv-init-bonus').value = (0) as any;
     { const _gEl = document.getElementById('inv-global'); if (_gEl) _gEl.checked = false; }
     _invRenderSkillsChecklist([]);
   }

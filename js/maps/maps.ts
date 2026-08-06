@@ -1932,8 +1932,8 @@ function abrirModalCriativoMestre(id: any) {
     if (_rId('criativo-anim-trilha'))   _rId('criativo-anim-trilha').checked = false;
     if (_rId('criativo-anim-url'))      _rId('criativo-anim-url').value    = '';
     if (_rId('criativo-anim-svg-code')) _rId('criativo-anim-svg-code').value = '';
-    if (_rId('criativo-anim-tamanho'))  _rId('criativo-anim-tamanho').value = 120;
-    if (_rId('criativo-anim-duracao'))  _rId('criativo-anim-duracao').value = 1500;
+    if (_rId('criativo-anim-tamanho'))  _rId('criativo-anim-tamanho').value = (120) as any;
+    if (_rId('criativo-anim-duracao'))  _rId('criativo-anim-duracao').value = (1500) as any;
     if (_rId('criativo-anim-posicao'))  _rId('criativo-anim-posicao').value = 'alvo';
     if (_rId('criativo-msg-fase2'))     _rId('criativo-msg-fase2').value   = '';
 
@@ -5086,7 +5086,7 @@ function mapaAplicarTransform3D(wrapper: any, _opts?: any) {
 
 // Atualiza preview ao vivo e labels no modal de config 3D
 function mp3dAtualizar() {
-  const _get = (id: any) => parseFloat(document.getElementById(id)?.value ?? 0);
+  const _get = (id: any) => parseFloat((document.getElementById(id)?.value ?? 0 as any));
   const rx = _get('mp3d-rx'), ry = _get('mp3d-ry'), rz = _get('mp3d-rz');
   const persp = _get('mp3d-persp'), ox = _get('mp3d-ox'), oy = _get('mp3d-oy'), sc = _get('mp3d-sc');
 
@@ -5491,9 +5491,9 @@ function abrirModalMapaConfig() {
   document.getElementById('modal-mapa-nome').value = m.nome || '';
   document.getElementById('modal-mapa-map-id').value = m.map_id || '';
   document.getElementById('modal-mapa-img-url').value = m.img_url || '';
-  document.getElementById('modal-mapa-escala-val').value = m.escala_val || '';
+  document.getElementById('modal-mapa-escala-val').value = (m.escala_val || '') as any;
   document.getElementById('modal-mapa-escala-unit').value = m.escala_unit || 'm';
-  document.getElementById('modal-mapa-grid').value = m.grid || '';
+  document.getElementById('modal-mapa-grid').value = (m.grid || '') as any;
 
   // Unidades nos labels
   const unit = m.escala_unit || 'm';
@@ -5503,8 +5503,8 @@ function abrirModalMapaConfig() {
   });
 
   // Dimensões totais
-  document.getElementById('modal-mapa-larg-total').value = m.largura_total || '';
-  document.getElementById('modal-mapa-alt-total').value = m.altura_total || '';
+  document.getElementById('modal-mapa-larg-total').value = (m.largura_total || '') as any;
+  document.getElementById('modal-mapa-alt-total').value = (m.altura_total || '') as any;
 
   modalMapaPreviewImg(m.img_url || '');
 
@@ -5525,9 +5525,9 @@ function abrirModalMapaConfig() {
     if (paiEntry) selPai.value = paiEntry.mapa.map_id;
 
     // Tamanho real (guardados no local ou no mapa)
-    document.getElementById('modal-mapa-local-larg').value = m.largura_real || '';
-    document.getElementById('modal-mapa-local-alt').value  = m.altura_real  || '';
-    document.getElementById('modal-mapa-repr-pct').value  = m.representar_pct != null ? m.representar_pct : 100;
+    document.getElementById('modal-mapa-local-larg').value = (m.largura_real || '') as any;
+    document.getElementById('modal-mapa-local-alt').value  = (m.altura_real  || '') as any;
+    document.getElementById('modal-mapa-repr-pct').value  = (m.representar_pct != null ? m.representar_pct : 100) as any;
 
     document.getElementById('modal-mapa-preview-calc').style.display = 'none';
     mapaConfigAtualizarPreview();
@@ -9966,7 +9966,7 @@ function cfgBattleSistemaChange() {
 }
 
 function _cfgBattlePopularCampos(cfg: any) {
-  const set = (id: any, val: any) => { const el = document.getElementById(id); if (el) el[el.type === 'checkbox' ? 'checked' : 'value'] = val ?? el.defaultValue; };
+  const set = (id: any, val: any) => { const el = document.getElementById(id); if (el) (el as any)[el.type === 'checkbox' ? 'checked' : 'value'] = val ?? el.defaultValue; };
   set('cfg-battle-max-reacoes',     cfg.max_reacoes_por_rodada ?? 1);
   set('cfg-battle-max-defesas',     cfg.max_defesas_por_rodada ?? 1);
   set('cfg-battle-tipo-defesa',     cfg.tipo_defesa || 'passiva');
@@ -10282,7 +10282,7 @@ function abrirModalAttrDef(id: any) {
    document.getElementById('ad-nome').value = def.nome;
    document.getElementById('ad-tipo').value = def.tipo;
    document.getElementById('ad-categoria').value = def.categoria || 'basico';
-   document.getElementById('ad-ordem').value = def.ordem || 1;
+   document.getElementById('ad-ordem').value = (def.ordem || 1) as any;
    // Restore category-specific opcoes fields
    const cat = def.categoria || 'basico';
    if (cat === 'resistencia') {
@@ -10306,7 +10306,7 @@ function abrirModalAttrDef(id: any) {
    document.getElementById('ad-tipo').value = 'number';
    document.getElementById('ad-categoria').value = 'basico';
    document.getElementById('ad-opcoes').value = '';
-   document.getElementById('ad-ordem').value = (RPG_DATA.attrDefs || []).length + 1;
+   document.getElementById('ad-ordem').value = ((RPG_DATA.attrDefs || []).length + 1) as any;
    tituloEl.textContent = 'Novo Atributo';
    btnRemover.style.display = 'none';
  }
@@ -10766,12 +10766,12 @@ function abrirModalNovoMapa() {
   document.getElementById('nm-nome').value = '';
   document.getElementById('nm-img').value = '';
   document.getElementById('nm-img-preview').style.display = 'none';
-  document.getElementById('nm-escala-val').value = 1;
+  document.getElementById('nm-escala-val').value = (1) as any;
   document.getElementById('nm-escala-unit').value = 'm';
-  document.getElementById('nm-grid').value = 20;
+  document.getElementById('nm-grid').value = (20) as any;
   document.getElementById('nm-larg-real').value = '';
   document.getElementById('nm-alt-real').value = '';
-  document.getElementById('nm-repr-pct').value = 100;
+  document.getElementById('nm-repr-pct').value = (100) as any;
   document.getElementById('nm-preview-calc').style.display = 'none';
   document.getElementById('nm-fallback-pct').style.display = 'none';
   // Resetar aba de fundo
@@ -11222,7 +11222,7 @@ let PLACEMENT_STATE: any = null;
     if (!wrap) return null;
     let svg = wrap.querySelector('svg.grid-tactical-svg');
     if (!svg) {
-      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg = (document.createElementNS('http://www.w3.org/2000/svg', 'svg')) as any;
       svg.setAttribute('class', 'grid-tactical-svg');
       svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;';
       const tokensEl = document.getElementById('mapa-tokens');

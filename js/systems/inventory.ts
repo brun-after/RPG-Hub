@@ -1293,7 +1293,7 @@ async function salvarItemDef() {
     const alvEl = document.getElementById('idef-alvo');
     if (alvEl && col.alvo) alvEl.value = col.alvo;
     const alcEl = document.getElementById('idef-alcance');
-    if (alcEl && col.alcance_m != null) alcEl.value = col.alcance_m;
+    if (alcEl && col.alcance_m != null) alcEl.value = (col.alcance_m) as any;
     const apEl = document.getElementById('idef-requer-aprov');
     if (apEl) apEl.checked = !!col.requer_aprovacao;
   }

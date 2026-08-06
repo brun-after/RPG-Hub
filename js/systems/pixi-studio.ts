@@ -3112,7 +3112,7 @@ function psImportarArquivo(input: any) {
   const reader = new FileReader();
   reader.onload = e => {
     const ta = document.getElementById('ps-import-json-text');
-    if (ta) ta.value = e.target.result;
+    if (ta) ta.value = (e.target.result) as any;
     psImportarJson(e.target.result);
   };
   reader.readAsText(file);
