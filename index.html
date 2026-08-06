@@ -5943,16 +5943,16 @@ Resistência elemental:
 </div>
 
 <!-- ════ MODAL ADICIONAR ITEM AO INV (busca catálogo) ════ -->
-<div id="modal-add-inv-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:2500;align-items:flex-end;justify-content:center">
+<div id="modal-add-inv-overlay-cat" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:2500;align-items:flex-end;justify-content:center">
   <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--destaque);border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:85vh;display:flex;flex-direction:column">
     <div style="padding:16px 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0">
       <div style="font-family:var(--fonte-d);font-size:0.88rem;color:var(--destaque)">Dar Item</div>
-      <button onclick="document.getElementById('modal-add-inv-overlay').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
+      <button onclick="document.getElementById('modal-add-inv-overlay-cat').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
     </div>
     <div style="padding:10px 12px;flex-shrink:0">
-      <input type="text" id="add-inv-busca" placeholder="🔍 Buscar no catálogo..." oninput="filtrarAddInv()" style="width:100%;box-sizing:border-box;padding:8px 10px;background:rgba(10,15,25,0.8);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.85rem">
+      <input type="text" id="add-inv-busca-cat" placeholder="🔍 Buscar no catálogo..." oninput="filtrarAddInv()" style="width:100%;box-sizing:border-box;padding:8px 10px;background:rgba(10,15,25,0.8);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.85rem">
     </div>
-    <div id="add-inv-lista" style="flex:1;overflow-y:auto;padding:0 12px 12px"></div>
+    <div id="add-inv-lista-cat" style="flex:1;overflow-y:auto;padding:0 12px 12px"></div>
   </div>
 </div>
 

@@ -11,7 +11,7 @@ import { bootAventuraSim, cloneEstado, digest } from './harness';
 const g = globalThis as any;
 
 const CAMPOS_TICK = [
-  'id', 'nome', 'x', 'y', 'hp', 'hpMax', 'tipo', 'anim', 'escondido',
+  'id', 'nome', 'x', 'y', 'hp', 'hpMax', 'tipo', 'morto', 'anim', 'escondido',
   'status_effects', 'atravessar', 'fantasma', 'ackSeq', 'dominado',
   'donoNome', 'cor', 'pat',
 ].sort();

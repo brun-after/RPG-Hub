@@ -268,6 +268,11 @@ class _AudioManager {
     if (this._muted || typeof Howl === 'undefined') return;
     const url = this._resolveId(idOrUrl);
     if (!url) return;
+    // Back-off: URL que falhou uma vez não é re-tentada na sessão. A biblioteca
+    // vive num host externo (gamesounds.xyz) sem SLA — sem isso, cada cast de
+    // skill re-dispara o download morto e um toast de erro para o jogador.
+    this._sfxDead = this._sfxDead || Object.create(null);
+    if (this._sfxDead[url]) return;
     const vol = Math.min(1, Math.max(0, volume ?? this.volume.sfx));
     let howl = this._sfxCache[url];
     if (!howl) {
@@ -279,8 +284,14 @@ class _AudioManager {
         volume: vol,
         html5:  !local,
         onloaderror: (_id: any, err: any) => {
+          const primeira = !this._sfxDead[url];
+          this._sfxDead[url] = true;
+          delete this._sfxCache[url];
+          try { howl.unload(); } catch (_) {}
           console.warn('[SFX] Falha ao carregar:', url, err);
-          try { mostrarToast('Falha ao carregar áudio. Verifique se a URL é um link direto para .mp3, .wav ou .ogg.', 'aviso'); } catch (_) {}
+          if (primeira) {
+            try { mostrarToast('Falha ao carregar áudio. Verifique se a URL é um link direto para .mp3, .wav ou .ogg.', 'aviso'); } catch (_) {}
+          }
         },
         onplayerror:  (_id: any, err: any) => console.warn('[SFX] Falha ao tocar:', url, err),
       });

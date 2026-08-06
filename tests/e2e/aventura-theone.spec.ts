@@ -60,6 +60,18 @@ async function novoCliente(browser: Browser, broker: BrokerPhoenix,
 async function entrar(cliente: Cliente) {
   await cliente.page.evaluate(async ({ rpgId, charNome }) => {
     const w = window as any;
+    // Sonda: registra o stack de todo chamador dos writers de theme_json
+    // (o accessor global rebinda a function declaration do módulo).
+    w.__regSaves = [];
+    for (const fn of ['_avtSalvarDungeon', '_avtSalvarThemeJson']) {
+      const orig = w[fn];
+      if (typeof orig === 'function') {
+        w[fn] = function (...args: any[]) {
+          try { w.__regSaves.push(fn + ' :: ' + (new Error().stack || '').split('\n').slice(2, 7).join(' | ')); } catch(_) {}
+          return orig.apply(this, args);
+        };
+      }
+    }
     const hostChange = new Promise<void>(res => {
       addEventListener('rtnet:hostchange', () => res(), { once: true });
     });
@@ -334,10 +346,12 @@ test.describe('the one: sessão de jogo simulada', () => {
     achados.fpsA = await a.page.evaluate(() => (window as any).AVT_PERF?.fpsAtual?.() ?? 0);
     achados.fpsB = await b.page.evaluate(() => (window as any).AVT_PERF?.fpsAtual?.() ?? 0);
 
-    // Divergência final: mede já, espera 6s de ticks, mede de novo (eventual?)
+    // Divergência final: mede já, espera 6s de ticks, mede de novo. O estado
+    // DEVE convergir (keyframe a cada 1s) — residual >1 célula é bug de sync.
     achados.divergenciaFinalImediata = divergenciaMaxima(await digestDe(a.page), await digestDe(b.page));
     await a.page.waitForTimeout(6_000);
     achados.divergenciaFinalApos6s = divergenciaMaxima(await digestDe(a.page), await digestDe(b.page));
+    expect(achados.divergenciaFinalApos6s, 'estado não convergiu 6s após o combate').toBeLessThanOrEqual(1);
     // Posição de Ares vista por cada lado (isola desync de teleporte)
     achados.aresA = await a.page.evaluate(() => {
       const e = (window as any).AVT_STATE.entidades.find((e: any) => e.nome === 'Ares');
@@ -351,6 +365,20 @@ test.describe('the one: sessão de jogo simulada', () => {
       const e = (window as any).AVT_STATE.entidades.find((e: any) => e.id === id);
       return e ? { hp: e.hp, morto: !!e.morto } : null;
     }, achados.alvoFraco?.id ?? '');
+    // Flag `morto` deve espelhar o host no convidado (propagada pelo state tick)
+    if (achados.morteInimigo?.morto) {
+      expect(achados.alvoFracoB?.morto, 'convidado não recebeu morto:true do host').toBe(true);
+    }
+    // Só o host da fase tem autoridade sobre o registro: o cliente que NÃO é
+    // host não pode ter gravado theme_json nenhuma vez na sessão.
+    const hostEhA = await a.page.evaluate(() => !!(window as any)._avtSouHostDaFaseAtual?.());
+    const naoHost = hostEhA ? b : a;
+    const patchesRegistroNaoHost = naoHost.reqLog.filter(r =>
+      r.method === 'PATCH' && r.url.includes('/rest/v1/rpg_registry')).length;
+    achados.hostFinal = hostEhA ? 'A' : 'B';
+    achados.regSavesA = await a.page.evaluate(() => (window as any).__regSaves ?? []);
+    achados.regSavesB = await b.page.evaluate(() => (window as any).__regSaves ?? []);
+    expect(patchesRegistroNaoHost, `cliente não-host (${naoHost.charNome}) gravou theme_json no registro`).toBe(0);
 
     expect(a.pageErrors, `pageerrors em A: ${a.pageErrors.join(' | ')}`).toEqual([]);
     expect(b.pageErrors, `pageerrors em B: ${b.pageErrors.join(' | ')}`).toEqual([]);

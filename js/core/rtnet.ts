@@ -775,7 +775,7 @@ window.RTNet = (() => {
       }
       // Canal do host indisponível → fallback Supabase (alcança todos os assinantes).
       if (typeof realtimeBroadcast === 'function') {
-        try { realtimeBroadcast(tipo, payload); } catch(e) { _warn('relay fallback:', e); }
+        try { realtimeBroadcast(tipo, payload); _s._stats.out++; } catch(e) { _warn('relay fallback:', e); }
       }
       return;
     }
@@ -802,7 +802,9 @@ window.RTNet = (() => {
         return;
       }
       if (typeof realtimeBroadcast === 'function') {
-        try { realtimeBroadcast(tipo, payload); } catch(e) { _warn('fallback broadcast:', e); }
+        // Contabiliza também o caminho supabase — sem isso getStats().out fica 0
+        // no fallback e mascara se o cliente está de fato emitindo.
+        try { realtimeBroadcast(tipo, payload); _s._stats.out++; } catch(e) { _warn('fallback broadcast:', e); }
       }
     }
   }
@@ -817,7 +819,7 @@ window.RTNet = (() => {
     }
     // Fallback: broadcast (host filtra)
     if (typeof realtimeBroadcast === 'function') {
-      try { realtimeBroadcast(tipo, payload); } catch(_) {}
+      try { realtimeBroadcast(tipo, payload); _s._stats.out++; } catch(_) {}
     }
   }
 
