@@ -96,133 +96,102 @@ window.RTNet = (() => {
   const PERIODIC_SYNC_INTERVAL = 10_000; // ms — ressincronização periódica forçada
   const PING_INTERVAL        = 2_000;   // ms — medição de RTT ao host (canal fast)
 
-  // Mapa: tipo de evento → nome da função global handler (mesmo que realtime.js)
-  const AVT_HANDLER_MAP = {
-    avt_token_move:        'avtReceberMovimento',
-    avt_combate_inicio:    'avtReceberCombateInicio',
-    avt_batalha_update:    'avtReceberBatalhaUpdate',
-    avt_combate_fim:       'avtReceberFimBatalha',
-    avt_combate_join:      'avtReceberJoinBatalha',
-    avt_npc_morreu:        'avtReceberNpcMorreu',
-    avt_npc_perseguindo:   'avtReceberNpcPerseguindo',
-    avt_npc_respawn:       'avtReceberNpcRespawn',
-    avt_convite_combate:   'avtReceberConviteCombate',
-    avt_xp_ganho:          'avtReceberXpGanho',
-    avt_level_up:          'avtReceberLevelUp',
-    avt_jogador_morreu:    'avtReceberJogadorMorreu',
-    avt_jogador_ressurgiu: 'avtReceberJogadorRessurgiu',
-    avt_jogador_visivel:   'avtReceberJogadorVisivel',
-    avt_skill_selecionada: 'avtReceberSkillSelecionada',
-    avt_dado_rolado:       'avtReceberDadoRolado',
-    avt_dano_visual:       'avtReceberDanoVisual',
-    avt_dano_visual_batch: 'avtReceberDanoVisualBatch',
-    avt_hp_update:         'avtReceberHpUpdate',
-    avt_member_linked:     'avtReceberMemberLinked',
-    avt_primeiro_ataque:   'avtReceberPrimeiroAtaque',
-    avt_skill_anim:        'avtReceberSkillAnim',
-    avt_attack_anim:       'avtReceberAttackAnim',
-    avt_level_config_update:'avtReceberLevelConfigUpdate',
-    // [HOST-RTC] novos
-    avt_state_tick:           'avtReceberStateTick',
-    avt_player_action:        'avtReceberPlayerAction',
-    avt_authoritative_apply:  'avtReceberAuthoritativeApply',
-    // [HP-AUTHORITY v22] novos
-    avt_player_hp:            'avtReceberPlayerHp',
-    avt_player_damage:        'avtReceberPlayerDamage',
+  // ── Catálogo único dos eventos avt_* (Entrega 3) ──────────────────────────
+  // Fonte de verdade para os 4 consumidores que antes mantinham cópias
+  // divergentes: AVT_HANDLER_MAP e EVENT_OPTS (derivados abaixo) e o
+  // dispatcher + flush do fallback Supabase em realtime.ts (via
+  // window.AVT_EVENTS). A divergência dropava eventos: o flush descartava
+  // ~20 tipos enfileirados pré-join e o fallback não roteava avt_obj_spawn,
+  // avt_rastro_marcar etc.; o DataChannel não roteava avt_invocacao_destruida.
+  // handler: função global receptora (ausente = tratado em camada própria);
+  // persist/reliable/relay: opts de transporte (ausentes = defaults do caller).
+  interface AvtEventSpec {
+    handler?: string;
+    persist?: 'never' | 'snapshot' | 'immediate';
+    reliable?: boolean;
+    relay?: boolean;
+  }
+  const AVT_EVENTS: Record<string, AvtEventSpec> = {
+    avt_token_move:        { handler: 'avtReceberMovimento',        persist: 'never',     reliable: false },
+    avt_host_heartbeat:    { handler: 'avtReceberHostHeartbeat',    persist: 'never',     reliable: false }, // interceptado na camada de transporte do RTNet; handler é o stub do fallback
+    avt_combate_inicio:    { handler: 'avtReceberCombateInicio',    persist: 'immediate', reliable: true  },
+    avt_batalha_update:    { handler: 'avtReceberBatalhaUpdate',    persist: 'snapshot',  reliable: true  },
+    avt_combate_fim:       { handler: 'avtReceberFimBatalha',       persist: 'immediate', reliable: true  },
+    avt_combate_join:      { handler: 'avtReceberJoinBatalha',      persist: 'snapshot',  reliable: true  },
+    avt_npc_morreu:        { handler: 'avtReceberNpcMorreu',        persist: 'immediate', reliable: true  },
+    avt_npc_perseguindo:   { handler: 'avtReceberNpcPerseguindo',   persist: 'never',     reliable: false },
+    avt_npc_respawn:       { handler: 'avtReceberNpcRespawn',       persist: 'immediate', reliable: true  },
+    avt_convite_combate:   { handler: 'avtReceberConviteCombate',   persist: 'never',     reliable: false },
+    avt_xp_ganho:          { handler: 'avtReceberXpGanho',          persist: 'immediate', reliable: true  },
+    avt_level_up:          { handler: 'avtReceberLevelUp',          persist: 'immediate', reliable: true  },
+    avt_jogador_morreu:    { handler: 'avtReceberJogadorMorreu',    persist: 'immediate', reliable: true  },
+    avt_jogador_ressurgiu: { handler: 'avtReceberJogadorRessurgiu', persist: 'immediate', reliable: true  },
+    avt_jogador_visivel:   { handler: 'avtReceberJogadorVisivel',   persist: 'immediate', reliable: true  },
+    avt_skill_selecionada: { handler: 'avtReceberSkillSelecionada', persist: 'never',     reliable: false, relay: true },
+    avt_dado_rolado:       { handler: 'avtReceberDadoRolado',       persist: 'never',     reliable: false, relay: true },
+    avt_dano_visual:       { handler: 'avtReceberDanoVisual',       persist: 'never',     reliable: false, relay: true },
+    avt_dano_visual_batch: { handler: 'avtReceberDanoVisualBatch',  persist: 'never',     reliable: false, relay: true },
+    avt_hp_update:         { handler: 'avtReceberHpUpdate',         persist: 'snapshot',  reliable: true  },
+    avt_member_linked:     { handler: 'avtReceberMemberLinked',     persist: 'immediate', reliable: true  },
+    avt_primeiro_ataque:   { handler: 'avtReceberPrimeiroAtaque',   persist: 'never',     reliable: false, relay: true },
+    avt_skill_anim:        { handler: 'avtReceberSkillAnim',        persist: 'never',     reliable: true,  relay: true },
+    avt_attack_anim:       { handler: 'avtReceberAttackAnim',       persist: 'never',     reliable: true,  relay: true },
+    avt_level_config_update:{ handler: 'avtReceberLevelConfigUpdate', persist: 'immediate', reliable: true },
+    // [HOST-RTC]
+    avt_state_tick:           { handler: 'avtReceberStateTick',          persist: 'never', reliable: true },
+    avt_player_action:        { handler: 'avtReceberPlayerAction',       persist: 'never', reliable: true },
+    avt_authoritative_apply:  { handler: 'avtReceberAuthoritativeApply', persist: 'never', reliable: true },
+    // [HP-AUTHORITY v22]
+    avt_player_hp:            { handler: 'avtReceberPlayerHp',           persist: 'never', reliable: true },
+    avt_player_damage:        { handler: 'avtReceberPlayerDamage',       persist: 'never', reliable: true },
     // [COLISAO + ENTIDADE]
-    avt_colisao_config:       'avtReceberColisaoConfig',
-    avt_entidade_nova:        'avtReceberEntidadeNova',
-    // [MOVE-INPUT] movimento baseado em input (não-host → host)
-    avt_move_input:           'avtReceberMoveInput',
-    // [SYNC-COMPLETO] equipamento, atributos e mudanças do mestre
-    avt_item_equipado:        'avtReceberItemEquipado',
-    avt_item_desequipado:     'avtReceberItemDesequipado',
-    avt_char_update:          'avtReceberCharUpdate',
+    avt_colisao_config:       { handler: 'avtReceberColisaoConfig' },
+    avt_entidade_nova:        { handler: 'avtReceberEntidadeNova' },
+    avt_invocacao_destruida:  { handler: 'avtReceberInvocacaoDestruida' },
+    // [MOVE-INPUT]
+    avt_move_input:           { handler: 'avtReceberMoveInput',          persist: 'never', reliable: true },
+    // [SYNC-COMPLETO]
+    avt_item_equipado:        { handler: 'avtReceberItemEquipado',       persist: 'never', reliable: true },
+    avt_item_desequipado:     { handler: 'avtReceberItemDesequipado',    persist: 'never', reliable: true },
+    avt_char_update:          { handler: 'avtReceberCharUpdate',         persist: 'never', reliable: true },
     // [RECURSOS + BAÚS]
-    avt_rsv_update:           'avtReceberRsvUpdate',
-    avt_bau_aberto:           'avtReceberBauAberto',
-    // [OBJETOS] loot no chão e orbes de recurso (spawn/coleta)
-    avt_obj_spawn:            'avtReceberObjSpawn',
-    avt_obj_pickup:           'avtReceberObjPickup',
-    // [COBERTURA COMPLETA] rastro autoritativo, cooldown OOC e cache de inventário
-    avt_rastro_marcar:        'avtReceberRastroMarcar',
-    avt_ooc_cooldown:         'avtReceberOocCooldown',
-    avt_inv_update:           'avtReceberInvUpdate',
+    avt_rsv_update:           { handler: 'avtReceberRsvUpdate',          persist: 'never', reliable: true },
+    avt_bau_aberto:           { handler: 'avtReceberBauAberto',          persist: 'immediate', reliable: true },
+    // [OBJETOS]
+    avt_obj_spawn:            { handler: 'avtReceberObjSpawn',           persist: 'immediate', reliable: true },
+    avt_obj_pickup:           { handler: 'avtReceberObjPickup',          persist: 'immediate', reliable: true },
+    // [COBERTURA COMPLETA]
+    avt_rastro_marcar:        { handler: 'avtReceberRastroMarcar',       persist: 'never', reliable: true },
+    avt_ooc_cooldown:         { handler: 'avtReceberOocCooldown',        persist: 'never', reliable: true },
+    avt_inv_update:           { handler: 'avtReceberInvUpdate',          persist: 'never', reliable: true },
     // [FASES]
-    avt_fase_mudou:           'avtReceberFaseMudou',
-    avt_fase_host:            'avtReceberFaseHost',
-    avt_fase_host_release:    'avtReceberFaseHostRelease',
-    avt_porta_proxima:        'avtReceberPortaProxima',
-    avt_dungeon_update:       'avtReceberDungeonUpdate',
-    // [VFX persistente] efeitos de status ancorados em entidade
-    avt_efeito_anim_start:    'avtReceberEfeitoAnimStart',
-    avt_efeito_anim_stop:     'avtReceberEfeitoAnimStop',
-    // [PERF] medição de RTT (tratados internamente em _dispatch; entradas aqui
-    // permitem que o fallback Supabase os roteie para os stubs do avt-perf)
-    avt_ping:                 'avtReceberPing',
-    avt_pong:                 'avtReceberPong',
+    avt_fase_mudou:           { handler: 'avtReceberFaseMudou' },
+    avt_fase_host:            { handler: 'avtReceberFaseHost',           persist: 'never', reliable: true },
+    avt_fase_host_release:    { handler: 'avtReceberFaseHostRelease',    persist: 'never', reliable: true },
+    avt_porta_proxima:        { handler: 'avtReceberPortaProxima' },
+    avt_dungeon_update:       { handler: 'avtReceberDungeonUpdate',      persist: 'never', reliable: true },
+    // presença por fase: tratada por handler anônimo via RTNet.on (avt-menu.ts)
+    avt_fase_presenca:        {},
+    // [VFX persistente]
+    avt_efeito_anim_start:    { handler: 'avtReceberEfeitoAnimStart',    persist: 'never', reliable: true, relay: true },
+    avt_efeito_anim_stop:     { handler: 'avtReceberEfeitoAnimStop',     persist: 'never', reliable: true, relay: true },
+    // [PERF] ping/pong tratados na camada de transporte; handlers = stubs do fallback
+    avt_ping:                 { handler: 'avtReceberPing',               persist: 'never', reliable: false },
+    avt_pong:                 { handler: 'avtReceberPong',               persist: 'never', reliable: false },
   };
+  try { (window as any).AVT_EVENTS = AVT_EVENTS; } catch(_) {}
 
-  // opts padrão por tipo de evento (camada A/B/C conforme plano §5)
-  const EVENT_OPTS = {
-    avt_token_move:        { persist: 'never',     reliable: false },
-    avt_host_heartbeat:    { persist: 'never',     reliable: false },
-    avt_combate_inicio:    { persist: 'immediate', reliable: true  },
-    avt_batalha_update:    { persist: 'snapshot',  reliable: true  },
-    avt_combate_fim:       { persist: 'immediate', reliable: true  },
-    avt_combate_join:      { persist: 'snapshot',  reliable: true  },
-    avt_npc_morreu:        { persist: 'immediate', reliable: true  },
-    avt_npc_perseguindo:   { persist: 'never',     reliable: false },
-    avt_npc_respawn:       { persist: 'immediate', reliable: true  },
-    avt_convite_combate:   { persist: 'never',     reliable: false },
-    avt_xp_ganho:          { persist: 'immediate', reliable: true  },
-    avt_level_up:          { persist: 'immediate', reliable: true  },
-    avt_jogador_morreu:    { persist: 'immediate', reliable: true  },
-    avt_jogador_ressurgiu: { persist: 'immediate', reliable: true  },
-    avt_jogador_visivel:   { persist: 'immediate', reliable: true  },
-    avt_skill_selecionada: { persist: 'never',     reliable: false, relay: true },
-    avt_dado_rolado:       { persist: 'never',     reliable: false, relay: true },
-    avt_dano_visual:       { persist: 'never',     reliable: false, relay: true },
-    avt_dano_visual_batch: { persist: 'never',     reliable: false, relay: true },
-    avt_hp_update:         { persist: 'snapshot',  reliable: true  },
-    avt_member_linked:     { persist: 'immediate', reliable: true  },
-    avt_primeiro_ataque:   { persist: 'never',     reliable: false, relay: true },
-    avt_bau_aberto:        { persist: 'immediate', reliable: true  },
-    avt_obj_spawn:         { persist: 'immediate', reliable: true  },
-    avt_obj_pickup:        { persist: 'immediate', reliable: true  },
-    avt_skill_anim:        { persist: 'never',     reliable: true,  relay: true },
-    avt_efeito_anim_start: { persist: 'never',     reliable: true,  relay: true },
-    avt_efeito_anim_stop:  { persist: 'never',     reliable: true,  relay: true },
-    avt_attack_anim:       { persist: 'never',     reliable: true,  relay: true },
-    avt_level_config_update:{ persist: 'immediate',reliable: true  },
-    // [HOST-RTC] novos
-    avt_state_tick:           { persist: 'never',     reliable: true  }, // tick autoritativo usa canal confiável
-    avt_player_action:        { persist: 'never',     reliable: true  },
-    avt_authoritative_apply:  { persist: 'never',     reliable: true  },
-    // [HP-AUTHORITY v22] novos — HP fast (unreliable, alta frequência); damage reliable
-    avt_player_hp:            { persist: 'never',     reliable: true  },
-    avt_player_damage:        { persist: 'never',     reliable: true  },
-    // [MOVE-INPUT] intenção de movimento do cliente para o host (canal confiável)
-    avt_move_input:           { persist: 'never',     reliable: true  },
-    // [SYNC-COMPLETO] equipamento e mudanças de atributos pelo mestre
-    avt_item_equipado:        { persist: 'never',     reliable: true  },
-    avt_item_desequipado:     { persist: 'never',     reliable: true  },
-    avt_char_update:          { persist: 'never',     reliable: true  },
-    // [RECURSOS + BAÚS]
-    avt_rsv_update:           { persist: 'never',     reliable: true  },
-    // [COBERTURA COMPLETA] eventos confiáveis de baixa frequência
-    avt_rastro_marcar:        { persist: 'never',     reliable: true  },
-    avt_ooc_cooldown:         { persist: 'never',     reliable: true  },
-    avt_inv_update:           { persist: 'never',     reliable: true  },
-    // [MAPA] edição de mapa ao vivo pelo mestre (já persistido via theme_json)
-    avt_dungeon_update:       { persist: 'never',     reliable: true  },
-    // [FASES] anúncio/reafirmação de host por fase
-    avt_fase_host:            { persist: 'never',     reliable: true  },
-    avt_fase_host_release:    { persist: 'never',     reliable: true  },
-    // [PERF] ping/pong de RTT — alta frequência, perda tolerável
-    avt_ping:                 { persist: 'never',     reliable: false },
-    avt_pong:                 { persist: 'never',     reliable: false },
-  };
+  // Derivados do catálogo — mesmo conteúdo que os literais antigos, sem cópia.
+  const AVT_HANDLER_MAP: Record<string, string> = {};
+  const EVENT_OPTS: Record<string, Partial<AvtEventSpec>> = {};
+  for (const _ev in AVT_EVENTS) {
+    const _spec = AVT_EVENTS[_ev];
+    if (_spec.handler) AVT_HANDLER_MAP[_ev] = _spec.handler;
+    if (_spec.persist !== undefined) {
+      EVENT_OPTS[_ev] = { persist: _spec.persist, reliable: !!_spec.reliable };
+      if (_spec.relay) EVENT_OPTS[_ev].relay = true;
+    }
+  }
 
   function _log(...a)  { try { console.log('[RTNet]',  ...a); } catch(_) {} }
   function _warn(...a) { try { console.warn('[RTNet]', ...a); } catch(_) {} }
@@ -406,7 +375,7 @@ window.RTNet = (() => {
   // [RELAY] Reenvia um frame já serializado a todos os peers abertos exceto o remetente.
   // Usa o mapa de canais conforme a confiabilidade do evento.
   function _relayFanout(frame, tipo, exceptPeerId) {
-    const o = EVENT_OPTS[tipo] || {};
+    const o: Partial<AvtEventSpec> = EVENT_OPTS[tipo] || {};
     const chMap = o.reliable !== false ? _s.channels : _s.fastChannels;
     for (const [pid, ch] of chMap.entries()) {
       if (pid === exceptPeerId) continue;

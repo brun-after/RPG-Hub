@@ -383,51 +383,13 @@ function iniciarRealtime(rpgId){
          if(typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode === 'p2p') return;
          const _avtEv = msg.payload.event;
          const _avtPl = msg.payload.payload;
-         const _map = {
-           avt_host_heartbeat: 'avtReceberHostHeartbeat', // no-op stub
-           avt_token_move: 'avtReceberMovimento',
-           avt_combate_inicio: 'avtReceberCombateInicio',
-           avt_batalha_update: 'avtReceberBatalhaUpdate',
-           avt_combate_fim: 'avtReceberFimBatalha',
-           avt_combate_join: 'avtReceberJoinBatalha',
-           avt_npc_morreu: 'avtReceberNpcMorreu',
-           avt_npc_perseguindo: 'avtReceberNpcPerseguindo',
-           avt_npc_respawn: 'avtReceberNpcRespawn',
-           avt_convite_combate: 'avtReceberConviteCombate',
-           avt_xp_ganho: 'avtReceberXpGanho',
-           avt_level_up: 'avtReceberLevelUp',
-           avt_jogador_morreu: 'avtReceberJogadorMorreu',
-           avt_jogador_ressurgiu: 'avtReceberJogadorRessurgiu',
-           avt_jogador_visivel: 'avtReceberJogadorVisivel',
-           avt_skill_selecionada: 'avtReceberSkillSelecionada',
-           avt_dado_rolado: 'avtReceberDadoRolado',
-           avt_dano_visual: 'avtReceberDanoVisual',
-           avt_dano_visual_batch: 'avtReceberDanoVisualBatch',
-           avt_hp_update: 'avtReceberHpUpdate',
-           avt_rsv_update: 'avtReceberRsvUpdate',
-           avt_member_linked: 'avtReceberMemberLinked',
-           avt_primeiro_ataque: 'avtReceberPrimeiroAtaque',
-           avt_skill_anim: 'avtReceberSkillAnim',
-           avt_efeito_anim_start: 'avtReceberEfeitoAnimStart',
-           avt_efeito_anim_stop: 'avtReceberEfeitoAnimStop',
-           avt_attack_anim: 'avtReceberAttackAnim',
-           avt_level_config_update: 'avtReceberLevelConfigUpdate',
-           avt_colisao_config: 'avtReceberColisaoConfig',
-           avt_entidade_nova: 'avtReceberEntidadeNova',
-           avt_invocacao_destruida: 'avtReceberInvocacaoDestruida',
-           avt_state_tick:    'avtReceberStateTick',
-           avt_player_hp:     'avtReceberPlayerHp',
-           avt_player_damage: 'avtReceberPlayerDamage',
-           avt_fase_host:     'avtReceberFaseHost',
-           avt_fase_host_release: 'avtReceberFaseHostRelease',
-           avt_ping:          'avtReceberPing',
-           avt_pong:          'avtReceberPong',
-         };
          if(_avtEv === 'avt_bau_aberto'){
            try{ if(typeof mostrarToast==='function') mostrarToast((_avtPl && _avtPl.jogadorNome ? _avtPl.jogadorNome : 'Alguém') + ' abriu um baú!','ok'); }catch(_){}
            return;
          }
-         const _hName = _map[_avtEv];
+         // Handler resolvido no catálogo único window.AVT_EVENTS (rtnet.ts) —
+         // consulta tardia porque rtnet.ts carrega depois deste módulo.
+         const _hName = window.AVT_EVENTS?.[_avtEv]?.handler;
          if(_hName){
            const _fn = (typeof window !== 'undefined' ? window[_hName] : undefined);
            if(typeof _fn === 'function'){
@@ -746,41 +708,12 @@ window.__avtFlushPendingBroadcasts = function(){
   try{
     const q = window.__avtPendingBroadcasts || [];
     if(!q.length) return;
-    const _map = {
-      avt_host_heartbeat: 'avtReceberHostHeartbeat',
-      avt_token_move: 'avtReceberMovimento',
-      avt_combate_inicio: 'avtReceberCombateInicio',
-      avt_batalha_update: 'avtReceberBatalhaUpdate',
-      avt_combate_fim: 'avtReceberFimBatalha',
-      avt_combate_join: 'avtReceberJoinBatalha',
-      avt_npc_morreu: 'avtReceberNpcMorreu',
-      avt_npc_perseguindo: 'avtReceberNpcPerseguindo',
-      avt_npc_respawn: 'avtReceberNpcRespawn',
-      avt_convite_combate: 'avtReceberConviteCombate',
-      avt_xp_ganho: 'avtReceberXpGanho',
-      avt_level_up: 'avtReceberLevelUp',
-      avt_jogador_morreu: 'avtReceberJogadorMorreu',
-      avt_jogador_ressurgiu: 'avtReceberJogadorRessurgiu',
-      avt_jogador_visivel: 'avtReceberJogadorVisivel',
-      avt_skill_selecionada: 'avtReceberSkillSelecionada',
-      avt_dado_rolado: 'avtReceberDadoRolado',
-      avt_dano_visual: 'avtReceberDanoVisual',
-      avt_dano_visual_batch: 'avtReceberDanoVisualBatch',
-      avt_hp_update: 'avtReceberHpUpdate',
-      avt_rsv_update: 'avtReceberRsvUpdate',
-      avt_member_linked: 'avtReceberMemberLinked',
-      avt_skill_anim: 'avtReceberSkillAnim',
-      avt_efeito_anim_start: 'avtReceberEfeitoAnimStart',
-      avt_efeito_anim_stop: 'avtReceberEfeitoAnimStop',
-      avt_attack_anim: 'avtReceberAttackAnim',
-      avt_level_config_update: 'avtReceberLevelConfigUpdate',
-      avt_colisao_config: 'avtReceberColisaoConfig',
-      avt_entidade_nova: 'avtReceberEntidadeNova',
-      avt_invocacao_destruida: 'avtReceberInvocacaoDestruida'
-    };
+    // Catálogo único (rtnet.ts). A cópia local antiga estava defasada e
+    // descartava silenciosamente ~20 tipos enfileirados antes do join
+    // (avt_state_tick, avt_player_hp, avt_obj_spawn, …).
     const kept = [];
     for(const item of q){
-      const fnName = _map[item.ev];
+      const fnName = window.AVT_EVENTS?.[item.ev]?.handler;
       const fn = fnName ? window[fnName] : null;
       if(typeof fn === 'function'){
         try{ (fn as any)(item.pl); }catch(err){ console.warn('[RT] flush handler', fnName, 'falhou:', err); }
