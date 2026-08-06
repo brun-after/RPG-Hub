@@ -4301,6 +4301,9 @@ function _avtCleanupListeners() {
   avtDpadStop();
   if (typeof avtPixiCleanupAll === 'function') avtPixiCleanupAll();
   _avtVfxHostDestroy();
+  // Tudo que o semáforo do fallback guardava acabou de ser destruído.
+  _avtPixiActiveApps = 0;
+  _avtPixiQueue.length = 0;
   // Texturas procedurais: PIXI.Texture.from(canvas) registra no TextureCache
   // global do PIXI, então sem destroy explícito elas (e o contexto GL antigo)
   // ficam retidas entre ciclos de entrar/sair. Aqui é o ponto seguro — depois
@@ -19823,19 +19826,12 @@ let _avtPixiActiveApps = 0;
 const _AVT_PIXI_MAX_CONCURRENT = 3;
 const _avtPixiQueue = [];
 
-function _avtPixiRunOrQueue(fn) {
-  if (_avtPixiActiveApps < _AVT_PIXI_MAX_CONCURRENT) {
-    fn();
-  } else {
-    _avtPixiQueue.push(fn);
-  }
-}
-
 function _avtPixiDrainQueue() {
   if (_avtPixiQueue.length && _avtPixiActiveApps < _AVT_PIXI_MAX_CONCURRENT) {
-    _avtPixiActiveApps++;
-    const fn = _avtPixiQueue.shift();
-    fn();
+    // Sem pré-incremento: a closure re-entra _avtPixiParticleAnim, que faz o
+    // próprio check/incremento do semáforo. O incremento extra daqui nunca era
+    // liberado — o contador inflava até nenhum efeito do fallback tocar mais.
+    _avtPixiQueue.shift()();
   }
 }
 
@@ -31395,7 +31391,6 @@ Object.defineProperty(globalThis, "_fxTintMatrix", { configurable: true, get: ()
 Object.defineProperty(globalThis, "_avtPixiActiveApps", { configurable: true, get: () => _avtPixiActiveApps, set: (__v) => { _avtPixiActiveApps = __v; } });
 Object.defineProperty(globalThis, "_AVT_PIXI_MAX_CONCURRENT", { configurable: true, get: () => _AVT_PIXI_MAX_CONCURRENT });
 Object.defineProperty(globalThis, "_avtPixiQueue", { configurable: true, get: () => _avtPixiQueue });
-Object.defineProperty(globalThis, "_avtPixiRunOrQueue", { configurable: true, get: () => _avtPixiRunOrQueue, set: (__v) => { _avtPixiRunOrQueue = __v; } });
 Object.defineProperty(globalThis, "_avtPixiDrainQueue", { configurable: true, get: () => _avtPixiDrainQueue, set: (__v) => { _avtPixiDrainQueue = __v; } });
 Object.defineProperty(globalThis, "_avtPixiParticleAnim", { configurable: true, get: () => _avtPixiParticleAnim, set: (__v) => { _avtPixiParticleAnim = __v; } });
 Object.defineProperty(globalThis, "_avtPlayPhases", { configurable: true, get: () => _avtPlayPhases, set: (__v) => { _avtPlayPhases = __v; } });
