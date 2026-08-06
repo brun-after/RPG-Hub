@@ -421,9 +421,9 @@ function _avtCopiarPromptImagemExterna() {
 function _avtExtHandleImageSelect(input) {
   const file = input?.files?.[0];
   if (!file) return;
-  AVT_STATE._criando._tilesetImgFile = file;
+  (AVT_STATE._criando as any)._tilesetImgFile = file;
   const url = URL.createObjectURL(file);
-  AVT_STATE._criando._tilesetImgUrl = url;
+  (AVT_STATE._criando as any)._tilesetImgUrl = url;
   const prev = document.getElementById('avt-ext-img-preview');
   if (prev) { prev.src = url; prev.style.display = 'block'; }
   const nome = document.getElementById('avt-ext-img-nome');
@@ -438,7 +438,7 @@ function _avtExtHandleJSONPaste(val) {
     const data = _avtValidarJSONCampanhaExterna(val);
     if (data.tileset_config?.mapa?.tiles)
       data.tileset_config.mapa.tiles = _avtNormalizarTilesParedes(data.tileset_config.mapa.tiles);
-    AVT_STATE._criando._extCampanhaJSON = data;
+    (AVT_STATE._criando as any)._extCampanhaJSON = data;
     if (data.nome) AVT_STATE._criando.nome = data.nome;
     const w = data.tileset_config.mapa.largura;
     const h = data.tileset_config.mapa.altura;
@@ -448,7 +448,7 @@ function _avtExtHandleJSONPaste(val) {
     if (status) status.innerHTML =
       `<span style="color:#27ae60">✓ ${nc} personagem(ns) + mapa ${w}×${h} — ${ns} sala(s)${nomeCampanha}</span>`;
   } catch(e) {
-    AVT_STATE._criando._extCampanhaJSON = null;
+    (AVT_STATE._criando as any)._extCampanhaJSON = null;
     if (status) status.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
   }
 }
@@ -540,9 +540,9 @@ function faseTilesetHandleImageSelect(input) {
   const file = input?.files?.[0];
   if (!file) return;
   _tilesetImgFile = file;
-  AVT_STATE._criando._tilesetImgFile = file;
+  (AVT_STATE._criando as any)._tilesetImgFile = file;
   const url = URL.createObjectURL(file);
-  AVT_STATE._criando._tilesetImgUrl = url;
+  (AVT_STATE._criando as any)._tilesetImgUrl = url;
   const prev = document.getElementById('avt-tileset-img-preview');
   if (prev) { prev.src = url; prev.style.display = 'block'; }
   const nome = document.getElementById('avt-tileset-img-nome');
@@ -566,8 +566,8 @@ function faseTilesetHandleImageSelect(input) {
 function faseTilesetTrocarImagem() {
   _tilesetImgFile = null;
   if (AVT_STATE._criando) {
-    AVT_STATE._criando._tilesetImgFile = null;
-    AVT_STATE._criando._tilesetImgUrl = null;
+    (AVT_STATE._criando as any)._tilesetImgFile = null;
+    (AVT_STATE._criando as any)._tilesetImgUrl = null;
   }
   const prev = document.getElementById('avt-tileset-img-preview');
   if (prev) { prev.src = ''; prev.style.display = 'none'; }
@@ -588,14 +588,14 @@ function faseTilesetHandleJSONPaste(val) {
   try {
     const cfg = faseTilesetValidarJSON(val);
     if (cfg.mapa?.tiles) cfg.mapa.tiles = _avtNormalizarTilesParedes(cfg.mapa.tiles);
-    AVT_STATE._criando._tilesetConfig = cfg;
+    (AVT_STATE._criando as any)._tilesetConfig = cfg;
     const w = cfg.mapa?.largura || '?', h = cfg.mapa?.altura || '?';
     const hasMapa = !!cfg.mapa?.tiles;
     if (status) status.innerHTML = hasMapa
       ? `<span style="color:#27ae60">✓ Tileset + mapa ${w}×${h} válidos — ${cfg.mapa.salas?.length||0} salas</span>`
       : `<span style="color:#e67e22">⚠ Tileset válido mas sem "mapa.tiles" — a IA não incluiu o layout</span>`;
   } catch(e) {
-    AVT_STATE._criando._tilesetConfig = null;
+    (AVT_STATE._criando as any)._tilesetConfig = null;
     if (status) status.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
   }
 }
@@ -641,8 +641,8 @@ async function _avtCarregarTileset(imgUrl, config) {
     textures[semanticKey] = tileImg;
   }
 
-  AVT_STATE._tilesetTextures = textures;
-  AVT_STATE._tilesetLoaded   = true;
+  (AVT_STATE as any)._tilesetTextures = textures;
+  (AVT_STATE as any)._tilesetLoaded   = true;
 }
 
 // ── Hash pseudo-aleatório por posição (sem padrão diagonal) ──────────────────
@@ -724,7 +724,7 @@ function _avtGetTileSemanticKey(x, y, dungeon) {
   if (here === AVT_T.PISO) {
     if (dungeon._chestPositions?.some(p => p.x === x && p.y === y)) return 'bau';
     const rng    = _tileRng(x, y);
-    const config = AVT_STATE._tilesetConfig;
+    const config = (AVT_STATE as any)._tilesetConfig;
     const varCh  = config?.regras?.piso_variacao_chance ?? 0.15;
     const objCh  = config?.regras?.objeto_chance        ?? 0.03;
     if (rng < objCh)                                   return 'objeto_1';
@@ -737,7 +737,7 @@ function _avtGetTileSemanticKey(x, y, dungeon) {
   const E = tileAt(x+1, y), W = tileAt(x-1, y);
   const NE = tileAt(x+1, y-1), NW = tileAt(x-1, y-1);
   const SE = tileAt(x+1, y+1), SW = tileAt(x-1, y+1);
-  const blocos = AVT_STATE._tilesetConfig?.blocos;
+  const blocos = (AVT_STATE as any)._tilesetConfig?.blocos;
   return _avtTipoParede(N, S, E, W, NE, NW, SE, SW, blocos);
 }
 
@@ -759,7 +759,7 @@ function _avtNormalizarTilesParedes(tiles) {
     'canto_int_NO','canto_int_NE','canto_int_SO','canto_int_SE',
   ]);
 
-  const blocos = AVT_STATE._tilesetConfig?.blocos;
+  const blocos = (AVT_STATE as any)._tilesetConfig?.blocos;
   const h = tiles.length, w = tiles[0]?.length || 0;
   const resultado = [];
 

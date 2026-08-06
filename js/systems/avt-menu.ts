@@ -803,7 +803,7 @@ function _avtMenuFallback(rpgId) {
 function sairAventura() {
   _avtCleanupListeners();
   try { if (typeof avtPixiWorldDestroy === 'function') avtPixiWorldDestroy(); } catch(_) {} // libera o contexto GL da camada de mundo
-  try { if (AVT_STATE._autoSaveTimer) { clearInterval(AVT_STATE._autoSaveTimer); AVT_STATE._autoSaveTimer = null; } } catch(_) {}
+  try { if (AVT_STATE._autoSaveTimer) { clearInterval(AVT_STATE._autoSaveTimer); (AVT_STATE as any)._autoSaveTimer = null; } } catch(_) {}
   try { if (typeof RTNet !== 'undefined' && RTNet.initialized) RTNet.shutdown(); } catch(_) {}
   try { if (typeof _avtNpcSyncShutdown === 'function') _avtNpcSyncShutdown(); } catch(_){}
   try { const mm = document.getElementById('avt-minimap'); if (mm) mm.remove(); } catch(_) {}
@@ -832,7 +832,7 @@ window.sairAventura = sairAventura;
 
 async function voltarAoMenuDeJogo() {
   _avtCleanupListeners();
-  try { if (AVT_STATE._autoSaveTimer) { clearInterval(AVT_STATE._autoSaveTimer); AVT_STATE._autoSaveTimer = null; } } catch(_) {}
+  try { if (AVT_STATE._autoSaveTimer) { clearInterval(AVT_STATE._autoSaveTimer); (AVT_STATE as any)._autoSaveTimer = null; } } catch(_) {}
   try { if (typeof RTNet !== 'undefined' && RTNet.initialized) RTNet.shutdown(); } catch(_) {}
   try { if (typeof _avtNpcSyncShutdown === 'function') _avtNpcSyncShutdown(); } catch(_){}
   try { const mm = document.getElementById('avt-minimap'); if (mm) mm.remove(); } catch(_) {}
@@ -1948,12 +1948,12 @@ function _avtMenuBindFaseMudouHandler() {
     try {
       if (!payload?.nome) return;
       if (typeof AVT_STATE !== 'undefined') {
-        AVT_STATE._fasePresenca = AVT_STATE._fasePresenca || {};
-        AVT_STATE._fasePresenca[payload.nome] = payload.faseId || 'principal';
+        AVT_STATE._fasePresenca = (AVT_STATE as any)._fasePresenca || {};
+        (AVT_STATE as any)._fasePresenca[payload.nome] = payload.faseId || 'principal';
         // Se EU sou o host desta fase, reafirmo na hora para o recém-chegado saber
         // rapidamente que já há host (evita prompt duplicado de "ser host").
         const fid = payload.faseId || 'principal';
-        if ((AVT_STATE._faseHosts || {})[fid] === (window._avtMeuUid && window._avtMeuUid())
+        if (((AVT_STATE as any)._faseHosts || {})[fid] === (window._avtMeuUid && window._avtMeuUid())
             && typeof window._avtReafirmarHostFase === 'function') {
           window._avtReafirmarHostFase(fid);
         }

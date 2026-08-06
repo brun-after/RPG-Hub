@@ -52,7 +52,7 @@ import './systems/npcs';
 import './hub/import';
 import './systems/arena';
 import './systems/inventory';
-import './systems/aventura.js';
+import './systems/aventura';
 import './aventura/renderer-pixi';
 import './systems/avt-walk-presets';
 import './systems/avt-menu';

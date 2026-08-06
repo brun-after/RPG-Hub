@@ -6,7 +6,7 @@
 // STATE
 // ─────────────────────────────────────────────────────────────────────────────
 
-var AVT_STATE = {
+var AVT_STATE: any = {
   rpgId: null,
   rpg: null,
   chars: [],
@@ -109,7 +109,7 @@ function _avtBroadcast(tipo, payload) {
   try {
     if (payload && typeof payload === 'object' && !Array.isArray(payload)
         && payload.faseId == null && _AVT_EVENTOS_DE_FASE.has(tipo)) {
-      payload = Object.assign({}, payload, { faseId: (AVT_STATE && AVT_STATE._faseAtualId) || 'principal' });
+      payload = Object.assign({}, payload, { faseId: (AVT_STATE && (AVT_STATE as any)._faseAtualId) || 'principal' });
     }
     if (typeof RTNet !== 'undefined' && RTNet.initialized) {
       RTNet.broadcast(tipo, payload);
@@ -146,7 +146,7 @@ function _avtBcastTokenMove(payload){
       payload = Object.assign({}, payload, { seq: next, ts: Date.now() });
     }
     // Escopo por fase: jogadores em fases diferentes não interferem uns nos outros.
-    if (payload.faseId == null) payload = Object.assign({}, payload, { faseId: AVT_STATE._faseAtualId || 'principal' });
+    if (payload.faseId == null) payload = Object.assign({}, payload, { faseId: (AVT_STATE as any)._faseAtualId || 'principal' });
     _avtBroadcast('avt_token_move', payload);
   }catch(e){
     try{ console.warn('[AVT] _avtBcastTokenMove falhou:', e); }catch(_){}
@@ -201,7 +201,7 @@ window._avtResetMovePredict = _avtResetMovePredict;
 // Usado por _avtVerificarInatividade para não confundir "jogando sem usar o chat"
 // com inatividade — causa do falso "pausado".
 function _avtMarcarAtividade(){
-  try { AVT_STATE._ultimaAtividade = Date.now(); } catch(_) {}
+  try { (AVT_STATE as any)._ultimaAtividade = Date.now(); } catch(_) {}
 }
 window._avtMarcarAtividade = _avtMarcarAtividade;
 
@@ -212,17 +212,17 @@ window._avtMarcarAtividade = _avtMarcarAtividade;
 // precisar instrumentar cada ponto de escrita de AVT_STATE.entidades.
 function _avtEntById(id) {
   if (id == null) return null;
-  const st = AVT_STATE;
+  const st: any = AVT_STATE;
   if (!st || !Array.isArray(st.entidades)) return null;
   const stamp = st._lastFrameTs || 0;
-  if (!st._entById || st._entByIdStamp !== stamp ||
-      st._entByIdArr !== st.entidades || st._entByIdLen !== st.entidades.length) {
-    const m = st._entById || (st._entById = new Map());
+  if (!st._entById || (st as any)._entByIdStamp !== stamp ||
+      st._entByIdArr !== st.entidades || (st as any)._entByIdLen !== st.entidades.length) {
+    const m = st._entById || ((st as any)._entById = new Map());
     m.clear();
     for (const e of st.entidades) { if (e && e.id != null) m.set(e.id, e); }
-    st._entByIdStamp = stamp;
-    st._entByIdArr = st.entidades;
-    st._entByIdLen = st.entidades.length;
+    (st as any)._entByIdStamp = stamp;
+    (st as any)._entByIdArr = st.entidades;
+    (st as any)._entByIdLen = st.entidades.length;
   }
   return st._entById.get(id) || null;
 }
@@ -329,7 +329,7 @@ function _avtCalcHpJog(ch) {
     var hpBase = (ovr != null && ovr !== '' && !isNaN(parseFloat(ovr))) ? parseFloat(ovr) : hpBaseGlobal;
     var atrs = (ch && ch.custom_attrs && ch.custom_attrs.atributos) || {};
     var norm = function(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); };
-    var k = Object.keys(atrs).find(function(k2){ return norm(k2) === norm(hpAttr); });
+    var k: any = Object.keys(atrs).find(function(k2){ return norm(k2) === norm(hpAttr); });
     var attrVal = k ? parseFloat(atrs[k] || 0) : 0;
     return Math.max(1, Math.round(hpBase + attrVal * hpAttrMult));
   } catch(e) { return 100; }
@@ -433,7 +433,7 @@ let _avtAtmGrad = null, _avtAtmGradR = -1;
 const _avtGlowCache = new Map();
 function _avtGlowSprite(cor, raio) {
   const r = Math.max(2, Math.round(raio / 2) * 2);
-  const key = cor + '|' + r;
+  const key: any = cor + '|' + r;
   let cv = _avtGlowCache.get(key);
   if (!cv) {
     const pad = Math.ceil(r * 0.9);
@@ -474,7 +474,7 @@ function _avtCachePrune(obj, max) {
 // stops: [[offset, cor], ...] — a chave inclui os stops serializados.
 const _avtRadGradCache = new Map();
 function _avtRadGrad(ctx, r0, r1, stops) {
-  const key = r0 + '|' + r1 + '|' + stops.map(s => s[0] + s[1]).join(',');
+  const key: any = r0 + '|' + r1 + '|' + stops.map(s => s[0] + s[1]).join(',');
   let g = _avtRadGradCache.get(key);
   if (!g) {
     g = ctx.createRadialGradient(0, 0, r0, 0, 0, r1);
@@ -680,11 +680,11 @@ window._avtSetOocCooldown = _avtSetOocCooldown;
 // Marca uma célula como contaminada pelo caster. Mescla células iguais do mesmo caster.
 // `_fromNet`: quando true, a célula veio de avt_rastro_marcar (não re-broadcasta) e usa
 // o `expiry_ms` recebido para manter a expiração idêntica entre clientes.
-function _avtRastroMarcarCelula(caster, x, y, formula, duracaoTurnos, cor, _fromNet, _expiryMs) {
+function _avtRastroMarcarCelula(caster, x, y, formula, duracaoTurnos, cor, _fromNet?, _expiryMs?) {
   if (!caster || formula == null) return;
   const tx = Math.round(x), ty = Math.round(y);
   if (typeof _avtTilePassavel === 'function' && !_avtTilePassavel(tx, ty, AVT_STATE.dungeon)) return;
-  if (!AVT_STATE._rastroCells) AVT_STATE._rastroCells = [];
+  if (!AVT_STATE._rastroCells) (AVT_STATE as any)._rastroCells = [];
   const dur = Math.max(1, duracaoTurnos || 3);
   const corCel = cor || '#5ee09a';
   const expiry = (_fromNet && typeof _expiryMs === 'number') ? _expiryMs : (Date.now() + dur * _avtGetEfeitoCooldownMs());
@@ -695,9 +695,9 @@ function _avtRastroMarcarCelula(caster, x, y, formula, duracaoTurnos, cor, _from
   if (!_fromNet) {
     try { _avtBroadcast('avt_rastro_marcar', { x: tx, y: ty, formula, expiry_ms: expiry, caster: casterNome, casterId, cor: corCel, duracaoTurnos: dur }); } catch(_) {}
   }
-  const ex = AVT_STATE._rastroCells.find(c => c.x === tx && c.y === ty && c.caster === casterNome);
+  const ex = (AVT_STATE as any)._rastroCells.find(c => c.x === tx && c.y === ty && c.caster === casterNome);
   if (ex) { ex.expiry_ms = Math.max(ex.expiry_ms, expiry); ex.formula = formula; ex.cor = corCel; return; }
-  AVT_STATE._rastroCells.push({ x: tx, y: ty, formula, expiry_ms: expiry, caster: casterNome, casterId, cor: corCel, hitSet: new Set() });
+  (AVT_STATE as any)._rastroCells.push({ x: tx, y: ty, formula, expiry_ms: expiry, caster: casterNome, casterId, cor: corCel, hitSet: new Set() });
 }
 
 // Predicado: entidade hostil ao jogador (inimigo ou invocação inimiga; nunca jogador/aliado/dominado/invocação do jogador)
@@ -714,7 +714,7 @@ function _avtRastroChecarEntrada(ent, x, y) {
   // Não-host renderiza as células, mas não aplica dano — evita HP não-autoritativo
   // revertido pelo tick.
   if (!_avtEhAutoridade()) return;
-  const cells = AVT_STATE._rastroCells;
+  const cells = (AVT_STATE as any)._rastroCells;
   if (!cells || !cells.length || !_avtRastroEhHostil(ent)) return;
   const tx = Math.round(x), ty = Math.round(y), now = Date.now();
   for (const cell of cells) {
@@ -852,9 +852,9 @@ window._avtAplicarEmpurrao = _avtAplicarEmpurrao;
 
 // Remove células de rastro expiradas (chamado periodicamente).
 function _avtRastroPrune() {
-  if (!AVT_STATE._rastroCells || !AVT_STATE._rastroCells.length) return;
+  if (!AVT_STATE._rastroCells || !(AVT_STATE as any)._rastroCells.length) return;
   const now = Date.now();
-  AVT_STATE._rastroCells = AVT_STATE._rastroCells.filter(c => now < c.expiry_ms);
+  AVT_STATE._rastroCells = (AVT_STATE as any)._rastroCells.filter(c => now < c.expiry_ms);
 }
 
 // Recebe contaminação de rastro de outro cliente e recria a célula localmente.
@@ -908,7 +908,7 @@ window.avtReceberInvUpdate = async function(p) {
 
 // Desenha as células contaminadas no grid (pulso translúcido).
 function _avtRenderRastroCells(ctx, camera, SZ, canvas) {
-  const cells = AVT_STATE._rastroCells;
+  const cells = (AVT_STATE as any)._rastroCells;
   if (!cells || !cells.length) return;
   const now = Date.now();
   const pulse = 0.10 + 0.06 * (0.5 + 0.5 * Math.sin(now / 350));
@@ -956,7 +956,7 @@ const AVT_LADINO_SVG_B_HEAD  = `<svg xmlns="http://www.w3.org/2000/svg" viewBox=
 const _avtClasseImgCache = {};
 function _avtGetClasseImg(classeAventura, variant, modo) {
   const sfx = (modo === 'head') ? '_HEAD' : '';
-  const key = `${classeAventura}_${variant}${sfx}`;
+  const key: any = `${classeAventura}_${variant}${sfx}`;
   if (_avtClasseImgCache[key]) return _avtClasseImgCache[key];
   const svgMap = {
     guerreiro_0: AVT_WARRIOR_SVG_A,  guerreiro_1: AVT_WARRIOR_SVG_B,
@@ -1289,7 +1289,7 @@ function _avtGetNpcClasses() {
   const rpg = AVT_STATE.rpg;
   if (rpg?.theme_json?.npc_classes) return rpg.theme_json.npc_classes;
   const defaults = {};
-  Object.entries(AVT_NPC_PRESETS).forEach(([k, v]) => {
+  Object.entries<any>(AVT_NPC_PRESETS).forEach(([k, v]) => {
     defaults[k] = { ...v, respawnDelay: v.isBoss ? 300 : 60, respawnTipo: 'timer', ataqueBasico: null };
   });
   if (!rpg) return defaults;
@@ -1315,9 +1315,9 @@ function _hexVary(hex, seed) {
 //                então embrulhamos no <svg> com o viewBox correto de cada modo.
 function _avtGetCreatureImg(tipo, cor, modo) {
   modo = (modo === 'iso') ? 'iso' : 'head';
-  if (!AVT_STATE._creatureImgCache) AVT_STATE._creatureImgCache = {};
-  const key = tipo + '_' + cor + '_' + modo;
-  if (AVT_STATE._creatureImgCache[key]) return AVT_STATE._creatureImgCache[key];
+  if (!AVT_STATE._creatureImgCache) (AVT_STATE as any)._creatureImgCache = {};
+  const key: any = tipo + '_' + cor + '_' + modo;
+  if (AVT_STATE._creatureImgCache[key]) return (AVT_STATE as any)._creatureImgCache[key];
   const model = AVT_CREATURE_MODELS[tipo];
   if (!model) return null;
   try {
@@ -1331,7 +1331,7 @@ function _avtGetCreatureImg(tipo, cor, modo) {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">${inner}</svg>`;
     const img = new Image();
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-    AVT_STATE._creatureImgCache[key] = img;
+    (AVT_STATE as any)._creatureImgCache[key] = img;
     return img;
   } catch(e) { return null; }
 }
@@ -1350,7 +1350,7 @@ window._avtBulkAparState = window._avtBulkAparState || {};
 // DB HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function _avtSb(path, opts) { return sb(path, opts); }
+async function _avtSb(path, opts?) { return sb(path, opts); }
 
 // ── LINHAGEM (personagem compartilhado entre aventuras) ───────────────────────
 // Um personagem importado de outra aventura carrega um `linhagem_id` em custom_attrs
@@ -1392,28 +1392,28 @@ async function _avtSyncLinhagem(char, opts = {}) {
       // aparência, cor, classe). Posições de mapa ficam em colunas top-level e não
       // são tocadas.
       const novoCa = { ...(irmao.custom_attrs || {}), ...ca, linhagem_id: linhagemId };
-      const body = { custom_attrs: novoCa };
-      if (char.hp_max != null) body.hp_max = char.hp_max;
-      if (char.hp_atual != null) body.hp_atual = char.hp_atual;
-      const xpV = char.xp ?? ca.xp; if (xpV != null) body.xp = xpV;
-      const nivelV = char.nivel ?? ca.nivel; if (nivelV != null) body.nivel = nivelV;
-      if (ca.pontos_attr != null) body.pontos_attr = ca.pontos_attr;
+      const body: any = { custom_attrs: novoCa };
+      if (char.hp_max != null) (body as any).hp_max = char.hp_max;
+      if (char.hp_atual != null) (body as any).hp_atual = char.hp_atual;
+      const xpV = char.xp ?? ca.xp; if (xpV != null) (body as any).xp = xpV;
+      const nivelV = char.nivel ?? ca.nivel; if (nivelV != null) (body as any).nivel = nivelV;
+      if (ca.pontos_attr != null) (body as any).pontos_attr = ca.pontos_attr;
       await _avtSb('characters?id=eq.' + encodeURIComponent(irmao.id), {
         method: 'PATCH', body: JSON.stringify(body)
       }).catch(() => {});
       // Refletir em memória se o irmão estiver na aventura ativa
       const local = (AVT_STATE.chars || []).find(c => String(c.id) === String(irmao.id));
       if (local) {
-        if (body.hp_max != null) local.hp_max = body.hp_max;
-        if (body.hp_atual != null) local.hp_atual = body.hp_atual;
-        if (body.xp != null) local.xp = body.xp;
-        if (body.nivel != null) local.nivel = body.nivel;
-        if (body.pontos_attr != null) local.pontos_attr = body.pontos_attr;
+        if (body.hp_max != null) local.hp_max = (body as any).hp_max;
+        if (body.hp_atual != null) local.hp_atual = (body as any).hp_atual;
+        if (body.xp != null) local.xp = (body as any).xp;
+        if (body.nivel != null) local.nivel = (body as any).nivel;
+        if ((body as any).pontos_attr != null) local.pontos_attr = body.pontos_attr;
         local.custom_attrs = novoCa;
       }
     }
-    if (opts.inventario) await _avtSyncLinhagemInventario(char, irmaos);
-    if (opts.skills) await _avtSyncLinhagemSkills(char, irmaos);
+    if ((opts as any).inventario) await _avtSyncLinhagemInventario(char, irmaos);
+    if ((opts as any).skills) await _avtSyncLinhagemSkills(char, irmaos);
   } catch(_) {}
 }
 
@@ -1487,7 +1487,7 @@ async function _avtBackfillLinhagem() {
       } catch(_) { continue; }
       chars.forEach(ch => {
         if (ch.custom_attrs?.tipo_personagem === 'npc' || !ch.nome) return;
-        const k = _norm(ch.nome);
+        const k: any = _norm(ch.nome);
         (porNome[k] = porNome[k] || []).push(ch);
       });
     }
@@ -1578,7 +1578,7 @@ function fecharCriarAventura() {
 }
 
 function _avtCriarRenderEtapa() {
-  const c = AVT_STATE._criando;
+  const c: any = AVT_STATE._criando;
   const body = document.getElementById('avt-criar-body');
   if (!body) return;
 
@@ -1607,7 +1607,7 @@ function _avtCriarRenderEtapa() {
 
 // ── ETAPA 0: Escolha de modo ─────────────────────────────────────────────────
 function _avtCriarRenderModoEscolha(body) {
-  const c = AVT_STATE._criando;
+  const c: any = AVT_STATE._criando;
   body.innerHTML = `
     <div class="etapa-titulo">Como deseja criar?</div>
     <div class="etapa-desc">Escolha o modo de criação do seu dungeon.</div>
@@ -1633,7 +1633,7 @@ function _avtCriarRenderModoEscolha(body) {
 
 // ── ETAPA 1: Identidade ───────────────────────────────────────────────────────
 function _avtCriarRenderIdentidade(body) {
-  const c = AVT_STATE._criando;
+  const c: any = AVT_STATE._criando;
   body.innerHTML = `
     <div class="etapa-titulo">Identidade do Dungeon</div>
     <div class="etapa-desc">Nome e cor do seu dungeon.</div>
@@ -1657,7 +1657,7 @@ function _avtCriarRenderIdentidade(body) {
 
 // ── ETAPA 1: Personagens ──────────────────────────────────────────────────────
 function _avtCriarRenderPersonagens(body) {
-  const c = AVT_STATE._criando;
+  const c: any = AVT_STATE._criando;
   const campanhas = (HUB_DATA?.rpgs || [])
     .filter(r => !r.is_arena && !r.is_aventura && !(r.theme_json?.is_aventura));
   const savedKey = localStorage.getItem('animgen_claude_key') || '';
@@ -1721,16 +1721,16 @@ function _avtCriarRenderPersonagens(body) {
 async function _avtCriarCarregarAventurasImport() {
   const cont = document.getElementById('avt-import-aventuras');
   if (!cont) return;
-  const c = AVT_STATE._criando;
-  if (!c._aventurasDisponiveis) {
+  const c: any = AVT_STATE._criando;
+  if (!(c as any)._aventurasDisponiveis) {
     cont.innerHTML = '<div style="font-size:0.72rem;color:#7a92aa;padding:4px 0">Carregando aventuras…</div>';
     try {
       const todas = await aventuraCarregarLista();
       const meuId = (typeof SESSION !== 'undefined' && SESSION?.user?.id) || null;
-      c._aventurasDisponiveis = (todas || []).filter(r =>
+      (c as any)._aventurasDisponiveis = (todas || []).filter(r =>
         (meuId && r.owner_id) ? r.owner_id === meuId : true)
-        .filter(r => r.rpg_id !== c._editingRpgId);
-    } catch(_) { c._aventurasDisponiveis = []; }
+        .filter(r => r.rpg_id !== (c as any)._editingRpgId);
+    } catch(_) { (c as any)._aventurasDisponiveis = []; }
   }
   _avtCriarRenderAventurasImport();
 }
@@ -1738,19 +1738,19 @@ async function _avtCriarCarregarAventurasImport() {
 function _avtCriarRenderAventurasImport() {
   const cont = document.getElementById('avt-import-aventuras');
   if (!cont) return;
-  const c = AVT_STATE._criando;
-  const advs = c._aventurasDisponiveis || [];
+  const c: any = AVT_STATE._criando;
+  const advs = (c as any)._aventurasDisponiveis || [];
   if (!advs.length) { cont.innerHTML = ''; return; }
-  c._advExpandidas = c._advExpandidas || new Set();
-  c._charsImportSel = c._charsImportSel || new Set();
-  const selCount = c._charsImportSel.size;
+  c._advExpandidas = (c as any)._advExpandidas || new Set();
+  c._charsImportSel = (c as any)._charsImportSel || new Set();
+  const selCount = (c as any)._charsImportSel.size;
   cont.innerHTML = `
     <div class="criar-field">
       <label>Importar personagens de outras aventuras (opcional)</label>
       <div style="border:1px solid var(--borda);border-radius:6px;background:#0a0f18;max-height:220px;overflow:auto">
         ${advs.map(a => {
-          const exp = c._advExpandidas.has(a.rpg_id);
-          const chars = c._advCharsCache?.[a.rpg_id];
+          const exp = (c as any)._advExpandidas.has(a.rpg_id);
+          const chars = (c as any)._advCharsCache?.[a.rpg_id];
           return `
           <div style="border-bottom:1px solid rgba(255,255,255,0.06)">
             <div onclick="_avtCriarToggleAventuraExpand('${a.rpg_id}')" style="display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer">
@@ -1761,8 +1761,8 @@ function _avtCriarRenderAventurasImport() {
               chars == null ? '<div style="font-size:0.7rem;color:#7a92aa">Carregando…</div>'
               : (!chars.length ? '<div style="font-size:0.7rem;color:#7a92aa">Nenhum personagem</div>'
               : chars.map(ch => {
-                  const key = a.rpg_id + '::' + ch.id;
-                  const checked = c._charsImportSel.has(key);
+                  const key: any = a.rpg_id + '::' + ch.id;
+                  const checked = (c as any)._charsImportSel.has(key);
                   return `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:0.76rem;color:#c8d8e8;cursor:pointer">
                     <input type="checkbox" ${checked?'checked':''} onchange="_avtCriarToggleCharSelecao('${a.rpg_id}','${ch.id}')">
                     ${ch.nome}
@@ -1778,36 +1778,36 @@ function _avtCriarRenderAventurasImport() {
 }
 
 async function _avtCriarToggleAventuraExpand(advId) {
-  const c = AVT_STATE._criando;
-  c._advExpandidas = c._advExpandidas || new Set();
-  if (c._advExpandidas.has(advId)) { c._advExpandidas.delete(advId); _avtCriarRenderAventurasImport(); return; }
-  c._advExpandidas.add(advId);
-  c._advCharsCache = c._advCharsCache || {};
-  if (c._advCharsCache[advId] == null) {
+  const c: any = AVT_STATE._criando;
+  c._advExpandidas = (c as any)._advExpandidas || new Set();
+  if (c._advExpandidas.has(advId)) { (c as any)._advExpandidas.delete(advId); _avtCriarRenderAventurasImport(); return; }
+  (c as any)._advExpandidas.add(advId);
+  c._advCharsCache = (c as any)._advCharsCache || {};
+  if ((c as any)._advCharsCache[advId] == null) {
     _avtCriarRenderAventurasImport(); // mostra "Carregando…"
     try {
       const chars = await _avtSb(`characters?rpg_id=eq.${encodeURIComponent(advId)}&select=id,nome,hp_max,hp_atual,xp,nivel,pontos_attr,custom_attrs&order=nome`);
-      c._advCharsCache[advId] = (chars || []).filter(ch => ch.custom_attrs?.tipo_personagem !== 'npc');
-    } catch(_) { c._advCharsCache[advId] = []; }
+      (c as any)._advCharsCache[advId] = (chars || []).filter(ch => ch.custom_attrs?.tipo_personagem !== 'npc');
+    } catch(_) { (c as any)._advCharsCache[advId] = []; }
   }
   _avtCriarRenderAventurasImport();
 }
 
 function _avtCriarToggleCharSelecao(advId, charId) {
-  const c = AVT_STATE._criando;
-  c._charsImportSel = c._charsImportSel || new Set();
-  const key = advId + '::' + charId;
-  if (c._charsImportSel.has(key)) c._charsImportSel.delete(key); else c._charsImportSel.add(key);
+  const c: any = AVT_STATE._criando;
+  c._charsImportSel = (c as any)._charsImportSel || new Set();
+  const key: any = advId + '::' + charId;
+  if (c._charsImportSel.has(key)) c._charsImportSel.delete(key); else (c as any)._charsImportSel.add(key);
   _avtCriarRenderAventurasImport();
 }
 
 async function _avtCriarConfirmarImportIndividual() {
-  const c = AVT_STATE._criando;
-  const sel = Array.from(c._charsImportSel || []);
+  const c: any = AVT_STATE._criando;
+  const sel = Array.from((c as any)._charsImportSel || []);
   if (!sel.length) return;
   const cores = ['#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e8604c'];
   // Buscar skills 1× por aventura envolvida
-  const advIds = [...new Set(sel.map(k => k.split('::')[0]))];
+  const advIds = [...new Set(sel.map(k => (k as any).split('::')[0]))];
   const skillsByAdv = {};
   await Promise.all(advIds.map(async advId => {
     try { skillsByAdv[advId] = await _avtSb(`skills?rpg_id=eq.${encodeURIComponent(advId)}&select=*`) || []; }
@@ -1815,9 +1815,9 @@ async function _avtCriarConfirmarImportIndividual() {
   }));
   let added = 0;
   sel.forEach(key => {
-    const sepIdx = key.indexOf('::');
-    const advId = key.slice(0, sepIdx), charId = key.slice(sepIdx + 2);
-    const ch = (c._advCharsCache?.[advId] || []).find(x => String(x.id) === String(charId));
+    const sepIdx = (key as any).indexOf('::');
+    const advId = (key as any).slice(0, sepIdx), charId = (key as any).slice(sepIdx + 2);
+    const ch = ((c as any)._advCharsCache?.[advId] || []).find(x => String(x.id) === String(charId));
     if (!ch) return;
     if (c.personagens.some(p => p._importSrcRpgId === advId && String(p._importSrcCharId) === String(ch.id))) return;
     const skillsDoChar = (skillsByAdv[advId] || []).filter(s => s.personagem === ch.nome || s.character_id === ch.id);
@@ -1844,7 +1844,7 @@ async function _avtCriarConfirmarImportIndividual() {
     const idx0 = c.personagens.findIndex(p => !p.nome && !p._importedCustomAttrs && !p._atributos);
     if (idx0 >= 0 && c.personagens.length > added) c.personagens.splice(idx0, 1);
   }
-  c._charsImportSel = new Set();
+  (c as any)._charsImportSel = new Set();
   mostrarToast(`${added} personagem(ns) importado(s)`, 'ok');
   const lista = document.getElementById('avt-chars-lista');
   if (lista) lista.innerHTML = _avtCriarRenderCharsLista();
@@ -2112,7 +2112,7 @@ window._avtCfgFileUpload = _avtCfgFileUpload;
 
 // ── ETAPA 3: Mapa ─────────────────────────────────────────────────────────────
 function _avtCriarRenderMapa(body) {
-  const c = AVT_STATE._criando;
+  const c: any = AVT_STATE._criando;
 
   // In completa mode: go directly to ia_externa subpanel
   if (c._modoEscolha === 'completa') {
@@ -2124,7 +2124,7 @@ function _avtCriarRenderMapa(body) {
   }
 
   // Detect if source campaign has fases
-  const temFases = !!(c._fasesDisponiveis?.length);
+  const temFases = !!((c as any)._fasesDisponiveis?.length);
 
   body.innerHTML = `
     <div class="etapa-titulo">Mapa do Dungeon</div>
@@ -2190,14 +2190,14 @@ function avtCriarSelecionarMapa(opcao) {
   AVT_STATE._criando.mapaOpcao = opcao;
   AVT_STATE._criando.mapa = null;
   // Re-render just the option cards + sub panel
-  const body = document.getElementById('avt-criar-body');
+  const body: any = document.getElementById('avt-criar-body');
   if (body) _avtCriarRenderMapa(body);
 }
 
 function _avtCriarRenderMapaSub(opcao) {
   const sub = document.getElementById('avt-mapa-sub');
   if (!sub) return;
-  const c = AVT_STATE._criando;
+  const c: any = AVT_STATE._criando;
 
   if (opcao === 'procedural') {
     sub.innerHTML = `
@@ -2246,10 +2246,10 @@ function _avtCriarRenderMapaSub(opcao) {
           </div>
         </div>
       </div>`;
-    AVT_STATE._criando._procSalas = 8;
-    AVT_STATE._criando._procTilesetCols = 4;
-    AVT_STATE._criando._procTilesetRows = 4;
-    AVT_STATE._criando._procTilesetImgFile = null;
+    (AVT_STATE._criando as any)._procSalas = 8;
+    (AVT_STATE._criando as any)._procTilesetCols = 4;
+    (AVT_STATE._criando as any)._procTilesetRows = 4;
+    (AVT_STATE._criando as any)._procTilesetImgFile = null;
     AVT_STATE._criando.mapa = 'procedural';
 
   } else if (opcao === 'editor') {
@@ -2344,7 +2344,7 @@ function _avtCriarRenderMapaSub(opcao) {
       <div id="avt-claude-status" style="margin-top:8px;font-size:0.75rem;color:#7a92aa"></div>`;
 
   } else if (opcao === 'fase') {
-    const fases = c._fasesDisponiveis || [];
+    const fases = (c as any)._fasesDisponiveis || [];
     sub.innerHTML = `
       <div class="criar-field">
         <label>Fase existente</label>
@@ -2517,9 +2517,9 @@ function _avtCriarRenderMapaSub(opcao) {
 function _avtProcHandleTilesetImg(input) {
   const file = input?.files?.[0];
   if (!file) return;
-  AVT_STATE._criando._procTilesetImgFile = file;
+  (AVT_STATE._criando as any)._procTilesetImgFile = file;
   const url = URL.createObjectURL(file);
-  AVT_STATE._criando._procTilesetImgUrl = url;
+  (AVT_STATE._criando as any)._procTilesetImgUrl = url;
   const prev = document.getElementById('avt-proc-ts-preview');
   if (prev) { prev.src = url; prev.style.display = 'block'; }
   const nome = document.getElementById('avt-proc-ts-nome');
@@ -2555,8 +2555,8 @@ function avtCriarRemChar(i) {
 
 async function avtCriarImportCampanha(campId) {
   AVT_STATE._criando.importCampanhaId = campId || null;
-  AVT_STATE._criando._fasesDisponiveis = [];
-  AVT_STATE._criando._campSkillsToImport = [];
+  (AVT_STATE._criando as any)._fasesDisponiveis = [];
+  (AVT_STATE._criando as any)._campSkillsToImport = [];
   if (!campId) {
     AVT_STATE._criando.personagens = [{ nome: '', cor: '#4fa3d1' }];
     const lista = document.getElementById('avt-chars-lista');
@@ -2583,17 +2583,17 @@ async function avtCriarImportCampanha(campId) {
       mostrarToast(`${chars.length} personagens importados`, 'ok');
     }
     if (fases?.length) {
-      AVT_STATE._criando._fasesDisponiveis = fases;
+      (AVT_STATE._criando as any)._fasesDisponiveis = fases;
     }
     if (campSkills?.length) {
-      AVT_STATE._criando._campSkillsToImport = campSkills;
+      (AVT_STATE._criando as any)._campSkillsToImport = campSkills;
       mostrarToast(`${campSkills.length} skills importadas`, 'ok');
     }
   } catch(e) { mostrarToast('Erro ao importar personagens', 'erro'); }
 }
 
 function _avtCriarVoltar() {
-  const c = AVT_STATE._criando;
+  const c: any = AVT_STATE._criando;
   if (c.etapa > 0) {
     // In completa mode, going back from map step returns to mode selection
     if (c._modoEscolha === 'completa' && c.etapa === 3) {
@@ -2606,7 +2606,7 @@ function _avtCriarVoltar() {
 }
 
 function _avtCriarAvancar() {
-  const c = AVT_STATE._criando;
+  const c: any = AVT_STATE._criando;
   if (c.etapa === 0) {
     if (!c._modoEscolha) { mostrarToast('Escolha um modo de criação', 'aviso'); return; }
     if (c._modoEscolha === 'completa') {
@@ -2635,7 +2635,7 @@ function _avtCriarAvancar() {
 // TILE EDITOR
 // ─────────────────────────────────────────────────────────────────────────────
 
-var _avtEd = { tiles: null, w: 60, h: 40, acao: 'piso', painting: false, salaStart: null };
+var _avtEd: any = { tiles: null, w: 60, h: 40, acao: 'piso', painting: false, salaStart: null };
 
 function _avtEditorTamanho(val) {
   const [w, h] = val.split('x').map(Number);
@@ -2677,13 +2677,13 @@ function _avtEditorInit() {
     AVT_STATE._criando.mapa = _avtEditorExport();
   };
 
-  canvas.onmousedown = canvas.ontouchstart = (e) => {
+  canvas.onmousedown = canvas.ontouchstart = (e: any) => {
     e.preventDefault(); _avtEd.painting = true;
     if (_avtEd.acao === 'sala') { _avtEd.salaStart = getTile(e); return; }
     paint(e);
   };
-  canvas.onmousemove = canvas.ontouchmove = (e) => { e.preventDefault(); paint(e); };
-  canvas.onmouseup = canvas.ontouchend = (e) => {
+  canvas.onmousemove = canvas.ontouchmove = (e: any) => { e.preventDefault(); paint(e); };
+  canvas.onmouseup = canvas.ontouchend = (e: any) => {
     if (_avtEd.acao === 'sala' && _avtEd.salaStart) {
       const {tx, ty} = getTile(e);
       const x0=Math.min(_avtEd.salaStart.tx,tx), y0=Math.min(_avtEd.salaStart.ty,ty);
@@ -2856,7 +2856,7 @@ function _avtCopiarPromptJson() {
   const txt = _avtGerarPromptJson(params);
   navigator.clipboard.writeText(txt).catch(() => {});
   const ok = document.getElementById('avt-json-ok');
-  if (ok) { ok.style.opacity=1; setTimeout(()=>ok.style.opacity=0,2000); }
+  if (ok) { (ok.style as any).opacity=1; setTimeout(()=>(ok.style as any).opacity=0,2000); }
 }
 
 function _avtJsonParsePreview(txt) {
@@ -3002,7 +3002,7 @@ async function _avtGerarPersonagensComIA() {
              || localStorage.getItem('animgen_claude_key') || '';
   if (!key) { mostrarToast('Insira a Claude API Key', 'aviso'); return; }
 
-  const c = AVT_STATE._criando;
+  const c: any = AVT_STATE._criando;
   const chars = c.personagens.filter(p => p.nome.trim() || p.descricao?.trim());
   if (!chars.length) { mostrarToast('Adicione ao menos um personagem', 'aviso'); return; }
 
@@ -3053,7 +3053,7 @@ async function _avtGerarPersonagensComIA() {
     });
 
     // Guardar habilidades para importar no submit
-    c._habilidadesGeradasIA = gerados;
+    (c as any)._habilidadesGeradasIA = gerados;
     localStorage.setItem('animgen_claude_key', key);
 
     const resumo = gerados.map(g => { const _hp = (typeof _avtCalcHpJog === 'function') ? _avtCalcHpJog({custom_attrs:g.custom_attrs||{atributos:g.atributos||{}}}) : 100; return `${g.nome} (${_hp}HP)`; }).join(', ');
@@ -3077,7 +3077,7 @@ async function _avtGerarPersonagensComIA() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _avtCopiarPromptPersonagensExterno() {
-  const c = AVT_STATE._criando;
+  const c: any = AVT_STATE._criando;
   const chars = c.personagens.filter(p => p.nome.trim() || p.descricao?.trim());
   const prompt = _avtMontarPromptPersonagens(chars.length ? chars : [{ nome: 'Personagem', descricao: 'guerreiro genérico' }], null);
   navigator.clipboard.writeText(prompt)
@@ -3086,7 +3086,7 @@ function _avtCopiarPromptPersonagensExterno() {
 }
 
 function _avtAplicarPersonagensIA(gerados) {
-  const c = AVT_STATE._criando;
+  const c: any = AVT_STATE._criando;
   gerados.forEach((g, i) => {
     if (i < c.personagens.length) {
       const p = c.personagens[i];
@@ -3097,7 +3097,7 @@ function _avtAplicarPersonagensIA(gerados) {
       p._habilidadesIA = g.habilidades || [];
     }
   });
-  c._habilidadesGeradasIA = gerados;
+  (c as any)._habilidadesGeradasIA = gerados;
   const lista = document.getElementById('avt-chars-lista');
   if (lista) lista.innerHTML = _avtCriarRenderCharsLista();
 }
@@ -3124,10 +3124,10 @@ function _avtAplicarPersonagensExterno(val) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function aventuraCriarSubmit() {
-  const c = AVT_STATE._criando;
+  const c: any = AVT_STATE._criando;
   const isModoCompleta = c._modoEscolha === 'completa';
   // In completa mode, name can come from the imported JSON
-  if (isModoCompleta && !c.nome && c._extCampanhaJSON?.nome) {
+  if (isModoCompleta && !c.nome && (c as any)._extCampanhaJSON?.nome) {
     c.nome = c._extCampanhaJSON.nome;
   }
   // No modo ia_externa os personagens vêm do JSON, mas precisamos de ao menos um placeholder
@@ -3498,7 +3498,7 @@ function _avtMestreAddBau() {
 }
 
 function _avtEntrarModoBauPlacement(bauId) {
-  AVT_STATE._modoBauPlacement = { bauId };
+  (AVT_STATE as any)._modoBauPlacement = { bauId };
   if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = 'crosshair';
   mostrarToast('📍 Clique no mapa para posicionar o baú', 'ok');
 }
@@ -3608,7 +3608,7 @@ function _avtBauAddItem(bauId) {
     sel.onchange = () => {
       const itemId = sel.value;
       if (!itemId) return;
-      const item = (AVT_STATE.itemCatalog||[]).find(i => String(i.id) === String(itemId));
+      const item: any = (AVT_STATE.itemCatalog||[]).find(i => String(i.id) === String(itemId));
       if (!item) return;
       const bau = _avtGetBauById(bauId);
       if (!bau) return;
@@ -3678,7 +3678,7 @@ async function _avtMestreDarItemChar(charNome, itemId, qty) {
   if (!itemId) return mostrarToast('Selecione um item do catálogo', 'aviso');
   const char = AVT_STATE.chars.find(c => c.nome === charNome);
   if (!char?.id) return mostrarToast('Personagem não encontrado', 'erro');
-  const item = (AVT_STATE.itemCatalog||[]).find(i => String(i.id) === String(itemId));
+  const item: any = (AVT_STATE.itemCatalog||[]).find(i => String(i.id) === String(itemId));
   if (!item) return mostrarToast('Item não encontrado', 'erro');
   const q = Math.max(1, parseInt(qty)||1);
   try {
@@ -3761,7 +3761,7 @@ async function _avtMestreDesequiparSlotChar(charNome, slot) {
   const char = AVT_STATE.chars.find(c => c.nome === charNome);
   if (!char?.id) return;
   const charInv = (typeof AVT_INV !== 'undefined' && AVT_INV.inventarios[char.id]) || [];
-  const item = charInv.find(i => i.equipado && i.slot_equipado === slot);
+  const item: any = charInv.find(i => i.equipado && i.slot_equipado === slot);
   if (!item) return;
   await avtInvEquipar(charNome, item.id);
   _avtMestrePainelRender();
@@ -3856,7 +3856,7 @@ window._avtNormalizarObjetosDungeon = _avtNormalizarObjetosDungeon;
 // Evita que um save disparado dentro de uma fase extra sobrescreva a fase inicial.
 function _avtGravarDungeonNoSlot(t) {
   if (!t || !AVT_STATE.dungeon) return;
-  const faseId = AVT_STATE._faseAtualId || 'principal';
+  const faseId = (AVT_STATE as any)._faseAtualId || 'principal';
   if (faseId === 'principal') {
     t.dungeon_data = AVT_STATE.dungeon;
   } else {
@@ -4026,7 +4026,7 @@ async function _avtCarregarDados(rpgId) {
     return s;
   });
   AVT_STATE.itemCatalog = itemCatalog || [];
-  AVT_STATE.attrDefs   = attrDefs  || [];
+  (AVT_STATE as any).attrDefs   = attrDefs  || [];
 
   // Semear config padrão de atributos de escala de skills (só Inteligência) + migração one-time.
   if (AVT_STATE.rpg.theme_json) {
@@ -4051,22 +4051,22 @@ async function _avtCarregarDados(rpgId) {
   }
   _avtBausPreDungeonParaMapa();
   _avtNormalizarObjetosDungeon(AVT_STATE.dungeon);
-  AVT_STATE._dynSpawnNextAt = 0;
+  (AVT_STATE as any)._dynSpawnNextAt = 0;
   // Início é sempre a fase inicial (fase 1). Entrar/Jogar nunca herda a fase de
   // outro jogador — o isolamento por fase cuida do resto.
-  AVT_STATE._faseAtualId = 'principal';
+  (AVT_STATE as any)._faseAtualId = 'principal';
   if (AVT_STATE.dungeon) {
     AVT_STATE.dungeon._faseId   = 'principal';
     AVT_STATE.dungeon._npcLevel = t.dungeon_data?.npc_level ?? AVT_STATE.dungeon._npcLevel ?? 1;
   }
-  AVT_STATE._tilesetConfig   = AVT_STATE.dungeon.tileset_config  || null;
-  AVT_STATE._tilesetImgUrl   = AVT_STATE.dungeon.tileset_img_url || null;
-  AVT_STATE._tilesetLoaded   = false;
-  AVT_STATE._tilesetTextures = {};
+  (AVT_STATE as any)._tilesetConfig   = AVT_STATE.dungeon.tileset_config  || null;
+  (AVT_STATE as any)._tilesetImgUrl   = AVT_STATE.dungeon.tileset_img_url || null;
+  (AVT_STATE as any)._tilesetLoaded   = false;
+  (AVT_STATE as any)._tilesetTextures = {};
   _avtPopularEntidades();
   _avtAplicarEstadoInimigosPersistido();
-  AVT_STATE._charHpBuffer = {};
-  AVT_STATE._charHpFlushTimer = null;
+  (AVT_STATE as any)._charHpBuffer = {};
+  (AVT_STATE as any)._charHpFlushTimer = null;
   _avtCarregarTodasAparencias();
   _avtCarregarBatalhasAtivas().catch(()=>{});
   if (typeof avtInvInit === 'function') avtInvInit(rpgId).catch(() => {});
@@ -4083,8 +4083,8 @@ function _avtIniciarCanvas() {
     _avtRenderHpBar();
     if (typeof _avtEnsurePixiParticles === 'function') _avtEnsurePixiParticles().catch(() => {});
     ocultarLoading();
-    if (AVT_STATE._tilesetConfig && AVT_STATE._tilesetImgUrl) {
-      _avtCarregarTileset(AVT_STATE._tilesetImgUrl, AVT_STATE._tilesetConfig)
+    if (AVT_STATE._tilesetConfig && (AVT_STATE as any)._tilesetImgUrl) {
+      _avtCarregarTileset(AVT_STATE._tilesetImgUrl, (AVT_STATE as any)._tilesetConfig)
         .catch(e => console.warn('[tileset] load failed:', e));
     }
     // Host por fase também para a fase inicial: solo assume; multiplayer resolve.
@@ -4102,7 +4102,7 @@ function _avtIniciarRTNet(rpgId, onHostElected) {
     RTNet.init({ rpgId, userId: _uid, isAventura: true }).then(() => {
       RTNet.registrarSnapshotProvider(() => ({
         // Fase do estado: o receptor só aplica se estiver na mesma fase.
-        faseId: (AVT_STATE._faseAtualId || 'principal'),
+        faseId: ((AVT_STATE as any)._faseAtualId || 'principal'),
         entidades: (AVT_STATE.entidades || []).map(
           ({ _waypoints, _lerpTo, _patrolDir, _patrolNext, _recent, _npcLastTick,
              _onWaypointReached, _wpCallbackOwner,
@@ -4116,14 +4116,14 @@ function _avtIniciarRTNet(rpgId, onHostElected) {
         _oocStatusEffects:  AVT_STATE._oocStatusEffects,
         batalhaAutoSuspensa:AVT_STATE.batalhaAutoSuspensa,
         // Rastros contaminados: hitSet (Set) → array para serializar.
-        _rastroCells: (AVT_STATE._rastroCells || []).map(c => ({ ...c, hitSet: Array.from(c.hitSet || []) })),
+        _rastroCells: ((AVT_STATE as any)._rastroCells || []).map(c => ({ ...c, hitSet: Array.from(c.hitSet || []) })),
       }));
-      if (AVT_STATE._charHpFlushTimer) clearInterval(AVT_STATE._charHpFlushTimer);
-      AVT_STATE._charHpFlushTimer = setInterval(() => {
+      if (AVT_STATE._charHpFlushTimer) clearInterval((AVT_STATE as any)._charHpFlushTimer);
+      (AVT_STATE as any)._charHpFlushTimer = setInterval(() => {
         try { if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('heartbeat-90s').catch(()=>{}); } catch(_) {}
       }, 90_000);
-      if (AVT_STATE._autoSaveTimer) clearInterval(AVT_STATE._autoSaveTimer);
-      AVT_STATE._autoSaveTimer = setInterval(() => {
+      if (AVT_STATE._autoSaveTimer) clearInterval((AVT_STATE as any)._autoSaveTimer);
+      (AVT_STATE as any)._autoSaveTimer = setInterval(() => {
         try { if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('autosave-10min').catch(()=>{}); } catch(_) {}
         try { if (RTNet.isHost() && typeof _avtPersistirEstadoInimigos === 'function') _avtPersistirEstadoInimigos(); } catch(_) {}
       }, 600_000);
@@ -4132,8 +4132,8 @@ function _avtIniciarRTNet(rpgId, onHostElected) {
           if (!RTNet.isHost()) return;
           const ent = (AVT_STATE.entidades || []).find(e => e.tipo === 'jogador' && (e.userId === uid || e.peerId === uid));
           if (ent && ent.dbId && typeof ent.hp === 'number') {
-            AVT_STATE._charHpBuffer = AVT_STATE._charHpBuffer || {};
-            AVT_STATE._charHpBuffer[ent.dbId] = { hp: ent.hp };
+            AVT_STATE._charHpBuffer = (AVT_STATE as any)._charHpBuffer || {};
+            (AVT_STATE as any)._charHpBuffer[ent.dbId] = { hp: ent.hp };
             if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('peer-leave').catch(()=>{});
           }
           // Esconde o personagem do peer que saiu, se ninguém online ainda o controla.
@@ -4214,8 +4214,8 @@ async function _avtFlushPersistencia(origem) {
   const promises = [];
 
   // 1. Flush HP buffered dos personagens
-  const hpBuf = AVT_STATE._charHpBuffer || {};
-  for (const [charId, { hp }] of Object.entries(hpBuf)) {
+  const hpBuf = (AVT_STATE as any)._charHpBuffer || {};
+  for (const [charId, { hp }] of Object.entries<any>(hpBuf)) {
     promises.push(
       _avtSb('characters?id=eq.' + encodeURIComponent(charId), {
         method: 'PATCH', body: JSON.stringify({ hp_atual: hp })
@@ -4225,7 +4225,7 @@ async function _avtFlushPersistencia(origem) {
       }).catch(e => { try { console.warn('[AVT][flush] HP buffered do char ' + charId + ' falhou:', e); } catch(_) {} })
     );
   }
-  AVT_STATE._charHpBuffer = {};
+  (AVT_STATE as any)._charHpBuffer = {};
 
   // 2. Flush posição + HP dos jogadores (avt_x/avt_y + hp_atual consolidados)
   for (const ent of (AVT_STATE.entidades || [])) {
@@ -4241,7 +4241,7 @@ async function _avtFlushPersistencia(origem) {
   }
 
   // 3. Flush posição de NPCs vivos (somente se npcSyncEnabled)
-  if (AVT_STATE.npcSyncEnabled) {
+  if ((AVT_STATE as any).npcSyncEnabled) {
     for (const ent of (AVT_STATE.entidades || [])) {
       if (ent.tipo !== 'inimigo' || ent.dbId || ent.hp <= 0) continue;
       promises.push(
@@ -4268,7 +4268,7 @@ function sairAventura__sombreado_32() {
     }
   } catch(_) {}
   _avtCleanupListeners();
-  try { if (AVT_STATE._autoSaveTimer) { clearInterval(AVT_STATE._autoSaveTimer); AVT_STATE._autoSaveTimer = null; } } catch(_) {}
+  try { if (AVT_STATE._autoSaveTimer) { clearInterval(AVT_STATE._autoSaveTimer); (AVT_STATE as any)._autoSaveTimer = null; } } catch(_) {}
   try { if (typeof RTNet !== 'undefined' && RTNet.initialized) RTNet.shutdown(); } catch(_) {}
   try { if (typeof _avtNpcSyncShutdown === 'function') _avtNpcSyncShutdown(); } catch(_){}
   const screen = document.getElementById('aventura-screen');
@@ -4292,7 +4292,7 @@ function sairAventura__sombreado_32() {
 function _avtCleanupListeners() {
   if (AVT_STATE.animFrame) { cancelAnimationFrame(AVT_STATE.animFrame); AVT_STATE.animFrame = null; }
   window.removeEventListener('resize', _avtCanvasResizeDebounced);
-  if (AVT_STATE._resizeDebounce) { clearTimeout(AVT_STATE._resizeDebounce); AVT_STATE._resizeDebounce = null; }
+  if (AVT_STATE._resizeDebounce) { clearTimeout(AVT_STATE._resizeDebounce); (AVT_STATE as any)._resizeDebounce = null; }
   window.removeEventListener('keydown', _avtCanvasKey);
   (AVT_STATE._pendingTimeouts || []).forEach(id => clearTimeout(id));
   AVT_STATE._pendingTimeouts = [];
@@ -4323,7 +4323,7 @@ function _avtSetTimeout(fn, ms) {
 // DUNGEON GENERATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _avtGerarDungeon(w, h, maxRooms, styleProfile) {
+function _avtGerarDungeon(w, h, maxRooms?, styleProfile?) {
   maxRooms = maxRooms || 8;
   const tiles = Array.from({length: h}, () => Array(w).fill(AVT_T.PAREDE));
   const rooms = [];
@@ -4424,10 +4424,10 @@ function _avtBlocoFuncao(key) {
 
 // Dado (coluna,linha) de um bloco no spritesheet, devolve a chave semântica canônica.
 function _avtBlocoChavePorCelula(tc, tr) {
-  const blocos = AVT_STATE._tilesetConfig?.blocos
+  const blocos = (AVT_STATE as any)._tilesetConfig?.blocos
     || AVT_STATE.dungeon?.tileset_config?.blocos || {};
   const alvo = `bloco_${tc}_${tr}`;
-  for (const [k, v] of Object.entries(blocos)) if (v === alvo) return k;
+  for (const [k, v] of Object.entries<any>(blocos)) if (v === alvo) return k;
   return null;
 }
 
@@ -4485,7 +4485,7 @@ function _avtDerivarStats(dungeon) {
   const portas = dungeon._portasInternas || [];
   const ws = rooms.map(r => r.w).filter(v => v > 0);
   const hs = rooms.map(r => r.h).filter(v => v > 0);
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const clamp = (v, a?, b?) => Math.max(a, Math.min(b, v));
   return {
     floor_density: total ? +(piso / total).toFixed(3) : 0,
     room_count: rooms.length,
@@ -4530,7 +4530,7 @@ function _avtAplicarRegrasEstilo(dungeon, profile) {
       const r = rules[_avtAssinaturaVizinhanca(orig, x, y)];
       if (!r || !r.keys) continue;
       let best = null, bestN = -1;
-      for (const [k, n] of Object.entries(r.keys)) if (n > bestN) { best = k; bestN = n; }
+      for (const [k, n] of Object.entries<any>(r.keys)) if (n > bestN) { best = k; bestN = n; }
       if (best == null || bestN < LIMIAR) continue;
       if (best === 'PISO') tiles[y][x] = AVT_T.PISO;
       else if (best === 'PAREDE') tiles[y][x] = AVT_T.PAREDE;
@@ -4640,7 +4640,7 @@ function _avtFaseMageSkill(d) {
   if (!d) return null;
   if (d._faseMageSkill) return d._faseMageSkill;
   const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
-  const seed = d._faseSeed ?? _avtSeedFromStr(d._faseId || AVT_STATE._faseAtualId || 'principal');
+  const seed = d._faseSeed ?? _avtSeedFromStr(d._faseId || (AVT_STATE as any)._faseAtualId || 'principal');
   d._faseMageSkill = {
     id: 'auto_mage_' + seed,
     habilidade: 'Projétil Arcano',
@@ -4716,7 +4716,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
       // Escalonamento por fase determinístico: nivela a partir do conjunto BASE
       // (atributos_base) usando o npc_level da fase atual, com seed estável por fase+índice.
       // Assim ajustar npc_level re-escala de fato, sem cravar stats no JSON persistido.
-      const _seedIni = _avtSeedFromStr((d._faseId || AVT_STATE._faseAtualId || 'principal') + '#' + i);
+      const _seedIni = _avtSeedFromStr((d._faseId || (AVT_STATE as any)._faseAtualId || 'principal') + '#' + i);
       let _nivelIni, _atrsIni;
       if (ini.atributos_base) {
         _nivelIni = _npcNivel;
@@ -4767,7 +4767,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
       if (isBossRoom) {
         const bPreset = npcClasses.boss || AVT_NPC_PRESETS.boss;
         const _baseB = { 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 };
-        const _seedB = _avtSeedFromStr((d._faseId || AVT_STATE._faseAtualId || 'principal') + '#boss');
+        const _seedB = _avtSeedFromStr((d._faseId || (AVT_STATE as any)._faseAtualId || 'principal') + '#boss');
         const _atrsB = _npcNivel <= 1 ? { ..._baseB } : _avtNivelarNpc(_baseB, _npcNivel, true, _seedB);
         const _hpMaxB = _calcHpNpc(_atrsB);
         const ent = {
@@ -4794,7 +4794,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
           const _lcAlc2 = AVT_STATE.rpg?.theme_json?.level_config || {};
           const alcancePadrao = tipoClasse === 'mago' ? (_lcAlc2.alcance_basico_mago ?? 4) : (_lcAlc2.alcance_basico_guerreiro ?? 2);
           const _baseE = { ..._attrsPorClasse[tipoClasse] };
-          const _seedE = _avtSeedFromStr((d._faseId || AVT_STATE._faseAtualId || 'principal') + '#' + uid);
+          const _seedE = _avtSeedFromStr((d._faseId || (AVT_STATE as any)._faseAtualId || 'principal') + '#' + uid);
           const _atrsE = _npcNivel <= 1 ? { ..._baseE } : _avtNivelarNpc(_baseE, _npcNivel, false, _seedE);
           const _hpMaxE = _calcHpNpc(_atrsE);
           const ent = {
@@ -4977,7 +4977,7 @@ function _avtCanvasInit() {
   window.addEventListener('keydown', _avtCanvasKey);
 
   // ─── PAN do mapa (cursor mãozinha em tiles fora de salas) ───
-  AVT_STATE._pan = null;
+  (AVT_STATE as any)._pan = null;
   const _tileFromEvent = (ev) => {
     const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
     let lx, ly;
@@ -5011,16 +5011,16 @@ function _avtCanvasInit() {
     // Touch devices: allow pan from any tile (tap vs drag resolved by pan.moved threshold)
     const isTouch = ev.pointerType === 'touch';
     if (!isTouch && !_tilePanavel(t.x, t.y)) return;
-    AVT_STATE._pan = {
+    (AVT_STATE as any)._pan = {
       startX: ev.clientX, startY: ev.clientY,
       camX: AVT_STATE.camera.x, camY: AVT_STATE.camera.y,
       moved: false, pointerId: ev.pointerId, thresholdMet: false,
     };
-    AVT_STATE._cameraManualMs = Date.now();
+    (AVT_STATE as any)._cameraManualMs = Date.now();
     try { canvas.setPointerCapture(ev.pointerId); } catch(_){}
   });
   canvas.addEventListener('pointermove', (ev) => {
-    const pan = AVT_STATE._pan;
+    const pan = (AVT_STATE as any)._pan;
     if (pan && pan.pointerId === ev.pointerId) {
       const dxRaw = ev.clientX - pan.startX;
       const dyRaw = ev.clientY - pan.startY;
@@ -5029,7 +5029,7 @@ function _avtCanvasInit() {
       if (!pan.thresholdMet) {
         if (dist < _avtPanDeadzone()) return;
         pan.thresholdMet = true;
-        AVT_STATE._userPanned = true;
+        (AVT_STATE as any)._userPanned = true;
         canvas.style.cursor = 'grabbing';
       }
       let dx = dxRaw, dy = dyRaw;
@@ -5039,10 +5039,10 @@ function _avtCanvasInit() {
       }
       AVT_STATE.camera.x = Math.round(pan.camX - dx);
       AVT_STATE.camera.y = Math.round(pan.camY - dy);
-      AVT_STATE.camera._targetX = AVT_STATE.camera.x;
-      AVT_STATE.camera._targetY = AVT_STATE.camera.y;
-      AVT_STATE.camera._floatX  = AVT_STATE.camera.x;
-      AVT_STATE.camera._floatY  = AVT_STATE.camera.y;
+      (AVT_STATE.camera as any)._targetX = AVT_STATE.camera.x;
+      (AVT_STATE.camera as any)._targetY = AVT_STATE.camera.y;
+      (AVT_STATE.camera as any)._floatX  = AVT_STATE.camera.x;
+      (AVT_STATE.camera as any)._floatY  = AVT_STATE.camera.y;
       return;
     }
     // Hover: cursor grab/pointer
@@ -5050,12 +5050,12 @@ function _avtCanvasInit() {
     canvas.style.cursor = _tilePanavel(t.x, t.y) ? 'grab' : 'pointer';
   });
   const _endPan = (ev) => {
-    const pan = AVT_STATE._pan;
+    const pan = (AVT_STATE as any)._pan;
     if (!pan || pan.pointerId !== ev.pointerId) return;
-    AVT_STATE._pan = null;
-    AVT_STATE._panSuprimirClick = pan.moved;
+    (AVT_STATE as any)._pan = null;
+    (AVT_STATE as any)._panSuprimirClick = pan.moved;
     // Marca câmera como "arrastada pelo usuário" — próximo movimento do jogador centraliza.
-    if (pan.moved) AVT_STATE.camera._userDragged = true;
+    if (pan.moved) (AVT_STATE.camera as any)._userDragged = true;
     canvas.style.cursor = 'pointer';
     try { canvas.releasePointerCapture(ev.pointerId); } catch(_){}
   };
@@ -5063,55 +5063,55 @@ function _avtCanvasInit() {
   canvas.addEventListener('pointercancel', _endPan);
 
   // Pinch-to-zoom for mobile (2 fingers)
-  AVT_STATE._ptrs = new Map();
-  AVT_STATE._pinchDist0 = 0;
-  AVT_STATE._pinchZoom0 = 1;
+  (AVT_STATE as any)._ptrs = new Map();
+  (AVT_STATE as any)._pinchDist0 = 0;
+  (AVT_STATE as any)._pinchZoom0 = 1;
   const _ptrDown2 = (ev) => {
-    AVT_STATE._ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    (AVT_STATE as any)._ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
   };
   const _ptrMove2 = (ev) => {
-    AVT_STATE._ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-    if (AVT_STATE._ptrs.size >= 2) {
-      const pts = [...AVT_STATE._ptrs.values()];
+    (AVT_STATE as any)._ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if ((AVT_STATE as any)._ptrs.size >= 2) {
+      const pts = [...(AVT_STATE as any)._ptrs.values()];
       const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
-      if (!AVT_STATE._pinchDist0) {
-        AVT_STATE._pinchDist0 = dist;
-        AVT_STATE._pinchZoom0 = AVT_STATE.camera.zoom || 1;
+      if (!(AVT_STATE as any)._pinchDist0) {
+        (AVT_STATE as any)._pinchDist0 = dist;
+        (AVT_STATE as any)._pinchZoom0 = AVT_STATE.camera.zoom || 1;
         // Ancora o ponto do mundo sob o centro do pinch para que o zoom
         // não desloque a câmera em relação ao ponto que o usuário está tocando.
         const rect = canvas.getBoundingClientRect();
         const midX = (pts[0].x + pts[1].x) / 2 - rect.left;
         const midY = (pts[0].y + pts[1].y) / 2 - rect.top;
-        const SZ0 = Math.round(AVT_SZ * AVT_STATE._pinchZoom0);
-        AVT_STATE._pinchAnchorWorld = {
+        const SZ0 = Math.round(AVT_SZ * (AVT_STATE as any)._pinchZoom0);
+        (AVT_STATE as any)._pinchAnchorWorld = {
           wx: (midX + AVT_STATE.camera.x) / SZ0,
           wy: (midY + AVT_STATE.camera.y) / SZ0,
           screenX: midX, screenY: midY,
         };
-        AVT_STATE._cameraManualMs = Date.now();
-        AVT_STATE._pan = null; // cancel ongoing pan
+        (AVT_STATE as any)._cameraManualMs = Date.now();
+        (AVT_STATE as any)._pan = null; // cancel ongoing pan
         return;
       }
-      const newZoom = Math.max(0.3, Math.min(3.0, AVT_STATE._pinchZoom0 * (dist / AVT_STATE._pinchDist0)));
+      const newZoom = Math.max(0.3, Math.min(3.0, AVT_STATE._pinchZoom0 * (dist / (AVT_STATE as any)._pinchDist0)));
       AVT_STATE.camera.zoom = newZoom;
       // Reposiciona câmera para manter o ponto ancor sob o centro do pinch
-      if (AVT_STATE._pinchAnchorWorld) {
+      if ((AVT_STATE as any)._pinchAnchorWorld) {
         const newSZ = Math.round(AVT_SZ * newZoom);
-        const { wx, wy, screenX, screenY } = AVT_STATE._pinchAnchorWorld;
+        const { wx, wy, screenX, screenY } = (AVT_STATE as any)._pinchAnchorWorld;
         const newCamX = wx * newSZ - screenX;
         const newCamY = wy * newSZ - screenY;
         AVT_STATE.camera.x = newCamX;
         AVT_STATE.camera.y = newCamY;
-        AVT_STATE.camera._targetX = newCamX;
-        AVT_STATE.camera._targetY = newCamY;
-        AVT_STATE.camera._floatX  = newCamX;
-        AVT_STATE.camera._floatY  = newCamY;
+        (AVT_STATE.camera as any)._targetX = newCamX;
+        (AVT_STATE.camera as any)._targetY = newCamY;
+        (AVT_STATE.camera as any)._floatX  = newCamX;
+        (AVT_STATE.camera as any)._floatY  = newCamY;
       }
     }
   };
   const _ptrUp2 = (ev) => {
-    AVT_STATE._ptrs.delete(ev.pointerId);
-    if (AVT_STATE._ptrs.size < 2) { AVT_STATE._pinchDist0 = 0; AVT_STATE._pinchAnchorWorld = null; }
+    (AVT_STATE as any)._ptrs.delete(ev.pointerId);
+    if (AVT_STATE._ptrs.size < 2) { AVT_STATE._pinchDist0 = 0; (AVT_STATE as any)._pinchAnchorWorld = null; }
   };
   canvas.addEventListener('pointerdown', _ptrDown2);
   canvas.addEventListener('pointermove', _ptrMove2);
@@ -5129,28 +5129,28 @@ function _avtCanvasInit() {
   // Mantém _caminhoDestino sempre apontando para a célula sob o cursor enquanto
   // o botão está pressionado. O sistema de waypoints/lerp continua suavizando
   // o movimento e atualizando célula lógica (combate, broadcast, save).
-  AVT_STATE._holdMove = null;
+  (AVT_STATE as any)._holdMove = null;
   const _avtFitMoveStart = (ev) => {
     if (ev.button != null && ev.button !== 0) return false;
     if (AVT_STATE._modoPortaPlacement) return false;
     if (AVT_STATE.mestreReposicionando) return false;
-    if (AVT_STATE._modoAlvoHabilidade) return false;
+    if ((AVT_STATE as any)._modoAlvoHabilidade) return false;
     if (AVT_STATE._primeiroAtaqueModoAlvo) return false;
     if (typeof _avtMinhaBatalha === 'function' && _avtMinhaBatalha()) return false;
     const t = _tileFromEvent(ev);
     const entNoTile = AVT_STATE.entidades.find(e => Math.round(e.x) === t.x && Math.round(e.y) === t.y);
     if (entNoTile) return false;
     if (!_avtTilePassavel || !_avtTilePassavel(t.x, t.y, AVT_STATE.dungeon)) return false;
-    AVT_STATE._holdMove = { active: true, lastTx: -999, lastTy: -999, pointerId: ev.pointerId };
+    (AVT_STATE as any)._holdMove = { active: true, lastTx: -999, lastTy: -999, pointerId: ev.pointerId };
     return true;
   };
   canvas.addEventListener('pointerdown', (ev) => { _avtFitMoveStart(ev); });
   canvas.addEventListener('pointermove', (ev) => {
-    const h = AVT_STATE._holdMove;
+    const h = (AVT_STATE as any)._holdMove;
     if (!h || !h.active) return;
     if (h.pointerId != null && ev.pointerId !== h.pointerId) return;
     // Pan venceu (usuário arrastou área não passável)
-    if (AVT_STATE._pan && AVT_STATE._pan.thresholdMet) { AVT_STATE._holdMove = null; return; }
+    if (AVT_STATE._pan && AVT_STATE._pan.thresholdMet) { (AVT_STATE as any)._holdMove = null; return; }
     const t = _tileFromEvent(ev);
     if (t.x === h.lastTx && t.y === h.lastTy) return;
     h.lastTx = t.x; h.lastTy = t.y;
@@ -5165,20 +5165,20 @@ function _avtCanvasInit() {
     const caminho = (typeof _avtPathfindSimples === 'function')
       ? _avtPathfindSimples(sx, sy, t.x, t.y) : null;
     if (caminho && caminho.length > 1) {
-      AVT_STATE._caminhoDestino = caminho.slice(1);
-      if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; if (typeof _avtCameraCenter === 'function') _avtCameraCenter(); }
+      (AVT_STATE as any)._caminhoDestino = caminho.slice(1);
+      if (AVT_STATE._userPanned) { (AVT_STATE as any)._userPanned = false; if (typeof _avtCameraCenter === 'function') _avtCameraCenter(); }
     }
   });
   const _avtFitMoveEnd = (ev) => {
-    const h = AVT_STATE._holdMove;
+    const h = (AVT_STATE as any)._holdMove;
     if (!h) return;
     if (h.pointerId != null && ev && ev.pointerId != null && ev.pointerId !== h.pointerId) return;
-    AVT_STATE._holdMove = null;
+    (AVT_STATE as any)._holdMove = null;
   };
   canvas.addEventListener('pointerup', _avtFitMoveEnd);
   canvas.addEventListener('pointercancel', _avtFitMoveEnd);
   canvas.addEventListener('pointerleave', _avtFitMoveEnd);
-  window.addEventListener('blur', () => { AVT_STATE._holdMove = null; });
+  window.addEventListener('blur', () => { (AVT_STATE as any)._holdMove = null; });
 
   // O modo controle real (catalog.js) gerencia os controles touch — ocultar d-pad legado
   if (_savedDpad) _savedDpad.style.display = 'none';
@@ -5217,9 +5217,9 @@ function _avtCanvasInit() {
 
 // Debounce compartilhado do resize (window resize + ResizeObserver do wrap).
 function _avtCanvasResizeDebounced() {
-  if (AVT_STATE._resizeDebounce) clearTimeout(AVT_STATE._resizeDebounce);
-  AVT_STATE._resizeDebounce = setTimeout(() => {
-    AVT_STATE._resizeDebounce = null;
+  if (AVT_STATE._resizeDebounce) clearTimeout((AVT_STATE as any)._resizeDebounce);
+  (AVT_STATE as any)._resizeDebounce = setTimeout(() => {
+    (AVT_STATE as any)._resizeDebounce = null;
     _avtCanvasResize();
   }, 150);
 }
@@ -5257,7 +5257,7 @@ function _avtCanvasResize() {
     AVT_STATE.ctx = canvas.getContext('2d');
     // Só centraliza na primeira inicialização — não recentraliza quando a HUD
     // de combate abre/fecha (causava sensação de "câmera puxada pra baixo").
-    if (!AVT_STATE._cameraInicializada) _avtCameraCenter();
+    if (!(AVT_STATE as any)._cameraInicializada) _avtCameraCenter();
   }
 }
 
@@ -5270,25 +5270,25 @@ function _avtCameraCenter() {
   // No iso, centraliza no jogador controlado (sem offset/clamp) e sincroniza.
   if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo) {
     _avtCameraUpdateCentralizada(true);
-    AVT_STATE.camera.x = AVT_STATE.camera._targetX ?? 0;
-    AVT_STATE.camera.y = AVT_STATE.camera._targetY ?? 0;
-    AVT_STATE.camera._floatX = AVT_STATE.camera.x;
-    AVT_STATE.camera._floatY = AVT_STATE.camera.y;
-    AVT_STATE._cameraInicializada = true;
+    AVT_STATE.camera.x = (AVT_STATE.camera as any)._targetX ?? 0;
+    AVT_STATE.camera.y = (AVT_STATE.camera as any)._targetY ?? 0;
+    (AVT_STATE.camera as any)._floatX = AVT_STATE.camera.x;
+    (AVT_STATE.camera as any)._floatY = AVT_STATE.camera.y;
+    (AVT_STATE as any)._cameraInicializada = true;
     return;
   }
   const cx = jogadores.reduce((s, j) => s + j.x, 0) / jogadores.length;
   const cy = jogadores.reduce((s, j) => s + j.y, 0) / jogadores.length;
   const _ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
-  const _overlayH = _ctrlDisp ? (AVT_STATE._overlayH ?? 160) : 0;
+  const _overlayH = _ctrlDisp ? ((AVT_STATE as any)._overlayH ?? 160) : 0;
   const effectiveH = canvas.height - _overlayH;
   AVT_STATE.camera.x = cx * SZ - canvas.width/2  + SZ/2;
   AVT_STATE.camera.y = cy * SZ - effectiveH/2 + SZ/2;
-  AVT_STATE.camera._targetX = AVT_STATE.camera.x;
-  AVT_STATE.camera._targetY = AVT_STATE.camera.y;
-  AVT_STATE.camera._floatX  = AVT_STATE.camera.x;
-  AVT_STATE.camera._floatY  = AVT_STATE.camera.y;
-  AVT_STATE._cameraInicializada = true;
+  (AVT_STATE.camera as any)._targetX = AVT_STATE.camera.x;
+  (AVT_STATE.camera as any)._targetY = AVT_STATE.camera.y;
+  (AVT_STATE.camera as any)._floatX  = AVT_STATE.camera.x;
+  (AVT_STATE.camera as any)._floatY  = AVT_STATE.camera.y;
+  (AVT_STATE as any)._cameraInicializada = true;
 }
 
 // Edge-triggered camera: follows only the controlled player to avoid cross-axis drift
@@ -5314,14 +5314,14 @@ function _avtCameraUpdate() {
   const _ctrlDispCam = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
   if (_ctrlDispCam) {
     const _now = performance.now();
-    if (AVT_STATE._overlayHTs == null || _now - AVT_STATE._overlayHTs > 1000) {
-      AVT_STATE._overlayH = document.getElementById('mobile-ctrl-overlay')?.offsetHeight || 160;
-      AVT_STATE._overlayHTs = _now;
+    if (AVT_STATE._overlayHTs == null || _now - (AVT_STATE as any)._overlayHTs > 1000) {
+      (AVT_STATE as any)._overlayH = document.getElementById('mobile-ctrl-overlay')?.offsetHeight || 160;
+      (AVT_STATE as any)._overlayHTs = _now;
     }
     // Câmera centralizada: pular dead zone — o render loop já cuida do target
     if (MOBILE_CTRL?.modoCamara === 'centralizada') return;
   }
-  const _overlayH = _ctrlDispCam ? (AVT_STATE._overlayH ?? 160) : 0;
+  const _overlayH = _ctrlDispCam ? ((AVT_STATE as any)._overlayH ?? 160) : 0;
   const effectiveH = canvas.height - _overlayH;
 
   const j = _avtMeuJogador() || AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0);
@@ -5331,22 +5331,22 @@ function _avtCameraUpdate() {
   // verticais quando só o eixo X muda entre passos.
   const jxLog = Math.round(j.x);
   const jyLog = Math.round(j.y);
-  const lastCell = AVT_STATE.camera._lastCell || { x: null, y: null };
+  const lastCell = (AVT_STATE.camera as any)._lastCell || { x: null, y: null };
   const xChanged = lastCell.x !== jxLog;
   const yChanged = lastCell.y !== jyLog;
-  AVT_STATE.camera._lastCell = { x: jxLog, y: jyLog };
+  (AVT_STATE.camera as any)._lastCell = { x: jxLog, y: jyLog };
 
-  if (AVT_STATE.camera._targetX == null) {
-    AVT_STATE.camera._targetX = AVT_STATE.camera.x;
-    AVT_STATE.camera._floatX  = AVT_STATE.camera.x;
+  if ((AVT_STATE.camera as any)._targetX == null) {
+    (AVT_STATE.camera as any)._targetX = AVT_STATE.camera.x;
+    (AVT_STATE.camera as any)._floatX  = AVT_STATE.camera.x;
   }
-  if (AVT_STATE.camera._targetY == null) {
-    AVT_STATE.camera._targetY = AVT_STATE.camera.y;
-    AVT_STATE.camera._floatY  = AVT_STATE.camera.y;
+  if ((AVT_STATE.camera as any)._targetY == null) {
+    (AVT_STATE.camera as any)._targetY = AVT_STATE.camera.y;
+    (AVT_STATE.camera as any)._floatY  = AVT_STATE.camera.y;
   }
 
-  const px = jxLog * SZ - AVT_STATE.camera._targetX;
-  const py = jyLog * SZ - AVT_STATE.camera._targetY;
+  const px = jxLog * SZ - (AVT_STATE.camera as any)._targetX;
+  const py = jyLog * SZ - (AVT_STATE.camera as any)._targetY;
   // Histerese ~25% do tile absorve arredondamentos e evita correções de 1-2px
   const hyst = SZ * 0.25;
   let shiftX = 0, shiftY = 0;
@@ -5358,21 +5358,21 @@ function _avtCameraUpdate() {
     if (py < mH - hyst)                   shiftY = py - mH;
     else if (py > effectiveH - mH + hyst) shiftY = py - (effectiveH - mH);
   }
-  AVT_STATE.camera._targetX += shiftX;
-  AVT_STATE.camera._targetY += shiftY;
+  (AVT_STATE.camera as any)._targetX += shiftX;
+  (AVT_STATE.camera as any)._targetY += shiftY;
   // Clamp para evitar câmera presa fora dos limites do mapa
   const dungeon = AVT_STATE.dungeon;
   if (dungeon) {
     const maxCX = Math.max(0, dungeon.w * SZ - canvas.width);
     const maxCY = Math.max(0, dungeon.h * SZ - canvas.height);
-    AVT_STATE.camera._targetX = Math.max(0, Math.min(AVT_STATE.camera._targetX, maxCX));
-    AVT_STATE.camera._targetY = Math.max(0, Math.min(AVT_STATE.camera._targetY, maxCY));
+    AVT_STATE.camera._targetX = Math.max(0, Math.min((AVT_STATE.camera as any)._targetX, maxCX));
+    AVT_STATE.camera._targetY = Math.max(0, Math.min((AVT_STATE.camera as any)._targetY, maxCY));
   }
 }
 
 // Centraliza a câmera no ponto médio entre dois entities, respeitando a área visível acima dos controles.
 function _avtCameraFocarEntidades(entA, entB) {
-  if (Date.now() - (AVT_STATE._cameraManualMs || 0) < 4000) return;
+  if (Date.now() - ((AVT_STATE as any)._cameraManualMs || 0) < 4000) return;
   const canvas = AVT_STATE.canvas;
   if (!canvas?.width) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
@@ -5380,22 +5380,22 @@ function _avtCameraFocarEntidades(entA, entB) {
   const bx = (entB.renderX ?? entB.x), by = (entB.renderY ?? entB.y);
   const midX = (ax + bx) / 2, midY = (ay + by) / 2;
   const _ctrlDispCam = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
-  const _overlayH = _ctrlDispCam ? (AVT_STATE._overlayH ?? 160) : 0;
+  const _overlayH = _ctrlDispCam ? ((AVT_STATE as any)._overlayH ?? 160) : 0;
   const effectiveH = canvas.height - _overlayH;
   AVT_STATE.camera.x = Math.round(midX * SZ - canvas.width / 2);
   AVT_STATE.camera.y = Math.round(midY * SZ - effectiveH / 2);
-  AVT_STATE.camera._targetX = AVT_STATE.camera.x;
-  AVT_STATE.camera._targetY = AVT_STATE.camera.y;
-  AVT_STATE.camera._floatX  = AVT_STATE.camera.x;
-  AVT_STATE.camera._floatY  = AVT_STATE.camera.y;
+  (AVT_STATE.camera as any)._targetX = AVT_STATE.camera.x;
+  (AVT_STATE.camera as any)._targetY = AVT_STATE.camera.y;
+  (AVT_STATE.camera as any)._floatX  = AVT_STATE.camera.x;
+  (AVT_STATE.camera as any)._floatY  = AVT_STATE.camera.y;
 }
 
-function _avtCameraUpdateCentralizada(skipClamp) {
+function _avtCameraUpdateCentralizada(skipClamp?) {
   const canvas = AVT_STATE.canvas;
   if (!canvas?.width) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   // No iso (skipClamp) centraliza de verdade, sem descontar o overlay inferior.
-  const _overlayH = skipClamp ? 0 : (AVT_STATE._overlayH ?? 160);
+  const _overlayH = skipClamp ? 0 : ((AVT_STATE as any)._overlayH ?? 160);
   const effectiveH = canvas.height - _overlayH;
   const j = _avtMeuJogador() || AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0);
   if (!j) return;
@@ -5408,8 +5408,8 @@ function _avtCameraUpdateCentralizada(skipClamp) {
     tX = Math.max(0, Math.min(tX, Math.max(0, dungeon.w * SZ - canvas.width)));
     tY = Math.max(0, Math.min(tY, Math.max(0, dungeon.h * SZ - canvas.height)));
   }
-  AVT_STATE.camera._targetX = tX;
-  AVT_STATE.camera._targetY = tY;
+  (AVT_STATE.camera as any)._targetX = tX;
+  (AVT_STATE.camera as any)._targetY = tY;
 }
 
 function _avtRenderLoop() {
@@ -5429,8 +5429,8 @@ function _avtRenderLoop() {
 // Mapas gigantes (> ~16MP de bake) caem no loop legado para não estourar memória.
 const _AVT_TILE_BAKE_MAX_PX = 16 * 1024 * 1024;
 function _avtTileBakeInvalidate() {
-  AVT_STATE._tileBake = null;
-  AVT_STATE._mmBake = null; // minimapa compartilha o gatilho de invalidação
+  (AVT_STATE as any)._tileBake = null;
+  (AVT_STATE as any)._mmBake = null; // minimapa compartilha o gatilho de invalidação
 }
 window._avtTileBakeInvalidate = _avtTileBakeInvalidate;
 
@@ -5438,13 +5438,13 @@ function _avtLegacyTileBake(dungeon, gridStyle, hue) {
   const SZ = AVT_SZ;
   const bw = dungeon.w * SZ, bh = dungeon.h * SZ;
   if (bw * bh > _AVT_TILE_BAKE_MAX_PX) return null;
-  const texCount = AVT_STATE._tilesetTextures ? Object.keys(AVT_STATE._tilesetTextures).length : 0;
+  const texCount = AVT_STATE._tilesetTextures ? Object.keys((AVT_STATE as any)._tilesetTextures).length : 0;
   const key = [
-    AVT_STATE._faseAtualId || 'principal', dungeon.w, dungeon.h,
-    AVT_STATE._tilesetLoaded ? 1 : 0, texCount,
-    gridStyle.op, gridStyle.stroke, hue || 0, AVT_STATE._dungeonRev || 0,
+    (AVT_STATE as any)._faseAtualId || 'principal', dungeon.w, dungeon.h,
+    (AVT_STATE as any)._tilesetLoaded ? 1 : 0, texCount,
+    gridStyle.op, gridStyle.stroke, hue || 0, (AVT_STATE as any)._dungeonRev || 0,
   ].join('|');
-  let bake = AVT_STATE._tileBake;
+  let bake = (AVT_STATE as any)._tileBake;
   if (bake && bake._key === key) return bake;
 
   bake = document.createElement('canvas');
@@ -5459,10 +5459,10 @@ function _avtLegacyTileBake(dungeon, gridStyle, hue) {
     for (let x = 0; x < dungeon.w; x++) {
       const t  = dungeon.tiles[y]?.[x];
       const px = x * SZ, py = y * SZ;
-      if (AVT_STATE._tilesetLoaded) {
+      if ((AVT_STATE as any)._tilesetLoaded) {
         ctx.imageSmoothingEnabled = false;
         const tkey = typeof t === 'string' ? t : _avtGetTileSemanticKey(x, y, dungeon);
-        const tileImg = tkey ? AVT_STATE._tilesetTextures[tkey] : null;
+        const tileImg = tkey ? (AVT_STATE as any)._tilesetTextures[tkey] : null;
         if (tileImg) { ctx.drawImage(tileImg, px, py, SZ, SZ); continue; }
         if (t === null || t === undefined) continue;
         ctx.fillStyle = _avtTilePassavel(x, y, dungeon) ? '#101520' : '#0a0c14';
@@ -5499,7 +5499,7 @@ function _avtLegacyTileBake(dungeon, gridStyle, hue) {
   }
   if (_hueOn) ctx.filter = 'none';
   // Grade fina dos tilesets (antes era um loop de strokes por frame)
-  if (AVT_STATE._tilesetLoaded && gridStyle.op > 0) {
+  if ((AVT_STATE as any)._tilesetLoaded && gridStyle.op > 0) {
     ctx.strokeStyle = gridStyle.stroke;
     ctx.lineWidth = 0.5;
     for (let gx = 0; gx <= dungeon.w; gx++) {
@@ -5509,7 +5509,7 @@ function _avtLegacyTileBake(dungeon, gridStyle, hue) {
       ctx.beginPath(); ctx.moveTo(0, gy * SZ); ctx.lineTo(bw, gy * SZ); ctx.stroke();
     }
   }
-  AVT_STATE._tileBake = bake;
+  (AVT_STATE as any)._tileBake = bake;
   return bake;
 }
 
@@ -5526,15 +5526,15 @@ function _avtGridStyle() {
 // ou null enquanto carrega/erro. Reusa o padrão dos tokens (_avtCarregarTopdownIa).
 function _avtObjImg(url) {
   if (!url) return null;
-  if (!AVT_STATE._objImgCache) AVT_STATE._objImgCache = {};
-  const rec = AVT_STATE._objImgCache[url];
+  if (!AVT_STATE._objImgCache) (AVT_STATE as any)._objImgCache = {};
+  const rec = (AVT_STATE as any)._objImgCache[url];
   if (rec === undefined) {
-    _avtCachePrune(AVT_STATE._objImgCache, 200);
+    _avtCachePrune((AVT_STATE as any)._objImgCache, 200);
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    AVT_STATE._objImgCache[url] = null; // pendente
-    img.onload  = () => { AVT_STATE._objImgCache[url] = img; };
-    img.onerror = () => { AVT_STATE._objImgCache[url] = false; };
+    (AVT_STATE as any)._objImgCache[url] = null; // pendente
+    img.onload  = () => { (AVT_STATE as any)._objImgCache[url] = img; };
+    img.onerror = () => { (AVT_STATE as any)._objImgCache[url] = false; };
     img.src = url;
     return null;
   }
@@ -5545,9 +5545,9 @@ function _avtRenderFrame() {
   const { canvas, ctx, dungeon, entidades, camera } = AVT_STATE;
   if (!ctx || !dungeon || !canvas.width) return;
   // Cinematic hitstop: skip world update while frozen by a VFX
-  if (AVT_STATE._fxFreezeUntil) {
-    if (performance.now() < AVT_STATE._fxFreezeUntil) return;
-    AVT_STATE._fxFreezeUntil = 0; // expired — clear so it never stays stuck
+  if ((AVT_STATE as any)._fxFreezeUntil) {
+    if (performance.now() < (AVT_STATE as any)._fxFreezeUntil) return;
+    (AVT_STATE as any)._fxFreezeUntil = 0; // expired — clear so it never stays stuck
   }
 
   // Track delta time for patience timers
@@ -5582,8 +5582,8 @@ function _avtRenderFrame() {
 
   if (AVT_STATE._oocStatusEffects?.length) {
     const _agPanel = Date.now();
-    if (_agPanel - (AVT_STATE._lastPanelEfRender || 0) >= 1000) {
-      AVT_STATE._lastPanelEfRender = _agPanel;
+    if (_agPanel - ((AVT_STATE as any)._lastPanelEfRender || 0) >= 1000) {
+      (AVT_STATE as any)._lastPanelEfRender = _agPanel;
       const _ceEl = document.getElementById('avt-char-editor');
       if (_ceEl && _ceEl.style.display !== 'none') {
         const _meuEl = document.getElementById('avt-ce-meu');
@@ -5602,7 +5602,7 @@ function _avtRenderFrame() {
     // Rastros: limpar células expiradas e ferir hostis parados sobre células contaminadas
     try {
       _avtRastroPrune();
-      if (AVT_STATE._rastroCells?.length) {
+      if ((AVT_STATE as any)._rastroCells?.length) {
         AVT_STATE.entidades.forEach(e => { try { _avtRastroChecarEntrada(e, e.x, e.y); } catch(_) {} });
       }
     } catch(_) {}
@@ -5618,21 +5618,21 @@ function _avtRenderFrame() {
     try { _avtCheckPrimeiroAtaque(); } catch(_) {}
   }
   // Auto-ataque básico com intervalo próprio (250ms) — reage mais rápido que o check de 1s
-  if (_agoraVerif - (AVT_STATE._ultimaAutoAtaqueVerif || 0) >= 250) {
-    AVT_STATE._ultimaAutoAtaqueVerif = _agoraVerif;
+  if (_agoraVerif - ((AVT_STATE as any)._ultimaAutoAtaqueVerif || 0) >= 250) {
+    (AVT_STATE as any)._ultimaAutoAtaqueVerif = _agoraVerif;
     const _jLocalAuto = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
     if (_jLocalAuto && !_avtMinhaBatalha() && !AVT_STATE._primeiroAtaqueModoAlvo) {
       try { _avtVerificarAutoAtaqueBasico(_jLocalAuto); } catch(_) {}
     }
   }
   // [NPC-SYNC] suaviza divergências de posição vindas do canônico (lerp 250ms)
-  if (AVT_STATE.npcSyncEnabled && typeof _avtNpcSyncTickLerp === 'function') {
+  if ((AVT_STATE as any).npcSyncEnabled && typeof _avtNpcSyncTickLerp === 'function') {
     try { _avtNpcSyncTickLerp(now); } catch(_) {}
   }
 
   // ── Áudio posicional: passos + fontes de som ambiente (~4 Hz) ───────────────
-  if (now - (AVT_STATE._sfxTickTs || 0) >= 250) {
-    AVT_STATE._sfxTickTs = now;
+  if (now - ((AVT_STATE as any)._sfxTickTs || 0) >= 250) {
+    (AVT_STATE as any)._sfxTickTs = now;
     try { _avtAtualizarSonsAmbiente(); } catch (_) {}
     if (typeof AVT_GRAFICOS === 'undefined' || AVT_GRAFICOS?.sfxPassos !== false) {
       for (const e of entidades) {
@@ -5657,7 +5657,7 @@ function _avtRenderFrame() {
   // processados (e _onWaypointReached → _avtCameraUpdate disparado) neste mesmo
   // frame, garantindo que camera.x/y esteja finalizado antes de qualquer desenho.
   const _jPlayer = (typeof _avtEntidadeControlada === 'function') ? _avtEntidadeControlada() : _avtMeuJogador();
-  if (_jPlayer && AVT_STATE._caminhoDestino?.length > 0 && !_avtMinhaBatalha()) {
+  if (_jPlayer && (AVT_STATE as any)._caminhoDestino?.length > 0 && !_avtMinhaBatalha()) {
     if (_jPlayer._wpCallbackOwner !== 'local-path') {
       _jPlayer._wpCallbackOwner = 'local-path';
       _jPlayer._onWaypointReached = function (cell, restantes) {
@@ -5680,7 +5680,7 @@ function _avtRenderFrame() {
         } catch(_) {}
         _avtCameraUpdate();
         const fimDoCaminho = restantes === 0 &&
-          (!AVT_STATE._caminhoDestino || AVT_STATE._caminhoDestino.length === 0);
+          (!AVT_STATE._caminhoDestino || (AVT_STATE as any)._caminhoDestino.length === 0);
         if (fimDoCaminho) {
           _jPlayer.x = Math.round(_jPlayer.x); _jPlayer.y = Math.round(_jPlayer.y);
           _avtDebounceSalvarPosicao(_jPlayer);
@@ -5691,8 +5691,8 @@ function _avtRenderFrame() {
         }
       };
     }
-    while (AVT_STATE._caminhoDestino.length && _jPlayer._waypoints.length < 3) {
-      const _cell = AVT_STATE._caminhoDestino.shift();
+    while ((AVT_STATE as any)._caminhoDestino.length && _jPlayer._waypoints.length < 3) {
+      const _cell = (AVT_STATE as any)._caminhoDestino.shift();
       _jPlayer._waypoints.push(_cell);
       // Predição: envia o input ao host imediatamente (P2P não-host) para a posição
       // ser confirmada via ackSeq; sem isto o host ignora o token_move do jogador.
@@ -5800,8 +5800,8 @@ function _avtRenderFrame() {
     const _meFine = (_fineModoSupabase && typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
     if (_meFine && _meFine.renderX != null) {
       const _nowFine = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      AVT_STATE._fineBcast = AVT_STATE._fineBcast || { last: 0, rx: null, ry: null };
-      const fb = AVT_STATE._fineBcast;
+      AVT_STATE._fineBcast = (AVT_STATE as any)._fineBcast || { last: 0, rx: null, ry: null };
+      const fb = (AVT_STATE as any)._fineBcast;
       if (_nowFine - fb.last > 50) {
         const rx = +(_meFine.renderX.toFixed(3));
         const ry = +(_meFine.renderY.toFixed(3));
@@ -5817,21 +5817,21 @@ function _avtRenderFrame() {
 
   // Lerp suave da câmera em direção ao alvo — elimina tremida ao revelar novas colunas/linhas
   {
-    const cam = AVT_STATE.camera;
-    if (cam._targetX != null) {
+    const cam: any = AVT_STATE.camera;
+    if ((cam as any)._targetX != null) {
       const _jCam = AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e._velocidadeLerp > 0);
       const _plSpeed = _jCam?._velocidadeLerp ?? 10;
       const camSpeedPxSec = Math.max(15, _plSpeed * 1.5) * SZ;
       const maxStep = camSpeedPxSec * dt / 1000;
-      if (cam._floatX == null) cam._floatX = cam.x;
-      if (cam._floatY == null) cam._floatY = cam.y;
-      const dx = cam._targetX - cam._floatX;
-      const dy = cam._targetY - cam._floatY;
-      cam._floatX += Math.sign(dx) * Math.min(Math.abs(dx), maxStep);
-      cam._floatY += Math.sign(dy) * Math.min(Math.abs(dy), maxStep);
+      if (cam._floatX == null) (cam as any)._floatX = cam.x;
+      if (cam._floatY == null) (cam as any)._floatY = cam.y;
+      const dx = cam._targetX - (cam as any)._floatX;
+      const dy = cam._targetY - (cam as any)._floatY;
+      (cam as any)._floatX += Math.sign(dx) * Math.min(Math.abs(dx), maxStep);
+      (cam as any)._floatY += Math.sign(dy) * Math.min(Math.abs(dy), maxStep);
       // Mantém float; o arredondamento ocorre nos sites de desenho
       // (Math.round(x*SZ - camera.x)) — evita drift de pixel acumulado.
-      cam.x = cam._floatX;
+      cam.x = (cam as any)._floatX;
       cam.y = cam._floatY;
     }
   }
@@ -5840,7 +5840,7 @@ function _avtRenderFrame() {
   const _gridStyle = _avtGridStyle();
 
   // Variação de cor por fase: aplica hue-rotate aos tiles (reset após o loop).
-  const _hue = AVT_STATE._faseHueShift || 0;
+  const _hue = (AVT_STATE as any)._faseHueShift || 0;
 
   // Camada de mundo em PIXI (WebGL): fundo + tiles + grade assados 1× por fase, câmera
   // como transform de container (aventura/renderer-pixi.ts). Quando ativa, o canvas 2D
@@ -5875,12 +5875,12 @@ function _avtRenderFrame() {
       const px = Math.round(x * SZ - camera.x);
       const py = Math.round(y * SZ - camera.y);
       if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
-      if (AVT_STATE._tilesetLoaded) {
+      if ((AVT_STATE as any)._tilesetLoaded) {
         ctx.imageSmoothingEnabled = false;
         // String-key grid (ia_fase): usa a chave diretamente
         // Binary grid (outros modos): usa autotile por vizinhos
         const key = typeof t === 'string' ? t : _avtGetTileSemanticKey(x, y, dungeon);
-        const tileImg = key ? AVT_STATE._tilesetTextures[key] : null;
+        const tileImg = key ? (AVT_STATE as any)._tilesetTextures[key] : null;
         if (tileImg) { ctx.drawImage(tileImg, px, py, SZ, SZ); continue; }
         if (t === null || t === undefined) continue; // void — fundo já foi preenchido
         ctx.fillStyle = _avtTilePassavel(x, y, dungeon) ? '#101520' : '#0a0c14';
@@ -5925,7 +5925,7 @@ function _avtRenderFrame() {
 
   // Overlay de grade suave nos tilesets (linhas finas e translúcidas)
   // (com a camada PIXI ativa OU o bake legado, a grade já foi assada junto com os tiles)
-  if (!_pixiWorld && !_tileBakeUsado && AVT_STATE._tilesetLoaded && _gridStyle.op > 0) {
+  if (!_pixiWorld && !_tileBakeUsado && (AVT_STATE as any)._tilesetLoaded && _gridStyle.op > 0) {
     ctx.strokeStyle = _gridStyle.stroke;
     ctx.lineWidth = 0.5;
     ctx.setLineDash([]);
@@ -5943,13 +5943,13 @@ function _avtRenderFrame() {
 
   // Portais de fases extras
   const _fasesExtras = AVT_STATE.rpg?.theme_json?.fases_extras || [];
-  if (_fasesExtras.length && (AVT_STATE._faseAtualId || 'principal') === 'principal') {
+  if (_fasesExtras.length && ((AVT_STATE as any)._faseAtualId || 'principal') === 'principal') {
     for (const _fase of _fasesExtras) {
       const { col, row } = _fase.porta;
       const fpx = Math.round(col * SZ - camera.x);
       const fpy = Math.round(row * SZ - camera.y);
       if (fpx + SZ < 0 || fpx > canvas.width || fpy + SZ < 0 || fpy > canvas.height) continue;
-      const _doorTex = AVT_STATE._tilesetLoaded ? AVT_STATE._tilesetTextures?.['porta_fase'] : null;
+      const _doorTex = AVT_STATE._tilesetLoaded ? (AVT_STATE as any)._tilesetTextures?.['porta_fase'] : null;
       if (_doorTex) {
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(_doorTex, fpx, fpy, SZ, SZ);
@@ -6007,8 +6007,8 @@ function _avtRenderFrame() {
   }
 
   // Porta temporária da próxima fase (aberta ao matar o boss)
-  const _pp = AVT_STATE._portaProximaFase;
-  if (_pp && (AVT_STATE._faseAtualId || 'principal') === (_pp._faseOrigem || (AVT_STATE._faseAtualId || 'principal'))) {
+  const _pp = (AVT_STATE as any)._portaProximaFase;
+  if (_pp && (AVT_STATE._faseAtualId || 'principal') === (_pp._faseOrigem || ((AVT_STATE as any)._faseAtualId || 'principal'))) {
     const ppx = Math.round(_pp.col * SZ - camera.x);
     const ppy = Math.round(_pp.row * SZ - camera.y);
     if (!(ppx + SZ < 0 || ppx > canvas.width || ppy + SZ < 0 || ppy > canvas.height)) {
@@ -6060,8 +6060,8 @@ function _avtRenderFrame() {
   }
 
   // ── Destaque de células de alcance de habilidade ─────────────────────────
-  if (AVT_STATE._habilidadeRange) {
-    const { tiles, tilesAlvo, tilesAlvoVermelho, tilesAlvoAmarelo } = AVT_STATE._habilidadeRange;
+  if ((AVT_STATE as any)._habilidadeRange) {
+    const { tiles, tilesAlvo, tilesAlvoVermelho, tilesAlvoAmarelo } = (AVT_STATE as any)._habilidadeRange;
     ctx.save();
     tiles.forEach(({ x, y }) => {
       const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
@@ -6091,8 +6091,8 @@ function _avtRenderFrame() {
       ctx.strokeRect(rpx + 1, rpy + 1, SZ - 2, SZ - 2);
     });
     // Centro da área selecionado (quadrado) — destaque em laranja
-    if (AVT_STATE._areaCentro) {
-      const { x: acx, y: acy } = AVT_STATE._areaCentro;
+    if ((AVT_STATE as any)._areaCentro) {
+      const { x: acx, y: acy } = (AVT_STATE as any)._areaCentro;
       const rpx = Math.round(acx * SZ - camera.x), rpy = Math.round(acy * SZ - camera.y);
       ctx.fillStyle = 'rgba(232,150,30,0.45)';
       ctx.fillRect(rpx, rpy, SZ, SZ);
@@ -6285,12 +6285,12 @@ function _avtRenderFrame() {
     if (_isoAnim?.img_url) {
       _avtDesenharIsoIa(ctx, e, _footX, _footY, SZ, _isoAnim);
     } else if (_isoUrl) {
-      AVT_STATE._isoTokenCache = AVT_STATE._isoTokenCache || {};
-      let _isoImg = AVT_STATE._isoTokenCache[_isoUrl];
+      AVT_STATE._isoTokenCache = (AVT_STATE as any)._isoTokenCache || {};
+      let _isoImg = (AVT_STATE as any)._isoTokenCache[_isoUrl];
       if (!_isoImg) {
-        _avtCachePrune(AVT_STATE._isoTokenCache, 200);
+        _avtCachePrune((AVT_STATE as any)._isoTokenCache, 200);
         _isoImg = new Image(); _isoImg.src = _isoUrl;
-        AVT_STATE._isoTokenCache[_isoUrl] = _isoImg;
+        (AVT_STATE as any)._isoTokenCache[_isoUrl] = _isoImg;
       }
       if (_isoImg.complete && _isoImg.naturalWidth > 0) {
         const imgSz = SZ * 0.95;
@@ -6696,7 +6696,7 @@ function _avtRenderFrame() {
 
 // Invalida o bake de tiles do minimapa (troca de fase, edição de mapa ao vivo).
 function _avtMinimapInvalidate() {
-  AVT_STATE._mmBake = null;
+  (AVT_STATE as any)._mmBake = null;
 }
 window._avtMinimapInvalidate = _avtMinimapInvalidate;
 
@@ -6709,22 +6709,22 @@ function _avtRenderMinimap() {
 
   // Throttle: pontos do minimapa a 10 Hz são suficientes (e o mapa é estático)
   const _mmNow = performance.now();
-  if (AVT_STATE._mmLastDraw && _mmNow - AVT_STATE._mmLastDraw < 100) return;
-  AVT_STATE._mmLastDraw = _mmNow;
+  if (AVT_STATE._mmLastDraw && _mmNow - (AVT_STATE as any)._mmLastDraw < 100) return;
+  (AVT_STATE as any)._mmLastDraw = _mmNow;
 
   const W = dungeon.w, H = dungeon.h;
   const mmW = mm.width, mmH = mm.height;
   const scaleX = mmW / W, scaleY = mmH / H;
 
-  const ctx = AVT_STATE._mmCtx && AVT_STATE._mmCtxEl === mm
-    ? AVT_STATE._mmCtx
-    : (AVT_STATE._mmCtxEl = mm, AVT_STATE._mmCtx = mm.getContext('2d'));
+  const ctx = AVT_STATE._mmCtx && (AVT_STATE as any)._mmCtxEl === mm
+    ? (AVT_STATE as any)._mmCtx
+    : (AVT_STATE._mmCtxEl = mm, (AVT_STATE as any)._mmCtx = mm.getContext('2d'));
   ctx.clearRect(0, 0, mmW, mmH);
 
   // Tiles: bakeados 1x por fase num offscreen (invalidado por _avtMinimapInvalidate
   // na troca de fase/edição); por frame apenas um drawImage.
-  const bakeKey = (AVT_STATE._faseAtualId || 'principal') + '|' + W + 'x' + H + '|' + mmW + 'x' + mmH + '|r' + (AVT_STATE._dungeonRev || 0);
-  let bake = AVT_STATE._mmBake;
+  const bakeKey = (AVT_STATE._faseAtualId || 'principal') + '|' + W + 'x' + H + '|' + mmW + 'x' + mmH + '|r' + ((AVT_STATE as any)._dungeonRev || 0);
+  let bake = (AVT_STATE as any)._mmBake;
   if (!bake || bake._key !== bakeKey) {
     bake = document.createElement('canvas');
     bake.width = mmW; bake.height = mmH;
@@ -6748,7 +6748,7 @@ function _avtRenderMinimap() {
     bctx.strokeStyle = 'rgba(100,150,200,0.25)';
     bctx.lineWidth = 1;
     bctx.strokeRect(0.5, 0.5, mmW - 1, mmH - 1);
-    AVT_STATE._mmBake = bake;
+    (AVT_STATE as any)._mmBake = bake;
   }
   ctx.drawImage(bake, 0, 0);
 
@@ -6788,7 +6788,7 @@ function _avtRenderEffectCountersOverlay() {
 
   // Nós persistentes por entidade: reposicionados via transform (composited, sem
   // layout); o innerHTML só é reconstruído quando o conjunto de efeitos muda.
-  const pool = AVT_STATE._efCounterNodes || (AVT_STATE._efCounterNodes = new Map());
+  const pool = AVT_STATE._efCounterNodes || ((AVT_STATE as any)._efCounterNodes = new Map());
   const vivos = new Set();
 
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
@@ -7193,9 +7193,9 @@ function _avtIsoFacing(autoFacing, mode) {
 function _avtDesenharIsoIa(ctx, ent, footX, footY, SZ, data) {
   const url = data?.img_url;
   if (!url) return;
-  AVT_STATE._isoTokenCache = AVT_STATE._isoTokenCache || {};
-  let img = AVT_STATE._isoTokenCache[url];
-  if (!img) { _avtCachePrune(AVT_STATE._isoTokenCache, 200); img = new Image(); img.crossOrigin = 'anonymous'; img.src = url; AVT_STATE._isoTokenCache[url] = img; }
+  AVT_STATE._isoTokenCache = (AVT_STATE as any)._isoTokenCache || {};
+  let img = (AVT_STATE as any)._isoTokenCache[url];
+  if (!img) { _avtCachePrune(AVT_STATE._isoTokenCache, 200); img = new Image(); img.crossOrigin = 'anonymous'; img.src = url; (AVT_STATE as any)._isoTokenCache[url] = img; }
   if (!(img.complete && img.naturalWidth > 0)) {
     ctx.beginPath(); ctx.arc(footX, footY - SZ * 0.3, SZ * 0.3, 0, Math.PI * 2);
     ctx.fillStyle = ent.cor || '#4fa3d1'; ctx.fill();
@@ -7291,7 +7291,7 @@ function _avtGetVelocidadeMovimento(ent) {
 }
 
 // BFS — retorna array de {x,y} do caminho (incluindo start). maxLen é opcional (default 60).
-function _avtPathfindSimples(startX, startY, goalX, goalY, maxLen) {
+function _avtPathfindSimples(startX, startY, goalX, goalY, maxLen?) {
   if (startX === goalX && startY === goalY) return [{ x: startX, y: startY }];
   const limit = (typeof maxLen === 'number' && maxLen > 0) ? maxLen : 60;
   const visited = new Map();
@@ -7397,7 +7397,7 @@ function _avtDadoSvg(faces, valor, delay) {
   </div>`;
 }
 
-function _avtMostrarDadosAcimaDaHeadCompleto(ent, resultado, nomeHabilidade, critTipo, multInfo) {
+function _avtMostrarDadosAcimaDaHeadCompleto(ent, resultado, nomeHabilidade, critTipo, multInfo?) {
   const overlay = document.getElementById('avt-dados-overlay');
   const canvas  = AVT_STATE.canvas;
   if (!overlay || !canvas || !ent) return;
@@ -7740,7 +7740,7 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
     && typeof _emModoAventura === 'function' && _emModoAventura();
   const overlayH = isAvtCtrlDisp ? 0
     : (document.getElementById('mobile-ctrl-overlay')?.offsetHeight
-       || (typeof AVT_STATE !== 'undefined' && AVT_STATE._overlayH) || 0);
+       || (typeof AVT_STATE !== 'undefined' && (AVT_STATE as any)._overlayH) || 0);
   hud.style.setProperty('--avt-ctrl-h', overlayH + 'px');
 
   // Classe de tamanho reduzido no modo controle
@@ -7748,8 +7748,8 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
   else hud.classList.remove('avt-rc-ctrl');
 
   // Cancelar fade em andamento
-  if (AVT_STATE._rollHudFadeTimer) { clearTimeout(AVT_STATE._rollHudFadeTimer); AVT_STATE._rollHudFadeTimer = null; }
-  if (AVT_STATE._rollHudHideTimer) { clearTimeout(AVT_STATE._rollHudHideTimer); AVT_STATE._rollHudHideTimer = null; }
+  if (AVT_STATE._rollHudFadeTimer) { clearTimeout(AVT_STATE._rollHudFadeTimer); (AVT_STATE as any)._rollHudFadeTimer = null; }
+  if (AVT_STATE._rollHudHideTimer) { clearTimeout(AVT_STATE._rollHudHideTimer); (AVT_STATE as any)._rollHudHideTimer = null; }
   hud.classList.remove('avt-rc-fade');
   hud.innerHTML = '';
 
@@ -7823,7 +7823,7 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
       let tick = 0;
       const slotId = setInterval(() => {
         if (tick < ticks) {
-          numEl.textContent = Math.floor(Math.random() * faces) + 1;
+          (numEl as any).textContent = Math.floor(Math.random() * faces) + 1;
           tick++;
         } else {
           clearInterval(slotId);
@@ -7858,9 +7858,9 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
   }
 
   // Auto-fade: 2 s de exibição + 0.4 s de fade
-  AVT_STATE._rollHudFadeTimer = setTimeout(() => {
+  (AVT_STATE as any)._rollHudFadeTimer = setTimeout(() => {
     hud.classList.add('avt-rc-fade');
-    AVT_STATE._rollHudHideTimer = setTimeout(() => {
+    (AVT_STATE as any)._rollHudHideTimer = setTimeout(() => {
       hud.innerHTML = '';
       hud.classList.remove('avt-rc-fade');
     }, 450);
@@ -7920,15 +7920,15 @@ function _avtAtivarModoAlvo(skId, atacante) {
     });
   }
 
-  AVT_STATE._habilidadeRange = { tiles, tilesAlvo };
-  AVT_STATE._modoAlvoHabilidade = { skId, atacante, tipoArea, tamanhoArea };
+  (AVT_STATE as any)._habilidadeRange = { tiles, tilesAlvo };
+  (AVT_STATE as any)._modoAlvoHabilidade = { skId, atacante, tipoArea, tamanhoArea };
 }
 
 function _avtLimparModoAlvo() {
-  AVT_STATE._habilidadeRange = null;
-  AVT_STATE._modoAlvoHabilidade = null;
-  AVT_STATE._areaCentro = null;
-  AVT_STATE._areaLinha = null;
+  (AVT_STATE as any)._habilidadeRange = null;
+  (AVT_STATE as any)._modoAlvoHabilidade = null;
+  (AVT_STATE as any)._areaCentro = null;
+  (AVT_STATE as any)._areaLinha = null;
 }
 
 function _avtAtivarIndicadorTeleporte(casterEnt, sk) {
@@ -7938,7 +7938,7 @@ function _avtAtivarIndicadorTeleporte(casterEnt, sk) {
     for (let dx = -alcance; dx <= alcance; dx++)
       if (Math.max(Math.abs(dx), Math.abs(dy)) <= alcance)
         tiles.push({ x: Math.round(casterEnt.x) + dx, y: Math.round(casterEnt.y) + dy });
-  AVT_STATE._habilidadeRange = { tiles, tilesAlvo: [] };
+  (AVT_STATE as any)._habilidadeRange = { tiles, tilesAlvo: [] };
 }
 
 function _avtMostrarBotaoRolar() {
@@ -8172,7 +8172,7 @@ function _avtBFS(startX, startY, range, entId, entTipo) {
 
 function _avtCanvasClick(e) {
   // Suprime click logo após um drag de pan do mapa
-  if (AVT_STATE._panSuprimirClick) { AVT_STATE._panSuprimirClick = false; return; }
+  if (AVT_STATE._panSuprimirClick) { (AVT_STATE as any)._panSuprimirClick = false; return; }
   const canvas = AVT_STATE.canvas;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   let _cx, _cy;
@@ -8200,9 +8200,9 @@ function _avtCanvasClick(e) {
   }
 
   // Chest placement mode: click to set chest position on the map
-  if (AVT_STATE._modoBauPlacement) {
-    const { bauId } = AVT_STATE._modoBauPlacement;
-    AVT_STATE._modoBauPlacement = null;
+  if ((AVT_STATE as any)._modoBauPlacement) {
+    const { bauId } = (AVT_STATE as any)._modoBauPlacement;
+    (AVT_STATE as any)._modoBauPlacement = null;
     canvas.style.cursor = '';
     const bau = _avtGetBauById(bauId);
     if (bau && AVT_STATE.dungeon) {
@@ -8247,7 +8247,7 @@ function _avtCanvasClick(e) {
       const efTp = entTp.status_effects?.find(e => e.tipo === 'teleporte');
       if (efTp) { efTp._turnos_restantes--; if (efTp._turnos_restantes <= 0) entTp.status_effects = entTp.status_effects.filter(e => e !== efTp); }
       AVT_STATE._modoTeleporte = null;
-      AVT_STATE._habilidadeRange = null;
+      (AVT_STATE as any)._habilidadeRange = null;
       canvas.style.cursor = '';
       _avtBcastTokenMove({ nome: entTp.nome, x: tileX, y: tileY });
       mostrarToast(`🌀 ${entTp.nome} teleportou!`, 'ok');
@@ -8303,9 +8303,9 @@ function _avtCanvasClick(e) {
           else _avtDebounceSalvarPosicaoNpc(ativo);
         }
       }
-    } else if (AVT_STATE._modoAlvoHabilidade) {
+    } else if ((AVT_STATE as any)._modoAlvoHabilidade) {
       // Modo alvo ativo: clique seleciona inimigo ou centro de área
-      const { skId, atacante, tipoArea, tamanhoArea } = AVT_STATE._modoAlvoHabilidade;
+      const { skId, atacante, tipoArea, tamanhoArea } = (AVT_STATE as any)._modoAlvoHabilidade;
       const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
       const alcance = _avtAlcanceAlvoJogador(sk, atacante);
       const ax = Math.round(atacante.x), ay = Math.round(atacante.y);
@@ -8328,9 +8328,9 @@ function _avtCanvasClick(e) {
               tilesAlvoArea.push({ x: Math.round(e.renderX ?? e.x), y: Math.round(e.renderY ?? e.y) });
             }
           });
-          AVT_STATE._areaCentro = { x: tileX, y: tileY, tamanho: t };
-          AVT_STATE._modoAlvoHabilidade = { skId, atacante, tipoArea, tamanhoArea };
-          AVT_STATE._habilidadeRange = { tiles: [], tilesAlvo: tilesAlvoArea, tilesAlvoVermelho: tilesArea };
+          (AVT_STATE as any)._areaCentro = { x: tileX, y: tileY, tamanho: t };
+          (AVT_STATE as any)._modoAlvoHabilidade = { skId, atacante, tipoArea, tamanhoArea };
+          (AVT_STATE as any)._habilidadeRange = { tiles: [], tilesAlvo: tilesAlvoArea, tilesAlvoVermelho: tilesArea };
           mostrarToast(`◼ Centro da área selecionado`, '', 1500);
           _avtMostrarBotaoRolar();
         } else if (dist === 0) {
@@ -8357,9 +8357,9 @@ function _avtCanvasClick(e) {
               tilesAlvoLinha.push({ x: Math.round(e.renderX ?? e.x), y: Math.round(e.renderY ?? e.y) });
             }
           });
-          AVT_STATE._areaLinha = { dx, dy, cells: linhaAlvo };
-          AVT_STATE._modoAlvoHabilidade = { skId, atacante, tipoArea, tamanhoArea };
-          AVT_STATE._habilidadeRange = { tiles: [], tilesAlvo: tilesAlvoLinha, tilesAlvoVermelho: linhaAlvo };
+          (AVT_STATE as any)._areaLinha = { dx, dy, cells: linhaAlvo };
+          (AVT_STATE as any)._modoAlvoHabilidade = { skId, atacante, tipoArea, tamanhoArea };
+          (AVT_STATE as any)._habilidadeRange = { tiles: [], tilesAlvo: tilesAlvoLinha, tilesAlvoVermelho: linhaAlvo };
           mostrarToast(`▬ Linha selecionada`, '', 1500);
           _avtMostrarBotaoRolar();
         } else {
@@ -8411,11 +8411,11 @@ function _avtCanvasClick(e) {
       if (dist <= alcance) {
         if (_isMobileClick) {
           // Mobile: seleciona alvo e mostra botão de rolagem (mantém range ativo)
-          AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = { entityId: entAlvo.id, skId };
+          (AVT_STATE as any)._primeiroAtaqueAlvoSelecionadoMobile = { entityId: entAlvo.id, skId };
           _avtMostrarBotaoRolarPerseguicaoMobile();
         } else {
           AVT_STATE._primeiroAtaqueModoAlvo = null;
-          AVT_STATE._habilidadeRange = null;
+          (AVT_STATE as any)._habilidadeRange = null;
           _avtExecutarPrimeiroAtaque(skId, entAlvo.id);
         }
       } else {
@@ -8424,7 +8424,7 @@ function _avtCanvasClick(e) {
     } else if (!_isMobileClick) {
       // Desktop: cancela ao clicar em tile vazio
       AVT_STATE._primeiroAtaqueModoAlvo = null;
-      AVT_STATE._habilidadeRange = null;
+      (AVT_STATE as any)._habilidadeRange = null;
       mostrarToast('Primeiro ataque cancelado', '', 1200);
     }
     return;
@@ -8435,17 +8435,17 @@ function _avtCanvasClick(e) {
     const jogador = _avtEntidadeControlada();
     if (jogador && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
       // Interrompe caminho atual e limpa fila de waypoints existente
-      AVT_STATE._caminhoDestino = null;
+      (AVT_STATE as any)._caminhoDestino = null;
       if (!Array.isArray(jogador._waypoints)) jogador._waypoints = [];
       jogador._waypoints.length = 0;
       // Pathfinding para o destino (snap para célula inteira mais próxima ao iniciar clique)
       const caminho = _avtPathfindSimples(Math.round(jogador.x), Math.round(jogador.y), tileX, tileY);
       if (caminho.length > 1) {
         // Ao mover, retoma o follow da câmera
-        if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
+        if (AVT_STATE._userPanned) { (AVT_STATE as any)._userPanned = false; _avtCameraCenter(); }
         // Todos os passos vão para a fila; o sistema de waypoints atualiza x/y por célula
         // garantindo movimento fluido sem travar e sem desincronizar x/y de renderX/Y
-        AVT_STATE._caminhoDestino = caminho.slice(1);
+        (AVT_STATE as any)._caminhoDestino = caminho.slice(1);
         _avtCheckPrimeiroAtaque();
         _avtBcastTokenMove({ nome: jogador.nome, x: tileX, y: tileY });
         // Salva a posição final (destino) de imediato para não atrasar
@@ -8487,9 +8487,9 @@ function _avtCanvasKey(e) {
   const _code = e.code  || '';
 
   // ── Escape: cancelar modo de posicionamento de baú ───────────────────────
-  if (e.key === 'Escape' && AVT_STATE._modoBauPlacement) {
-    const { bauId } = AVT_STATE._modoBauPlacement;
-    AVT_STATE._modoBauPlacement = null;
+  if (e.key === 'Escape' && (AVT_STATE as any)._modoBauPlacement) {
+    const { bauId } = (AVT_STATE as any)._modoBauPlacement;
+    (AVT_STATE as any)._modoBauPlacement = null;
     if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
     mostrarToast('Posicionamento cancelado', 'aviso');
     _avtMestreEditarBau(bauId);
@@ -8515,7 +8515,7 @@ function _avtCanvasKey(e) {
         const _dist = Math.max(Math.abs(Math.round(_alvoEnt.x) - Math.round(atacante.x)), Math.abs(Math.round(_alvoEnt.y) - Math.round(atacante.y)));
         if (_dist <= _alc) {
           AVT_STATE._primeiroAtaqueModoAlvo = null;
-          AVT_STATE._habilidadeRange = null;
+          (AVT_STATE as any)._habilidadeRange = null;
           _avtExecutarPrimeiroAtaque(skId, _alvoEnt.id);
           return;
         }
@@ -8734,7 +8734,7 @@ window._avtJogadorEstaOnline = _avtJogadorEstaOnline;
 // Atualiza visibilidade de personagens vinculados a jogadores offline/online
 function _avtAtualizarVisibilidadeOffline() {
   if (!AVT_STATE.membros?.length) return;
-  const d = AVT_STATE.dungeonData || AVT_STATE.dungeon;
+  const d = (AVT_STATE as any).dungeonData || AVT_STATE.dungeon;
   // Visibilidade de jogadores remotos é autoridade do host da fase: clientes não-autoridade
   // recebem o estado pelo tick (avt_state_tick) e não devem recalcular localmente — senão
   // brigam com o host e o token pisca. Não-autoridade só cuida do próprio personagem.
@@ -8810,7 +8810,7 @@ function _avtVerificarInatividade() {
   const meuChar  = AVT_STATE.myCharNome || null;
 
   // Jogador local: atividade real de jogo conta como presença, independente do chat.
-  const euAtivo = (agora - (AVT_STATE._ultimaAtividade || 0)) < JANELA;
+  const euAtivo = (agora - ((AVT_STATE as any)._ultimaAtividade || 0)) < JANELA;
 
   const ativos = vinculados.filter(e => {
     if (meuChar && e.nome === meuChar) return euAtivo;
@@ -8860,8 +8860,8 @@ function _avtMeuJogador() {
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
   if (jogadores.length === 1) return jogadores[0];
   // Múltiplos jogadores e sem vínculo: avisa uma vez (mas não se for o host técnico)
-  if (jogadores.length > 1 && !AVT_STATE._avisouSemVinculo) {
-    AVT_STATE._avisouSemVinculo = true;
+  if (jogadores.length > 1 && !(AVT_STATE as any)._avisouSemVinculo) {
+    (AVT_STATE as any)._avisouSemVinculo = true;
     const isHostSemPersonagem = typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.isHost();
     if (!isHostSemPersonagem && typeof mostrarToast === 'function') {
       mostrarToast('⏳ Aguardando o mestre atribuir seu personagem', 'aviso', 4000);
@@ -8908,7 +8908,7 @@ function _avtSfxVolDist(baseVol, fonte) {
 // (reutiliza _avtSfxVolDist) e panning estéreo derivado da direção fonte→ouvinte
 // (o pan só tem efeito em SFX de assets locais; remotos tocam sem pan por CORS).
 // fonte: entidade ou {x, y} em células. Retorna true se tocou.
-function _avtSfxPosicional(sfxId, fonte, baseVol, pitchVar) {
+function _avtSfxPosicional(sfxId, fonte, baseVol, pitchVar?) {
   try {
     if (typeof AudioManager === 'undefined' || !sfxId) return false;
     const vol = _avtSfxVolDist(baseVol != null ? baseVol : 0.7, fonte);
@@ -8929,7 +8929,7 @@ window._avtSfxPosicional = _avtSfxPosicional;
 // distância do ouvinte (tocha crepitando, cachoeira, fogueira...). Atualizado a
 // ~4 Hz pelo render loop; loops de objetos removidos/da fase anterior são parados.
 function _avtAtualizarSonsAmbiente() {
-  const reg = AVT_STATE._ambSounds || (AVT_STATE._ambSounds = new Map());
+  const reg = AVT_STATE._ambSounds || ((AVT_STATE as any)._ambSounds = new Map());
   const objs = AVT_STATE.dungeon?.render_data?.objetos;
   const vivos = new Set();
   if (Array.isArray(objs) && typeof AudioManager !== 'undefined' && AVT_STATE.dungeon) {
@@ -8965,7 +8965,7 @@ function _avtAtualizarSonsAmbiente() {
 window._avtAtualizarSonsAmbiente = _avtAtualizarSonsAmbiente;
 
 function _avtPararSonsAmbiente() {
-  const reg = AVT_STATE._ambSounds;
+  const reg = (AVT_STATE as any)._ambSounds;
   if (!reg) return;
   for (const [, rec] of reg) { try { rec.howl.stop(); rec.howl.unload(); } catch (_) {} }
   reg.clear();
@@ -8976,7 +8976,7 @@ window._avtPararSonsAmbiente = _avtPararSonsAmbiente;
 // faseId ausente (null/undefined) conta como "minha", preservando o comportamento
 // legado de handlers que recebiam payloads sem fase.
 function _avtMinhaFase(faseId) {
-  return faseId == null || faseId === (AVT_STATE._faseAtualId || 'principal');
+  return faseId == null || faseId === ((AVT_STATE as any)._faseAtualId || 'principal');
 }
 
 // Entidade que o usuário atual está controlando para fins de movimentação:
@@ -8995,7 +8995,7 @@ function _avtMoverJogador(dx, dy) {
   // centraliza imediatamente nele (corrige "câmera perdida").
   if (AVT_STATE.camera?._userDragged) {
     try { _avtCameraSnapToPlayer({ instant: true }); } catch(_) {}
-    AVT_STATE.camera._userDragged = false;
+    (AVT_STATE.camera as any)._userDragged = false;
   }
   const minhaBat = _avtMinhaBatalha();
   // Resolve a entidade controlada (jogador vinculado, ou NPC sob mestreAtivo).
@@ -9062,7 +9062,7 @@ function _avtMoverJogador(dx, dy) {
     // A interpolação renderX/Y desliza suavemente; side-effects (broadcast,
     // proximidade, porta/saída, recuperação) rodam no callback por célula,
     // unificado com o pipeline de clique (_caminhoDestino).
-    AVT_STATE._caminhoDestino = null;
+    (AVT_STATE as any)._caminhoDestino = null;
     if (!Array.isArray(jogador._waypoints)) jogador._waypoints = [];
     // Cancelamento antecipado: se o personagem ainda não completou 50% da animação
     // para a próxima célula E está mudando de direção, cancela e volta à célula de
@@ -9143,7 +9143,7 @@ function _avtMoverJogador(dx, dy) {
     // reconciliação por seq. Host/Supabase fazem o broadcast no callback ao alcançar.
     _avtEnviarMoveInput(jogador, nx, ny);
     _avtMarcarAtividade();
-    if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
+    if (AVT_STATE._userPanned) { (AVT_STATE as any)._userPanned = false; _avtCameraCenter(); }
   }
 }
 
@@ -9354,8 +9354,8 @@ function _avtCheckPrimeiroAtaque() {
     );
     if (!temAlvo) {
       AVT_STATE._primeiroAtaqueModoAlvo = null;
-      AVT_STATE._habilidadeRange = null;
-      AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
+      (AVT_STATE as any)._habilidadeRange = null;
+      (AVT_STATE as any)._primeiroAtaqueAlvoSelecionadoMobile = null;
       document.getElementById('avt-btn-rolar')?.remove();
       mostrarToast('Inimigo saiu do alcance', '', 1500);
     } else {
@@ -9412,9 +9412,9 @@ function _avtEnquadrarAlvosCamera(alvos, jogador) {
   // Debounce: não re-enquadrar mais que uma vez a cada 4s, e respeitar pan manual
   const agora = Date.now();
   const _debounceEnq = (navigator.maxTouchPoints > 0) ? 6000 : 4000;
-  if (agora - (AVT_STATE._ultimoEnquadre || 0) < _debounceEnq) return;
-  if (agora - (AVT_STATE._cameraManualMs || 0) < _debounceEnq) return;
-  AVT_STATE._ultimoEnquadre = agora;
+  if (agora - ((AVT_STATE as any)._ultimoEnquadre || 0) < _debounceEnq) return;
+  if (agora - ((AVT_STATE as any)._cameraManualMs || 0) < _debounceEnq) return;
+  (AVT_STATE as any)._ultimoEnquadre = agora;
   // Usar apenas o inimigo mais próximo para evitar zoom excessivo
   const closest = alvos.reduce((best, e) => {
     const d  = Math.abs(e.x - jogador.x) + Math.abs(e.y - jogador.y);
@@ -9454,7 +9454,7 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
   const _ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo' && typeof _emModoAventura === 'function' && _emModoAventura();
   if (_ctrlDisp) {
     // Reset seleção pendente para fresh start
-    AVT_STATE._pendingSkillId = undefined;
+    (AVT_STATE as any)._pendingSkillId = undefined;
     AVT_STATE.alvoSelecionado = null;
     if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
     if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
@@ -9480,9 +9480,9 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
     background:rgba(5,8,16,0.97);border:1px solid rgba(79,163,209,0.35);
     border-radius:10px;padding:8px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
 
-  const algumPerseguindo = Object.values(AVT_STATE.npcTimers).some(t => t.isPursuing && t.targetId === jogador.id);
+  const algumPerseguindo = Object.values<any>(AVT_STATE.npcTimers).some(t => t.isPursuing && t.targetId === jogador.id);
   const _rangeAc = _avtGetRangeAceitarCombate();
-  const algumPerseguindoDentroDoRange = Object.entries(AVT_STATE.npcTimers).some(([id, t]) => {
+  const algumPerseguindoDentroDoRange = Object.entries<any>(AVT_STATE.npcTimers).some(([id, t]) => {
     if (!t.isPursuing || t.targetId !== jogador.id) return false;
     const ent = AVT_STATE.entidades.find(e => e.id === id);
     if (!ent) return false;
@@ -9562,12 +9562,12 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
   }, 500);
 }
 
-function _avtFecharPrimeiroAtaqueModal(_byIgnore) {
+function _avtFecharPrimeiroAtaqueModal(_byIgnore?) {
   // Ao ignorar (não ao aceitar): marcar perseguidores como ignorados para não repetir o convite
   if (_byIgnore !== false) {
     const _jog = _avtMeuJogador();
     if (_jog) {
-      Object.entries(AVT_STATE.npcTimers).forEach(([id, t]) => {
+      Object.entries<any>(AVT_STATE.npcTimers).forEach(([id, t]) => {
         if (t.isPursuing && t.targetId === _jog.id &&
             !AVT_STATE._inimigosIgnorados.includes(id)) {
           AVT_STATE._inimigosIgnorados.push(id);
@@ -9578,8 +9578,8 @@ function _avtFecharPrimeiroAtaqueModal(_byIgnore) {
   AVT_STATE._primeiroAtaqueAlvo = null;
   AVT_STATE._primeiroAtaqueAberto = false;
   AVT_STATE._primeiroAtaqueModoAlvo = null;
-  AVT_STATE._habilidadeRange = null;
-  AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
+  (AVT_STATE as any)._habilidadeRange = null;
+  (AVT_STATE as any)._primeiroAtaqueAlvoSelecionadoMobile = null;
   document.getElementById('avt-skill-overlay')?.remove();
   document.getElementById('avt-alvo-skill-overlay')?.remove();
   document.getElementById('avt-btn-rolar')?.remove();
@@ -9606,7 +9606,7 @@ async function _avtPrimeiroAtaqueSelecionarSkill(skId) {
   if (sk?.alvo_tipo === 'aliado') {
     const _isMcDispOoc = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
     if (_isMcDispOoc) {
-      AVT_STATE._pendingSkillId = skId;
+      (AVT_STATE as any)._pendingSkillId = skId;
       if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
       if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
       return;
@@ -9792,7 +9792,7 @@ function _avtAtivarModoAlvoPrimeiroAtaque(skId, atacante) {
       else             tilesAlvoAmarelo.push({ x: ex, y: ey });
     }
   });
-  AVT_STATE._habilidadeRange = { tiles, tilesAlvo: [], tilesAlvoVermelho, tilesAlvoAmarelo };
+  (AVT_STATE as any)._habilidadeRange = { tiles, tilesAlvo: [], tilesAlvoVermelho, tilesAlvoAmarelo };
   AVT_STATE._primeiroAtaqueModoAlvo = { skId, atacante };
 
 }
@@ -9828,25 +9828,25 @@ function _avtMostrarBotaoRolarPerseguicaoMobile() {
 
 // Handler do botão de rolagem mobile durante perseguição
 function _avtRolarDadosPrimAtaqueMobile() {
-  const sel = AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile;
+  const sel = (AVT_STATE as any)._primeiroAtaqueAlvoSelecionadoMobile;
   if (!sel) return;
   AVT_STATE._primeiroAtaqueModoAlvo = null;
-  AVT_STATE._habilidadeRange = null;
-  AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
+  (AVT_STATE as any)._habilidadeRange = null;
+  (AVT_STATE as any)._primeiroAtaqueAlvoSelecionadoMobile = null;
   document.getElementById('avt-btn-rolar')?.remove();
   _avtExecutarPrimeiroAtaque(sel.skId, sel.entityId);
 }
 
 // Verifica se o alvo selecionado ainda está no range; mostra/esconde botão de rolagem
 function _avtVerificarAlvoAindaNoRangeMobile() {
-  const sel = AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile;
+  const sel = (AVT_STATE as any)._primeiroAtaqueAlvoSelecionadoMobile;
   if (!sel) return;
   const modoAlvo = AVT_STATE._primeiroAtaqueModoAlvo;
   if (!modoAlvo) return;
   const ini = AVT_STATE.entidades.find(e => e.id === sel.entityId);
   if (!ini || ini.hp <= 0) {
     document.getElementById('avt-btn-rolar')?.remove();
-    AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
+    (AVT_STATE as any)._primeiroAtaqueAlvoSelecionadoMobile = null;
     return;
   }
   const sk = sel.skId ? AVT_STATE.skills.find(s => s.id === sel.skId) : null;
@@ -9902,8 +9902,8 @@ function _avtSelecionarAlvoPrimeiroAtaque(skId, targetId) {
 
 async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   AVT_STATE._primeiroAtaqueModoAlvo = null;
-  AVT_STATE._habilidadeRange = null;
-  AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
+  (AVT_STATE as any)._habilidadeRange = null;
+  (AVT_STATE as any)._primeiroAtaqueAlvoSelecionadoMobile = null;
   if (!targetId) return;
   const ini = AVT_STATE.entidades.find(e => e.id === targetId);
   const jogador = _avtMeuJogador();
@@ -10016,7 +10016,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     if (_isTodosInimigoOoc) {
       _alvosAreaOoc = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0);
     } else if (_tipoAreaOoc === 'quadrado') {
-      const _ctr = AVT_STATE._areaCentro
+      const _ctr = (AVT_STATE as any)._areaCentro
         || { x: Math.round(ini.x), y: Math.round(ini.y), tamanho: sk.tamanho_area || 1 };
       const { x: _cx, y: _cy, tamanho: _ct } = _ctr;
       _alvosAreaOoc = AVT_STATE.entidades.filter(e =>
@@ -10024,8 +10024,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
         Math.max(Math.abs(Math.round(e.x) - _cx), Math.abs(Math.round(e.y) - _cy)) <= _ct
       );
     } else if (_tipoAreaOoc === 'linha') {
-      if (AVT_STATE._areaLinha) {
-        const { cells: _lnCells } = AVT_STATE._areaLinha;
+      if ((AVT_STATE as any)._areaLinha) {
+        const { cells: _lnCells } = (AVT_STATE as any)._areaLinha;
         _alvosAreaOoc = AVT_STATE.entidades.filter(e =>
           e.tipo === 'inimigo' && e.hp > 0 &&
           _lnCells.some(c => c.x === Math.round(e.x) && c.y === Math.round(e.y))
@@ -10174,7 +10174,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
         // Para skills de área, enviar a geometria (centro/linha) e ancorar no conjurador —
         // o rótulo "_areaLabel" não resolve uma entidade nos peers, e _areaCentro/_areaLinha
         // são estado local, então a animação não aparecia para quem não conjurou.
-        try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivoArea.nome, alvoNome: entJogVivoArea.nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null }); } catch(_) {}
+        try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivoArea.nome, alvoNome: entJogVivoArea.nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: (AVT_STATE as any)._areaLinha || null }); } catch(_) {}
       }
 
       // Invocações (efeito 'invocar_catalogo'): vinculadas ao conjurador, uma vez por uso
@@ -10271,8 +10271,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
         }, idxA * 80);
       });
 
-      AVT_STATE._areaCentro = null;
-      AVT_STATE._areaLinha  = null;
+      (AVT_STATE as any)._areaCentro = null;
+      (AVT_STATE as any)._areaLinha  = null;
 
     } else {
       // ── PATH DE ALVO ÚNICO (original) ────────────────────────────────────
@@ -10505,13 +10505,13 @@ function _avtCheckProximidadeInimigos(jogadorMovendo) {
 function _avtAtualizarPaciencias(dt) {
   if (!dt) return;
   if (AVT_STATE._jogoAutoSuspenso) return;
-  for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
+  for (const [id, timer] of Object.entries<any>(AVT_STATE.npcTimers)) {
     if (!timer.ativo) continue;
     // Pausa paciência enquanto menu do personagem ou painel do mestre estiver aberto
     // (desde que o inimigo ainda não esteja perseguindo ativamente)
     if (AVT_STATE._menuJogadorAberto && !timer.isPursuing) continue;
     // [NPC-SYNC] Só o host eleito atualiza o relógio de paciência do NPC (apenas em modo RTNet ativo).
-    if (AVT_STATE.npcSyncEnabled && typeof RTNet !== 'undefined' && RTNet?.initialized && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
+    if ((AVT_STATE as any).npcSyncEnabled && typeof RTNet !== 'undefined' && RTNet?.initialized && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
     // Skip if this enemy is already in a combat
     if (_avtBatalhaDeEnt(id)) { timer.ativo = false; continue; }
     timer.patience = Math.max(0, timer.patience - dt);
@@ -10575,7 +10575,7 @@ async function _avtSalvarPacienciaConfig() {
     paciencia_chance_2s: parseFloat(document.getElementById('avt-mp-pac-c2')?.value),
     paciencia_tempo_2s:  parseFloat(document.getElementById('avt-mp-pac-t2')?.value),
   };
-  if (Object.values(vals).some(v => isNaN(v))) { mostrarToast('Valores inválidos', 'erro'); return; }
+  if (Object.values<any>(vals).some(v => isNaN(v))) { mostrarToast('Valores inválidos', 'erro'); return; }
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -10631,7 +10631,7 @@ function _avtGetPerseguicaoDesistirChance() {
 function _avtGetPerseguicaoDesistirIntervaloMs() {
   return (AVT_STATE.rpg?.theme_json?.level_config?.perseguicao_desistir_intervalo_s ?? 3) * 1000;
 }
-function _avtGetAtaqueBasicoCooldown(abCfg) {
+function _avtGetAtaqueBasicoCooldown(abCfg?) {
   // Override individual por personagem (config.ataque_basico.cooldown_turnos) tem
   // prioridade sobre o padrão global da aventura (Painel do Mestre → Balanceamento).
   const perChar = abCfg?.cooldown_turnos;
@@ -10696,7 +10696,7 @@ function _avtCancelarPerseguicao(enemyId) {
   // Voltar para música de exploração se nenhum outro inimigo ainda persegue e não há combate ativo
   if (typeof AudioManager !== 'undefined') {
     try {
-      const _algumPers = Object.values(AVT_STATE.npcTimers).some(t => t.isPursuing);
+      const _algumPers = Object.values<any>(AVT_STATE.npcTimers).some(t => t.isPursuing);
       const _emCombate = AVT_STATE.batalhas && AVT_STATE.batalhas.length > 0;
       if (!_algumPers && !_emCombate) AudioManager.onCombatEnd();
     } catch(_) {}
@@ -10713,7 +10713,7 @@ function _avtInimigoReageADominado(alvoEnt, dominadoEnt) {
   // Já em batalha por turnos: a IA de combate cuida do alvo.
   if (typeof _avtBatalhaDeEnt === 'function' && _avtBatalhaDeEnt(alvoEnt.id)) return;
   // [NPC-SYNC] Só o host eleito do alvo muta o timer/persegue (evita divergência).
-  if (AVT_STATE.npcSyncEnabled && typeof RTNet !== 'undefined' && RTNet?.initialized &&
+  if ((AVT_STATE as any).npcSyncEnabled && typeof RTNet !== 'undefined' && RTNet?.initialized &&
       typeof _avtSouHostDe === 'function' && !_avtSouHostDe(alvoEnt.id)) return;
 
   if (!AVT_STATE.npcTimers[alvoEnt.id]) _avtInitNpcTimer(alvoEnt);
@@ -10759,10 +10759,10 @@ function _avtAtualizarPerseguicoes(dt) {
     return false;
   };
 
-  for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
+  for (const [id, timer] of Object.entries<any>(AVT_STATE.npcTimers)) {
     if (!timer.isPursuing) continue;
     // [NPC-SYNC] Só o host eleito do NPC simula sua IA (evita travamento e divergência).
-    if (AVT_STATE.npcSyncEnabled && typeof RTNet !== 'undefined' && RTNet?.initialized && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
+    if ((AVT_STATE as any).npcSyncEnabled && typeof RTNet !== 'undefined' && RTNet?.initialized && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
     if (_avtBatalhaDeEnt(id)) { _avtCancelarPerseguicao(id); continue; }
     const ini = AVT_STATE.entidades.find(e => e.id === id);
     if (!ini || ini.hp <= 0) { _avtCancelarPerseguicao(id); continue; }
@@ -11044,7 +11044,7 @@ function _avtAtualizarDominados(dt) {
   });
 }
 
-function _avtIniciarAnimPersistente(ef, entAlvo, casterEnt, _fromNet) {
+function _avtIniciarAnimPersistente(ef, entAlvo, casterEnt, _fromNet?) {
   if (!ef?.animacao_persistente?.pixi_studio_id) return;
   if (typeof avtPixiPlayPersistent !== 'function') return;
   const key = `${entAlvo?.id}_${ef.tipo}`;
@@ -11064,7 +11064,7 @@ function _avtIniciarAnimPersistente(ef, entAlvo, casterEnt, _fromNet) {
   }
 }
 
-function _avtPararAnimPersistente(ef, entAlvo, _fromNet) {
+function _avtPararAnimPersistente(ef, entAlvo, _fromNet?) {
   if (!ef?.animacao_persistente?.pixi_studio_id) return;
   if (typeof avtPixiStopPersistent !== 'function') return;
   avtPixiStopPersistent(`${entAlvo?.id}_${ef.tipo}`);
@@ -11549,7 +11549,7 @@ function _avtAceitarCombate() {
   // Coletar perseguidores em perseguição ativa e dentro do range configurado
   const _rangeAc = _avtGetRangeAceitarCombate();
   const _jogEnt = AVT_STATE.entidades.find(e => e.id === jogador?.id) || jogador;
-  const perseguidores = Object.entries(AVT_STATE.npcTimers)
+  const perseguidores = Object.entries<any>(AVT_STATE.npcTimers)
     .filter(([id, t]) => {
       if (!t.isPursuing) return false;
       const ent = AVT_STATE.entidades.find(e => e.id === id);
@@ -11651,8 +11651,8 @@ function avtDpadStop() {
 
 function _avtDpadDoMove(dx, dy) {
   const _jog = _avtMeuJogador();
-  if (_jog && (_jog._waypoints?.length > 0 || AVT_STATE._caminhoDestino?.length > 0)) {
-    AVT_STATE._caminhoDestino = null;
+  if (_jog && (_jog._waypoints?.length > 0 || (AVT_STATE as any)._caminhoDestino?.length > 0)) {
+    (AVT_STATE as any)._caminhoDestino = null;
     if (_jog._waypoints) _jog._waypoints.length = 0;
     _jog.x = Math.round(_jog.renderX ?? _jog.x);
     _jog.y = Math.round(_jog.renderY ?? _jog.y);
@@ -12003,7 +12003,7 @@ function avtReceberColisaoConfig({ colisaoJogJog, colisaoJogNpc }) {
 window.avtReceberColisaoConfig = avtReceberColisaoConfig;
 
 // Broadcast / receive new entity (avatar, etc.)
-function avtReceberEntidadeNova({ entidade, casterId, faseId } = {}) {
+function avtReceberEntidadeNova({ entidade, casterId, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   if (!entidade || AVT_STATE.entidades.some(e => e.id === entidade.id)) return;
   AVT_STATE.entidades.push(entidade);
@@ -12015,7 +12015,7 @@ window.avtReceberEntidadeNova = avtReceberEntidadeNova;
 function _avtBroadcastFimBatalha(batalhaId) {
   _avtBroadcast('avt_combate_fim', { batalhaId });
 }
-function avtReceberFimBatalha({ batalhaId, faseId } = {}) {
+function avtReceberFimBatalha({ batalhaId, faseId }: any = {}) {
   if (!AVT_STATE.rpgId) return;
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   AVT_STATE.batalhas = AVT_STATE.batalhas.filter(b => b.id !== batalhaId);
@@ -12032,7 +12032,7 @@ function _avtBroadcastJoinBatalha(batalhaId, jogadorId, jogadorNome) {
   const initRoll = Math.floor(Math.random()*20)+1+4;
   _avtBroadcast('avt_combate_join', { batalhaId, jogadorId, jogadorNome, initRoll });
 }
-function avtReceberJoinBatalha({ batalhaId, jogadorId, jogadorNome, initRoll, faseId } = {}) {
+function avtReceberJoinBatalha({ batalhaId, jogadorId, jogadorNome, initRoll, faseId }: any = {}) {
   if (!AVT_STATE.rpgId) return;
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   const bat = AVT_STATE.batalhas.find(b => b.id === batalhaId);
@@ -12053,7 +12053,7 @@ window.avtReceberJoinBatalha = avtReceberJoinBatalha;
 function _avtBroadcastNpcMorreu(npcId) {
   _avtBroadcastNpc('avt_npc_morreu', { npcId });
 }
-function avtReceberNpcMorreu({ npcId, faseId } = {}) {
+function avtReceberNpcMorreu({ npcId, faseId }: any = {}) {
   if (!AVT_STATE.rpgId) return;
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   const ent = AVT_STATE.entidades.find(e => e.id === npcId);
@@ -12065,7 +12065,7 @@ window.avtReceberNpcMorreu = avtReceberNpcMorreu;
 function _avtBroadcastNpcRespawn(npcId, x, y, hp) {
   _avtBroadcastNpc('avt_npc_respawn', { npcId, x, y, hp });
 }
-function avtReceberNpcRespawn({ npcId, x, y, hp, faseId } = {}) {
+function avtReceberNpcRespawn({ npcId, x, y, hp, faseId }: any = {}) {
   if (!AVT_STATE.rpgId) return;
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   const ent = AVT_STATE.entidades.find(e => e.id === npcId);
@@ -12079,7 +12079,7 @@ function avtReceberNpcRespawn({ npcId, x, y, hp, faseId } = {}) {
 }
 window.avtReceberNpcRespawn = avtReceberNpcRespawn;
 
-function avtReceberNpcPerseguindo({ id, targetId, faseId } = {}) {
+function avtReceberNpcPerseguindo({ id, targetId, faseId }: any = {}) {
   if (!AVT_STATE.rpgId) return;
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   if (!AVT_STATE.npcTimers[id]) {
@@ -12097,7 +12097,7 @@ function avtReceberNpcPerseguindo({ id, targetId, faseId } = {}) {
 }
 window.avtReceberNpcPerseguindo = avtReceberNpcPerseguindo;
 
-function avtReceberConviteCombate({ batId, expiry, aliadoIds, faseId } = {}) {
+function avtReceberConviteCombate({ batId, expiry, aliadoIds, faseId }: any = {}) {
   if (!AVT_STATE.rpgId) return;
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   const meJog = _avtMeuJogador();
@@ -12484,7 +12484,7 @@ function _avtDistribuirXpNpc(npcEnt, bat, opts = {}) {
   // Destinatários: jogadores presentes na batalha; quando não há batalha (ex.: morte por
   // DOT fora de combate), credita diretamente o autor do abate.
   const destinatarios = bat ? bat.iniciativa.filter(e => e.tipo === 'jogador').map(j => j.nome) : [];
-  const creditoNome = opts.creditoNome || null;
+  const creditoNome = (opts as any).creditoNome || null;
   if (creditoNome && !destinatarios.includes(creditoNome)) destinatarios.push(creditoNome);
   if (!destinatarios.length) return;
   const xpPorJog = Math.max(1, Math.round(xpFinal / destinatarios.length));
@@ -12536,7 +12536,7 @@ async function _avtAutoLevelUp(char) {
     char.nivel = novoNivel; // sincronizar campo top-level para HUD e painel
     ca.pontos_attr = (ca.pontos_attr || 0) + pontos_attr_por_nivel;
     if (!ca.atributos) ca.atributos = {};
-    Object.entries(aumentos).forEach(([a, v]) => {
+    Object.entries<any>(aumentos).forEach(([a, v]) => {
       ca.atributos[a] = (parseFloat(ca.atributos[a]) || 0) + v;
     });
     // HP é derivado: depois de aplicar os ganhos de atributo acima, recomputa via _avtCalcHpJog.
@@ -12586,7 +12586,7 @@ function _avtNpcMorreu(npcEnt, bat, opts = {}) {
   }
   // Se o NPC tem efeito Necromante ativo e ainda não está dominado, dominar em vez de matar.
   // opts.semDominar pula esta dominação (ex.: expiração do domínio → morte definitiva).
-  if (!npcEnt._dominado && !opts.semDominar) {
+  if (!npcEnt._dominado && !(opts as any).semDominar) {
     let efNecro = (npcEnt.status_effects || []).find(ef => ef.tipo === 'necromante' && (ef._turnos_restantes ?? 1) > 0);
     // Fallback OOC: o efeito pode ter sido registrado apenas em _oocStatusEffects
     if (!efNecro) {
@@ -12606,7 +12606,7 @@ function _avtNpcMorreu(npcEnt, bat, opts = {}) {
       // um minion dominado (que propaga o efeito necromante) é dominado em vez de morrer e o
       // jogador nunca recebe XP. A flag evita crédito duplo quando o domínio expira depois
       // (morte real via opts.semDominar, sem creditoNome). A cascata é preservada.
-      if (opts.creditoNome && !npcEnt._xpAbateCreditado) {
+      if ((opts as any).creditoNome && !npcEnt._xpAbateCreditado) {
         npcEnt._xpAbateCreditado = true;
         _avtDistribuirXpNpc(npcEnt, bat, opts);
       }
@@ -12816,7 +12816,7 @@ function _avtGerarDropNpc(npcEnt) {
   const catalog = AVT_STATE.itemCatalog || [];
   const droppable = catalog.filter(i => i.droppable);
   if (!droppable.length) return;
-  const item = _avtEscolherPorPeso(droppable, i => (i.drop_rate != null ? i.drop_rate : 1));
+  const item: any = _avtEscolherPorPeso(droppable, i => (i.drop_rate != null ? i.drop_rate : 1));
   if (!item) return;
   const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
   _avtSpawnObjMapa({
@@ -12835,7 +12835,7 @@ function _avtGerarDropNpc(npcEnt) {
 
 // Gera um orbe de recurso (HP/mana) na posição do NPC, escolhendo um tier por
 // raridade. Tiers: [{ valor, modo:'abs'|'pct', raridade_pct }]. Default 1 tier.
-function _avtGerarOrbeNpc(npcEnt, tipo, tiers, idPrefix) {
+function _avtGerarOrbeNpc(npcEnt, tipo, tiers, idPrefix?) {
   const lista = (Array.isArray(tiers) && tiers.length)
     ? tiers
     : [{ valor: tipo === 'orbe_hp' ? 25 : 20, modo: 'pct', raridade_pct: 100 }];
@@ -12859,7 +12859,7 @@ function _avtOrbeEfeitoPool() {
   if (typeof EFFECT_REGISTRY === 'undefined') return [];
   const salvo = AVT_STATE.rpg?.theme_json?.level_config?.orbe_efeito?.efeitos || {};
   return EFFECT_REGISTRY.orbEligible().map(t => {
-    const cfg = salvo[t.id] || {};
+    const cfg: any = salvo[t.id] || {};
     return {
       def: t,
       ativo: cfg.ativo != null ? !!cfg.ativo : true,
@@ -12874,7 +12874,7 @@ function _avtOrbeEfeitoPool() {
 // Gera um orbe de efeito na posição dada (entidade morta ou célula {x,y} em
 // tiles). O payload completo do efeito viaja no objeto — os peers não precisam
 // de lookup no registry para renderizar/aplicar.
-function _avtGerarOrbeEfeito(posEnt, idPrefix) {
+function _avtGerarOrbeEfeito(posEnt, idPrefix?) {
   const pool = _avtOrbeEfeitoPool().filter(p => p.ativo && p.peso > 0);
   if (!pool.length) return;
   const sorteado = _avtEscolherPorPeso(pool, p => p.peso);
@@ -12906,8 +12906,8 @@ function _avtGerarOrbeEfeito(posEnt, idPrefix) {
 function _avtCelulaLivreAleatoria(opts = {}) {
   const dungeon = AVT_STATE.dungeon;
   if (!dungeon?.tiles) return null;
-  const tentativas = opts.tentativas ?? 40;
-  const distMin = opts.distMinJogador ?? 4;
+  const tentativas = (opts as any).tentativas ?? 40;
+  const distMin = (opts as any).distMinJogador ?? 4;
   const dw = dungeon.w || 1, dh = dungeon.h || 1;
   const objetos = dungeon.render_data?.objetos || [];
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && !e.escondido);
@@ -12944,7 +12944,7 @@ function _avtGerarBauDinamico(pos) {
   const loot = [];
   const nItens = catalog.length ? (1 + (Math.random() < 0.35 ? 1 : 0)) : 0;
   for (let i = 0; i < nItens; i++) {
-    const item = _avtEscolherPorPeso(catalog, it => (it.drop_rate != null ? it.drop_rate : 1));
+    const item: any = _avtEscolherPorPeso(catalog, it => (it.drop_rate != null ? it.drop_rate : 1));
     if (item) loot.push({ item_catalog_id: item.id, nome: item.nome, quantidade: 1 });
   }
   const nivel = AVT_STATE.dungeon?._npcLevel || 1;
@@ -12962,7 +12962,7 @@ function _avtGerarBauDinamico(pos) {
 function _avtGerarLootDinamico(pos) {
   const catalog = (AVT_STATE.itemCatalog || []).filter(i => i.droppable);
   if (!catalog.length) return;
-  const item = _avtEscolherPorPeso(catalog, i => (i.drop_rate != null ? i.drop_rate : 1));
+  const item: any = _avtEscolherPorPeso(catalog, i => (i.drop_rate != null ? i.drop_rate : 1));
   if (!item) return;
   const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
   _avtSpawnObjMapa({
@@ -12979,9 +12979,9 @@ function _avtGerarLootDinamico(pos) {
 // máximos (um roll de chance por vaga); depois repõe a cada intervalo.
 function _avtDynSpawnTick(now) {
   if (!AVT_STATE.rpgId || !AVT_STATE.dungeon?.render_data) return;
-  if (now < (AVT_STATE._dynSpawnNextAt || 0)) return;
-  const cfg = _avtDynSpawnConfig();
-  AVT_STATE._dynSpawnNextAt = now + Math.max(15, cfg.intervaloS) * 1000;
+  if (now < ((AVT_STATE as any)._dynSpawnNextAt || 0)) return;
+  const cfg: any = _avtDynSpawnConfig();
+  (AVT_STATE as any)._dynSpawnNextAt = now + Math.max(15, cfg.intervaloS) * 1000;
   if (!cfg.ativo) return;
   if (typeof _avtSouHostDaFaseAtual === 'function' && !_avtSouHostDaFaseAtual()) return;
 
@@ -13096,7 +13096,7 @@ function _avtCheckAbandonoCombate(ativo, bat) {
   }
 }
 
-function avtCombateIniciar(inimigo_trigger, forcedId, opts) {
+function avtCombateIniciar(inimigo_trigger, forcedId, opts?) {
   // Dedupe: se este inimigo já está em alguma batalha, não cria outra
   if (inimigo_trigger && _avtBatalhaDeEnt(inimigo_trigger.id)) return null;
   const raio = inimigo_trigger?.deteccaoRaio ?? 3;
@@ -13265,7 +13265,7 @@ function _avtAtivo() {
 
 function _avtHudMostrar(show) {
   // Ao entrar em combate, cancela pathfinding de exploração
-  if (show) AVT_STATE._caminhoDestino = null;
+  if (show) (AVT_STATE as any)._caminhoDestino = null;
   // No modo controle mobile dispositivo, o HUD é suprimido (botões ficam no overlay)
   const ctrlAtivo = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL.ativo && MOBILE_CTRL.modoTela === 'dispositivo';
   const hud = document.getElementById('avt-hud');
@@ -13392,7 +13392,7 @@ function _avtMostrarSkillOverlay() {
     mySkills = AVT_STATE.skills.filter(sk => _invSkillIds.includes(sk.id));
   }
 
-  const pendingId = AVT_STATE._pendingSkillId ?? null;
+  const pendingId = (AVT_STATE as any)._pendingSkillId ?? null;
 
   const overlay = document.createElement('div');
   overlay.id = 'avt-skill-overlay';
@@ -13453,7 +13453,7 @@ async function _avtSkillOverlaySel(skId) {
   if (sk?.alvo_tipo === 'aliado') {
     const _isMcDispAlv = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
     if (_isMcDispAlv) {
-      AVT_STATE._pendingSkillId = skId;
+      (AVT_STATE as any)._pendingSkillId = skId;
       if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
       if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
       return;
@@ -13536,7 +13536,7 @@ async function _avtSkillOverlaySel(skId) {
     return;
   }
 
-  AVT_STATE._pendingSkillId = skId;
+  (AVT_STATE as any)._pendingSkillId = skId;
   document.getElementById('avt-skill-overlay')?.remove();
   // Atualizar destaque na lista de skills inline do HUD
   if (document.getElementById('avt-hud-dir')) _avtHudUpdate();
@@ -13600,11 +13600,11 @@ function _avtSelecionarAlvoComSkill(alvoId) {
   if (sel) sel.value = alvoId;
   // Skills de área (quadrado/linha): no fluxo mobile/TV (lista de alvos), a seleção manual
   // do centro no mapa pode não estar disponível — então centra a área no alvo escolhido.
-  const _skSelArea = AVT_STATE._pendingSkillId ? AVT_STATE.skills.find(s => s.id === AVT_STATE._pendingSkillId) : null;
+  const _skSelArea = AVT_STATE._pendingSkillId ? AVT_STATE.skills.find(s => s.id === (AVT_STATE as any)._pendingSkillId) : null;
   const _alvoEnt = AVT_STATE.entidades.find(e => e.id === alvoId);
   if (_skSelArea && _alvoEnt) {
     if (_skSelArea.tipo_area === 'quadrado') {
-      AVT_STATE._areaCentro = { x: Math.round(_alvoEnt.x), y: Math.round(_alvoEnt.y), tamanho: _skSelArea.tamanho_area || 1 };
+      (AVT_STATE as any)._areaCentro = { x: Math.round(_alvoEnt.x), y: Math.round(_alvoEnt.y), tamanho: _skSelArea.tamanho_area || 1 };
     } else if (_skSelArea.tipo_area === 'linha') {
       const _ativoSel = _avtAtivo();
       if (_ativoSel) {
@@ -13615,7 +13615,7 @@ function _avtSelecionarAlvoComSkill(alvoId) {
         const _alc = _skSelArea.alcance_celulas ?? 1;
         const _cells = [];
         for (let i = 1; i <= _alc; i++) _cells.push({ x: _ax + _dx * i, y: _ay + _dy * i });
-        AVT_STATE._areaLinha = { dx: _dx, dy: _dy, cells: _cells };
+        (AVT_STATE as any)._areaLinha = { dx: _dx, dy: _dy, cells: _cells };
       }
     }
   }
@@ -13624,7 +13624,7 @@ function _avtSelecionarAlvoComSkill(alvoId) {
 
 function _avtSkillOverlayCancelar() {
   if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
-  AVT_STATE._pendingSkillId = undefined;
+  (AVT_STATE as any)._pendingSkillId = undefined;
   AVT_STATE.alvoSelecionado = null;
   _avtLimparModoAlvo();
   _avtEsconderBotaoRolar();
@@ -13713,7 +13713,7 @@ async function _avtExecutarAtaque() {
   const _semAtkEf = _ativoSilEnt?.status_effects?.find(ef =>
     ef.tipo === 'sem_ataque' && (ef._turnos_restantes ?? 0) > 0);
   if (_semAtkEf) {
-    const _skSemAtk = AVT_STATE._pendingSkillId ? AVT_STATE.skills.find(s => s.id === AVT_STATE._pendingSkillId) : null;
+    const _skSemAtk = AVT_STATE._pendingSkillId ? AVT_STATE.skills.find(s => s.id === (AVT_STATE as any)._pendingSkillId) : null;
     const _tipoDanoAtual = _skSemAtk?.tipo_dano || 'fisico';
     const _bloqueiaTipo = _semAtkEf.sem_ataque_tipo || 'todos';
     if (_bloqueiaTipo === 'todos' || _bloqueiaTipo === _tipoDanoAtual) {
@@ -13727,7 +13727,7 @@ async function _avtExecutarAtaque() {
     ? ((AVT_STATE.invocacoes_ativas || []).find(i => i.id === ativo.id)?.dono_char_nome || ativo.nome)
     : ativo.nome;
 
-  const skIdArea = AVT_STATE._pendingSkillId ?? null;
+  const skIdArea = (AVT_STATE as any)._pendingSkillId ?? null;
   const skArea = skIdArea ? AVT_STATE.skills.find(s => s.id === skIdArea) : null;
   const _tipoAreaExec = skArea?.tipo_area || null;
   const _isTodosInimigos = skArea?.alvo_tipo === 'todos_inimigos';
@@ -13735,8 +13735,8 @@ async function _avtExecutarAtaque() {
 
   // Para ataques em área: verificar se centro/linha foi selecionado (todos_inimigos não precisa)
   if (_isAreaAttack && !_isTodosInimigos) {
-    const _temCentro = _tipoAreaExec === 'quadrado' && AVT_STATE._areaCentro;
-    const _temLinha  = _tipoAreaExec === 'linha'    && AVT_STATE._areaLinha;
+    const _temCentro = _tipoAreaExec === 'quadrado' && (AVT_STATE as any)._areaCentro;
+    const _temLinha  = _tipoAreaExec === 'linha'    && (AVT_STATE as any)._areaLinha;
     if (!_temCentro && !_temLinha) {
       _avtAtivarModoAlvo(skIdArea, ativo);
       mostrarToast(_tipoAreaExec === 'quadrado' ? '◼ Clique no mapa para selecionar o centro da área' : '▬ Clique no mapa para selecionar a direção da linha', 'aviso', 2800);
@@ -13751,8 +13751,8 @@ async function _avtExecutarAtaque() {
   let alvo = alvoId ? b.iniciativa.find(e => e.id === alvoId) : null;
   if (!_isAreaAttack) {
     if (!alvo || alvo.hp <= 0) {
-      const skTmp = AVT_STATE._pendingSkillId
-        ? AVT_STATE.skills.find(s => s.id === AVT_STATE._pendingSkillId) : null;
+      const skTmp = (AVT_STATE as any)._pendingSkillId
+        ? AVT_STATE.skills.find(s => s.id === (AVT_STATE as any)._pendingSkillId) : null;
       const alc = _avtAlcanceAlvoJogador(skTmp, ativo);
       const ax = Math.round(ativo.x), ay = Math.round(ativo.y);
       const candidatos = b.iniciativa.filter(e =>
@@ -13764,7 +13764,7 @@ async function _avtExecutarAtaque() {
         AVT_STATE.alvoSelecionado = alvo.id;
       } else {
         if (candidatos.length > 1 && typeof _avtAtivarModoAlvo === 'function') {
-          _avtAtivarModoAlvo(AVT_STATE._pendingSkillId ?? null, ativo);
+          _avtAtivarModoAlvo((AVT_STATE as any)._pendingSkillId ?? null, ativo);
           mostrarToast('Selecione o alvo no mapa', 'aviso', 2500);
         } else {
           mostrarToast('Selecione um alvo válido', 'aviso');
@@ -13783,17 +13783,17 @@ async function _avtExecutarAtaque() {
     if (_isTodosInimigos) {
       _alvosArea = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0);
     } else if (_tipoAreaExec === 'quadrado') {
-      _alvosArea = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0 && AVT_STATE._areaCentro &&
-          Math.max(Math.abs(Math.round(e.x)-AVT_STATE._areaCentro.x), Math.abs(Math.round(e.y)-AVT_STATE._areaCentro.y)) <= (AVT_STATE._areaCentro.tamanho||1));
+      _alvosArea = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0 && (AVT_STATE as any)._areaCentro &&
+          Math.max(Math.abs(Math.round(e.x)-AVT_STATE._areaCentro.x), Math.abs(Math.round(e.y)-AVT_STATE._areaCentro.y)) <= ((AVT_STATE as any)._areaCentro.tamanho||1));
     } else {
-      _alvosArea = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0 && AVT_STATE._areaLinha &&
-          AVT_STATE._areaLinha.cells.some(c => c.x===Math.round(e.x) && c.y===Math.round(e.y)));
+      _alvosArea = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0 && (AVT_STATE as any)._areaLinha &&
+          (AVT_STATE as any)._areaLinha.cells.some(c => c.x===Math.round(e.x) && c.y===Math.round(e.y)));
     }
     alvo = _alvosArea[0] || { nome: 'Área', hp: 1, hpMax: 1, id: '_area_ficticio', tipo: 'inimigo' };
   }
 
-  const skId = AVT_STATE._pendingSkillId ?? null;
-  AVT_STATE._pendingSkillId = undefined;
+  const skId = (AVT_STATE as any)._pendingSkillId ?? null;
+  (AVT_STATE as any)._pendingSkillId = undefined;
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
   // Para ataque básico (sk null), carregamos a config per-char (formula, atributo, multiplicador).
   const _dbAtivoForm = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
@@ -13962,7 +13962,7 @@ async function _avtExecutarAtaque() {
   // Animação rica (skill OU ataque básico configurado) vs. placeholder.
   const _temAnimRicaAtk = !!(skEfetiva?.animacao && skEfetiva.animacao.tipo && skEfetiva.animacao.tipo !== 'nenhuma');
   const animPlaceholderAtk = _temAnimRicaAtk ? null : _avtAnimacaoPlaceholder(entAtacanteAnim || ativo, sk);
-  const _animDuracao = skEfetiva?.animacao?.duracao ?? animPlaceholderAtk?.duracao ?? 600;
+  const _animDuracao = skEfetiva?.animacao?.duracao ?? (animPlaceholderAtk as any)?.duracao ?? 600;
   if (animPlaceholderAtk && typeof animarAtaque === 'function') {
     const entAlvoAnim = AVT_STATE.entidades.find(e => e.id === alvo.id);
     const atacEl = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
@@ -13999,8 +13999,8 @@ async function _avtExecutarAtaque() {
         b.iniciativa.sort((a, bb) => bb.initRoll - a.initRoll);
         b.envolvidos.push(e.id);
       });
-    } else if (_tipoAreaExec === 'quadrado' && AVT_STATE._areaCentro) {
-      const { x: cx, y: cy, tamanho: ct } = AVT_STATE._areaCentro;
+    } else if (_tipoAreaExec === 'quadrado' && (AVT_STATE as any)._areaCentro) {
+      const { x: cx, y: cy, tamanho: ct } = (AVT_STATE as any)._areaCentro;
       // Inimigos em bat.iniciativa
       _alvosAreaFinal = b.iniciativa.filter(e =>
         e.tipo === 'inimigo' && e.hp > 0 &&
@@ -14018,8 +14018,8 @@ async function _avtExecutarAtaque() {
           b.envolvidos.push(e.id);
         }
       });
-    } else if (_tipoAreaExec === 'linha' && AVT_STATE._areaLinha) {
-      const { cells } = AVT_STATE._areaLinha;
+    } else if (_tipoAreaExec === 'linha' && (AVT_STATE as any)._areaLinha) {
+      const { cells } = (AVT_STATE as any)._areaLinha;
       _alvosAreaFinal = b.iniciativa.filter(e =>
         e.tipo === 'inimigo' && e.hp > 0 &&
         cells.some(c => c.x === Math.round(e.x) && c.y === Math.round(e.y))
@@ -14074,7 +14074,7 @@ async function _avtExecutarAtaque() {
         const _delayMorteArea = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entCaster), _avtEntViva(entCaster), _isAreaAttack) : 0;
         // Skills de área: enviar geometria (centro/linha) e ancorar no conjurador, pois o
         // rótulo de área não resolve entidade nos peers e _areaCentro/_areaLinha são locais.
-        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAtacanteAnim||ativo).nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null }); } catch(_) {} }
+        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAtacanteAnim||ativo).nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: (AVT_STATE as any)._areaLinha || null }); } catch(_) {} }
 
         // Números de dano nos peers: 1 broadcast em lote (o stagger de 80ms é
         // reproduzido no receptor) em vez de 1 evento por alvo dentro do loop.
@@ -14154,8 +14154,8 @@ async function _avtExecutarAtaque() {
           }, idxA * 80);
         });
 
-        AVT_STATE._areaCentro = null;
-        AVT_STATE._areaLinha  = null;
+        (AVT_STATE as any)._areaCentro = null;
+        (AVT_STATE as any)._areaLinha  = null;
         setTimeout(() => { _avtBroadcastBatalha(b); }, (_alvosAreaFinal.length * 80) + 100);
       } else {
         // ── Alvo único ────────────────────────────────────────────────────
@@ -14319,7 +14319,7 @@ function avtReceberDadoRolado({ atacanteNome, alvoNome, skillNome, dados, total,
 window.avtReceberDadoRolado = avtReceberDadoRolado;
 
 // Receive damage visual broadcast (floating number above target)
-function avtReceberDanoVisual({ alvoNome, dano, isCrit, faseId } = {}) {
+function avtReceberDanoVisual({ alvoNome, dano, isCrit, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   const alvo = AVT_STATE.entidades.find(e => e.nome === alvoNome);
   if (alvo) _avtMostrarDanoAcimaDaHead(alvo, dano, isCrit);
@@ -14330,7 +14330,7 @@ window.avtReceberDanoVisual = avtReceberDanoVisual;
 // alvos em vez de N eventos; o stagger visual é reproduzido localmente com
 // stepMs (padrão 80ms, o mesmo dos emissores). O handler unitário acima
 // permanece registrado para compat com hosts em bundle antigo.
-function avtReceberDanoVisualBatch({ alvoNomes, dano, isCrit, stepMs, faseId } = {}) {
+function avtReceberDanoVisualBatch({ alvoNomes, dano, isCrit, stepMs, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return;
   if (!Array.isArray(alvoNomes) || !alvoNomes.length) return;
   const passo = (typeof stepMs === 'number' && stepMs >= 0) ? stepMs : 80;
@@ -14406,7 +14406,7 @@ function _avtHudUpdate() {
     // Reset pending skill selection apenas se não há ação em andamento (fix P14)
     const overlayAtivo = document.getElementById('avt-dice-overlay') || document.getElementById('avt-skill-overlay');
     if (!overlayAtivo) {
-      AVT_STATE._pendingSkillId = undefined;
+      (AVT_STATE as any)._pendingSkillId = undefined;
     }
     // Initialize movement budget for this turn
     if (!b.movimentoRestante) b.movimentoRestante = {};
@@ -14432,7 +14432,7 @@ function _avtHudUpdate() {
       (sk.character_id && sk.character_id === ativo.dbId)
     );
     mySkillsHud = _avtSkillsOrdenadasPorNumero(mySkillsHud, _dbCharHud, ativo);
-    const _pendingId = AVT_STATE._pendingSkillId ?? null;
+    const _pendingId = (AVT_STATE as any)._pendingSkillId ?? null;
     const _skillListHud = [
       `<div class="avt-skill-overlay-item${_pendingId===null?' avt-skill-overlay-ativo':''}" onclick="_avtSkillOverlaySel(null)" style="cursor:pointer">
         <span>Ataque básico</span><span style="font-size:0.55rem;color:#7a92aa">1d8</span>
@@ -14916,7 +14916,7 @@ function _avtTurnoAvancar(bat) {
   document.getElementById('avt-skill-overlay')?.remove();
   document.getElementById('avt-dice-overlay')?.remove();
   document.getElementById('avt-alvo-skill-overlay')?.remove();
-  AVT_STATE._pendingSkillId = undefined;
+  (AVT_STATE as any)._pendingSkillId = undefined;
   AVT_STATE.alvoSelecionado = null;
   _avtLimparModoAlvo();
   _avtEsconderBotaoRolar();
@@ -15166,7 +15166,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
 
     // Animação placeholder do NPC em direção ao alvo
     const animPlaceholderNpc = _avtAnimacaoPlaceholder(entNpc || npc, sk);
-    const _animDuracaoNpc = sk?.animacao?.duracao ?? animPlaceholderNpc?.duracao ?? 600;
+    const _animDuracaoNpc = sk?.animacao?.duracao ?? (animPlaceholderNpc as any)?.duracao ?? 600;
     if (animPlaceholderNpc && typeof animarAtaque === 'function') {
       const entAlvoNpcAnim = AVT_STATE.entidades.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
       const atacElNpc = _avtElPosicaoCanvas(entNpc || npc);
@@ -15421,8 +15421,8 @@ function _avtPersistirHpChar(ent) {
   if (!ent?.dbId) return;
   // Em modo P2P: buffer HP em memória — evita flood de PATCH e Realtime events
   if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') {
-    AVT_STATE._charHpBuffer = AVT_STATE._charHpBuffer || {};
-    AVT_STATE._charHpBuffer[ent.dbId] = { hp: ent.hp };
+    AVT_STATE._charHpBuffer = (AVT_STATE as any)._charHpBuffer || {};
+    (AVT_STATE as any)._charHpBuffer[ent.dbId] = { hp: ent.hp };
     return;
   }
   clearTimeout(_avtHpSaveTimers[ent.dbId]);
@@ -15438,11 +15438,11 @@ function _avtPersistirHpChar(ent) {
 }
 
 async function _avtFlushCharHpBuffer(origem) {
-  const buf = AVT_STATE._charHpBuffer || {};
+  const buf = (AVT_STATE as any)._charHpBuffer || {};
   const ids = Object.keys(buf);
   if (!ids.length) return;
   const copy = { ...buf };
-  AVT_STATE._charHpBuffer = {};
+  (AVT_STATE as any)._charHpBuffer = {};
   for (const charId of ids) {
     const { hp } = copy[charId];
     try {
@@ -15452,7 +15452,7 @@ async function _avtFlushCharHpBuffer(origem) {
       const dbChar = (AVT_STATE.chars || []).find(c => c.id === charId);
       if (dbChar) { dbChar.hp_atual = hp; _avtSyncLinhagem(dbChar); }
     } catch(e) {
-      AVT_STATE._charHpBuffer[charId] = copy[charId]; // re-buffer on failure
+      (AVT_STATE as any)._charHpBuffer[charId] = copy[charId]; // re-buffer on failure
       try { console.warn('[AVT][flush] HP do char ' + charId + ' falhou (re-buffer):', e); } catch(_) {}
     }
   }
@@ -15465,7 +15465,7 @@ var _avtEstadoInimigosTimer = null;
 // Slot de dungeon_data da fase corrente (principal → theme_json.dungeon_data;
 // fase extra → fases_extras[id].dungeon_data). Criado sob demanda quando `criar`.
 function _avtDungeonDataSlot(t, criar) {
-  const faseId = AVT_STATE._faseAtualId || 'principal';
+  const faseId = (AVT_STATE as any)._faseAtualId || 'principal';
   if (faseId === 'principal') {
     if (!t.dungeon_data && criar) t.dungeon_data = {};
     return t.dungeon_data || null;
@@ -15481,10 +15481,10 @@ function _avtPersistirEstadoInimigos() {
   clearTimeout(_avtEstadoInimigosTimer);
   // Captura a fase no AGENDAMENTO: se o host trocar de fase durante o debounce,
   // não podemos gravar o estado da fase nova no slot da antiga (nem vice-versa).
-  const _faseAgendada = AVT_STATE._faseAtualId || 'principal';
+  const _faseAgendada = (AVT_STATE as any)._faseAtualId || 'principal';
   _avtEstadoInimigosTimer = setTimeout(async () => {
     try {
-      if ((AVT_STATE._faseAtualId || 'principal') !== _faseAgendada) return; // fase mudou — descarta
+      if (((AVT_STATE as any)._faseAtualId || 'principal') !== _faseAgendada) return; // fase mudou — descarta
       const t = AVT_STATE.rpg.theme_json || {};
       // FIX F1: gravar no slot da FASE CORRENTE. Antes gravava sempre em
       // t.dungeon_data (fase principal) e, como os IDs de inimigo são idênticos
@@ -15516,7 +15516,7 @@ function _avtAplicarDanoPersistir(entAlvo, novoHp) {
   if (entAlvo.tipo === 'inimigo' && !entAlvo.dbId) {
     // Rota nova: estado canônico em public.npc_state via RPC atômico.
     // Mantém _avtPersistirEstadoInimigos como fallback (kill-switch / falha).
-    if (AVT_STATE.npcSyncEnabled && typeof _avtNpcSyncReportDelta === 'function' && AVT_STATE.rpgId) {
+    if ((AVT_STATE as any).npcSyncEnabled && typeof _avtNpcSyncReportDelta === 'function' && AVT_STATE.rpgId) {
       try { _avtNpcSyncReportDelta(entAlvo, hpAntes, entAlvo.hp); }
       catch(e) { try { console.warn('[NPC-SYNC] reportDelta falhou:', e); } catch(_){} _avtPersistirEstadoInimigos(); }
     } else {
@@ -15536,7 +15536,7 @@ function _avtPersistirBatalha(bat) {
   clearTimeout(_avtBatalhaSaveTimers[bat.id]);
   _avtBatalhaSaveTimers[bat.id] = setTimeout(async () => {
     try {
-      const body = {
+      const body: any = {
         rpg_id: AVT_STATE.rpgId,
         id: bat.id,
         ativa: true,
@@ -16072,7 +16072,7 @@ function _avtRolarFormula(formula) {
 // LOG + HP BAR
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _avtLog(msg, batalhaId) {
+function _avtLog(msg, batalhaId?) {
   const bat = batalhaId ? AVT_STATE.batalhas.find(b => b.id === batalhaId) : _avtMinhaBatalha();
   if (bat) {
     bat.log.unshift(msg);
@@ -16163,6 +16163,7 @@ window.avtReceberHostHeartbeat = avtReceberHostHeartbeat;
 (function(){
   if(typeof _avtCarregarBatalhasAtivas !== 'function') return;
   const _orig = _avtCarregarBatalhasAtivas;
+  // @ts-expect-error — monkey-patch em runtime: reatribuição de function declaration
   _avtCarregarBatalhasAtivas = async function(){
     const r = await _orig.apply(this, arguments);
     try{ _avtReconciliarEntidades(); }catch(_){}
@@ -16294,7 +16295,7 @@ function _avtRecuperarPorMovimento(jogador, celulas) {
   const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
   // Não regenera HP enquanto houver inimigo perseguindo (a menos que configurado para recuperar)
   if (!lc.hp_regen_em_perseguicao) {
-    const algumPerseguindo = Object.values(AVT_STATE.npcTimers).some(
+    const algumPerseguindo = Object.values<any>(AVT_STATE.npcTimers).some(
       t => t.isPursuing && t.targetId === jogador.id
     );
     if (algumPerseguindo) return;
@@ -16332,9 +16333,9 @@ function _avtRecuperarPorMovimento(jogador, celulas) {
     try { _avtBroadcast('avt_rsv_update', { nome: jogador.nome, atributos: { ...atrs } }); } catch(_) {}
   }
 
-  clearTimeout(AVT_STATE._recDebounceTimer);
-  AVT_STATE._recDebounceTimer = setTimeout(async () => {
-    AVT_STATE._recDebounceTimer = null;
+  clearTimeout((AVT_STATE as any)._recDebounceTimer);
+  (AVT_STATE as any)._recDebounceTimer = setTimeout(async () => {
+    (AVT_STATE as any)._recDebounceTimer = null;
     await _avtSb(`characters?id=eq.${encodeURIComponent(char.id)}`,
       { method: 'PATCH', body: JSON.stringify({ hp_atual: char.hp_atual, custom_attrs: ca }) }
     ).catch(() => {});
@@ -16349,7 +16350,7 @@ function _avtPatchRpgData() {
     rpgId:      AVT_STATE.rpgId,
     characters: AVT_STATE.chars,
     skills:     AVT_STATE.skills || [],
-    attrDefs:   AVT_STATE.attrDefs || [],
+    attrDefs:   (AVT_STATE as any).attrDefs || [],
     myRole:     _avtSouMestre() ? 'mestre' : 'jogador',
     linked:     AVT_STATE.myCharNome,
     config:     AVT_STATE.rpg?.theme_json || {},
@@ -16374,13 +16375,13 @@ function _avtRecursosDoChar(char) {
   if (!char) return [];
   const atrs = char.custom_attrs?.atributos || {};
   const recursos = [];
-  (AVT_STATE.attrDefs || []).forEach(def => {
-    let cfg = {};
+  ((AVT_STATE as any).attrDefs || []).forEach(def => {
+    let cfg: any = {};
     try { cfg = typeof def.opcoes === 'string' ? JSON.parse(def.opcoes) : (def.opcoes || {}); } catch(e) {}
-    if (cfg.e_recurso && cfg.max_attr) {
+    if (cfg.e_recurso && (cfg as any).max_attr) {
       const atual = parseFloat(atrs[def.nome] ?? 0);
-      const max   = parseFloat(atrs[cfg.max_attr] ?? 0);
-      if (max > 0) recursos.push({ nome: def.nome, atual, max, maxAttr: cfg.max_attr });
+      const max   = parseFloat(atrs[(cfg as any).max_attr] ?? 0);
+      if (max > 0) recursos.push({ nome: def.nome, atual, max, maxAttr: (cfg as any).max_attr });
     }
   });
   // Fallback: detectar atributos com padrão Mana/Stamina/Ki mesmo sem attrDefs configurado
@@ -16460,8 +16461,8 @@ async function avtDescansar(tipo) {
   if (tipo === 'longo') {
     char.hp_atual = (typeof _avtCalcHpJog === "function" ? _avtCalcHpJog(char) : (char.hpMax || 100));
     // Restaurar todos recursos ao máximo
-    (AVT_STATE.attrDefs || []).forEach(def => {
-      let cfg = {};
+    ((AVT_STATE as any).attrDefs || []).forEach(def => {
+      let cfg: any = {};
       try { cfg = typeof def.opcoes === 'string' ? JSON.parse(def.opcoes) : (def.opcoes || {}); } catch(e) {}
       if (cfg.e_recurso && cfg.max_attr && atrs[cfg.max_attr] != null) {
         atrs[def.nome] = parseFloat(atrs[cfg.max_attr]);
@@ -16518,7 +16519,7 @@ function avtJogadorPainel() {
 }
 window.avtJogadorPainel = avtJogadorPainel;
 
-function avtJogadorPainelRender(targetEl, opts) {
+function avtJogadorPainelRender(targetEl?, opts?) {
   const compact = !!(opts && opts.compact);
   const el = targetEl || document.getElementById('avt-pp-content');
   if (!el) return;
@@ -17021,7 +17022,7 @@ async function avtAbrirBau(bauId) {
 window.avtAbrirBau = avtAbrirBau;
 
 // Receber notificação de baú aberto por outro jogador: marcar como aberto localmente
-function avtReceberBauAberto({ bauId, jogadorNome, faseId } = {}) {
+function avtReceberBauAberto({ bauId, jogadorNome, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     const rd = AVT_STATE.dungeon?.render_data;
@@ -17044,7 +17045,7 @@ function avtReceberBauAberto({ bauId, jogadorNome, faseId } = {}) {
 window.avtReceberBauAberto = avtReceberBauAberto;
 
 // Receber spawn de objeto (loot no chão / orbe de recurso) de outro cliente.
-function avtReceberObjSpawn({ obj, faseId } = {}) {
+function avtReceberObjSpawn({ obj, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (!obj || !AVT_STATE.dungeon) return;
@@ -17057,7 +17058,7 @@ function avtReceberObjSpawn({ obj, faseId } = {}) {
 window.avtReceberObjSpawn = avtReceberObjSpawn;
 
 // Receber coleta/remoção de objeto por outro cliente.
-function avtReceberObjPickup({ objId, faseId } = {}) {
+function avtReceberObjPickup({ objId, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     const rd = AVT_STATE.dungeon?.render_data;
@@ -17286,7 +17287,7 @@ function avtMestrePainel() {
   if (!open) _avtMestrePainelRender();
 }
 
-function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
+function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode?) {
   if (!sk) return;
   alvoEnt = _avtEntViva(alvoEnt);
   atacanteEnt = atacanteEnt ? _avtEntViva(atacanteEnt) : null;
@@ -17371,17 +17372,17 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
     const dur = anim.duracao || 700;
     const SZ2 = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
     // Centro de efeito: area center se disponível, senão alvo
-    const cx = AVT_STATE._areaCentro
-      ? Math.round(AVT_STATE._areaCentro.x * SZ2 - AVT_STATE.camera.x + SZ2 / 2)
+    const cx = (AVT_STATE as any)._areaCentro
+      ? Math.round((AVT_STATE as any)._areaCentro.x * SZ2 - AVT_STATE.camera.x + SZ2 / 2)
       : (alvoScr.x + atacScr.x) / 2;
-    const cy = AVT_STATE._areaCentro
-      ? Math.round(AVT_STATE._areaCentro.y * SZ2 - AVT_STATE.camera.y + SZ2 / 2)
+    const cy = (AVT_STATE as any)._areaCentro
+      ? Math.round((AVT_STATE as any)._areaCentro.y * SZ2 - AVT_STATE.camera.y + SZ2 / 2)
       : (alvoScr.y + atacScr.y) / 2;
-    const tamanhoCell = (AVT_STATE._areaCentro?.tamanho || 1) * SZ2;
-    const lineEndX = AVT_STATE._areaLinha?.cells?.slice(-1)[0]
-      ? Math.round(AVT_STATE._areaLinha.cells.slice(-1)[0].x * SZ2 - AVT_STATE.camera.x + SZ2 / 2) : alvoScr.x;
-    const lineEndY = AVT_STATE._areaLinha?.cells?.slice(-1)[0]
-      ? Math.round(AVT_STATE._areaLinha.cells.slice(-1)[0].y * SZ2 - AVT_STATE.camera.y + SZ2 / 2) : alvoScr.y;
+    const tamanhoCell = ((AVT_STATE as any)._areaCentro?.tamanho || 1) * SZ2;
+    const lineEndX = (AVT_STATE as any)._areaLinha?.cells?.slice(-1)[0]
+      ? Math.round((AVT_STATE as any)._areaLinha.cells.slice(-1)[0].x * SZ2 - AVT_STATE.camera.x + SZ2 / 2) : alvoScr.x;
+    const lineEndY = (AVT_STATE as any)._areaLinha?.cells?.slice(-1)[0]
+      ? Math.round((AVT_STATE as any)._areaLinha.cells.slice(-1)[0].y * SZ2 - AVT_STATE.camera.y + SZ2 / 2) : alvoScr.y;
     _avtCanvasEfeito(tipo, cx, cy, lineEndX, lineEndY, cor, dur, tamanhoCell || 60, false, anim.icone||'');
     return 0;
   }
@@ -17451,7 +17452,7 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
   return 0;
 }
 
-function _avtCanvasEfeito(tipo, x1, y1, x2, y2, cor, dur, tamanho, trilha, icone, trajetoMode) {
+function _avtCanvasEfeito(tipo, x1, y1, x2, y2, cor, dur, tamanho, trilha, icone, trajetoMode?) {
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -19247,12 +19248,12 @@ function _avtBuildBody(bodyCfg, defaultColor) {
     } catch(e) { console.warn('[body] sprite falhou', e); }
   }
 
-  const col = (hex, fb) => _avtHexToInt(hex || fb || defaultColor || '#ffffff');
+  const col = (hex, fb?) => _avtHexToInt(hex || fb || defaultColor || '#ffffff');
   const parts = Array.isArray(bodyCfg.parts) ? bodyCfg.parts : [];
 
   parts.forEach(p => {
     const g = new PIXI.Graphics();
-    const C = col(p.color);
+    const C: any = col(p.color);
     const O = p.outline ? _avtHexToInt(p.outline) : null;
 
     switch ((p.kind || '').toLowerCase()) {
@@ -19463,27 +19464,27 @@ function _avtFxResolveTextures(spec) {
 }
 
 // ── Camera FX controller ─────────────────────────────────────────────────────
-function _avtCameraFX(app, worldRoot, uiRoot, camCfg, totalDuration, intensProfile) {
+function _avtCameraFX(app, worldRoot, uiRoot, camCfg, totalDuration, intensProfile?) {
   const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const IP = intensProfile || _avtIntensityProfile('equilibrado');
   const Craw = camCfg || {};
   // Aplica multiplicadores e remove campos zerados
-  const C = {};
-  if (Craw.shake && IP.shakeMul > 0) C.shake = Object.assign({}, Craw.shake, { amp: (Craw.shake.amp || 0) * IP.shakeMul });
-  if (Craw.flash && IP.flashMul > 0) C.flash = Object.assign({}, Craw.flash, { alpha: (Craw.flash.alpha || 0) * IP.flashMul });
-  if (Craw.hitstop && IP.hitstopMul > 0) C.hitstop = Object.assign({}, Craw.hitstop, { ms: (Craw.hitstop.ms || 0) * IP.hitstopMul });
-  if (Craw.zoomPunch && IP.zoomPunchMul > 0) C.zoomPunch = Object.assign({}, Craw.zoomPunch, { scale: 1 + ((Craw.zoomPunch.scale || 1) - 1) * IP.zoomPunchMul });
-  if (Craw.chromaticAberration && IP.chromaticMul > 0) C.chromaticAberration = Object.assign({}, Craw.chromaticAberration, { amount: (Craw.chromaticAberration.amount || 0) * IP.chromaticMul });
+  const C: any = {};
+  if (Craw.shake && IP.shakeMul > 0) (C as any).shake = Object.assign({}, Craw.shake, { amp: (Craw.shake.amp || 0) * IP.shakeMul });
+  if (Craw.flash && IP.flashMul > 0) (C as any).flash = Object.assign({}, Craw.flash, { alpha: (Craw.flash.alpha || 0) * IP.flashMul });
+  if (Craw.hitstop && IP.hitstopMul > 0) (C as any).hitstop = Object.assign({}, Craw.hitstop, { ms: (Craw.hitstop.ms || 0) * IP.hitstopMul });
+  if (Craw.zoomPunch && IP.zoomPunchMul > 0) (C as any).zoomPunch = Object.assign({}, Craw.zoomPunch, { scale: 1 + ((Craw.zoomPunch.scale || 1) - 1) * IP.zoomPunchMul });
+  if (Craw.chromaticAberration && IP.chromaticMul > 0) (C as any).chromaticAberration = Object.assign({}, Craw.chromaticAberration, { amount: (Craw.chromaticAberration.amount || 0) * IP.chromaticMul });
   const W = app.renderer.width, H = app.renderer.height;
   const baseX = worldRoot.position.x, baseY = worldRoot.position.y;
   const baseScale = worldRoot.scale.x;
 
   // Flash
   let flashSpr = null;
-  if (C.flash) {
+  if ((C as any).flash) {
     flashSpr = new PIXI.Sprite(PIXI.Texture.WHITE);
     flashSpr.width = W; flashSpr.height = H;
-    flashSpr.tint = _avtHexToInt(C.flash.color || '#ffffff');
+    flashSpr.tint = _avtHexToInt((C as any).flash.color || '#ffffff');
     flashSpr.alpha = 0;
     flashSpr.blendMode = PIXI.BLEND_MODES.ADD;
     uiRoot.addChild(flashSpr);
@@ -19491,16 +19492,16 @@ function _avtCameraFX(app, worldRoot, uiRoot, camCfg, totalDuration, intensProfi
 
   // RGB split filter (chromatic aberration)
   let rgb = null;
-  if (C.chromaticAberration && !reducedMotion && PIXI.filters && PIXI.filters.RGBSplitFilter) {
+  if ((C as any).chromaticAberration && !reducedMotion && PIXI.filters && PIXI.filters.RGBSplitFilter) {
     rgb = new PIXI.filters.RGBSplitFilter([0,0],[0,0],[0,0]);
     uiRoot.filters = (uiRoot.filters || []).concat(rgb);
   }
 
   // Hitstop
-  if (C.hitstop && !reducedMotion) {
-    const at = (C.hitstop.at != null ? C.hitstop.at : 0.2) * totalDuration;
+  if ((C as any).hitstop && !reducedMotion) {
+    const at = (C.hitstop.at != null ? (C as any).hitstop.at : 0.2) * totalDuration;
     setTimeout(() => {
-      AVT_STATE._fxFreezeUntil = performance.now() + Math.min(C.hitstop.ms || 80, 400);
+      AVT_STATE._fxFreezeUntil = performance.now() + Math.min((C as any).hitstop.ms || 80, 400);
     }, at);
   }
 
@@ -19512,9 +19513,9 @@ function _avtCameraFX(app, worldRoot, uiRoot, camCfg, totalDuration, intensProfi
     const k = Math.min(1, t / totalDuration);
 
     // Shake
-    if (C.shake && !reducedMotion) {
-      const amp = (C.shake.amp || 10) * Math.pow(C.shake.decay || 0.9, t/16);
-      const freq = (C.shake.freq || 30) / 1000;
+    if ((C as any).shake && !reducedMotion) {
+      const amp = (C.shake.amp || 10) * Math.pow((C as any).shake.decay || 0.9, t/16);
+      const freq = ((C as any).shake.freq || 30) / 1000;
       worldRoot.position.set(
         baseX + Math.sin(t*freq + shakeSeed)*amp,
         baseY + Math.cos(t*freq*1.13 + shakeSeed)*amp
@@ -19522,11 +19523,11 @@ function _avtCameraFX(app, worldRoot, uiRoot, camCfg, totalDuration, intensProfi
     }
 
     // Zoom punch (easeOutBack -> back to 1)
-    if (C.zoomPunch && !reducedMotion) {
-      const dur = C.zoomPunch.ms || 220;
+    if ((C as any).zoomPunch && !reducedMotion) {
+      const dur = (C as any).zoomPunch.ms || 220;
       const tt = Math.min(1, t/dur);
       // 0→peak at 0.4, then back to 1
-      const peak = (C.zoomPunch.scale || 1.04);
+      const peak = ((C as any).zoomPunch.scale || 1.04);
       let s;
       if (tt < 0.4) s = 1 + (peak-1) * (tt/0.4);
       else s = peak - (peak-1) * ((tt-0.4)/0.6);
@@ -19535,8 +19536,8 @@ function _avtCameraFX(app, worldRoot, uiRoot, camCfg, totalDuration, intensProfi
 
     // Flash fade
     if (flashSpr) {
-      const dur = C.flash.ms || 120;
-      const a = Math.max(0, (C.flash.alpha || 0.5) * (1 - t/dur));
+      const dur = (C as any).flash.ms || 120;
+      const a = Math.max(0, ((C as any).flash.alpha || 0.5) * (1 - t/dur));
       flashSpr.alpha = a;
     }
 
@@ -19552,7 +19553,7 @@ function _avtCameraFX(app, worldRoot, uiRoot, camCfg, totalDuration, intensProfi
     try { app.ticker.remove(tick); } catch(_) {}
     worldRoot.position.set(baseX, baseY);
     worldRoot.scale.set(baseScale);
-    AVT_STATE._fxFreezeUntil = 0;
+    (AVT_STATE as any)._fxFreezeUntil = 0;
   };
 }
 
@@ -19665,7 +19666,7 @@ function _avtVfxHostDestroy() {
   try { h.active.forEach(ad => { try { ad.destroy(); } catch(e) { try { console.warn('[pixi-fx] destroy de adapter falhou:', e); } catch(_) {} } }); } catch(_) {}
   try { h.app.ticker.remove(h._syncFn); } catch(_) {}
   try { h.overlayCanvas.remove(); } catch(_) {}
-  try { h.app.destroy(true); } catch(e) { try { console.warn('[pixi-fx] destroy do app host falhou:', e); } catch(_) {} }
+  try { (h.app as any).destroy(true); } catch(e) { try { console.warn('[pixi-fx] destroy do app host falhou:', e); } catch(_) {} }
 }
 window._avtVfxHostDestroy = _avtVfxHostDestroy;
 
@@ -19733,7 +19734,7 @@ function _avtPixiDrainQueue() {
 
 // ── Main entry point ─────────────────────────────────────────────────────────
 // ownerEl (optional): DOM element to track; emitters follow its screen position each frame.
-function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl) {
+function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl?) {
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
   if (typeof atacScr === 'number') {
@@ -19770,8 +19771,8 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
     // AoE: múltiplos emissores espalhados entre atacante e alvo
     startX = endX = midX; startY = endY = midY; mode = 'area';
     const SZArea = Math.round(AVT_SZ * (AVT_STATE.camera?.zoom || 1));
-    if (AVT_STATE._areaCentro) {
-      const { x: cx, y: cy, tamanho: ct } = AVT_STATE._areaCentro;
+    if ((AVT_STATE as any)._areaCentro) {
+      const { x: cx, y: cy, tamanho: ct } = (AVT_STATE as any)._areaCentro;
       _areaPoints = [];
       for (let dy = -(ct||1); dy <= (ct||1); dy++) {
         for (let dx = -(ct||1); dx <= (ct||1); dx++) {
@@ -19781,8 +19782,8 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
           });
         }
       }
-    } else if (AVT_STATE._areaLinha) {
-      _areaPoints = AVT_STATE._areaLinha.cells.map(c => ({
+    } else if ((AVT_STATE as any)._areaLinha) {
+      _areaPoints = (AVT_STATE as any)._areaLinha.cells.map(c => ({
         x: Math.round(c.x * SZArea - AVT_STATE.camera.x + SZArea / 2),
         y: Math.round(c.y * SZArea - AVT_STATE.camera.y + SZArea / 2),
       }));
@@ -20068,7 +20069,7 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
         const tickFn = () => {
           const dt = app.ticker.deltaMS;
           // Honor hitstop on the VFX itself
-          if (AVT_STATE._fxFreezeUntil && performance.now() < AVT_STATE._fxFreezeUntil) return;
+          if (AVT_STATE._fxFreezeUntil && performance.now() < (AVT_STATE as any)._fxFreezeUntil) return;
           elapsed += dt;
 
           // Travel / boomerang / spiral positioning
@@ -20096,8 +20097,8 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
           if (ownerEl) {
             try {
               const r = ownerEl.getBoundingClientRect();
-              if (!tickFn._canvR) tickFn._canvR = canvas.getBoundingClientRect();
-              const canvR = tickFn._canvR;
+              if (!(tickFn as any)._canvR) (tickFn as any)._canvR = canvas.getBoundingClientRect();
+              const canvR = (tickFn as any)._canvR;
               startX = r.left + r.width / 2 - canvR.left;
               startY = r.top + r.height / 2 - canvR.top;
               if (mode === 'static' || mode === 'emanation') { cx = startX; cy = startY; }
@@ -20186,11 +20187,11 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
             try { app.destroy(); } catch(_) {} // adapter: destrói o Container e libera o host
           } else {
             overlayCanvas.remove();
-            try { app.destroy(true); } catch(_) {}
+            try { (app as any).destroy(true); } catch(_) {}
             _avtPixiActiveApps--;
             _avtPixiDrainQueue();
           }
-          AVT_STATE._fxFreezeUntil = 0;
+          (AVT_STATE as any)._fxFreezeUntil = 0;
         }, totalDuration + 1100);
       });
     } catch(e) {
@@ -20199,11 +20200,11 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
         try { if (app) app.destroy(); } catch(_) {}
       } else {
         if (overlayCanvas) overlayCanvas.remove();
-        try { if (app) app.destroy(true); } catch(_) {}
+        try { if (app) (app as any).destroy(true); } catch(_) {}
         _avtPixiActiveApps--;
         _avtPixiDrainQueue();
       }
-      AVT_STATE._fxFreezeUntil = 0;
+      (AVT_STATE as any)._fxFreezeUntil = 0;
       _avtCanvasFlash(endX, endY, '#e74c3c', 'Impacto');
     }
   }).catch((err) => {
@@ -20291,9 +20292,9 @@ function _avtPlayTravelBody(travelCfg, atacScr, alvoScr, cor, intensidade) {
       }
       const _destroyApp = () => {
         if (_usaHost) { try { app.destroy(); } catch(_) {} }
-        else { try { app.destroy(true); } catch(_) {} try { overlayCanvas.remove(); } catch(_) {} }
+        else { try { (app as any).destroy(true); } catch(_) {} try { overlayCanvas.remove(); } catch(_) {} }
       };
-      const body = _avtBuildBody(travelCfg.body, cor);
+      const body: any = _avtBuildBody(travelCfg.body, cor);
       if (!body) { _destroyApp(); return; }
       // Billboard iso: envolve o conteúdo num container contra-transformado (ancorado no
       // midpoint) p/ o projétil viajar "em pé" entre os pontos projetados.
@@ -20375,7 +20376,7 @@ function _avtPlayTravelBody(travelCfg, atacScr, alvoScr, cor, intensidade) {
     } catch(e) {
       console.warn('[phases] travel body falhou:', e);
       if (_usaHost) { try { if (app) app.destroy(); } catch(_) {} }
-      else { try { if (app) app.destroy(true); } catch(_) {} try { overlayCanvas && overlayCanvas.remove(); } catch(_) {} }
+      else { try { if (app) (app as any).destroy(true); } catch(_) {} try { overlayCanvas && overlayCanvas.remove(); } catch(_) {} }
     }
   });
 }
@@ -20462,14 +20463,14 @@ function _avtPixiSpineAnim(spineConfig, screenX, screenY) {
       });
     } catch(e) {
       console.warn('[pixi-spine] erro app:', e);
-      try { if (app) app.destroy(true); } catch(_) {}
+      try { if (app) (app as any).destroy(true); } catch(_) {}
       overlayCanvas.remove();
       _avtCanvasFlash(screenX, screenY, '#9b59b6', 'Impacto');
       return;
     }
 
     setTimeout(() => {
-      try { app.destroy(true); } catch(_) {}
+      try { (app as any).destroy(true); } catch(_) {}
       const ov = document.getElementById('avt-pixi-spine-overlay');
       if (ov) ov.remove();
     }, duration + 500);
@@ -20537,7 +20538,7 @@ function _avtMpConteudoAba() {
 
     case 'fases': {
       const inpCss = 'width:100%;box-sizing:border-box;padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem';
-      const atualId = AVT_STATE._faseAtualId || 'principal';
+      const atualId = (AVT_STATE as any)._faseAtualId || 'principal';
       const pri = _avtFasePrincipalObj();
       const extras = (typeof _avtFasesOrdenadas === 'function') ? _avtFasesOrdenadas() : (AVT_STATE.rpg?.theme_json?.fases_extras || []);
       const linha = (f, isPri) => {
@@ -20891,13 +20892,13 @@ function _avtMpConteudoAba() {
       <div class="avt-mp-secao">
         <div class="avt-mp-label">Fases</div>
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:8px" onclick="_avtMestreNovaFase()">🚪 + Nova Fase</button>
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:${(AVT_STATE._faseAtualId||'principal')==='principal'?'rgba(200,168,75,0.10)':'rgba(79,163,209,0.04)'};border:1px solid rgba(200,168,75,0.25);margin-bottom:4px">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:${((AVT_STATE as any)._faseAtualId||'principal')==='principal'?'rgba(200,168,75,0.10)':'rgba(79,163,209,0.04)'};border:1px solid rgba(200,168,75,0.25);margin-bottom:4px">
           <span style="flex:1;font-size:0.72rem;color:#c8d8e8">🏰 Fase inicial${(AVT_STATE._faseAtualId||'principal')==='principal'?' <span style=\"font-size:0.6rem;color:#c8a84b\">(atual)</span>':''}</span>
           <button class="avt-mp-btn" style="flex:0;padding:3px 7px;min-width:0;font-size:0.65rem" onclick="_avtIrParaFase('principal')" title="Ir para fase inicial">▶</button>
         </div>
         ${fases.length ? fases.map(f => `
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:${AVT_STATE._faseAtualId===f.id?'rgba(200,168,75,0.10)':'rgba(79,163,209,0.04)'};border:1px solid rgba(79,163,209,0.1);margin-bottom:4px">
-            <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${f.nome}${AVT_STATE._faseAtualId===f.id?' <span style=\"font-size:0.6rem;color:#c8a84b\">(atual)</span>':''}</span>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:${(AVT_STATE as any)._faseAtualId===f.id?'rgba(200,168,75,0.10)':'rgba(79,163,209,0.04)'};border:1px solid rgba(79,163,209,0.1);margin-bottom:4px">
+            <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${f.nome}${(AVT_STATE as any)._faseAtualId===f.id?' <span style=\"font-size:0.6rem;color:#c8a84b\">(atual)</span>':''}</span>
             <span style="font-size:0.62rem;color:#7a92aa">${f.porta.lock_type==='livre'?'🔓':f.porta.lock_type==='chave'?'🔑':'⚔'} (${f.porta.col},${f.porta.row})</span>
             <button class="avt-mp-btn" style="flex:0;padding:3px 7px;min-width:0;font-size:0.65rem" onclick="_avtIrParaFase('${f.id}')">▶</button>
             <button class="avt-mp-btn avt-mp-btn-danger" style="flex:0;padding:3px 7px;min-width:0" onclick="_avtMestreRemoverFase('${f.id}')">✕</button>
@@ -21106,7 +21107,7 @@ function _avtMpConteudoAba() {
 
     case 'balanceamento': {
       const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
-      const attrDefs = AVT_STATE.attrDefs || [];
+      const attrDefs = (AVT_STATE as any).attrDefs || [];
       const corridaAtual  = lc.velocidade_corrida_ms ?? lc.velocidade_perseguicao_ms ?? 400;
       const dexPctAtual   = lc.destreza_vel_pct_por_ponto ?? 5;
       const pontosAtual   = lc.pontos_attr_por_nivel ?? 3;
@@ -21615,23 +21616,23 @@ function _avtMestreAbrirEditorUnificado() {
 
   // Estado de edição
   _avtEd.tiles         = dungeon.tiles.map(r => [...r]);
-  _avtEd.tilesBaseline = dungeon.tiles.map(r => [...r]);   // p/ o diff de aprendizado
+  (_avtEd as any).tilesBaseline = dungeon.tiles.map(r => [...r]);   // p/ o diff de aprendizado
   _avtEd.w = W; _avtEd.h = H;
-  _avtEd.tool = 'wall';
-  _avtEd.tsBrush = null;
-  _avtEd.pendingDoorAnchor = null;
-  _avtEd.portasInternas = (dungeon._portasInternas || []).map(p => JSON.parse(JSON.stringify(p)));
-  _avtEd.fasesExtras    = (AVT_STATE.rpg?.theme_json?.fases_extras || []).map(f => JSON.parse(JSON.stringify(f)));
+  (_avtEd as any).tool = 'wall';
+  (_avtEd as any).tsBrush = null;
+  (_avtEd as any).pendingDoorAnchor = null;
+  (_avtEd as any).portasInternas = (dungeon._portasInternas || []).map(p => JSON.parse(JSON.stringify(p)));
+  (_avtEd as any).fasesExtras    = (AVT_STATE.rpg?.theme_json?.fases_extras || []).map(f => JSON.parse(JSON.stringify(f)));
 
   // Migração: tileset_paints é morto (nunca renderizado) — limpa no próximo save.
   if (AVT_STATE.rpg?.theme_json?.tileset_paints) delete AVT_STATE.rpg.theme_json.tileset_paints;
 
   const tilesetUrl = AVT_STATE.rpg?.theme_json?.tileset_img_url || dungeon.tileset_img_url || null;
-  const tsCfg = AVT_STATE._tilesetConfig || dungeon.tileset_config || null;
+  const tsCfg = (AVT_STATE as any)._tilesetConfig || dungeon.tileset_config || null;
   const TS_COLS = tsCfg?.cols || 4, TS_ROWS = tsCfg?.rows || 4;
-  const dentroFaseExtra = (AVT_STATE._faseAtualId && AVT_STATE._faseAtualId !== 'principal');
+  const dentroFaseExtra = (AVT_STATE._faseAtualId && (AVT_STATE as any)._faseAtualId !== 'principal');
 
-  const toolBtn = (id, label) => `<button id="avt-ed-tool-${id}" class="avt-mp-btn avt-ed-tool ${_avtEd.tool===id?'avt-mp-btn-ativo':''}" onclick="_avtEdSetTool('${id}')">${label}</button>`;
+  const toolBtn = (id, label) => `<button id="avt-ed-tool-${id}" class="avt-mp-btn avt-ed-tool ${(_avtEd as any).tool===id?'avt-mp-btn-ativo':''}" onclick="_avtEdSetTool('${id}')">${label}</button>`;
 
   overlay.innerHTML = `
     <div style="width:100%;max-width:1100px">
@@ -21687,7 +21688,7 @@ function _avtMestreAbrirEditorUnificado() {
   canvas.style.width = (W * EDSZ) + 'px'; canvas.style.height = (H * EDSZ) + 'px';
 
   // Render WYSIWYG (espelha o render loop ao vivo: tileset + autotiler)
-  _avtEd._render = function() {
+  (_avtEd as any)._render = function() {
     const ctx = canvas.getContext('2d');
     const view = { w: W, h: H, tiles: _avtEd.tiles, _chestPositions: dungeon._chestPositions };
     ctx.imageSmoothingEnabled = false;
@@ -21696,9 +21697,9 @@ function _avtMestreAbrirEditorUnificado() {
         const t = _avtEd.tiles[y]?.[x];
         const px = x * EDSZ, py = y * EDSZ;
         let drawn = false;
-        if (AVT_STATE._tilesetLoaded && AVT_STATE._tilesetTextures) {
+        if (AVT_STATE._tilesetLoaded && (AVT_STATE as any)._tilesetTextures) {
           const key = typeof t === 'string' ? t : _avtGetTileSemanticKey(x, y, view);
-          const img = key ? AVT_STATE._tilesetTextures[key] : null;
+          const img = key ? (AVT_STATE as any)._tilesetTextures[key] : null;
           if (img) { ctx.drawImage(img, px, py, EDSZ, EDSZ); drawn = true; }
         }
         if (!drawn) {
@@ -21711,18 +21712,18 @@ function _avtMestreAbrirEditorUnificado() {
     }
     ctx.font = `${Math.round(EDSZ * 0.8)}px serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    (_avtEd.portasInternas || []).forEach(p => [p.a, p.b].forEach(ep => {
+    ((_avtEd as any).portasInternas || []).forEach(p => [p.a, p.b].forEach(ep => {
       if (!ep) return;
       ctx.fillStyle = 'rgba(168,120,255,0.95)';
       ctx.fillText('🌀', ep.col * EDSZ + EDSZ / 2, ep.row * EDSZ + EDSZ / 2);
     }));
-    (_avtEd.fasesExtras || []).forEach(f => {
+    ((_avtEd as any).fasesExtras || []).forEach(f => {
       const pr = f.porta; if (!pr) return;
       ctx.fillStyle = 'rgba(200,168,75,0.95)';
       ctx.fillText('🚪', pr.col * EDSZ + EDSZ / 2, pr.row * EDSZ + EDSZ / 2);
     });
-    if (_avtEd.pendingDoorAnchor) {
-      const a = _avtEd.pendingDoorAnchor;
+    if ((_avtEd as any).pendingDoorAnchor) {
+      const a = (_avtEd as any).pendingDoorAnchor;
       ctx.strokeStyle = '#a878ff'; ctx.lineWidth = 2;
       ctx.strokeRect(a.col * EDSZ + 1, a.row * EDSZ + 1, EDSZ - 2, EDSZ - 2);
     }
@@ -21734,12 +21735,12 @@ function _avtMestreAbrirEditorUnificado() {
       ctx.fill();
     });
   };
-  _avtEd._render();
+  (_avtEd as any)._render();
 
   // Garante que as texturas do tileset estejam em memória; sem isso o canvas
   // mostraria apenas cores sólidas (dá a impressão de que o tileset "sumiu").
-  if (tilesetUrl && tsCfg && !AVT_STATE._tilesetLoaded && typeof _avtCarregarTileset === 'function') {
-    _avtCarregarTileset(tilesetUrl, tsCfg).then(() => _avtEd._render?.()).catch(() => {});
+  if (tilesetUrl && tsCfg && !(AVT_STATE as any)._tilesetLoaded && typeof _avtCarregarTileset === 'function') {
+    _avtCarregarTileset(tilesetUrl, tsCfg).then(() => (_avtEd as any)._render?.()).catch(() => {});
   }
 
   const coords = (e) => {
@@ -21750,8 +21751,8 @@ function _avtMestreAbrirEditorUnificado() {
   };
   let painting = false;
   // Ferramentas de "clique único" (abrem modal/criam par) não devem repetir no arraste.
-  const isClickTool = () => _avtEd.tool === 'door' ||
-    (_avtEd.tool === 'tileset' && _avtEd.tsBrush?.fn === 'door');
+  const isClickTool = () => (_avtEd as any).tool === 'door' ||
+    (_avtEd.tool === 'tileset' && (_avtEd as any).tsBrush?.fn === 'door');
   const onDown = (e) => {
     e.preventDefault();
     const { tx, ty } = coords(e);
@@ -21778,8 +21779,8 @@ function _avtMestreAbrirEditorUnificado() {
       const tr = Math.floor((e.clientY - rect.top) / cellH);
       const key = _avtBlocoChavePorCelula(tc, tr);
       const fn = _avtBlocoFuncao(key);
-      _avtEd.tsBrush = { tc, tr, key, fn };
-      _avtEd.tool = 'tileset';
+      (_avtEd as any).tsBrush = { tc, tr, key, fn };
+      (_avtEd as any).tool = 'tileset';
       _avtEdAtualizarBotoes();
       const fnLabel = fn === 'wall' ? 'Parede' : fn === 'door' ? 'Porta' : 'Piso';
       const info = document.getElementById('avt-ts-brush-info');
@@ -21803,18 +21804,18 @@ function _avtEdStatus(msg) {
 function _avtEdAtualizarBotoes() {
   document.querySelectorAll('#avt-mestre-map-editor-overlay .avt-ed-tool')
     .forEach(b => b.classList.remove('avt-mp-btn-ativo'));
-  const btn = document.getElementById('avt-ed-tool-' + _avtEd.tool);
+  const btn = document.getElementById('avt-ed-tool-' + (_avtEd as any).tool);
   if (btn) btn.classList.add('avt-mp-btn-ativo');
 }
 
 function _avtEdSetTool(tool) {
-  _avtEd.tool = tool;
-  if (tool !== 'tileset') _avtEd.tsBrush = null;
-  if (tool !== 'door') _avtEd.pendingDoorAnchor = null;
+  (_avtEd as any).tool = tool;
+  if (tool !== 'tileset') (_avtEd as any).tsBrush = null;
+  if (tool !== 'door') (_avtEd as any).pendingDoorAnchor = null;
   _avtEdAtualizarBotoes();
   const labels = { floor: 'Piso', wall: 'Parede', door: 'Porta', erase: 'Apagar' };
   _avtEdStatus('Ferramenta: ' + (labels[tool] || tool));
-  _avtEd._render?.();
+  (_avtEd as any)._render?.();
 }
 
 // ── Distribuição automática: "assa" as peças do tileset em todo o mapa ──────────
@@ -21823,7 +21824,7 @@ function _avtEdSetTool(tool) {
 // _avtChaveEhParede para identificar todas as chaves de parede.
 function _avtEdDistribuirTileset() {
   if (!_avtEd.tiles) return;
-  const tsCfg = AVT_STATE._tilesetConfig || AVT_STATE.dungeon?.tileset_config;
+  const tsCfg = (AVT_STATE as any)._tilesetConfig || AVT_STATE.dungeon?.tileset_config;
   if (!tsCfg?.blocos) { mostrarToast('Tileset sem configuração de blocos', 'aviso'); return; }
   const W = _avtEd.w, H = _avtEd.h;
   // View numérica do grid original: a detecção de vizinhos do autotiler compara com
@@ -21848,46 +21849,46 @@ function _avtEdDistribuirTileset() {
   _avtEd.tiles = novo;
   _avtEdStatus(`Tileset distribuído em ${n} células.`);
   mostrarToast('Tileset distribuído pelo mapa', 'ok');
-  _avtEd._render?.();
+  (_avtEd as any)._render?.();
 }
 
 // Dispatcher de pintura
 function _avtEdAplicarTool(tx, ty) {
   if (!_avtEd.tiles || tx < 0 || ty < 0 || tx >= _avtEd.w || ty >= _avtEd.h) return;
   if (!_avtEd.tiles[ty]) _avtEd.tiles[ty] = [];
-  const tool = _avtEd.tool;
+  const tool = (_avtEd as any).tool;
   if (tool === 'floor') {
     _avtEd.tiles[ty][tx] = AVT_T.PISO;
   } else if (tool === 'wall') {
     _avtEd.tiles[ty][tx] = AVT_T.PAREDE;
   } else if (tool === 'erase') {
     _avtEdApagar(tx, ty); return;
-  } else if (tool === 'door' || (tool === 'tileset' && _avtEd.tsBrush?.fn === 'door')) {
-    if (_avtEd.pendingDoorAnchor) { _avtEdCompletarPortaInterna(tx, ty); }
+  } else if (tool === 'door' || (tool === 'tileset' && (_avtEd as any).tsBrush?.fn === 'door')) {
+    if ((_avtEd as any).pendingDoorAnchor) { _avtEdCompletarPortaInterna(tx, ty); }
     else { _avtEdAbrirConfigPorta(tx, ty); }
     return;
-  } else if (tool === 'tileset' && _avtEd.tsBrush?.key) {
-    _avtEd.tiles[ty][tx] = _avtEd.tsBrush.key;   // peça semântica exata (string)
+  } else if (tool === 'tileset' && (_avtEd as any).tsBrush?.key) {
+    _avtEd.tiles[ty][tx] = (_avtEd as any).tsBrush.key;   // peça semântica exata (string)
   }
-  _avtEd._render?.();
+  (_avtEd as any)._render?.();
 }
 
 function _avtEdApagar(col, row) {
   // Remove par interno (par inteiro) e porta de fase nesta célula.
-  const antes = _avtEd.portasInternas.length;
-  _avtEd.portasInternas = _avtEd.portasInternas.filter(p =>
+  const antes = (_avtEd as any).portasInternas.length;
+  _avtEd.portasInternas = (_avtEd as any).portasInternas.filter(p =>
     !((p.a && p.a.col === col && p.a.row === row) || (p.b && p.b.col === col && p.b.row === row)));
-  if (_avtEd.portasInternas.length !== antes) mostrarToast('Porta interna removida', 'ok');
-  _avtEd.fasesExtras.forEach(f => {
+  if ((_avtEd as any).portasInternas.length !== antes) mostrarToast('Porta interna removida', 'ok');
+  (_avtEd as any).fasesExtras.forEach(f => {
     if (f.porta && f.porta.col === col && f.porta.row === row) { f.porta = null; mostrarToast('Porta de fase removida', 'ok'); }
   });
   _avtEd.tiles[row][col] = AVT_T.PAREDE;   // volta a parede/void
-  _avtEd._render?.();
+  (_avtEd as any)._render?.();
 }
 
 // ── Portas no editor ─────────────────────────────────────────────────────────
 function _avtEdAbrirConfigPorta(col, row) {
-  _avtEd._portaCfgCell = { col, row };
+  (_avtEd as any)._portaCfgCell = { col, row };
   let modal = document.getElementById('avt-ed-porta-modal');
   if (!modal) {
     modal = document.createElement('div');
@@ -21895,7 +21896,7 @@ function _avtEdAbrirConfigPorta(col, row) {
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9600;display:flex;align-items:center;justify-content:center';
     document.body.appendChild(modal);
   }
-  const fases = _avtEd.fasesExtras || [];
+  const fases = (_avtEd as any).fasesExtras || [];
   modal.innerHTML = `
     <div style="background:#0d1320;border:1px solid rgba(79,163,209,0.3);border-radius:10px;padding:18px;width:320px;max-width:92vw">
       <div style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8d8e8;margin-bottom:12px">🚪 Posicionar porta (${col},${row})</div>
@@ -21929,12 +21930,12 @@ function _avtEdAbrirConfigPorta(col, row) {
 }
 
 function _avtEdConfirmarPorta() {
-  const cell = _avtEd._portaCfgCell;
+  const cell = (_avtEd as any)._portaCfgCell;
   if (!cell) return;
   const tipo = document.querySelector('input[name="avt-ed-porta-tipo"]:checked')?.value || 'interna';
   document.getElementById('avt-ed-porta-modal').style.display = 'none';
   if (tipo === 'interna') {
-    _avtEd.pendingDoorAnchor = { col: cell.col, row: cell.row };
+    (_avtEd as any).pendingDoorAnchor = { col: cell.col, row: cell.row };
     _avtEd.tiles[cell.row][cell.col] = AVT_T.PISO; // passável
     _avtEdStatus('Porta interna: clique na célula de destino (teleporte).');
     mostrarToast('Clique no destino da porta interna', 'ok');
@@ -21942,7 +21943,7 @@ function _avtEdConfirmarPorta() {
     const faseId = document.getElementById('avt-ed-porta-fase-sel')?.value;
     if (!faseId) { mostrarToast('Crie uma fase antes', 'aviso'); return; }
     const lock = document.getElementById('avt-ed-porta-lock')?.value || 'livre';
-    const fase = _avtEd.fasesExtras.find(f => f.id === faseId);
+    const fase = (_avtEd as any).fasesExtras.find(f => f.id === faseId);
     if (fase) {
       fase.porta = { col: cell.col, row: cell.row, lock_type: lock,
         chave_palavra: fase.porta?.chave_palavra || '', npc_boss_id: fase.porta?.npc_boss_id || '' };
@@ -21950,21 +21951,21 @@ function _avtEdConfirmarPorta() {
       mostrarToast('Porta de fase posicionada', 'ok');
     }
   }
-  _avtEd._render?.();
+  (_avtEd as any)._render?.();
 }
 
 function _avtEdCompletarPortaInterna(col, row) {
-  const a = _avtEd.pendingDoorAnchor;
-  _avtEd.pendingDoorAnchor = null;
+  const a = (_avtEd as any).pendingDoorAnchor;
+  (_avtEd as any).pendingDoorAnchor = null;
   if (!a) return;
   if (a.col === col && a.row === row) { mostrarToast('Destino deve ser outra célula', 'aviso'); return; }
-  const maxNum = _avtEd.portasInternas.reduce((m, p) => Math.max(m, p.numero || 0), 1);
+  const maxNum = (_avtEd as any).portasInternas.reduce((m, p) => Math.max(m, p.numero || 0), 1);
   const numero = maxNum + 1;
-  _avtEd.portasInternas.push({ numero, nome: 'Porta ' + numero, a: { col: a.col, row: a.row }, b: { col, row } });
+  (_avtEd as any).portasInternas.push({ numero, nome: 'Porta ' + numero, a: { col: a.col, row: a.row }, b: { col, row } });
   _avtEd.tiles[row][col] = AVT_T.PISO;
   _avtEdStatus('Porta interna criada.');
   mostrarToast('Porta interna criada', 'ok');
-  _avtEd._render?.();
+  (_avtEd as any)._render?.();
 }
 
 async function _avtMestreSalvarMapaUnificado() {
@@ -21973,22 +21974,22 @@ async function _avtMestreSalvarMapaUnificado() {
   try {
     const tj = AVT_STATE.rpg.theme_json = AVT_STATE.rpg.theme_json || {};
     const profile = tj.generation_style_profile || {};
-    const rules = _avtAprenderPlacements(_avtEd.tilesBaseline, _avtEd.tiles, _avtEd.w, _avtEd.h, profile.placement_rules || {});
+    const rules = _avtAprenderPlacements((_avtEd as any).tilesBaseline, _avtEd.tiles, _avtEd.w, _avtEd.h, profile.placement_rules || {});
     // dungeon temporário p/ stats (com as portas e tiles editados)
-    const dungeonStats = { tiles: _avtEd.tiles, rooms: AVT_STATE.dungeon.rooms, _portasInternas: _avtEd.portasInternas };
+    const dungeonStats = { tiles: _avtEd.tiles, rooms: AVT_STATE.dungeon.rooms, _portasInternas: (_avtEd as any).portasInternas };
     tj.generation_style_profile = _avtMesclarPerfilEstilo(profile, _avtDerivarStats(dungeonStats), rules);
   } catch(e) { console.warn('[avt] aprendizado de estilo falhou:', e); }
 
   // Aplicar ao dungeon ativo
   AVT_STATE.dungeon.tiles = _avtEd.tiles.map(r => [...r]);
-  AVT_STATE.dungeon._portasInternas = _avtEd.portasInternas;
+  AVT_STATE.dungeon._portasInternas = (_avtEd as any).portasInternas;
 
   // Persistir estado da fase atual no lugar certo (principal vs fase extra)
   const tj = AVT_STATE.rpg.theme_json;
-  const faseId = AVT_STATE._faseAtualId || 'principal';
+  const faseId = (AVT_STATE as any)._faseAtualId || 'principal';
   _avtGravarDungeonNoSlot(tj);
   // Portas de fase editadas (merge das coords) — mantém objetos das fases já existentes
-  if (_avtEd.fasesExtras && tj.fases_extras) {
+  if ((_avtEd as any).fasesExtras && tj.fases_extras) {
     tj.fases_extras.forEach(f => {
       const ed = _avtEd.fasesExtras.find(x => x.id === f.id);
       if (ed) f.porta = ed.porta;
@@ -22007,7 +22008,7 @@ async function _avtMestreSalvarMapaUnificado() {
     mostrarToast('Mapa atualizado localmente (erro ao persistir: ' + (e?.message || e) + ')', 'aviso');
   }
   // Invalida os bakes estáticos locais do próprio mestre (o broadcast não ecoa de volta)
-  AVT_STATE._dungeonRev = (AVT_STATE._dungeonRev || 0) + 1;
+  AVT_STATE._dungeonRev = ((AVT_STATE as any)._dungeonRev || 0) + 1;
   if (typeof _avtTileBakeInvalidate === 'function') _avtTileBakeInvalidate();
   // Broadcast p/ os outros clientes (escopo por fase)
   try {
@@ -22022,7 +22023,7 @@ async function _avtMestreSalvarMapaUnificado() {
 // Recebe atualização de mapa de outro cliente (mestre editou ao vivo)
 function avtReceberDungeonUpdate(p) {
   if (!p) return;
-  const minhaFase = AVT_STATE._faseAtualId || 'principal';
+  const minhaFase = (AVT_STATE as any)._faseAtualId || 'principal';
   // Sempre sincroniza as portas de fase do registro
   if (AVT_STATE.rpg?.theme_json && Array.isArray(p.fases_extras)) {
     AVT_STATE.rpg.theme_json.fases_extras = p.fases_extras;
@@ -22031,10 +22032,10 @@ function avtReceberDungeonUpdate(p) {
   AVT_STATE.dungeon = p.dungeon;
   AVT_STATE.dungeon._portasInternas = p.dungeon._portasInternas || [];
   try { _avtNormalizarObjetosDungeon(AVT_STATE.dungeon); } catch(_) {}
-  AVT_STATE._tilesetConfig = AVT_STATE.dungeon.tileset_config || AVT_STATE._tilesetConfig;
+  AVT_STATE._tilesetConfig = AVT_STATE.dungeon.tileset_config || (AVT_STATE as any)._tilesetConfig;
   // FIX F7: edição de tiles em sessão precisa invalidar os bakes estáticos
   // (camada PIXI, tiles 2D legados e minimapa) mesmo sem mudar dimensões/fase.
-  AVT_STATE._dungeonRev = (AVT_STATE._dungeonRev || 0) + 1;
+  AVT_STATE._dungeonRev = ((AVT_STATE as any)._dungeonRev || 0) + 1;
   if (typeof _avtTileBakeInvalidate === 'function') _avtTileBakeInvalidate();
   mostrarToast?.('🗺 O mestre atualizou o mapa', 'ok');
 }
@@ -22182,7 +22183,7 @@ async function _avtSalvarDropsConfig() {
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
-  const clamp = (id, def) => Math.max(0, Math.min(100, parseInt(document.getElementById(id)?.value))) / 100;
+  const clamp = (id, def?) => Math.max(0, Math.min(100, parseInt(document.getElementById(id)?.value))) / 100;
   const cfg = {
     drop_item_chance:   isNaN(clamp('avt-mp-drop-item-pct'))   ? 0.10 : clamp('avt-mp-drop-item-pct'),
     orbe_hp_chance:     isNaN(clamp('avt-mp-orbe-hp-pct'))     ? 0.10 : clamp('avt-mp-orbe-hp-pct'),
@@ -22226,7 +22227,7 @@ async function _avtSalvarDynSpawnConfig() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     try { _avtBroadcast('avt_level_config_update', { config: cfg }); } catch(_) {}
-    AVT_STATE._dynSpawnNextAt = 0; // aplica já no próximo frame
+    (AVT_STATE as any)._dynSpawnNextAt = 0; // aplica já no próximo frame
     mostrarToast('Spawns dinâmicos salvos!', 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
@@ -22317,7 +22318,7 @@ async function _avtSalvarOrbeTiers() {
     }
     return tiers;
   };
-  const cfg = { orbe_hp_tiers: coletar('hp'), orbe_mana_tiers: coletar('mana') };
+  const cfg: any = { orbe_hp_tiers: coletar('hp'), orbe_mana_tiers: coletar('mana') };
   // Orbes de efeito: uma entrada por tipo elegível do registry (novos tipos
   // aparecem sozinhos no editor; só o que difere dos defaults precisa existir aqui)
   if (typeof EFFECT_REGISTRY !== 'undefined') {
@@ -22458,7 +22459,7 @@ async function _avtSalvarPerseguicaoDesistir() {
 window._avtSalvarPerseguicaoDesistir = _avtSalvarPerseguicaoDesistir;
 
 // Receber broadcast de mudança em level_config (qualquer chave)
-function avtReceberLevelConfigUpdate({ config } = {}) {
+function avtReceberLevelConfigUpdate({ config }: any = {}) {
   if (!config || typeof config !== 'object') return;
   if (!AVT_STATE.rpg) return;
   if (!AVT_STATE.rpg.theme_json) AVT_STATE.rpg.theme_json = {};
@@ -22475,7 +22476,7 @@ function avtReceberLevelConfigUpdate({ config } = {}) {
 window.avtReceberLevelConfigUpdate = avtReceberLevelConfigUpdate;
 
 // Receber broadcast de animação de skill — re-toca localmente
-function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, animacao, areaCentro, areaLinha, faseId } = {}) {
+function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, animacao, areaCentro, areaLinha, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof _avtPlaySkillAnim !== 'function') return;
@@ -22493,14 +22494,14 @@ function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, animacao, areaCe
       if (!isArea) return; // alvo único não resolvido: comportamento antigo (não anima)
       alvo = atac;
     }
-    const _savedC = AVT_STATE._areaCentro, _savedL = AVT_STATE._areaLinha;
+    const _savedC = AVT_STATE._areaCentro, _savedL = (AVT_STATE as any)._areaLinha;
     if (isArea) {
-      AVT_STATE._areaCentro = areaCentro || null;
-      AVT_STATE._areaLinha  = areaLinha  || null;
+      (AVT_STATE as any)._areaCentro = areaCentro || null;
+      (AVT_STATE as any)._areaLinha  = areaLinha  || null;
     }
     try { _avtPlaySkillAnim(sk, alvo, atac, isArea); }
     finally {
-      if (isArea) { AVT_STATE._areaCentro = _savedC; AVT_STATE._areaLinha = _savedL; }
+      if (isArea) { AVT_STATE._areaCentro = _savedC; (AVT_STATE as any)._areaLinha = _savedL; }
     }
   } catch(e) { try { console.warn('[AVT] avtReceberSkillAnim:', e); } catch(_) {} }
 }
@@ -22509,7 +22510,7 @@ window.avtReceberSkillAnim = avtReceberSkillAnim;
 // Receber broadcast de início de animação persistente de efeito (Rastro Persona,
 // Atravessar, modificadores de ataque básico, etc.). Espelha avtReceberSkillAnim:
 // resolve as entidades por nome e reconstrói a chave local antes de tocar.
-function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome, faseId } = {}) {
+function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof avtPixiPlayPersistent !== 'function' || !animId || !tipo) return;
@@ -22523,7 +22524,7 @@ function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome
 window.avtReceberEfeitoAnimStart = avtReceberEfeitoAnimStart;
 
 // Receber broadcast de parada de animação persistente de efeito.
-function avtReceberEfeitoAnimStop({ tipo, alvoNome, faseId } = {}) {
+function avtReceberEfeitoAnimStop({ tipo, alvoNome, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof avtPixiStopPersistent !== 'function' || !tipo) return;
@@ -22535,7 +22536,7 @@ function avtReceberEfeitoAnimStop({ tipo, alvoNome, faseId } = {}) {
 window.avtReceberEfeitoAnimStop = avtReceberEfeitoAnimStop;
 
 // Receber broadcast de animação de ataque placeholder
-function avtReceberAttackAnim({ atacanteNome, alvoNome, animacao, delay, faseId } = {}) {
+function avtReceberAttackAnim({ atacanteNome, alvoNome, animacao, delay, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof animarAtaque !== 'function' || !animacao) return;
@@ -22603,13 +22604,13 @@ function avtAplicarSnapshotMerge(snap) {
     if (snap._oocCooldowns) {
       const _now = Date.now();
       AVT_STATE._oocCooldowns = Object.fromEntries(
-        Object.entries(snap._oocCooldowns).filter(([, exp]) => exp > _now)
+        Object.entries<any>(snap._oocCooldowns).filter(([, exp]) => exp > _now)
       );
     }
     if (snap._oocStatusEffects) AVT_STATE._oocStatusEffects = snap._oocStatusEffects;
     if (Array.isArray(snap._rastroCells)) {
       const _nowR = Date.now();
-      AVT_STATE._rastroCells = snap._rastroCells
+      (AVT_STATE as any)._rastroCells = snap._rastroCells
         .filter(c => c && _nowR < c.expiry_ms)
         .map(c => ({ ...c, hitSet: new Set(c.hitSet || []) }));
     }
@@ -22626,7 +22627,7 @@ window.avtAplicarSnapshotMerge = avtAplicarSnapshotMerge;
     if (_bound) return;
     if (typeof RTNet === 'undefined' || typeof RTNet.onHostChange !== 'function') return;
     _bound = true;
-    RTNet.onHostChange(({ hostId, isHost } = {}) => {
+    RTNet.onHostChange(({ hostId, isHost }: any = {}) => {
       if (isHost || !hostId) return;
       // Espera o canal abrir antes de pedir snapshot
       setTimeout(() => { try { RTNet.requisitarSnapshot(); } catch(_) {} }, 800);
@@ -22874,10 +22875,10 @@ async function _avtSalvarTrilhaSonora() {
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
-  const audio = {};
-  if (exploracaoUrl) audio.exploracao_url = exploracaoUrl;
-  if (combateUrl)    audio.combate_url    = combateUrl;
-  if (bossUrl)       audio.boss_url       = bossUrl;
+  const audio: any = {};
+  if (exploracaoUrl) (audio as any).exploracao_url = exploracaoUrl;
+  if (combateUrl)    (audio as any).combate_url    = combateUrl;
+  if (bossUrl)       (audio as any).boss_url       = bossUrl;
   audio.volume_musica = volume;
   rpg.theme_json.audio = audio;
   try {
@@ -22974,7 +22975,7 @@ function _avtBulkNpcSkillAplicar() {
   const npcSkills = (AVT_STATE.skills || []).filter(s => (s.personagem || s.character_id) && ehNpc(s));
   let nDb = 0;
   npcSkills.forEach(s => {
-    const body = {};
+    const body: any = {};
     if (formula) body.formula_dano = formula;
     if (cd != null) body.cooldown_turnos = cd;
     if (tipo) body.tipo_dano = tipo;
@@ -23052,23 +23053,23 @@ async function _avtPackageAdicionar(pkgId) {
       nome: item.nome,
       icone: item.icone || '📦',
       tipo_canonico: item.tipo_canonico,
-      subtipo: item.subtipo || null,
+      subtipo: (item as any).subtipo || null,
       raridade: item.raridade || 'comum',
       descricao: item.descricao || null,
-      slot_padrao: item.slot_padrao || null,
-      grupo_atributo_base: item.grupo_atributo_base || null,
+      slot_padrao: (item as any).slot_padrao || null,
+      grupo_atributo_base: (item as any).grupo_atributo_base || null,
       aceita_amuleto_aninhado: false,
-      atributos_bonus: item.atributos_bonus || null,
-      trade_offs: item.trade_offs || null,
-      efeitos: item.efeitos || null,
-      visual_config: item.visual_config || { tipo_visual: 'emoji', valor: item.icone || '📦' },
+      atributos_bonus: (item as any).atributos_bonus || null,
+      trade_offs: (item as any).trade_offs || null,
+      efeitos: (item as any).efeitos || null,
+      visual_config: (item as any).visual_config || { tipo_visual: 'emoji', valor: item.icone || '📦' },
       nivel: item.nivel || 1,
-      nivel_minimo_uso: item.nivel_minimo_uso || 1,
+      nivel_minimo_uso: (item as any).nivel_minimo_uso || 1,
       unico_no_mundo: false,
       droppable: item.droppable || false,
       drop_rate: item.drop_rate || null,
-      tier_min: item.tier_min || null,
-      tier_max: item.tier_max || null,
+      tier_min: (item as any).tier_min || null,
+      tier_max: (item as any).tier_max || null,
     };
     try {
       const rows = await _avtSb('item_catalog', {
@@ -23172,10 +23173,10 @@ async function _avtMestreAplicarTilesetUpload() {
     dungeon.tileset_config  = tilesetConfig;
     dungeon.tileset_img_url = url;
     AVT_STATE.dungeon = dungeon;
-    AVT_STATE._tilesetConfig   = tilesetConfig;
-    AVT_STATE._tilesetImgUrl   = url;
-    AVT_STATE._tilesetLoaded   = false;
-    AVT_STATE._tilesetTextures = {};
+    (AVT_STATE as any)._tilesetConfig   = tilesetConfig;
+    (AVT_STATE as any)._tilesetImgUrl   = url;
+    (AVT_STATE as any)._tilesetLoaded   = false;
+    (AVT_STATE as any)._tilesetTextures = {};
     if (typeof _avtCarregarTileset === 'function') _avtCarregarTileset(url, tilesetConfig);
     const newTheme = {
       ...(AVT_STATE.rpg.theme_json || {}),
@@ -23341,7 +23342,7 @@ function _avtNfSelecionarMapa(opcao) {
   const grid = document.querySelector('#avt-nf-mapa-sub')?.parentElement?.querySelector('[style*="grid-template-columns"]');
   if (grid) {
     [...grid.children].forEach((el, i) => {
-      const opts = ['procedural','json','claude','editor'];
+      const opts: any = ['procedural','json','claude','editor'];
       const sel = opts[i] === opcao;
       el.style.border = `1px solid ${sel?'rgba(79,163,209,0.6)':'rgba(255,255,255,0.08)'}`;
       el.style.background = sel?'rgba(79,163,209,0.12)':'rgba(255,255,255,0.02)';
@@ -23581,7 +23582,7 @@ async function _avtMestreSalvarNovaFase() {
   if (w.porta_col == null || w.porta_row == null) { mostrarToast('Defina a posição da porta clicando no mapa', 'aviso'); return; }
 
   // Resolve dungeon_data
-  let dungeonData = w.dungeon;
+  let dungeonData: any = w.dungeon;
   if (!dungeonData) {
     if (w.mapaOpcao === 'procedural') {
       const salas = w._procSalas || 8;
@@ -23681,12 +23682,12 @@ async function _avtSalvarFaseBalance(faseId) {
   }
 
   // Refletir na fase em jogo: cor imediata; nível/dificuldade valem ao (re)popular os inimigos.
-  if ((AVT_STATE._faseAtualId || 'principal') === faseId && AVT_STATE.dungeon) {
+  if (((AVT_STATE as any)._faseAtualId || 'principal') === faseId && AVT_STATE.dungeon) {
     const obj = faseId === 'principal' ? _avtFasePrincipalObj() : (tj.fases_extras || []).find(f => f.id === faseId);
     if (obj) {
       AVT_STATE.dungeon._npcLevel      = obj.npc_level ?? 1;
       AVT_STATE.dungeon._balanceConfig = obj.balance_config || null;
-      AVT_STATE._faseHueShift          = obj.tint_hue || 0;
+      (AVT_STATE as any)._faseHueShift          = obj.tint_hue || 0;
     }
   }
 
@@ -23705,10 +23706,10 @@ window._avtFasesOrdenadas = _avtFasesOrdenadas;
 
 // Descritor da fase atual (objeto da fase extra, ou sintético para a principal).
 function _avtFaseAtualObj() {
-  const id = AVT_STATE._faseAtualId || 'principal';
+  const id = (AVT_STATE as any)._faseAtualId || 'principal';
   if (id === 'principal') {
     return { id: 'principal', ordem: 0, npc_level: 1,
-      tileset_img_url: AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_img_url || AVT_STATE._tilesetImgUrl || null,
+      tileset_img_url: AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_img_url || (AVT_STATE as any)._tilesetImgUrl || null,
       dungeon_data: AVT_STATE.rpg?.theme_json?.dungeon_data || AVT_STATE.dungeon, tint_hue: 0 };
   }
   return (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === id) || null;
@@ -23732,7 +23733,7 @@ async function _avtGerarProximaFaseAuto() {
   const salas = prevSalas + Math.floor(Math.random() * 4); // 0..3 a mais (viés p/ cima)
   const area = Math.max(22*16, salas*60);
   const ww = Math.ceil(Math.sqrt(area*(22/16))); const hh = Math.ceil(area/ww);
-  const dungeonData = _avtGerarDungeon(ww, hh, salas, prof);
+  const dungeonData: any = _avtGerarDungeon(ww, hh, salas, prof);
   _avtAplicarRegrasEstilo(dungeonData, prof);
   // SAIDA na última sala
   if (dungeonData.rooms?.length > 0) {
@@ -23765,7 +23766,7 @@ window._avtGerarProximaFaseAuto = _avtGerarProximaFaseAuto;
 async function _avtOnBossMorto(boss, bat) {
   const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
   const modo = lc.boss_door_mode || 'spawn_door';
-  let prox = _avtProximaFase(AVT_STATE._faseAtualId);
+  let prox = _avtProximaFase((AVT_STATE as any)._faseAtualId);
   if (!prox) {
     try { prox = await _avtGerarProximaFaseAuto(); } catch(_) { prox = null; }
   }
@@ -23797,29 +23798,29 @@ async function _avtOnBossMorto(boss, bat) {
       const alt = dirs.map(([dx,dy]) => ({x:col+dx,y:row+dy})).find(p => _avtTilePassavel(p.x,p.y,AVT_STATE.dungeon));
       if (alt) { col = alt.x; row = alt.y; }
     }
-    AVT_STATE._portaProximaFase = { faseId: prox.id, nome: prox.nome, col, row, abertaEm: Date.now(), _faseOrigem: AVT_STATE._faseAtualId || 'principal' };
-    try { _avtBroadcast('avt_porta_proxima', AVT_STATE._portaProximaFase); } catch(_){}
+    AVT_STATE._portaProximaFase = { faseId: prox.id, nome: prox.nome, col, row, abertaEm: Date.now(), _faseOrigem: (AVT_STATE as any)._faseAtualId || 'principal' };
+    try { _avtBroadcast('avt_porta_proxima', (AVT_STATE as any)._portaProximaFase); } catch(_){}
     mostrarToast(`🚪 Porta para ${prox.nome} aberta por ${segs}s!`, 'ok');
     // Após a janela, a porta para de "aparecer" (mas se já foi aberta segue usável):
     // marcamos apenas que a janela fechou; a entrada continua permitida.
-    _avtSetTimeout(() => { if (AVT_STATE._portaProximaFase) AVT_STATE._portaProximaFase._janelaFechada = true; }, segs * 1000);
+    _avtSetTimeout(() => { if (AVT_STATE._portaProximaFase) (AVT_STATE as any)._portaProximaFase._janelaFechada = true; }, segs * 1000);
   }
 }
 window._avtOnBossMorto = _avtOnBossMorto;
 // Recebe abertura de porta da próxima fase de outro cliente
-window.avtReceberPortaProxima = function(p) { try { if (p?.faseId) AVT_STATE._portaProximaFase = p; } catch(_){} };
+window.avtReceberPortaProxima = function(p) { try { if (p?.faseId) (AVT_STATE as any)._portaProximaFase = p; } catch(_){} };
 
 // ─── Verificação de porta ao mover ───────────────────────────────────────────
 function _avtVerificarPortaFase(x, y) {
   // Porta temporária da próxima fase (aberta ao matar o boss)
-  const pp = AVT_STATE._portaProximaFase;
+  const pp = (AVT_STATE as any)._portaProximaFase;
   if (pp && pp.col === x && pp.row === y) {
     const prox = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === pp.faseId);
     if (prox) { _avtPromptFase(`Avançar para ${prox.nome || 'a próxima fase'}?`, 'Avançar', () => _avtEntrarFaseExtra(prox)); return; }
   }
   // Se já estou dentro de uma fase extra, ignorar portas (só SAIDA volta).
   // As portas de fase são posicionadas no mapa principal; dentro de uma fase extra só a SAIDA volta.
-  if (AVT_STATE._faseAtualId && AVT_STATE._faseAtualId !== 'principal') return;
+  if (AVT_STATE._faseAtualId && (AVT_STATE as any)._faseAtualId !== 'principal') return;
   const fases = AVT_STATE.rpg?.theme_json?.fases_extras;
   if (!fases?.length) return;
   const fase = fases.find(f => f.porta.col === x && f.porta.row === y);
@@ -23866,7 +23867,7 @@ window._avtFasePrincipalObj = _avtFasePrincipalObj;
 // Snapshot completo do estado vivo da fase atual (dungeon + entidades + tileset + cor).
 function _avtSnapshotFaseAtual() {
   if (!AVT_STATE._faseSnapshots) AVT_STATE._faseSnapshots = {};
-  const id = AVT_STATE._faseAtualId || 'principal';
+  const id = (AVT_STATE as any)._faseAtualId || 'principal';
   AVT_STATE._faseSnapshots[id] = {
     dungeon:         AVT_STATE.dungeon,
     entidades:       (AVT_STATE.entidades || []).map(e => _avtDeepClone(e)),
@@ -23874,11 +23875,11 @@ function _avtSnapshotFaseAtual() {
     // FIX F5: batalhas ativas fazem parte do estado da fase — antes ficavam em
     // AVT_STATE.batalhas apontando para entidades da fase antiga.
     batalhas:        _avtDeepClone(AVT_STATE.batalhas) || [],
-    tilesetImgUrl:   AVT_STATE._tilesetImgUrl || null,
-    tilesetConfig:   AVT_STATE._tilesetConfig || null,
-    tilesetTextures: AVT_STATE._tilesetTextures || {},
-    tilesetLoaded:   AVT_STATE._tilesetLoaded || false,
-    hue:             AVT_STATE._faseHueShift || 0,
+    tilesetImgUrl:   (AVT_STATE as any)._tilesetImgUrl || null,
+    tilesetConfig:   (AVT_STATE as any)._tilesetConfig || null,
+    tilesetTextures: (AVT_STATE as any)._tilesetTextures || {},
+    tilesetLoaded:   (AVT_STATE as any)._tilesetLoaded || false,
+    hue:             (AVT_STATE as any)._faseHueShift || 0,
   };
   return id;
 }
@@ -23886,7 +23887,7 @@ function _avtSnapshotFaseAtual() {
 // Tileset da fase: SEMPRE usa o tileset_config do tileset principal; só a imagem
 // (se a fase tiver a sua) e a cor (tint_hue) variam por fase.
 function _avtAplicarTilesetFase(faseObj) {
-  AVT_STATE._faseHueShift = faseObj.tint_hue || 0;
+  (AVT_STATE as any)._faseHueShift = faseObj.tint_hue || 0;
   // Config/imagem PRÓPRIAS da fase quando existirem; senão herda do principal.
   const config = faseObj.tileset_config
     || (faseObj.dungeon_data && faseObj.dungeon_data.tileset_config)
@@ -23897,14 +23898,14 @@ function _avtAplicarTilesetFase(faseObj) {
   if (!config || !imgUrl) return; // sem tileset configurado: mantém o estado atual
   // Invalida cache por imagem E config (fases podem ter o mesmo URL mas layout distinto).
   const _cacheKey = imgUrl + '|' + JSON.stringify(config);
-  if (AVT_STATE._tilesetCacheKey === _cacheKey && AVT_STATE._tilesetLoaded) return; // já carregado
-  AVT_STATE._tilesetCacheKey = _cacheKey;
-  AVT_STATE._tilesetImgUrl   = imgUrl;
-  AVT_STATE._tilesetConfig   = config;
-  AVT_STATE._tilesetLoaded   = false;
-  AVT_STATE._tilesetTextures = {};
+  if (AVT_STATE._tilesetCacheKey === _cacheKey && (AVT_STATE as any)._tilesetLoaded) return; // já carregado
+  (AVT_STATE as any)._tilesetCacheKey = _cacheKey;
+  (AVT_STATE as any)._tilesetImgUrl   = imgUrl;
+  (AVT_STATE as any)._tilesetConfig   = config;
+  (AVT_STATE as any)._tilesetLoaded   = false;
+  (AVT_STATE as any)._tilesetTextures = {};
   _avtCarregarTileset(imgUrl, config)
-    .then(() => { AVT_STATE._tilesetLoaded = true; })
+    .then(() => { (AVT_STATE as any)._tilesetLoaded = true; })
     .catch(() => {});
 }
 
@@ -23912,16 +23913,16 @@ async function _avtCarregarFase(faseId, opts = {}) {
   if (!faseId) return;
   // FIX F8: guard de reentrância — a função tem awaits antes do snapshot; duas
   // chamadas sobrepostas (porta + _avtIrParaFase) corrompiam pilha/snapshot.
-  if (AVT_STATE._carregandoFase) return;
-  AVT_STATE._carregandoFase = true;
+  if ((AVT_STATE as any)._carregandoFase) return;
+  (AVT_STATE as any)._carregandoFase = true;
   try {
     await _avtCarregarFaseInner(faseId, opts);
   } finally {
-    AVT_STATE._carregandoFase = false;
+    (AVT_STATE as any)._carregandoFase = false;
   }
 }
 async function _avtCarregarFaseInner(faseId, opts = {}) {
-  const atualId = AVT_STATE._faseAtualId || 'principal';
+  const atualId = (AVT_STATE as any)._faseAtualId || 'principal';
   if (faseId === atualId) { mostrarToast('Já está nesta fase', ''); return; }
 
   // Resolver objeto da fase alvo (principal é sintética).
@@ -23986,9 +23987,9 @@ async function _avtCarregarFaseInner(faseId, opts = {}) {
     AVT_STATE.batalhas  = [];
   }
   _avtNormalizarObjetosDungeon(AVT_STATE.dungeon);
-  AVT_STATE._dynSpawnNextAt = 0;
+  (AVT_STATE as any)._dynSpawnNextAt = 0;
   // FIX F8: porta boss→próxima fase da fase anterior não vale nesta.
-  AVT_STATE._portaProximaFase = null;
+  (AVT_STATE as any)._portaProximaFase = null;
   // Bakes estáticos (tiles 2D legado + minimapa) são por fase.
   if (typeof _avtTileBakeInvalidate === 'function') _avtTileBakeInvalidate();
   // Sons ambientes pertencem à fase anterior — o tick recria os da nova.
@@ -24005,7 +24006,7 @@ async function _avtCarregarFaseInner(faseId, opts = {}) {
   AVT_STATE.dungeon._faseId        = faseObj.id;
   if (AVT_STATE.dungeon._faseSeed == null) AVT_STATE.dungeon._faseSeed = _avtSeedFromStr(String(faseObj.id));
 
-  AVT_STATE._faseAtualId = faseObj.id;
+  (AVT_STATE as any)._faseAtualId = faseObj.id;
   if (typeof AudioManager !== 'undefined') AudioManager.onEnterPhase(faseObj);
 
   // 3) Tileset + cor da fase.
@@ -24019,7 +24020,7 @@ async function _avtCarregarFaseInner(faseId, opts = {}) {
   // 5) Inserir o jogador, posicionando conforme a origem da transição.
   if (jogadorClone) {
     let px = null, py = null;
-    if (opts.origem === 'voltar' || opts.origem === 'saida') {
+    if ((opts as any).origem === 'voltar' || (opts as any).origem === 'saida') {
       // Voltando: posicionar perto da porta que levou à fase de onde saímos.
       const portaFase = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === atualId);
       if (portaFase?.porta) { px = portaFase.porta.col + 1; py = portaFase.porta.row; }
@@ -24089,8 +24090,8 @@ function _avtMeuUid() { try { return SESSION?.user?.id || null; } catch(_) { ret
 window._avtMeuUid = _avtMeuUid;
 
 function _avtFaseHostFresco(faseId) {
-  const reg = AVT_STATE._faseHosts || {};
-  const ts  = AVT_STATE._faseHostsTs || {};
+  const reg = (AVT_STATE as any)._faseHosts || {};
+  const ts  = (AVT_STATE as any)._faseHostsTs || {};
   const uid = reg[faseId];
   if (!uid) return null;
   if (Date.now() - (ts[faseId] || 0) > FASE_HOST_DEAD) return null;
@@ -24100,13 +24101,13 @@ function _avtFaseHostFresco(faseId) {
 // Autoridade da minha fase atual. Sem host de fase válido, cai no host rtnet
 // global (compat. sessão de 1 fase / solo).
 function _avtSouHostDaFaseAtual() {
-  const fid = AVT_STATE._faseAtualId || 'principal';
+  const fid = (AVT_STATE as any)._faseAtualId || 'principal';
   const uid = _avtFaseHostFresco(fid);
   if (uid) {
     if (uid !== _avtMeuUid()) return false;
     // [F4] Warm-up pós-claim com peers presentes: aguarda 1 round de broadcast
     // antes de emitir ticks, para o desempate de claims concorrentes resolver.
-    const claimTs = (AVT_STATE._faseHostClaimTs || {})[fid] || 0;
+    const claimTs = ((AVT_STATE as any)._faseHostClaimTs || {})[fid] || 0;
     if (claimTs && Date.now() - claimTs < FASE_HOST_CLAIM_WARMUP) {
       const temPeers = (() => {
         try { return typeof RTNet !== 'undefined' && RTNet.initialized && RTNet._peerJoinTs && RTNet._peerJoinTs().size > 0; }
@@ -24122,13 +24123,13 @@ window._avtSouHostDaFaseAtual = _avtSouHostDaFaseAtual;
 
 function _avtRegistrarHostFase(faseId, uid) {
   if (!faseId || !uid) return;
-  AVT_STATE._faseHosts   = AVT_STATE._faseHosts   || {};
-  AVT_STATE._faseHostsTs = AVT_STATE._faseHostsTs || {};
-  const cur = AVT_STATE._faseHosts[faseId];
+  AVT_STATE._faseHosts   = (AVT_STATE as any)._faseHosts   || {};
+  AVT_STATE._faseHostsTs = (AVT_STATE as any)._faseHostsTs || {};
+  const cur = (AVT_STATE as any)._faseHosts[faseId];
   // Conflito de claim: menor uid vence (determinístico em todos os clientes).
   const winner = (cur && cur !== uid) ? (uid < cur ? uid : cur) : uid;
-  AVT_STATE._faseHosts[faseId]   = winner;
-  AVT_STATE._faseHostsTs[faseId] = Date.now();
+  (AVT_STATE as any)._faseHosts[faseId]   = winner;
+  (AVT_STATE as any)._faseHostsTs[faseId] = Date.now();
   if (cur && cur !== uid && winner === _avtMeuUid()) _avtReafirmarHostFase(faseId);
 }
 
@@ -24136,8 +24137,8 @@ function _avtClaimHostFase(faseId) {
   const uid = _avtMeuUid();
   if (!faseId || !uid) return;
   // [F4] Marca o instante do claim (warm-up antes de emitir ticks com peers).
-  AVT_STATE._faseHostClaimTs = AVT_STATE._faseHostClaimTs || {};
-  if ((AVT_STATE._faseHosts || {})[faseId] !== uid) AVT_STATE._faseHostClaimTs[faseId] = Date.now();
+  AVT_STATE._faseHostClaimTs = (AVT_STATE as any)._faseHostClaimTs || {};
+  if ((AVT_STATE._faseHosts || {})[faseId] !== uid) (AVT_STATE as any)._faseHostClaimTs[faseId] = Date.now();
   _avtRegistrarHostFase(faseId, uid);
   try { _avtBroadcast('avt_fase_host', { faseId, uid }); } catch(_) {}
   try { _avtMestrePainelRender(); } catch(_) {}
@@ -24150,9 +24151,9 @@ window._avtClaimHostFase = _avtClaimHostFase;
 function _avtReleaseHostFase(faseId) {
   const uid = _avtMeuUid();
   if (!faseId || !uid) return;
-  if ((AVT_STATE._faseHosts || {})[faseId] !== uid) return; // só o host libera
-  delete AVT_STATE._faseHosts[faseId];
-  if (AVT_STATE._faseHostsTs) delete AVT_STATE._faseHostsTs[faseId];
+  if (((AVT_STATE as any)._faseHosts || {})[faseId] !== uid) return; // só o host libera
+  delete (AVT_STATE as any)._faseHosts[faseId];
+  if (AVT_STATE._faseHostsTs) delete (AVT_STATE as any)._faseHostsTs[faseId];
   try { _avtBroadcast('avt_fase_host_release', { faseId, uid }); } catch(_) {}
 }
 window._avtReleaseHostFase = _avtReleaseHostFase;
@@ -24160,17 +24161,17 @@ window._avtReleaseHostFase = _avtReleaseHostFase;
 function avtReceberFaseHostRelease(payload) {
   const { faseId, uid } = payload || {};
   if (!faseId || !uid) return;
-  if ((AVT_STATE._faseHosts || {})[faseId] !== uid) return; // release de quem não é host — ignora
-  delete AVT_STATE._faseHosts[faseId];
-  if (AVT_STATE._faseHostsTs) delete AVT_STATE._faseHostsTs[faseId];
+  if (((AVT_STATE as any)._faseHosts || {})[faseId] !== uid) return; // release de quem não é host — ignora
+  delete (AVT_STATE as any)._faseHosts[faseId];
+  if (AVT_STATE._faseHostsTs) delete (AVT_STATE as any)._faseHostsTs[faseId];
 }
 window.avtReceberFaseHostRelease = avtReceberFaseHostRelease;
 
 function _avtReafirmarHostFase(faseId) {
   const uid = _avtMeuUid();
   if (!faseId || !uid) return;
-  AVT_STATE._faseHostsTs = AVT_STATE._faseHostsTs || {};
-  AVT_STATE._faseHostsTs[faseId] = Date.now();
+  AVT_STATE._faseHostsTs = (AVT_STATE as any)._faseHostsTs || {};
+  (AVT_STATE as any)._faseHostsTs[faseId] = Date.now();
   try { _avtBroadcast('avt_fase_host', { faseId, uid }); } catch(_) {}
 }
 window._avtReafirmarHostFase = _avtReafirmarHostFase;
@@ -24189,15 +24190,15 @@ function _avtIniciarFaseHostLoop() {
   if (!window._avtFaseHostUnloadBound) {
     window._avtFaseHostUnloadBound = true;
     window.addEventListener('beforeunload', () => {
-      try { _avtReleaseHostFase(AVT_STATE._faseAtualId || 'principal'); } catch(_) {}
+      try { _avtReleaseHostFase((AVT_STATE as any)._faseAtualId || 'principal'); } catch(_) {}
     });
   }
-  if (AVT_STATE._faseHostLoop) return;
-  AVT_STATE._faseHostLoop = setInterval(() => {
+  if ((AVT_STATE as any)._faseHostLoop) return;
+  (AVT_STATE as any)._faseHostLoop = setInterval(() => {
     try {
-      const fid = AVT_STATE._faseAtualId || 'principal';
+      const fid = (AVT_STATE as any)._faseAtualId || 'principal';
       const uid = _avtMeuUid();
-      if ((AVT_STATE._faseHosts || {})[fid] === uid) {
+      if (((AVT_STATE as any)._faseHosts || {})[fid] === uid) {
         _avtReafirmarHostFase(fid); // sou host → renovo
       } else if (!_avtFaseHostFresco(fid) && uid) {
         // Minha fase ficou sem host vivo (host saiu/caiu): reivindico para não
@@ -24224,7 +24225,7 @@ function _avtResolverHostDaFase(faseId) {
   try { _avtPhaseHostCheck(faseId); } catch(_) {}
   setTimeout(() => {
     try {
-      if ((AVT_STATE._faseAtualId || 'principal') !== faseId) return; // já saí
+      if (((AVT_STATE as any)._faseAtualId || 'principal') !== faseId) return; // já saí
       if (_avtFaseHostFresco(faseId)) return; // host apareceu → sou guest
       _avtPromptHostFase(faseId);
     } catch(_) {}
@@ -24233,8 +24234,8 @@ function _avtResolverHostDaFase(faseId) {
 window._avtResolverHostDaFase = _avtResolverHostDaFase;
 
 function _avtPromptHostFase(faseId) {
-  if (AVT_STATE._promptHostAberto) return;
-  AVT_STATE._promptHostAberto = true;
+  if ((AVT_STATE as any)._promptHostAberto) return;
+  (AVT_STATE as any)._promptHostAberto = true;
   let ov = document.getElementById('avt-prompt-host-fase');
   if (!ov) {
     ov = document.createElement('div');
@@ -24242,7 +24243,7 @@ function _avtPromptHostFase(faseId) {
     ov.style.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5)';
     document.body.appendChild(ov);
   }
-  const fechar = () => { AVT_STATE._promptHostAberto = false; ov.remove(); };
+  const fechar = () => { (AVT_STATE as any)._promptHostAberto = false; ov.remove(); };
   ov.innerHTML = `
     <div style="background:#0d1520;border:1px solid rgba(200,168,75,0.35);border-radius:12px;padding:20px;max-width:360px;width:90%;text-align:center">
       <div style="font-family:var(--fonte-d, sans-serif);font-size:0.95rem;color:#c8d8e8;margin-bottom:6px">🛡️ Nova fase sem host</div>
@@ -24259,7 +24260,7 @@ function _avtPromptHostFase(faseId) {
     // Se ninguém assumir em ~6s e ainda não houver host, assume para não travar a fase.
     setTimeout(() => {
       try {
-        const fid = AVT_STATE._faseAtualId || 'principal';
+        const fid = (AVT_STATE as any)._faseAtualId || 'principal';
         if (fid === faseId && !_avtFaseHostFresco(faseId)) _avtClaimHostFase(faseId);
       } catch(_) {}
     }, 6000);
@@ -24293,8 +24294,8 @@ function _avtVerificarSaida(x, y) {
 // Prompt instantâneo (sem confirm() nem sala de espera) ao pisar numa porta de fase.
 // onAdvance: callback ao confirmar; "Ficar" apenas fecha (jogador permanece na fase).
 function _avtPromptFase(titulo, labelAvancar, onAdvance) {
-  if (AVT_STATE._promptFaseAberto) return;
-  AVT_STATE._promptFaseAberto = true;
+  if ((AVT_STATE as any)._promptFaseAberto) return;
+  (AVT_STATE as any)._promptFaseAberto = true;
   let ov = document.getElementById('avt-prompt-fase');
   if (!ov) {
     ov = document.createElement('div');
@@ -24302,7 +24303,7 @@ function _avtPromptFase(titulo, labelAvancar, onAdvance) {
     ov.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45)';
     document.body.appendChild(ov);
   }
-  const fechar = () => { AVT_STATE._promptFaseAberto = false; ov.remove(); };
+  const fechar = () => { (AVT_STATE as any)._promptFaseAberto = false; ov.remove(); };
   ov.innerHTML = `
     <div style="background:#0d1520;border:1px solid rgba(79,163,209,0.3);border-radius:12px;padding:20px;max-width:340px;width:90%;text-align:center">
       <div style="font-family:var(--fonte-d, sans-serif);font-size:0.95rem;color:#c8d8e8;margin-bottom:16px">🚪 ${titulo}</div>
@@ -24462,7 +24463,7 @@ function _avtMestreAddInimigo() {
       <div class="avt-modal-body" style="display:flex;flex-direction:column;gap:10px">
         <div style="font-size:0.7rem;color:#7a92aa">Escolha um tipo ou personalize abaixo:</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px" id="avt-npc-presets">
-          ${Object.entries(_avtGetNpcClasses()).map(([k,p])=>`
+          ${Object.entries<any>(_avtGetNpcClasses()).map(([k,p])=>`
             <button onclick="_avtNpcPresetSel('${k}')"
               style="padding:6px 10px;border-radius:6px;border:1px solid ${p.isBoss?'rgba(231,76,60,0.4)':'rgba(79,163,209,0.2)'};background:rgba(255,255,255,0.03);color:#c8d8e8;cursor:pointer;font-size:0.72rem;font-family:var(--fonte-d)">
               ${p.icone || k[0].toUpperCase()} ${p.nome}${p.isBoss?' 👑':''}
@@ -24615,10 +24616,10 @@ function abrirAvtCharEditor(entId) {
     const dbChar = ent ? AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome) : null;
     const ca = dbChar?.custom_attrs || {};
     const atribs = ca.atributos || {};
-    if (!AVT_STATE._attrBaseline) AVT_STATE._attrBaseline = {};
+    if (!AVT_STATE._attrBaseline) (AVT_STATE as any)._attrBaseline = {};
     const snap = {};
     Object.keys(atribs).forEach(k => { snap[k] = parseFloat(atribs[k]) || 0; });
-    AVT_STATE._attrBaseline[entId] = {
+    (AVT_STATE as any)._attrBaseline[entId] = {
       atributos: snap,
       pontos_attr: parseFloat(ca.pontos_attr) || 0,
     };
@@ -24854,7 +24855,7 @@ async function _avtCe2SalvarImgUrlTipo(entId, alvo) {
     dbChar.custom_attrs.iso_token_url = url;
     ent.custom_attrs = ent.custom_attrs || {};
     ent.custom_attrs.iso_token_url = url;
-    if (AVT_STATE._isoTokenCache) delete AVT_STATE._isoTokenCache[url];
+    if (AVT_STATE._isoTokenCache) delete (AVT_STATE as any)._isoTokenCache[url];
   } else if (alvo === 'token') {
     dbChar.custom_attrs.aparencia.img_token = url;
     if (!dbChar.custom_attrs.topdown_ia) dbChar.custom_attrs.topdown_ia = {};
@@ -24974,7 +24975,7 @@ function _avtCharEditorRenderAttrs(container, ent, dbChar, attrs) {
 
   // Pool unificado de pontos de atributo a distribuir
   const pontosDisp = Math.max(0, parseFloat(ca.pontos_attr) || 0);
-  const baseline   = (AVT_STATE._attrBaseline && AVT_STATE._attrBaseline[ent.id]) || { atributos: {}, pontos_attr: 0 };
+  const baseline   = (AVT_STATE._attrBaseline && (AVT_STATE as any)._attrBaseline[ent.id]) || { atributos: {}, pontos_attr: 0 };
   const pontosBanner = pontosDisp > 0
     ? `<div class="avt-ce2-pontos-banner">⭐ ${pontosDisp} ponto${pontosDisp !== 1 ? 's' : ''} de atributo disponíve${pontosDisp !== 1 ? 'is' : 'l'}</div>`
     : '';
@@ -24988,7 +24989,7 @@ function _avtCharEditorRenderAttrs(container, ent, dbChar, attrs) {
     { key: 'carisma',      label: 'Carisma',       emoji: '✨', color: '#c8a84b' },
   ];
 
-  const _adSource = AVT_STATE.attrDefs?.length ? AVT_STATE.attrDefs : (RPG_DATA?.attrDefs || []);
+  const _adSource = AVT_STATE.attrDefs?.length ? (AVT_STATE as any).attrDefs : (RPG_DATA?.attrDefs || []);
   const useRpgAttrs = _adSource.length > 0;
   let attrsHtml = '';
 
@@ -25157,7 +25158,7 @@ function _avtAttrDelta(entId, attr, delta) {
   const ca = dbChar.custom_attrs;
   const a = ca.atributos;
   const isMestre = _avtSouMestre();
-  const baseline = (AVT_STATE._attrBaseline && AVT_STATE._attrBaseline[entId]) || { atributos: {}, pontos_attr: 0 };
+  const baseline = (AVT_STATE._attrBaseline && (AVT_STATE as any)._attrBaseline[entId]) || { atributos: {}, pontos_attr: 0 };
   const cur = parseFloat(a[attr] ?? 10) || 0;
   if (isMestre) {
     a[attr] = cur + delta;
@@ -25201,7 +25202,7 @@ function _avtAttrDeltaRpg(entId, attrNome, delta) {
   const ca = dbChar.custom_attrs;
   const a = ca.atributos;
   const isMestre = _avtSouMestre();
-  const baseline = (AVT_STATE._attrBaseline && AVT_STATE._attrBaseline[entId]) || { atributos: {}, pontos_attr: 0 };
+  const baseline = (AVT_STATE._attrBaseline && (AVT_STATE as any)._attrBaseline[entId]) || { atributos: {}, pontos_attr: 0 };
   const cur = parseFloat(a[attrNome] ?? 0) || 0;
   if (isMestre) {
     a[attrNome] = cur + delta;
@@ -25277,10 +25278,10 @@ async function _avtCharSalvarAttrs(entId) {
     try {
       const ca = dbChar?.custom_attrs || {};
       const atribs = ca.atributos || {};
-      if (!AVT_STATE._attrBaseline) AVT_STATE._attrBaseline = {};
+      if (!AVT_STATE._attrBaseline) (AVT_STATE as any)._attrBaseline = {};
       const snap = {};
       Object.keys(atribs).forEach(k => { snap[k] = parseFloat(atribs[k]) || 0; });
-      AVT_STATE._attrBaseline[entId] = {
+      (AVT_STATE as any)._attrBaseline[entId] = {
         atributos: snap,
         pontos_attr: parseFloat(ca.pontos_attr) || 0,
       };
@@ -25343,7 +25344,7 @@ function _avtCharEditorRenderEquip(container, ent, dbChar) {
     const equippedImg  = equipped && typeof equipped === 'object' ? equipped.img_url : null;
     const bonuses      = equipped && typeof equipped === 'object' ? equipped.bonus_snapshot : null;
     const bonusText    = bonuses && Object.keys(bonuses).length
-      ? Object.entries(bonuses).map(([a, v]) => `${a}: ${v > 0 ? '+' : ''}${v}`).join(' · ')
+      ? Object.entries<any>(bonuses).map(([a, v]) => `${a}: ${v > 0 ? '+' : ''}${v}`).join(' · ')
       : null;
     const compatItems  = catalog.filter(i => {
       if (i.tipo !== 'equipamento' && i.tipo !== 'arma') return false;
@@ -25405,14 +25406,14 @@ function _avtEquiparItem(entId, slotKey, itemId) {
   // Revert previous item in slot
   const prev = dbChar.custom_attrs.equipamento[slotKey];
   if (prev && typeof prev === 'object' && prev.bonus_snapshot) {
-    Object.entries(prev.bonus_snapshot).forEach(([attr, delta]) => {
+    Object.entries<any>(prev.bonus_snapshot).forEach(([attr, delta]) => {
       dbChar.custom_attrs.atributos[attr] = (parseFloat(dbChar.custom_attrs.atributos[attr])||0) - delta;
     });
   }
   // Apply new bonuses
   const bonus = item.atributos_bonus || {};
   const snapshot = {};
-  Object.entries(bonus).forEach(([attr, val]) => {
+  Object.entries<any>(bonus).forEach(([attr, val]) => {
     const delta = typeof val === 'object' ? (val.valor||0) : parseFloat(val)||0;
     snapshot[attr] = delta;
     dbChar.custom_attrs.atributos[attr] = (parseFloat(dbChar.custom_attrs.atributos[attr])||0) + delta;
@@ -25440,7 +25441,7 @@ function _avtDesequiparItem(entId, slotKey) {
   const prev = dbChar.custom_attrs.equipamento?.[slotKey];
   if (prev && typeof prev === 'object' && prev.bonus_snapshot) {
     if (!dbChar.custom_attrs.atributos) dbChar.custom_attrs.atributos = _avtDefaultAttrs();
-    Object.entries(prev.bonus_snapshot).forEach(([attr, delta]) => {
+    Object.entries<any>(prev.bonus_snapshot).forEach(([attr, delta]) => {
       dbChar.custom_attrs.atributos[attr] = (parseFloat(dbChar.custom_attrs.atributos[attr])||0) - delta;
     });
   }
@@ -25804,7 +25805,7 @@ function _avtCharEditorRenderSkillEdit(container) {
   );
   const otherSkills = AVT_STATE.skills.filter(sk => !charSkills.includes(sk));
 
-  const filterMode = AVT_STATE._skillEditFilter || 'char';
+  const filterMode = (AVT_STATE as any)._skillEditFilter || 'char';
 
   const shownSkills = filterMode === 'char' ? charSkills : AVT_STATE.skills;
 
@@ -26555,7 +26556,7 @@ async function _avtAbrirModalSkill(skId, entId) {
     });
   });
 
-  const _attrSrc = (AVT_STATE.attrDefs?.length ? AVT_STATE.attrDefs :
+  const _attrSrc = (AVT_STATE.attrDefs?.length ? (AVT_STATE as any).attrDefs :
     (AVT_STATE.rpg?.theme_json?.attrDefs?.length ? AVT_STATE.rpg.theme_json.attrDefs :
     (RPG_DATA?.attrDefs || []))).filter(a => a.tipo === 'number' || a.tipo === 'numero' || a.tipo == null);
   const attrDefs = _attrSrc.length ? _attrSrc
@@ -27214,7 +27215,7 @@ function _avtAbrirModalAtaqueBasico(entId) {
 
   const ab = dbChar.custom_attrs?.ataque_basico || {};
   const anim = ab.animacao || dbChar.custom_attrs?.ataque_basico_animacao || {};
-  const _attrSrc = (AVT_STATE.attrDefs?.length ? AVT_STATE.attrDefs :
+  const _attrSrc = (AVT_STATE.attrDefs?.length ? (AVT_STATE as any).attrDefs :
     (AVT_STATE.rpg?.theme_json?.attrDefs?.length ? AVT_STATE.rpg.theme_json.attrDefs :
     (RPG_DATA?.attrDefs || []))).filter(a => a.tipo === 'number' || a.tipo === 'numero' || a.tipo == null);
   const attrDefs = _attrSrc.length ? _attrSrc
@@ -27519,7 +27520,7 @@ function _avtSkillAnimCfgHtml(sk) {
 
 // Auto-save debounced de skill (persiste sk.animacao no Supabase sem o usuário precisar clicar Salvar)
 const _AVT_SK_SAVE_TIMERS = new Map();
-function _avtSkillAutoSave(skId, delay) {
+function _avtSkillAutoSave(skId, delay?) {
   if (!skId) return;
   if (_AVT_SK_SAVE_TIMERS.has(skId)) clearTimeout(_AVT_SK_SAVE_TIMERS.get(skId));
   const t = setTimeout(() => {
@@ -28204,7 +28205,7 @@ async function _avtIsoIaSalvar(entId) {
       ent.custom_attrs = ent.custom_attrs || {};
       ent.custom_attrs.iso_anim = isoAnim;
       ent.custom_attrs.iso_token_url = url;
-      if (AVT_STATE._isoTokenCache) delete AVT_STATE._isoTokenCache[url];
+      if (AVT_STATE._isoTokenCache) delete (AVT_STATE as any)._isoTokenCache[url];
     }
     _avtCharEditorRender();
     mostrarToast('Sprite isométrico salvo!', 'ok');
@@ -28331,7 +28332,7 @@ window._avtWalkStudioSetWeapon = _avtWalkStudioSetWeapon;
 function _avtWalkStudioLoop() {
   const S = window._avtWalkStudio;
   if (!S || !S.aberto) return;
-  const img = S.img, now = performance.now();
+  const img: any = S.img, now = performance.now();
   if (typeof avtWalkRender === 'function' && img && img.complete && img.naturalWidth > 0) {
     // Cards: cada preset andando com seus parâmetros padrão (comparação lado a lado).
     document.querySelectorAll('#avt-walk-cards canvas').forEach(cv => {
@@ -28382,7 +28383,7 @@ function _avtWalkStudioRender() {
   overlay.style.display = 'flex';
 
   const wa = S.params.weaponAnchor || { yTop: 0.3, yBot: 0.8, damp: 0 };
-  const cards = Object.entries(AVT_WALK_PRESETS).map(([id, p]) => {
+  const cards = Object.entries<any>(AVT_WALK_PRESETS).map(([id, p]) => {
     const sel = id === S.presetId;
     return `<div class="avt-walk-card${sel ? ' sel' : ''}" onclick="_avtWalkStudioSelectPreset('${id}')"
         title="${p.descricao}">
@@ -28513,14 +28514,14 @@ function _avtNpcClassesSecao() {
   // Contador geral
   const countByPreset = {};
   inimigos.forEach(e => { countByPreset[e.presetTipo] = (countByPreset[e.presetTipo] || 0) + 1; });
-  const resumo = Object.entries(countByPreset).map(([k, n]) => {
+  const resumo = Object.entries<any>(countByPreset).map(([k, n]) => {
     const cl = npcClasses[k];
     return `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,0.05);font-size:0.65rem;color:#c8d8e8">${S(cl?.icone || k)} ${S(cl?.nome || k)} ×${n}</span>`;
   }).join('');
   if (resumo) html += `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${resumo}</div>`;
 
   // Lista de classes
-  Object.entries(npcClasses).forEach(([key, cls]) => {
+  Object.entries<any>(npcClasses).forEach(([key, cls]) => {
     const cnt = countByPreset[key] || 0;
     const isEditando = window._avtNpcClasseEditando === key;
     const bossTag = cls.isBoss ? ' 👑' : '';
@@ -28805,7 +28806,7 @@ function _avtBulkAparMassaSecoes() {
   const inimigos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo');
   const countByPreset = {};
   inimigos.forEach(e => { countByPreset[e.presetTipo] = (countByPreset[e.presetTipo] || 0) + 1; });
-  return Object.entries(npcClasses).map(([key, cls]) => {
+  return Object.entries<any>(npcClasses).map(([key, cls]) => {
     const cnt = countByPreset[key] || 0;
     return `
       <div style="margin-bottom:10px;padding:8px;border-radius:7px;border:1px solid rgba(79,163,209,0.12);background:rgba(79,163,209,0.03)">
@@ -28822,7 +28823,7 @@ window._avtBulkAparMassaSecoes = _avtBulkAparMassaSecoes;
 
 async function _avtBulkMaskPng(file, hexCor) {
   const url = URL.createObjectURL(file);
-  const img = await new Promise((res, rej) => {
+  const img: any = await new Promise((res, rej) => {
     const i = new Image();
     i.onload = () => res(i);
     i.onerror = rej;
@@ -28893,10 +28894,10 @@ try{
 
 (function(){
   // Default ligado — pode ser sobrescrito no console.
-  if (typeof AVT_STATE.npcSyncEnabled === 'undefined') AVT_STATE.npcSyncEnabled = true;
-  AVT_STATE._npcPending     = AVT_STATE._npcPending     || {};   // { npcId: [{nonce, delta}] }
-  AVT_STATE._npcHostLease   = AVT_STATE._npcHostLease   || {};   // { npcId: expiresAtMs (local clock) }
-  AVT_STATE._npcVersionSeen = AVT_STATE._npcVersionSeen || {};   // { npcId: version (dedup despawn/XP) }
+  if (typeof AVT_STATE.npcSyncEnabled === 'undefined') (AVT_STATE as any).npcSyncEnabled = true;
+  AVT_STATE._npcPending     = (AVT_STATE as any)._npcPending     || {};   // { npcId: [{nonce, delta}] }
+  AVT_STATE._npcHostLease   = (AVT_STATE as any)._npcHostLease   || {};   // { npcId: expiresAtMs (local clock) }
+  AVT_STATE._npcVersionSeen = (AVT_STATE as any)._npcVersionSeen || {};   // { npcId: version (dedup despawn/XP) }
 
   let _hostLoopTimer = null;
   let _rpcFailStreakStart = 0;        // ms desde o 1º erro consecutivo
@@ -28921,8 +28922,8 @@ try{
     const now = Date.now();
     if (!_rpcFailStreakStart) _rpcFailStreakStart = now;
     if (now - _rpcFailStreakStart > RPC_DEGRADE_AFTER_MS) {
-      if (AVT_STATE.npcSyncEnabled) {
-        AVT_STATE.npcSyncEnabled = false;
+      if ((AVT_STATE as any).npcSyncEnabled) {
+        (AVT_STATE as any).npcSyncEnabled = false;
         try { console.warn('[NPC-SYNC] RPC indisponível >10s — degradando para broadcast antigo'); } catch(_){}
         try { mostrarToast('Sincronização de NPC degradada para modo legado', 'aviso'); } catch(_){}
       }
@@ -28936,7 +28937,7 @@ try{
     // Sem leases, sem RPC de posição, sem timer. O tick autoritativo (100ms) é suficiente.
     if (typeof RTNet !== 'undefined' && RTNet.initialized) {
       if (_hostLoopTimer) { clearInterval(_hostLoopTimer); _hostLoopTimer = null; }
-      if (RTNet.isHost()) AVT_STATE._npcHostOwned = true;
+      if (RTNet.isHost()) (AVT_STATE as any)._npcHostOwned = true;
       return;
     }
     try {
@@ -28956,7 +28957,7 @@ try{
           if (typeof canon.y === 'number') ent.y = canon.y;
           ent.renderX = ent.x; ent.renderY = ent.y;
           ent._lastSyncedHp = ent.hp;
-          AVT_STATE._npcVersionSeen[ent.id] = canon.version || 0;
+          (AVT_STATE as any)._npcVersionSeen[ent.id] = canon.version || 0;
           if (canon.dead) { _despawnLocal(ent.id); continue; }
         } else {
           // Semeia o canônico a partir do estado local
@@ -28968,7 +28969,7 @@ try{
               _x:   ent.x||0, _y: ent.y||0
             });
             if (seeded) {
-              AVT_STATE._npcVersionSeen[ent.id] = seeded.version || 0;
+              (AVT_STATE as any)._npcVersionSeen[ent.id] = seeded.version || 0;
               ent._lastSyncedHp = ent.hp;
               _markRpcOk();
             }
@@ -28992,9 +28993,9 @@ try{
   function _avtNpcSyncShutdown(){
     if (_hostLoopTimer) { clearInterval(_hostLoopTimer); _hostLoopTimer = null; }
     _releaseAllLeases();
-    AVT_STATE._npcPending = {};
-    AVT_STATE._npcHostLease = {};
-    AVT_STATE._npcVersionSeen = {};
+    (AVT_STATE as any)._npcPending = {};
+    (AVT_STATE as any)._npcHostLease = {};
+    (AVT_STATE as any)._npcVersionSeen = {};
   }
 
   function _releaseAllLeases(){
@@ -29002,13 +29003,13 @@ try{
     if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') return;
     const uid = _myUid();
     if (!uid || !AVT_STATE.rpgId) return;
-    const ids = Object.keys(AVT_STATE._npcHostLease || {});
+    const ids = Object.keys((AVT_STATE as any)._npcHostLease || {});
     for (const id of ids) {
-      if ((AVT_STATE._npcHostLease[id]||0) > Date.now()) {
+      if (((AVT_STATE as any)._npcHostLease[id]||0) > Date.now()) {
         try { sbRpc('npc_release_host', { _rpg: AVT_STATE.rpgId, _npc: id, _user: uid }).catch(()=>{}); } catch(_){}
       }
     }
-    AVT_STATE._npcHostLease = {};
+    (AVT_STATE as any)._npcHostLease = {};
   }
 
   // ── Aplicar dano: chamado a partir de _avtAplicarDanoPersistir ──────────
@@ -29021,7 +29022,7 @@ try{
     _avtNpcApplyDamage(ent.id, delta, _myUid());
   }
 
-  function _avtNpcApplyDamage(npcId, delta, attackerUserId, _retry){
+  function _avtNpcApplyDamage(npcId, delta, attackerUserId, _retry?){
     if (!AVT_STATE.rpgId || !npcId) return;
     const isRTNet = typeof RTNet !== 'undefined' && RTNet.initialized;
     // Não-host em P2P: delega ao host pelo canal confiável
@@ -29049,8 +29050,8 @@ try{
     if (typeof sbRpc !== 'function') return;
     const nonce = _newNonce();
     // Somente usa _npcPending em modo Supabase (reconciliação com RPC canônico)
-    AVT_STATE._npcPending[npcId] = AVT_STATE._npcPending[npcId] || [];
-    AVT_STATE._npcPending[npcId].push({ nonce, delta });
+    AVT_STATE._npcPending[npcId] = (AVT_STATE as any)._npcPending[npcId] || [];
+    (AVT_STATE as any)._npcPending[npcId].push({ nonce, delta });
 
     sbRpc('npc_apply_damage', {
       _rpg: AVT_STATE.rpgId, _npc: npcId,
@@ -29058,7 +29059,7 @@ try{
     }).then(res => {
       _markRpcOk();
       // remove o nonce da fila
-      const q = AVT_STATE._npcPending[npcId] || [];
+      const q = (AVT_STATE as any)._npcPending[npcId] || [];
       const i = q.findIndex(p => p.nonce === nonce);
       if (i >= 0) q.splice(i, 1);
       const canon = Array.isArray(res) ? res[0] : res;
@@ -29066,12 +29067,12 @@ try{
     }).catch(err => {
       _markRpcFail();
       // remove pendente
-      const q = AVT_STATE._npcPending[npcId] || [];
+      const q = (AVT_STATE as any)._npcPending[npcId] || [];
       const i = q.findIndex(p => p.nonce === nonce);
       if (i >= 0) q.splice(i, 1);
       // Retry com backoff curto (1s, 2s, 4s)
       const r = (_retry|0);
-      if (r < 3 && AVT_STATE.npcSyncEnabled) {
+      if (r < 3 && (AVT_STATE as any).npcSyncEnabled) {
         setTimeout(() => _avtNpcApplyDamage(npcId, delta, attackerUserId, r+1), 1000*Math.pow(2, r));
       } else {
         // Degradação: persiste local
@@ -29090,11 +29091,11 @@ try{
       const ent = (AVT_STATE.entidades||[]).find(e => e.id === row.npc_id);
 
       // Dedup por version (eventos podem chegar duplicados em reconnect)
-      const prevVer = AVT_STATE._npcVersionSeen[row.npc_id] || 0;
+      const prevVer = (AVT_STATE as any)._npcVersionSeen[row.npc_id] || 0;
       if (row.version && row.version <= prevVer && !row._deleted) {
         // Reaplicar HP mesmo assim (é barato), mas pular efeitos one-shot (morte/XP).
       } else if (row.version) {
-        AVT_STATE._npcVersionSeen[row.npc_id] = row.version;
+        (AVT_STATE as any)._npcVersionSeen[row.npc_id] = row.version;
       }
 
       if (!ent) {
@@ -29103,7 +29104,7 @@ try{
       }
 
       // ── Reconciliação de HP (loop antena) ──
-      const pendentes = AVT_STATE._npcPending[row.npc_id] || [];
+      const pendentes = (AVT_STATE as any)._npcPending[row.npc_id] || [];
       const somaPend = pendentes.reduce((s,p) => s + (p.delta|0), 0);
       const novoHp = Math.max(0, Math.min(ent.hpMax || row.hp_max || row.hp, (row.hp|0) - somaPend));
       if (typeof row.hp_max === 'number' && row.hp_max > 0) ent.hpMax = row.hp_max;
@@ -29173,18 +29174,18 @@ try{
       } catch(_) {}
       return RTNet.isHost();
     }
-    const exp = AVT_STATE._npcHostLease && AVT_STATE._npcHostLease[npcId];
+    const exp = AVT_STATE._npcHostLease && (AVT_STATE as any)._npcHostLease[npcId];
     return !!(exp && exp > Date.now());
   }
 
   async function _avtNpcHostLoop(){
-    if (!AVT_STATE.rpgId || !AVT_STATE.npcSyncEnabled) return;
+    if (!AVT_STATE.rpgId || !(AVT_STATE as any).npcSyncEnabled) return;
     // Em modo P2P: o host RTNet é autoridade de todos os NPCs — sem RPC de lease
     if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') {
       if (RTNet.isHost()) {
         const fakeExpiry = Date.now() + 5000;
         (AVT_STATE.entidades || []).filter(_isNpc).filter(e => e.hp > 0)
-          .forEach(ent => { AVT_STATE._npcHostLease[ent.id] = fakeExpiry; });
+          .forEach(ent => { (AVT_STATE as any)._npcHostLease[ent.id] = fakeExpiry; });
       }
       return;
     }
@@ -29193,7 +29194,7 @@ try{
     const inimigos = (AVT_STATE.entidades||[]).filter(_isNpc).filter(e => e.hp > 0);
 
     for (const ent of inimigos) {
-      const leaseLocal = AVT_STATE._npcHostLease[ent.id] || 0;
+      const leaseLocal = (AVT_STATE as any)._npcHostLease[ent.id] || 0;
       // Renova se já sou host (próximo do vencimento) OU tenta claim se não tenho
       if (leaseLocal > Date.now() + 1500) continue; // ainda tenho ≥1.5s de lease
       try {
@@ -29202,15 +29203,15 @@ try{
         const row = Array.isArray(res) ? res[0] : res;
         if (row && row.host_user === uid) {
           // ganhei (ou renovei) lease ~6s; guardo localmente ~5s para folga
-          AVT_STATE._npcHostLease[ent.id] = Date.now() + 5000;
+          (AVT_STATE as any)._npcHostLease[ent.id] = Date.now() + 5000;
         } else {
-          AVT_STATE._npcHostLease[ent.id] = 0;
+          (AVT_STATE as any)._npcHostLease[ent.id] = 0;
         }
       } catch(e){
         // 404 = função inexistente no banco → degradar imediatamente sem aguardar 10s
         const is404 = e?.status === 404 || (e?.message || String(e)).includes('404');
         if (is404) {
-          AVT_STATE.npcSyncEnabled = false;
+          (AVT_STATE as any).npcSyncEnabled = false;
           try { console.warn('[NPC-SYNC] npc_claim_host não encontrada (404) — degradando para broadcast'); } catch(_){}
         } else { _markRpcFail(); }
       }
@@ -29228,7 +29229,7 @@ try{
       } catch(e){
         const is404 = e?.status === 404 || (e?.message || String(e)).includes('404');
         if (is404) {
-          AVT_STATE.npcSyncEnabled = false;
+          (AVT_STATE as any).npcSyncEnabled = false;
           try { console.warn('[NPC-SYNC] npc_update_position não encontrada (404) — degradando para broadcast'); } catch(_){}
         } else { _markRpcFail(); }
       }
@@ -29308,7 +29309,7 @@ try{
 
   // ── Gate em _avtBroadcast: NPCs só são movidos pelo host ────────────────
   try {
-    if (typeof window._avtBroadcast === 'function' && !window._avtBroadcast._hostrtcWrapped) {
+    if (typeof window._avtBroadcast === 'function' && !(window._avtBroadcast as any)._hostrtcWrapped) {
       const _origBroadcast = window._avtBroadcast;
       const wrapped = function(tipo, payload) {
         try {
@@ -29350,7 +29351,7 @@ try{
         _tickBase = null; // perdeu a autoridade → próximo tick meu será keyframe
         return null;
       }
-      const faseId = AVT_STATE._faseAtualId || 'principal';
+      const faseId = (AVT_STATE as any)._faseAtualId || 'principal';
       const ents = [];
       for (const e of AVT_STATE.entidades) {
         if (!e || !e.id) continue;
@@ -29461,7 +29462,7 @@ try{
         // vindo do tick. Kill-switch npcSyncEnabled=false restaura o tick como
         // autoridade também de posição. Jogadores continuam tick-autoritativos.
         const _npcPosViaNpcState = ent.tipo !== 'jogador'
-          && AVT_STATE.npcSyncEnabled
+          && (AVT_STATE as any).npcSyncEnabled
           && typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode === 'supabase';
         // Posição: reconciliação autoritativa por sequência de input (server reconciliation)
         if (!_npcPosViaNpcState && typeof r.x === 'number' && typeof r.y === 'number') {
@@ -29523,7 +29524,7 @@ try{
   };
 
   // ── Sync completo: equipamento e atributos ────────────────────────────────
-  window.avtReceberItemEquipado = function({ charNome, slotKey, itemId, nomeItem, bonusSnapshot, atributosAtuais } = {}) {
+  window.avtReceberItemEquipado = function({ charNome, slotKey, itemId, nomeItem, bonusSnapshot, atributosAtuais }: any = {}) {
     try {
       if (typeof RTNet !== 'undefined' && RTNet.isHost()) return; // host já tem estado atualizado
       if (!charNome || !slotKey) return;
@@ -29544,7 +29545,7 @@ try{
     } catch(e) { try { console.warn('[SYNC] avtReceberItemEquipado:', e); } catch(_){} }
   };
 
-  window.avtReceberItemDesequipado = function({ charNome, slotKey, atributosAtuais } = {}) {
+  window.avtReceberItemDesequipado = function({ charNome, slotKey, atributosAtuais }: any = {}) {
     try {
       if (typeof RTNet !== 'undefined' && RTNet.isHost()) return;
       if (!charNome || !slotKey) return;
@@ -29564,7 +29565,7 @@ try{
     } catch(e) { try { console.warn('[SYNC] avtReceberItemDesequipado:', e); } catch(_){} }
   };
 
-  window.avtReceberCharUpdate = function({ charNome, atributos, hpMax } = {}) {
+  window.avtReceberCharUpdate = function({ charNome, atributos, hpMax }: any = {}) {
     try {
       if (typeof RTNet !== 'undefined' && RTNet.isHost()) return;
       if (!charNome) return;
@@ -29862,7 +29863,7 @@ try{
 
   // ─── 1) HP HEARTBEAT (dono → host a cada 500ms) ──────────────────────────
   let _hpHbTimer = null;
-  let _lastHpSent = { hp: null, hpMax: null, morto: false };
+  let _lastHpSent: any = { hp: null, hpMax: null, morto: false };
 
   function _avtIniciarHpHeartbeat() {
     if (_hpHbTimer) return;
@@ -29919,7 +29920,7 @@ try{
         if (typeof _avtMinhaBatalha === 'function' && _avtMinhaBatalha()) return;
         // Sem regen durante perseguição (se não configurado)
         if (!lc.hp_regen_em_perseguicao) {
-          const perseguindo = Object.values(AVT_STATE.npcTimers).some(
+          const perseguindo = Object.values<any>(AVT_STATE.npcTimers).some(
             t => t.isPursuing && t.targetId === ent.id
           );
           if (perseguindo) return;
@@ -30116,10 +30117,10 @@ try{
 
     // Host muda → assume controle de NPC e re-emite turnos pendentes
     if (typeof RTNet.onHostChange === 'function') {
-      RTNet.onHostChange(({ isHost } = {}) => {
+      RTNet.onHostChange(({ isHost }: any = {}) => {
         if (!isHost) return;
         // Assume controle de todos os NPCs (P2P: sem lease, apenas flag em memória)
-        AVT_STATE._npcHostOwned = true;
+        (AVT_STATE as any)._npcHostOwned = true;
         setTimeout(() => {
           try {
             (AVT_STATE.batalhas || []).forEach(b => {
@@ -30162,17 +30163,17 @@ try{
     const cx = (j.renderX != null ? j.renderX : j.x);
     const cy = (j.renderY != null ? j.renderY : j.y);
     const _ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
-    const _overlayH = _ctrlDisp ? (AVT_STATE._overlayH ?? 160) : 0;
+    const _overlayH = _ctrlDisp ? ((AVT_STATE as any)._overlayH ?? 160) : 0;
     const effectiveH = canvas.height - _overlayH;
     const targetX = cx * SZ - canvas.width / 2 + SZ / 2;
     const targetY = cy * SZ - effectiveH / 2 + SZ / 2;
     AVT_STATE.camera.x = targetX;
     AVT_STATE.camera.y = targetY;
-    AVT_STATE.camera._targetX = targetX;
-    AVT_STATE.camera._targetY = targetY;
-    AVT_STATE.camera._floatX = targetX;
-    AVT_STATE.camera._floatY = targetY;
-    AVT_STATE.camera._lastCell = { x: Math.round(j.x), y: Math.round(j.y) };
+    (AVT_STATE.camera as any)._targetX = targetX;
+    (AVT_STATE.camera as any)._targetY = targetY;
+    (AVT_STATE.camera as any)._floatX = targetX;
+    (AVT_STATE.camera as any)._floatY = targetY;
+    (AVT_STATE.camera as any)._lastCell = { x: Math.round(j.x), y: Math.round(j.y) };
   }
   window._avtCameraSnapToPlayer = _avtCameraSnapToPlayer;
 
@@ -30204,6 +30205,7 @@ try{
       };
       window._avtNpcTurno = _safeNpcTurno;
       // Reescrever referência global (var hoisted)
+      // @ts-expect-error — monkey-patch em runtime: reatribuição de function declaration
       try { _avtNpcTurno = _safeNpcTurno; } catch(_) {}
     }
   } catch(_) {}
@@ -30219,7 +30221,7 @@ try{
     try { _avtPararRegenManaPorSegundo(); } catch(_) {}
     try { if (typeof AVT_PERF !== 'undefined' && AVT_PERF && typeof AVT_PERF.pararAdaptativo === 'function') AVT_PERF.pararAdaptativo(); } catch(_) {}
     // Parar timer de flush de HP e persistir estado final
-    try { if (AVT_STATE._charHpFlushTimer) { clearInterval(AVT_STATE._charHpFlushTimer); AVT_STATE._charHpFlushTimer = null; } } catch(_) {}
+    try { if (AVT_STATE._charHpFlushTimer) { clearInterval((AVT_STATE as any)._charHpFlushTimer); AVT_STATE._charHpFlushTimer = null; } } catch(_) {}
     try { if (typeof _avtFlushPersistencia === 'function') _avtFlushPersistencia(origem).catch(()=>{}); } catch(_) {}
   }
   function _avtInstalarHookSaida(nomeFn) {
@@ -30230,9 +30232,9 @@ try{
     }
     // O accessor global de avt-menu.js propaga a atribuição ao binding do módulo,
     // então chamadores internos também passam pelo wrapper.
-    window[nomeFn] = function() {
+    (window as any)[nomeFn] = function() {
       _avtHookTeardown(nomeFn);
-      return orig.apply(this, arguments);
+      return (orig as any).apply(this, arguments);
     };
   }
   setTimeout(() => {
@@ -30345,8 +30347,8 @@ function avtInvocar(charNome, invocacaoId, opts = {}) {
   const sabValor = parseFloat(atrs[sabKey] ?? 0);
 
   // Duração: override (efeito de skill com turnos fixos) ou a própria da invocação
-  const duracao = (opts.duracaoOverride != null && opts.duracaoOverride > 0)
-    ? opts.duracaoOverride
+  const duracao = ((opts as any).duracaoOverride != null && (opts as any).duracaoOverride > 0)
+    ? (opts as any).duracaoOverride
     : (invDef.duracao_base_turnos || 3) + Math.ceil(sabValor * (invDef.duracao_sabedoria_mult || 0));
 
   const hpScalingAttr = invDef.hp_atributo_scaling;
@@ -30357,8 +30359,8 @@ function avtInvocar(charNome, invocacaoId, opts = {}) {
   const invId = 'invocado_' + invocacaoId.replace(/-/g, '').slice(0, 8) + '_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
 
   // Posição: opcional deslocamento para empilhar múltiplas invocações sem sobrepor
-  const offX = opts.posicao?.dx ?? 1;
-  const offY = opts.posicao?.dy ?? 0;
+  const offX = (opts as any).posicao?.dx ?? 1;
+  const offY = (opts as any).posicao?.dy ?? 0;
 
   const invAtiva = {
     id: invId,
@@ -30669,7 +30671,7 @@ function _avtNpcTurnoInvocado(bat) {
 
     // Animação de ataque (placeholder ou da skill)
     const _animInv = _avtAnimacaoPlaceholder(entInv, _skUsada);
-    const _animDuracaoInv = _skUsada?.animacao?.duracao ?? _animInv?.duracao ?? 600;
+    const _animDuracaoInv = _skUsada?.animacao?.duracao ?? (_animInv as any)?.duracao ?? 600;
     if (_animInv && typeof animarAtaque === 'function') {
       const _atacElInv = _avtElPosicaoCanvas(entInv);
       const _alvoElInv = _avtElPosicaoCanvas(alvo);
@@ -30791,39 +30793,39 @@ function _avtRolarFormulaInvocado(invDef, tipo, donoNome) {
 
 /* [migração-esm] accessors globais */
 Object.defineProperty(globalThis, "AVT_STATE", { configurable: true, get: () => AVT_STATE, set: (__v) => { AVT_STATE = __v; } });
-Object.defineProperty(globalThis, "_avtBroadcast", { configurable: true, get: () => _avtBroadcast, set: (__v) => { _avtBroadcast = __v; } });
-Object.defineProperty(globalThis, "_avtBroadcastNpc", { configurable: true, get: () => _avtBroadcastNpc, set: (__v) => { _avtBroadcastNpc = __v; } });
-Object.defineProperty(globalThis, "_avtBcastTokenMove", { configurable: true, get: () => _avtBcastTokenMove, set: (__v) => { _avtBcastTokenMove = __v; } });
+Object.defineProperty(globalThis, "_avtBroadcast", { configurable: true, writable: true, value: _avtBroadcast });
+Object.defineProperty(globalThis, "_avtBroadcastNpc", { configurable: true, writable: true, value: _avtBroadcastNpc });
+Object.defineProperty(globalThis, "_avtBcastTokenMove", { configurable: true, writable: true, value: _avtBcastTokenMove });
 Object.defineProperty(globalThis, "_AVT_MAX_PENDING_INPUTS", { configurable: true, get: () => _AVT_MAX_PENDING_INPUTS });
-Object.defineProperty(globalThis, "_avtEnviarMoveInput", { configurable: true, get: () => _avtEnviarMoveInput, set: (__v) => { _avtEnviarMoveInput = __v; } });
-Object.defineProperty(globalThis, "_avtResetMovePredict", { configurable: true, get: () => _avtResetMovePredict, set: (__v) => { _avtResetMovePredict = __v; } });
-Object.defineProperty(globalThis, "_avtMarcarAtividade", { configurable: true, get: () => _avtMarcarAtividade, set: (__v) => { _avtMarcarAtividade = __v; } });
-Object.defineProperty(globalThis, "_avtSalaEspera", { configurable: true, get: () => _avtSalaEspera, set: (__v) => { _avtSalaEspera = __v; } });
-Object.defineProperty(globalThis, "_avtSeededRng", { configurable: true, get: () => _avtSeededRng, set: (__v) => { _avtSeededRng = __v; } });
-Object.defineProperty(globalThis, "_avtCalcHpJog", { configurable: true, get: () => _avtCalcHpJog, set: (__v) => { _avtCalcHpJog = __v; } });
-Object.defineProperty(globalThis, "_avtReconciliarEntidades", { configurable: true, get: () => _avtReconciliarEntidades, set: (__v) => { _avtReconciliarEntidades = __v; } });
-Object.defineProperty(globalThis, "_avtResyncEstado", { configurable: true, get: () => _avtResyncEstado, set: (__v) => { _avtResyncEstado = __v; } });
-Object.defineProperty(globalThis, "_avtGetSkillNumero", { configurable: true, get: () => _avtGetSkillNumero, set: (__v) => { _avtGetSkillNumero = __v; } });
-Object.defineProperty(globalThis, "_avtSkillsOrdenadasPorNumero", { configurable: true, get: () => _avtSkillsOrdenadasPorNumero, set: (__v) => { _avtSkillsOrdenadasPorNumero = __v; } });
+Object.defineProperty(globalThis, "_avtEnviarMoveInput", { configurable: true, writable: true, value: _avtEnviarMoveInput });
+Object.defineProperty(globalThis, "_avtResetMovePredict", { configurable: true, writable: true, value: _avtResetMovePredict });
+Object.defineProperty(globalThis, "_avtMarcarAtividade", { configurable: true, writable: true, value: _avtMarcarAtividade });
+Object.defineProperty(globalThis, "_avtSalaEspera", { configurable: true, writable: true, value: _avtSalaEspera });
+Object.defineProperty(globalThis, "_avtSeededRng", { configurable: true, writable: true, value: _avtSeededRng });
+Object.defineProperty(globalThis, "_avtCalcHpJog", { configurable: true, writable: true, value: _avtCalcHpJog });
+Object.defineProperty(globalThis, "_avtReconciliarEntidades", { configurable: true, writable: true, value: _avtReconciliarEntidades });
+Object.defineProperty(globalThis, "_avtResyncEstado", { configurable: true, writable: true, value: _avtResyncEstado });
+Object.defineProperty(globalThis, "_avtGetSkillNumero", { configurable: true, writable: true, value: _avtGetSkillNumero });
+Object.defineProperty(globalThis, "_avtSkillsOrdenadasPorNumero", { configurable: true, writable: true, value: _avtSkillsOrdenadasPorNumero });
 Object.defineProperty(globalThis, "AVT_T", { configurable: true, get: () => AVT_T });
 Object.defineProperty(globalThis, "AVT_SZ", { configurable: true, get: () => AVT_SZ });
 Object.defineProperty(globalThis, "_avtYsortBuf", { configurable: true, get: () => _avtYsortBuf });
 Object.defineProperty(globalThis, "_avtAtmGrad", { configurable: true, get: () => _avtAtmGrad, set: (__v) => { _avtAtmGrad = __v; } });
 Object.defineProperty(globalThis, "_avtAtmGradR", { configurable: true, get: () => _avtAtmGradR, set: (__v) => { _avtAtmGradR = __v; } });
 Object.defineProperty(globalThis, "AVT_STATUS_COLORS", { configurable: true, get: () => AVT_STATUS_COLORS });
-Object.defineProperty(globalThis, "_avtHexRgb", { configurable: true, get: () => _avtHexRgb, set: (__v) => { _avtHexRgb = __v; } });
-Object.defineProperty(globalThis, "_avtEfetosAtivosEnt", { configurable: true, get: () => _avtEfetosAtivosEnt, set: (__v) => { _avtEfetosAtivosEnt = __v; } });
-Object.defineProperty(globalThis, "_avtEhAutoridade", { configurable: true, get: () => _avtEhAutoridade, set: (__v) => { _avtEhAutoridade = __v; } });
-Object.defineProperty(globalThis, "_avtSetOocCooldown", { configurable: true, get: () => _avtSetOocCooldown, set: (__v) => { _avtSetOocCooldown = __v; } });
-Object.defineProperty(globalThis, "_avtRastroMarcarCelula", { configurable: true, get: () => _avtRastroMarcarCelula, set: (__v) => { _avtRastroMarcarCelula = __v; } });
-Object.defineProperty(globalThis, "_avtRastroEhHostil", { configurable: true, get: () => _avtRastroEhHostil, set: (__v) => { _avtRastroEhHostil = __v; } });
-Object.defineProperty(globalThis, "_avtRastroChecarEntrada", { configurable: true, get: () => _avtRastroChecarEntrada, set: (__v) => { _avtRastroChecarEntrada = __v; } });
-Object.defineProperty(globalThis, "_avtRastroCelulasTrajetoria", { configurable: true, get: () => _avtRastroCelulasTrajetoria, set: (__v) => { _avtRastroCelulasTrajetoria = __v; } });
-Object.defineProperty(globalThis, "_avtRastroPersonaAtivo", { configurable: true, get: () => _avtRastroPersonaAtivo, set: (__v) => { _avtRastroPersonaAtivo = __v; } });
-Object.defineProperty(globalThis, "_avtAplicarRastroEfeito", { configurable: true, get: () => _avtAplicarRastroEfeito, set: (__v) => { _avtAplicarRastroEfeito = __v; } });
-Object.defineProperty(globalThis, "_avtAplicarEmpurrao", { configurable: true, get: () => _avtAplicarEmpurrao, set: (__v) => { _avtAplicarEmpurrao = __v; } });
-Object.defineProperty(globalThis, "_avtRastroPrune", { configurable: true, get: () => _avtRastroPrune, set: (__v) => { _avtRastroPrune = __v; } });
-Object.defineProperty(globalThis, "_avtRenderRastroCells", { configurable: true, get: () => _avtRenderRastroCells, set: (__v) => { _avtRenderRastroCells = __v; } });
+Object.defineProperty(globalThis, "_avtHexRgb", { configurable: true, writable: true, value: _avtHexRgb });
+Object.defineProperty(globalThis, "_avtEfetosAtivosEnt", { configurable: true, writable: true, value: _avtEfetosAtivosEnt });
+Object.defineProperty(globalThis, "_avtEhAutoridade", { configurable: true, writable: true, value: _avtEhAutoridade });
+Object.defineProperty(globalThis, "_avtSetOocCooldown", { configurable: true, writable: true, value: _avtSetOocCooldown });
+Object.defineProperty(globalThis, "_avtRastroMarcarCelula", { configurable: true, writable: true, value: _avtRastroMarcarCelula });
+Object.defineProperty(globalThis, "_avtRastroEhHostil", { configurable: true, writable: true, value: _avtRastroEhHostil });
+Object.defineProperty(globalThis, "_avtRastroChecarEntrada", { configurable: true, writable: true, value: _avtRastroChecarEntrada });
+Object.defineProperty(globalThis, "_avtRastroCelulasTrajetoria", { configurable: true, writable: true, value: _avtRastroCelulasTrajetoria });
+Object.defineProperty(globalThis, "_avtRastroPersonaAtivo", { configurable: true, writable: true, value: _avtRastroPersonaAtivo });
+Object.defineProperty(globalThis, "_avtAplicarRastroEfeito", { configurable: true, writable: true, value: _avtAplicarRastroEfeito });
+Object.defineProperty(globalThis, "_avtAplicarEmpurrao", { configurable: true, writable: true, value: _avtAplicarEmpurrao });
+Object.defineProperty(globalThis, "_avtRastroPrune", { configurable: true, writable: true, value: _avtRastroPrune });
+Object.defineProperty(globalThis, "_avtRenderRastroCells", { configurable: true, writable: true, value: _avtRenderRastroCells });
 Object.defineProperty(globalThis, "AVT_WARRIOR_SVG_A", { configurable: true, get: () => AVT_WARRIOR_SVG_A });
 Object.defineProperty(globalThis, "AVT_WARRIOR_SVG_B", { configurable: true, get: () => AVT_WARRIOR_SVG_B });
 Object.defineProperty(globalThis, "AVT_MAGE_SVG_A", { configurable: true, get: () => AVT_MAGE_SVG_A });
@@ -30845,733 +30847,733 @@ Object.defineProperty(globalThis, "AVT_LADINO_SVG_B", { configurable: true, get:
 Object.defineProperty(globalThis, "AVT_LADINO_SVG_A_HEAD", { configurable: true, get: () => AVT_LADINO_SVG_A_HEAD });
 Object.defineProperty(globalThis, "AVT_LADINO_SVG_B_HEAD", { configurable: true, get: () => AVT_LADINO_SVG_B_HEAD });
 Object.defineProperty(globalThis, "_avtClasseImgCache", { configurable: true, get: () => _avtClasseImgCache });
-Object.defineProperty(globalThis, "_avtGetClasseImg", { configurable: true, get: () => _avtGetClasseImg, set: (__v) => { _avtGetClasseImg = __v; } });
-Object.defineProperty(globalThis, "_avtClasseVariant", { configurable: true, get: () => _avtClasseVariant, set: (__v) => { _avtClasseVariant = __v; } });
+Object.defineProperty(globalThis, "_avtGetClasseImg", { configurable: true, writable: true, value: _avtGetClasseImg });
+Object.defineProperty(globalThis, "_avtClasseVariant", { configurable: true, writable: true, value: _avtClasseVariant });
 Object.defineProperty(globalThis, "AVT_TOPDOWN_GEN_PROMPT", { configurable: true, get: () => AVT_TOPDOWN_GEN_PROMPT });
 Object.defineProperty(globalThis, "AVT_ISO_GEN_PROMPT", { configurable: true, get: () => AVT_ISO_GEN_PROMPT });
 Object.defineProperty(globalThis, "AVT_TOPDOWN_COORD_PROMPT", { configurable: true, get: () => AVT_TOPDOWN_COORD_PROMPT });
 Object.defineProperty(globalThis, "AVT_CREATURE_MODELS", { configurable: true, get: () => AVT_CREATURE_MODELS });
 Object.defineProperty(globalThis, "AVT_NPC_PRESETS", { configurable: true, get: () => AVT_NPC_PRESETS });
 Object.defineProperty(globalThis, "AVT_PRESET_TO_CREATURE", { configurable: true, get: () => AVT_PRESET_TO_CREATURE });
-Object.defineProperty(globalThis, "_avtGetNpcClasses", { configurable: true, get: () => _avtGetNpcClasses, set: (__v) => { _avtGetNpcClasses = __v; } });
-Object.defineProperty(globalThis, "_hexVary", { configurable: true, get: () => _hexVary, set: (__v) => { _hexVary = __v; } });
-Object.defineProperty(globalThis, "_avtGetCreatureImg", { configurable: true, get: () => _avtGetCreatureImg, set: (__v) => { _avtGetCreatureImg = __v; } });
+Object.defineProperty(globalThis, "_avtGetNpcClasses", { configurable: true, writable: true, value: _avtGetNpcClasses });
+Object.defineProperty(globalThis, "_hexVary", { configurable: true, writable: true, value: _hexVary });
+Object.defineProperty(globalThis, "_avtGetCreatureImg", { configurable: true, writable: true, value: _avtGetCreatureImg });
 Object.defineProperty(globalThis, "AVT_BULK_MASK_CORES", { configurable: true, get: () => AVT_BULK_MASK_CORES });
-Object.defineProperty(globalThis, "_avtSb", { configurable: true, get: () => _avtSb, set: (__v) => { _avtSb = __v; } });
-Object.defineProperty(globalThis, "_avtNovaLinhagemId", { configurable: true, get: () => _avtNovaLinhagemId, set: (__v) => { _avtNovaLinhagemId = __v; } });
-Object.defineProperty(globalThis, "_avtBuscarIrmaosLinhagem", { configurable: true, get: () => _avtBuscarIrmaosLinhagem, set: (__v) => { _avtBuscarIrmaosLinhagem = __v; } });
-Object.defineProperty(globalThis, "_avtSyncLinhagem", { configurable: true, get: () => _avtSyncLinhagem, set: (__v) => { _avtSyncLinhagem = __v; } });
-Object.defineProperty(globalThis, "_avtSyncLinhagemInventario", { configurable: true, get: () => _avtSyncLinhagemInventario, set: (__v) => { _avtSyncLinhagemInventario = __v; } });
-Object.defineProperty(globalThis, "_avtSyncLinhagemSkills", { configurable: true, get: () => _avtSyncLinhagemSkills, set: (__v) => { _avtSyncLinhagemSkills = __v; } });
+Object.defineProperty(globalThis, "_avtSb", { configurable: true, writable: true, value: _avtSb });
+Object.defineProperty(globalThis, "_avtNovaLinhagemId", { configurable: true, writable: true, value: _avtNovaLinhagemId });
+Object.defineProperty(globalThis, "_avtBuscarIrmaosLinhagem", { configurable: true, writable: true, value: _avtBuscarIrmaosLinhagem });
+Object.defineProperty(globalThis, "_avtSyncLinhagem", { configurable: true, writable: true, value: _avtSyncLinhagem });
+Object.defineProperty(globalThis, "_avtSyncLinhagemInventario", { configurable: true, writable: true, value: _avtSyncLinhagemInventario });
+Object.defineProperty(globalThis, "_avtSyncLinhagemSkills", { configurable: true, writable: true, value: _avtSyncLinhagemSkills });
 Object.defineProperty(globalThis, "_avtBackfillLinhagemFeito", { configurable: true, get: () => _avtBackfillLinhagemFeito, set: (__v) => { _avtBackfillLinhagemFeito = __v; } });
-Object.defineProperty(globalThis, "_avtBackfillLinhagem", { configurable: true, get: () => _avtBackfillLinhagem, set: (__v) => { _avtBackfillLinhagem = __v; } });
-Object.defineProperty(globalThis, "_avtEsc", { configurable: true, get: () => _avtEsc, set: (__v) => { _avtEsc = __v; } });
-Object.defineProperty(globalThis, "aventuraCarregarLista", { configurable: true, get: () => aventuraCarregarLista, set: (__v) => { aventuraCarregarLista = __v; } });
-Object.defineProperty(globalThis, "avtHubRenderSection", { configurable: true, get: () => avtHubRenderSection, set: (__v) => { avtHubRenderSection = __v; } });
-Object.defineProperty(globalThis, "abrirCriarAventura", { configurable: true, get: () => abrirCriarAventura, set: (__v) => { abrirCriarAventura = __v; } });
-Object.defineProperty(globalThis, "fecharCriarAventura", { configurable: true, get: () => fecharCriarAventura, set: (__v) => { fecharCriarAventura = __v; } });
-Object.defineProperty(globalThis, "_avtCriarRenderEtapa", { configurable: true, get: () => _avtCriarRenderEtapa, set: (__v) => { _avtCriarRenderEtapa = __v; } });
-Object.defineProperty(globalThis, "_avtCriarRenderModoEscolha", { configurable: true, get: () => _avtCriarRenderModoEscolha, set: (__v) => { _avtCriarRenderModoEscolha = __v; } });
-Object.defineProperty(globalThis, "_avtCriarRenderIdentidade", { configurable: true, get: () => _avtCriarRenderIdentidade, set: (__v) => { _avtCriarRenderIdentidade = __v; } });
-Object.defineProperty(globalThis, "_avtCriarRenderPersonagens", { configurable: true, get: () => _avtCriarRenderPersonagens, set: (__v) => { _avtCriarRenderPersonagens = __v; } });
-Object.defineProperty(globalThis, "_avtCriarCarregarAventurasImport", { configurable: true, get: () => _avtCriarCarregarAventurasImport, set: (__v) => { _avtCriarCarregarAventurasImport = __v; } });
-Object.defineProperty(globalThis, "_avtCriarRenderAventurasImport", { configurable: true, get: () => _avtCriarRenderAventurasImport, set: (__v) => { _avtCriarRenderAventurasImport = __v; } });
-Object.defineProperty(globalThis, "_avtCriarToggleAventuraExpand", { configurable: true, get: () => _avtCriarToggleAventuraExpand, set: (__v) => { _avtCriarToggleAventuraExpand = __v; } });
-Object.defineProperty(globalThis, "_avtCriarToggleCharSelecao", { configurable: true, get: () => _avtCriarToggleCharSelecao, set: (__v) => { _avtCriarToggleCharSelecao = __v; } });
-Object.defineProperty(globalThis, "_avtCriarConfirmarImportIndividual", { configurable: true, get: () => _avtCriarConfirmarImportIndividual, set: (__v) => { _avtCriarConfirmarImportIndividual = __v; } });
-Object.defineProperty(globalThis, "_avtCriarRenderCharsLista", { configurable: true, get: () => _avtCriarRenderCharsLista, set: (__v) => { _avtCriarRenderCharsLista = __v; } });
-Object.defineProperty(globalThis, "_avtAbrirConfigPersonagem", { configurable: true, get: () => _avtAbrirConfigPersonagem, set: (__v) => { _avtAbrirConfigPersonagem = __v; } });
-Object.defineProperty(globalThis, "_avtCfgSwitchTab", { configurable: true, get: () => _avtCfgSwitchTab, set: (__v) => { _avtCfgSwitchTab = __v; } });
-Object.defineProperty(globalThis, "_avtCfgHpPreview", { configurable: true, get: () => _avtCfgHpPreview, set: (__v) => { _avtCfgHpPreview = __v; } });
-Object.defineProperty(globalThis, "_avtCfgAtualizarTokenPrev", { configurable: true, get: () => _avtCfgAtualizarTokenPrev, set: (__v) => { _avtCfgAtualizarTokenPrev = __v; } });
-Object.defineProperty(globalThis, "_avtCfgAtualizarPerfilPrev", { configurable: true, get: () => _avtCfgAtualizarPerfilPrev, set: (__v) => { _avtCfgAtualizarPerfilPrev = __v; } });
-Object.defineProperty(globalThis, "_avtCfgFileUpload", { configurable: true, get: () => _avtCfgFileUpload, set: (__v) => { _avtCfgFileUpload = __v; } });
-Object.defineProperty(globalThis, "_avtCriarRenderMapa", { configurable: true, get: () => _avtCriarRenderMapa, set: (__v) => { _avtCriarRenderMapa = __v; } });
-Object.defineProperty(globalThis, "avtCriarSelecionarMapa", { configurable: true, get: () => avtCriarSelecionarMapa, set: (__v) => { avtCriarSelecionarMapa = __v; } });
-Object.defineProperty(globalThis, "_avtCriarRenderMapaSub", { configurable: true, get: () => _avtCriarRenderMapaSub, set: (__v) => { _avtCriarRenderMapaSub = __v; } });
-Object.defineProperty(globalThis, "_avtProcHandleTilesetImg", { configurable: true, get: () => _avtProcHandleTilesetImg, set: (__v) => { _avtProcHandleTilesetImg = __v; } });
-Object.defineProperty(globalThis, "_avtProcCopiarPromptTileset", { configurable: true, get: () => _avtProcCopiarPromptTileset, set: (__v) => { _avtProcCopiarPromptTileset = __v; } });
-Object.defineProperty(globalThis, "avtCriarSetCor", { configurable: true, get: () => avtCriarSetCor, set: (__v) => { avtCriarSetCor = __v; } });
-Object.defineProperty(globalThis, "avtCriarAddChar", { configurable: true, get: () => avtCriarAddChar, set: (__v) => { avtCriarAddChar = __v; } });
-Object.defineProperty(globalThis, "avtCriarRemChar", { configurable: true, get: () => avtCriarRemChar, set: (__v) => { avtCriarRemChar = __v; } });
-Object.defineProperty(globalThis, "avtCriarImportCampanha", { configurable: true, get: () => avtCriarImportCampanha, set: (__v) => { avtCriarImportCampanha = __v; } });
-Object.defineProperty(globalThis, "_avtCriarVoltar", { configurable: true, get: () => _avtCriarVoltar, set: (__v) => { _avtCriarVoltar = __v; } });
-Object.defineProperty(globalThis, "_avtCriarAvancar", { configurable: true, get: () => _avtCriarAvancar, set: (__v) => { _avtCriarAvancar = __v; } });
+Object.defineProperty(globalThis, "_avtBackfillLinhagem", { configurable: true, writable: true, value: _avtBackfillLinhagem });
+Object.defineProperty(globalThis, "_avtEsc", { configurable: true, writable: true, value: _avtEsc });
+Object.defineProperty(globalThis, "aventuraCarregarLista", { configurable: true, writable: true, value: aventuraCarregarLista });
+Object.defineProperty(globalThis, "avtHubRenderSection", { configurable: true, writable: true, value: avtHubRenderSection });
+Object.defineProperty(globalThis, "abrirCriarAventura", { configurable: true, writable: true, value: abrirCriarAventura });
+Object.defineProperty(globalThis, "fecharCriarAventura", { configurable: true, writable: true, value: fecharCriarAventura });
+Object.defineProperty(globalThis, "_avtCriarRenderEtapa", { configurable: true, writable: true, value: _avtCriarRenderEtapa });
+Object.defineProperty(globalThis, "_avtCriarRenderModoEscolha", { configurable: true, writable: true, value: _avtCriarRenderModoEscolha });
+Object.defineProperty(globalThis, "_avtCriarRenderIdentidade", { configurable: true, writable: true, value: _avtCriarRenderIdentidade });
+Object.defineProperty(globalThis, "_avtCriarRenderPersonagens", { configurable: true, writable: true, value: _avtCriarRenderPersonagens });
+Object.defineProperty(globalThis, "_avtCriarCarregarAventurasImport", { configurable: true, writable: true, value: _avtCriarCarregarAventurasImport });
+Object.defineProperty(globalThis, "_avtCriarRenderAventurasImport", { configurable: true, writable: true, value: _avtCriarRenderAventurasImport });
+Object.defineProperty(globalThis, "_avtCriarToggleAventuraExpand", { configurable: true, writable: true, value: _avtCriarToggleAventuraExpand });
+Object.defineProperty(globalThis, "_avtCriarToggleCharSelecao", { configurable: true, writable: true, value: _avtCriarToggleCharSelecao });
+Object.defineProperty(globalThis, "_avtCriarConfirmarImportIndividual", { configurable: true, writable: true, value: _avtCriarConfirmarImportIndividual });
+Object.defineProperty(globalThis, "_avtCriarRenderCharsLista", { configurable: true, writable: true, value: _avtCriarRenderCharsLista });
+Object.defineProperty(globalThis, "_avtAbrirConfigPersonagem", { configurable: true, writable: true, value: _avtAbrirConfigPersonagem });
+Object.defineProperty(globalThis, "_avtCfgSwitchTab", { configurable: true, writable: true, value: _avtCfgSwitchTab });
+Object.defineProperty(globalThis, "_avtCfgHpPreview", { configurable: true, writable: true, value: _avtCfgHpPreview });
+Object.defineProperty(globalThis, "_avtCfgAtualizarTokenPrev", { configurable: true, writable: true, value: _avtCfgAtualizarTokenPrev });
+Object.defineProperty(globalThis, "_avtCfgAtualizarPerfilPrev", { configurable: true, writable: true, value: _avtCfgAtualizarPerfilPrev });
+Object.defineProperty(globalThis, "_avtCfgFileUpload", { configurable: true, writable: true, value: _avtCfgFileUpload });
+Object.defineProperty(globalThis, "_avtCriarRenderMapa", { configurable: true, writable: true, value: _avtCriarRenderMapa });
+Object.defineProperty(globalThis, "avtCriarSelecionarMapa", { configurable: true, writable: true, value: avtCriarSelecionarMapa });
+Object.defineProperty(globalThis, "_avtCriarRenderMapaSub", { configurable: true, writable: true, value: _avtCriarRenderMapaSub });
+Object.defineProperty(globalThis, "_avtProcHandleTilesetImg", { configurable: true, writable: true, value: _avtProcHandleTilesetImg });
+Object.defineProperty(globalThis, "_avtProcCopiarPromptTileset", { configurable: true, writable: true, value: _avtProcCopiarPromptTileset });
+Object.defineProperty(globalThis, "avtCriarSetCor", { configurable: true, writable: true, value: avtCriarSetCor });
+Object.defineProperty(globalThis, "avtCriarAddChar", { configurable: true, writable: true, value: avtCriarAddChar });
+Object.defineProperty(globalThis, "avtCriarRemChar", { configurable: true, writable: true, value: avtCriarRemChar });
+Object.defineProperty(globalThis, "avtCriarImportCampanha", { configurable: true, writable: true, value: avtCriarImportCampanha });
+Object.defineProperty(globalThis, "_avtCriarVoltar", { configurable: true, writable: true, value: _avtCriarVoltar });
+Object.defineProperty(globalThis, "_avtCriarAvancar", { configurable: true, writable: true, value: _avtCriarAvancar });
 Object.defineProperty(globalThis, "_avtEd", { configurable: true, get: () => _avtEd, set: (__v) => { _avtEd = __v; } });
-Object.defineProperty(globalThis, "_avtEditorTamanho", { configurable: true, get: () => _avtEditorTamanho, set: (__v) => { _avtEditorTamanho = __v; } });
-Object.defineProperty(globalThis, "_avtEditorInit", { configurable: true, get: () => _avtEditorInit, set: (__v) => { _avtEditorInit = __v; } });
-Object.defineProperty(globalThis, "_avtEditorReset", { configurable: true, get: () => _avtEditorReset, set: (__v) => { _avtEditorReset = __v; } });
-Object.defineProperty(globalThis, "_avtEditorLimpar", { configurable: true, get: () => _avtEditorLimpar, set: (__v) => { _avtEditorLimpar = __v; } });
-Object.defineProperty(globalThis, "_avtEditorAcaoSet", { configurable: true, get: () => _avtEditorAcaoSet, set: (__v) => { _avtEditorAcaoSet = __v; } });
-Object.defineProperty(globalThis, "_avtEditorRenderCanvas", { configurable: true, get: () => _avtEditorRenderCanvas, set: (__v) => { _avtEditorRenderCanvas = __v; } });
-Object.defineProperty(globalThis, "_avtEditorExport", { configurable: true, get: () => _avtEditorExport, set: (__v) => { _avtEditorExport = __v; } });
-Object.defineProperty(globalThis, "_avtGetGridParams", { configurable: true, get: () => _avtGetGridParams, set: (__v) => { _avtGetGridParams = __v; } });
-Object.defineProperty(globalThis, "_avtGerarPromptJson", { configurable: true, get: () => _avtGerarPromptJson, set: (__v) => { _avtGerarPromptJson = __v; } });
-Object.defineProperty(globalThis, "_avtJsonAtualizarPrompt", { configurable: true, get: () => _avtJsonAtualizarPrompt, set: (__v) => { _avtJsonAtualizarPrompt = __v; } });
-Object.defineProperty(globalThis, "_avtCopiarPromptJson", { configurable: true, get: () => _avtCopiarPromptJson, set: (__v) => { _avtCopiarPromptJson = __v; } });
-Object.defineProperty(globalThis, "_avtJsonParsePreview", { configurable: true, get: () => _avtJsonParsePreview, set: (__v) => { _avtJsonParsePreview = __v; } });
-Object.defineProperty(globalThis, "_avtJsonToDungeon", { configurable: true, get: () => _avtJsonToDungeon, set: (__v) => { _avtJsonToDungeon = __v; } });
-Object.defineProperty(globalThis, "_avtGerarComClaude", { configurable: true, get: () => _avtGerarComClaude, set: (__v) => { _avtGerarComClaude = __v; } });
-Object.defineProperty(globalThis, "_avtMontarPromptPersonagens", { configurable: true, get: () => _avtMontarPromptPersonagens, set: (__v) => { _avtMontarPromptPersonagens = __v; } });
-Object.defineProperty(globalThis, "_avtGerarPersonagensComIA", { configurable: true, get: () => _avtGerarPersonagensComIA, set: (__v) => { _avtGerarPersonagensComIA = __v; } });
-Object.defineProperty(globalThis, "_avtCopiarPromptPersonagensExterno", { configurable: true, get: () => _avtCopiarPromptPersonagensExterno, set: (__v) => { _avtCopiarPromptPersonagensExterno = __v; } });
-Object.defineProperty(globalThis, "_avtAplicarPersonagensIA", { configurable: true, get: () => _avtAplicarPersonagensIA, set: (__v) => { _avtAplicarPersonagensIA = __v; } });
-Object.defineProperty(globalThis, "_avtAplicarPersonagensExterno", { configurable: true, get: () => _avtAplicarPersonagensExterno, set: (__v) => { _avtAplicarPersonagensExterno = __v; } });
-Object.defineProperty(globalThis, "aventuraCriarSubmit", { configurable: true, get: () => aventuraCriarSubmit, set: (__v) => { aventuraCriarSubmit = __v; } });
-Object.defineProperty(globalThis, "_avtCarregarAtribuicaoJogador", { configurable: true, get: () => _avtCarregarAtribuicaoJogador, set: (__v) => { _avtCarregarAtribuicaoJogador = __v; } });
-Object.defineProperty(globalThis, "_avtMestreAtribuirJogador", { configurable: true, get: () => _avtMestreAtribuirJogador, set: (__v) => { _avtMestreAtribuirJogador = __v; } });
-Object.defineProperty(globalThis, "avtReceberMemberLinked", { configurable: true, get: () => avtReceberMemberLinked, set: (__v) => { avtReceberMemberLinked = __v; } });
-Object.defineProperty(globalThis, "_avtMestreSelecionarPersonagem", { configurable: true, get: () => _avtMestreSelecionarPersonagem, set: (__v) => { _avtMestreSelecionarPersonagem = __v; } });
-Object.defineProperty(globalThis, "_avtMestreAddXp", { configurable: true, get: () => _avtMestreAddXp, set: (__v) => { _avtMestreAddXp = __v; } });
-Object.defineProperty(globalThis, "_avtGetBauById", { configurable: true, get: () => _avtGetBauById, set: (__v) => { _avtGetBauById = __v; } });
-Object.defineProperty(globalThis, "_avtMestreAddBau", { configurable: true, get: () => _avtMestreAddBau, set: (__v) => { _avtMestreAddBau = __v; } });
-Object.defineProperty(globalThis, "_avtEntrarModoBauPlacement", { configurable: true, get: () => _avtEntrarModoBauPlacement, set: (__v) => { _avtEntrarModoBauPlacement = __v; } });
-Object.defineProperty(globalThis, "_avtMestreRemoverBau", { configurable: true, get: () => _avtMestreRemoverBau, set: (__v) => { _avtMestreRemoverBau = __v; } });
-Object.defineProperty(globalThis, "_avtMestreReabrirBau", { configurable: true, get: () => _avtMestreReabrirBau, set: (__v) => { _avtMestreReabrirBau = __v; } });
-Object.defineProperty(globalThis, "_avtMestreEditarBau", { configurable: true, get: () => _avtMestreEditarBau, set: (__v) => { _avtMestreEditarBau = __v; } });
-Object.defineProperty(globalThis, "_avtBauAddItem", { configurable: true, get: () => _avtBauAddItem, set: (__v) => { _avtBauAddItem = __v; } });
-Object.defineProperty(globalThis, "_avtBauAddItemManual", { configurable: true, get: () => _avtBauAddItemManual, set: (__v) => { _avtBauAddItemManual = __v; } });
-Object.defineProperty(globalThis, "_avtBauRemoverItem", { configurable: true, get: () => _avtBauRemoverItem, set: (__v) => { _avtBauRemoverItem = __v; } });
-Object.defineProperty(globalThis, "_avtBauUploadImg", { configurable: true, get: () => _avtBauUploadImg, set: (__v) => { _avtBauUploadImg = __v; } });
-Object.defineProperty(globalThis, "_avtBauSalvar", { configurable: true, get: () => _avtBauSalvar, set: (__v) => { _avtBauSalvar = __v; } });
-Object.defineProperty(globalThis, "_avtMestreDarItemChar", { configurable: true, get: () => _avtMestreDarItemChar, set: (__v) => { _avtMestreDarItemChar = __v; } });
-Object.defineProperty(globalThis, "_avtItensSelChar", { configurable: true, get: () => _avtItensSelChar, set: (__v) => { _avtItensSelChar = __v; } });
-Object.defineProperty(globalThis, "_avtMestreAtualizarOuroChar", { configurable: true, get: () => _avtMestreAtualizarOuroChar, set: (__v) => { _avtMestreAtualizarOuroChar = __v; } });
-Object.defineProperty(globalThis, "_avtMestreRemoverItemChar", { configurable: true, get: () => _avtMestreRemoverItemChar, set: (__v) => { _avtMestreRemoverItemChar = __v; } });
-Object.defineProperty(globalThis, "_avtMestreDesequiparSlotChar", { configurable: true, get: () => _avtMestreDesequiparSlotChar, set: (__v) => { _avtMestreDesequiparSlotChar = __v; } });
-Object.defineProperty(globalThis, "_avtMestreCarregarInvChar", { configurable: true, get: () => _avtMestreCarregarInvChar, set: (__v) => { _avtMestreCarregarInvChar = __v; } });
-Object.defineProperty(globalThis, "_avtBauPreParaMapa", { configurable: true, get: () => _avtBauPreParaMapa, set: (__v) => { _avtBauPreParaMapa = __v; } });
-Object.defineProperty(globalThis, "_avtRemoverBauPre", { configurable: true, get: () => _avtRemoverBauPre, set: (__v) => { _avtRemoverBauPre = __v; } });
-Object.defineProperty(globalThis, "_avtBausPreDungeonParaMapa", { configurable: true, get: () => _avtBausPreDungeonParaMapa, set: (__v) => { _avtBausPreDungeonParaMapa = __v; } });
-Object.defineProperty(globalThis, "_avtGravarDungeonNoSlot", { configurable: true, get: () => _avtGravarDungeonNoSlot, set: (__v) => { _avtGravarDungeonNoSlot = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarDungeon", { configurable: true, get: () => _avtSalvarDungeon, set: (__v) => { _avtSalvarDungeon = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarThemeJson", { configurable: true, get: () => _avtSalvarThemeJson, set: (__v) => { _avtSalvarThemeJson = __v; } });
-Object.defineProperty(globalThis, "_avtDeepClone", { configurable: true, get: () => _avtDeepClone, set: (__v) => { _avtDeepClone = __v; } });
-Object.defineProperty(globalThis, "_avtSkillScalingAttrs", { configurable: true, get: () => _avtSkillScalingAttrs, set: (__v) => { _avtSkillScalingAttrs = __v; } });
-Object.defineProperty(globalThis, "_migrarSkillsIntOnly", { configurable: true, get: () => _migrarSkillsIntOnly, set: (__v) => { _migrarSkillsIntOnly = __v; } });
-Object.defineProperty(globalThis, "_avtAdicionarMembro", { configurable: true, get: () => _avtAdicionarMembro, set: (__v) => { _avtAdicionarMembro = __v; } });
-Object.defineProperty(globalThis, "_avtRemoverMembro", { configurable: true, get: () => _avtRemoverMembro, set: (__v) => { _avtRemoverMembro = __v; } });
-Object.defineProperty(globalThis, "_avtCarregarDados", { configurable: true, get: () => _avtCarregarDados, set: (__v) => { _avtCarregarDados = __v; } });
-Object.defineProperty(globalThis, "_avtIniciarCanvas", { configurable: true, get: () => _avtIniciarCanvas, set: (__v) => { _avtIniciarCanvas = __v; } });
-Object.defineProperty(globalThis, "_avtIniciarRTNet", { configurable: true, get: () => _avtIniciarRTNet, set: (__v) => { _avtIniciarRTNet = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarAventuraScreen", { configurable: true, get: () => _avtMostrarAventuraScreen, set: (__v) => { _avtMostrarAventuraScreen = __v; } });
-Object.defineProperty(globalThis, "entrarAventura", { configurable: true, get: () => entrarAventura, set: (__v) => { entrarAventura = __v; } });
-Object.defineProperty(globalThis, "_avtFlushPersistencia", { configurable: true, get: () => _avtFlushPersistencia, set: (__v) => { _avtFlushPersistencia = __v; } });
-Object.defineProperty(globalThis, "_avtCleanupListeners", { configurable: true, get: () => _avtCleanupListeners, set: (__v) => { _avtCleanupListeners = __v; } });
-Object.defineProperty(globalThis, "_avtSetTimeout", { configurable: true, get: () => _avtSetTimeout, set: (__v) => { _avtSetTimeout = __v; } });
-Object.defineProperty(globalThis, "_avtGerarDungeon", { configurable: true, get: () => _avtGerarDungeon, set: (__v) => { _avtGerarDungeon = __v; } });
-Object.defineProperty(globalThis, "_avtGerarPortasInternas", { configurable: true, get: () => _avtGerarPortasInternas, set: (__v) => { _avtGerarPortasInternas = __v; } });
-Object.defineProperty(globalThis, "_avtBlocoFuncao", { configurable: true, get: () => _avtBlocoFuncao, set: (__v) => { _avtBlocoFuncao = __v; } });
-Object.defineProperty(globalThis, "_avtBlocoChavePorCelula", { configurable: true, get: () => _avtBlocoChavePorCelula, set: (__v) => { _avtBlocoChavePorCelula = __v; } });
-Object.defineProperty(globalThis, "_avtClasseCelula", { configurable: true, get: () => _avtClasseCelula, set: (__v) => { _avtClasseCelula = __v; } });
+Object.defineProperty(globalThis, "_avtEditorTamanho", { configurable: true, writable: true, value: _avtEditorTamanho });
+Object.defineProperty(globalThis, "_avtEditorInit", { configurable: true, writable: true, value: _avtEditorInit });
+Object.defineProperty(globalThis, "_avtEditorReset", { configurable: true, writable: true, value: _avtEditorReset });
+Object.defineProperty(globalThis, "_avtEditorLimpar", { configurable: true, writable: true, value: _avtEditorLimpar });
+Object.defineProperty(globalThis, "_avtEditorAcaoSet", { configurable: true, writable: true, value: _avtEditorAcaoSet });
+Object.defineProperty(globalThis, "_avtEditorRenderCanvas", { configurable: true, writable: true, value: _avtEditorRenderCanvas });
+Object.defineProperty(globalThis, "_avtEditorExport", { configurable: true, writable: true, value: _avtEditorExport });
+Object.defineProperty(globalThis, "_avtGetGridParams", { configurable: true, writable: true, value: _avtGetGridParams });
+Object.defineProperty(globalThis, "_avtGerarPromptJson", { configurable: true, writable: true, value: _avtGerarPromptJson });
+Object.defineProperty(globalThis, "_avtJsonAtualizarPrompt", { configurable: true, writable: true, value: _avtJsonAtualizarPrompt });
+Object.defineProperty(globalThis, "_avtCopiarPromptJson", { configurable: true, writable: true, value: _avtCopiarPromptJson });
+Object.defineProperty(globalThis, "_avtJsonParsePreview", { configurable: true, writable: true, value: _avtJsonParsePreview });
+Object.defineProperty(globalThis, "_avtJsonToDungeon", { configurable: true, writable: true, value: _avtJsonToDungeon });
+Object.defineProperty(globalThis, "_avtGerarComClaude", { configurable: true, writable: true, value: _avtGerarComClaude });
+Object.defineProperty(globalThis, "_avtMontarPromptPersonagens", { configurable: true, writable: true, value: _avtMontarPromptPersonagens });
+Object.defineProperty(globalThis, "_avtGerarPersonagensComIA", { configurable: true, writable: true, value: _avtGerarPersonagensComIA });
+Object.defineProperty(globalThis, "_avtCopiarPromptPersonagensExterno", { configurable: true, writable: true, value: _avtCopiarPromptPersonagensExterno });
+Object.defineProperty(globalThis, "_avtAplicarPersonagensIA", { configurable: true, writable: true, value: _avtAplicarPersonagensIA });
+Object.defineProperty(globalThis, "_avtAplicarPersonagensExterno", { configurable: true, writable: true, value: _avtAplicarPersonagensExterno });
+Object.defineProperty(globalThis, "aventuraCriarSubmit", { configurable: true, writable: true, value: aventuraCriarSubmit });
+Object.defineProperty(globalThis, "_avtCarregarAtribuicaoJogador", { configurable: true, writable: true, value: _avtCarregarAtribuicaoJogador });
+Object.defineProperty(globalThis, "_avtMestreAtribuirJogador", { configurable: true, writable: true, value: _avtMestreAtribuirJogador });
+Object.defineProperty(globalThis, "avtReceberMemberLinked", { configurable: true, writable: true, value: avtReceberMemberLinked });
+Object.defineProperty(globalThis, "_avtMestreSelecionarPersonagem", { configurable: true, writable: true, value: _avtMestreSelecionarPersonagem });
+Object.defineProperty(globalThis, "_avtMestreAddXp", { configurable: true, writable: true, value: _avtMestreAddXp });
+Object.defineProperty(globalThis, "_avtGetBauById", { configurable: true, writable: true, value: _avtGetBauById });
+Object.defineProperty(globalThis, "_avtMestreAddBau", { configurable: true, writable: true, value: _avtMestreAddBau });
+Object.defineProperty(globalThis, "_avtEntrarModoBauPlacement", { configurable: true, writable: true, value: _avtEntrarModoBauPlacement });
+Object.defineProperty(globalThis, "_avtMestreRemoverBau", { configurable: true, writable: true, value: _avtMestreRemoverBau });
+Object.defineProperty(globalThis, "_avtMestreReabrirBau", { configurable: true, writable: true, value: _avtMestreReabrirBau });
+Object.defineProperty(globalThis, "_avtMestreEditarBau", { configurable: true, writable: true, value: _avtMestreEditarBau });
+Object.defineProperty(globalThis, "_avtBauAddItem", { configurable: true, writable: true, value: _avtBauAddItem });
+Object.defineProperty(globalThis, "_avtBauAddItemManual", { configurable: true, writable: true, value: _avtBauAddItemManual });
+Object.defineProperty(globalThis, "_avtBauRemoverItem", { configurable: true, writable: true, value: _avtBauRemoverItem });
+Object.defineProperty(globalThis, "_avtBauUploadImg", { configurable: true, writable: true, value: _avtBauUploadImg });
+Object.defineProperty(globalThis, "_avtBauSalvar", { configurable: true, writable: true, value: _avtBauSalvar });
+Object.defineProperty(globalThis, "_avtMestreDarItemChar", { configurable: true, writable: true, value: _avtMestreDarItemChar });
+Object.defineProperty(globalThis, "_avtItensSelChar", { configurable: true, writable: true, value: _avtItensSelChar });
+Object.defineProperty(globalThis, "_avtMestreAtualizarOuroChar", { configurable: true, writable: true, value: _avtMestreAtualizarOuroChar });
+Object.defineProperty(globalThis, "_avtMestreRemoverItemChar", { configurable: true, writable: true, value: _avtMestreRemoverItemChar });
+Object.defineProperty(globalThis, "_avtMestreDesequiparSlotChar", { configurable: true, writable: true, value: _avtMestreDesequiparSlotChar });
+Object.defineProperty(globalThis, "_avtMestreCarregarInvChar", { configurable: true, writable: true, value: _avtMestreCarregarInvChar });
+Object.defineProperty(globalThis, "_avtBauPreParaMapa", { configurable: true, writable: true, value: _avtBauPreParaMapa });
+Object.defineProperty(globalThis, "_avtRemoverBauPre", { configurable: true, writable: true, value: _avtRemoverBauPre });
+Object.defineProperty(globalThis, "_avtBausPreDungeonParaMapa", { configurable: true, writable: true, value: _avtBausPreDungeonParaMapa });
+Object.defineProperty(globalThis, "_avtGravarDungeonNoSlot", { configurable: true, writable: true, value: _avtGravarDungeonNoSlot });
+Object.defineProperty(globalThis, "_avtSalvarDungeon", { configurable: true, writable: true, value: _avtSalvarDungeon });
+Object.defineProperty(globalThis, "_avtSalvarThemeJson", { configurable: true, writable: true, value: _avtSalvarThemeJson });
+Object.defineProperty(globalThis, "_avtDeepClone", { configurable: true, writable: true, value: _avtDeepClone });
+Object.defineProperty(globalThis, "_avtSkillScalingAttrs", { configurable: true, writable: true, value: _avtSkillScalingAttrs });
+Object.defineProperty(globalThis, "_migrarSkillsIntOnly", { configurable: true, writable: true, value: _migrarSkillsIntOnly });
+Object.defineProperty(globalThis, "_avtAdicionarMembro", { configurable: true, writable: true, value: _avtAdicionarMembro });
+Object.defineProperty(globalThis, "_avtRemoverMembro", { configurable: true, writable: true, value: _avtRemoverMembro });
+Object.defineProperty(globalThis, "_avtCarregarDados", { configurable: true, writable: true, value: _avtCarregarDados });
+Object.defineProperty(globalThis, "_avtIniciarCanvas", { configurable: true, writable: true, value: _avtIniciarCanvas });
+Object.defineProperty(globalThis, "_avtIniciarRTNet", { configurable: true, writable: true, value: _avtIniciarRTNet });
+Object.defineProperty(globalThis, "_avtMostrarAventuraScreen", { configurable: true, writable: true, value: _avtMostrarAventuraScreen });
+Object.defineProperty(globalThis, "entrarAventura", { configurable: true, writable: true, value: entrarAventura });
+Object.defineProperty(globalThis, "_avtFlushPersistencia", { configurable: true, writable: true, value: _avtFlushPersistencia });
+Object.defineProperty(globalThis, "_avtCleanupListeners", { configurable: true, writable: true, value: _avtCleanupListeners });
+Object.defineProperty(globalThis, "_avtSetTimeout", { configurable: true, writable: true, value: _avtSetTimeout });
+Object.defineProperty(globalThis, "_avtGerarDungeon", { configurable: true, writable: true, value: _avtGerarDungeon });
+Object.defineProperty(globalThis, "_avtGerarPortasInternas", { configurable: true, writable: true, value: _avtGerarPortasInternas });
+Object.defineProperty(globalThis, "_avtBlocoFuncao", { configurable: true, writable: true, value: _avtBlocoFuncao });
+Object.defineProperty(globalThis, "_avtBlocoChavePorCelula", { configurable: true, writable: true, value: _avtBlocoChavePorCelula });
+Object.defineProperty(globalThis, "_avtClasseCelula", { configurable: true, writable: true, value: _avtClasseCelula });
 Object.defineProperty(globalThis, "_AVT_VIZ_DIRS", { configurable: true, get: () => _AVT_VIZ_DIRS });
-Object.defineProperty(globalThis, "_avtAssinaturaVizinhanca", { configurable: true, get: () => _avtAssinaturaVizinhanca, set: (__v) => { _avtAssinaturaVizinhanca = __v; } });
-Object.defineProperty(globalThis, "_avtAprenderPlacements", { configurable: true, get: () => _avtAprenderPlacements, set: (__v) => { _avtAprenderPlacements = __v; } });
-Object.defineProperty(globalThis, "_avtDerivarStats", { configurable: true, get: () => _avtDerivarStats, set: (__v) => { _avtDerivarStats = __v; } });
-Object.defineProperty(globalThis, "_avtMesclarPerfilEstilo", { configurable: true, get: () => _avtMesclarPerfilEstilo, set: (__v) => { _avtMesclarPerfilEstilo = __v; } });
-Object.defineProperty(globalThis, "_avtAplicarRegrasEstilo", { configurable: true, get: () => _avtAplicarRegrasEstilo, set: (__v) => { _avtAplicarRegrasEstilo = __v; } });
-Object.defineProperty(globalThis, "_avtGerarDungeonProcedural", { configurable: true, get: () => _avtGerarDungeonProcedural, set: (__v) => { _avtGerarDungeonProcedural = __v; } });
-Object.defineProperty(globalThis, "_avtInitNpcTimer", { configurable: true, get: () => _avtInitNpcTimer, set: (__v) => { _avtInitNpcTimer = __v; } });
-Object.defineProperty(globalThis, "_avtNivelarNpc", { configurable: true, get: () => _avtNivelarNpc, set: (__v) => { _avtNivelarNpc = __v; } });
-Object.defineProperty(globalThis, "_avtSeedFromStr", { configurable: true, get: () => _avtSeedFromStr, set: (__v) => { _avtSeedFromStr = __v; } });
-Object.defineProperty(globalThis, "_avtGerarParticleConfigFase", { configurable: true, get: () => _avtGerarParticleConfigFase, set: (__v) => { _avtGerarParticleConfigFase = __v; } });
-Object.defineProperty(globalThis, "_avtFaseMageSkill", { configurable: true, get: () => _avtFaseMageSkill, set: (__v) => { _avtFaseMageSkill = __v; } });
-Object.defineProperty(globalThis, "_avtCelulaValidaMaisProxima", { configurable: true, get: () => _avtCelulaValidaMaisProxima, set: (__v) => { _avtCelulaValidaMaisProxima = __v; } });
-Object.defineProperty(globalThis, "_avtPopularEntidadesInimigos", { configurable: true, get: () => _avtPopularEntidadesInimigos, set: (__v) => { _avtPopularEntidadesInimigos = __v; } });
-Object.defineProperty(globalThis, "_avtPopularEntidades", { configurable: true, get: () => _avtPopularEntidades, set: (__v) => { _avtPopularEntidades = __v; } });
-Object.defineProperty(globalThis, "_avtDetectarSalas", { configurable: true, get: () => _avtDetectarSalas, set: (__v) => { _avtDetectarSalas = __v; } });
-Object.defineProperty(globalThis, "_avtCanvasInit", { configurable: true, get: () => _avtCanvasInit, set: (__v) => { _avtCanvasInit = __v; } });
-Object.defineProperty(globalThis, "_avtCanvasResize", { configurable: true, get: () => _avtCanvasResize, set: (__v) => { _avtCanvasResize = __v; } });
-Object.defineProperty(globalThis, "_avtCameraCenter", { configurable: true, get: () => _avtCameraCenter, set: (__v) => { _avtCameraCenter = __v; } });
-Object.defineProperty(globalThis, "_avtCameraUpdate", { configurable: true, get: () => _avtCameraUpdate, set: (__v) => { _avtCameraUpdate = __v; } });
-Object.defineProperty(globalThis, "_avtCameraFocarEntidades", { configurable: true, get: () => _avtCameraFocarEntidades, set: (__v) => { _avtCameraFocarEntidades = __v; } });
-Object.defineProperty(globalThis, "_avtCameraUpdateCentralizada", { configurable: true, get: () => _avtCameraUpdateCentralizada, set: (__v) => { _avtCameraUpdateCentralizada = __v; } });
-Object.defineProperty(globalThis, "_avtRenderLoop", { configurable: true, get: () => _avtRenderLoop, set: (__v) => { _avtRenderLoop = __v; } });
-Object.defineProperty(globalThis, "_avtGridStyle", { configurable: true, get: () => _avtGridStyle, set: (__v) => { _avtGridStyle = __v; } });
-Object.defineProperty(globalThis, "_avtObjImg", { configurable: true, get: () => _avtObjImg, set: (__v) => { _avtObjImg = __v; } });
-Object.defineProperty(globalThis, "_avtRenderFrame", { configurable: true, get: () => _avtRenderFrame, set: (__v) => { _avtRenderFrame = __v; } });
-Object.defineProperty(globalThis, "_avtRenderMinimap", { configurable: true, get: () => _avtRenderMinimap, set: (__v) => { _avtRenderMinimap = __v; } });
-Object.defineProperty(globalThis, "_avtRenderEffectCountersOverlay", { configurable: true, get: () => _avtRenderEffectCountersOverlay, set: (__v) => { _avtRenderEffectCountersOverlay = __v; } });
-Object.defineProperty(globalThis, "_avtAtualizarPosRollInimigos", { configurable: true, get: () => _avtAtualizarPosRollInimigos, set: (__v) => { _avtAtualizarPosRollInimigos = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarRollInimigo", { configurable: true, get: () => _avtMostrarRollInimigo, set: (__v) => { _avtMostrarRollInimigo = __v; } });
-Object.defineProperty(globalThis, "_avtCarregarTodasAparencias", { configurable: true, get: () => _avtCarregarTodasAparencias, set: (__v) => { _avtCarregarTodasAparencias = __v; } });
-Object.defineProperty(globalThis, "_avtCarregarAparencia", { configurable: true, get: () => _avtCarregarAparencia, set: (__v) => { _avtCarregarAparencia = __v; } });
-Object.defineProperty(globalThis, "_avtCarregarTopdownIa", { configurable: true, get: () => _avtCarregarTopdownIa, set: (__v) => { _avtCarregarTopdownIa = __v; } });
-Object.defineProperty(globalThis, "_avtSetEntState", { configurable: true, get: () => _avtSetEntState, set: (__v) => { _avtSetEntState = __v; } });
-Object.defineProperty(globalThis, "_avtAnimAtualizar", { configurable: true, get: () => _avtAnimAtualizar, set: (__v) => { _avtAnimAtualizar = __v; } });
-Object.defineProperty(globalThis, "_avtInterp", { configurable: true, get: () => _avtInterp, set: (__v) => { _avtInterp = __v; } });
-Object.defineProperty(globalThis, "_avtFrameTransform", { configurable: true, get: () => _avtFrameTransform, set: (__v) => { _avtFrameTransform = __v; } });
-Object.defineProperty(globalThis, "_avtDesenharTopdownIa", { configurable: true, get: () => _avtDesenharTopdownIa, set: (__v) => { _avtDesenharTopdownIa = __v; } });
-Object.defineProperty(globalThis, "_avtIsoFacing", { configurable: true, get: () => _avtIsoFacing, set: (__v) => { _avtIsoFacing = __v; } });
-Object.defineProperty(globalThis, "_avtDesenharIsoIa", { configurable: true, get: () => _avtDesenharIsoIa, set: (__v) => { _avtDesenharIsoIa = __v; } });
-Object.defineProperty(globalThis, "_avtDesenharAparencia", { configurable: true, get: () => _avtDesenharAparencia, set: (__v) => { _avtDesenharAparencia = __v; } });
-Object.defineProperty(globalThis, "_avtGetVelocidadeMovimento", { configurable: true, get: () => _avtGetVelocidadeMovimento, set: (__v) => { _avtGetVelocidadeMovimento = __v; } });
-Object.defineProperty(globalThis, "_avtPathfindSimples", { configurable: true, get: () => _avtPathfindSimples, set: (__v) => { _avtPathfindSimples = __v; } });
-Object.defineProperty(globalThis, "_avtCorMago", { configurable: true, get: () => _avtCorMago, set: (__v) => { _avtCorMago = __v; } });
-Object.defineProperty(globalThis, "_avtAnimacaoPlaceholder", { configurable: true, get: () => _avtAnimacaoPlaceholder, set: (__v) => { _avtAnimacaoPlaceholder = __v; } });
-Object.defineProperty(globalThis, "_avtEntViva", { configurable: true, get: () => _avtEntViva, set: (__v) => { _avtEntViva = __v; } });
-Object.defineProperty(globalThis, "_avtElPosicaoCanvas", { configurable: true, get: () => _avtElPosicaoCanvas, set: (__v) => { _avtElPosicaoCanvas = __v; } });
-Object.defineProperty(globalThis, "_avtDadoSvg", { configurable: true, get: () => _avtDadoSvg, set: (__v) => { _avtDadoSvg = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarDadosAcimaDaHeadCompleto", { configurable: true, get: () => _avtMostrarDadosAcimaDaHeadCompleto, set: (__v) => { _avtMostrarDadosAcimaDaHeadCompleto = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarDanoAbaixoHp", { configurable: true, get: () => _avtMostrarDanoAbaixoHp, set: (__v) => { _avtMostrarDanoAbaixoHp = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarD20AbaixoDaHead", { configurable: true, get: () => _avtMostrarD20AbaixoDaHead, set: (__v) => { _avtMostrarD20AbaixoDaHead = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarDanoAcimaDaHead", { configurable: true, get: () => _avtMostrarDanoAcimaDaHead, set: (__v) => { _avtMostrarDanoAcimaDaHead = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarCuraAcimaDaHead", { configurable: true, get: () => _avtMostrarCuraAcimaDaHead, set: (__v) => { _avtMostrarCuraAcimaDaHead = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarDotDrip", { configurable: true, get: () => _avtMostrarDotDrip, set: (__v) => { _avtMostrarDotDrip = __v; } });
+Object.defineProperty(globalThis, "_avtAssinaturaVizinhanca", { configurable: true, writable: true, value: _avtAssinaturaVizinhanca });
+Object.defineProperty(globalThis, "_avtAprenderPlacements", { configurable: true, writable: true, value: _avtAprenderPlacements });
+Object.defineProperty(globalThis, "_avtDerivarStats", { configurable: true, writable: true, value: _avtDerivarStats });
+Object.defineProperty(globalThis, "_avtMesclarPerfilEstilo", { configurable: true, writable: true, value: _avtMesclarPerfilEstilo });
+Object.defineProperty(globalThis, "_avtAplicarRegrasEstilo", { configurable: true, writable: true, value: _avtAplicarRegrasEstilo });
+Object.defineProperty(globalThis, "_avtGerarDungeonProcedural", { configurable: true, writable: true, value: _avtGerarDungeonProcedural });
+Object.defineProperty(globalThis, "_avtInitNpcTimer", { configurable: true, writable: true, value: _avtInitNpcTimer });
+Object.defineProperty(globalThis, "_avtNivelarNpc", { configurable: true, writable: true, value: _avtNivelarNpc });
+Object.defineProperty(globalThis, "_avtSeedFromStr", { configurable: true, writable: true, value: _avtSeedFromStr });
+Object.defineProperty(globalThis, "_avtGerarParticleConfigFase", { configurable: true, writable: true, value: _avtGerarParticleConfigFase });
+Object.defineProperty(globalThis, "_avtFaseMageSkill", { configurable: true, writable: true, value: _avtFaseMageSkill });
+Object.defineProperty(globalThis, "_avtCelulaValidaMaisProxima", { configurable: true, writable: true, value: _avtCelulaValidaMaisProxima });
+Object.defineProperty(globalThis, "_avtPopularEntidadesInimigos", { configurable: true, writable: true, value: _avtPopularEntidadesInimigos });
+Object.defineProperty(globalThis, "_avtPopularEntidades", { configurable: true, writable: true, value: _avtPopularEntidades });
+Object.defineProperty(globalThis, "_avtDetectarSalas", { configurable: true, writable: true, value: _avtDetectarSalas });
+Object.defineProperty(globalThis, "_avtCanvasInit", { configurable: true, writable: true, value: _avtCanvasInit });
+Object.defineProperty(globalThis, "_avtCanvasResize", { configurable: true, writable: true, value: _avtCanvasResize });
+Object.defineProperty(globalThis, "_avtCameraCenter", { configurable: true, writable: true, value: _avtCameraCenter });
+Object.defineProperty(globalThis, "_avtCameraUpdate", { configurable: true, writable: true, value: _avtCameraUpdate });
+Object.defineProperty(globalThis, "_avtCameraFocarEntidades", { configurable: true, writable: true, value: _avtCameraFocarEntidades });
+Object.defineProperty(globalThis, "_avtCameraUpdateCentralizada", { configurable: true, writable: true, value: _avtCameraUpdateCentralizada });
+Object.defineProperty(globalThis, "_avtRenderLoop", { configurable: true, writable: true, value: _avtRenderLoop });
+Object.defineProperty(globalThis, "_avtGridStyle", { configurable: true, writable: true, value: _avtGridStyle });
+Object.defineProperty(globalThis, "_avtObjImg", { configurable: true, writable: true, value: _avtObjImg });
+Object.defineProperty(globalThis, "_avtRenderFrame", { configurable: true, writable: true, value: _avtRenderFrame });
+Object.defineProperty(globalThis, "_avtRenderMinimap", { configurable: true, writable: true, value: _avtRenderMinimap });
+Object.defineProperty(globalThis, "_avtRenderEffectCountersOverlay", { configurable: true, writable: true, value: _avtRenderEffectCountersOverlay });
+Object.defineProperty(globalThis, "_avtAtualizarPosRollInimigos", { configurable: true, writable: true, value: _avtAtualizarPosRollInimigos });
+Object.defineProperty(globalThis, "_avtMostrarRollInimigo", { configurable: true, writable: true, value: _avtMostrarRollInimigo });
+Object.defineProperty(globalThis, "_avtCarregarTodasAparencias", { configurable: true, writable: true, value: _avtCarregarTodasAparencias });
+Object.defineProperty(globalThis, "_avtCarregarAparencia", { configurable: true, writable: true, value: _avtCarregarAparencia });
+Object.defineProperty(globalThis, "_avtCarregarTopdownIa", { configurable: true, writable: true, value: _avtCarregarTopdownIa });
+Object.defineProperty(globalThis, "_avtSetEntState", { configurable: true, writable: true, value: _avtSetEntState });
+Object.defineProperty(globalThis, "_avtAnimAtualizar", { configurable: true, writable: true, value: _avtAnimAtualizar });
+Object.defineProperty(globalThis, "_avtInterp", { configurable: true, writable: true, value: _avtInterp });
+Object.defineProperty(globalThis, "_avtFrameTransform", { configurable: true, writable: true, value: _avtFrameTransform });
+Object.defineProperty(globalThis, "_avtDesenharTopdownIa", { configurable: true, writable: true, value: _avtDesenharTopdownIa });
+Object.defineProperty(globalThis, "_avtIsoFacing", { configurable: true, writable: true, value: _avtIsoFacing });
+Object.defineProperty(globalThis, "_avtDesenharIsoIa", { configurable: true, writable: true, value: _avtDesenharIsoIa });
+Object.defineProperty(globalThis, "_avtDesenharAparencia", { configurable: true, writable: true, value: _avtDesenharAparencia });
+Object.defineProperty(globalThis, "_avtGetVelocidadeMovimento", { configurable: true, writable: true, value: _avtGetVelocidadeMovimento });
+Object.defineProperty(globalThis, "_avtPathfindSimples", { configurable: true, writable: true, value: _avtPathfindSimples });
+Object.defineProperty(globalThis, "_avtCorMago", { configurable: true, writable: true, value: _avtCorMago });
+Object.defineProperty(globalThis, "_avtAnimacaoPlaceholder", { configurable: true, writable: true, value: _avtAnimacaoPlaceholder });
+Object.defineProperty(globalThis, "_avtEntViva", { configurable: true, writable: true, value: _avtEntViva });
+Object.defineProperty(globalThis, "_avtElPosicaoCanvas", { configurable: true, writable: true, value: _avtElPosicaoCanvas });
+Object.defineProperty(globalThis, "_avtDadoSvg", { configurable: true, writable: true, value: _avtDadoSvg });
+Object.defineProperty(globalThis, "_avtMostrarDadosAcimaDaHeadCompleto", { configurable: true, writable: true, value: _avtMostrarDadosAcimaDaHeadCompleto });
+Object.defineProperty(globalThis, "_avtMostrarDanoAbaixoHp", { configurable: true, writable: true, value: _avtMostrarDanoAbaixoHp });
+Object.defineProperty(globalThis, "_avtMostrarD20AbaixoDaHead", { configurable: true, writable: true, value: _avtMostrarD20AbaixoDaHead });
+Object.defineProperty(globalThis, "_avtMostrarDanoAcimaDaHead", { configurable: true, writable: true, value: _avtMostrarDanoAcimaDaHead });
+Object.defineProperty(globalThis, "_avtMostrarCuraAcimaDaHead", { configurable: true, writable: true, value: _avtMostrarCuraAcimaDaHead });
+Object.defineProperty(globalThis, "_avtMostrarDotDrip", { configurable: true, writable: true, value: _avtMostrarDotDrip });
 Object.defineProperty(globalThis, "AVT_SLOT_MACHINE_MS", { configurable: true, get: () => AVT_SLOT_MACHINE_MS });
-Object.defineProperty(globalThis, "_avtGetOrCreateRollHud", { configurable: true, get: () => _avtGetOrCreateRollHud, set: (__v) => { _avtGetOrCreateRollHud = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarRollCenter", { configurable: true, get: () => _avtMostrarRollCenter, set: (__v) => { _avtMostrarRollCenter = __v; } });
-Object.defineProperty(globalThis, "_avtAtivarModoAlvo", { configurable: true, get: () => _avtAtivarModoAlvo, set: (__v) => { _avtAtivarModoAlvo = __v; } });
-Object.defineProperty(globalThis, "_avtLimparModoAlvo", { configurable: true, get: () => _avtLimparModoAlvo, set: (__v) => { _avtLimparModoAlvo = __v; } });
-Object.defineProperty(globalThis, "_avtAtivarIndicadorTeleporte", { configurable: true, get: () => _avtAtivarIndicadorTeleporte, set: (__v) => { _avtAtivarIndicadorTeleporte = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarBotaoRolar", { configurable: true, get: () => _avtMostrarBotaoRolar, set: (__v) => { _avtMostrarBotaoRolar = __v; } });
-Object.defineProperty(globalThis, "_avtEsconderBotaoRolar", { configurable: true, get: () => _avtEsconderBotaoRolar, set: (__v) => { _avtEsconderBotaoRolar = __v; } });
-Object.defineProperty(globalThis, "_avtAtualizarPosBotaoRolar", { configurable: true, get: () => _avtAtualizarPosBotaoRolar, set: (__v) => { _avtAtualizarPosBotaoRolar = __v; } });
-Object.defineProperty(globalThis, "_avtNpcPatrulharFrame", { configurable: true, get: () => _avtNpcPatrulharFrame, set: (__v) => { _avtNpcPatrulharFrame = __v; } });
-Object.defineProperty(globalThis, "_avtRolarDados", { configurable: true, get: () => _avtRolarDados, set: (__v) => { _avtRolarDados = __v; } });
-Object.defineProperty(globalThis, "_avtCelulaOcupada", { configurable: true, get: () => _avtCelulaOcupada, set: (__v) => { _avtCelulaOcupada = __v; } });
-Object.defineProperty(globalThis, "_avtBFS", { configurable: true, get: () => _avtBFS, set: (__v) => { _avtBFS = __v; } });
-Object.defineProperty(globalThis, "_avtCanvasClick", { configurable: true, get: () => _avtCanvasClick, set: (__v) => { _avtCanvasClick = __v; } });
-Object.defineProperty(globalThis, "_avtCanvasDblClick", { configurable: true, get: () => _avtCanvasDblClick, set: (__v) => { _avtCanvasDblClick = __v; } });
-Object.defineProperty(globalThis, "_avtCanvasKey", { configurable: true, get: () => _avtCanvasKey, set: (__v) => { _avtCanvasKey = __v; } });
-Object.defineProperty(globalThis, "_avtPcCiclarAlvo", { configurable: true, get: () => _avtPcCiclarAlvo, set: (__v) => { _avtPcCiclarAlvo = __v; } });
-Object.defineProperty(globalThis, "_avtNumpadDispararSkill", { configurable: true, get: () => _avtNumpadDispararSkill, set: (__v) => { _avtNumpadDispararSkill = __v; } });
-Object.defineProperty(globalThis, "_avtDpadControle", { configurable: true, get: () => _avtDpadControle, set: (__v) => { _avtDpadControle = __v; } });
-Object.defineProperty(globalThis, "_avtPresencaTs", { configurable: true, get: () => _avtPresencaTs, set: (__v) => { _avtPresencaTs = __v; } });
-Object.defineProperty(globalThis, "_avtPersonagemCombateAtivo", { configurable: true, get: () => _avtPersonagemCombateAtivo, set: (__v) => { _avtPersonagemCombateAtivo = __v; } });
-Object.defineProperty(globalThis, "_avtJogadorEstaOnline", { configurable: true, get: () => _avtJogadorEstaOnline, set: (__v) => { _avtJogadorEstaOnline = __v; } });
-Object.defineProperty(globalThis, "_avtAtualizarVisibilidadeOffline", { configurable: true, get: () => _avtAtualizarVisibilidadeOffline, set: (__v) => { _avtAtualizarVisibilidadeOffline = __v; } });
-Object.defineProperty(globalThis, "_avtRenderBannerPausa", { configurable: true, get: () => _avtRenderBannerPausa, set: (__v) => { _avtRenderBannerPausa = __v; } });
-Object.defineProperty(globalThis, "_avtVerificarInatividade", { configurable: true, get: () => _avtVerificarInatividade, set: (__v) => { _avtVerificarInatividade = __v; } });
-Object.defineProperty(globalThis, "_avtMeuJogador", { configurable: true, get: () => _avtMeuJogador, set: (__v) => { _avtMeuJogador = __v; } });
+Object.defineProperty(globalThis, "_avtGetOrCreateRollHud", { configurable: true, writable: true, value: _avtGetOrCreateRollHud });
+Object.defineProperty(globalThis, "_avtMostrarRollCenter", { configurable: true, writable: true, value: _avtMostrarRollCenter });
+Object.defineProperty(globalThis, "_avtAtivarModoAlvo", { configurable: true, writable: true, value: _avtAtivarModoAlvo });
+Object.defineProperty(globalThis, "_avtLimparModoAlvo", { configurable: true, writable: true, value: _avtLimparModoAlvo });
+Object.defineProperty(globalThis, "_avtAtivarIndicadorTeleporte", { configurable: true, writable: true, value: _avtAtivarIndicadorTeleporte });
+Object.defineProperty(globalThis, "_avtMostrarBotaoRolar", { configurable: true, writable: true, value: _avtMostrarBotaoRolar });
+Object.defineProperty(globalThis, "_avtEsconderBotaoRolar", { configurable: true, writable: true, value: _avtEsconderBotaoRolar });
+Object.defineProperty(globalThis, "_avtAtualizarPosBotaoRolar", { configurable: true, writable: true, value: _avtAtualizarPosBotaoRolar });
+Object.defineProperty(globalThis, "_avtNpcPatrulharFrame", { configurable: true, writable: true, value: _avtNpcPatrulharFrame });
+Object.defineProperty(globalThis, "_avtRolarDados", { configurable: true, writable: true, value: _avtRolarDados });
+Object.defineProperty(globalThis, "_avtCelulaOcupada", { configurable: true, writable: true, value: _avtCelulaOcupada });
+Object.defineProperty(globalThis, "_avtBFS", { configurable: true, writable: true, value: _avtBFS });
+Object.defineProperty(globalThis, "_avtCanvasClick", { configurable: true, writable: true, value: _avtCanvasClick });
+Object.defineProperty(globalThis, "_avtCanvasDblClick", { configurable: true, writable: true, value: _avtCanvasDblClick });
+Object.defineProperty(globalThis, "_avtCanvasKey", { configurable: true, writable: true, value: _avtCanvasKey });
+Object.defineProperty(globalThis, "_avtPcCiclarAlvo", { configurable: true, writable: true, value: _avtPcCiclarAlvo });
+Object.defineProperty(globalThis, "_avtNumpadDispararSkill", { configurable: true, writable: true, value: _avtNumpadDispararSkill });
+Object.defineProperty(globalThis, "_avtDpadControle", { configurable: true, writable: true, value: _avtDpadControle });
+Object.defineProperty(globalThis, "_avtPresencaTs", { configurable: true, writable: true, value: _avtPresencaTs });
+Object.defineProperty(globalThis, "_avtPersonagemCombateAtivo", { configurable: true, writable: true, value: _avtPersonagemCombateAtivo });
+Object.defineProperty(globalThis, "_avtJogadorEstaOnline", { configurable: true, writable: true, value: _avtJogadorEstaOnline });
+Object.defineProperty(globalThis, "_avtAtualizarVisibilidadeOffline", { configurable: true, writable: true, value: _avtAtualizarVisibilidadeOffline });
+Object.defineProperty(globalThis, "_avtRenderBannerPausa", { configurable: true, writable: true, value: _avtRenderBannerPausa });
+Object.defineProperty(globalThis, "_avtVerificarInatividade", { configurable: true, writable: true, value: _avtVerificarInatividade });
+Object.defineProperty(globalThis, "_avtMeuJogador", { configurable: true, writable: true, value: _avtMeuJogador });
 Object.defineProperty(globalThis, "AVT_SFX_AVENTURA_MULT", { configurable: true, get: () => AVT_SFX_AVENTURA_MULT });
 Object.defineProperty(globalThis, "AVT_SFX_DIST_MAX", { configurable: true, get: () => AVT_SFX_DIST_MAX });
-Object.defineProperty(globalThis, "_avtSfxOuvinte", { configurable: true, get: () => _avtSfxOuvinte, set: (__v) => { _avtSfxOuvinte = __v; } });
-Object.defineProperty(globalThis, "_avtSfxVolDist", { configurable: true, get: () => _avtSfxVolDist, set: (__v) => { _avtSfxVolDist = __v; } });
-Object.defineProperty(globalThis, "_avtMinhaFase", { configurable: true, get: () => _avtMinhaFase, set: (__v) => { _avtMinhaFase = __v; } });
-Object.defineProperty(globalThis, "_avtEntidadeControlada", { configurable: true, get: () => _avtEntidadeControlada, set: (__v) => { _avtEntidadeControlada = __v; } });
-Object.defineProperty(globalThis, "_avtMoverJogador", { configurable: true, get: () => _avtMoverJogador, set: (__v) => { _avtMoverJogador = __v; } });
-Object.defineProperty(globalThis, "_avtCheckEntradaCombateAtivo", { configurable: true, get: () => _avtCheckEntradaCombateAtivo, set: (__v) => { _avtCheckEntradaCombateAtivo = __v; } });
-Object.defineProperty(globalThis, "_avtDefaultAtaqueBasico", { configurable: true, get: () => _avtDefaultAtaqueBasico, set: (__v) => { _avtDefaultAtaqueBasico = __v; } });
-Object.defineProperty(globalThis, "_avtSkillSinteticaAtaqueBasico", { configurable: true, get: () => _avtSkillSinteticaAtaqueBasico, set: (__v) => { _avtSkillSinteticaAtaqueBasico = __v; } });
-Object.defineProperty(globalThis, "_avtEfeitoVaiParaUsuario", { configurable: true, get: () => _avtEfeitoVaiParaUsuario, set: (__v) => { _avtEfeitoVaiParaUsuario = __v; } });
-Object.defineProperty(globalThis, "_avtAtaqueBasicoBuffs", { configurable: true, get: () => _avtAtaqueBasicoBuffs, set: (__v) => { _avtAtaqueBasicoBuffs = __v; } });
-Object.defineProperty(globalThis, "_avtAlcanceBasicoJogador", { configurable: true, get: () => _avtAlcanceBasicoJogador, set: (__v) => { _avtAlcanceBasicoJogador = __v; } });
-Object.defineProperty(globalThis, "_avtAlcanceAlvoJogador", { configurable: true, get: () => _avtAlcanceAlvoJogador, set: (__v) => { _avtAlcanceAlvoJogador = __v; } });
-Object.defineProperty(globalThis, "_avtAlcanceBasicoNpc", { configurable: true, get: () => _avtAlcanceBasicoNpc, set: (__v) => { _avtAlcanceBasicoNpc = __v; } });
-Object.defineProperty(globalThis, "_avtAtaqueBasicoEfetivo", { configurable: true, get: () => _avtAtaqueBasicoEfetivo, set: (__v) => { _avtAtaqueBasicoEfetivo = __v; } });
-Object.defineProperty(globalThis, "_avtVerificarAutoAtaqueBasico", { configurable: true, get: () => _avtVerificarAutoAtaqueBasico, set: (__v) => { _avtVerificarAutoAtaqueBasico = __v; } });
-Object.defineProperty(globalThis, "_avtMaxAlcanceJogador", { configurable: true, get: () => _avtMaxAlcanceJogador, set: (__v) => { _avtMaxAlcanceJogador = __v; } });
-Object.defineProperty(globalThis, "_avtCheckPrimeiroAtaque", { configurable: true, get: () => _avtCheckPrimeiroAtaque, set: (__v) => { _avtCheckPrimeiroAtaque = __v; } });
-Object.defineProperty(globalThis, "_avtEnquadrarAlvosCamera", { configurable: true, get: () => _avtEnquadrarAlvosCamera, set: (__v) => { _avtEnquadrarAlvosCamera = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarPrimeiroAtaqueModal", { configurable: true, get: () => _avtMostrarPrimeiroAtaqueModal, set: (__v) => { _avtMostrarPrimeiroAtaqueModal = __v; } });
-Object.defineProperty(globalThis, "_avtFecharPrimeiroAtaqueModal", { configurable: true, get: () => _avtFecharPrimeiroAtaqueModal, set: (__v) => { _avtFecharPrimeiroAtaqueModal = __v; } });
-Object.defineProperty(globalThis, "_avtPrimeiroAtaqueSelecionarSkill", { configurable: true, get: () => _avtPrimeiroAtaqueSelecionarSkill, set: (__v) => { _avtPrimeiroAtaqueSelecionarSkill = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarListaAliadosParaSkillOoc", { configurable: true, get: () => _avtMostrarListaAliadosParaSkillOoc, set: (__v) => { _avtMostrarListaAliadosParaSkillOoc = __v; } });
-Object.defineProperty(globalThis, "_avtAplicarSkillAliadoOoc", { configurable: true, get: () => _avtAplicarSkillAliadoOoc, set: (__v) => { _avtAplicarSkillAliadoOoc = __v; } });
-Object.defineProperty(globalThis, "_avtAtivarModoAlvoPrimeiroAtaque", { configurable: true, get: () => _avtAtivarModoAlvoPrimeiroAtaque, set: (__v) => { _avtAtivarModoAlvoPrimeiroAtaque = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarBotaoRolarPerseguicaoMobile", { configurable: true, get: () => _avtMostrarBotaoRolarPerseguicaoMobile, set: (__v) => { _avtMostrarBotaoRolarPerseguicaoMobile = __v; } });
-Object.defineProperty(globalThis, "_avtRolarDadosPrimAtaqueMobile", { configurable: true, get: () => _avtRolarDadosPrimAtaqueMobile, set: (__v) => { _avtRolarDadosPrimAtaqueMobile = __v; } });
-Object.defineProperty(globalThis, "_avtVerificarAlvoAindaNoRangeMobile", { configurable: true, get: () => _avtVerificarAlvoAindaNoRangeMobile, set: (__v) => { _avtVerificarAlvoAindaNoRangeMobile = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarListaAlvosPrimeiroAtaque", { configurable: true, get: () => _avtMostrarListaAlvosPrimeiroAtaque, set: (__v) => { _avtMostrarListaAlvosPrimeiroAtaque = __v; } });
-Object.defineProperty(globalThis, "_avtSelecionarAlvoPrimeiroAtaque", { configurable: true, get: () => _avtSelecionarAlvoPrimeiroAtaque, set: (__v) => { _avtSelecionarAlvoPrimeiroAtaque = __v; } });
-Object.defineProperty(globalThis, "_avtExecutarPrimeiroAtaqueCore", { configurable: true, get: () => _avtExecutarPrimeiroAtaqueCore, set: (__v) => { _avtExecutarPrimeiroAtaqueCore = __v; } });
-Object.defineProperty(globalThis, "_avtExecutarPrimeiroAtaque", { configurable: true, get: () => _avtExecutarPrimeiroAtaque, set: (__v) => { _avtExecutarPrimeiroAtaque = __v; } });
-Object.defineProperty(globalThis, "avtReceberPrimeiroAtaque", { configurable: true, get: () => avtReceberPrimeiroAtaque, set: (__v) => { avtReceberPrimeiroAtaque = __v; } });
-Object.defineProperty(globalThis, "_avtCheckProximidadeInimigos", { configurable: true, get: () => _avtCheckProximidadeInimigos, set: (__v) => { _avtCheckProximidadeInimigos = __v; } });
-Object.defineProperty(globalThis, "_avtAtualizarPaciencias", { configurable: true, get: () => _avtAtualizarPaciencias, set: (__v) => { _avtAtualizarPaciencias = __v; } });
-Object.defineProperty(globalThis, "_avtRolarPacienciaNpc", { configurable: true, get: () => _avtRolarPacienciaNpc, set: (__v) => { _avtRolarPacienciaNpc = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarPacienciaConfig", { configurable: true, get: () => _avtSalvarPacienciaConfig, set: (__v) => { _avtSalvarPacienciaConfig = __v; } });
-Object.defineProperty(globalThis, "_avtGetVelocidadePerseguicao", { configurable: true, get: () => _avtGetVelocidadePerseguicao, set: (__v) => { _avtGetVelocidadePerseguicao = __v; } });
-Object.defineProperty(globalThis, "_avtGetVelocidadePatrulha", { configurable: true, get: () => _avtGetVelocidadePatrulha, set: (__v) => { _avtGetVelocidadePatrulha = __v; } });
-Object.defineProperty(globalThis, "_avtGetVelocidadeCorridaMs", { configurable: true, get: () => _avtGetVelocidadeCorridaMs, set: (__v) => { _avtGetVelocidadeCorridaMs = __v; } });
-Object.defineProperty(globalThis, "_avtGetDestrezaVelPct", { configurable: true, get: () => _avtGetDestrezaVelPct, set: (__v) => { _avtGetDestrezaVelPct = __v; } });
-Object.defineProperty(globalThis, "_avtGetVelocidadePerseguicaoNpc", { configurable: true, get: () => _avtGetVelocidadePerseguicaoNpc, set: (__v) => { _avtGetVelocidadePerseguicaoNpc = __v; } });
-Object.defineProperty(globalThis, "_avtGetSecsPerTurno", { configurable: true, get: () => _avtGetSecsPerTurno, set: (__v) => { _avtGetSecsPerTurno = __v; } });
-Object.defineProperty(globalThis, "_avtGetRaioConviteAliado", { configurable: true, get: () => _avtGetRaioConviteAliado, set: (__v) => { _avtGetRaioConviteAliado = __v; } });
-Object.defineProperty(globalThis, "_avtGetRangeAceitarCombate", { configurable: true, get: () => _avtGetRangeAceitarCombate, set: (__v) => { _avtGetRangeAceitarCombate = __v; } });
-Object.defineProperty(globalThis, "_avtGetEfeitoCooldownMs", { configurable: true, get: () => _avtGetEfeitoCooldownMs, set: (__v) => { _avtGetEfeitoCooldownMs = __v; } });
-Object.defineProperty(globalThis, "_avtGetPerseguicaoDesistirAposMs", { configurable: true, get: () => _avtGetPerseguicaoDesistirAposMs, set: (__v) => { _avtGetPerseguicaoDesistirAposMs = __v; } });
-Object.defineProperty(globalThis, "_avtGetPerseguicaoDesistirChance", { configurable: true, get: () => _avtGetPerseguicaoDesistirChance, set: (__v) => { _avtGetPerseguicaoDesistirChance = __v; } });
-Object.defineProperty(globalThis, "_avtGetPerseguicaoDesistirIntervaloMs", { configurable: true, get: () => _avtGetPerseguicaoDesistirIntervaloMs, set: (__v) => { _avtGetPerseguicaoDesistirIntervaloMs = __v; } });
-Object.defineProperty(globalThis, "_avtGetAtaqueBasicoCooldown", { configurable: true, get: () => _avtGetAtaqueBasicoCooldown, set: (__v) => { _avtGetAtaqueBasicoCooldown = __v; } });
-Object.defineProperty(globalThis, "_avtIniciarPerseguicao", { configurable: true, get: () => _avtIniciarPerseguicao, set: (__v) => { _avtIniciarPerseguicao = __v; } });
-Object.defineProperty(globalThis, "_avtCancelarPerseguicao", { configurable: true, get: () => _avtCancelarPerseguicao, set: (__v) => { _avtCancelarPerseguicao = __v; } });
-Object.defineProperty(globalThis, "_avtInimigoReageADominado", { configurable: true, get: () => _avtInimigoReageADominado, set: (__v) => { _avtInimigoReageADominado = __v; } });
-Object.defineProperty(globalThis, "_avtAtualizarPerseguicoes", { configurable: true, get: () => _avtAtualizarPerseguicoes, set: (__v) => { _avtAtualizarPerseguicoes = __v; } });
-Object.defineProperty(globalThis, "_avtAtualizarDominados", { configurable: true, get: () => _avtAtualizarDominados, set: (__v) => { _avtAtualizarDominados = __v; } });
-Object.defineProperty(globalThis, "_avtIniciarAnimPersistente", { configurable: true, get: () => _avtIniciarAnimPersistente, set: (__v) => { _avtIniciarAnimPersistente = __v; } });
-Object.defineProperty(globalThis, "_avtPararAnimPersistente", { configurable: true, get: () => _avtPararAnimPersistente, set: (__v) => { _avtPararAnimPersistente = __v; } });
-Object.defineProperty(globalThis, "_avtTickEfeitosOOC", { configurable: true, get: () => _avtTickEfeitosOOC, set: (__v) => { _avtTickEfeitosOOC = __v; } });
-Object.defineProperty(globalThis, "_avtPerseguicaoAtaqueNpc", { configurable: true, get: () => _avtPerseguicaoAtaqueNpc, set: (__v) => { _avtPerseguicaoAtaqueNpc = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarBannerAceitarCombate", { configurable: true, get: () => _avtMostrarBannerAceitarCombate, set: (__v) => { _avtMostrarBannerAceitarCombate = __v; } });
-Object.defineProperty(globalThis, "_avtAtualizarBannerAceitarCombate", { configurable: true, get: () => _avtAtualizarBannerAceitarCombate, set: (__v) => { _avtAtualizarBannerAceitarCombate = __v; } });
-Object.defineProperty(globalThis, "_avtAceitarCombate", { configurable: true, get: () => _avtAceitarCombate, set: (__v) => { _avtAceitarCombate = __v; } });
-Object.defineProperty(globalThis, "_avtConvidarAliadosProximos", { configurable: true, get: () => _avtConvidarAliadosProximos, set: (__v) => { _avtConvidarAliadosProximos = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarConviteCombate", { configurable: true, get: () => _avtMostrarConviteCombate, set: (__v) => { _avtMostrarConviteCombate = __v; } });
-Object.defineProperty(globalThis, "_avtAceitarConviteCombate", { configurable: true, get: () => _avtAceitarConviteCombate, set: (__v) => { _avtAceitarConviteCombate = __v; } });
+Object.defineProperty(globalThis, "_avtSfxOuvinte", { configurable: true, writable: true, value: _avtSfxOuvinte });
+Object.defineProperty(globalThis, "_avtSfxVolDist", { configurable: true, writable: true, value: _avtSfxVolDist });
+Object.defineProperty(globalThis, "_avtMinhaFase", { configurable: true, writable: true, value: _avtMinhaFase });
+Object.defineProperty(globalThis, "_avtEntidadeControlada", { configurable: true, writable: true, value: _avtEntidadeControlada });
+Object.defineProperty(globalThis, "_avtMoverJogador", { configurable: true, writable: true, value: _avtMoverJogador });
+Object.defineProperty(globalThis, "_avtCheckEntradaCombateAtivo", { configurable: true, writable: true, value: _avtCheckEntradaCombateAtivo });
+Object.defineProperty(globalThis, "_avtDefaultAtaqueBasico", { configurable: true, writable: true, value: _avtDefaultAtaqueBasico });
+Object.defineProperty(globalThis, "_avtSkillSinteticaAtaqueBasico", { configurable: true, writable: true, value: _avtSkillSinteticaAtaqueBasico });
+Object.defineProperty(globalThis, "_avtEfeitoVaiParaUsuario", { configurable: true, writable: true, value: _avtEfeitoVaiParaUsuario });
+Object.defineProperty(globalThis, "_avtAtaqueBasicoBuffs", { configurable: true, writable: true, value: _avtAtaqueBasicoBuffs });
+Object.defineProperty(globalThis, "_avtAlcanceBasicoJogador", { configurable: true, writable: true, value: _avtAlcanceBasicoJogador });
+Object.defineProperty(globalThis, "_avtAlcanceAlvoJogador", { configurable: true, writable: true, value: _avtAlcanceAlvoJogador });
+Object.defineProperty(globalThis, "_avtAlcanceBasicoNpc", { configurable: true, writable: true, value: _avtAlcanceBasicoNpc });
+Object.defineProperty(globalThis, "_avtAtaqueBasicoEfetivo", { configurable: true, writable: true, value: _avtAtaqueBasicoEfetivo });
+Object.defineProperty(globalThis, "_avtVerificarAutoAtaqueBasico", { configurable: true, writable: true, value: _avtVerificarAutoAtaqueBasico });
+Object.defineProperty(globalThis, "_avtMaxAlcanceJogador", { configurable: true, writable: true, value: _avtMaxAlcanceJogador });
+Object.defineProperty(globalThis, "_avtCheckPrimeiroAtaque", { configurable: true, writable: true, value: _avtCheckPrimeiroAtaque });
+Object.defineProperty(globalThis, "_avtEnquadrarAlvosCamera", { configurable: true, writable: true, value: _avtEnquadrarAlvosCamera });
+Object.defineProperty(globalThis, "_avtMostrarPrimeiroAtaqueModal", { configurable: true, writable: true, value: _avtMostrarPrimeiroAtaqueModal });
+Object.defineProperty(globalThis, "_avtFecharPrimeiroAtaqueModal", { configurable: true, writable: true, value: _avtFecharPrimeiroAtaqueModal });
+Object.defineProperty(globalThis, "_avtPrimeiroAtaqueSelecionarSkill", { configurable: true, writable: true, value: _avtPrimeiroAtaqueSelecionarSkill });
+Object.defineProperty(globalThis, "_avtMostrarListaAliadosParaSkillOoc", { configurable: true, writable: true, value: _avtMostrarListaAliadosParaSkillOoc });
+Object.defineProperty(globalThis, "_avtAplicarSkillAliadoOoc", { configurable: true, writable: true, value: _avtAplicarSkillAliadoOoc });
+Object.defineProperty(globalThis, "_avtAtivarModoAlvoPrimeiroAtaque", { configurable: true, writable: true, value: _avtAtivarModoAlvoPrimeiroAtaque });
+Object.defineProperty(globalThis, "_avtMostrarBotaoRolarPerseguicaoMobile", { configurable: true, writable: true, value: _avtMostrarBotaoRolarPerseguicaoMobile });
+Object.defineProperty(globalThis, "_avtRolarDadosPrimAtaqueMobile", { configurable: true, writable: true, value: _avtRolarDadosPrimAtaqueMobile });
+Object.defineProperty(globalThis, "_avtVerificarAlvoAindaNoRangeMobile", { configurable: true, writable: true, value: _avtVerificarAlvoAindaNoRangeMobile });
+Object.defineProperty(globalThis, "_avtMostrarListaAlvosPrimeiroAtaque", { configurable: true, writable: true, value: _avtMostrarListaAlvosPrimeiroAtaque });
+Object.defineProperty(globalThis, "_avtSelecionarAlvoPrimeiroAtaque", { configurable: true, writable: true, value: _avtSelecionarAlvoPrimeiroAtaque });
+Object.defineProperty(globalThis, "_avtExecutarPrimeiroAtaqueCore", { configurable: true, writable: true, value: _avtExecutarPrimeiroAtaqueCore });
+Object.defineProperty(globalThis, "_avtExecutarPrimeiroAtaque", { configurable: true, writable: true, value: _avtExecutarPrimeiroAtaque });
+Object.defineProperty(globalThis, "avtReceberPrimeiroAtaque", { configurable: true, writable: true, value: avtReceberPrimeiroAtaque });
+Object.defineProperty(globalThis, "_avtCheckProximidadeInimigos", { configurable: true, writable: true, value: _avtCheckProximidadeInimigos });
+Object.defineProperty(globalThis, "_avtAtualizarPaciencias", { configurable: true, writable: true, value: _avtAtualizarPaciencias });
+Object.defineProperty(globalThis, "_avtRolarPacienciaNpc", { configurable: true, writable: true, value: _avtRolarPacienciaNpc });
+Object.defineProperty(globalThis, "_avtSalvarPacienciaConfig", { configurable: true, writable: true, value: _avtSalvarPacienciaConfig });
+Object.defineProperty(globalThis, "_avtGetVelocidadePerseguicao", { configurable: true, writable: true, value: _avtGetVelocidadePerseguicao });
+Object.defineProperty(globalThis, "_avtGetVelocidadePatrulha", { configurable: true, writable: true, value: _avtGetVelocidadePatrulha });
+Object.defineProperty(globalThis, "_avtGetVelocidadeCorridaMs", { configurable: true, writable: true, value: _avtGetVelocidadeCorridaMs });
+Object.defineProperty(globalThis, "_avtGetDestrezaVelPct", { configurable: true, writable: true, value: _avtGetDestrezaVelPct });
+Object.defineProperty(globalThis, "_avtGetVelocidadePerseguicaoNpc", { configurable: true, writable: true, value: _avtGetVelocidadePerseguicaoNpc });
+Object.defineProperty(globalThis, "_avtGetSecsPerTurno", { configurable: true, writable: true, value: _avtGetSecsPerTurno });
+Object.defineProperty(globalThis, "_avtGetRaioConviteAliado", { configurable: true, writable: true, value: _avtGetRaioConviteAliado });
+Object.defineProperty(globalThis, "_avtGetRangeAceitarCombate", { configurable: true, writable: true, value: _avtGetRangeAceitarCombate });
+Object.defineProperty(globalThis, "_avtGetEfeitoCooldownMs", { configurable: true, writable: true, value: _avtGetEfeitoCooldownMs });
+Object.defineProperty(globalThis, "_avtGetPerseguicaoDesistirAposMs", { configurable: true, writable: true, value: _avtGetPerseguicaoDesistirAposMs });
+Object.defineProperty(globalThis, "_avtGetPerseguicaoDesistirChance", { configurable: true, writable: true, value: _avtGetPerseguicaoDesistirChance });
+Object.defineProperty(globalThis, "_avtGetPerseguicaoDesistirIntervaloMs", { configurable: true, writable: true, value: _avtGetPerseguicaoDesistirIntervaloMs });
+Object.defineProperty(globalThis, "_avtGetAtaqueBasicoCooldown", { configurable: true, writable: true, value: _avtGetAtaqueBasicoCooldown });
+Object.defineProperty(globalThis, "_avtIniciarPerseguicao", { configurable: true, writable: true, value: _avtIniciarPerseguicao });
+Object.defineProperty(globalThis, "_avtCancelarPerseguicao", { configurable: true, writable: true, value: _avtCancelarPerseguicao });
+Object.defineProperty(globalThis, "_avtInimigoReageADominado", { configurable: true, writable: true, value: _avtInimigoReageADominado });
+Object.defineProperty(globalThis, "_avtAtualizarPerseguicoes", { configurable: true, writable: true, value: _avtAtualizarPerseguicoes });
+Object.defineProperty(globalThis, "_avtAtualizarDominados", { configurable: true, writable: true, value: _avtAtualizarDominados });
+Object.defineProperty(globalThis, "_avtIniciarAnimPersistente", { configurable: true, writable: true, value: _avtIniciarAnimPersistente });
+Object.defineProperty(globalThis, "_avtPararAnimPersistente", { configurable: true, writable: true, value: _avtPararAnimPersistente });
+Object.defineProperty(globalThis, "_avtTickEfeitosOOC", { configurable: true, writable: true, value: _avtTickEfeitosOOC });
+Object.defineProperty(globalThis, "_avtPerseguicaoAtaqueNpc", { configurable: true, writable: true, value: _avtPerseguicaoAtaqueNpc });
+Object.defineProperty(globalThis, "_avtMostrarBannerAceitarCombate", { configurable: true, writable: true, value: _avtMostrarBannerAceitarCombate });
+Object.defineProperty(globalThis, "_avtAtualizarBannerAceitarCombate", { configurable: true, writable: true, value: _avtAtualizarBannerAceitarCombate });
+Object.defineProperty(globalThis, "_avtAceitarCombate", { configurable: true, writable: true, value: _avtAceitarCombate });
+Object.defineProperty(globalThis, "_avtConvidarAliadosProximos", { configurable: true, writable: true, value: _avtConvidarAliadosProximos });
+Object.defineProperty(globalThis, "_avtMostrarConviteCombate", { configurable: true, writable: true, value: _avtMostrarConviteCombate });
+Object.defineProperty(globalThis, "_avtAceitarConviteCombate", { configurable: true, writable: true, value: _avtAceitarConviteCombate });
 Object.defineProperty(globalThis, "_avtDpadTimer", { configurable: true, get: () => _avtDpadTimer, set: (__v) => { _avtDpadTimer = __v; } });
-Object.defineProperty(globalThis, "avtDpad", { configurable: true, get: () => avtDpad, set: (__v) => { avtDpad = __v; } });
-Object.defineProperty(globalThis, "avtDpadStop", { configurable: true, get: () => avtDpadStop, set: (__v) => { avtDpadStop = __v; } });
-Object.defineProperty(globalThis, "_avtDpadDoMove", { configurable: true, get: () => _avtDpadDoMove, set: (__v) => { _avtDpadDoMove = __v; } });
-Object.defineProperty(globalThis, "_avtToggleDpad", { configurable: true, get: () => _avtToggleDpad, set: (__v) => { _avtToggleDpad = __v; } });
-Object.defineProperty(globalThis, "avtReceberMovimento", { configurable: true, get: () => avtReceberMovimento, set: (__v) => { avtReceberMovimento = __v; } });
-Object.defineProperty(globalThis, "avtReceberCombateInicio", { configurable: true, get: () => avtReceberCombateInicio, set: (__v) => { avtReceberCombateInicio = __v; } });
-Object.defineProperty(globalThis, "_avtCriarBatalhaDePayload", { configurable: true, get: () => _avtCriarBatalhaDePayload, set: (__v) => { _avtCriarBatalhaDePayload = __v; } });
-Object.defineProperty(globalThis, "_avtBroadcastBatalha", { configurable: true, get: () => _avtBroadcastBatalha, set: (__v) => { _avtBroadcastBatalha = __v; } });
-Object.defineProperty(globalThis, "avtReceberBatalhaUpdate", { configurable: true, get: () => avtReceberBatalhaUpdate, set: (__v) => { avtReceberBatalhaUpdate = __v; } });
-Object.defineProperty(globalThis, "_avtSetColisao", { configurable: true, get: () => _avtSetColisao, set: (__v) => { _avtSetColisao = __v; } });
-Object.defineProperty(globalThis, "avtReceberColisaoConfig", { configurable: true, get: () => avtReceberColisaoConfig, set: (__v) => { avtReceberColisaoConfig = __v; } });
-Object.defineProperty(globalThis, "avtReceberEntidadeNova", { configurable: true, get: () => avtReceberEntidadeNova, set: (__v) => { avtReceberEntidadeNova = __v; } });
-Object.defineProperty(globalThis, "_avtBroadcastFimBatalha", { configurable: true, get: () => _avtBroadcastFimBatalha, set: (__v) => { _avtBroadcastFimBatalha = __v; } });
-Object.defineProperty(globalThis, "avtReceberFimBatalha", { configurable: true, get: () => avtReceberFimBatalha, set: (__v) => { avtReceberFimBatalha = __v; } });
-Object.defineProperty(globalThis, "_avtBroadcastJoinBatalha", { configurable: true, get: () => _avtBroadcastJoinBatalha, set: (__v) => { _avtBroadcastJoinBatalha = __v; } });
-Object.defineProperty(globalThis, "avtReceberJoinBatalha", { configurable: true, get: () => avtReceberJoinBatalha, set: (__v) => { avtReceberJoinBatalha = __v; } });
-Object.defineProperty(globalThis, "_avtBroadcastNpcMorreu", { configurable: true, get: () => _avtBroadcastNpcMorreu, set: (__v) => { _avtBroadcastNpcMorreu = __v; } });
-Object.defineProperty(globalThis, "avtReceberNpcMorreu", { configurable: true, get: () => avtReceberNpcMorreu, set: (__v) => { avtReceberNpcMorreu = __v; } });
-Object.defineProperty(globalThis, "_avtBroadcastNpcRespawn", { configurable: true, get: () => _avtBroadcastNpcRespawn, set: (__v) => { _avtBroadcastNpcRespawn = __v; } });
-Object.defineProperty(globalThis, "avtReceberNpcRespawn", { configurable: true, get: () => avtReceberNpcRespawn, set: (__v) => { avtReceberNpcRespawn = __v; } });
-Object.defineProperty(globalThis, "avtReceberNpcPerseguindo", { configurable: true, get: () => avtReceberNpcPerseguindo, set: (__v) => { avtReceberNpcPerseguindo = __v; } });
-Object.defineProperty(globalThis, "avtReceberConviteCombate", { configurable: true, get: () => avtReceberConviteCombate, set: (__v) => { avtReceberConviteCombate = __v; } });
-Object.defineProperty(globalThis, "_avtXpParaNivel", { configurable: true, get: () => _avtXpParaNivel, set: (__v) => { _avtXpParaNivel = __v; } });
-Object.defineProperty(globalThis, "_avtBroadcastXpGanho", { configurable: true, get: () => _avtBroadcastXpGanho, set: (__v) => { _avtBroadcastXpGanho = __v; } });
-Object.defineProperty(globalThis, "avtReceberXpGanho", { configurable: true, get: () => avtReceberXpGanho, set: (__v) => { avtReceberXpGanho = __v; } });
-Object.defineProperty(globalThis, "_avtBroadcastLevelUp", { configurable: true, get: () => _avtBroadcastLevelUp, set: (__v) => { _avtBroadcastLevelUp = __v; } });
-Object.defineProperty(globalThis, "avtReceberLevelUp", { configurable: true, get: () => avtReceberLevelUp, set: (__v) => { avtReceberLevelUp = __v; } });
-Object.defineProperty(globalThis, "_avtProcessarMorteJogador", { configurable: true, get: () => _avtProcessarMorteJogador, set: (__v) => { _avtProcessarMorteJogador = __v; } });
-Object.defineProperty(globalThis, "avtReceberJogadorMorreu", { configurable: true, get: () => avtReceberJogadorMorreu, set: (__v) => { avtReceberJogadorMorreu = __v; } });
-Object.defineProperty(globalThis, "avtReceberJogadorRessurgiu", { configurable: true, get: () => avtReceberJogadorRessurgiu, set: (__v) => { avtReceberJogadorRessurgiu = __v; } });
-Object.defineProperty(globalThis, "avtReceberJogadorVisivel", { configurable: true, get: () => avtReceberJogadorVisivel, set: (__v) => { avtReceberJogadorVisivel = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarXpFloat", { configurable: true, get: () => _avtMostrarXpFloat, set: (__v) => { _avtMostrarXpFloat = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarXpLoss", { configurable: true, get: () => _avtMostrarXpLoss, set: (__v) => { _avtMostrarXpLoss = __v; } });
-Object.defineProperty(globalThis, "_avtGetCharScreenPos", { configurable: true, get: () => _avtGetCharScreenPos, set: (__v) => { _avtGetCharScreenPos = __v; } });
-Object.defineProperty(globalThis, "_avtLevelUpParticleEffect", { configurable: true, get: () => _avtLevelUpParticleEffect, set: (__v) => { _avtLevelUpParticleEffect = __v; } });
-Object.defineProperty(globalThis, "_avtAgendarRespawnNpc", { configurable: true, get: () => _avtAgendarRespawnNpc, set: (__v) => { _avtAgendarRespawnNpc = __v; } });
-Object.defineProperty(globalThis, "avtRespawnNpc", { configurable: true, get: () => avtRespawnNpc, set: (__v) => { avtRespawnNpc = __v; } });
-Object.defineProperty(globalThis, "_avtRecarregarNpcs", { configurable: true, get: () => _avtRecarregarNpcs, set: (__v) => { _avtRecarregarNpcs = __v; } });
-Object.defineProperty(globalThis, "_avtDistribuirXpNpc", { configurable: true, get: () => _avtDistribuirXpNpc, set: (__v) => { _avtDistribuirXpNpc = __v; } });
-Object.defineProperty(globalThis, "_avtAutoLevelUp", { configurable: true, get: () => _avtAutoLevelUp, set: (__v) => { _avtAutoLevelUp = __v; } });
-Object.defineProperty(globalThis, "_avtNpcMorreu", { configurable: true, get: () => _avtNpcMorreu, set: (__v) => { _avtNpcMorreu = __v; } });
-Object.defineProperty(globalThis, "_avtNecromanteDominar", { configurable: true, get: () => _avtNecromanteDominar, set: (__v) => { _avtNecromanteDominar = __v; } });
-Object.defineProperty(globalThis, "_avtEscolherPorPeso", { configurable: true, get: () => _avtEscolherPorPeso, set: (__v) => { _avtEscolherPorPeso = __v; } });
-Object.defineProperty(globalThis, "_avtSpawnObjMapa", { configurable: true, get: () => _avtSpawnObjMapa, set: (__v) => { _avtSpawnObjMapa = __v; } });
-Object.defineProperty(globalThis, "_avtProcessarDropsNpc", { configurable: true, get: () => _avtProcessarDropsNpc, set: (__v) => { _avtProcessarDropsNpc = __v; } });
-Object.defineProperty(globalThis, "_avtGerarDropNpc", { configurable: true, get: () => _avtGerarDropNpc, set: (__v) => { _avtGerarDropNpc = __v; } });
-Object.defineProperty(globalThis, "_avtGerarOrbeNpc", { configurable: true, get: () => _avtGerarOrbeNpc, set: (__v) => { _avtGerarOrbeNpc = __v; } });
+Object.defineProperty(globalThis, "avtDpad", { configurable: true, writable: true, value: avtDpad });
+Object.defineProperty(globalThis, "avtDpadStop", { configurable: true, writable: true, value: avtDpadStop });
+Object.defineProperty(globalThis, "_avtDpadDoMove", { configurable: true, writable: true, value: _avtDpadDoMove });
+Object.defineProperty(globalThis, "_avtToggleDpad", { configurable: true, writable: true, value: _avtToggleDpad });
+Object.defineProperty(globalThis, "avtReceberMovimento", { configurable: true, writable: true, value: avtReceberMovimento });
+Object.defineProperty(globalThis, "avtReceberCombateInicio", { configurable: true, writable: true, value: avtReceberCombateInicio });
+Object.defineProperty(globalThis, "_avtCriarBatalhaDePayload", { configurable: true, writable: true, value: _avtCriarBatalhaDePayload });
+Object.defineProperty(globalThis, "_avtBroadcastBatalha", { configurable: true, writable: true, value: _avtBroadcastBatalha });
+Object.defineProperty(globalThis, "avtReceberBatalhaUpdate", { configurable: true, writable: true, value: avtReceberBatalhaUpdate });
+Object.defineProperty(globalThis, "_avtSetColisao", { configurable: true, writable: true, value: _avtSetColisao });
+Object.defineProperty(globalThis, "avtReceberColisaoConfig", { configurable: true, writable: true, value: avtReceberColisaoConfig });
+Object.defineProperty(globalThis, "avtReceberEntidadeNova", { configurable: true, writable: true, value: avtReceberEntidadeNova });
+Object.defineProperty(globalThis, "_avtBroadcastFimBatalha", { configurable: true, writable: true, value: _avtBroadcastFimBatalha });
+Object.defineProperty(globalThis, "avtReceberFimBatalha", { configurable: true, writable: true, value: avtReceberFimBatalha });
+Object.defineProperty(globalThis, "_avtBroadcastJoinBatalha", { configurable: true, writable: true, value: _avtBroadcastJoinBatalha });
+Object.defineProperty(globalThis, "avtReceberJoinBatalha", { configurable: true, writable: true, value: avtReceberJoinBatalha });
+Object.defineProperty(globalThis, "_avtBroadcastNpcMorreu", { configurable: true, writable: true, value: _avtBroadcastNpcMorreu });
+Object.defineProperty(globalThis, "avtReceberNpcMorreu", { configurable: true, writable: true, value: avtReceberNpcMorreu });
+Object.defineProperty(globalThis, "_avtBroadcastNpcRespawn", { configurable: true, writable: true, value: _avtBroadcastNpcRespawn });
+Object.defineProperty(globalThis, "avtReceberNpcRespawn", { configurable: true, writable: true, value: avtReceberNpcRespawn });
+Object.defineProperty(globalThis, "avtReceberNpcPerseguindo", { configurable: true, writable: true, value: avtReceberNpcPerseguindo });
+Object.defineProperty(globalThis, "avtReceberConviteCombate", { configurable: true, writable: true, value: avtReceberConviteCombate });
+Object.defineProperty(globalThis, "_avtXpParaNivel", { configurable: true, writable: true, value: _avtXpParaNivel });
+Object.defineProperty(globalThis, "_avtBroadcastXpGanho", { configurable: true, writable: true, value: _avtBroadcastXpGanho });
+Object.defineProperty(globalThis, "avtReceberXpGanho", { configurable: true, writable: true, value: avtReceberXpGanho });
+Object.defineProperty(globalThis, "_avtBroadcastLevelUp", { configurable: true, writable: true, value: _avtBroadcastLevelUp });
+Object.defineProperty(globalThis, "avtReceberLevelUp", { configurable: true, writable: true, value: avtReceberLevelUp });
+Object.defineProperty(globalThis, "_avtProcessarMorteJogador", { configurable: true, writable: true, value: _avtProcessarMorteJogador });
+Object.defineProperty(globalThis, "avtReceberJogadorMorreu", { configurable: true, writable: true, value: avtReceberJogadorMorreu });
+Object.defineProperty(globalThis, "avtReceberJogadorRessurgiu", { configurable: true, writable: true, value: avtReceberJogadorRessurgiu });
+Object.defineProperty(globalThis, "avtReceberJogadorVisivel", { configurable: true, writable: true, value: avtReceberJogadorVisivel });
+Object.defineProperty(globalThis, "_avtMostrarXpFloat", { configurable: true, writable: true, value: _avtMostrarXpFloat });
+Object.defineProperty(globalThis, "_avtMostrarXpLoss", { configurable: true, writable: true, value: _avtMostrarXpLoss });
+Object.defineProperty(globalThis, "_avtGetCharScreenPos", { configurable: true, writable: true, value: _avtGetCharScreenPos });
+Object.defineProperty(globalThis, "_avtLevelUpParticleEffect", { configurable: true, writable: true, value: _avtLevelUpParticleEffect });
+Object.defineProperty(globalThis, "_avtAgendarRespawnNpc", { configurable: true, writable: true, value: _avtAgendarRespawnNpc });
+Object.defineProperty(globalThis, "avtRespawnNpc", { configurable: true, writable: true, value: avtRespawnNpc });
+Object.defineProperty(globalThis, "_avtRecarregarNpcs", { configurable: true, writable: true, value: _avtRecarregarNpcs });
+Object.defineProperty(globalThis, "_avtDistribuirXpNpc", { configurable: true, writable: true, value: _avtDistribuirXpNpc });
+Object.defineProperty(globalThis, "_avtAutoLevelUp", { configurable: true, writable: true, value: _avtAutoLevelUp });
+Object.defineProperty(globalThis, "_avtNpcMorreu", { configurable: true, writable: true, value: _avtNpcMorreu });
+Object.defineProperty(globalThis, "_avtNecromanteDominar", { configurable: true, writable: true, value: _avtNecromanteDominar });
+Object.defineProperty(globalThis, "_avtEscolherPorPeso", { configurable: true, writable: true, value: _avtEscolherPorPeso });
+Object.defineProperty(globalThis, "_avtSpawnObjMapa", { configurable: true, writable: true, value: _avtSpawnObjMapa });
+Object.defineProperty(globalThis, "_avtProcessarDropsNpc", { configurable: true, writable: true, value: _avtProcessarDropsNpc });
+Object.defineProperty(globalThis, "_avtGerarDropNpc", { configurable: true, writable: true, value: _avtGerarDropNpc });
+Object.defineProperty(globalThis, "_avtGerarOrbeNpc", { configurable: true, writable: true, value: _avtGerarOrbeNpc });
 Object.defineProperty(globalThis, "_avtSavePosTimers", { configurable: true, get: () => _avtSavePosTimers, set: (__v) => { _avtSavePosTimers = __v; } });
-Object.defineProperty(globalThis, "_avtDebounceSalvarPosicao", { configurable: true, get: () => _avtDebounceSalvarPosicao, set: (__v) => { _avtDebounceSalvarPosicao = __v; } });
-Object.defineProperty(globalThis, "_avtDebounceSalvarPosicaoNpc", { configurable: true, get: () => _avtDebounceSalvarPosicaoNpc, set: (__v) => { _avtDebounceSalvarPosicaoNpc = __v; } });
-Object.defineProperty(globalThis, "_avtMinhaBatalha", { configurable: true, get: () => _avtMinhaBatalha, set: (__v) => { _avtMinhaBatalha = __v; } });
-Object.defineProperty(globalThis, "_avtBatalhaDeEnt", { configurable: true, get: () => _avtBatalhaDeEnt, set: (__v) => { _avtBatalhaDeEnt = __v; } });
-Object.defineProperty(globalThis, "_avtCheckAbandonoCombate", { configurable: true, get: () => _avtCheckAbandonoCombate, set: (__v) => { _avtCheckAbandonoCombate = __v; } });
-Object.defineProperty(globalThis, "avtCombateIniciar", { configurable: true, get: () => avtCombateIniciar, set: (__v) => { avtCombateIniciar = __v; } });
-Object.defineProperty(globalThis, "avtCombateEncerrar", { configurable: true, get: () => avtCombateEncerrar, set: (__v) => { avtCombateEncerrar = __v; } });
-Object.defineProperty(globalThis, "avtEncerrarMeuCombate", { configurable: true, get: () => avtEncerrarMeuCombate, set: (__v) => { avtEncerrarMeuCombate = __v; } });
-Object.defineProperty(globalThis, "_avtAtivo", { configurable: true, get: () => _avtAtivo, set: (__v) => { _avtAtivo = __v; } });
-Object.defineProperty(globalThis, "_avtHudMostrar", { configurable: true, get: () => _avtHudMostrar, set: (__v) => { _avtHudMostrar = __v; } });
-Object.defineProperty(globalThis, "_avtSkillOverlayGetAlvoScreenPos", { configurable: true, get: () => _avtSkillOverlayGetAlvoScreenPos, set: (__v) => { _avtSkillOverlayGetAlvoScreenPos = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarListaAlvosMobile", { configurable: true, get: () => _avtMostrarListaAlvosMobile, set: (__v) => { _avtMostrarListaAlvosMobile = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarSkillOverlay", { configurable: true, get: () => _avtMostrarSkillOverlay, set: (__v) => { _avtMostrarSkillOverlay = __v; } });
-Object.defineProperty(globalThis, "_avtSkillOverlaySel", { configurable: true, get: () => _avtSkillOverlaySel, set: (__v) => { _avtSkillOverlaySel = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarListaAlvosComSkill", { configurable: true, get: () => _avtMostrarListaAlvosComSkill, set: (__v) => { _avtMostrarListaAlvosComSkill = __v; } });
-Object.defineProperty(globalThis, "_avtSelecionarAlvoComSkill", { configurable: true, get: () => _avtSelecionarAlvoComSkill, set: (__v) => { _avtSelecionarAlvoComSkill = __v; } });
-Object.defineProperty(globalThis, "_avtSkillOverlayCancelar", { configurable: true, get: () => _avtSkillOverlayCancelar, set: (__v) => { _avtSkillOverlayCancelar = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarDiceOverlay", { configurable: true, get: () => _avtMostrarDiceOverlay, set: (__v) => { _avtMostrarDiceOverlay = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarResultadoDice", { configurable: true, get: () => _avtMostrarResultadoDice, set: (__v) => { _avtMostrarResultadoDice = __v; } });
-Object.defineProperty(globalThis, "_avtExecutarAtaque", { configurable: true, get: () => _avtExecutarAtaque, set: (__v) => { _avtExecutarAtaque = __v; } });
-Object.defineProperty(globalThis, "avtReceberSkillSelecionada", { configurable: true, get: () => avtReceberSkillSelecionada, set: (__v) => { avtReceberSkillSelecionada = __v; } });
-Object.defineProperty(globalThis, "avtReceberDadoRolado", { configurable: true, get: () => avtReceberDadoRolado, set: (__v) => { avtReceberDadoRolado = __v; } });
-Object.defineProperty(globalThis, "avtReceberDanoVisual", { configurable: true, get: () => avtReceberDanoVisual, set: (__v) => { avtReceberDanoVisual = __v; } });
-Object.defineProperty(globalThis, "avtReceberDanoVisualBatch", { configurable: true, get: () => avtReceberDanoVisualBatch, set: (__v) => { avtReceberDanoVisualBatch = __v; } });
-Object.defineProperty(globalThis, "avtReceberHpUpdate", { configurable: true, get: () => avtReceberHpUpdate, set: (__v) => { avtReceberHpUpdate = __v; } });
-Object.defineProperty(globalThis, "avtReceberRsvUpdate", { configurable: true, get: () => avtReceberRsvUpdate, set: (__v) => { avtReceberRsvUpdate = __v; } });
-Object.defineProperty(globalThis, "_avtHudUpdate", { configurable: true, get: () => _avtHudUpdate, set: (__v) => { _avtHudUpdate = __v; } });
-Object.defineProperty(globalThis, "avtHudAtacar", { configurable: true, get: () => avtHudAtacar, set: (__v) => { avtHudAtacar = __v; } });
-Object.defineProperty(globalThis, "avtHudMover", { configurable: true, get: () => avtHudMover, set: (__v) => { avtHudMover = __v; } });
-Object.defineProperty(globalThis, "avtHudPassar", { configurable: true, get: () => avtHudPassar, set: (__v) => { avtHudPassar = __v; } });
-Object.defineProperty(globalThis, "_avtTeleportarParaAlvo", { configurable: true, get: () => _avtTeleportarParaAlvo, set: (__v) => { _avtTeleportarParaAlvo = __v; } });
-Object.defineProperty(globalThis, "_avtVerificarPortaInterna", { configurable: true, get: () => _avtVerificarPortaInterna, set: (__v) => { _avtVerificarPortaInterna = __v; } });
-Object.defineProperty(globalThis, "_avtNpcTentarPorta", { configurable: true, get: () => _avtNpcTentarPorta, set: (__v) => { _avtNpcTentarPorta = __v; } });
-Object.defineProperty(globalThis, "_avtCriarAvatar", { configurable: true, get: () => _avtCriarAvatar, set: (__v) => { _avtCriarAvatar = __v; } });
-Object.defineProperty(globalThis, "_avtDestruirAvatar", { configurable: true, get: () => _avtDestruirAvatar, set: (__v) => { _avtDestruirAvatar = __v; } });
-Object.defineProperty(globalThis, "_avtProcessarStatusEffects", { configurable: true, get: () => _avtProcessarStatusEffects, set: (__v) => { _avtProcessarStatusEffects = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarListaAliadosParaSkill", { configurable: true, get: () => _avtMostrarListaAliadosParaSkill, set: (__v) => { _avtMostrarListaAliadosParaSkill = __v; } });
-Object.defineProperty(globalThis, "_avtExecutarSkillEmAliado", { configurable: true, get: () => _avtExecutarSkillEmAliado, set: (__v) => { _avtExecutarSkillEmAliado = __v; } });
-Object.defineProperty(globalThis, "_avtTurnoAvancar", { configurable: true, get: () => _avtTurnoAvancar, set: (__v) => { _avtTurnoAvancar = __v; } });
-Object.defineProperty(globalThis, "_avtGetMovimentoMax", { configurable: true, get: () => _avtGetMovimentoMax, set: (__v) => { _avtGetMovimentoMax = __v; } });
-Object.defineProperty(globalThis, "_avtNpcEscolherSkill", { configurable: true, get: () => _avtNpcEscolherSkill, set: (__v) => { _avtNpcEscolherSkill = __v; } });
-Object.defineProperty(globalThis, "_avtNpcExecutarAtaque", { configurable: true, get: () => _avtNpcExecutarAtaque, set: (__v) => { _avtNpcExecutarAtaque = __v; } });
-Object.defineProperty(globalThis, "_avtNpcPensarDelay", { configurable: true, get: () => _avtNpcPensarDelay, set: (__v) => { _avtNpcPensarDelay = __v; } });
-Object.defineProperty(globalThis, "_avtJanelaMovimentoPosDado", { configurable: true, get: () => _avtJanelaMovimentoPosDado, set: (__v) => { _avtJanelaMovimentoPosDado = __v; } });
-Object.defineProperty(globalThis, "_avtIaMovimentoPosDado", { configurable: true, get: () => _avtIaMovimentoPosDado, set: (__v) => { _avtIaMovimentoPosDado = __v; } });
+Object.defineProperty(globalThis, "_avtDebounceSalvarPosicao", { configurable: true, writable: true, value: _avtDebounceSalvarPosicao });
+Object.defineProperty(globalThis, "_avtDebounceSalvarPosicaoNpc", { configurable: true, writable: true, value: _avtDebounceSalvarPosicaoNpc });
+Object.defineProperty(globalThis, "_avtMinhaBatalha", { configurable: true, writable: true, value: _avtMinhaBatalha });
+Object.defineProperty(globalThis, "_avtBatalhaDeEnt", { configurable: true, writable: true, value: _avtBatalhaDeEnt });
+Object.defineProperty(globalThis, "_avtCheckAbandonoCombate", { configurable: true, writable: true, value: _avtCheckAbandonoCombate });
+Object.defineProperty(globalThis, "avtCombateIniciar", { configurable: true, writable: true, value: avtCombateIniciar });
+Object.defineProperty(globalThis, "avtCombateEncerrar", { configurable: true, writable: true, value: avtCombateEncerrar });
+Object.defineProperty(globalThis, "avtEncerrarMeuCombate", { configurable: true, writable: true, value: avtEncerrarMeuCombate });
+Object.defineProperty(globalThis, "_avtAtivo", { configurable: true, writable: true, value: _avtAtivo });
+Object.defineProperty(globalThis, "_avtHudMostrar", { configurable: true, writable: true, value: _avtHudMostrar });
+Object.defineProperty(globalThis, "_avtSkillOverlayGetAlvoScreenPos", { configurable: true, writable: true, value: _avtSkillOverlayGetAlvoScreenPos });
+Object.defineProperty(globalThis, "_avtMostrarListaAlvosMobile", { configurable: true, writable: true, value: _avtMostrarListaAlvosMobile });
+Object.defineProperty(globalThis, "_avtMostrarSkillOverlay", { configurable: true, writable: true, value: _avtMostrarSkillOverlay });
+Object.defineProperty(globalThis, "_avtSkillOverlaySel", { configurable: true, writable: true, value: _avtSkillOverlaySel });
+Object.defineProperty(globalThis, "_avtMostrarListaAlvosComSkill", { configurable: true, writable: true, value: _avtMostrarListaAlvosComSkill });
+Object.defineProperty(globalThis, "_avtSelecionarAlvoComSkill", { configurable: true, writable: true, value: _avtSelecionarAlvoComSkill });
+Object.defineProperty(globalThis, "_avtSkillOverlayCancelar", { configurable: true, writable: true, value: _avtSkillOverlayCancelar });
+Object.defineProperty(globalThis, "_avtMostrarDiceOverlay", { configurable: true, writable: true, value: _avtMostrarDiceOverlay });
+Object.defineProperty(globalThis, "_avtMostrarResultadoDice", { configurable: true, writable: true, value: _avtMostrarResultadoDice });
+Object.defineProperty(globalThis, "_avtExecutarAtaque", { configurable: true, writable: true, value: _avtExecutarAtaque });
+Object.defineProperty(globalThis, "avtReceberSkillSelecionada", { configurable: true, writable: true, value: avtReceberSkillSelecionada });
+Object.defineProperty(globalThis, "avtReceberDadoRolado", { configurable: true, writable: true, value: avtReceberDadoRolado });
+Object.defineProperty(globalThis, "avtReceberDanoVisual", { configurable: true, writable: true, value: avtReceberDanoVisual });
+Object.defineProperty(globalThis, "avtReceberDanoVisualBatch", { configurable: true, writable: true, value: avtReceberDanoVisualBatch });
+Object.defineProperty(globalThis, "avtReceberHpUpdate", { configurable: true, writable: true, value: avtReceberHpUpdate });
+Object.defineProperty(globalThis, "avtReceberRsvUpdate", { configurable: true, writable: true, value: avtReceberRsvUpdate });
+Object.defineProperty(globalThis, "_avtHudUpdate", { configurable: true, writable: true, value: _avtHudUpdate });
+Object.defineProperty(globalThis, "avtHudAtacar", { configurable: true, writable: true, value: avtHudAtacar });
+Object.defineProperty(globalThis, "avtHudMover", { configurable: true, writable: true, value: avtHudMover });
+Object.defineProperty(globalThis, "avtHudPassar", { configurable: true, writable: true, value: avtHudPassar });
+Object.defineProperty(globalThis, "_avtTeleportarParaAlvo", { configurable: true, writable: true, value: _avtTeleportarParaAlvo });
+Object.defineProperty(globalThis, "_avtVerificarPortaInterna", { configurable: true, writable: true, value: _avtVerificarPortaInterna });
+Object.defineProperty(globalThis, "_avtNpcTentarPorta", { configurable: true, writable: true, value: _avtNpcTentarPorta });
+Object.defineProperty(globalThis, "_avtCriarAvatar", { configurable: true, writable: true, value: _avtCriarAvatar });
+Object.defineProperty(globalThis, "_avtDestruirAvatar", { configurable: true, writable: true, value: _avtDestruirAvatar });
+Object.defineProperty(globalThis, "_avtProcessarStatusEffects", { configurable: true, writable: true, value: _avtProcessarStatusEffects });
+Object.defineProperty(globalThis, "_avtMostrarListaAliadosParaSkill", { configurable: true, writable: true, value: _avtMostrarListaAliadosParaSkill });
+Object.defineProperty(globalThis, "_avtExecutarSkillEmAliado", { configurable: true, writable: true, value: _avtExecutarSkillEmAliado });
+Object.defineProperty(globalThis, "_avtTurnoAvancar", { configurable: true, writable: true, value: _avtTurnoAvancar });
+Object.defineProperty(globalThis, "_avtGetMovimentoMax", { configurable: true, writable: true, value: _avtGetMovimentoMax });
+Object.defineProperty(globalThis, "_avtNpcEscolherSkill", { configurable: true, writable: true, value: _avtNpcEscolherSkill });
+Object.defineProperty(globalThis, "_avtNpcExecutarAtaque", { configurable: true, writable: true, value: _avtNpcExecutarAtaque });
+Object.defineProperty(globalThis, "_avtNpcPensarDelay", { configurable: true, writable: true, value: _avtNpcPensarDelay });
+Object.defineProperty(globalThis, "_avtJanelaMovimentoPosDado", { configurable: true, writable: true, value: _avtJanelaMovimentoPosDado });
+Object.defineProperty(globalThis, "_avtIaMovimentoPosDado", { configurable: true, writable: true, value: _avtIaMovimentoPosDado });
 Object.defineProperty(globalThis, "_avtHpSaveTimers", { configurable: true, get: () => _avtHpSaveTimers, set: (__v) => { _avtHpSaveTimers = __v; } });
-Object.defineProperty(globalThis, "_avtPersistirHpChar", { configurable: true, get: () => _avtPersistirHpChar, set: (__v) => { _avtPersistirHpChar = __v; } });
-Object.defineProperty(globalThis, "_avtFlushCharHpBuffer", { configurable: true, get: () => _avtFlushCharHpBuffer, set: (__v) => { _avtFlushCharHpBuffer = __v; } });
+Object.defineProperty(globalThis, "_avtPersistirHpChar", { configurable: true, writable: true, value: _avtPersistirHpChar });
+Object.defineProperty(globalThis, "_avtFlushCharHpBuffer", { configurable: true, writable: true, value: _avtFlushCharHpBuffer });
 Object.defineProperty(globalThis, "_avtEstadoInimigosTimer", { configurable: true, get: () => _avtEstadoInimigosTimer, set: (__v) => { _avtEstadoInimigosTimer = __v; } });
-Object.defineProperty(globalThis, "_avtPersistirEstadoInimigos", { configurable: true, get: () => _avtPersistirEstadoInimigos, set: (__v) => { _avtPersistirEstadoInimigos = __v; } });
-Object.defineProperty(globalThis, "_avtAplicarDanoPersistir", { configurable: true, get: () => _avtAplicarDanoPersistir, set: (__v) => { _avtAplicarDanoPersistir = __v; } });
+Object.defineProperty(globalThis, "_avtPersistirEstadoInimigos", { configurable: true, writable: true, value: _avtPersistirEstadoInimigos });
+Object.defineProperty(globalThis, "_avtAplicarDanoPersistir", { configurable: true, writable: true, value: _avtAplicarDanoPersistir });
 Object.defineProperty(globalThis, "_avtBatalhaSaveTimers", { configurable: true, get: () => _avtBatalhaSaveTimers, set: (__v) => { _avtBatalhaSaveTimers = __v; } });
-Object.defineProperty(globalThis, "_avtPersistirBatalha", { configurable: true, get: () => _avtPersistirBatalha, set: (__v) => { _avtPersistirBatalha = __v; } });
-Object.defineProperty(globalThis, "_avtRemoverBatalhaDb", { configurable: true, get: () => _avtRemoverBatalhaDb, set: (__v) => { _avtRemoverBatalhaDb = __v; } });
-Object.defineProperty(globalThis, "_avtCarregarBatalhasAtivas", { configurable: true, get: () => _avtCarregarBatalhasAtivas, set: (__v) => { _avtCarregarBatalhasAtivas = __v; } });
-Object.defineProperty(globalThis, "_avtAplicarEstadoInimigosPersistido", { configurable: true, get: () => _avtAplicarEstadoInimigosPersistido, set: (__v) => { _avtAplicarEstadoInimigosPersistido = __v; } });
-Object.defineProperty(globalThis, "avtGetFichaImg", { configurable: true, get: () => avtGetFichaImg, set: (__v) => { avtGetFichaImg = __v; } });
-Object.defineProperty(globalThis, "_avtNpcAtualizarPerseguicao", { configurable: true, get: () => _avtNpcAtualizarPerseguicao, set: (__v) => { _avtNpcAtualizarPerseguicao = __v; } });
-Object.defineProperty(globalThis, "_avtNpcMelhorDirecao", { configurable: true, get: () => _avtNpcMelhorDirecao, set: (__v) => { _avtNpcMelhorDirecao = __v; } });
-Object.defineProperty(globalThis, "_avtDanoEsperado", { configurable: true, get: () => _avtDanoEsperado, set: (__v) => { _avtDanoEsperado = __v; } });
-Object.defineProperty(globalThis, "_avtNpcTurno", { configurable: true, get: () => _avtNpcTurno, set: (__v) => { _avtNpcTurno = __v; } });
-Object.defineProperty(globalThis, "_avtCheckVitoria", { configurable: true, get: () => _avtCheckVitoria, set: (__v) => { _avtCheckVitoria = __v; } });
-Object.defineProperty(globalThis, "_avtCheckDerrota", { configurable: true, get: () => _avtCheckDerrota, set: (__v) => { _avtCheckDerrota = __v; } });
-Object.defineProperty(globalThis, "_avtRolarFormula", { configurable: true, get: () => _avtRolarFormula, set: (__v) => { _avtRolarFormula = __v; } });
-Object.defineProperty(globalThis, "_avtLog", { configurable: true, get: () => _avtLog, set: (__v) => { _avtLog = __v; } });
-Object.defineProperty(globalThis, "_avtRenderLog", { configurable: true, get: () => _avtRenderLog, set: (__v) => { _avtRenderLog = __v; } });
-Object.defineProperty(globalThis, "_avtRenderHpBar", { configurable: true, get: () => _avtRenderHpBar, set: (__v) => { _avtRenderHpBar = __v; } });
-Object.defineProperty(globalThis, "_avtToggleLog", { configurable: true, get: () => _avtToggleLog, set: (__v) => { _avtToggleLog = __v; } });
-Object.defineProperty(globalThis, "_avtDetectarMestre", { configurable: true, get: () => _avtDetectarMestre, set: (__v) => { _avtDetectarMestre = __v; } });
-Object.defineProperty(globalThis, "_avtSouMestre", { configurable: true, get: () => _avtSouMestre, set: (__v) => { _avtSouMestre = __v; } });
-Object.defineProperty(globalThis, "_avtHostHeartbeatStart", { configurable: true, get: () => _avtHostHeartbeatStart, set: (__v) => { _avtHostHeartbeatStart = __v; } });
-Object.defineProperty(globalThis, "_avtHostHeartbeatStop", { configurable: true, get: () => _avtHostHeartbeatStop, set: (__v) => { _avtHostHeartbeatStop = __v; } });
-Object.defineProperty(globalThis, "avtReceberHostHeartbeat", { configurable: true, get: () => avtReceberHostHeartbeat, set: (__v) => { avtReceberHostHeartbeat = __v; } });
-Object.defineProperty(globalThis, "_avtSouHostAventura", { configurable: true, get: () => _avtSouHostAventura, set: (__v) => { _avtSouHostAventura = __v; } });
-Object.defineProperty(globalThis, "_avtSouHostBatalha", { configurable: true, get: () => _avtSouHostBatalha, set: (__v) => { _avtSouHostBatalha = __v; } });
-Object.defineProperty(globalThis, "_avtAtualizarUiPorRole", { configurable: true, get: () => _avtAtualizarUiPorRole, set: (__v) => { _avtAtualizarUiPorRole = __v; } });
-Object.defineProperty(globalThis, "_avtToggleModoJogador", { configurable: true, get: () => _avtToggleModoJogador, set: (__v) => { _avtToggleModoJogador = __v; } });
-Object.defineProperty(globalThis, "_avtRecuperarPorMovimento", { configurable: true, get: () => _avtRecuperarPorMovimento, set: (__v) => { _avtRecuperarPorMovimento = __v; } });
-Object.defineProperty(globalThis, "_avtPatchRpgData", { configurable: true, get: () => _avtPatchRpgData, set: (__v) => { _avtPatchRpgData = __v; } });
-Object.defineProperty(globalThis, "_avtCalcManaMaxChar", { configurable: true, get: () => _avtCalcManaMaxChar, set: (__v) => { _avtCalcManaMaxChar = __v; } });
-Object.defineProperty(globalThis, "_avtRecursosDoChar", { configurable: true, get: () => _avtRecursosDoChar, set: (__v) => { _avtRecursosDoChar = __v; } });
-Object.defineProperty(globalThis, "_avtDescontarCustoSkill", { configurable: true, get: () => _avtDescontarCustoSkill, set: (__v) => { _avtDescontarCustoSkill = __v; } });
-Object.defineProperty(globalThis, "avtUsarConsumivel", { configurable: true, get: () => avtUsarConsumivel, set: (__v) => { avtUsarConsumivel = __v; } });
-Object.defineProperty(globalThis, "avtDescansar", { configurable: true, get: () => avtDescansar, set: (__v) => { avtDescansar = __v; } });
-Object.defineProperty(globalThis, "avtJogadorPainel", { configurable: true, get: () => avtJogadorPainel, set: (__v) => { avtJogadorPainel = __v; } });
-Object.defineProperty(globalThis, "avtJogadorPainelRender", { configurable: true, get: () => avtJogadorPainelRender, set: (__v) => { avtJogadorPainelRender = __v; } });
-Object.defineProperty(globalThis, "_avtBauNaPosicao", { configurable: true, get: () => _avtBauNaPosicao, set: (__v) => { _avtBauNaPosicao = __v; } });
-Object.defineProperty(globalThis, "_avtColetarObjsNaPosicao", { configurable: true, get: () => _avtColetarObjsNaPosicao, set: (__v) => { _avtColetarObjsNaPosicao = __v; } });
-Object.defineProperty(globalThis, "avtAbrirBau", { configurable: true, get: () => avtAbrirBau, set: (__v) => { avtAbrirBau = __v; } });
-Object.defineProperty(globalThis, "avtReceberBauAberto", { configurable: true, get: () => avtReceberBauAberto, set: (__v) => { avtReceberBauAberto = __v; } });
-Object.defineProperty(globalThis, "avtReceberObjSpawn", { configurable: true, get: () => avtReceberObjSpawn, set: (__v) => { avtReceberObjSpawn = __v; } });
-Object.defineProperty(globalThis, "avtReceberObjPickup", { configurable: true, get: () => avtReceberObjPickup, set: (__v) => { avtReceberObjPickup = __v; } });
-Object.defineProperty(globalThis, "avtImportarCatalogo", { configurable: true, get: () => avtImportarCatalogo, set: (__v) => { avtImportarCatalogo = __v; } });
-Object.defineProperty(globalThis, "avtImportarCatalogoConfirmar", { configurable: true, get: () => avtImportarCatalogoConfirmar, set: (__v) => { avtImportarCatalogoConfirmar = __v; } });
-Object.defineProperty(globalThis, "_avtCatItemEditor", { configurable: true, get: () => _avtCatItemEditor, set: (__v) => { _avtCatItemEditor = __v; } });
-Object.defineProperty(globalThis, "_avtCatItemUploadImg", { configurable: true, get: () => _avtCatItemUploadImg, set: (__v) => { _avtCatItemUploadImg = __v; } });
-Object.defineProperty(globalThis, "_avtCatItemSalvar", { configurable: true, get: () => _avtCatItemSalvar, set: (__v) => { _avtCatItemSalvar = __v; } });
-Object.defineProperty(globalThis, "_avtCatItemRemover", { configurable: true, get: () => _avtCatItemRemover, set: (__v) => { _avtCatItemRemover = __v; } });
-Object.defineProperty(globalThis, "avtMestrePainel", { configurable: true, get: () => avtMestrePainel, set: (__v) => { avtMestrePainel = __v; } });
-Object.defineProperty(globalThis, "_avtPlaySkillAnim", { configurable: true, get: () => _avtPlaySkillAnim, set: (__v) => { _avtPlaySkillAnim = __v; } });
-Object.defineProperty(globalThis, "_avtCanvasEfeito", { configurable: true, get: () => _avtCanvasEfeito, set: (__v) => { _avtCanvasEfeito = __v; } });
-Object.defineProperty(globalThis, "_avtCanvasFlash", { configurable: true, get: () => _avtCanvasFlash, set: (__v) => { _avtCanvasFlash = __v; } });
-Object.defineProperty(globalThis, "_avtEnsurePixiCore", { configurable: true, get: () => _avtEnsurePixiCore, set: (__v) => { _avtEnsurePixiCore = __v; } });
-Object.defineProperty(globalThis, "_avtEnsurePixiParticles", { configurable: true, get: () => _avtEnsurePixiParticles, set: (__v) => { _avtEnsurePixiParticles = __v; } });
-Object.defineProperty(globalThis, "_avtEnsurePixiFilter", { configurable: true, get: () => _avtEnsurePixiFilter, set: (__v) => { _avtEnsurePixiFilter = __v; } });
-Object.defineProperty(globalThis, "_avtBuildPixiFilters", { configurable: true, get: () => _avtBuildPixiFilters, set: (__v) => { _avtBuildPixiFilters = __v; } });
-Object.defineProperty(globalThis, "_avtLoadPixiTextures", { configurable: true, get: () => _avtLoadPixiTextures, set: (__v) => { _avtLoadPixiTextures = __v; } });
-Object.defineProperty(globalThis, "_avtEnsurePixiSpine", { configurable: true, get: () => _avtEnsurePixiSpine, set: (__v) => { _avtEnsurePixiSpine = __v; } });
+Object.defineProperty(globalThis, "_avtPersistirBatalha", { configurable: true, writable: true, value: _avtPersistirBatalha });
+Object.defineProperty(globalThis, "_avtRemoverBatalhaDb", { configurable: true, writable: true, value: _avtRemoverBatalhaDb });
+Object.defineProperty(globalThis, "_avtCarregarBatalhasAtivas", { configurable: true, writable: true, value: _avtCarregarBatalhasAtivas });
+Object.defineProperty(globalThis, "_avtAplicarEstadoInimigosPersistido", { configurable: true, writable: true, value: _avtAplicarEstadoInimigosPersistido });
+Object.defineProperty(globalThis, "avtGetFichaImg", { configurable: true, writable: true, value: avtGetFichaImg });
+Object.defineProperty(globalThis, "_avtNpcAtualizarPerseguicao", { configurable: true, writable: true, value: _avtNpcAtualizarPerseguicao });
+Object.defineProperty(globalThis, "_avtNpcMelhorDirecao", { configurable: true, writable: true, value: _avtNpcMelhorDirecao });
+Object.defineProperty(globalThis, "_avtDanoEsperado", { configurable: true, writable: true, value: _avtDanoEsperado });
+Object.defineProperty(globalThis, "_avtNpcTurno", { configurable: true, writable: true, value: _avtNpcTurno });
+Object.defineProperty(globalThis, "_avtCheckVitoria", { configurable: true, writable: true, value: _avtCheckVitoria });
+Object.defineProperty(globalThis, "_avtCheckDerrota", { configurable: true, writable: true, value: _avtCheckDerrota });
+Object.defineProperty(globalThis, "_avtRolarFormula", { configurable: true, writable: true, value: _avtRolarFormula });
+Object.defineProperty(globalThis, "_avtLog", { configurable: true, writable: true, value: _avtLog });
+Object.defineProperty(globalThis, "_avtRenderLog", { configurable: true, writable: true, value: _avtRenderLog });
+Object.defineProperty(globalThis, "_avtRenderHpBar", { configurable: true, writable: true, value: _avtRenderHpBar });
+Object.defineProperty(globalThis, "_avtToggleLog", { configurable: true, writable: true, value: _avtToggleLog });
+Object.defineProperty(globalThis, "_avtDetectarMestre", { configurable: true, writable: true, value: _avtDetectarMestre });
+Object.defineProperty(globalThis, "_avtSouMestre", { configurable: true, writable: true, value: _avtSouMestre });
+Object.defineProperty(globalThis, "_avtHostHeartbeatStart", { configurable: true, writable: true, value: _avtHostHeartbeatStart });
+Object.defineProperty(globalThis, "_avtHostHeartbeatStop", { configurable: true, writable: true, value: _avtHostHeartbeatStop });
+Object.defineProperty(globalThis, "avtReceberHostHeartbeat", { configurable: true, writable: true, value: avtReceberHostHeartbeat });
+Object.defineProperty(globalThis, "_avtSouHostAventura", { configurable: true, writable: true, value: _avtSouHostAventura });
+Object.defineProperty(globalThis, "_avtSouHostBatalha", { configurable: true, writable: true, value: _avtSouHostBatalha });
+Object.defineProperty(globalThis, "_avtAtualizarUiPorRole", { configurable: true, writable: true, value: _avtAtualizarUiPorRole });
+Object.defineProperty(globalThis, "_avtToggleModoJogador", { configurable: true, writable: true, value: _avtToggleModoJogador });
+Object.defineProperty(globalThis, "_avtRecuperarPorMovimento", { configurable: true, writable: true, value: _avtRecuperarPorMovimento });
+Object.defineProperty(globalThis, "_avtPatchRpgData", { configurable: true, writable: true, value: _avtPatchRpgData });
+Object.defineProperty(globalThis, "_avtCalcManaMaxChar", { configurable: true, writable: true, value: _avtCalcManaMaxChar });
+Object.defineProperty(globalThis, "_avtRecursosDoChar", { configurable: true, writable: true, value: _avtRecursosDoChar });
+Object.defineProperty(globalThis, "_avtDescontarCustoSkill", { configurable: true, writable: true, value: _avtDescontarCustoSkill });
+Object.defineProperty(globalThis, "avtUsarConsumivel", { configurable: true, writable: true, value: avtUsarConsumivel });
+Object.defineProperty(globalThis, "avtDescansar", { configurable: true, writable: true, value: avtDescansar });
+Object.defineProperty(globalThis, "avtJogadorPainel", { configurable: true, writable: true, value: avtJogadorPainel });
+Object.defineProperty(globalThis, "avtJogadorPainelRender", { configurable: true, writable: true, value: avtJogadorPainelRender });
+Object.defineProperty(globalThis, "_avtBauNaPosicao", { configurable: true, writable: true, value: _avtBauNaPosicao });
+Object.defineProperty(globalThis, "_avtColetarObjsNaPosicao", { configurable: true, writable: true, value: _avtColetarObjsNaPosicao });
+Object.defineProperty(globalThis, "avtAbrirBau", { configurable: true, writable: true, value: avtAbrirBau });
+Object.defineProperty(globalThis, "avtReceberBauAberto", { configurable: true, writable: true, value: avtReceberBauAberto });
+Object.defineProperty(globalThis, "avtReceberObjSpawn", { configurable: true, writable: true, value: avtReceberObjSpawn });
+Object.defineProperty(globalThis, "avtReceberObjPickup", { configurable: true, writable: true, value: avtReceberObjPickup });
+Object.defineProperty(globalThis, "avtImportarCatalogo", { configurable: true, writable: true, value: avtImportarCatalogo });
+Object.defineProperty(globalThis, "avtImportarCatalogoConfirmar", { configurable: true, writable: true, value: avtImportarCatalogoConfirmar });
+Object.defineProperty(globalThis, "_avtCatItemEditor", { configurable: true, writable: true, value: _avtCatItemEditor });
+Object.defineProperty(globalThis, "_avtCatItemUploadImg", { configurable: true, writable: true, value: _avtCatItemUploadImg });
+Object.defineProperty(globalThis, "_avtCatItemSalvar", { configurable: true, writable: true, value: _avtCatItemSalvar });
+Object.defineProperty(globalThis, "_avtCatItemRemover", { configurable: true, writable: true, value: _avtCatItemRemover });
+Object.defineProperty(globalThis, "avtMestrePainel", { configurable: true, writable: true, value: avtMestrePainel });
+Object.defineProperty(globalThis, "_avtPlaySkillAnim", { configurable: true, writable: true, value: _avtPlaySkillAnim });
+Object.defineProperty(globalThis, "_avtCanvasEfeito", { configurable: true, writable: true, value: _avtCanvasEfeito });
+Object.defineProperty(globalThis, "_avtCanvasFlash", { configurable: true, writable: true, value: _avtCanvasFlash });
+Object.defineProperty(globalThis, "_avtEnsurePixiCore", { configurable: true, writable: true, value: _avtEnsurePixiCore });
+Object.defineProperty(globalThis, "_avtEnsurePixiParticles", { configurable: true, writable: true, value: _avtEnsurePixiParticles });
+Object.defineProperty(globalThis, "_avtEnsurePixiFilter", { configurable: true, writable: true, value: _avtEnsurePixiFilter });
+Object.defineProperty(globalThis, "_avtBuildPixiFilters", { configurable: true, writable: true, value: _avtBuildPixiFilters });
+Object.defineProperty(globalThis, "_avtLoadPixiTextures", { configurable: true, writable: true, value: _avtLoadPixiTextures });
+Object.defineProperty(globalThis, "_avtEnsurePixiSpine", { configurable: true, writable: true, value: _avtEnsurePixiSpine });
 Object.defineProperty(globalThis, "_AVT_PROC_TEX_CACHE", { configurable: true, get: () => _AVT_PROC_TEX_CACHE, set: (__v) => { _AVT_PROC_TEX_CACHE = __v; } });
-Object.defineProperty(globalThis, "_avtProcTextures", { configurable: true, get: () => _avtProcTextures, set: (__v) => { _avtProcTextures = __v; } });
+Object.defineProperty(globalThis, "_avtProcTextures", { configurable: true, writable: true, value: _avtProcTextures });
 Object.defineProperty(globalThis, "AVT_FX_PRESETS", { configurable: true, get: () => AVT_FX_PRESETS, set: (__v) => { AVT_FX_PRESETS = __v; } });
-Object.defineProperty(globalThis, "_avtIntensityProfile", { configurable: true, get: () => _avtIntensityProfile, set: (__v) => { _avtIntensityProfile = __v; } });
-Object.defineProperty(globalThis, "_avtBuildBody", { configurable: true, get: () => _avtBuildBody, set: (__v) => { _avtBuildBody = __v; } });
-Object.defineProperty(globalThis, "_avtUpdateBody", { configurable: true, get: () => _avtUpdateBody, set: (__v) => { _avtUpdateBody = __v; } });
-Object.defineProperty(globalThis, "_avtFxDeepMerge", { configurable: true, get: () => _avtFxDeepMerge, set: (__v) => { _avtFxDeepMerge = __v; } });
-Object.defineProperty(globalThis, "_avtFxNormalize", { configurable: true, get: () => _avtFxNormalize, set: (__v) => { _avtFxNormalize = __v; } });
-Object.defineProperty(globalThis, "_avtFxResolveTextures", { configurable: true, get: () => _avtFxResolveTextures, set: (__v) => { _avtFxResolveTextures = __v; } });
-Object.defineProperty(globalThis, "_avtCameraFX", { configurable: true, get: () => _avtCameraFX, set: (__v) => { _avtCameraFX = __v; } });
-Object.defineProperty(globalThis, "_avtHexToInt", { configurable: true, get: () => _avtHexToInt, set: (__v) => { _avtHexToInt = __v; } });
-Object.defineProperty(globalThis, "_fxUpdateTrail", { configurable: true, get: () => _fxUpdateTrail, set: (__v) => { _fxUpdateTrail = __v; } });
-Object.defineProperty(globalThis, "_fxTintMatrix", { configurable: true, get: () => _fxTintMatrix, set: (__v) => { _fxTintMatrix = __v; } });
+Object.defineProperty(globalThis, "_avtIntensityProfile", { configurable: true, writable: true, value: _avtIntensityProfile });
+Object.defineProperty(globalThis, "_avtBuildBody", { configurable: true, writable: true, value: _avtBuildBody });
+Object.defineProperty(globalThis, "_avtUpdateBody", { configurable: true, writable: true, value: _avtUpdateBody });
+Object.defineProperty(globalThis, "_avtFxDeepMerge", { configurable: true, writable: true, value: _avtFxDeepMerge });
+Object.defineProperty(globalThis, "_avtFxNormalize", { configurable: true, writable: true, value: _avtFxNormalize });
+Object.defineProperty(globalThis, "_avtFxResolveTextures", { configurable: true, writable: true, value: _avtFxResolveTextures });
+Object.defineProperty(globalThis, "_avtCameraFX", { configurable: true, writable: true, value: _avtCameraFX });
+Object.defineProperty(globalThis, "_avtHexToInt", { configurable: true, writable: true, value: _avtHexToInt });
+Object.defineProperty(globalThis, "_fxUpdateTrail", { configurable: true, writable: true, value: _fxUpdateTrail });
+Object.defineProperty(globalThis, "_fxTintMatrix", { configurable: true, writable: true, value: _fxTintMatrix });
 Object.defineProperty(globalThis, "_avtPixiActiveApps", { configurable: true, get: () => _avtPixiActiveApps, set: (__v) => { _avtPixiActiveApps = __v; } });
 Object.defineProperty(globalThis, "_AVT_PIXI_MAX_CONCURRENT", { configurable: true, get: () => _AVT_PIXI_MAX_CONCURRENT });
 Object.defineProperty(globalThis, "_avtPixiQueue", { configurable: true, get: () => _avtPixiQueue });
-Object.defineProperty(globalThis, "_avtPixiRunOrQueue", { configurable: true, get: () => _avtPixiRunOrQueue, set: (__v) => { _avtPixiRunOrQueue = __v; } });
-Object.defineProperty(globalThis, "_avtPixiDrainQueue", { configurable: true, get: () => _avtPixiDrainQueue, set: (__v) => { _avtPixiDrainQueue = __v; } });
-Object.defineProperty(globalThis, "_avtPixiParticleAnim", { configurable: true, get: () => _avtPixiParticleAnim, set: (__v) => { _avtPixiParticleAnim = __v; } });
-Object.defineProperty(globalThis, "_avtPlayPhases", { configurable: true, get: () => _avtPlayPhases, set: (__v) => { _avtPlayPhases = __v; } });
-Object.defineProperty(globalThis, "_avtPlayTravelBody", { configurable: true, get: () => _avtPlayTravelBody, set: (__v) => { _avtPlayTravelBody = __v; } });
-Object.defineProperty(globalThis, "_avtFxSpawnSub", { configurable: true, get: () => _avtFxSpawnSub, set: (__v) => { _avtFxSpawnSub = __v; } });
-Object.defineProperty(globalThis, "_avtPixiSpineAnim", { configurable: true, get: () => _avtPixiSpineAnim, set: (__v) => { _avtPixiSpineAnim = __v; } });
-Object.defineProperty(globalThis, "_avtMestrePainelRender", { configurable: true, get: () => _avtMestrePainelRender, set: (__v) => { _avtMestrePainelRender = __v; } });
-Object.defineProperty(globalThis, "_avtMpAba", { configurable: true, get: () => _avtMpAba, set: (__v) => { _avtMpAba = __v; } });
-Object.defineProperty(globalThis, "_avtMpConteudoAba", { configurable: true, get: () => _avtMpConteudoAba, set: (__v) => { _avtMpConteudoAba = __v; } });
+Object.defineProperty(globalThis, "_avtPixiRunOrQueue", { configurable: true, writable: true, value: _avtPixiRunOrQueue });
+Object.defineProperty(globalThis, "_avtPixiDrainQueue", { configurable: true, writable: true, value: _avtPixiDrainQueue });
+Object.defineProperty(globalThis, "_avtPixiParticleAnim", { configurable: true, writable: true, value: _avtPixiParticleAnim });
+Object.defineProperty(globalThis, "_avtPlayPhases", { configurable: true, writable: true, value: _avtPlayPhases });
+Object.defineProperty(globalThis, "_avtPlayTravelBody", { configurable: true, writable: true, value: _avtPlayTravelBody });
+Object.defineProperty(globalThis, "_avtFxSpawnSub", { configurable: true, writable: true, value: _avtFxSpawnSub });
+Object.defineProperty(globalThis, "_avtPixiSpineAnim", { configurable: true, writable: true, value: _avtPixiSpineAnim });
+Object.defineProperty(globalThis, "_avtMestrePainelRender", { configurable: true, writable: true, value: _avtMestrePainelRender });
+Object.defineProperty(globalThis, "_avtMpAba", { configurable: true, writable: true, value: _avtMpAba });
+Object.defineProperty(globalThis, "_avtMpConteudoAba", { configurable: true, writable: true, value: _avtMpConteudoAba });
 Object.defineProperty(globalThis, "_AVT_ED_SZ", { configurable: true, get: () => _AVT_ED_SZ });
-Object.defineProperty(globalThis, "_avtMestreAbrirEditorUnificado", { configurable: true, get: () => _avtMestreAbrirEditorUnificado, set: (__v) => { _avtMestreAbrirEditorUnificado = __v; } });
-Object.defineProperty(globalThis, "_avtEdStatus", { configurable: true, get: () => _avtEdStatus, set: (__v) => { _avtEdStatus = __v; } });
-Object.defineProperty(globalThis, "_avtEdAtualizarBotoes", { configurable: true, get: () => _avtEdAtualizarBotoes, set: (__v) => { _avtEdAtualizarBotoes = __v; } });
-Object.defineProperty(globalThis, "_avtEdSetTool", { configurable: true, get: () => _avtEdSetTool, set: (__v) => { _avtEdSetTool = __v; } });
-Object.defineProperty(globalThis, "_avtEdDistribuirTileset", { configurable: true, get: () => _avtEdDistribuirTileset, set: (__v) => { _avtEdDistribuirTileset = __v; } });
-Object.defineProperty(globalThis, "_avtEdAplicarTool", { configurable: true, get: () => _avtEdAplicarTool, set: (__v) => { _avtEdAplicarTool = __v; } });
-Object.defineProperty(globalThis, "_avtEdApagar", { configurable: true, get: () => _avtEdApagar, set: (__v) => { _avtEdApagar = __v; } });
-Object.defineProperty(globalThis, "_avtEdAbrirConfigPorta", { configurable: true, get: () => _avtEdAbrirConfigPorta, set: (__v) => { _avtEdAbrirConfigPorta = __v; } });
-Object.defineProperty(globalThis, "_avtEdConfirmarPorta", { configurable: true, get: () => _avtEdConfirmarPorta, set: (__v) => { _avtEdConfirmarPorta = __v; } });
-Object.defineProperty(globalThis, "_avtEdCompletarPortaInterna", { configurable: true, get: () => _avtEdCompletarPortaInterna, set: (__v) => { _avtEdCompletarPortaInterna = __v; } });
-Object.defineProperty(globalThis, "_avtMestreSalvarMapaUnificado", { configurable: true, get: () => _avtMestreSalvarMapaUnificado, set: (__v) => { _avtMestreSalvarMapaUnificado = __v; } });
-Object.defineProperty(globalThis, "avtReceberDungeonUpdate", { configurable: true, get: () => avtReceberDungeonUpdate, set: (__v) => { avtReceberDungeonUpdate = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarBossDoorConfig", { configurable: true, get: () => _avtSalvarBossDoorConfig, set: (__v) => { _avtSalvarBossDoorConfig = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarSkillScalingAttrs", { configurable: true, get: () => _avtSalvarSkillScalingAttrs, set: (__v) => { _avtSalvarSkillScalingAttrs = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarPontosAttrPorNivel", { configurable: true, get: () => _avtSalvarPontosAttrPorNivel, set: (__v) => { _avtSalvarPontosAttrPorNivel = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarJanelaMovimento", { configurable: true, get: () => _avtSalvarJanelaMovimento, set: (__v) => { _avtSalvarJanelaMovimento = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarHpConfig", { configurable: true, get: () => _avtSalvarHpConfig, set: (__v) => { _avtSalvarHpConfig = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarVelocidadePerseguicao", { configurable: true, get: () => _avtSalvarVelocidadePerseguicao, set: (__v) => { _avtSalvarVelocidadePerseguicao = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarVelocidadeCorrida", { configurable: true, get: () => _avtSalvarVelocidadeCorrida, set: (__v) => { _avtSalvarVelocidadeCorrida = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarDropsConfig", { configurable: true, get: () => _avtSalvarDropsConfig, set: (__v) => { _avtSalvarDropsConfig = __v; } });
-Object.defineProperty(globalThis, "_avtOrbeConfigEditor", { configurable: true, get: () => _avtOrbeConfigEditor, set: (__v) => { _avtOrbeConfigEditor = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarOrbeTiers", { configurable: true, get: () => _avtSalvarOrbeTiers, set: (__v) => { _avtSalvarOrbeTiers = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarDestrezaVelPct", { configurable: true, get: () => _avtSalvarDestrezaVelPct, set: (__v) => { _avtSalvarDestrezaVelPct = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarVelocidadesIA", { configurable: true, get: () => _avtSalvarVelocidadesIA, set: (__v) => { _avtSalvarVelocidadesIA = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarAtaqueBasicoNpc", { configurable: true, get: () => _avtSalvarAtaqueBasicoNpc, set: (__v) => { _avtSalvarAtaqueBasicoNpc = __v; } });
-Object.defineProperty(globalThis, "_avtMestreSalvarAtaqueBasicoJog", { configurable: true, get: () => _avtMestreSalvarAtaqueBasicoJog, set: (__v) => { _avtMestreSalvarAtaqueBasicoJog = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarPerseguicaoDesistir", { configurable: true, get: () => _avtSalvarPerseguicaoDesistir, set: (__v) => { _avtSalvarPerseguicaoDesistir = __v; } });
-Object.defineProperty(globalThis, "avtReceberLevelConfigUpdate", { configurable: true, get: () => avtReceberLevelConfigUpdate, set: (__v) => { avtReceberLevelConfigUpdate = __v; } });
-Object.defineProperty(globalThis, "avtReceberSkillAnim", { configurable: true, get: () => avtReceberSkillAnim, set: (__v) => { avtReceberSkillAnim = __v; } });
-Object.defineProperty(globalThis, "avtReceberEfeitoAnimStart", { configurable: true, get: () => avtReceberEfeitoAnimStart, set: (__v) => { avtReceberEfeitoAnimStart = __v; } });
-Object.defineProperty(globalThis, "avtReceberEfeitoAnimStop", { configurable: true, get: () => avtReceberEfeitoAnimStop, set: (__v) => { avtReceberEfeitoAnimStop = __v; } });
-Object.defineProperty(globalThis, "avtReceberAttackAnim", { configurable: true, get: () => avtReceberAttackAnim, set: (__v) => { avtReceberAttackAnim = __v; } });
-Object.defineProperty(globalThis, "avtAplicarSnapshotMerge", { configurable: true, get: () => avtAplicarSnapshotMerge, set: (__v) => { avtAplicarSnapshotMerge = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarSecsPerTurno", { configurable: true, get: () => _avtSalvarSecsPerTurno, set: (__v) => { _avtSalvarSecsPerTurno = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarManaSabedoria", { configurable: true, get: () => _avtSalvarManaSabedoria, set: (__v) => { _avtSalvarManaSabedoria = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarManaRegenTurno", { configurable: true, get: () => _avtSalvarManaRegenTurno, set: (__v) => { _avtSalvarManaRegenTurno = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarManaRegenOoc", { configurable: true, get: () => _avtSalvarManaRegenOoc, set: (__v) => { _avtSalvarManaRegenOoc = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarAtaqueBasicoCooldown", { configurable: true, get: () => _avtSalvarAtaqueBasicoCooldown, set: (__v) => { _avtSalvarAtaqueBasicoCooldown = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarAtaqueBasicoForcaMult", { configurable: true, get: () => _avtSalvarAtaqueBasicoForcaMult, set: (__v) => { _avtSalvarAtaqueBasicoForcaMult = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarRaioAliado", { configurable: true, get: () => _avtSalvarRaioAliado, set: (__v) => { _avtSalvarRaioAliado = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarRangeAceitarCombate", { configurable: true, get: () => _avtSalvarRangeAceitarCombate, set: (__v) => { _avtSalvarRangeAceitarCombate = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarDuracaoAnimDados", { configurable: true, get: () => _avtSalvarDuracaoAnimDados, set: (__v) => { _avtSalvarDuracaoAnimDados = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarEfeitoCooldownMs", { configurable: true, get: () => _avtSalvarEfeitoCooldownMs, set: (__v) => { _avtSalvarEfeitoCooldownMs = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarXpPerdaMorte", { configurable: true, get: () => _avtSalvarXpPerdaMorte, set: (__v) => { _avtSalvarXpPerdaMorte = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarXpDecayAtivo", { configurable: true, get: () => _avtSalvarXpDecayAtivo, set: (__v) => { _avtSalvarXpDecayAtivo = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarDowngradeMorte", { configurable: true, get: () => _avtSalvarDowngradeMorte, set: (__v) => { _avtSalvarDowngradeMorte = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarHpRecuperacaoMorte", { configurable: true, get: () => _avtSalvarHpRecuperacaoMorte, set: (__v) => { _avtSalvarHpRecuperacaoMorte = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarInvisibilidadeMorte", { configurable: true, get: () => _avtSalvarInvisibilidadeMorte, set: (__v) => { _avtSalvarInvisibilidadeMorte = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarHpRegen", { configurable: true, get: () => _avtSalvarHpRegen, set: (__v) => { _avtSalvarHpRegen = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarTrilhaSonora", { configurable: true, get: () => _avtSalvarTrilhaSonora, set: (__v) => { _avtSalvarTrilhaSonora = __v; } });
-Object.defineProperty(globalThis, "_avtPreviewTrilha", { configurable: true, get: () => _avtPreviewTrilha, set: (__v) => { _avtPreviewTrilha = __v; } });
-Object.defineProperty(globalThis, "_avtPreviewTrilhaTipo", { configurable: true, get: () => _avtPreviewTrilhaTipo, set: (__v) => { _avtPreviewTrilhaTipo = __v; } });
-Object.defineProperty(globalThis, "_avtAudioPresetChange", { configurable: true, get: () => _avtAudioPresetChange, set: (__v) => { _avtAudioPresetChange = __v; } });
-Object.defineProperty(globalThis, "_avtBulkAttrAplicar", { configurable: true, get: () => _avtBulkAttrAplicar, set: (__v) => { _avtBulkAttrAplicar = __v; } });
-Object.defineProperty(globalThis, "_avtBulkNpcSkillAplicar", { configurable: true, get: () => _avtBulkNpcSkillAplicar, set: (__v) => { _avtBulkNpcSkillAplicar = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarNpcPortaChance", { configurable: true, get: () => _avtSalvarNpcPortaChance, set: (__v) => { _avtSalvarNpcPortaChance = __v; } });
-Object.defineProperty(globalThis, "_avtMestreExcluirCampanha", { configurable: true, get: () => _avtMestreExcluirCampanha, set: (__v) => { _avtMestreExcluirCampanha = __v; } });
-Object.defineProperty(globalThis, "_avtPackageAdicionar", { configurable: true, get: () => _avtPackageAdicionar, set: (__v) => { _avtPackageAdicionar = __v; } });
-Object.defineProperty(globalThis, "_avtPackageRemover", { configurable: true, get: () => _avtPackageRemover, set: (__v) => { _avtPackageRemover = __v; } });
+Object.defineProperty(globalThis, "_avtMestreAbrirEditorUnificado", { configurable: true, writable: true, value: _avtMestreAbrirEditorUnificado });
+Object.defineProperty(globalThis, "_avtEdStatus", { configurable: true, writable: true, value: _avtEdStatus });
+Object.defineProperty(globalThis, "_avtEdAtualizarBotoes", { configurable: true, writable: true, value: _avtEdAtualizarBotoes });
+Object.defineProperty(globalThis, "_avtEdSetTool", { configurable: true, writable: true, value: _avtEdSetTool });
+Object.defineProperty(globalThis, "_avtEdDistribuirTileset", { configurable: true, writable: true, value: _avtEdDistribuirTileset });
+Object.defineProperty(globalThis, "_avtEdAplicarTool", { configurable: true, writable: true, value: _avtEdAplicarTool });
+Object.defineProperty(globalThis, "_avtEdApagar", { configurable: true, writable: true, value: _avtEdApagar });
+Object.defineProperty(globalThis, "_avtEdAbrirConfigPorta", { configurable: true, writable: true, value: _avtEdAbrirConfigPorta });
+Object.defineProperty(globalThis, "_avtEdConfirmarPorta", { configurable: true, writable: true, value: _avtEdConfirmarPorta });
+Object.defineProperty(globalThis, "_avtEdCompletarPortaInterna", { configurable: true, writable: true, value: _avtEdCompletarPortaInterna });
+Object.defineProperty(globalThis, "_avtMestreSalvarMapaUnificado", { configurable: true, writable: true, value: _avtMestreSalvarMapaUnificado });
+Object.defineProperty(globalThis, "avtReceberDungeonUpdate", { configurable: true, writable: true, value: avtReceberDungeonUpdate });
+Object.defineProperty(globalThis, "_avtSalvarBossDoorConfig", { configurable: true, writable: true, value: _avtSalvarBossDoorConfig });
+Object.defineProperty(globalThis, "_avtSalvarSkillScalingAttrs", { configurable: true, writable: true, value: _avtSalvarSkillScalingAttrs });
+Object.defineProperty(globalThis, "_avtSalvarPontosAttrPorNivel", { configurable: true, writable: true, value: _avtSalvarPontosAttrPorNivel });
+Object.defineProperty(globalThis, "_avtSalvarJanelaMovimento", { configurable: true, writable: true, value: _avtSalvarJanelaMovimento });
+Object.defineProperty(globalThis, "_avtSalvarHpConfig", { configurable: true, writable: true, value: _avtSalvarHpConfig });
+Object.defineProperty(globalThis, "_avtSalvarVelocidadePerseguicao", { configurable: true, writable: true, value: _avtSalvarVelocidadePerseguicao });
+Object.defineProperty(globalThis, "_avtSalvarVelocidadeCorrida", { configurable: true, writable: true, value: _avtSalvarVelocidadeCorrida });
+Object.defineProperty(globalThis, "_avtSalvarDropsConfig", { configurable: true, writable: true, value: _avtSalvarDropsConfig });
+Object.defineProperty(globalThis, "_avtOrbeConfigEditor", { configurable: true, writable: true, value: _avtOrbeConfigEditor });
+Object.defineProperty(globalThis, "_avtSalvarOrbeTiers", { configurable: true, writable: true, value: _avtSalvarOrbeTiers });
+Object.defineProperty(globalThis, "_avtSalvarDestrezaVelPct", { configurable: true, writable: true, value: _avtSalvarDestrezaVelPct });
+Object.defineProperty(globalThis, "_avtSalvarVelocidadesIA", { configurable: true, writable: true, value: _avtSalvarVelocidadesIA });
+Object.defineProperty(globalThis, "_avtSalvarAtaqueBasicoNpc", { configurable: true, writable: true, value: _avtSalvarAtaqueBasicoNpc });
+Object.defineProperty(globalThis, "_avtMestreSalvarAtaqueBasicoJog", { configurable: true, writable: true, value: _avtMestreSalvarAtaqueBasicoJog });
+Object.defineProperty(globalThis, "_avtSalvarPerseguicaoDesistir", { configurable: true, writable: true, value: _avtSalvarPerseguicaoDesistir });
+Object.defineProperty(globalThis, "avtReceberLevelConfigUpdate", { configurable: true, writable: true, value: avtReceberLevelConfigUpdate });
+Object.defineProperty(globalThis, "avtReceberSkillAnim", { configurable: true, writable: true, value: avtReceberSkillAnim });
+Object.defineProperty(globalThis, "avtReceberEfeitoAnimStart", { configurable: true, writable: true, value: avtReceberEfeitoAnimStart });
+Object.defineProperty(globalThis, "avtReceberEfeitoAnimStop", { configurable: true, writable: true, value: avtReceberEfeitoAnimStop });
+Object.defineProperty(globalThis, "avtReceberAttackAnim", { configurable: true, writable: true, value: avtReceberAttackAnim });
+Object.defineProperty(globalThis, "avtAplicarSnapshotMerge", { configurable: true, writable: true, value: avtAplicarSnapshotMerge });
+Object.defineProperty(globalThis, "_avtSalvarSecsPerTurno", { configurable: true, writable: true, value: _avtSalvarSecsPerTurno });
+Object.defineProperty(globalThis, "_avtSalvarManaSabedoria", { configurable: true, writable: true, value: _avtSalvarManaSabedoria });
+Object.defineProperty(globalThis, "_avtSalvarManaRegenTurno", { configurable: true, writable: true, value: _avtSalvarManaRegenTurno });
+Object.defineProperty(globalThis, "_avtSalvarManaRegenOoc", { configurable: true, writable: true, value: _avtSalvarManaRegenOoc });
+Object.defineProperty(globalThis, "_avtSalvarAtaqueBasicoCooldown", { configurable: true, writable: true, value: _avtSalvarAtaqueBasicoCooldown });
+Object.defineProperty(globalThis, "_avtSalvarAtaqueBasicoForcaMult", { configurable: true, writable: true, value: _avtSalvarAtaqueBasicoForcaMult });
+Object.defineProperty(globalThis, "_avtSalvarRaioAliado", { configurable: true, writable: true, value: _avtSalvarRaioAliado });
+Object.defineProperty(globalThis, "_avtSalvarRangeAceitarCombate", { configurable: true, writable: true, value: _avtSalvarRangeAceitarCombate });
+Object.defineProperty(globalThis, "_avtSalvarDuracaoAnimDados", { configurable: true, writable: true, value: _avtSalvarDuracaoAnimDados });
+Object.defineProperty(globalThis, "_avtSalvarEfeitoCooldownMs", { configurable: true, writable: true, value: _avtSalvarEfeitoCooldownMs });
+Object.defineProperty(globalThis, "_avtSalvarXpPerdaMorte", { configurable: true, writable: true, value: _avtSalvarXpPerdaMorte });
+Object.defineProperty(globalThis, "_avtSalvarXpDecayAtivo", { configurable: true, writable: true, value: _avtSalvarXpDecayAtivo });
+Object.defineProperty(globalThis, "_avtSalvarDowngradeMorte", { configurable: true, writable: true, value: _avtSalvarDowngradeMorte });
+Object.defineProperty(globalThis, "_avtSalvarHpRecuperacaoMorte", { configurable: true, writable: true, value: _avtSalvarHpRecuperacaoMorte });
+Object.defineProperty(globalThis, "_avtSalvarInvisibilidadeMorte", { configurable: true, writable: true, value: _avtSalvarInvisibilidadeMorte });
+Object.defineProperty(globalThis, "_avtSalvarHpRegen", { configurable: true, writable: true, value: _avtSalvarHpRegen });
+Object.defineProperty(globalThis, "_avtSalvarTrilhaSonora", { configurable: true, writable: true, value: _avtSalvarTrilhaSonora });
+Object.defineProperty(globalThis, "_avtPreviewTrilha", { configurable: true, writable: true, value: _avtPreviewTrilha });
+Object.defineProperty(globalThis, "_avtPreviewTrilhaTipo", { configurable: true, writable: true, value: _avtPreviewTrilhaTipo });
+Object.defineProperty(globalThis, "_avtAudioPresetChange", { configurable: true, writable: true, value: _avtAudioPresetChange });
+Object.defineProperty(globalThis, "_avtBulkAttrAplicar", { configurable: true, writable: true, value: _avtBulkAttrAplicar });
+Object.defineProperty(globalThis, "_avtBulkNpcSkillAplicar", { configurable: true, writable: true, value: _avtBulkNpcSkillAplicar });
+Object.defineProperty(globalThis, "_avtSalvarNpcPortaChance", { configurable: true, writable: true, value: _avtSalvarNpcPortaChance });
+Object.defineProperty(globalThis, "_avtMestreExcluirCampanha", { configurable: true, writable: true, value: _avtMestreExcluirCampanha });
+Object.defineProperty(globalThis, "_avtPackageAdicionar", { configurable: true, writable: true, value: _avtPackageAdicionar });
+Object.defineProperty(globalThis, "_avtPackageRemover", { configurable: true, writable: true, value: _avtPackageRemover });
 Object.defineProperty(globalThis, "_avtMpTilesetFile", { configurable: true, get: () => _avtMpTilesetFile, set: (__v) => { _avtMpTilesetFile = __v; } });
-Object.defineProperty(globalThis, "_avtMestreToggleTrocaTileset", { configurable: true, get: () => _avtMestreToggleTrocaTileset, set: (__v) => { _avtMestreToggleTrocaTileset = __v; } });
-Object.defineProperty(globalThis, "_avtMestreCopiarPromptTileset", { configurable: true, get: () => _avtMestreCopiarPromptTileset, set: (__v) => { _avtMestreCopiarPromptTileset = __v; } });
-Object.defineProperty(globalThis, "_avtMestreHandleTilesetUpload", { configurable: true, get: () => _avtMestreHandleTilesetUpload, set: (__v) => { _avtMestreHandleTilesetUpload = __v; } });
-Object.defineProperty(globalThis, "_avtMestreAplicarTilesetUpload", { configurable: true, get: () => _avtMestreAplicarTilesetUpload, set: (__v) => { _avtMestreAplicarTilesetUpload = __v; } });
-Object.defineProperty(globalThis, "_avtMestreNovaFase", { configurable: true, get: () => _avtMestreNovaFase, set: (__v) => { _avtMestreNovaFase = __v; } });
-Object.defineProperty(globalThis, "_avtMestreNovaFaseRender", { configurable: true, get: () => _avtMestreNovaFaseRender, set: (__v) => { _avtMestreNovaFaseRender = __v; } });
-Object.defineProperty(globalThis, "_avtNfCancelar", { configurable: true, get: () => _avtNfCancelar, set: (__v) => { _avtNfCancelar = __v; } });
-Object.defineProperty(globalThis, "_avtNfLockChange", { configurable: true, get: () => _avtNfLockChange, set: (__v) => { _avtNfLockChange = __v; } });
-Object.defineProperty(globalThis, "_avtNfSelecionarMapa", { configurable: true, get: () => _avtNfSelecionarMapa, set: (__v) => { _avtNfSelecionarMapa = __v; } });
-Object.defineProperty(globalThis, "_avtNfRenderMapaSub", { configurable: true, get: () => _avtNfRenderMapaSub, set: (__v) => { _avtNfRenderMapaSub = __v; } });
-Object.defineProperty(globalThis, "_avtNfGerarProcedural", { configurable: true, get: () => _avtNfGerarProcedural, set: (__v) => { _avtNfGerarProcedural = __v; } });
-Object.defineProperty(globalThis, "_avtNfJsonParse", { configurable: true, get: () => _avtNfJsonParse, set: (__v) => { _avtNfJsonParse = __v; } });
-Object.defineProperty(globalThis, "_avtNfGerarComClaude", { configurable: true, get: () => _avtNfGerarComClaude, set: (__v) => { _avtNfGerarComClaude = __v; } });
+Object.defineProperty(globalThis, "_avtMestreToggleTrocaTileset", { configurable: true, writable: true, value: _avtMestreToggleTrocaTileset });
+Object.defineProperty(globalThis, "_avtMestreCopiarPromptTileset", { configurable: true, writable: true, value: _avtMestreCopiarPromptTileset });
+Object.defineProperty(globalThis, "_avtMestreHandleTilesetUpload", { configurable: true, writable: true, value: _avtMestreHandleTilesetUpload });
+Object.defineProperty(globalThis, "_avtMestreAplicarTilesetUpload", { configurable: true, writable: true, value: _avtMestreAplicarTilesetUpload });
+Object.defineProperty(globalThis, "_avtMestreNovaFase", { configurable: true, writable: true, value: _avtMestreNovaFase });
+Object.defineProperty(globalThis, "_avtMestreNovaFaseRender", { configurable: true, writable: true, value: _avtMestreNovaFaseRender });
+Object.defineProperty(globalThis, "_avtNfCancelar", { configurable: true, writable: true, value: _avtNfCancelar });
+Object.defineProperty(globalThis, "_avtNfLockChange", { configurable: true, writable: true, value: _avtNfLockChange });
+Object.defineProperty(globalThis, "_avtNfSelecionarMapa", { configurable: true, writable: true, value: _avtNfSelecionarMapa });
+Object.defineProperty(globalThis, "_avtNfRenderMapaSub", { configurable: true, writable: true, value: _avtNfRenderMapaSub });
+Object.defineProperty(globalThis, "_avtNfGerarProcedural", { configurable: true, writable: true, value: _avtNfGerarProcedural });
+Object.defineProperty(globalThis, "_avtNfJsonParse", { configurable: true, writable: true, value: _avtNfJsonParse });
+Object.defineProperty(globalThis, "_avtNfGerarComClaude", { configurable: true, writable: true, value: _avtNfGerarComClaude });
 Object.defineProperty(globalThis, "_avtNfEd", { configurable: true, get: () => _avtNfEd });
-Object.defineProperty(globalThis, "_avtNfEditorInit", { configurable: true, get: () => _avtNfEditorInit, set: (__v) => { _avtNfEditorInit = __v; } });
-Object.defineProperty(globalThis, "_avtNfEditorDraw", { configurable: true, get: () => _avtNfEditorDraw, set: (__v) => { _avtNfEditorDraw = __v; } });
-Object.defineProperty(globalThis, "_avtNfEditorAcao", { configurable: true, get: () => _avtNfEditorAcao, set: (__v) => { _avtNfEditorAcao = __v; } });
-Object.defineProperty(globalThis, "_avtNfEditorTamanho", { configurable: true, get: () => _avtNfEditorTamanho, set: (__v) => { _avtNfEditorTamanho = __v; } });
-Object.defineProperty(globalThis, "_avtNfEditorLimpar", { configurable: true, get: () => _avtNfEditorLimpar, set: (__v) => { _avtNfEditorLimpar = __v; } });
-Object.defineProperty(globalThis, "_avtNfEditorExport", { configurable: true, get: () => _avtNfEditorExport, set: (__v) => { _avtNfEditorExport = __v; } });
-Object.defineProperty(globalThis, "_avtNfHandleTilesetImg", { configurable: true, get: () => _avtNfHandleTilesetImg, set: (__v) => { _avtNfHandleTilesetImg = __v; } });
-Object.defineProperty(globalThis, "_avtNfRemoverTileset", { configurable: true, get: () => _avtNfRemoverTileset, set: (__v) => { _avtNfRemoverTileset = __v; } });
-Object.defineProperty(globalThis, "_avtNfIniciarPlacement", { configurable: true, get: () => _avtNfIniciarPlacement, set: (__v) => { _avtNfIniciarPlacement = __v; } });
-Object.defineProperty(globalThis, "_avtMestreSalvarNovaFase", { configurable: true, get: () => _avtMestreSalvarNovaFase, set: (__v) => { _avtMestreSalvarNovaFase = __v; } });
-Object.defineProperty(globalThis, "_avtMestreRemoverFase", { configurable: true, get: () => _avtMestreRemoverFase, set: (__v) => { _avtMestreRemoverFase = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarFaseBalance", { configurable: true, get: () => _avtSalvarFaseBalance, set: (__v) => { _avtSalvarFaseBalance = __v; } });
-Object.defineProperty(globalThis, "_avtFasesOrdenadas", { configurable: true, get: () => _avtFasesOrdenadas, set: (__v) => { _avtFasesOrdenadas = __v; } });
-Object.defineProperty(globalThis, "_avtFaseAtualObj", { configurable: true, get: () => _avtFaseAtualObj, set: (__v) => { _avtFaseAtualObj = __v; } });
-Object.defineProperty(globalThis, "_avtProximaFase", { configurable: true, get: () => _avtProximaFase, set: (__v) => { _avtProximaFase = __v; } });
-Object.defineProperty(globalThis, "_avtGerarProximaFaseAuto", { configurable: true, get: () => _avtGerarProximaFaseAuto, set: (__v) => { _avtGerarProximaFaseAuto = __v; } });
-Object.defineProperty(globalThis, "_avtOnBossMorto", { configurable: true, get: () => _avtOnBossMorto, set: (__v) => { _avtOnBossMorto = __v; } });
-Object.defineProperty(globalThis, "_avtVerificarPortaFase", { configurable: true, get: () => _avtVerificarPortaFase, set: (__v) => { _avtVerificarPortaFase = __v; } });
-Object.defineProperty(globalThis, "_avtTilesetConfigPrincipal", { configurable: true, get: () => _avtTilesetConfigPrincipal, set: (__v) => { _avtTilesetConfigPrincipal = __v; } });
-Object.defineProperty(globalThis, "_avtFasePrincipalObj", { configurable: true, get: () => _avtFasePrincipalObj, set: (__v) => { _avtFasePrincipalObj = __v; } });
-Object.defineProperty(globalThis, "_avtSnapshotFaseAtual", { configurable: true, get: () => _avtSnapshotFaseAtual, set: (__v) => { _avtSnapshotFaseAtual = __v; } });
-Object.defineProperty(globalThis, "_avtAplicarTilesetFase", { configurable: true, get: () => _avtAplicarTilesetFase, set: (__v) => { _avtAplicarTilesetFase = __v; } });
-Object.defineProperty(globalThis, "_avtCarregarFase", { configurable: true, get: () => _avtCarregarFase, set: (__v) => { _avtCarregarFase = __v; } });
-Object.defineProperty(globalThis, "_avtEntrarFaseExtra", { configurable: true, get: () => _avtEntrarFaseExtra, set: (__v) => { _avtEntrarFaseExtra = __v; } });
-Object.defineProperty(globalThis, "_avtPhaseHostCheck", { configurable: true, get: () => _avtPhaseHostCheck, set: (__v) => { _avtPhaseHostCheck = __v; } });
+Object.defineProperty(globalThis, "_avtNfEditorInit", { configurable: true, writable: true, value: _avtNfEditorInit });
+Object.defineProperty(globalThis, "_avtNfEditorDraw", { configurable: true, writable: true, value: _avtNfEditorDraw });
+Object.defineProperty(globalThis, "_avtNfEditorAcao", { configurable: true, writable: true, value: _avtNfEditorAcao });
+Object.defineProperty(globalThis, "_avtNfEditorTamanho", { configurable: true, writable: true, value: _avtNfEditorTamanho });
+Object.defineProperty(globalThis, "_avtNfEditorLimpar", { configurable: true, writable: true, value: _avtNfEditorLimpar });
+Object.defineProperty(globalThis, "_avtNfEditorExport", { configurable: true, writable: true, value: _avtNfEditorExport });
+Object.defineProperty(globalThis, "_avtNfHandleTilesetImg", { configurable: true, writable: true, value: _avtNfHandleTilesetImg });
+Object.defineProperty(globalThis, "_avtNfRemoverTileset", { configurable: true, writable: true, value: _avtNfRemoverTileset });
+Object.defineProperty(globalThis, "_avtNfIniciarPlacement", { configurable: true, writable: true, value: _avtNfIniciarPlacement });
+Object.defineProperty(globalThis, "_avtMestreSalvarNovaFase", { configurable: true, writable: true, value: _avtMestreSalvarNovaFase });
+Object.defineProperty(globalThis, "_avtMestreRemoverFase", { configurable: true, writable: true, value: _avtMestreRemoverFase });
+Object.defineProperty(globalThis, "_avtSalvarFaseBalance", { configurable: true, writable: true, value: _avtSalvarFaseBalance });
+Object.defineProperty(globalThis, "_avtFasesOrdenadas", { configurable: true, writable: true, value: _avtFasesOrdenadas });
+Object.defineProperty(globalThis, "_avtFaseAtualObj", { configurable: true, writable: true, value: _avtFaseAtualObj });
+Object.defineProperty(globalThis, "_avtProximaFase", { configurable: true, writable: true, value: _avtProximaFase });
+Object.defineProperty(globalThis, "_avtGerarProximaFaseAuto", { configurable: true, writable: true, value: _avtGerarProximaFaseAuto });
+Object.defineProperty(globalThis, "_avtOnBossMorto", { configurable: true, writable: true, value: _avtOnBossMorto });
+Object.defineProperty(globalThis, "_avtVerificarPortaFase", { configurable: true, writable: true, value: _avtVerificarPortaFase });
+Object.defineProperty(globalThis, "_avtTilesetConfigPrincipal", { configurable: true, writable: true, value: _avtTilesetConfigPrincipal });
+Object.defineProperty(globalThis, "_avtFasePrincipalObj", { configurable: true, writable: true, value: _avtFasePrincipalObj });
+Object.defineProperty(globalThis, "_avtSnapshotFaseAtual", { configurable: true, writable: true, value: _avtSnapshotFaseAtual });
+Object.defineProperty(globalThis, "_avtAplicarTilesetFase", { configurable: true, writable: true, value: _avtAplicarTilesetFase });
+Object.defineProperty(globalThis, "_avtCarregarFase", { configurable: true, writable: true, value: _avtCarregarFase });
+Object.defineProperty(globalThis, "_avtEntrarFaseExtra", { configurable: true, writable: true, value: _avtEntrarFaseExtra });
+Object.defineProperty(globalThis, "_avtPhaseHostCheck", { configurable: true, writable: true, value: _avtPhaseHostCheck });
 Object.defineProperty(globalThis, "FASE_HOST_DEAD", { configurable: true, get: () => FASE_HOST_DEAD });
 Object.defineProperty(globalThis, "FASE_HOST_REASSERT", { configurable: true, get: () => FASE_HOST_REASSERT });
-Object.defineProperty(globalThis, "_avtMeuUid", { configurable: true, get: () => _avtMeuUid, set: (__v) => { _avtMeuUid = __v; } });
-Object.defineProperty(globalThis, "_avtFaseHostFresco", { configurable: true, get: () => _avtFaseHostFresco, set: (__v) => { _avtFaseHostFresco = __v; } });
-Object.defineProperty(globalThis, "_avtSouHostDaFaseAtual", { configurable: true, get: () => _avtSouHostDaFaseAtual, set: (__v) => { _avtSouHostDaFaseAtual = __v; } });
-Object.defineProperty(globalThis, "_avtRegistrarHostFase", { configurable: true, get: () => _avtRegistrarHostFase, set: (__v) => { _avtRegistrarHostFase = __v; } });
-Object.defineProperty(globalThis, "_avtClaimHostFase", { configurable: true, get: () => _avtClaimHostFase, set: (__v) => { _avtClaimHostFase = __v; } });
-Object.defineProperty(globalThis, "_avtReafirmarHostFase", { configurable: true, get: () => _avtReafirmarHostFase, set: (__v) => { _avtReafirmarHostFase = __v; } });
-Object.defineProperty(globalThis, "avtReceberFaseHost", { configurable: true, get: () => avtReceberFaseHost, set: (__v) => { avtReceberFaseHost = __v; } });
-Object.defineProperty(globalThis, "_avtIniciarFaseHostLoop", { configurable: true, get: () => _avtIniciarFaseHostLoop, set: (__v) => { _avtIniciarFaseHostLoop = __v; } });
-Object.defineProperty(globalThis, "_avtResolverHostDaFase", { configurable: true, get: () => _avtResolverHostDaFase, set: (__v) => { _avtResolverHostDaFase = __v; } });
-Object.defineProperty(globalThis, "_avtPromptHostFase", { configurable: true, get: () => _avtPromptHostFase, set: (__v) => { _avtPromptHostFase = __v; } });
-Object.defineProperty(globalThis, "_avtSalaEsperaFase", { configurable: true, get: () => _avtSalaEsperaFase, set: (__v) => { _avtSalaEsperaFase = __v; } });
-Object.defineProperty(globalThis, "_avtVerificarSaida", { configurable: true, get: () => _avtVerificarSaida, set: (__v) => { _avtVerificarSaida = __v; } });
-Object.defineProperty(globalThis, "_avtPromptFase", { configurable: true, get: () => _avtPromptFase, set: (__v) => { _avtPromptFase = __v; } });
-Object.defineProperty(globalThis, "_avtVoltarFaseAnterior", { configurable: true, get: () => _avtVoltarFaseAnterior, set: (__v) => { _avtVoltarFaseAnterior = __v; } });
-Object.defineProperty(globalThis, "_avtMestreGerarPersonagensExterno", { configurable: true, get: () => _avtMestreGerarPersonagensExterno, set: (__v) => { _avtMestreGerarPersonagensExterno = __v; } });
-Object.defineProperty(globalThis, "_avtMestreAplicarPersonagensExterno", { configurable: true, get: () => _avtMestreAplicarPersonagensExterno, set: (__v) => { _avtMestreAplicarPersonagensExterno = __v; } });
-Object.defineProperty(globalThis, "_avtMestreAssumir", { configurable: true, get: () => _avtMestreAssumir, set: (__v) => { _avtMestreAssumir = __v; } });
-Object.defineProperty(globalThis, "_avtMestreIniciarRepos", { configurable: true, get: () => _avtMestreIniciarRepos, set: (__v) => { _avtMestreIniciarRepos = __v; } });
-Object.defineProperty(globalThis, "_avtPassarTurnoBatalha", { configurable: true, get: () => _avtPassarTurnoBatalha, set: (__v) => { _avtPassarTurnoBatalha = __v; } });
-Object.defineProperty(globalThis, "_avtMestreAddInimigo", { configurable: true, get: () => _avtMestreAddInimigo, set: (__v) => { _avtMestreAddInimigo = __v; } });
-Object.defineProperty(globalThis, "_avtNpcPresetSel", { configurable: true, get: () => _avtNpcPresetSel, set: (__v) => { _avtNpcPresetSel = __v; } });
-Object.defineProperty(globalThis, "_avtNpcConfirmarAdd", { configurable: true, get: () => _avtNpcConfirmarAdd, set: (__v) => { _avtNpcConfirmarAdd = __v; } });
-Object.defineProperty(globalThis, "_avtNpcSetPaciencia", { configurable: true, get: () => _avtNpcSetPaciencia, set: (__v) => { _avtNpcSetPaciencia = __v; } });
-Object.defineProperty(globalThis, "_avtNpcSetRaio", { configurable: true, get: () => _avtNpcSetRaio, set: (__v) => { _avtNpcSetRaio = __v; } });
-Object.defineProperty(globalThis, "_avtNpcSetBoss", { configurable: true, get: () => _avtNpcSetBoss, set: (__v) => { _avtNpcSetBoss = __v; } });
-Object.defineProperty(globalThis, "_avtNpcSetCor", { configurable: true, get: () => _avtNpcSetCor, set: (__v) => { _avtNpcSetCor = __v; } });
-Object.defineProperty(globalThis, "_avtMestreToggleVisao", { configurable: true, get: () => _avtMestreToggleVisao, set: (__v) => { _avtMestreToggleVisao = __v; } });
-Object.defineProperty(globalThis, "avtHudAtacarNpc", { configurable: true, get: () => avtHudAtacarNpc, set: (__v) => { avtHudAtacarNpc = __v; } });
-Object.defineProperty(globalThis, "abrirAvtCharEditor", { configurable: true, get: () => abrirAvtCharEditor, set: (__v) => { abrirAvtCharEditor = __v; } });
-Object.defineProperty(globalThis, "fecharAvtCharEditor", { configurable: true, get: () => fecharAvtCharEditor, set: (__v) => { fecharAvtCharEditor = __v; } });
-Object.defineProperty(globalThis, "_avtDefaultAttrs", { configurable: true, get: () => _avtDefaultAttrs, set: (__v) => { _avtDefaultAttrs = __v; } });
-Object.defineProperty(globalThis, "_avtCharEditorRender", { configurable: true, get: () => _avtCharEditorRender, set: (__v) => { _avtCharEditorRender = __v; } });
-Object.defineProperty(globalThis, "_avtCe2HpDelta", { configurable: true, get: () => _avtCe2HpDelta, set: (__v) => { _avtCe2HpDelta = __v; } });
-Object.defineProperty(globalThis, "_avtCe2SalvarCorCritico", { configurable: true, get: () => _avtCe2SalvarCorCritico, set: (__v) => { _avtCe2SalvarCorCritico = __v; } });
-Object.defineProperty(globalThis, "_avtCe2PodeEditarImg", { configurable: true, get: () => _avtCe2PodeEditarImg, set: (__v) => { _avtCe2PodeEditarImg = __v; } });
-Object.defineProperty(globalThis, "_avtCe2TrocarImagemTipo", { configurable: true, get: () => _avtCe2TrocarImagemTipo, set: (__v) => { _avtCe2TrocarImagemTipo = __v; } });
-Object.defineProperty(globalThis, "_avtCe2TrocarImagem", { configurable: true, get: () => _avtCe2TrocarImagem, set: (__v) => { _avtCe2TrocarImagem = __v; } });
-Object.defineProperty(globalThis, "_avtCe2SalvarImgUrlTipo", { configurable: true, get: () => _avtCe2SalvarImgUrlTipo, set: (__v) => { _avtCe2SalvarImgUrlTipo = __v; } });
-Object.defineProperty(globalThis, "_avtCe2SalvarImgUrl", { configurable: true, get: () => _avtCe2SalvarImgUrl, set: (__v) => { _avtCe2SalvarImgUrl = __v; } });
-Object.defineProperty(globalThis, "_avtCe2UploadImg", { configurable: true, get: () => _avtCe2UploadImg, set: (__v) => { _avtCe2UploadImg = __v; } });
-Object.defineProperty(globalThis, "_avtCharEditorRenderRight", { configurable: true, get: () => _avtCharEditorRenderRight, set: (__v) => { _avtCharEditorRenderRight = __v; } });
-Object.defineProperty(globalThis, "_avtCharEditorTab", { configurable: true, get: () => _avtCharEditorTab, set: (__v) => { _avtCharEditorTab = __v; } });
-Object.defineProperty(globalThis, "_avtCe2EditStatCard", { configurable: true, get: () => _avtCe2EditStatCard, set: (__v) => { _avtCe2EditStatCard = __v; } });
-Object.defineProperty(globalThis, "_avtCharEditorRenderAttrs", { configurable: true, get: () => _avtCharEditorRenderAttrs, set: (__v) => { _avtCharEditorRenderAttrs = __v; } });
-Object.defineProperty(globalThis, "_avtAttrDelta", { configurable: true, get: () => _avtAttrDelta, set: (__v) => { _avtAttrDelta = __v; } });
-Object.defineProperty(globalThis, "_avtAttrDeltaRpg", { configurable: true, get: () => _avtAttrDeltaRpg, set: (__v) => { _avtAttrDeltaRpg = __v; } });
-Object.defineProperty(globalThis, "_avtAttrHpBaseOverride", { configurable: true, get: () => _avtAttrHpBaseOverride, set: (__v) => { _avtAttrHpBaseOverride = __v; } });
-Object.defineProperty(globalThis, "_avtAttrHpMax", { configurable: true, get: () => _avtAttrHpMax, set: (__v) => { _avtAttrHpMax = __v; } });
-Object.defineProperty(globalThis, "_avtCharSalvarAttrs", { configurable: true, get: () => _avtCharSalvarAttrs, set: (__v) => { _avtCharSalvarAttrs = __v; } });
+Object.defineProperty(globalThis, "_avtMeuUid", { configurable: true, writable: true, value: _avtMeuUid });
+Object.defineProperty(globalThis, "_avtFaseHostFresco", { configurable: true, writable: true, value: _avtFaseHostFresco });
+Object.defineProperty(globalThis, "_avtSouHostDaFaseAtual", { configurable: true, writable: true, value: _avtSouHostDaFaseAtual });
+Object.defineProperty(globalThis, "_avtRegistrarHostFase", { configurable: true, writable: true, value: _avtRegistrarHostFase });
+Object.defineProperty(globalThis, "_avtClaimHostFase", { configurable: true, writable: true, value: _avtClaimHostFase });
+Object.defineProperty(globalThis, "_avtReafirmarHostFase", { configurable: true, writable: true, value: _avtReafirmarHostFase });
+Object.defineProperty(globalThis, "avtReceberFaseHost", { configurable: true, writable: true, value: avtReceberFaseHost });
+Object.defineProperty(globalThis, "_avtIniciarFaseHostLoop", { configurable: true, writable: true, value: _avtIniciarFaseHostLoop });
+Object.defineProperty(globalThis, "_avtResolverHostDaFase", { configurable: true, writable: true, value: _avtResolverHostDaFase });
+Object.defineProperty(globalThis, "_avtPromptHostFase", { configurable: true, writable: true, value: _avtPromptHostFase });
+Object.defineProperty(globalThis, "_avtSalaEsperaFase", { configurable: true, writable: true, value: _avtSalaEsperaFase });
+Object.defineProperty(globalThis, "_avtVerificarSaida", { configurable: true, writable: true, value: _avtVerificarSaida });
+Object.defineProperty(globalThis, "_avtPromptFase", { configurable: true, writable: true, value: _avtPromptFase });
+Object.defineProperty(globalThis, "_avtVoltarFaseAnterior", { configurable: true, writable: true, value: _avtVoltarFaseAnterior });
+Object.defineProperty(globalThis, "_avtMestreGerarPersonagensExterno", { configurable: true, writable: true, value: _avtMestreGerarPersonagensExterno });
+Object.defineProperty(globalThis, "_avtMestreAplicarPersonagensExterno", { configurable: true, writable: true, value: _avtMestreAplicarPersonagensExterno });
+Object.defineProperty(globalThis, "_avtMestreAssumir", { configurable: true, writable: true, value: _avtMestreAssumir });
+Object.defineProperty(globalThis, "_avtMestreIniciarRepos", { configurable: true, writable: true, value: _avtMestreIniciarRepos });
+Object.defineProperty(globalThis, "_avtPassarTurnoBatalha", { configurable: true, writable: true, value: _avtPassarTurnoBatalha });
+Object.defineProperty(globalThis, "_avtMestreAddInimigo", { configurable: true, writable: true, value: _avtMestreAddInimigo });
+Object.defineProperty(globalThis, "_avtNpcPresetSel", { configurable: true, writable: true, value: _avtNpcPresetSel });
+Object.defineProperty(globalThis, "_avtNpcConfirmarAdd", { configurable: true, writable: true, value: _avtNpcConfirmarAdd });
+Object.defineProperty(globalThis, "_avtNpcSetPaciencia", { configurable: true, writable: true, value: _avtNpcSetPaciencia });
+Object.defineProperty(globalThis, "_avtNpcSetRaio", { configurable: true, writable: true, value: _avtNpcSetRaio });
+Object.defineProperty(globalThis, "_avtNpcSetBoss", { configurable: true, writable: true, value: _avtNpcSetBoss });
+Object.defineProperty(globalThis, "_avtNpcSetCor", { configurable: true, writable: true, value: _avtNpcSetCor });
+Object.defineProperty(globalThis, "_avtMestreToggleVisao", { configurable: true, writable: true, value: _avtMestreToggleVisao });
+Object.defineProperty(globalThis, "avtHudAtacarNpc", { configurable: true, writable: true, value: avtHudAtacarNpc });
+Object.defineProperty(globalThis, "abrirAvtCharEditor", { configurable: true, writable: true, value: abrirAvtCharEditor });
+Object.defineProperty(globalThis, "fecharAvtCharEditor", { configurable: true, writable: true, value: fecharAvtCharEditor });
+Object.defineProperty(globalThis, "_avtDefaultAttrs", { configurable: true, writable: true, value: _avtDefaultAttrs });
+Object.defineProperty(globalThis, "_avtCharEditorRender", { configurable: true, writable: true, value: _avtCharEditorRender });
+Object.defineProperty(globalThis, "_avtCe2HpDelta", { configurable: true, writable: true, value: _avtCe2HpDelta });
+Object.defineProperty(globalThis, "_avtCe2SalvarCorCritico", { configurable: true, writable: true, value: _avtCe2SalvarCorCritico });
+Object.defineProperty(globalThis, "_avtCe2PodeEditarImg", { configurable: true, writable: true, value: _avtCe2PodeEditarImg });
+Object.defineProperty(globalThis, "_avtCe2TrocarImagemTipo", { configurable: true, writable: true, value: _avtCe2TrocarImagemTipo });
+Object.defineProperty(globalThis, "_avtCe2TrocarImagem", { configurable: true, writable: true, value: _avtCe2TrocarImagem });
+Object.defineProperty(globalThis, "_avtCe2SalvarImgUrlTipo", { configurable: true, writable: true, value: _avtCe2SalvarImgUrlTipo });
+Object.defineProperty(globalThis, "_avtCe2SalvarImgUrl", { configurable: true, writable: true, value: _avtCe2SalvarImgUrl });
+Object.defineProperty(globalThis, "_avtCe2UploadImg", { configurable: true, writable: true, value: _avtCe2UploadImg });
+Object.defineProperty(globalThis, "_avtCharEditorRenderRight", { configurable: true, writable: true, value: _avtCharEditorRenderRight });
+Object.defineProperty(globalThis, "_avtCharEditorTab", { configurable: true, writable: true, value: _avtCharEditorTab });
+Object.defineProperty(globalThis, "_avtCe2EditStatCard", { configurable: true, writable: true, value: _avtCe2EditStatCard });
+Object.defineProperty(globalThis, "_avtCharEditorRenderAttrs", { configurable: true, writable: true, value: _avtCharEditorRenderAttrs });
+Object.defineProperty(globalThis, "_avtAttrDelta", { configurable: true, writable: true, value: _avtAttrDelta });
+Object.defineProperty(globalThis, "_avtAttrDeltaRpg", { configurable: true, writable: true, value: _avtAttrDeltaRpg });
+Object.defineProperty(globalThis, "_avtAttrHpBaseOverride", { configurable: true, writable: true, value: _avtAttrHpBaseOverride });
+Object.defineProperty(globalThis, "_avtAttrHpMax", { configurable: true, writable: true, value: _avtAttrHpMax });
+Object.defineProperty(globalThis, "_avtCharSalvarAttrs", { configurable: true, writable: true, value: _avtCharSalvarAttrs });
 Object.defineProperty(globalThis, "AVT_EQUIP_SLOTS", { configurable: true, get: () => AVT_EQUIP_SLOTS });
-Object.defineProperty(globalThis, "_avtCharEditorRenderEquip", { configurable: true, get: () => _avtCharEditorRenderEquip, set: (__v) => { _avtCharEditorRenderEquip = __v; } });
-Object.defineProperty(globalThis, "_avtEquiparItem", { configurable: true, get: () => _avtEquiparItem, set: (__v) => { _avtEquiparItem = __v; } });
-Object.defineProperty(globalThis, "_avtDesequiparItem", { configurable: true, get: () => _avtDesequiparItem, set: (__v) => { _avtDesequiparItem = __v; } });
-Object.defineProperty(globalThis, "_avtCharEditorRenderSkills", { configurable: true, get: () => _avtCharEditorRenderSkills, set: (__v) => { _avtCharEditorRenderSkills = __v; } });
-Object.defineProperty(globalThis, "_avtCharEditorRenderInvocacoes", { configurable: true, get: () => _avtCharEditorRenderInvocacoes, set: (__v) => { _avtCharEditorRenderInvocacoes = __v; } });
-Object.defineProperty(globalThis, "_avtDispensarInvocacao", { configurable: true, get: () => _avtDispensarInvocacao, set: (__v) => { _avtDispensarInvocacao = __v; } });
-Object.defineProperty(globalThis, "_avtSkillToggleChar", { configurable: true, get: () => _avtSkillToggleChar, set: (__v) => { _avtSkillToggleChar = __v; } });
-Object.defineProperty(globalThis, "_avtSetSkillNumero", { configurable: true, get: () => _avtSetSkillNumero, set: (__v) => { _avtSetSkillNumero = __v; } });
-Object.defineProperty(globalThis, "_avtSetArcSkill", { configurable: true, get: () => _avtSetArcSkill, set: (__v) => { _avtSetArcSkill = __v; } });
-Object.defineProperty(globalThis, "_avtCharEditorRenderSkillEdit", { configurable: true, get: () => _avtCharEditorRenderSkillEdit, set: (__v) => { _avtCharEditorRenderSkillEdit = __v; } });
-Object.defineProperty(globalThis, "_avtSkillCardHtml", { configurable: true, get: () => _avtSkillCardHtml, set: (__v) => { _avtSkillCardHtml = __v; } });
-Object.defineProperty(globalThis, "_avtSkillField", { configurable: true, get: () => _avtSkillField, set: (__v) => { _avtSkillField = __v; } });
-Object.defineProperty(globalThis, "_avtSkmAreaTipoChange", { configurable: true, get: () => _avtSkmAreaTipoChange, set: (__v) => { _avtSkmAreaTipoChange = __v; } });
+Object.defineProperty(globalThis, "_avtCharEditorRenderEquip", { configurable: true, writable: true, value: _avtCharEditorRenderEquip });
+Object.defineProperty(globalThis, "_avtEquiparItem", { configurable: true, writable: true, value: _avtEquiparItem });
+Object.defineProperty(globalThis, "_avtDesequiparItem", { configurable: true, writable: true, value: _avtDesequiparItem });
+Object.defineProperty(globalThis, "_avtCharEditorRenderSkills", { configurable: true, writable: true, value: _avtCharEditorRenderSkills });
+Object.defineProperty(globalThis, "_avtCharEditorRenderInvocacoes", { configurable: true, writable: true, value: _avtCharEditorRenderInvocacoes });
+Object.defineProperty(globalThis, "_avtDispensarInvocacao", { configurable: true, writable: true, value: _avtDispensarInvocacao });
+Object.defineProperty(globalThis, "_avtSkillToggleChar", { configurable: true, writable: true, value: _avtSkillToggleChar });
+Object.defineProperty(globalThis, "_avtSetSkillNumero", { configurable: true, writable: true, value: _avtSetSkillNumero });
+Object.defineProperty(globalThis, "_avtSetArcSkill", { configurable: true, writable: true, value: _avtSetArcSkill });
+Object.defineProperty(globalThis, "_avtCharEditorRenderSkillEdit", { configurable: true, writable: true, value: _avtCharEditorRenderSkillEdit });
+Object.defineProperty(globalThis, "_avtSkillCardHtml", { configurable: true, writable: true, value: _avtSkillCardHtml });
+Object.defineProperty(globalThis, "_avtSkillField", { configurable: true, writable: true, value: _avtSkillField });
+Object.defineProperty(globalThis, "_avtSkmAreaTipoChange", { configurable: true, writable: true, value: _avtSkmAreaTipoChange });
 Object.defineProperty(globalThis, "_AVT_SK_MODAL", { configurable: true, get: () => _AVT_SK_MODAL, set: (__v) => { _AVT_SK_MODAL = __v; } });
 Object.defineProperty(globalThis, "_AVT_SKM_PREV", { configurable: true, get: () => _AVT_SKM_PREV, set: (__v) => { _AVT_SKM_PREV = __v; } });
-Object.defineProperty(globalThis, "_avtSkMFBCarregarFormula", { configurable: true, get: () => _avtSkMFBCarregarFormula, set: (__v) => { _avtSkMFBCarregarFormula = __v; } });
-Object.defineProperty(globalThis, "_avtSkMFBFormula", { configurable: true, get: () => _avtSkMFBFormula, set: (__v) => { _avtSkMFBFormula = __v; } });
-Object.defineProperty(globalThis, "_avtSkMFBAtualizarUI", { configurable: true, get: () => _avtSkMFBAtualizarUI, set: (__v) => { _avtSkMFBAtualizarUI = __v; } });
-Object.defineProperty(globalThis, "_avtSkMFBAdd", { configurable: true, get: () => _avtSkMFBAdd, set: (__v) => { _avtSkMFBAdd = __v; } });
-Object.defineProperty(globalThis, "_avtSkMFBRem", { configurable: true, get: () => _avtSkMFBRem, set: (__v) => { _avtSkMFBRem = __v; } });
-Object.defineProperty(globalThis, "_avtSkMFBAddBonus", { configurable: true, get: () => _avtSkMFBAddBonus, set: (__v) => { _avtSkMFBAddBonus = __v; } });
-Object.defineProperty(globalThis, "_avtSkMFBLimpar", { configurable: true, get: () => _avtSkMFBLimpar, set: (__v) => { _avtSkMFBLimpar = __v; } });
-Object.defineProperty(globalThis, "_avtSkmAtualizarPreview", { configurable: true, get: () => _avtSkmAtualizarPreview, set: (__v) => { _avtSkmAtualizarPreview = __v; } });
-Object.defineProperty(globalThis, "_avtEfFBFormula", { configurable: true, get: () => _avtEfFBFormula, set: (__v) => { _avtEfFBFormula = __v; } });
-Object.defineProperty(globalThis, "_avtEfFBAtualizarUI", { configurable: true, get: () => _avtEfFBAtualizarUI, set: (__v) => { _avtEfFBAtualizarUI = __v; } });
-Object.defineProperty(globalThis, "_avtEfFBAdd", { configurable: true, get: () => _avtEfFBAdd, set: (__v) => { _avtEfFBAdd = __v; } });
-Object.defineProperty(globalThis, "_avtEfFBRem", { configurable: true, get: () => _avtEfFBRem, set: (__v) => { _avtEfFBRem = __v; } });
-Object.defineProperty(globalThis, "_avtEfFBAddBonus", { configurable: true, get: () => _avtEfFBAddBonus, set: (__v) => { _avtEfFBAddBonus = __v; } });
-Object.defineProperty(globalThis, "_avtEfFBLimpar", { configurable: true, get: () => _avtEfFBLimpar, set: (__v) => { _avtEfFBLimpar = __v; } });
-Object.defineProperty(globalThis, "_avtEfFBParseFormula", { configurable: true, get: () => _avtEfFBParseFormula, set: (__v) => { _avtEfFBParseFormula = __v; } });
-Object.defineProperty(globalThis, "_avtSkmMiniDiceBuilderHTML", { configurable: true, get: () => _avtSkmMiniDiceBuilderHTML, set: (__v) => { _avtSkmMiniDiceBuilderHTML = __v; } });
-Object.defineProperty(globalThis, "_avtSkmRenderEfeitos", { configurable: true, get: () => _avtSkmRenderEfeitos, set: (__v) => { _avtSkmRenderEfeitos = __v; } });
-Object.defineProperty(globalThis, "_avtSkmEfTipoChange", { configurable: true, get: () => _avtSkmEfTipoChange, set: (__v) => { _avtSkmEfTipoChange = __v; } });
-Object.defineProperty(globalThis, "_avtEfPixiCarregar", { configurable: true, get: () => _avtEfPixiCarregar, set: (__v) => { _avtEfPixiCarregar = __v; } });
-Object.defineProperty(globalThis, "_avtEfPixiFiltrar", { configurable: true, get: () => _avtEfPixiFiltrar, set: (__v) => { _avtEfPixiFiltrar = __v; } });
-Object.defineProperty(globalThis, "_avtEfPixiRenderRows", { configurable: true, get: () => _avtEfPixiRenderRows, set: (__v) => { _avtEfPixiRenderRows = __v; } });
-Object.defineProperty(globalThis, "_avtEfPixiSelecionar", { configurable: true, get: () => _avtEfPixiSelecionar, set: (__v) => { _avtEfPixiSelecionar = __v; } });
-Object.defineProperty(globalThis, "_avtEfPixiLimpar", { configurable: true, get: () => _avtEfPixiLimpar, set: (__v) => { _avtEfPixiLimpar = __v; } });
-Object.defineProperty(globalThis, "_avtSkmIniciarPreviewAnim", { configurable: true, get: () => _avtSkmIniciarPreviewAnim, set: (__v) => { _avtSkmIniciarPreviewAnim = __v; } });
-Object.defineProperty(globalThis, "_avtSkmPararPreviewAnim", { configurable: true, get: () => _avtSkmPararPreviewAnim, set: (__v) => { _avtSkmPararPreviewAnim = __v; } });
-Object.defineProperty(globalThis, "_avtSkmDesenharPreview", { configurable: true, get: () => _avtSkmDesenharPreview, set: (__v) => { _avtSkmDesenharPreview = __v; } });
-Object.defineProperty(globalThis, "_avtSkmAnimCfgHTML", { configurable: true, get: () => _avtSkmAnimCfgHTML, set: (__v) => { _avtSkmAnimCfgHTML = __v; } });
-Object.defineProperty(globalThis, "_avtAbrirModalSkill", { configurable: true, get: () => _avtAbrirModalSkill, set: (__v) => { _avtAbrirModalSkill = __v; } });
-Object.defineProperty(globalThis, "_avtSkmAnimTipoChange", { configurable: true, get: () => _avtSkmAnimTipoChange, set: (__v) => { _avtSkmAnimTipoChange = __v; } });
+Object.defineProperty(globalThis, "_avtSkMFBCarregarFormula", { configurable: true, writable: true, value: _avtSkMFBCarregarFormula });
+Object.defineProperty(globalThis, "_avtSkMFBFormula", { configurable: true, writable: true, value: _avtSkMFBFormula });
+Object.defineProperty(globalThis, "_avtSkMFBAtualizarUI", { configurable: true, writable: true, value: _avtSkMFBAtualizarUI });
+Object.defineProperty(globalThis, "_avtSkMFBAdd", { configurable: true, writable: true, value: _avtSkMFBAdd });
+Object.defineProperty(globalThis, "_avtSkMFBRem", { configurable: true, writable: true, value: _avtSkMFBRem });
+Object.defineProperty(globalThis, "_avtSkMFBAddBonus", { configurable: true, writable: true, value: _avtSkMFBAddBonus });
+Object.defineProperty(globalThis, "_avtSkMFBLimpar", { configurable: true, writable: true, value: _avtSkMFBLimpar });
+Object.defineProperty(globalThis, "_avtSkmAtualizarPreview", { configurable: true, writable: true, value: _avtSkmAtualizarPreview });
+Object.defineProperty(globalThis, "_avtEfFBFormula", { configurable: true, writable: true, value: _avtEfFBFormula });
+Object.defineProperty(globalThis, "_avtEfFBAtualizarUI", { configurable: true, writable: true, value: _avtEfFBAtualizarUI });
+Object.defineProperty(globalThis, "_avtEfFBAdd", { configurable: true, writable: true, value: _avtEfFBAdd });
+Object.defineProperty(globalThis, "_avtEfFBRem", { configurable: true, writable: true, value: _avtEfFBRem });
+Object.defineProperty(globalThis, "_avtEfFBAddBonus", { configurable: true, writable: true, value: _avtEfFBAddBonus });
+Object.defineProperty(globalThis, "_avtEfFBLimpar", { configurable: true, writable: true, value: _avtEfFBLimpar });
+Object.defineProperty(globalThis, "_avtEfFBParseFormula", { configurable: true, writable: true, value: _avtEfFBParseFormula });
+Object.defineProperty(globalThis, "_avtSkmMiniDiceBuilderHTML", { configurable: true, writable: true, value: _avtSkmMiniDiceBuilderHTML });
+Object.defineProperty(globalThis, "_avtSkmRenderEfeitos", { configurable: true, writable: true, value: _avtSkmRenderEfeitos });
+Object.defineProperty(globalThis, "_avtSkmEfTipoChange", { configurable: true, writable: true, value: _avtSkmEfTipoChange });
+Object.defineProperty(globalThis, "_avtEfPixiCarregar", { configurable: true, writable: true, value: _avtEfPixiCarregar });
+Object.defineProperty(globalThis, "_avtEfPixiFiltrar", { configurable: true, writable: true, value: _avtEfPixiFiltrar });
+Object.defineProperty(globalThis, "_avtEfPixiRenderRows", { configurable: true, writable: true, value: _avtEfPixiRenderRows });
+Object.defineProperty(globalThis, "_avtEfPixiSelecionar", { configurable: true, writable: true, value: _avtEfPixiSelecionar });
+Object.defineProperty(globalThis, "_avtEfPixiLimpar", { configurable: true, writable: true, value: _avtEfPixiLimpar });
+Object.defineProperty(globalThis, "_avtSkmIniciarPreviewAnim", { configurable: true, writable: true, value: _avtSkmIniciarPreviewAnim });
+Object.defineProperty(globalThis, "_avtSkmPararPreviewAnim", { configurable: true, writable: true, value: _avtSkmPararPreviewAnim });
+Object.defineProperty(globalThis, "_avtSkmDesenharPreview", { configurable: true, writable: true, value: _avtSkmDesenharPreview });
+Object.defineProperty(globalThis, "_avtSkmAnimCfgHTML", { configurable: true, writable: true, value: _avtSkmAnimCfgHTML });
+Object.defineProperty(globalThis, "_avtAbrirModalSkill", { configurable: true, writable: true, value: _avtAbrirModalSkill });
+Object.defineProperty(globalThis, "_avtSkmAnimTipoChange", { configurable: true, writable: true, value: _avtSkmAnimTipoChange });
 Object.defineProperty(globalThis, "_AVT_PIXI_STUDIO_CACHE", { configurable: true, get: () => _AVT_PIXI_STUDIO_CACHE, set: (__v) => { _AVT_PIXI_STUDIO_CACHE = __v; } });
-Object.defineProperty(globalThis, "_avtPixiStudioCarregar", { configurable: true, get: () => _avtPixiStudioCarregar, set: (__v) => { _avtPixiStudioCarregar = __v; } });
-Object.defineProperty(globalThis, "_avtPixiStudioFiltrar", { configurable: true, get: () => _avtPixiStudioFiltrar, set: (__v) => { _avtPixiStudioFiltrar = __v; } });
-Object.defineProperty(globalThis, "_avtPixiStudioRenderLista", { configurable: true, get: () => _avtPixiStudioRenderLista, set: (__v) => { _avtPixiStudioRenderLista = __v; } });
-Object.defineProperty(globalThis, "_avtPixiStudioSelecionar", { configurable: true, get: () => _avtPixiStudioSelecionar, set: (__v) => { _avtPixiStudioSelecionar = __v; } });
-Object.defineProperty(globalThis, "_isSfxUrlDireta", { configurable: true, get: () => _isSfxUrlDireta, set: (__v) => { _isSfxUrlDireta = __v; } });
-Object.defineProperty(globalThis, "_avtSkTestarSfx", { configurable: true, get: () => _avtSkTestarSfx, set: (__v) => { _avtSkTestarSfx = __v; } });
-Object.defineProperty(globalThis, "_avtSfxBibliotecaToggle", { configurable: true, get: () => _avtSfxBibliotecaToggle, set: (__v) => { _avtSfxBibliotecaToggle = __v; } });
-Object.defineProperty(globalThis, "_avtSfxBibliotecaListHTML", { configurable: true, get: () => _avtSfxBibliotecaListHTML, set: (__v) => { _avtSfxBibliotecaListHTML = __v; } });
-Object.defineProperty(globalThis, "_avtSfxBibliotecaUpload", { configurable: true, get: () => _avtSfxBibliotecaUpload, set: (__v) => { _avtSfxBibliotecaUpload = __v; } });
-Object.defineProperty(globalThis, "_avtSfxBibliotecaRemover", { configurable: true, get: () => _avtSfxBibliotecaRemover, set: (__v) => { _avtSfxBibliotecaRemover = __v; } });
-Object.defineProperty(globalThis, "_avtSfxDropdownsRefresh", { configurable: true, get: () => _avtSfxDropdownsRefresh, set: (__v) => { _avtSfxDropdownsRefresh = __v; } });
-Object.defineProperty(globalThis, "_avtFecharModalSkill", { configurable: true, get: () => _avtFecharModalSkill, set: (__v) => { _avtFecharModalSkill = __v; } });
-Object.defineProperty(globalThis, "_avtModalSkillSalvar", { configurable: true, get: () => _avtModalSkillSalvar, set: (__v) => { _avtModalSkillSalvar = __v; } });
-Object.defineProperty(globalThis, "_avtCalcLimiarCrit", { configurable: true, get: () => _avtCalcLimiarCrit, set: (__v) => { _avtCalcLimiarCrit = __v; } });
-Object.defineProperty(globalThis, "_avtCritMultFromD20", { configurable: true, get: () => _avtCritMultFromD20, set: (__v) => { _avtCritMultFromD20 = __v; } });
-Object.defineProperty(globalThis, "_avtCarismaChanceCriticoD20", { configurable: true, get: () => _avtCarismaChanceCriticoD20, set: (__v) => { _avtCarismaChanceCriticoD20 = __v; } });
-Object.defineProperty(globalThis, "_avtMostrarAnimacaoCarismaCritico", { configurable: true, get: () => _avtMostrarAnimacaoCarismaCritico, set: (__v) => { _avtMostrarAnimacaoCarismaCritico = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarCarismaCritConfig", { configurable: true, get: () => _avtSalvarCarismaCritConfig, set: (__v) => { _avtSalvarCarismaCritConfig = __v; } });
-Object.defineProperty(globalThis, "_avtTokenTremer", { configurable: true, get: () => _avtTokenTremer, set: (__v) => { _avtTokenTremer = __v; } });
-Object.defineProperty(globalThis, "_avtAbrirModalAnimAtaqueBasico", { configurable: true, get: () => _avtAbrirModalAnimAtaqueBasico, set: (__v) => { _avtAbrirModalAnimAtaqueBasico = __v; } });
-Object.defineProperty(globalThis, "_avtAbrirModalAtaqueBasico", { configurable: true, get: () => _avtAbrirModalAtaqueBasico, set: (__v) => { _avtAbrirModalAtaqueBasico = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarAtaqueBasico", { configurable: true, get: () => _avtSalvarAtaqueBasico, set: (__v) => { _avtSalvarAtaqueBasico = __v; } });
-Object.defineProperty(globalThis, "_avtSkillEfeitoField", { configurable: true, get: () => _avtSkillEfeitoField, set: (__v) => { _avtSkillEfeitoField = __v; } });
-Object.defineProperty(globalThis, "_avtSkillAddEfeito", { configurable: true, get: () => _avtSkillAddEfeito, set: (__v) => { _avtSkillAddEfeito = __v; } });
-Object.defineProperty(globalThis, "_avtSkillRemEfeito", { configurable: true, get: () => _avtSkillRemEfeito, set: (__v) => { _avtSkillRemEfeito = __v; } });
-Object.defineProperty(globalThis, "_avtSkillAnimSetTipo", { configurable: true, get: () => _avtSkillAnimSetTipo, set: (__v) => { _avtSkillAnimSetTipo = __v; } });
-Object.defineProperty(globalThis, "_avtSkillAnimSetTipoSel", { configurable: true, get: () => _avtSkillAnimSetTipoSel, set: (__v) => { _avtSkillAnimSetTipoSel = __v; } });
-Object.defineProperty(globalThis, "_avtSkillAnimField", { configurable: true, get: () => _avtSkillAnimField, set: (__v) => { _avtSkillAnimField = __v; } });
-Object.defineProperty(globalThis, "_avtSkillAnimCfgHtml", { configurable: true, get: () => _avtSkillAnimCfgHtml, set: (__v) => { _avtSkillAnimCfgHtml = __v; } });
+Object.defineProperty(globalThis, "_avtPixiStudioCarregar", { configurable: true, writable: true, value: _avtPixiStudioCarregar });
+Object.defineProperty(globalThis, "_avtPixiStudioFiltrar", { configurable: true, writable: true, value: _avtPixiStudioFiltrar });
+Object.defineProperty(globalThis, "_avtPixiStudioRenderLista", { configurable: true, writable: true, value: _avtPixiStudioRenderLista });
+Object.defineProperty(globalThis, "_avtPixiStudioSelecionar", { configurable: true, writable: true, value: _avtPixiStudioSelecionar });
+Object.defineProperty(globalThis, "_isSfxUrlDireta", { configurable: true, writable: true, value: _isSfxUrlDireta });
+Object.defineProperty(globalThis, "_avtSkTestarSfx", { configurable: true, writable: true, value: _avtSkTestarSfx });
+Object.defineProperty(globalThis, "_avtSfxBibliotecaToggle", { configurable: true, writable: true, value: _avtSfxBibliotecaToggle });
+Object.defineProperty(globalThis, "_avtSfxBibliotecaListHTML", { configurable: true, writable: true, value: _avtSfxBibliotecaListHTML });
+Object.defineProperty(globalThis, "_avtSfxBibliotecaUpload", { configurable: true, writable: true, value: _avtSfxBibliotecaUpload });
+Object.defineProperty(globalThis, "_avtSfxBibliotecaRemover", { configurable: true, writable: true, value: _avtSfxBibliotecaRemover });
+Object.defineProperty(globalThis, "_avtSfxDropdownsRefresh", { configurable: true, writable: true, value: _avtSfxDropdownsRefresh });
+Object.defineProperty(globalThis, "_avtFecharModalSkill", { configurable: true, writable: true, value: _avtFecharModalSkill });
+Object.defineProperty(globalThis, "_avtModalSkillSalvar", { configurable: true, writable: true, value: _avtModalSkillSalvar });
+Object.defineProperty(globalThis, "_avtCalcLimiarCrit", { configurable: true, writable: true, value: _avtCalcLimiarCrit });
+Object.defineProperty(globalThis, "_avtCritMultFromD20", { configurable: true, writable: true, value: _avtCritMultFromD20 });
+Object.defineProperty(globalThis, "_avtCarismaChanceCriticoD20", { configurable: true, writable: true, value: _avtCarismaChanceCriticoD20 });
+Object.defineProperty(globalThis, "_avtMostrarAnimacaoCarismaCritico", { configurable: true, writable: true, value: _avtMostrarAnimacaoCarismaCritico });
+Object.defineProperty(globalThis, "_avtSalvarCarismaCritConfig", { configurable: true, writable: true, value: _avtSalvarCarismaCritConfig });
+Object.defineProperty(globalThis, "_avtTokenTremer", { configurable: true, writable: true, value: _avtTokenTremer });
+Object.defineProperty(globalThis, "_avtAbrirModalAnimAtaqueBasico", { configurable: true, writable: true, value: _avtAbrirModalAnimAtaqueBasico });
+Object.defineProperty(globalThis, "_avtAbrirModalAtaqueBasico", { configurable: true, writable: true, value: _avtAbrirModalAtaqueBasico });
+Object.defineProperty(globalThis, "_avtSalvarAtaqueBasico", { configurable: true, writable: true, value: _avtSalvarAtaqueBasico });
+Object.defineProperty(globalThis, "_avtSkillEfeitoField", { configurable: true, writable: true, value: _avtSkillEfeitoField });
+Object.defineProperty(globalThis, "_avtSkillAddEfeito", { configurable: true, writable: true, value: _avtSkillAddEfeito });
+Object.defineProperty(globalThis, "_avtSkillRemEfeito", { configurable: true, writable: true, value: _avtSkillRemEfeito });
+Object.defineProperty(globalThis, "_avtSkillAnimSetTipo", { configurable: true, writable: true, value: _avtSkillAnimSetTipo });
+Object.defineProperty(globalThis, "_avtSkillAnimSetTipoSel", { configurable: true, writable: true, value: _avtSkillAnimSetTipoSel });
+Object.defineProperty(globalThis, "_avtSkillAnimField", { configurable: true, writable: true, value: _avtSkillAnimField });
+Object.defineProperty(globalThis, "_avtSkillAnimCfgHtml", { configurable: true, writable: true, value: _avtSkillAnimCfgHtml });
 Object.defineProperty(globalThis, "_AVT_SK_SAVE_TIMERS", { configurable: true, get: () => _AVT_SK_SAVE_TIMERS });
-Object.defineProperty(globalThis, "_avtSkillAutoSave", { configurable: true, get: () => _avtSkillAutoSave, set: (__v) => { _avtSkillAutoSave = __v; } });
-Object.defineProperty(globalThis, "_avtSkillAnimGsapField", { configurable: true, get: () => _avtSkillAnimGsapField, set: (__v) => { _avtSkillAnimGsapField = __v; } });
-Object.defineProperty(globalThis, "_avtSkillAnexarRefImg", { configurable: true, get: () => _avtSkillAnexarRefImg, set: (__v) => { _avtSkillAnexarRefImg = __v; } });
-Object.defineProperty(globalThis, "_avtSkillRemoverRefImg", { configurable: true, get: () => _avtSkillRemoverRefImg, set: (__v) => { _avtSkillRemoverRefImg = __v; } });
-Object.defineProperty(globalThis, "_avtSkillAnimParticleJson", { configurable: true, get: () => _avtSkillAnimParticleJson, set: (__v) => { _avtSkillAnimParticleJson = __v; } });
-Object.defineProperty(globalThis, "_avtSkillAnimSpineJson", { configurable: true, get: () => _avtSkillAnimSpineJson, set: (__v) => { _avtSkillAnimSpineJson = __v; } });
-Object.defineProperty(globalThis, "_avtSkillPromptIA", { configurable: true, get: () => _avtSkillPromptIA, set: (__v) => { _avtSkillPromptIA = __v; } });
-Object.defineProperty(globalThis, "_avtSkillCopiarPromptIA", { configurable: true, get: () => _avtSkillCopiarPromptIA, set: (__v) => { _avtSkillCopiarPromptIA = __v; } });
-Object.defineProperty(globalThis, "_avtSkillGerarAnimIA", { configurable: true, get: () => _avtSkillGerarAnimIA, set: (__v) => { _avtSkillGerarAnimIA = __v; } });
-Object.defineProperty(globalThis, "_avtSkillAnimTipo", { configurable: true, get: () => _avtSkillAnimTipo, set: (__v) => { _avtSkillAnimTipo = __v; } });
-Object.defineProperty(globalThis, "_avtSkillNova", { configurable: true, get: () => _avtSkillNova, set: (__v) => { _avtSkillNova = __v; } });
-Object.defineProperty(globalThis, "_avtSkillSalvar", { configurable: true, get: () => _avtSkillSalvar, set: (__v) => { _avtSkillSalvar = __v; } });
-Object.defineProperty(globalThis, "_avtSkillDeletar", { configurable: true, get: () => _avtSkillDeletar, set: (__v) => { _avtSkillDeletar = __v; } });
+Object.defineProperty(globalThis, "_avtSkillAutoSave", { configurable: true, writable: true, value: _avtSkillAutoSave });
+Object.defineProperty(globalThis, "_avtSkillAnimGsapField", { configurable: true, writable: true, value: _avtSkillAnimGsapField });
+Object.defineProperty(globalThis, "_avtSkillAnexarRefImg", { configurable: true, writable: true, value: _avtSkillAnexarRefImg });
+Object.defineProperty(globalThis, "_avtSkillRemoverRefImg", { configurable: true, writable: true, value: _avtSkillRemoverRefImg });
+Object.defineProperty(globalThis, "_avtSkillAnimParticleJson", { configurable: true, writable: true, value: _avtSkillAnimParticleJson });
+Object.defineProperty(globalThis, "_avtSkillAnimSpineJson", { configurable: true, writable: true, value: _avtSkillAnimSpineJson });
+Object.defineProperty(globalThis, "_avtSkillPromptIA", { configurable: true, writable: true, value: _avtSkillPromptIA });
+Object.defineProperty(globalThis, "_avtSkillCopiarPromptIA", { configurable: true, writable: true, value: _avtSkillCopiarPromptIA });
+Object.defineProperty(globalThis, "_avtSkillGerarAnimIA", { configurable: true, writable: true, value: _avtSkillGerarAnimIA });
+Object.defineProperty(globalThis, "_avtSkillAnimTipo", { configurable: true, writable: true, value: _avtSkillAnimTipo });
+Object.defineProperty(globalThis, "_avtSkillNova", { configurable: true, writable: true, value: _avtSkillNova });
+Object.defineProperty(globalThis, "_avtSkillSalvar", { configurable: true, writable: true, value: _avtSkillSalvar });
+Object.defineProperty(globalThis, "_avtSkillDeletar", { configurable: true, writable: true, value: _avtSkillDeletar });
 Object.defineProperty(globalThis, "_AVT_ANIM_PROMPT", { configurable: true, get: () => _AVT_ANIM_PROMPT });
-Object.defineProperty(globalThis, "_avtCharImportarAparencia", { configurable: true, get: () => _avtCharImportarAparencia, set: (__v) => { _avtCharImportarAparencia = __v; } });
-Object.defineProperty(globalThis, "_avtAparTabSwitch", { configurable: true, get: () => _avtAparTabSwitch, set: (__v) => { _avtAparTabSwitch = __v; } });
-Object.defineProperty(globalThis, "_avtIsoPreviewImagem", { configurable: true, get: () => _avtIsoPreviewImagem, set: (__v) => { _avtIsoPreviewImagem = __v; } });
-Object.defineProperty(globalThis, "_avtTdPreviewImagem", { configurable: true, get: () => _avtTdPreviewImagem, set: (__v) => { _avtTdPreviewImagem = __v; } });
-Object.defineProperty(globalThis, "_avtCopiarTexto", { configurable: true, get: () => _avtCopiarTexto, set: (__v) => { _avtCopiarTexto = __v; } });
-Object.defineProperty(globalThis, "_avtAnimPreview", { configurable: true, get: () => _avtAnimPreview, set: (__v) => { _avtAnimPreview = __v; } });
-Object.defineProperty(globalThis, "_avtAnimSalvar", { configurable: true, get: () => _avtAnimSalvar, set: (__v) => { _avtAnimSalvar = __v; } });
-Object.defineProperty(globalThis, "_avtTopdownIaSalvar", { configurable: true, get: () => _avtTopdownIaSalvar, set: (__v) => { _avtTopdownIaSalvar = __v; } });
-Object.defineProperty(globalThis, "_avtIsoIaSalvar", { configurable: true, get: () => _avtIsoIaSalvar, set: (__v) => { _avtIsoIaSalvar = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioImgUrl", { configurable: true, get: () => _avtWalkStudioImgUrl, set: (__v) => { _avtWalkStudioImgUrl = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioAbrir", { configurable: true, get: () => _avtWalkStudioAbrir, set: (__v) => { _avtWalkStudioAbrir = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioFechar", { configurable: true, get: () => _avtWalkStudioFechar, set: (__v) => { _avtWalkStudioFechar = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioSelectPreset", { configurable: true, get: () => _avtWalkStudioSelectPreset, set: (__v) => { _avtWalkStudioSelectPreset = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioSetState", { configurable: true, get: () => _avtWalkStudioSetState, set: (__v) => { _avtWalkStudioSetState = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioFlip", { configurable: true, get: () => _avtWalkStudioFlip, set: (__v) => { _avtWalkStudioFlip = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioTogglePernas", { configurable: true, get: () => _avtWalkStudioTogglePernas, set: (__v) => { _avtWalkStudioTogglePernas = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioSetFacingMode", { configurable: true, get: () => _avtWalkStudioSetFacingMode, set: (__v) => { _avtWalkStudioSetFacingMode = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioSetParam", { configurable: true, get: () => _avtWalkStudioSetParam, set: (__v) => { _avtWalkStudioSetParam = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioSetWeapon", { configurable: true, get: () => _avtWalkStudioSetWeapon, set: (__v) => { _avtWalkStudioSetWeapon = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioLoop", { configurable: true, get: () => _avtWalkStudioLoop, set: (__v) => { _avtWalkStudioLoop = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioSlider", { configurable: true, get: () => _avtWalkStudioSlider, set: (__v) => { _avtWalkStudioSlider = __v; } });
-Object.defineProperty(globalThis, "_avtWalkStudioRender", { configurable: true, get: () => _avtWalkStudioRender, set: (__v) => { _avtWalkStudioRender = __v; } });
-Object.defineProperty(globalThis, "_avtWalkPresetSalvar", { configurable: true, get: () => _avtWalkPresetSalvar, set: (__v) => { _avtWalkPresetSalvar = __v; } });
-Object.defineProperty(globalThis, "_avtNpcClassesSecao", { configurable: true, get: () => _avtNpcClassesSecao, set: (__v) => { _avtNpcClassesSecao = __v; } });
-Object.defineProperty(globalThis, "_avtSalvarNpcClasse", { configurable: true, get: () => _avtSalvarNpcClasse, set: (__v) => { _avtSalvarNpcClasse = __v; } });
-Object.defineProperty(globalThis, "_avtCriarNpcClasse", { configurable: true, get: () => _avtCriarNpcClasse, set: (__v) => { _avtCriarNpcClasse = __v; } });
-Object.defineProperty(globalThis, "_avtExcluirNpcClasse", { configurable: true, get: () => _avtExcluirNpcClasse, set: (__v) => { _avtExcluirNpcClasse = __v; } });
-Object.defineProperty(globalThis, "_avtBulkAparSecaoPreset", { configurable: true, get: () => _avtBulkAparSecaoPreset, set: (__v) => { _avtBulkAparSecaoPreset = __v; } });
-Object.defineProperty(globalThis, "_avtBulkAplicarAparenciaPreset", { configurable: true, get: () => _avtBulkAplicarAparenciaPreset, set: (__v) => { _avtBulkAplicarAparenciaPreset = __v; } });
-Object.defineProperty(globalThis, "_avtBulkAparMassaSecoes", { configurable: true, get: () => _avtBulkAparMassaSecoes, set: (__v) => { _avtBulkAparMassaSecoes = __v; } });
-Object.defineProperty(globalThis, "_avtBulkMaskPng", { configurable: true, get: () => _avtBulkMaskPng, set: (__v) => { _avtBulkMaskPng = __v; } });
-Object.defineProperty(globalThis, "_avtBulkUpload", { configurable: true, get: () => _avtBulkUpload, set: (__v) => { _avtBulkUpload = __v; } });
-Object.defineProperty(globalThis, "_avtInvocacoesDisponiveis", { configurable: true, get: () => _avtInvocacoesDisponiveis, set: (__v) => { _avtInvocacoesDisponiveis = __v; } });
-Object.defineProperty(globalThis, "_avtAplicarEfeitoInvocar", { configurable: true, get: () => _avtAplicarEfeitoInvocar, set: (__v) => { _avtAplicarEfeitoInvocar = __v; } });
-Object.defineProperty(globalThis, "avtInvocar", { configurable: true, get: () => avtInvocar, set: (__v) => { avtInvocar = __v; } });
-Object.defineProperty(globalThis, "_avtCriarEntidadeInvocacao", { configurable: true, get: () => _avtCriarEntidadeInvocacao, set: (__v) => { _avtCriarEntidadeInvocacao = __v; } });
-Object.defineProperty(globalThis, "_avtDestruirInvocacao", { configurable: true, get: () => _avtDestruirInvocacao, set: (__v) => { _avtDestruirInvocacao = __v; } });
-Object.defineProperty(globalThis, "_avtInvocacaoExplosao", { configurable: true, get: () => _avtInvocacaoExplosao, set: (__v) => { _avtInvocacaoExplosao = __v; } });
-Object.defineProperty(globalThis, "_avtNpcTurnoInvocado", { configurable: true, get: () => _avtNpcTurnoInvocado, set: (__v) => { _avtNpcTurnoInvocado = __v; } });
-Object.defineProperty(globalThis, "avtReceberInvocacaoDestruida", { configurable: true, get: () => avtReceberInvocacaoDestruida, set: (__v) => { avtReceberInvocacaoDestruida = __v; } });
-Object.defineProperty(globalThis, "_avtRolarFormulaInvocado", { configurable: true, get: () => _avtRolarFormulaInvocado, set: (__v) => { _avtRolarFormulaInvocado = __v; } });
+Object.defineProperty(globalThis, "_avtCharImportarAparencia", { configurable: true, writable: true, value: _avtCharImportarAparencia });
+Object.defineProperty(globalThis, "_avtAparTabSwitch", { configurable: true, writable: true, value: _avtAparTabSwitch });
+Object.defineProperty(globalThis, "_avtIsoPreviewImagem", { configurable: true, writable: true, value: _avtIsoPreviewImagem });
+Object.defineProperty(globalThis, "_avtTdPreviewImagem", { configurable: true, writable: true, value: _avtTdPreviewImagem });
+Object.defineProperty(globalThis, "_avtCopiarTexto", { configurable: true, writable: true, value: _avtCopiarTexto });
+Object.defineProperty(globalThis, "_avtAnimPreview", { configurable: true, writable: true, value: _avtAnimPreview });
+Object.defineProperty(globalThis, "_avtAnimSalvar", { configurable: true, writable: true, value: _avtAnimSalvar });
+Object.defineProperty(globalThis, "_avtTopdownIaSalvar", { configurable: true, writable: true, value: _avtTopdownIaSalvar });
+Object.defineProperty(globalThis, "_avtIsoIaSalvar", { configurable: true, writable: true, value: _avtIsoIaSalvar });
+Object.defineProperty(globalThis, "_avtWalkStudioImgUrl", { configurable: true, writable: true, value: _avtWalkStudioImgUrl });
+Object.defineProperty(globalThis, "_avtWalkStudioAbrir", { configurable: true, writable: true, value: _avtWalkStudioAbrir });
+Object.defineProperty(globalThis, "_avtWalkStudioFechar", { configurable: true, writable: true, value: _avtWalkStudioFechar });
+Object.defineProperty(globalThis, "_avtWalkStudioSelectPreset", { configurable: true, writable: true, value: _avtWalkStudioSelectPreset });
+Object.defineProperty(globalThis, "_avtWalkStudioSetState", { configurable: true, writable: true, value: _avtWalkStudioSetState });
+Object.defineProperty(globalThis, "_avtWalkStudioFlip", { configurable: true, writable: true, value: _avtWalkStudioFlip });
+Object.defineProperty(globalThis, "_avtWalkStudioTogglePernas", { configurable: true, writable: true, value: _avtWalkStudioTogglePernas });
+Object.defineProperty(globalThis, "_avtWalkStudioSetFacingMode", { configurable: true, writable: true, value: _avtWalkStudioSetFacingMode });
+Object.defineProperty(globalThis, "_avtWalkStudioSetParam", { configurable: true, writable: true, value: _avtWalkStudioSetParam });
+Object.defineProperty(globalThis, "_avtWalkStudioSetWeapon", { configurable: true, writable: true, value: _avtWalkStudioSetWeapon });
+Object.defineProperty(globalThis, "_avtWalkStudioLoop", { configurable: true, writable: true, value: _avtWalkStudioLoop });
+Object.defineProperty(globalThis, "_avtWalkStudioSlider", { configurable: true, writable: true, value: _avtWalkStudioSlider });
+Object.defineProperty(globalThis, "_avtWalkStudioRender", { configurable: true, writable: true, value: _avtWalkStudioRender });
+Object.defineProperty(globalThis, "_avtWalkPresetSalvar", { configurable: true, writable: true, value: _avtWalkPresetSalvar });
+Object.defineProperty(globalThis, "_avtNpcClassesSecao", { configurable: true, writable: true, value: _avtNpcClassesSecao });
+Object.defineProperty(globalThis, "_avtSalvarNpcClasse", { configurable: true, writable: true, value: _avtSalvarNpcClasse });
+Object.defineProperty(globalThis, "_avtCriarNpcClasse", { configurable: true, writable: true, value: _avtCriarNpcClasse });
+Object.defineProperty(globalThis, "_avtExcluirNpcClasse", { configurable: true, writable: true, value: _avtExcluirNpcClasse });
+Object.defineProperty(globalThis, "_avtBulkAparSecaoPreset", { configurable: true, writable: true, value: _avtBulkAparSecaoPreset });
+Object.defineProperty(globalThis, "_avtBulkAplicarAparenciaPreset", { configurable: true, writable: true, value: _avtBulkAplicarAparenciaPreset });
+Object.defineProperty(globalThis, "_avtBulkAparMassaSecoes", { configurable: true, writable: true, value: _avtBulkAparMassaSecoes });
+Object.defineProperty(globalThis, "_avtBulkMaskPng", { configurable: true, writable: true, value: _avtBulkMaskPng });
+Object.defineProperty(globalThis, "_avtBulkUpload", { configurable: true, writable: true, value: _avtBulkUpload });
+Object.defineProperty(globalThis, "_avtInvocacoesDisponiveis", { configurable: true, writable: true, value: _avtInvocacoesDisponiveis });
+Object.defineProperty(globalThis, "_avtAplicarEfeitoInvocar", { configurable: true, writable: true, value: _avtAplicarEfeitoInvocar });
+Object.defineProperty(globalThis, "avtInvocar", { configurable: true, writable: true, value: avtInvocar });
+Object.defineProperty(globalThis, "_avtCriarEntidadeInvocacao", { configurable: true, writable: true, value: _avtCriarEntidadeInvocacao });
+Object.defineProperty(globalThis, "_avtDestruirInvocacao", { configurable: true, writable: true, value: _avtDestruirInvocacao });
+Object.defineProperty(globalThis, "_avtInvocacaoExplosao", { configurable: true, writable: true, value: _avtInvocacaoExplosao });
+Object.defineProperty(globalThis, "_avtNpcTurnoInvocado", { configurable: true, writable: true, value: _avtNpcTurnoInvocado });
+Object.defineProperty(globalThis, "avtReceberInvocacaoDestruida", { configurable: true, writable: true, value: avtReceberInvocacaoDestruida });
+Object.defineProperty(globalThis, "_avtRolarFormulaInvocado", { configurable: true, writable: true, value: _avtRolarFormulaInvocado });

@@ -191,7 +191,7 @@ window.mapaRenderCanvas = function(m) {
       const altura  = m.altura_total  || 20;
       const cW = W / largura;
       const cH = H / altura;
-      const _hasTileset = typeof AVT_STATE !== 'undefined' && AVT_STATE._tilesetLoaded;
+      const _hasTileset = typeof AVT_STATE !== 'undefined' && (AVT_STATE as any)._tilesetLoaded;
       ctx.save();
       ctx.strokeStyle = _hasTileset ? 'rgba(126,200,240,0.04)' : 'rgba(126,200,240,0.12)';
       ctx.lineWidth   = _hasTileset ? 0.3 : 0.5;

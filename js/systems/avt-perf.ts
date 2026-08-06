@@ -54,7 +54,7 @@ var AVT_PERF = (() => {
     let ents = 0, fase = '';
     try {
       ents = (typeof AVT_STATE !== 'undefined' && AVT_STATE && AVT_STATE.entidades) ? AVT_STATE.entidades.length : 0;
-      fase = (typeof AVT_STATE !== 'undefined' && AVT_STATE && AVT_STATE._faseAtualId) || '';
+      fase = (typeof AVT_STATE !== 'undefined' && AVT_STATE && (AVT_STATE as any)._faseAtualId) || '';
     } catch (_) {}
 
     // Taxas de rede por segundo (diff dos acumulados)

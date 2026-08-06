@@ -767,7 +767,7 @@ window.RTNet = (() => {
     try {
       if (typeof AVT_STATE === 'undefined' || !AVT_STATE) return;
       // Isolamento por fase: não aplicar snapshot de fase diferente da minha.
-      const _minhaFase = AVT_STATE._faseAtualId || 'principal';
+      const _minhaFase = (AVT_STATE as any)._faseAtualId || 'principal';
       if (snapshot.faseId != null && snapshot.faseId !== _minhaFase) return;
       // Merge não-destrutivo (preserva posição do MEU personagem) quando disponível
       if (typeof window !== 'undefined' && typeof window.avtAplicarSnapshotMerge === 'function') {

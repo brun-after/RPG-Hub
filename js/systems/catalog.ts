@@ -3146,7 +3146,7 @@ window._avtCtrlToggleAutoAlvoPref = _avtCtrlToggleAutoAlvoPref;
 
 function _avtCtrlAplicarAutoAlvo() {
   if (!MOBILE_CTRL.autoAlvo || typeof AVT_STATE === 'undefined') return;
-  const skId = AVT_STATE._pendingSkillId;
+  const skId = (AVT_STATE as any)._pendingSkillId;
   if (skId === undefined) return;
   const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
   if (!jogador) return;
@@ -4114,7 +4114,7 @@ function _avtCtrlAtualizarAlvosCentral(alvosEl) {
 
   if (!emMeuTurno && !primAtaque && !algumPerseguindo) { alvosEl.innerHTML = ''; return; }
 
-  const skId   = AVT_STATE._pendingSkillId; // undefined=nenhuma selecionada, null=básico, string=skill
+  const skId   = (AVT_STATE as any)._pendingSkillId; // undefined=nenhuma selecionada, null=básico, string=skill
   const alvoId = AVT_STATE.alvoSelecionado;
   const sk = (skId != null) ? AVT_STATE.skills.find(s => s.id === skId) : null;
   const alcanceSk = sk?.alcance_celulas ?? 1;
@@ -4440,7 +4440,7 @@ function _atualizarZonaDireitaAventura() {
 
   if (typeof AVT_STATE === 'undefined' || !jogador) return;
 
-  const skId   = AVT_STATE._pendingSkillId;
+  const skId   = (AVT_STATE as any)._pendingSkillId;
   const alvoId = AVT_STATE.alvoSelecionado;
 
   // Calcular distância ao alvo selecionado
@@ -4813,7 +4813,7 @@ function _atualizarZonaDireitaAventura() {
 // ── Funções de controle adventure device ────────────────────────────────
 window._avtCtrlSelecionarSkill = function(skId) {
   if (typeof AVT_STATE === 'undefined') return;
-  AVT_STATE._pendingSkillId = skId;
+  (AVT_STATE as any)._pendingSkillId = skId;
   // Se alvo selecionado mas fora do alcance da nova skill, limpar alvo
   if (AVT_STATE.alvoSelecionado && skId != null) {
     const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
@@ -4848,11 +4848,11 @@ window._avtCtrlSelecionarSkill = function(skId) {
 window._avtCtrlSelecionarAlvo = function(entId) {
   if (typeof AVT_STATE === 'undefined') return;
   // Skill de aliado: executar diretamente sem passar por lógica de inimigo
-  const _skIdAlv = AVT_STATE._pendingSkillId;
+  const _skIdAlv = (AVT_STATE as any)._pendingSkillId;
   const _skAlv = _skIdAlv ? AVT_STATE.skills.find(s => s.id === _skIdAlv) : null;
   if (_skAlv?.alvo_tipo === 'aliado') {
     const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
-    AVT_STATE._pendingSkillId = undefined;
+    (AVT_STATE as any)._pendingSkillId = undefined;
     AVT_STATE.alvoSelecionado = null;
     if (bat && typeof _avtExecutarSkillEmAliado === 'function') {
       _avtExecutarSkillEmAliado(_skIdAlv, entId);
@@ -4864,7 +4864,7 @@ window._avtCtrlSelecionarAlvo = function(entId) {
     return;
   }
   AVT_STATE.alvoSelecionado = entId;
-  const skId = AVT_STATE._pendingSkillId;
+  const skId = (AVT_STATE as any)._pendingSkillId;
   if (skId !== undefined) {
     const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
     const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
@@ -4886,14 +4886,14 @@ window._avtCtrlRolarDados = function() {
   if (typeof AVT_STATE === 'undefined') return;
   const primAtaque = AVT_STATE._primeiroAtaqueAberto || AVT_STATE._primeiroAtaqueModoAlvo;
   if (primAtaque) {
-    const skId   = AVT_STATE._pendingSkillId ?? null;
+    const skId   = (AVT_STATE as any)._pendingSkillId ?? null;
     const alvoId = AVT_STATE.alvoSelecionado;
     if (!alvoId) return;
     AVT_STATE._primeiroAtaqueAberto = false;
     AVT_STATE._primeiroAtaqueModoAlvo = null;
-    AVT_STATE._habilidadeRange = null;
-    AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
-    AVT_STATE._pendingSkillId = undefined;
+    (AVT_STATE as any)._habilidadeRange = null;
+    (AVT_STATE as any)._primeiroAtaqueAlvoSelecionadoMobile = null;
+    (AVT_STATE as any)._pendingSkillId = undefined;
     AVT_STATE.alvoSelecionado = null;
     _atualizarZonaDireita();
     _atualizarZonaCentral();

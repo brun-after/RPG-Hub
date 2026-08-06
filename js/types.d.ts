@@ -46,6 +46,8 @@ declare global {
   // Bloco regenerado automaticamente durante a Entrega 2; esvazia conforme os
   // módulos donos são convertidos. (Sobras no fim = globals de runtime puro.)
   // [migração-ts:auto-globals:início]
+  var AVT_WALK_PRESETS: any;
+  var EFFECT_REGISTRY: any;
   var FASE_TILE_SZ: any;
   var INVENTARIO_CACHE: any;
   var ITEMS_CATALOG: any;
@@ -56,13 +58,25 @@ declare global {
   var TRADES_CACHE: any;
   var _aoeObterAlvosAtingidos: any;
   var _aplicarAnimacaoSkill: any;
+  var _avtAplicarPlayerDamageLocal: any;
+  var _avtCameraSnapToPlayer: any;
   var _avtCtrlRolarDados: any;
   var _avtCtrlSelecionarAlvo: any;
   var _avtCtrlSelecionarSkill: any;
+  var _avtIniciarRegenManaPorSegundo: any;
   var _avtIrParaFase: any;
+  var _avtNpcSyncInit: any;
+  var _avtNpcSyncReportDelta: any;
   var _avtNpcSyncShutdown: any;
+  var _avtNpcSyncTickLerp: any;
+  var _avtPararRegenManaPorSegundo: any;
+  var _avtRTBroadcastPlayerDamage: any;
+  var _avtSouHostDe: any;
+  var _calcHpNpc: any;
   var _dataUrlToBlob: any;
+  var _isHost: any;
   var _isMestre: any;
+  var _isRTNet: any;
   var _mesaAtaqueInlineConfirmar: any;
   var _mesaAtaqueInlineRolar: any;
   var _origMostrarPropostaRecebidaOrig: any;
@@ -77,10 +91,12 @@ declare global {
   var aplicarDanoBatalha: any;
   var arLog: any;
   var assertHpConsistente: any;
+  var atrs: any;
   var atualizarDisplayMoedas: any;
   var atualizarInventarioUI: any;
   var atualizarMapaLoot: any;
   var atualizarTradesUI: any;
+  var avtWalkRender: any;
   var battleStateBroadcast: any;
   var cenaRenderizarObjetos: any;
   var chatEnviarNarrador: any;
