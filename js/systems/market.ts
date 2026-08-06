@@ -297,10 +297,17 @@ async function verInformacoesCompradas() {
 console.log('✓ Sistema de informações secretas do mercado carregado');
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "mercadoSelecionarTipo", { configurable: true, writable: true, value: mercadoSelecionarTipo });
-Object.defineProperty(globalThis, "mercadoCriarInformacao", { configurable: true, writable: true, value: mercadoCriarInformacao });
-Object.defineProperty(globalThis, "_limparFormularioInformacao", { configurable: true, writable: true, value: _limparFormularioInformacao });
-Object.defineProperty(globalThis, "confirmarCompraInfo", { configurable: true, writable: true, value: confirmarCompraInfo });
-Object.defineProperty(globalThis, "comprarInformacao", { configurable: true, writable: true, value: comprarInformacao });
-Object.defineProperty(globalThis, "mostrarInformacaoAdquirida", { configurable: true, writable: true, value: mostrarInformacaoAdquirida });
-Object.defineProperty(globalThis, "verInformacoesCompradas", { configurable: true, writable: true, value: verInformacoesCompradas });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mercadoSelecionarTipo", { configurable: true, get: () => mercadoSelecionarTipo, set: (__v) => { mercadoSelecionarTipo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mercadoCriarInformacao", { configurable: true, get: () => mercadoCriarInformacao, set: (__v) => { mercadoCriarInformacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_limparFormularioInformacao", { configurable: true, get: () => _limparFormularioInformacao, set: (__v) => { _limparFormularioInformacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "confirmarCompraInfo", { configurable: true, get: () => confirmarCompraInfo, set: (__v) => { confirmarCompraInfo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "comprarInformacao", { configurable: true, get: () => comprarInformacao, set: (__v) => { comprarInformacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mostrarInformacaoAdquirida", { configurable: true, get: () => mostrarInformacaoAdquirida, set: (__v) => { mostrarInformacaoAdquirida = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "verInformacoesCompradas", { configurable: true, get: () => verInformacoesCompradas, set: (__v) => { verInformacoesCompradas = __v; } });

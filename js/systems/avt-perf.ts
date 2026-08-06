@@ -168,6 +168,9 @@ function avtPerfToggle(force) { return AVT_PERF.toggle(force); }
 
 /* [migração-esm] accessors globais */
 Object.defineProperty(globalThis, "AVT_PERF", { configurable: true, get: () => AVT_PERF });
-Object.defineProperty(globalThis, "avtReceberPing", { configurable: true, writable: true, value: avtReceberPing });
-Object.defineProperty(globalThis, "avtReceberPong", { configurable: true, writable: true, value: avtReceberPong });
-Object.defineProperty(globalThis, "avtPerfToggle", { configurable: true, writable: true, value: avtPerfToggle });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberPing", { configurable: true, get: () => avtReceberPing, set: (__v) => { avtReceberPing = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberPong", { configurable: true, get: () => avtReceberPong, set: (__v) => { avtReceberPong = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtPerfToggle", { configurable: true, get: () => avtPerfToggle, set: (__v) => { avtPerfToggle = __v; } });

@@ -492,25 +492,47 @@ async function entrarArenaFromHub(rpgId){
 /* [migração-esm] accessors globais */
 Object.defineProperty(globalThis, "AUTH_MODE", { configurable: true, get: () => AUTH_MODE, set: (__v) => { AUTH_MODE = __v; } });
 Object.defineProperty(globalThis, "HCAPTCHA_WIDGET_ID", { configurable: true, get: () => HCAPTCHA_WIDGET_ID, set: (__v) => { HCAPTCHA_WIDGET_ID = __v; } });
-Object.defineProperty(globalThis, "onHcaptchaLoad", { configurable: true, writable: true, value: onHcaptchaLoad });
-Object.defineProperty(globalThis, "authTab", { configurable: true, writable: true, value: authTab });
-Object.defineProperty(globalThis, "authErro", { configurable: true, writable: true, value: authErro });
-Object.defineProperty(globalThis, "authSucesso", { configurable: true, writable: true, value: authSucesso });
-Object.defineProperty(globalThis, "authToggleSenha", { configurable: true, writable: true, value: authToggleSenha });
-Object.defineProperty(globalThis, "authToggleSenha2", { configurable: true, writable: true, value: authToggleSenha2 });
-Object.defineProperty(globalThis, "authSubmit", { configurable: true, writable: true, value: authSubmit });
-Object.defineProperty(globalThis, "authCadastrar", { configurable: true, writable: true, value: authCadastrar });
-Object.defineProperty(globalThis, "authEntrar", { configurable: true, writable: true, value: authEntrar });
-Object.defineProperty(globalThis, "authMostrarRecuperacao", { configurable: true, writable: true, value: authMostrarRecuperacao });
-Object.defineProperty(globalThis, "authOcultarRecuperacao", { configurable: true, writable: true, value: authOcultarRecuperacao });
-Object.defineProperty(globalThis, "authEnviarRecuperacao", { configurable: true, writable: true, value: authEnviarRecuperacao });
-Object.defineProperty(globalThis, "authVerificarLinkRecuperacao", { configurable: true, writable: true, value: authVerificarLinkRecuperacao });
-Object.defineProperty(globalThis, "authVerificarConfirmacaoEmail", { configurable: true, writable: true, value: authVerificarConfirmacaoEmail });
-Object.defineProperty(globalThis, "authExibirFormNovaSenha", { configurable: true, writable: true, value: authExibirFormNovaSenha });
-Object.defineProperty(globalThis, "authSalvarNovaSenha", { configurable: true, writable: true, value: authSalvarNovaSenha });
-Object.defineProperty(globalThis, "traduzirErroAuth", { configurable: true, writable: true, value: traduzirErroAuth });
-Object.defineProperty(globalThis, "authRefreshSession", { configurable: true, writable: true, value: authRefreshSession });
-Object.defineProperty(globalThis, "authSair", { configurable: true, writable: true, value: authSair });
-Object.defineProperty(globalThis, "iniciarApp", { configurable: true, writable: true, value: iniciarApp });
-Object.defineProperty(globalThis, "renderRPGList", { configurable: true, writable: true, value: renderRPGList });
-Object.defineProperty(globalThis, "entrarArenaFromHub", { configurable: true, writable: true, value: entrarArenaFromHub });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "onHcaptchaLoad", { configurable: true, get: () => onHcaptchaLoad, set: (__v) => { onHcaptchaLoad = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authTab", { configurable: true, get: () => authTab, set: (__v) => { authTab = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authErro", { configurable: true, get: () => authErro, set: (__v) => { authErro = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authSucesso", { configurable: true, get: () => authSucesso, set: (__v) => { authSucesso = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authToggleSenha", { configurable: true, get: () => authToggleSenha, set: (__v) => { authToggleSenha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authToggleSenha2", { configurable: true, get: () => authToggleSenha2, set: (__v) => { authToggleSenha2 = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authSubmit", { configurable: true, get: () => authSubmit, set: (__v) => { authSubmit = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authCadastrar", { configurable: true, get: () => authCadastrar, set: (__v) => { authCadastrar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authEntrar", { configurable: true, get: () => authEntrar, set: (__v) => { authEntrar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authMostrarRecuperacao", { configurable: true, get: () => authMostrarRecuperacao, set: (__v) => { authMostrarRecuperacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authOcultarRecuperacao", { configurable: true, get: () => authOcultarRecuperacao, set: (__v) => { authOcultarRecuperacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authEnviarRecuperacao", { configurable: true, get: () => authEnviarRecuperacao, set: (__v) => { authEnviarRecuperacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authVerificarLinkRecuperacao", { configurable: true, get: () => authVerificarLinkRecuperacao, set: (__v) => { authVerificarLinkRecuperacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authVerificarConfirmacaoEmail", { configurable: true, get: () => authVerificarConfirmacaoEmail, set: (__v) => { authVerificarConfirmacaoEmail = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authExibirFormNovaSenha", { configurable: true, get: () => authExibirFormNovaSenha, set: (__v) => { authExibirFormNovaSenha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authSalvarNovaSenha", { configurable: true, get: () => authSalvarNovaSenha, set: (__v) => { authSalvarNovaSenha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "traduzirErroAuth", { configurable: true, get: () => traduzirErroAuth, set: (__v) => { traduzirErroAuth = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authRefreshSession", { configurable: true, get: () => authRefreshSession, set: (__v) => { authRefreshSession = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "authSair", { configurable: true, get: () => authSair, set: (__v) => { authSair = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "iniciarApp", { configurable: true, get: () => iniciarApp, set: (__v) => { iniciarApp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderRPGList", { configurable: true, get: () => renderRPGList, set: (__v) => { renderRPGList = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "entrarArenaFromHub", { configurable: true, get: () => entrarArenaFromHub, set: (__v) => { entrarArenaFromHub = __v; } });

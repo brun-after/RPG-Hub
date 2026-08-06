@@ -848,25 +848,46 @@ window.avtInvRenderMestreInv     = avtInvRenderMestreInv;
 Object.defineProperty(globalThis, "AVT_INV", { configurable: true, get: () => AVT_INV });
 Object.defineProperty(globalThis, "_AVT_SLOTS", { configurable: true, get: () => _AVT_SLOTS });
 Object.defineProperty(globalThis, "_AVT_RAR_COR", { configurable: true, get: () => _AVT_RAR_COR });
-Object.defineProperty(globalThis, "_avtInvIco", { configurable: true, writable: true, value: _avtInvIco });
-Object.defineProperty(globalThis, "avtInvInit", { configurable: true, writable: true, value: avtInvInit });
-Object.defineProperty(globalThis, "avtInvReset", { configurable: true, writable: true, value: avtInvReset });
-Object.defineProperty(globalThis, "avtInvCarregarChar", { configurable: true, writable: true, value: avtInvCarregarChar });
-Object.defineProperty(globalThis, "avtInvBroadcastUpdate", { configurable: true, writable: true, value: avtInvBroadcastUpdate });
-Object.defineProperty(globalThis, "avtInvDarItem", { configurable: true, writable: true, value: avtInvDarItem });
-Object.defineProperty(globalThis, "avtInvRemoverItem", { configurable: true, writable: true, value: avtInvRemoverItem });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInvIco", { configurable: true, get: () => _avtInvIco, set: (__v) => { _avtInvIco = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvInit", { configurable: true, get: () => avtInvInit, set: (__v) => { avtInvInit = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvReset", { configurable: true, get: () => avtInvReset, set: (__v) => { avtInvReset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvCarregarChar", { configurable: true, get: () => avtInvCarregarChar, set: (__v) => { avtInvCarregarChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvBroadcastUpdate", { configurable: true, get: () => avtInvBroadcastUpdate, set: (__v) => { avtInvBroadcastUpdate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvDarItem", { configurable: true, get: () => avtInvDarItem, set: (__v) => { avtInvDarItem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvRemoverItem", { configurable: true, get: () => avtInvRemoverItem, set: (__v) => { avtInvRemoverItem = __v; } });
 Object.defineProperty(globalThis, "_avtInvEquipando", { configurable: true, get: () => _avtInvEquipando, set: (__v) => { _avtInvEquipando = __v; } });
-Object.defineProperty(globalThis, "avtInvEquipar", { configurable: true, writable: true, value: avtInvEquipar });
-Object.defineProperty(globalThis, "_avtInvDoEquipar", { configurable: true, writable: true, value: _avtInvDoEquipar });
-Object.defineProperty(globalThis, "_avtInvDoDesequipar", { configurable: true, writable: true, value: _avtInvDoDesequipar });
-Object.defineProperty(globalThis, "avtInvUsarConsumivel", { configurable: true, writable: true, value: avtInvUsarConsumivel });
-Object.defineProperty(globalThis, "avtInvAplicarEfeitos", { configurable: true, writable: true, value: avtInvAplicarEfeitos });
-Object.defineProperty(globalThis, "avtInvDarOuro", { configurable: true, writable: true, value: avtInvDarOuro });
-Object.defineProperty(globalThis, "avtInvRemoverOuro", { configurable: true, writable: true, value: avtInvRemoverOuro });
-Object.defineProperty(globalThis, "avtAbrirInventario", { configurable: true, writable: true, value: avtAbrirInventario });
-Object.defineProperty(globalThis, "avtFecharInventario", { configurable: true, writable: true, value: avtFecharInventario });
-Object.defineProperty(globalThis, "avtInvRenderPanel", { configurable: true, writable: true, value: avtInvRenderPanel });
-Object.defineProperty(globalThis, "avtInvRenderSlotsHud", { configurable: true, writable: true, value: avtInvRenderSlotsHud });
-Object.defineProperty(globalThis, "avtInvRenderConsumiveisHud", { configurable: true, writable: true, value: avtInvRenderConsumiveisHud });
-Object.defineProperty(globalThis, "_avtInvEfLabel", { configurable: true, writable: true, value: _avtInvEfLabel });
-Object.defineProperty(globalThis, "avtInvRenderMestreInv", { configurable: true, writable: true, value: avtInvRenderMestreInv });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvEquipar", { configurable: true, get: () => avtInvEquipar, set: (__v) => { avtInvEquipar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInvDoEquipar", { configurable: true, get: () => _avtInvDoEquipar, set: (__v) => { _avtInvDoEquipar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInvDoDesequipar", { configurable: true, get: () => _avtInvDoDesequipar, set: (__v) => { _avtInvDoDesequipar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvUsarConsumivel", { configurable: true, get: () => avtInvUsarConsumivel, set: (__v) => { avtInvUsarConsumivel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvAplicarEfeitos", { configurable: true, get: () => avtInvAplicarEfeitos, set: (__v) => { avtInvAplicarEfeitos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvDarOuro", { configurable: true, get: () => avtInvDarOuro, set: (__v) => { avtInvDarOuro = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvRemoverOuro", { configurable: true, get: () => avtInvRemoverOuro, set: (__v) => { avtInvRemoverOuro = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtAbrirInventario", { configurable: true, get: () => avtAbrirInventario, set: (__v) => { avtAbrirInventario = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtFecharInventario", { configurable: true, get: () => avtFecharInventario, set: (__v) => { avtFecharInventario = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvRenderPanel", { configurable: true, get: () => avtInvRenderPanel, set: (__v) => { avtInvRenderPanel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvRenderSlotsHud", { configurable: true, get: () => avtInvRenderSlotsHud, set: (__v) => { avtInvRenderSlotsHud = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvRenderConsumiveisHud", { configurable: true, get: () => avtInvRenderConsumiveisHud, set: (__v) => { avtInvRenderConsumiveisHud = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInvEfLabel", { configurable: true, get: () => _avtInvEfLabel, set: (__v) => { _avtInvEfLabel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvRenderMestreInv", { configurable: true, get: () => avtInvRenderMestreInv, set: (__v) => { avtInvRenderMestreInv = __v; } });

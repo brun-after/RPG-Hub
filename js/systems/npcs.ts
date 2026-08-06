@@ -176,9 +176,14 @@ function npcGenericoProximoPlacement() {
 }
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "abrirModalNpcGenerico", { configurable: true, writable: true, value: abrirModalNpcGenerico });
-Object.defineProperty(globalThis, "fecharModalNpcGenerico", { configurable: true, writable: true, value: fecharModalNpcGenerico });
-Object.defineProperty(globalThis, "criarNpcGenerico", { configurable: true, writable: true, value: criarNpcGenerico });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalNpcGenerico", { configurable: true, get: () => abrirModalNpcGenerico, set: (__v) => { abrirModalNpcGenerico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalNpcGenerico", { configurable: true, get: () => fecharModalNpcGenerico, set: (__v) => { fecharModalNpcGenerico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criarNpcGenerico", { configurable: true, get: () => criarNpcGenerico, set: (__v) => { criarNpcGenerico = __v; } });
 Object.defineProperty(globalThis, "NPC_PLACEMENT_QUEUE", { configurable: true, get: () => NPC_PLACEMENT_QUEUE, set: (__v) => { NPC_PLACEMENT_QUEUE = __v; } });
-Object.defineProperty(globalThis, "npcGenericoIniciarPlacement", { configurable: true, writable: true, value: npcGenericoIniciarPlacement });
-Object.defineProperty(globalThis, "npcGenericoProximoPlacement", { configurable: true, writable: true, value: npcGenericoProximoPlacement });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "npcGenericoIniciarPlacement", { configurable: true, get: () => npcGenericoIniciarPlacement, set: (__v) => { npcGenericoIniciarPlacement = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "npcGenericoProximoPlacement", { configurable: true, get: () => npcGenericoProximoPlacement, set: (__v) => { npcGenericoProximoPlacement = __v; } });

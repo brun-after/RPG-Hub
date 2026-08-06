@@ -444,4 +444,5 @@ Object.defineProperty(globalThis, "DEFAULT_SOUNDTRACKS", { configurable: true, g
 Object.defineProperty(globalThis, "DEFAULT_SFX_LIBRARY", { configurable: true, get: () => DEFAULT_SFX_LIBRARY });
 Object.defineProperty(globalThis, "SOUND_BANK", { configurable: true, get: () => SOUND_BANK });
 Object.defineProperty(globalThis, "_SFX_AUTO_MAP", { configurable: true, get: () => _SFX_AUTO_MAP });
-Object.defineProperty(globalThis, "_AudioManager", { configurable: true, writable: true, value: _AudioManager });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_AudioManager", { configurable: true, get: () => _AudioManager, set: (__v) => { _AudioManager = __v; } });

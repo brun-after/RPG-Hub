@@ -98,5 +98,7 @@ async function descansoGrupo(tipo) {
 }
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "descansoExecutar", { configurable: true, writable: true, value: descansoExecutar });
-Object.defineProperty(globalThis, "descansoGrupo", { configurable: true, writable: true, value: descansoGrupo });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "descansoExecutar", { configurable: true, get: () => descansoExecutar, set: (__v) => { descansoExecutar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "descansoGrupo", { configurable: true, get: () => descansoGrupo, set: (__v) => { descansoGrupo = __v; } });

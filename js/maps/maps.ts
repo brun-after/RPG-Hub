@@ -11726,356 +11726,682 @@ let PLACEMENT_STATE = null;
 })();
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "_animMedia", { configurable: true, writable: true, value: _animMedia });
-Object.defineProperty(globalThis, "_animImpacto", { configurable: true, writable: true, value: _animImpacto });
-Object.defineProperty(globalThis, "skAnimValidarDuracao", { configurable: true, writable: true, value: skAnimValidarDuracao });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_animMedia", { configurable: true, get: () => _animMedia, set: (__v) => { _animMedia = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_animImpacto", { configurable: true, get: () => _animImpacto, set: (__v) => { _animImpacto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skAnimValidarDuracao", { configurable: true, get: () => skAnimValidarDuracao, set: (__v) => { skAnimValidarDuracao = __v; } });
 Object.defineProperty(globalThis, "_maps_skAnimPreviewRaf", { configurable: true, get: () => _maps_skAnimPreviewRaf, set: (__v) => { _maps_skAnimPreviewRaf = __v; } });
-Object.defineProperty(globalThis, "skAnimTipoChange", { configurable: true, writable: true, value: skAnimTipoChange });
-Object.defineProperty(globalThis, "skAnimMidiaPreview", { configurable: true, writable: true, value: skAnimMidiaPreview });
-Object.defineProperty(globalThis, "criativoAnimTipoChange", { configurable: true, writable: true, value: criativoAnimTipoChange });
-Object.defineProperty(globalThis, "arAnimDnTipoChange", { configurable: true, writable: true, value: arAnimDnTipoChange });
-Object.defineProperty(globalThis, "skAnimPreview", { configurable: true, writable: true, value: skAnimPreview });
-Object.defineProperty(globalThis, "skAnimPreviewPlay", { configurable: true, writable: true, value: skAnimPreviewPlay });
-Object.defineProperty(globalThis, "atkConfirmarAtaque", { configurable: true, writable: true, value: atkConfirmarAtaque });
-Object.defineProperty(globalThis, "atkAplicarEfeitoComRecuperacao", { configurable: true, writable: true, value: atkAplicarEfeitoComRecuperacao });
-Object.defineProperty(globalThis, "atkAplicarEfeito", { configurable: true, writable: true, value: atkAplicarEfeito });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skAnimTipoChange", { configurable: true, get: () => skAnimTipoChange, set: (__v) => { skAnimTipoChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skAnimMidiaPreview", { configurable: true, get: () => skAnimMidiaPreview, set: (__v) => { skAnimMidiaPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoAnimTipoChange", { configurable: true, get: () => criativoAnimTipoChange, set: (__v) => { criativoAnimTipoChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "arAnimDnTipoChange", { configurable: true, get: () => arAnimDnTipoChange, set: (__v) => { arAnimDnTipoChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skAnimPreview", { configurable: true, get: () => skAnimPreview, set: (__v) => { skAnimPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skAnimPreviewPlay", { configurable: true, get: () => skAnimPreviewPlay, set: (__v) => { skAnimPreviewPlay = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkConfirmarAtaque", { configurable: true, get: () => atkConfirmarAtaque, set: (__v) => { atkConfirmarAtaque = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkAplicarEfeitoComRecuperacao", { configurable: true, get: () => atkAplicarEfeitoComRecuperacao, set: (__v) => { atkAplicarEfeitoComRecuperacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkAplicarEfeito", { configurable: true, get: () => atkAplicarEfeito, set: (__v) => { atkAplicarEfeito = __v; } });
 Object.defineProperty(globalThis, "_AOE_STATE", { configurable: true, get: () => _AOE_STATE, set: (__v) => { _AOE_STATE = __v; } });
-Object.defineProperty(globalThis, "atkIniciarModoArea", { configurable: true, writable: true, value: atkIniciarModoArea });
-Object.defineProperty(globalThis, "_aoeRenderCircle", { configurable: true, writable: true, value: _aoeRenderCircle });
-Object.defineProperty(globalThis, "atkAtivarAoECriativo", { configurable: true, writable: true, value: atkAtivarAoECriativo });
-Object.defineProperty(globalThis, "atkConfirmarAoECriativo", { configurable: true, writable: true, value: atkConfirmarAoECriativo });
-Object.defineProperty(globalThis, "_aoeStartDrag", { configurable: true, writable: true, value: _aoeStartDrag });
-Object.defineProperty(globalThis, "_aoeDrag", { configurable: true, writable: true, value: _aoeDrag });
-Object.defineProperty(globalThis, "_aoeEndDrag", { configurable: true, writable: true, value: _aoeEndDrag });
-Object.defineProperty(globalThis, "_aoeRemoverBadges", { configurable: true, writable: true, value: _aoeRemoverBadges });
-Object.defineProperty(globalThis, "_aoeAtualizarAlvos", { configurable: true, writable: true, value: _aoeAtualizarAlvos });
-Object.defineProperty(globalThis, "atkConfirmarAoE", { configurable: true, writable: true, value: atkConfirmarAoE });
-Object.defineProperty(globalThis, "_atkInvocarPersonagem", { configurable: true, writable: true, value: _atkInvocarPersonagem });
-Object.defineProperty(globalThis, "_skEhInvocacao", { configurable: true, writable: true, value: _skEhInvocacao });
-Object.defineProperty(globalThis, "calcularDanoFinal", { configurable: true, writable: true, value: calcularDanoFinal });
-Object.defineProperty(globalThis, "getAttrDefsParaDano", { configurable: true, writable: true, value: getAttrDefsParaDano });
-Object.defineProperty(globalThis, "obterHpAtualSeguro", { configurable: true, writable: true, value: obterHpAtualSeguro });
-Object.defineProperty(globalThis, "calcularDanoComResistencia", { configurable: true, writable: true, value: calcularDanoComResistencia });
-Object.defineProperty(globalThis, "aplicarDanoComHpTemporario", { configurable: true, writable: true, value: aplicarDanoComHpTemporario });
-Object.defineProperty(globalThis, "carregarEstadoBatalha", { configurable: true, writable: true, value: carregarEstadoBatalha });
-Object.defineProperty(globalThis, "salvarEstadoBatalha", { configurable: true, writable: true, value: salvarEstadoBatalha });
-Object.defineProperty(globalThis, "atkAplicarDano", { configurable: true, writable: true, value: atkAplicarDano });
-Object.defineProperty(globalThis, "atkEnviarAtaqueCriativo", { configurable: true, writable: true, value: atkEnviarAtaqueCriativo });
-Object.defineProperty(globalThis, "atkEnviarSolicitacaoSkill", { configurable: true, writable: true, value: atkEnviarSolicitacaoSkill });
-Object.defineProperty(globalThis, "renderAtaquesPendentes", { configurable: true, writable: true, value: renderAtaquesPendentes });
-Object.defineProperty(globalThis, "atkRolarParaPendente", { configurable: true, writable: true, value: atkRolarParaPendente });
-Object.defineProperty(globalThis, "atkMestreAprovar", { configurable: true, writable: true, value: atkMestreAprovar });
-Object.defineProperty(globalThis, "atkMestreRejeitar", { configurable: true, writable: true, value: atkMestreRejeitar });
-Object.defineProperty(globalThis, "_parseDCData", { configurable: true, writable: true, value: _parseDCData });
-Object.defineProperty(globalThis, "criativoSalvar", { configurable: true, writable: true, value: criativoSalvar });
-Object.defineProperty(globalThis, "criativoInserir", { configurable: true, writable: true, value: criativoInserir });
-Object.defineProperty(globalThis, "criativoReceberLinhaRemota", { configurable: true, writable: true, value: criativoReceberLinhaRemota });
-Object.defineProperty(globalThis, "criativoRenderMestre", { configurable: true, writable: true, value: criativoRenderMestre });
-Object.defineProperty(globalThis, "_adicionarBadgeCriticoModalFase2", { configurable: true, writable: true, value: _adicionarBadgeCriticoModalFase2 });
-Object.defineProperty(globalThis, "abrirModalCriativoMestre", { configurable: true, writable: true, value: abrirModalCriativoMestre });
-Object.defineProperty(globalThis, "_abrirModalAprovacaoPorStatus", { configurable: true, writable: true, value: _abrirModalAprovacaoPorStatus });
-Object.defineProperty(globalThis, "criativoCobrarCustoToggle", { configurable: true, writable: true, value: criativoCobrarCustoToggle });
-Object.defineProperty(globalThis, "criativoCustoAtributoMudou", { configurable: true, writable: true, value: criativoCustoAtributoMudou });
-Object.defineProperty(globalThis, "fecharModalCriativoMestre", { configurable: true, writable: true, value: fecharModalCriativoMestre });
-Object.defineProperty(globalThis, "_injetarCriativoExtrasPanel", { configurable: true, writable: true, value: _injetarCriativoExtrasPanel });
-Object.defineProperty(globalThis, "abrirModalAcao", { configurable: true, writable: true, value: abrirModalAcao });
-Object.defineProperty(globalThis, "fecharModalAcao", { configurable: true, writable: true, value: fecharModalAcao });
-Object.defineProperty(globalThis, "_acaoMostrarPainel", { configurable: true, writable: true, value: _acaoMostrarPainel });
-Object.defineProperty(globalThis, "acaoVoltarRaiz", { configurable: true, writable: true, value: acaoVoltarRaiz });
-Object.defineProperty(globalThis, "acaoMostrarCriativa", { configurable: true, writable: true, value: acaoMostrarCriativa });
-Object.defineProperty(globalThis, "acaoSelecionarTipo", { configurable: true, writable: true, value: acaoSelecionarTipo });
-Object.defineProperty(globalThis, "acaoSelecionarAlvo", { configurable: true, writable: true, value: acaoSelecionarAlvo });
-Object.defineProperty(globalThis, "modalAcaoCriativa", { configurable: true, writable: true, value: modalAcaoCriativa });
-Object.defineProperty(globalThis, "modalAcaoSolicitarCombate", { configurable: true, writable: true, value: modalAcaoSolicitarCombate });
-Object.defineProperty(globalThis, "modalAcaoItem", { configurable: true, writable: true, value: modalAcaoItem });
-Object.defineProperty(globalThis, "usarItemConsumivel", { configurable: true, writable: true, value: usarItemConsumivel });
-Object.defineProperty(globalThis, "acaoEnviarCriativa", { configurable: true, writable: true, value: acaoEnviarCriativa });
-Object.defineProperty(globalThis, "acaoEnviarPedidoCombate", { configurable: true, writable: true, value: acaoEnviarPedidoCombate });
-Object.defineProperty(globalThis, "mestreAbrirModalCombatePedido", { configurable: true, writable: true, value: mestreAbrirModalCombatePedido });
-Object.defineProperty(globalThis, "fecharModalCombatePedido", { configurable: true, writable: true, value: fecharModalCombatePedido });
-Object.defineProperty(globalThis, "mestreAprovarCombatePedido", { configurable: true, writable: true, value: mestreAprovarCombatePedido });
-Object.defineProperty(globalThis, "mestreRejeitarCombatePedido", { configurable: true, writable: true, value: mestreRejeitarCombatePedido });
-Object.defineProperty(globalThis, "criativoCadastrarSkillToggle", { configurable: true, writable: true, value: criativoCadastrarSkillToggle });
-Object.defineProperty(globalThis, "criativoMestreBuilderAdd", { configurable: true, writable: true, value: criativoMestreBuilderAdd });
-Object.defineProperty(globalThis, "criativoMestreBuilderRemove", { configurable: true, writable: true, value: criativoMestreBuilderRemove });
-Object.defineProperty(globalThis, "criativoMestreBuilderAtualizar", { configurable: true, writable: true, value: criativoMestreBuilderAtualizar });
-Object.defineProperty(globalThis, "criativoMestreAtributoMudou", { configurable: true, writable: true, value: criativoMestreAtributoMudou });
-Object.defineProperty(globalThis, "criativoSelecionarDado", { configurable: true, writable: true, value: criativoSelecionarDado });
-Object.defineProperty(globalThis, "criativoToggleAtaque", { configurable: true, writable: true, value: criativoToggleAtaque });
-Object.defineProperty(globalThis, "criativoEhAtaqueChange", { configurable: true, writable: true, value: criativoEhAtaqueChange });
-Object.defineProperty(globalThis, "criativoDCPreview", { configurable: true, writable: true, value: criativoDCPreview });
-Object.defineProperty(globalThis, "_criativoAbrirModalOverlay", { configurable: true, writable: true, value: _criativoAbrirModalOverlay });
-Object.defineProperty(globalThis, "criativoMestreConcluirFase1", { configurable: true, writable: true, value: criativoMestreConcluirFase1 });
-Object.defineProperty(globalThis, "crLabelAcao", { configurable: true, writable: true, value: crLabelAcao });
-Object.defineProperty(globalThis, "criativoMestreDefinirDano", { configurable: true, writable: true, value: criativoMestreDefinirDano });
-Object.defineProperty(globalThis, "criativoMestreRejeitar", { configurable: true, writable: true, value: criativoMestreRejeitar });
-Object.defineProperty(globalThis, "criativoMestreRejeitarDireto", { configurable: true, writable: true, value: criativoMestreRejeitarDireto });
-Object.defineProperty(globalThis, "criativoMestreLimparTodas", { configurable: true, writable: true, value: criativoMestreLimparTodas });
-Object.defineProperty(globalThis, "criativoReclassificar", { configurable: true, writable: true, value: criativoReclassificar });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkIniciarModoArea", { configurable: true, get: () => atkIniciarModoArea, set: (__v) => { atkIniciarModoArea = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aoeRenderCircle", { configurable: true, get: () => _aoeRenderCircle, set: (__v) => { _aoeRenderCircle = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkAtivarAoECriativo", { configurable: true, get: () => atkAtivarAoECriativo, set: (__v) => { atkAtivarAoECriativo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkConfirmarAoECriativo", { configurable: true, get: () => atkConfirmarAoECriativo, set: (__v) => { atkConfirmarAoECriativo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aoeStartDrag", { configurable: true, get: () => _aoeStartDrag, set: (__v) => { _aoeStartDrag = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aoeDrag", { configurable: true, get: () => _aoeDrag, set: (__v) => { _aoeDrag = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aoeEndDrag", { configurable: true, get: () => _aoeEndDrag, set: (__v) => { _aoeEndDrag = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aoeRemoverBadges", { configurable: true, get: () => _aoeRemoverBadges, set: (__v) => { _aoeRemoverBadges = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aoeAtualizarAlvos", { configurable: true, get: () => _aoeAtualizarAlvos, set: (__v) => { _aoeAtualizarAlvos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkConfirmarAoE", { configurable: true, get: () => atkConfirmarAoE, set: (__v) => { atkConfirmarAoE = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_atkInvocarPersonagem", { configurable: true, get: () => _atkInvocarPersonagem, set: (__v) => { _atkInvocarPersonagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_skEhInvocacao", { configurable: true, get: () => _skEhInvocacao, set: (__v) => { _skEhInvocacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "calcularDanoFinal", { configurable: true, get: () => calcularDanoFinal, set: (__v) => { calcularDanoFinal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "getAttrDefsParaDano", { configurable: true, get: () => getAttrDefsParaDano, set: (__v) => { getAttrDefsParaDano = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "obterHpAtualSeguro", { configurable: true, get: () => obterHpAtualSeguro, set: (__v) => { obterHpAtualSeguro = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "calcularDanoComResistencia", { configurable: true, get: () => calcularDanoComResistencia, set: (__v) => { calcularDanoComResistencia = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "aplicarDanoComHpTemporario", { configurable: true, get: () => aplicarDanoComHpTemporario, set: (__v) => { aplicarDanoComHpTemporario = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "carregarEstadoBatalha", { configurable: true, get: () => carregarEstadoBatalha, set: (__v) => { carregarEstadoBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarEstadoBatalha", { configurable: true, get: () => salvarEstadoBatalha, set: (__v) => { salvarEstadoBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkAplicarDano", { configurable: true, get: () => atkAplicarDano, set: (__v) => { atkAplicarDano = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkEnviarAtaqueCriativo", { configurable: true, get: () => atkEnviarAtaqueCriativo, set: (__v) => { atkEnviarAtaqueCriativo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkEnviarSolicitacaoSkill", { configurable: true, get: () => atkEnviarSolicitacaoSkill, set: (__v) => { atkEnviarSolicitacaoSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderAtaquesPendentes", { configurable: true, get: () => renderAtaquesPendentes, set: (__v) => { renderAtaquesPendentes = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkRolarParaPendente", { configurable: true, get: () => atkRolarParaPendente, set: (__v) => { atkRolarParaPendente = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkMestreAprovar", { configurable: true, get: () => atkMestreAprovar, set: (__v) => { atkMestreAprovar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkMestreRejeitar", { configurable: true, get: () => atkMestreRejeitar, set: (__v) => { atkMestreRejeitar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_parseDCData", { configurable: true, get: () => _parseDCData, set: (__v) => { _parseDCData = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoSalvar", { configurable: true, get: () => criativoSalvar, set: (__v) => { criativoSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoInserir", { configurable: true, get: () => criativoInserir, set: (__v) => { criativoInserir = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoReceberLinhaRemota", { configurable: true, get: () => criativoReceberLinhaRemota, set: (__v) => { criativoReceberLinhaRemota = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoRenderMestre", { configurable: true, get: () => criativoRenderMestre, set: (__v) => { criativoRenderMestre = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_adicionarBadgeCriticoModalFase2", { configurable: true, get: () => _adicionarBadgeCriticoModalFase2, set: (__v) => { _adicionarBadgeCriticoModalFase2 = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalCriativoMestre", { configurable: true, get: () => abrirModalCriativoMestre, set: (__v) => { abrirModalCriativoMestre = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_abrirModalAprovacaoPorStatus", { configurable: true, get: () => _abrirModalAprovacaoPorStatus, set: (__v) => { _abrirModalAprovacaoPorStatus = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoCobrarCustoToggle", { configurable: true, get: () => criativoCobrarCustoToggle, set: (__v) => { criativoCobrarCustoToggle = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoCustoAtributoMudou", { configurable: true, get: () => criativoCustoAtributoMudou, set: (__v) => { criativoCustoAtributoMudou = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalCriativoMestre", { configurable: true, get: () => fecharModalCriativoMestre, set: (__v) => { fecharModalCriativoMestre = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_injetarCriativoExtrasPanel", { configurable: true, get: () => _injetarCriativoExtrasPanel, set: (__v) => { _injetarCriativoExtrasPanel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalAcao", { configurable: true, get: () => abrirModalAcao, set: (__v) => { abrirModalAcao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalAcao", { configurable: true, get: () => fecharModalAcao, set: (__v) => { fecharModalAcao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_acaoMostrarPainel", { configurable: true, get: () => _acaoMostrarPainel, set: (__v) => { _acaoMostrarPainel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "acaoVoltarRaiz", { configurable: true, get: () => acaoVoltarRaiz, set: (__v) => { acaoVoltarRaiz = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "acaoMostrarCriativa", { configurable: true, get: () => acaoMostrarCriativa, set: (__v) => { acaoMostrarCriativa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "acaoSelecionarTipo", { configurable: true, get: () => acaoSelecionarTipo, set: (__v) => { acaoSelecionarTipo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "acaoSelecionarAlvo", { configurable: true, get: () => acaoSelecionarAlvo, set: (__v) => { acaoSelecionarAlvo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "modalAcaoCriativa", { configurable: true, get: () => modalAcaoCriativa, set: (__v) => { modalAcaoCriativa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "modalAcaoSolicitarCombate", { configurable: true, get: () => modalAcaoSolicitarCombate, set: (__v) => { modalAcaoSolicitarCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "modalAcaoItem", { configurable: true, get: () => modalAcaoItem, set: (__v) => { modalAcaoItem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "usarItemConsumivel", { configurable: true, get: () => usarItemConsumivel, set: (__v) => { usarItemConsumivel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "acaoEnviarCriativa", { configurable: true, get: () => acaoEnviarCriativa, set: (__v) => { acaoEnviarCriativa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "acaoEnviarPedidoCombate", { configurable: true, get: () => acaoEnviarPedidoCombate, set: (__v) => { acaoEnviarPedidoCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mestreAbrirModalCombatePedido", { configurable: true, get: () => mestreAbrirModalCombatePedido, set: (__v) => { mestreAbrirModalCombatePedido = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalCombatePedido", { configurable: true, get: () => fecharModalCombatePedido, set: (__v) => { fecharModalCombatePedido = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mestreAprovarCombatePedido", { configurable: true, get: () => mestreAprovarCombatePedido, set: (__v) => { mestreAprovarCombatePedido = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mestreRejeitarCombatePedido", { configurable: true, get: () => mestreRejeitarCombatePedido, set: (__v) => { mestreRejeitarCombatePedido = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoCadastrarSkillToggle", { configurable: true, get: () => criativoCadastrarSkillToggle, set: (__v) => { criativoCadastrarSkillToggle = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoMestreBuilderAdd", { configurable: true, get: () => criativoMestreBuilderAdd, set: (__v) => { criativoMestreBuilderAdd = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoMestreBuilderRemove", { configurable: true, get: () => criativoMestreBuilderRemove, set: (__v) => { criativoMestreBuilderRemove = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoMestreBuilderAtualizar", { configurable: true, get: () => criativoMestreBuilderAtualizar, set: (__v) => { criativoMestreBuilderAtualizar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoMestreAtributoMudou", { configurable: true, get: () => criativoMestreAtributoMudou, set: (__v) => { criativoMestreAtributoMudou = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoSelecionarDado", { configurable: true, get: () => criativoSelecionarDado, set: (__v) => { criativoSelecionarDado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoToggleAtaque", { configurable: true, get: () => criativoToggleAtaque, set: (__v) => { criativoToggleAtaque = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoEhAtaqueChange", { configurable: true, get: () => criativoEhAtaqueChange, set: (__v) => { criativoEhAtaqueChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoDCPreview", { configurable: true, get: () => criativoDCPreview, set: (__v) => { criativoDCPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_criativoAbrirModalOverlay", { configurable: true, get: () => _criativoAbrirModalOverlay, set: (__v) => { _criativoAbrirModalOverlay = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoMestreConcluirFase1", { configurable: true, get: () => criativoMestreConcluirFase1, set: (__v) => { criativoMestreConcluirFase1 = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "crLabelAcao", { configurable: true, get: () => crLabelAcao, set: (__v) => { crLabelAcao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoMestreDefinirDano", { configurable: true, get: () => criativoMestreDefinirDano, set: (__v) => { criativoMestreDefinirDano = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoMestreRejeitar", { configurable: true, get: () => criativoMestreRejeitar, set: (__v) => { criativoMestreRejeitar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoMestreRejeitarDireto", { configurable: true, get: () => criativoMestreRejeitarDireto, set: (__v) => { criativoMestreRejeitarDireto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoMestreLimparTodas", { configurable: true, get: () => criativoMestreLimparTodas, set: (__v) => { criativoMestreLimparTodas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoReclassificar", { configurable: true, get: () => criativoReclassificar, set: (__v) => { criativoReclassificar = __v; } });
 Object.defineProperty(globalThis, "_criativoNotifId", { configurable: true, get: () => _criativoNotifId, set: (__v) => { _criativoNotifId = __v; } });
-Object.defineProperty(globalThis, "criativoNotifMostrar", { configurable: true, writable: true, value: criativoNotifMostrar });
-Object.defineProperty(globalThis, "criativoNotifFechar", { configurable: true, writable: true, value: criativoNotifFechar });
-Object.defineProperty(globalThis, "criativoNotifAcao", { configurable: true, writable: true, value: criativoNotifAcao });
-Object.defineProperty(globalThis, "_criativoHideAllPendente", { configurable: true, writable: true, value: _criativoHideAllPendente });
-Object.defineProperty(globalThis, "criativoAtualizarStepJogador", { configurable: true, writable: true, value: criativoAtualizarStepJogador });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoNotifMostrar", { configurable: true, get: () => criativoNotifMostrar, set: (__v) => { criativoNotifMostrar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoNotifFechar", { configurable: true, get: () => criativoNotifFechar, set: (__v) => { criativoNotifFechar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoNotifAcao", { configurable: true, get: () => criativoNotifAcao, set: (__v) => { criativoNotifAcao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_criativoHideAllPendente", { configurable: true, get: () => _criativoHideAllPendente, set: (__v) => { _criativoHideAllPendente = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoAtualizarStepJogador", { configurable: true, get: () => criativoAtualizarStepJogador, set: (__v) => { criativoAtualizarStepJogador = __v; } });
 Object.defineProperty(globalThis, "_criativoPollingTimer", { configurable: true, get: () => _criativoPollingTimer, set: (__v) => { _criativoPollingTimer = __v; } });
-Object.defineProperty(globalThis, "criativoIniciarPolling", { configurable: true, writable: true, value: criativoIniciarPolling });
-Object.defineProperty(globalThis, "criativoStopPolling", { configurable: true, writable: true, value: criativoStopPolling });
-Object.defineProperty(globalThis, "criativoJogadorRolarDC", { configurable: true, writable: true, value: criativoJogadorRolarDC });
-Object.defineProperty(globalThis, "_aplicarConsequenciaFalhaCritica", { configurable: true, writable: true, value: _aplicarConsequenciaFalhaCritica });
-Object.defineProperty(globalThis, "_dcMostrarModalRolagem", { configurable: true, writable: true, value: _dcMostrarModalRolagem });
-Object.defineProperty(globalThis, "_dcMostrarResultado", { configurable: true, writable: true, value: _dcMostrarResultado });
-Object.defineProperty(globalThis, "_dcFecharModalRolagem", { configurable: true, writable: true, value: _dcFecharModalRolagem });
-Object.defineProperty(globalThis, "criativoJogadorRolarDano", { configurable: true, writable: true, value: criativoJogadorRolarDano });
-Object.defineProperty(globalThis, "criativoJogadorRolar", { configurable: true, writable: true, value: criativoJogadorRolar });
-Object.defineProperty(globalThis, "criativoJogadorRolarMapa", { configurable: true, writable: true, value: criativoJogadorRolarMapa });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoIniciarPolling", { configurable: true, get: () => criativoIniciarPolling, set: (__v) => { criativoIniciarPolling = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoStopPolling", { configurable: true, get: () => criativoStopPolling, set: (__v) => { criativoStopPolling = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoJogadorRolarDC", { configurable: true, get: () => criativoJogadorRolarDC, set: (__v) => { criativoJogadorRolarDC = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aplicarConsequenciaFalhaCritica", { configurable: true, get: () => _aplicarConsequenciaFalhaCritica, set: (__v) => { _aplicarConsequenciaFalhaCritica = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_dcMostrarModalRolagem", { configurable: true, get: () => _dcMostrarModalRolagem, set: (__v) => { _dcMostrarModalRolagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_dcMostrarResultado", { configurable: true, get: () => _dcMostrarResultado, set: (__v) => { _dcMostrarResultado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_dcFecharModalRolagem", { configurable: true, get: () => _dcFecharModalRolagem, set: (__v) => { _dcFecharModalRolagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoJogadorRolarDano", { configurable: true, get: () => criativoJogadorRolarDano, set: (__v) => { criativoJogadorRolarDano = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoJogadorRolar", { configurable: true, get: () => criativoJogadorRolar, set: (__v) => { criativoJogadorRolar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criativoJogadorRolarMapa", { configurable: true, get: () => criativoJogadorRolarMapa, set: (__v) => { criativoJogadorRolarMapa = __v; } });
 Object.defineProperty(globalThis, "_atkAnimTriggerTimer", { configurable: true, get: () => _atkAnimTriggerTimer, set: (__v) => { _atkAnimTriggerTimer = __v; } });
 Object.defineProperty(globalThis, "_atkAnimTriggerSeg", { configurable: true, get: () => _atkAnimTriggerSeg, set: (__v) => { _atkAnimTriggerSeg = __v; } });
-Object.defineProperty(globalThis, "calcMaxFormula", { configurable: true, writable: true, value: calcMaxFormula });
-Object.defineProperty(globalThis, "calcCriticoThreshold", { configurable: true, writable: true, value: calcCriticoThreshold });
-Object.defineProperty(globalThis, "_atkDarkenColor", { configurable: true, writable: true, value: _atkDarkenColor });
-Object.defineProperty(globalThis, "_atkMostrarTrigger", { configurable: true, writable: true, value: _atkMostrarTrigger });
-Object.defineProperty(globalThis, "_atkOcultarTrigger", { configurable: true, writable: true, value: _atkOcultarTrigger });
-Object.defineProperty(globalThis, "_atkMostrarTriggerRemoto", { configurable: true, writable: true, value: _atkMostrarTriggerRemoto });
-Object.defineProperty(globalThis, "_atkMostrarCalcDano", { configurable: true, writable: true, value: _atkMostrarCalcDano });
-Object.defineProperty(globalThis, "_atkTriggerAnimacao", { configurable: true, writable: true, value: _atkTriggerAnimacao });
-Object.defineProperty(globalThis, "atkRenderHabilidadesNPC", { configurable: true, writable: true, value: atkRenderHabilidadesNPC });
-Object.defineProperty(globalThis, "atkAdicionarHabilidadeNPC", { configurable: true, writable: true, value: atkAdicionarHabilidadeNPC });
-Object.defineProperty(globalThis, "atkRemoverHabilidadeNPC", { configurable: true, writable: true, value: atkRemoverHabilidadeNPC });
-Object.defineProperty(globalThis, "mapaFilhos", { configurable: true, writable: true, value: mapaFilhos });
-Object.defineProperty(globalThis, "mapaZonaNoParent", { configurable: true, writable: true, value: mapaZonaNoParent });
-Object.defineProperty(globalThis, "projetarPosicaoNoParent", { configurable: true, writable: true, value: projetarPosicaoNoParent });
-Object.defineProperty(globalThis, "normalizarPosicao", { configurable: true, writable: true, value: normalizarPosicao });
-Object.defineProperty(globalThis, "pctParaCelula", { configurable: true, writable: true, value: pctParaCelula });
-Object.defineProperty(globalThis, "_getMapaById", { configurable: true, writable: true, value: _getMapaById });
-Object.defineProperty(globalThis, "_imgToken", { configurable: true, writable: true, value: _imgToken });
-Object.defineProperty(globalThis, "_imgFicha", { configurable: true, writable: true, value: _imgFicha });
-Object.defineProperty(globalThis, "getPosicaoNoMapa", { configurable: true, writable: true, value: getPosicaoNoMapa });
-Object.defineProperty(globalThis, "setCharActiveMap", { configurable: true, writable: true, value: setCharActiveMap });
-Object.defineProperty(globalThis, "removeCharFromMap", { configurable: true, writable: true, value: removeCharFromMap });
-Object.defineProperty(globalThis, "excluirPersonagemCompleto", { configurable: true, writable: true, value: excluirPersonagemCompleto });
-Object.defineProperty(globalThis, "excluirNpcGenerico", { configurable: true, writable: true, value: excluirNpcGenerico });
-Object.defineProperty(globalThis, "resetarHpNpcGenerico", { configurable: true, writable: true, value: resetarHpNpcGenerico });
-Object.defineProperty(globalThis, "ativarModoPlacement", { configurable: true, writable: true, value: ativarModoPlacement });
-Object.defineProperty(globalThis, "cancelarPlacement", { configurable: true, writable: true, value: cancelarPlacement });
-Object.defineProperty(globalThis, "confirmarPlacement", { configurable: true, writable: true, value: confirmarPlacement });
-Object.defineProperty(globalThis, "toggleMapaTool", { configurable: true, writable: true, value: toggleMapaTool });
-Object.defineProperty(globalThis, "abrirModalZona", { configurable: true, writable: true, value: abrirModalZona });
-Object.defineProperty(globalThis, "fecharModalZona", { configurable: true, writable: true, value: fecharModalZona });
-Object.defineProperty(globalThis, "salvarZona", { configurable: true, writable: true, value: salvarZona });
-Object.defineProperty(globalThis, "removerZona", { configurable: true, writable: true, value: removerZona });
-Object.defineProperty(globalThis, "renderDados", { configurable: true, writable: true, value: renderDados });
-Object.defineProperty(globalThis, "renderDiceConfig", { configurable: true, writable: true, value: renderDiceConfig });
-Object.defineProperty(globalThis, "toggleDadoCampanha", { configurable: true, writable: true, value: toggleDadoCampanha });
-Object.defineProperty(globalThis, "svgDado", { configurable: true, writable: true, value: svgDado });
-Object.defineProperty(globalThis, "selecionarDado", { configurable: true, writable: true, value: selecionarDado });
-Object.defineProperty(globalThis, "rolarDado", { configurable: true, writable: true, value: rolarDado });
-Object.defineProperty(globalThis, "renderMapasTab", { configurable: true, writable: true, value: renderMapasTab });
-Object.defineProperty(globalThis, "selecionarMapa", { configurable: true, writable: true, value: selecionarMapa });
-Object.defineProperty(globalThis, "_faseAtivarViewerMode", { configurable: true, writable: true, value: _faseAtivarViewerMode });
-Object.defineProperty(globalThis, "_faseDesativarViewerMode", { configurable: true, writable: true, value: _faseDesativarViewerMode });
-Object.defineProperty(globalThis, "renderMapaViewer", { configurable: true, writable: true, value: renderMapaViewer });
-Object.defineProperty(globalThis, "mapaAplicarTransform3D", { configurable: true, writable: true, value: mapaAplicarTransform3D });
-Object.defineProperty(globalThis, "mp3dAtualizar", { configurable: true, writable: true, value: mp3dAtualizar });
-Object.defineProperty(globalThis, "mapaPreset3D", { configurable: true, writable: true, value: mapaPreset3D });
-Object.defineProperty(globalThis, "mapaDesenharGrade", { configurable: true, writable: true, value: mapaDesenharGrade });
-Object.defineProperty(globalThis, "mapaRenderTokens", { configurable: true, writable: true, value: mapaRenderTokens });
-Object.defineProperty(globalThis, "_mapaAdicionarBadgesBuffTokens", { configurable: true, writable: true, value: _mapaAdicionarBadgesBuffTokens });
-Object.defineProperty(globalThis, "mapaRenderStatus", { configurable: true, writable: true, value: mapaRenderStatus });
-Object.defineProperty(globalThis, "abrirModalMapaConfig", { configurable: true, writable: true, value: abrirModalMapaConfig });
-Object.defineProperty(globalThis, "modalMapaPreviewImg", { configurable: true, writable: true, value: modalMapaPreviewImg });
-Object.defineProperty(globalThis, "fecharModalMapaConfig", { configurable: true, writable: true, value: fecharModalMapaConfig });
-Object.defineProperty(globalThis, "pedirConfirmacaoExcluirMapa", { configurable: true, writable: true, value: pedirConfirmacaoExcluirMapa });
-Object.defineProperty(globalThis, "deletarMapaDoModal", { configurable: true, writable: true, value: deletarMapaDoModal });
-Object.defineProperty(globalThis, "reposicionarMapaLocal", { configurable: true, writable: true, value: reposicionarMapaLocal });
-Object.defineProperty(globalThis, "mapaConfigAtualizarPreview", { configurable: true, writable: true, value: mapaConfigAtualizarPreview });
-Object.defineProperty(globalThis, "salvarConfigMapa", { configurable: true, writable: true, value: salvarConfigMapa });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "calcMaxFormula", { configurable: true, get: () => calcMaxFormula, set: (__v) => { calcMaxFormula = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "calcCriticoThreshold", { configurable: true, get: () => calcCriticoThreshold, set: (__v) => { calcCriticoThreshold = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_atkDarkenColor", { configurable: true, get: () => _atkDarkenColor, set: (__v) => { _atkDarkenColor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_atkMostrarTrigger", { configurable: true, get: () => _atkMostrarTrigger, set: (__v) => { _atkMostrarTrigger = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_atkOcultarTrigger", { configurable: true, get: () => _atkOcultarTrigger, set: (__v) => { _atkOcultarTrigger = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_atkMostrarTriggerRemoto", { configurable: true, get: () => _atkMostrarTriggerRemoto, set: (__v) => { _atkMostrarTriggerRemoto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_atkMostrarCalcDano", { configurable: true, get: () => _atkMostrarCalcDano, set: (__v) => { _atkMostrarCalcDano = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_atkTriggerAnimacao", { configurable: true, get: () => _atkTriggerAnimacao, set: (__v) => { _atkTriggerAnimacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkRenderHabilidadesNPC", { configurable: true, get: () => atkRenderHabilidadesNPC, set: (__v) => { atkRenderHabilidadesNPC = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkAdicionarHabilidadeNPC", { configurable: true, get: () => atkAdicionarHabilidadeNPC, set: (__v) => { atkAdicionarHabilidadeNPC = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atkRemoverHabilidadeNPC", { configurable: true, get: () => atkRemoverHabilidadeNPC, set: (__v) => { atkRemoverHabilidadeNPC = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaFilhos", { configurable: true, get: () => mapaFilhos, set: (__v) => { mapaFilhos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaZonaNoParent", { configurable: true, get: () => mapaZonaNoParent, set: (__v) => { mapaZonaNoParent = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "projetarPosicaoNoParent", { configurable: true, get: () => projetarPosicaoNoParent, set: (__v) => { projetarPosicaoNoParent = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "normalizarPosicao", { configurable: true, get: () => normalizarPosicao, set: (__v) => { normalizarPosicao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "pctParaCelula", { configurable: true, get: () => pctParaCelula, set: (__v) => { pctParaCelula = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_getMapaById", { configurable: true, get: () => _getMapaById, set: (__v) => { _getMapaById = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_imgToken", { configurable: true, get: () => _imgToken, set: (__v) => { _imgToken = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_imgFicha", { configurable: true, get: () => _imgFicha, set: (__v) => { _imgFicha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "getPosicaoNoMapa", { configurable: true, get: () => getPosicaoNoMapa, set: (__v) => { getPosicaoNoMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "setCharActiveMap", { configurable: true, get: () => setCharActiveMap, set: (__v) => { setCharActiveMap = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "removeCharFromMap", { configurable: true, get: () => removeCharFromMap, set: (__v) => { removeCharFromMap = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "excluirPersonagemCompleto", { configurable: true, get: () => excluirPersonagemCompleto, set: (__v) => { excluirPersonagemCompleto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "excluirNpcGenerico", { configurable: true, get: () => excluirNpcGenerico, set: (__v) => { excluirNpcGenerico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "resetarHpNpcGenerico", { configurable: true, get: () => resetarHpNpcGenerico, set: (__v) => { resetarHpNpcGenerico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "ativarModoPlacement", { configurable: true, get: () => ativarModoPlacement, set: (__v) => { ativarModoPlacement = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cancelarPlacement", { configurable: true, get: () => cancelarPlacement, set: (__v) => { cancelarPlacement = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "confirmarPlacement", { configurable: true, get: () => confirmarPlacement, set: (__v) => { confirmarPlacement = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "toggleMapaTool", { configurable: true, get: () => toggleMapaTool, set: (__v) => { toggleMapaTool = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalZona", { configurable: true, get: () => abrirModalZona, set: (__v) => { abrirModalZona = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalZona", { configurable: true, get: () => fecharModalZona, set: (__v) => { fecharModalZona = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarZona", { configurable: true, get: () => salvarZona, set: (__v) => { salvarZona = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "removerZona", { configurable: true, get: () => removerZona, set: (__v) => { removerZona = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderDados", { configurable: true, get: () => renderDados, set: (__v) => { renderDados = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderDiceConfig", { configurable: true, get: () => renderDiceConfig, set: (__v) => { renderDiceConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "toggleDadoCampanha", { configurable: true, get: () => toggleDadoCampanha, set: (__v) => { toggleDadoCampanha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "svgDado", { configurable: true, get: () => svgDado, set: (__v) => { svgDado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "selecionarDado", { configurable: true, get: () => selecionarDado, set: (__v) => { selecionarDado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "rolarDado", { configurable: true, get: () => rolarDado, set: (__v) => { rolarDado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderMapasTab", { configurable: true, get: () => renderMapasTab, set: (__v) => { renderMapasTab = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "selecionarMapa", { configurable: true, get: () => selecionarMapa, set: (__v) => { selecionarMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseAtivarViewerMode", { configurable: true, get: () => _faseAtivarViewerMode, set: (__v) => { _faseAtivarViewerMode = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseDesativarViewerMode", { configurable: true, get: () => _faseDesativarViewerMode, set: (__v) => { _faseDesativarViewerMode = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderMapaViewer", { configurable: true, get: () => renderMapaViewer, set: (__v) => { renderMapaViewer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaAplicarTransform3D", { configurable: true, get: () => mapaAplicarTransform3D, set: (__v) => { mapaAplicarTransform3D = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mp3dAtualizar", { configurable: true, get: () => mp3dAtualizar, set: (__v) => { mp3dAtualizar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaPreset3D", { configurable: true, get: () => mapaPreset3D, set: (__v) => { mapaPreset3D = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaDesenharGrade", { configurable: true, get: () => mapaDesenharGrade, set: (__v) => { mapaDesenharGrade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaRenderTokens", { configurable: true, get: () => mapaRenderTokens, set: (__v) => { mapaRenderTokens = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_mapaAdicionarBadgesBuffTokens", { configurable: true, get: () => _mapaAdicionarBadgesBuffTokens, set: (__v) => { _mapaAdicionarBadgesBuffTokens = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaRenderStatus", { configurable: true, get: () => mapaRenderStatus, set: (__v) => { mapaRenderStatus = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalMapaConfig", { configurable: true, get: () => abrirModalMapaConfig, set: (__v) => { abrirModalMapaConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "modalMapaPreviewImg", { configurable: true, get: () => modalMapaPreviewImg, set: (__v) => { modalMapaPreviewImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalMapaConfig", { configurable: true, get: () => fecharModalMapaConfig, set: (__v) => { fecharModalMapaConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "pedirConfirmacaoExcluirMapa", { configurable: true, get: () => pedirConfirmacaoExcluirMapa, set: (__v) => { pedirConfirmacaoExcluirMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "deletarMapaDoModal", { configurable: true, get: () => deletarMapaDoModal, set: (__v) => { deletarMapaDoModal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "reposicionarMapaLocal", { configurable: true, get: () => reposicionarMapaLocal, set: (__v) => { reposicionarMapaLocal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaConfigAtualizarPreview", { configurable: true, get: () => mapaConfigAtualizarPreview, set: (__v) => { mapaConfigAtualizarPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarConfigMapa", { configurable: true, get: () => salvarConfigMapa, set: (__v) => { salvarConfigMapa = __v; } });
 Object.defineProperty(globalThis, "_TOKEN_MOVE_SID", { configurable: true, get: () => _TOKEN_MOVE_SID, set: (__v) => { _TOKEN_MOVE_SID = __v; } });
-Object.defineProperty(globalThis, "tokenMoveBroadcast", { configurable: true, writable: true, value: tokenMoveBroadcast });
-Object.defineProperty(globalThis, "tokenMoveReceber", { configurable: true, writable: true, value: tokenMoveReceber });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tokenMoveBroadcast", { configurable: true, get: () => tokenMoveBroadcast, set: (__v) => { tokenMoveBroadcast = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tokenMoveReceber", { configurable: true, get: () => tokenMoveReceber, set: (__v) => { tokenMoveReceber = __v; } });
 Object.defineProperty(globalThis, "FOG_STATE", { configurable: true, get: () => FOG_STATE, set: (__v) => { FOG_STATE = __v; } });
-Object.defineProperty(globalThis, "fogGetEstado", { configurable: true, writable: true, value: fogGetEstado });
-Object.defineProperty(globalThis, "fogSetEstado", { configurable: true, writable: true, value: fogSetEstado });
-Object.defineProperty(globalThis, "fogInicializar", { configurable: true, writable: true, value: fogInicializar });
-Object.defineProperty(globalThis, "fogCarregarDoServidor", { configurable: true, writable: true, value: fogCarregarDoServidor });
-Object.defineProperty(globalThis, "fogRevealAround", { configurable: true, writable: true, value: fogRevealAround });
-Object.defineProperty(globalThis, "fogRevealRect", { configurable: true, writable: true, value: fogRevealRect });
-Object.defineProperty(globalThis, "fogRenderizar", { configurable: true, writable: true, value: fogRenderizar });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fogGetEstado", { configurable: true, get: () => fogGetEstado, set: (__v) => { fogGetEstado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fogSetEstado", { configurable: true, get: () => fogSetEstado, set: (__v) => { fogSetEstado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fogInicializar", { configurable: true, get: () => fogInicializar, set: (__v) => { fogInicializar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fogCarregarDoServidor", { configurable: true, get: () => fogCarregarDoServidor, set: (__v) => { fogCarregarDoServidor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fogRevealAround", { configurable: true, get: () => fogRevealAround, set: (__v) => { fogRevealAround = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fogRevealRect", { configurable: true, get: () => fogRevealRect, set: (__v) => { fogRevealRect = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fogRenderizar", { configurable: true, get: () => fogRenderizar, set: (__v) => { fogRenderizar = __v; } });
 Object.defineProperty(globalThis, "_fogSaveTimer", { configurable: true, get: () => _fogSaveTimer, set: (__v) => { _fogSaveTimer = __v; } });
-Object.defineProperty(globalThis, "fogSalvarDebounced", { configurable: true, writable: true, value: fogSalvarDebounced });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fogSalvarDebounced", { configurable: true, get: () => fogSalvarDebounced, set: (__v) => { fogSalvarDebounced = __v; } });
 Object.defineProperty(globalThis, "CAMERA_RAIO_MAX", { configurable: true, get: () => CAMERA_RAIO_MAX, set: (__v) => { CAMERA_RAIO_MAX = __v; } });
-Object.defineProperty(globalThis, "cameraVerificarRaio", { configurable: true, writable: true, value: cameraVerificarRaio });
-Object.defineProperty(globalThis, "cameraBloqueioFeedback", { configurable: true, writable: true, value: cameraBloqueioFeedback });
-Object.defineProperty(globalThis, "mapaIniciarDrag", { configurable: true, writable: true, value: mapaIniciarDrag });
-Object.defineProperty(globalThis, "mapaOnDrag", { configurable: true, writable: true, value: mapaOnDrag });
-Object.defineProperty(globalThis, "mapaFimDrag", { configurable: true, writable: true, value: mapaFimDrag });
-Object.defineProperty(globalThis, "mapaPosicionarChar", { configurable: true, writable: true, value: mapaPosicionarChar });
-Object.defineProperty(globalThis, "mapaTeleportarPersonagem", { configurable: true, writable: true, value: mapaTeleportarPersonagem });
-Object.defineProperty(globalThis, "mapaAdjacenteAlvo", { configurable: true, writable: true, value: mapaAdjacenteAlvo });
-Object.defineProperty(globalThis, "mapaForcedMovement", { configurable: true, writable: true, value: mapaForcedMovement });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cameraVerificarRaio", { configurable: true, get: () => cameraVerificarRaio, set: (__v) => { cameraVerificarRaio = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cameraBloqueioFeedback", { configurable: true, get: () => cameraBloqueioFeedback, set: (__v) => { cameraBloqueioFeedback = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaIniciarDrag", { configurable: true, get: () => mapaIniciarDrag, set: (__v) => { mapaIniciarDrag = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaOnDrag", { configurable: true, get: () => mapaOnDrag, set: (__v) => { mapaOnDrag = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaFimDrag", { configurable: true, get: () => mapaFimDrag, set: (__v) => { mapaFimDrag = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaPosicionarChar", { configurable: true, get: () => mapaPosicionarChar, set: (__v) => { mapaPosicionarChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaTeleportarPersonagem", { configurable: true, get: () => mapaTeleportarPersonagem, set: (__v) => { mapaTeleportarPersonagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaAdjacenteAlvo", { configurable: true, get: () => mapaAdjacenteAlvo, set: (__v) => { mapaAdjacenteAlvo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaForcedMovement", { configurable: true, get: () => mapaForcedMovement, set: (__v) => { mapaForcedMovement = __v; } });
 Object.defineProperty(globalThis, "BATTLE_CONFIG_DEFAULTS", { configurable: true, get: () => BATTLE_CONFIG_DEFAULTS });
-Object.defineProperty(globalThis, "getBattleConfig", { configurable: true, writable: true, value: getBattleConfig });
-Object.defineProperty(globalThis, "salvarBattleConfig", { configurable: true, writable: true, value: salvarBattleConfig });
-Object.defineProperty(globalThis, "batalhaNovaId", { configurable: true, writable: true, value: batalhaNovaId });
-Object.defineProperty(globalThis, "batalhaDoMapa", { configurable: true, writable: true, value: batalhaDoMapa });
-Object.defineProperty(globalThis, "batalhaBuscaMinhaAtiva", { configurable: true, writable: true, value: batalhaBuscaMinhaAtiva });
-Object.defineProperty(globalThis, "jogadorEstaOnline", { configurable: true, writable: true, value: jogadorEstaOnline });
-Object.defineProperty(globalThis, "personagemTemJogador", { configurable: true, writable: true, value: personagemTemJogador });
-Object.defineProperty(globalThis, "mestreDeveJogarPor", { configurable: true, writable: true, value: mestreDeveJogarPor });
-Object.defineProperty(globalThis, "batalhaParticipantesDoMapa", { configurable: true, writable: true, value: batalhaParticipantesDoMapa });
-Object.defineProperty(globalThis, "batalhaIdMinha", { configurable: true, writable: true, value: batalhaIdMinha });
-Object.defineProperty(globalThis, "batalhaMinha", { configurable: true, writable: true, value: batalhaMinha });
-Object.defineProperty(globalThis, "getCooldownsBatalha", { configurable: true, writable: true, value: getCooldownsBatalha });
-Object.defineProperty(globalThis, "criarBatalhaRemota", { configurable: true, writable: true, value: criarBatalhaRemota });
-Object.defineProperty(globalThis, "batalhaReceberLinhaRemota", { configurable: true, writable: true, value: batalhaReceberLinhaRemota });
-Object.defineProperty(globalThis, "batalhaReceberEstadoRemoto", { configurable: true, writable: true, value: batalhaReceberEstadoRemoto });
-Object.defineProperty(globalThis, "_notificarVez", { configurable: true, writable: true, value: _notificarVez });
-Object.defineProperty(globalThis, "_atualizarBadgeMesa", { configurable: true, writable: true, value: _atualizarBadgeMesa });
-Object.defineProperty(globalThis, "_atualizarSeletorBatalhas", { configurable: true, writable: true, value: _atualizarSeletorBatalhas });
-Object.defineProperty(globalThis, "batalhaAlternarPara", { configurable: true, writable: true, value: batalhaAlternarPara });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "getBattleConfig", { configurable: true, get: () => getBattleConfig, set: (__v) => { getBattleConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarBattleConfig", { configurable: true, get: () => salvarBattleConfig, set: (__v) => { salvarBattleConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaNovaId", { configurable: true, get: () => batalhaNovaId, set: (__v) => { batalhaNovaId = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaDoMapa", { configurable: true, get: () => batalhaDoMapa, set: (__v) => { batalhaDoMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaBuscaMinhaAtiva", { configurable: true, get: () => batalhaBuscaMinhaAtiva, set: (__v) => { batalhaBuscaMinhaAtiva = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "jogadorEstaOnline", { configurable: true, get: () => jogadorEstaOnline, set: (__v) => { jogadorEstaOnline = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "personagemTemJogador", { configurable: true, get: () => personagemTemJogador, set: (__v) => { personagemTemJogador = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mestreDeveJogarPor", { configurable: true, get: () => mestreDeveJogarPor, set: (__v) => { mestreDeveJogarPor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaParticipantesDoMapa", { configurable: true, get: () => batalhaParticipantesDoMapa, set: (__v) => { batalhaParticipantesDoMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaIdMinha", { configurable: true, get: () => batalhaIdMinha, set: (__v) => { batalhaIdMinha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaMinha", { configurable: true, get: () => batalhaMinha, set: (__v) => { batalhaMinha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "getCooldownsBatalha", { configurable: true, get: () => getCooldownsBatalha, set: (__v) => { getCooldownsBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criarBatalhaRemota", { configurable: true, get: () => criarBatalhaRemota, set: (__v) => { criarBatalhaRemota = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaReceberLinhaRemota", { configurable: true, get: () => batalhaReceberLinhaRemota, set: (__v) => { batalhaReceberLinhaRemota = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaReceberEstadoRemoto", { configurable: true, get: () => batalhaReceberEstadoRemoto, set: (__v) => { batalhaReceberEstadoRemoto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_notificarVez", { configurable: true, get: () => _notificarVez, set: (__v) => { _notificarVez = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_atualizarBadgeMesa", { configurable: true, get: () => _atualizarBadgeMesa, set: (__v) => { _atualizarBadgeMesa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_atualizarSeletorBatalhas", { configurable: true, get: () => _atualizarSeletorBatalhas, set: (__v) => { _atualizarSeletorBatalhas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaAlternarPara", { configurable: true, get: () => batalhaAlternarPara, set: (__v) => { batalhaAlternarPara = __v; } });
 Object.defineProperty(globalThis, "SESSAO_ATUAL", { configurable: true, get: () => SESSAO_ATUAL, set: (__v) => { SESSAO_ATUAL = __v; } });
-Object.defineProperty(globalThis, "_parseCoordenada", { configurable: true, writable: true, value: _parseCoordenada });
-Object.defineProperty(globalThis, "_parseRetangulo", { configurable: true, writable: true, value: _parseRetangulo });
-Object.defineProperty(globalThis, "parsePacote", { configurable: true, writable: true, value: parsePacote });
-Object.defineProperty(globalThis, "_parseLinha", { configurable: true, writable: true, value: _parseLinha });
-Object.defineProperty(globalThis, "pacoteAplicar", { configurable: true, writable: true, value: pacoteAplicar });
-Object.defineProperty(globalThis, "pacoteMostrarConfirmacao", { configurable: true, writable: true, value: pacoteMostrarConfirmacao });
-Object.defineProperty(globalThis, "sessionRenderPainel", { configurable: true, writable: true, value: sessionRenderPainel });
-Object.defineProperty(globalThis, "sessionAtivarCena", { configurable: true, writable: true, value: sessionAtivarCena });
-Object.defineProperty(globalThis, "orgAddNo", { configurable: true, writable: true, value: orgAddNo });
-Object.defineProperty(globalThis, "orgNavegar", { configurable: true, writable: true, value: orgNavegar });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_parseCoordenada", { configurable: true, get: () => _parseCoordenada, set: (__v) => { _parseCoordenada = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_parseRetangulo", { configurable: true, get: () => _parseRetangulo, set: (__v) => { _parseRetangulo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "parsePacote", { configurable: true, get: () => parsePacote, set: (__v) => { parsePacote = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_parseLinha", { configurable: true, get: () => _parseLinha, set: (__v) => { _parseLinha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "pacoteAplicar", { configurable: true, get: () => pacoteAplicar, set: (__v) => { pacoteAplicar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "pacoteMostrarConfirmacao", { configurable: true, get: () => pacoteMostrarConfirmacao, set: (__v) => { pacoteMostrarConfirmacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "sessionRenderPainel", { configurable: true, get: () => sessionRenderPainel, set: (__v) => { sessionRenderPainel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "sessionAtivarCena", { configurable: true, get: () => sessionAtivarCena, set: (__v) => { sessionAtivarCena = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "orgAddNo", { configurable: true, get: () => orgAddNo, set: (__v) => { orgAddNo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "orgNavegar", { configurable: true, get: () => orgNavegar, set: (__v) => { orgNavegar = __v; } });
 Object.defineProperty(globalThis, "BIBLIOTECA_CENA", { configurable: true, get: () => BIBLIOTECA_CENA, set: (__v) => { BIBLIOTECA_CENA = __v; } });
-Object.defineProperty(globalThis, "bibliotecaCarregarDoLore", { configurable: true, writable: true, value: bibliotecaCarregarDoLore });
-Object.defineProperty(globalThis, "gerarCenaAleatoria", { configurable: true, writable: true, value: gerarCenaAleatoria });
-Object.defineProperty(globalThis, "sessaoMarcarCenasAfetadas", { configurable: true, writable: true, value: sessaoMarcarCenasAfetadas });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "bibliotecaCarregarDoLore", { configurable: true, get: () => bibliotecaCarregarDoLore, set: (__v) => { bibliotecaCarregarDoLore = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "gerarCenaAleatoria", { configurable: true, get: () => gerarCenaAleatoria, set: (__v) => { gerarCenaAleatoria = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "sessaoMarcarCenasAfetadas", { configurable: true, get: () => sessaoMarcarCenasAfetadas, set: (__v) => { sessaoMarcarCenasAfetadas = __v; } });
 Object.defineProperty(globalThis, "_batalhaAtualIdInterno", { configurable: true, get: () => _batalhaAtualIdInterno, set: (__v) => { _batalhaAtualIdInterno = __v; } });
 Object.defineProperty(globalThis, "NPC_PILOTO", { configurable: true, get: () => NPC_PILOTO, set: (__v) => { NPC_PILOTO = __v; } });
-Object.defineProperty(globalThis, "npcTogglePiloto", { configurable: true, writable: true, value: npcTogglePiloto });
-Object.defineProperty(globalThis, "npcExecutarTurnoAuto", { configurable: true, writable: true, value: npcExecutarTurnoAuto });
-Object.defineProperty(globalThis, "_npcCalcAcao", { configurable: true, writable: true, value: _npcCalcAcao });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "npcTogglePiloto", { configurable: true, get: () => npcTogglePiloto, set: (__v) => { npcTogglePiloto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "npcExecutarTurnoAuto", { configurable: true, get: () => npcExecutarTurnoAuto, set: (__v) => { npcExecutarTurnoAuto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_npcCalcAcao", { configurable: true, get: () => _npcCalcAcao, set: (__v) => { _npcCalcAcao = __v; } });
 Object.defineProperty(globalThis, "_origConfirmarUsarItem", { configurable: true, get: () => _origConfirmarUsarItem, set: (__v) => { _origConfirmarUsarItem = __v; } });
-Object.defineProperty(globalThis, "renderItensPendentes6", { configurable: true, writable: true, value: renderItensPendentes6 });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderItensPendentes6", { configurable: true, get: () => renderItensPendentes6, set: (__v) => { renderItensPendentes6 = __v; } });
 Object.defineProperty(globalThis, "_origExecutarDropNPC", { configurable: true, get: () => _origExecutarDropNPC, set: (__v) => { _origExecutarDropNPC = __v; } });
 Object.defineProperty(globalThis, "LOOT_RECLAMOS", { configurable: true, get: () => LOOT_RECLAMOS, set: (__v) => { LOOT_RECLAMOS = __v; } });
-Object.defineProperty(globalThis, "lootMostrarJanela", { configurable: true, writable: true, value: lootMostrarJanela });
-Object.defineProperty(globalThis, "lootResolverReclamo", { configurable: true, writable: true, value: lootResolverReclamo });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "lootMostrarJanela", { configurable: true, get: () => lootMostrarJanela, set: (__v) => { lootMostrarJanela = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "lootResolverReclamo", { configurable: true, get: () => lootResolverReclamo, set: (__v) => { lootResolverReclamo = __v; } });
 Object.defineProperty(globalThis, "_origMRBadges6", { configurable: true, get: () => _origMRBadges6, set: (__v) => { _origMRBadges6 = __v; } });
 Object.defineProperty(globalThis, "_origInvEquipar6", { configurable: true, get: () => _origInvEquipar6, set: (__v) => { _origInvEquipar6 = __v; } });
-Object.defineProperty(globalThis, "bloqueadoPorNivel", { configurable: true, writable: true, value: bloqueadoPorNivel });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "bloqueadoPorNivel", { configurable: true, get: () => bloqueadoPorNivel, set: (__v) => { bloqueadoPorNivel = __v; } });
 Object.defineProperty(globalThis, "_origRenderInvCompleto6", { configurable: true, get: () => _origRenderInvCompleto6, set: (__v) => { _origRenderInvCompleto6 = __v; } });
 Object.defineProperty(globalThis, "_origCtxGerarBotoes6", { configurable: true, get: () => _origCtxGerarBotoes6, set: (__v) => { _origCtxGerarBotoes6 = __v; } });
-Object.defineProperty(globalThis, "abrirModalIniciarBatalha", { configurable: true, writable: true, value: abrirModalIniciarBatalha });
-Object.defineProperty(globalThis, "fecharModalIniciarBatalha", { configurable: true, writable: true, value: fecharModalIniciarBatalha });
-Object.defineProperty(globalThis, "confirmarIniciarBatalha", { configurable: true, writable: true, value: confirmarIniciarBatalha });
-Object.defineProperty(globalThis, "batalhaRenderFaseIniciativa", { configurable: true, writable: true, value: batalhaRenderFaseIniciativa });
-Object.defineProperty(globalThis, "abrirModalIniciativa", { configurable: true, writable: true, value: abrirModalIniciativa });
-Object.defineProperty(globalThis, "fecharModalIniciativa", { configurable: true, writable: true, value: fecharModalIniciativa });
-Object.defineProperty(globalThis, "iniciativaRolarDado", { configurable: true, writable: true, value: iniciativaRolarDado });
-Object.defineProperty(globalThis, "iniciativaConfirmar", { configurable: true, writable: true, value: iniciativaConfirmar });
-Object.defineProperty(globalThis, "batalhaVerificarIniciativasCompletas", { configurable: true, writable: true, value: batalhaVerificarIniciativasCompletas });
-Object.defineProperty(globalThis, "batalhaRenderOrdemStrip", { configurable: true, writable: true, value: batalhaRenderOrdemStrip });
-Object.defineProperty(globalThis, "batalhaRenderVezLabel", { configurable: true, writable: true, value: batalhaRenderVezLabel });
-Object.defineProperty(globalThis, "batalhaRenderReordenarLista", { configurable: true, writable: true, value: batalhaRenderReordenarLista });
-Object.defineProperty(globalThis, "batalhaDefinirVez", { configurable: true, writable: true, value: batalhaDefinirVez });
-Object.defineProperty(globalThis, "_finalizarAtaqueCampanha", { configurable: true, writable: true, value: _finalizarAtaqueCampanha });
-Object.defineProperty(globalThis, "batalhaPassarVez", { configurable: true, writable: true, value: batalhaPassarVez });
-Object.defineProperty(globalThis, "_buffAtivo", { configurable: true, writable: true, value: _buffAtivo });
-Object.defineProperty(globalThis, "_logExpiracaoEfeito", { configurable: true, writable: true, value: _logExpiracaoEfeito });
-Object.defineProperty(globalThis, "_batalhaProcessarEventoReativo", { configurable: true, writable: true, value: _batalhaProcessarEventoReativo });
-Object.defineProperty(globalThis, "_mostrarDialogReacao", { configurable: true, writable: true, value: _mostrarDialogReacao });
-Object.defineProperty(globalThis, "_processarEfeitosCampanha", { configurable: true, writable: true, value: _processarEfeitosCampanha });
-Object.defineProperty(globalThis, "batalhaAtacarVez", { configurable: true, writable: true, value: batalhaAtacarVez });
-Object.defineProperty(globalThis, "batalhaJogarPorOffline", { configurable: true, writable: true, value: batalhaJogarPorOffline });
-Object.defineProperty(globalThis, "batalhaAvancarTurno", { configurable: true, writable: true, value: batalhaAvancarTurno });
-Object.defineProperty(globalThis, "batalhaAtualizarTurno", { configurable: true, writable: true, value: batalhaAtualizarTurno });
-Object.defineProperty(globalThis, "pausarOuRetomarBatalha", { configurable: true, writable: true, value: pausarOuRetomarBatalha });
-Object.defineProperty(globalThis, "encerrarBatalha", { configurable: true, writable: true, value: encerrarBatalha });
-Object.defineProperty(globalThis, "entrarBatalha", { configurable: true, writable: true, value: entrarBatalha });
-Object.defineProperty(globalThis, "_verificarVitoriaBatalha", { configurable: true, writable: true, value: _verificarVitoriaBatalha });
-Object.defineProperty(globalThis, "_mostrarTelaVitoria", { configurable: true, writable: true, value: _mostrarTelaVitoria });
-Object.defineProperty(globalThis, "_encerrarBatalhaAposVitoria", { configurable: true, writable: true, value: _encerrarBatalhaAposVitoria });
-Object.defineProperty(globalThis, "_irParaBatalhaAtiva", { configurable: true, writable: true, value: _irParaBatalhaAtiva });
-Object.defineProperty(globalThis, "_aplicarEstadoBatalhaUI", { configurable: true, writable: true, value: _aplicarEstadoBatalhaUI });
-Object.defineProperty(globalThis, "batalhaRenderDados", { configurable: true, writable: true, value: batalhaRenderDados });
-Object.defineProperty(globalThis, "batalhaSelDado", { configurable: true, writable: true, value: batalhaSelDado });
-Object.defineProperty(globalThis, "batalhaRolarDado", { configurable: true, writable: true, value: batalhaRolarDado });
-Object.defineProperty(globalThis, "deletarMapaAtual", { configurable: true, writable: true, value: deletarMapaAtual });
-Object.defineProperty(globalThis, "toggleNpcVisivelGeral", { configurable: true, writable: true, value: toggleNpcVisivelGeral });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalIniciarBatalha", { configurable: true, get: () => abrirModalIniciarBatalha, set: (__v) => { abrirModalIniciarBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalIniciarBatalha", { configurable: true, get: () => fecharModalIniciarBatalha, set: (__v) => { fecharModalIniciarBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "confirmarIniciarBatalha", { configurable: true, get: () => confirmarIniciarBatalha, set: (__v) => { confirmarIniciarBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaRenderFaseIniciativa", { configurable: true, get: () => batalhaRenderFaseIniciativa, set: (__v) => { batalhaRenderFaseIniciativa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalIniciativa", { configurable: true, get: () => abrirModalIniciativa, set: (__v) => { abrirModalIniciativa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalIniciativa", { configurable: true, get: () => fecharModalIniciativa, set: (__v) => { fecharModalIniciativa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "iniciativaRolarDado", { configurable: true, get: () => iniciativaRolarDado, set: (__v) => { iniciativaRolarDado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "iniciativaConfirmar", { configurable: true, get: () => iniciativaConfirmar, set: (__v) => { iniciativaConfirmar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaVerificarIniciativasCompletas", { configurable: true, get: () => batalhaVerificarIniciativasCompletas, set: (__v) => { batalhaVerificarIniciativasCompletas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaRenderOrdemStrip", { configurable: true, get: () => batalhaRenderOrdemStrip, set: (__v) => { batalhaRenderOrdemStrip = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaRenderVezLabel", { configurable: true, get: () => batalhaRenderVezLabel, set: (__v) => { batalhaRenderVezLabel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaRenderReordenarLista", { configurable: true, get: () => batalhaRenderReordenarLista, set: (__v) => { batalhaRenderReordenarLista = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaDefinirVez", { configurable: true, get: () => batalhaDefinirVez, set: (__v) => { batalhaDefinirVez = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_finalizarAtaqueCampanha", { configurable: true, get: () => _finalizarAtaqueCampanha, set: (__v) => { _finalizarAtaqueCampanha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaPassarVez", { configurable: true, get: () => batalhaPassarVez, set: (__v) => { batalhaPassarVez = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_buffAtivo", { configurable: true, get: () => _buffAtivo, set: (__v) => { _buffAtivo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_logExpiracaoEfeito", { configurable: true, get: () => _logExpiracaoEfeito, set: (__v) => { _logExpiracaoEfeito = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_batalhaProcessarEventoReativo", { configurable: true, get: () => _batalhaProcessarEventoReativo, set: (__v) => { _batalhaProcessarEventoReativo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_mostrarDialogReacao", { configurable: true, get: () => _mostrarDialogReacao, set: (__v) => { _mostrarDialogReacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_processarEfeitosCampanha", { configurable: true, get: () => _processarEfeitosCampanha, set: (__v) => { _processarEfeitosCampanha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaAtacarVez", { configurable: true, get: () => batalhaAtacarVez, set: (__v) => { batalhaAtacarVez = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaJogarPorOffline", { configurable: true, get: () => batalhaJogarPorOffline, set: (__v) => { batalhaJogarPorOffline = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaAvancarTurno", { configurable: true, get: () => batalhaAvancarTurno, set: (__v) => { batalhaAvancarTurno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaAtualizarTurno", { configurable: true, get: () => batalhaAtualizarTurno, set: (__v) => { batalhaAtualizarTurno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "pausarOuRetomarBatalha", { configurable: true, get: () => pausarOuRetomarBatalha, set: (__v) => { pausarOuRetomarBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "encerrarBatalha", { configurable: true, get: () => encerrarBatalha, set: (__v) => { encerrarBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "entrarBatalha", { configurable: true, get: () => entrarBatalha, set: (__v) => { entrarBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_verificarVitoriaBatalha", { configurable: true, get: () => _verificarVitoriaBatalha, set: (__v) => { _verificarVitoriaBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_mostrarTelaVitoria", { configurable: true, get: () => _mostrarTelaVitoria, set: (__v) => { _mostrarTelaVitoria = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_encerrarBatalhaAposVitoria", { configurable: true, get: () => _encerrarBatalhaAposVitoria, set: (__v) => { _encerrarBatalhaAposVitoria = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_irParaBatalhaAtiva", { configurable: true, get: () => _irParaBatalhaAtiva, set: (__v) => { _irParaBatalhaAtiva = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aplicarEstadoBatalhaUI", { configurable: true, get: () => _aplicarEstadoBatalhaUI, set: (__v) => { _aplicarEstadoBatalhaUI = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaRenderDados", { configurable: true, get: () => batalhaRenderDados, set: (__v) => { batalhaRenderDados = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaSelDado", { configurable: true, get: () => batalhaSelDado, set: (__v) => { batalhaSelDado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaRolarDado", { configurable: true, get: () => batalhaRolarDado, set: (__v) => { batalhaRolarDado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "deletarMapaAtual", { configurable: true, get: () => deletarMapaAtual, set: (__v) => { deletarMapaAtual = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "toggleNpcVisivelGeral", { configurable: true, get: () => toggleNpcVisivelGeral, set: (__v) => { toggleNpcVisivelGeral = __v; } });
 Object.defineProperty(globalThis, "_TECLAS_ATIVAS", { configurable: true, get: () => _TECLAS_ATIVAS, set: (__v) => { _TECLAS_ATIVAS = __v; } });
-Object.defineProperty(globalThis, "_processarSetinhaMapa", { configurable: true, writable: true, value: _processarSetinhaMapa });
-Object.defineProperty(globalThis, "_moverTokenPorSeta", { configurable: true, writable: true, value: _moverTokenPorSeta });
-Object.defineProperty(globalThis, "_getTokenControleAtual", { configurable: true, writable: true, value: _getTokenControleAtual });
-Object.defineProperty(globalThis, "_tokenCliqueSimples", { configurable: true, writable: true, value: _tokenCliqueSimples });
-Object.defineProperty(globalThis, "_ctxAtualizarPainelDesktop", { configurable: true, writable: true, value: _ctxAtualizarPainelDesktop });
-Object.defineProperty(globalThis, "_tokenDuploClique", { configurable: true, writable: true, value: _tokenDuploClique });
-Object.defineProperty(globalThis, "movCalcVelocidade", { configurable: true, writable: true, value: movCalcVelocidade });
-Object.defineProperty(globalThis, "movResetTurno", { configurable: true, writable: true, value: movResetTurno });
-Object.defineProperty(globalThis, "movGetRestante", { configurable: true, writable: true, value: movGetRestante });
-Object.defineProperty(globalThis, "movConsumirAcao", { configurable: true, writable: true, value: movConsumirAcao });
-Object.defineProperty(globalThis, "movConsumirMovimento", { configurable: true, writable: true, value: movConsumirMovimento });
-Object.defineProperty(globalThis, "movAdicionarMovimento", { configurable: true, writable: true, value: movAdicionarMovimento });
-Object.defineProperty(globalThis, "ctxGerarBotoes", { configurable: true, writable: true, value: ctxGerarBotoes });
-Object.defineProperty(globalThis, "ctxPriorizar", { configurable: true, writable: true, value: ctxPriorizar });
-Object.defineProperty(globalThis, "ctxExecutarAcao", { configurable: true, writable: true, value: ctxExecutarAcao });
-Object.defineProperty(globalThis, "ctxRenderizarPainelBotoes", { configurable: true, writable: true, value: ctxRenderizarPainelBotoes });
-Object.defineProperty(globalThis, "ctxMostrarOcultos", { configurable: true, writable: true, value: ctxMostrarOcultos });
-Object.defineProperty(globalThis, "mapaClicarToken", { configurable: true, writable: true, value: mapaClicarToken });
-Object.defineProperty(globalThis, "fecharFichaNoMapa", { configurable: true, writable: true, value: fecharFichaNoMapa });
-Object.defineProperty(globalThis, "abrirFichaNoMapa", { configurable: true, writable: true, value: abrirFichaNoMapa });
-Object.defineProperty(globalThis, "fichaToggleOcultarAtribs", { configurable: true, writable: true, value: fichaToggleOcultarAtribs });
-Object.defineProperty(globalThis, "abrirModalAdicionarAoMapa", { configurable: true, writable: true, value: abrirModalAdicionarAoMapa });
-Object.defineProperty(globalThis, "mapaDesenharDistancia", { configurable: true, writable: true, value: mapaDesenharDistancia });
-Object.defineProperty(globalThis, "limparMedicaoMapa", { configurable: true, writable: true, value: limparMedicaoMapa });
-Object.defineProperty(globalThis, "entrarMapaLocal", { configurable: true, writable: true, value: entrarMapaLocal });
-Object.defineProperty(globalThis, "voltarMapaGeral", { configurable: true, writable: true, value: voltarMapaGeral });
-Object.defineProperty(globalThis, "renderConfig", { configurable: true, writable: true, value: renderConfig });
-Object.defineProperty(globalThis, "salvarPvpConfig", { configurable: true, writable: true, value: salvarPvpConfig });
-Object.defineProperty(globalThis, "salvarFogoAmigoConfig", { configurable: true, writable: true, value: salvarFogoAmigoConfig });
-Object.defineProperty(globalThis, "cfgBattleInit", { configurable: true, writable: true, value: cfgBattleInit });
-Object.defineProperty(globalThis, "cfgBattleSistemaChange", { configurable: true, writable: true, value: cfgBattleSistemaChange });
-Object.defineProperty(globalThis, "_cfgBattlePopularCampos", { configurable: true, writable: true, value: _cfgBattlePopularCampos });
-Object.defineProperty(globalThis, "cfgBattleSalvar", { configurable: true, writable: true, value: cfgBattleSalvar });
-Object.defineProperty(globalThis, "renderCfgMembros", { configurable: true, writable: true, value: renderCfgMembros });
-Object.defineProperty(globalThis, "abrirModalAtribuirPersonagem", { configurable: true, writable: true, value: abrirModalAtribuirPersonagem });
-Object.defineProperty(globalThis, "atribuirPersonagemAMembro", { configurable: true, writable: true, value: atribuirPersonagemAMembro });
-Object.defineProperty(globalThis, "cfgAdicionarMembro", { configurable: true, writable: true, value: cfgAdicionarMembro });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_processarSetinhaMapa", { configurable: true, get: () => _processarSetinhaMapa, set: (__v) => { _processarSetinhaMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_moverTokenPorSeta", { configurable: true, get: () => _moverTokenPorSeta, set: (__v) => { _moverTokenPorSeta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_getTokenControleAtual", { configurable: true, get: () => _getTokenControleAtual, set: (__v) => { _getTokenControleAtual = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_tokenCliqueSimples", { configurable: true, get: () => _tokenCliqueSimples, set: (__v) => { _tokenCliqueSimples = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_ctxAtualizarPainelDesktop", { configurable: true, get: () => _ctxAtualizarPainelDesktop, set: (__v) => { _ctxAtualizarPainelDesktop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_tokenDuploClique", { configurable: true, get: () => _tokenDuploClique, set: (__v) => { _tokenDuploClique = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "movCalcVelocidade", { configurable: true, get: () => movCalcVelocidade, set: (__v) => { movCalcVelocidade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "movResetTurno", { configurable: true, get: () => movResetTurno, set: (__v) => { movResetTurno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "movGetRestante", { configurable: true, get: () => movGetRestante, set: (__v) => { movGetRestante = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "movConsumirAcao", { configurable: true, get: () => movConsumirAcao, set: (__v) => { movConsumirAcao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "movConsumirMovimento", { configurable: true, get: () => movConsumirMovimento, set: (__v) => { movConsumirMovimento = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "movAdicionarMovimento", { configurable: true, get: () => movAdicionarMovimento, set: (__v) => { movAdicionarMovimento = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "ctxGerarBotoes", { configurable: true, get: () => ctxGerarBotoes, set: (__v) => { ctxGerarBotoes = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "ctxPriorizar", { configurable: true, get: () => ctxPriorizar, set: (__v) => { ctxPriorizar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "ctxExecutarAcao", { configurable: true, get: () => ctxExecutarAcao, set: (__v) => { ctxExecutarAcao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "ctxRenderizarPainelBotoes", { configurable: true, get: () => ctxRenderizarPainelBotoes, set: (__v) => { ctxRenderizarPainelBotoes = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "ctxMostrarOcultos", { configurable: true, get: () => ctxMostrarOcultos, set: (__v) => { ctxMostrarOcultos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaClicarToken", { configurable: true, get: () => mapaClicarToken, set: (__v) => { mapaClicarToken = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharFichaNoMapa", { configurable: true, get: () => fecharFichaNoMapa, set: (__v) => { fecharFichaNoMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirFichaNoMapa", { configurable: true, get: () => abrirFichaNoMapa, set: (__v) => { abrirFichaNoMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fichaToggleOcultarAtribs", { configurable: true, get: () => fichaToggleOcultarAtribs, set: (__v) => { fichaToggleOcultarAtribs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalAdicionarAoMapa", { configurable: true, get: () => abrirModalAdicionarAoMapa, set: (__v) => { abrirModalAdicionarAoMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaDesenharDistancia", { configurable: true, get: () => mapaDesenharDistancia, set: (__v) => { mapaDesenharDistancia = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "limparMedicaoMapa", { configurable: true, get: () => limparMedicaoMapa, set: (__v) => { limparMedicaoMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "entrarMapaLocal", { configurable: true, get: () => entrarMapaLocal, set: (__v) => { entrarMapaLocal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "voltarMapaGeral", { configurable: true, get: () => voltarMapaGeral, set: (__v) => { voltarMapaGeral = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderConfig", { configurable: true, get: () => renderConfig, set: (__v) => { renderConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarPvpConfig", { configurable: true, get: () => salvarPvpConfig, set: (__v) => { salvarPvpConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarFogoAmigoConfig", { configurable: true, get: () => salvarFogoAmigoConfig, set: (__v) => { salvarFogoAmigoConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cfgBattleInit", { configurable: true, get: () => cfgBattleInit, set: (__v) => { cfgBattleInit = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cfgBattleSistemaChange", { configurable: true, get: () => cfgBattleSistemaChange, set: (__v) => { cfgBattleSistemaChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_cfgBattlePopularCampos", { configurable: true, get: () => _cfgBattlePopularCampos, set: (__v) => { _cfgBattlePopularCampos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cfgBattleSalvar", { configurable: true, get: () => cfgBattleSalvar, set: (__v) => { cfgBattleSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderCfgMembros", { configurable: true, get: () => renderCfgMembros, set: (__v) => { renderCfgMembros = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalAtribuirPersonagem", { configurable: true, get: () => abrirModalAtribuirPersonagem, set: (__v) => { abrirModalAtribuirPersonagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atribuirPersonagemAMembro", { configurable: true, get: () => atribuirPersonagemAMembro, set: (__v) => { atribuirPersonagemAMembro = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cfgAdicionarMembro", { configurable: true, get: () => cfgAdicionarMembro, set: (__v) => { cfgAdicionarMembro = __v; } });
 Object.defineProperty(globalThis, "PERMISSOES_CONFIG", { configurable: true, get: () => PERMISSOES_CONFIG, set: (__v) => { PERMISSOES_CONFIG = __v; } });
-Object.defineProperty(globalThis, "abrirModalPermissoes", { configurable: true, writable: true, value: abrirModalPermissoes });
-Object.defineProperty(globalThis, "salvarPermissoes", { configurable: true, writable: true, value: salvarPermissoes });
-Object.defineProperty(globalThis, "cfgRemoverMembro", { configurable: true, writable: true, value: cfgRemoverMembro });
-Object.defineProperty(globalThis, "abrirModalVincularPersonagem", { configurable: true, writable: true, value: abrirModalVincularPersonagem });
-Object.defineProperty(globalThis, "vincularPersonagem", { configurable: true, writable: true, value: vincularPersonagem });
-Object.defineProperty(globalThis, "renderCfgAttrDefs", { configurable: true, writable: true, value: renderCfgAttrDefs });
-Object.defineProperty(globalThis, "abrirModalAttrDef", { configurable: true, writable: true, value: abrirModalAttrDef });
-Object.defineProperty(globalThis, "fecharModalAttrDef", { configurable: true, writable: true, value: fecharModalAttrDef });
-Object.defineProperty(globalThis, "attrDefTipoChange", { configurable: true, writable: true, value: attrDefTipoChange });
-Object.defineProperty(globalThis, "attrDefCategoriaChange", { configurable: true, writable: true, value: attrDefCategoriaChange });
-Object.defineProperty(globalThis, "_adStatusJsonToForm", { configurable: true, writable: true, value: _adStatusJsonToForm });
-Object.defineProperty(globalThis, "_adStatusFormToJson", { configurable: true, writable: true, value: _adStatusFormToJson });
-Object.defineProperty(globalThis, "salvarAttrDef", { configurable: true, writable: true, value: salvarAttrDef });
-Object.defineProperty(globalThis, "removerAttrDefModal", { configurable: true, writable: true, value: removerAttrDefModal });
-Object.defineProperty(globalThis, "removerAttrDef", { configurable: true, writable: true, value: removerAttrDef });
-Object.defineProperty(globalThis, "selecionarOpcaoConfig", { configurable: true, writable: true, value: selecionarOpcaoConfig });
-Object.defineProperty(globalThis, "salvarConfig", { configurable: true, writable: true, value: salvarConfig });
-Object.defineProperty(globalThis, "confirmarDeleteRPG", { configurable: true, writable: true, value: confirmarDeleteRPG });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalPermissoes", { configurable: true, get: () => abrirModalPermissoes, set: (__v) => { abrirModalPermissoes = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarPermissoes", { configurable: true, get: () => salvarPermissoes, set: (__v) => { salvarPermissoes = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cfgRemoverMembro", { configurable: true, get: () => cfgRemoverMembro, set: (__v) => { cfgRemoverMembro = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalVincularPersonagem", { configurable: true, get: () => abrirModalVincularPersonagem, set: (__v) => { abrirModalVincularPersonagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "vincularPersonagem", { configurable: true, get: () => vincularPersonagem, set: (__v) => { vincularPersonagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderCfgAttrDefs", { configurable: true, get: () => renderCfgAttrDefs, set: (__v) => { renderCfgAttrDefs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalAttrDef", { configurable: true, get: () => abrirModalAttrDef, set: (__v) => { abrirModalAttrDef = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalAttrDef", { configurable: true, get: () => fecharModalAttrDef, set: (__v) => { fecharModalAttrDef = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "attrDefTipoChange", { configurable: true, get: () => attrDefTipoChange, set: (__v) => { attrDefTipoChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "attrDefCategoriaChange", { configurable: true, get: () => attrDefCategoriaChange, set: (__v) => { attrDefCategoriaChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_adStatusJsonToForm", { configurable: true, get: () => _adStatusJsonToForm, set: (__v) => { _adStatusJsonToForm = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_adStatusFormToJson", { configurable: true, get: () => _adStatusFormToJson, set: (__v) => { _adStatusFormToJson = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarAttrDef", { configurable: true, get: () => salvarAttrDef, set: (__v) => { salvarAttrDef = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "removerAttrDefModal", { configurable: true, get: () => removerAttrDefModal, set: (__v) => { removerAttrDefModal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "removerAttrDef", { configurable: true, get: () => removerAttrDef, set: (__v) => { removerAttrDef = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "selecionarOpcaoConfig", { configurable: true, get: () => selecionarOpcaoConfig, set: (__v) => { selecionarOpcaoConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarConfig", { configurable: true, get: () => salvarConfig, set: (__v) => { salvarConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "confirmarDeleteRPG", { configurable: true, get: () => confirmarDeleteRPG, set: (__v) => { confirmarDeleteRPG = __v; } });
 Object.defineProperty(globalThis, "_highlightLayer", { configurable: true, get: () => _highlightLayer, set: (__v) => { _highlightLayer = __v; } });
 Object.defineProperty(globalThis, "_highlightModoAtivo", { configurable: true, get: () => _highlightModoAtivo, set: (__v) => { _highlightModoAtivo = __v; } });
-Object.defineProperty(globalThis, "ctxHighlightToggle", { configurable: true, writable: true, value: ctxHighlightToggle });
-Object.defineProperty(globalThis, "ctxHighlightTurno", { configurable: true, writable: true, value: ctxHighlightTurno });
-Object.defineProperty(globalThis, "ctxHighlightLimpar", { configurable: true, writable: true, value: ctxHighlightLimpar });
-Object.defineProperty(globalThis, "_bfsCelulas", { configurable: true, writable: true, value: _bfsCelulas });
-Object.defineProperty(globalThis, "_celulasComAlvo", { configurable: true, writable: true, value: _celulasComAlvo });
-Object.defineProperty(globalThis, "losVerificar", { configurable: true, writable: true, value: losVerificar });
-Object.defineProperty(globalThis, "_segIntersect", { configurable: true, writable: true, value: _segIntersect });
-Object.defineProperty(globalThis, "superficieRenderizar", { configurable: true, writable: true, value: superficieRenderizar });
-Object.defineProperty(globalThis, "superficieVerificarEntrada", { configurable: true, writable: true, value: superficieVerificarEntrada });
-Object.defineProperty(globalThis, "verificarAtaqueOportunidade", { configurable: true, writable: true, value: verificarAtaqueOportunidade });
-Object.defineProperty(globalThis, "batalhaConfirmarPosicionamento", { configurable: true, writable: true, value: batalhaConfirmarPosicionamento });
-Object.defineProperty(globalThis, "aoePreviewAtualizar", { configurable: true, writable: true, value: aoePreviewAtualizar });
-Object.defineProperty(globalThis, "abrirModalNovoMapa", { configurable: true, writable: true, value: abrirModalNovoMapa });
-Object.defineProperty(globalThis, "nmTipoChange", { configurable: true, writable: true, value: nmTipoChange });
-Object.defineProperty(globalThis, "nmParentChange", { configurable: true, writable: true, value: nmParentChange });
-Object.defineProperty(globalThis, "nmAtualizarPreview", { configurable: true, writable: true, value: nmAtualizarPreview });
-Object.defineProperty(globalThis, "fecharModalNovoMapa", { configurable: true, writable: true, value: fecharModalNovoMapa });
-Object.defineProperty(globalThis, "criarNovoMapa", { configurable: true, writable: true, value: criarNovoMapa });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "ctxHighlightToggle", { configurable: true, get: () => ctxHighlightToggle, set: (__v) => { ctxHighlightToggle = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "ctxHighlightTurno", { configurable: true, get: () => ctxHighlightTurno, set: (__v) => { ctxHighlightTurno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "ctxHighlightLimpar", { configurable: true, get: () => ctxHighlightLimpar, set: (__v) => { ctxHighlightLimpar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_bfsCelulas", { configurable: true, get: () => _bfsCelulas, set: (__v) => { _bfsCelulas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_celulasComAlvo", { configurable: true, get: () => _celulasComAlvo, set: (__v) => { _celulasComAlvo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "losVerificar", { configurable: true, get: () => losVerificar, set: (__v) => { losVerificar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_segIntersect", { configurable: true, get: () => _segIntersect, set: (__v) => { _segIntersect = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "superficieRenderizar", { configurable: true, get: () => superficieRenderizar, set: (__v) => { superficieRenderizar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "superficieVerificarEntrada", { configurable: true, get: () => superficieVerificarEntrada, set: (__v) => { superficieVerificarEntrada = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "verificarAtaqueOportunidade", { configurable: true, get: () => verificarAtaqueOportunidade, set: (__v) => { verificarAtaqueOportunidade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "batalhaConfirmarPosicionamento", { configurable: true, get: () => batalhaConfirmarPosicionamento, set: (__v) => { batalhaConfirmarPosicionamento = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "aoePreviewAtualizar", { configurable: true, get: () => aoePreviewAtualizar, set: (__v) => { aoePreviewAtualizar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalNovoMapa", { configurable: true, get: () => abrirModalNovoMapa, set: (__v) => { abrirModalNovoMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmTipoChange", { configurable: true, get: () => nmTipoChange, set: (__v) => { nmTipoChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmParentChange", { configurable: true, get: () => nmParentChange, set: (__v) => { nmParentChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmAtualizarPreview", { configurable: true, get: () => nmAtualizarPreview, set: (__v) => { nmAtualizarPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalNovoMapa", { configurable: true, get: () => fecharModalNovoMapa, set: (__v) => { fecharModalNovoMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criarNovoMapa", { configurable: true, get: () => criarNovoMapa, set: (__v) => { criarNovoMapa = __v; } });
 Object.defineProperty(globalThis, "PLACEMENT_STATE", { configurable: true, get: () => PLACEMENT_STATE, set: (__v) => { PLACEMENT_STATE = __v; } });

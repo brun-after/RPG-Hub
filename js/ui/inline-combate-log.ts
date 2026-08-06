@@ -76,7 +76,11 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "toggleCombateLog", { configurable: true, writable: true, value: toggleCombateLog });
-Object.defineProperty(globalThis, "mostrarBotaoLogCombate", { configurable: true, writable: true, value: mostrarBotaoLogCombate });
-Object.defineProperty(globalThis, "ocultarBotaoLogCombate", { configurable: true, writable: true, value: ocultarBotaoLogCombate });
-Object.defineProperty(globalThis, "toggleAtalhosHelp", { configurable: true, writable: true, value: toggleAtalhosHelp });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "toggleCombateLog", { configurable: true, get: () => toggleCombateLog, set: (__v) => { toggleCombateLog = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mostrarBotaoLogCombate", { configurable: true, get: () => mostrarBotaoLogCombate, set: (__v) => { mostrarBotaoLogCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "ocultarBotaoLogCombate", { configurable: true, get: () => ocultarBotaoLogCombate, set: (__v) => { ocultarBotaoLogCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "toggleAtalhosHelp", { configurable: true, get: () => toggleAtalhosHelp, set: (__v) => { toggleAtalhosHelp = __v; } });

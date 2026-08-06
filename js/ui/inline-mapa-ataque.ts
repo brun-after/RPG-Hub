@@ -27,4 +27,5 @@ function mapaAtaqueMinimizar() {
 }
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "mapaAtaqueMinimizar", { configurable: true, writable: true, value: mapaAtaqueMinimizar });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaAtaqueMinimizar", { configurable: true, get: () => mapaAtaqueMinimizar, set: (__v) => { mapaAtaqueMinimizar = __v; } });

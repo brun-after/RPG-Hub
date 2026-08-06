@@ -890,39 +890,74 @@ Object.defineProperty(globalThis, "FASE_CAM_MARGIN", { configurable: true, get: 
 Object.defineProperty(globalThis, "FASE_MIN_ZOOM", { configurable: true, get: () => FASE_MIN_ZOOM });
 Object.defineProperty(globalThis, "FASE_MAX_ZOOM", { configurable: true, get: () => FASE_MAX_ZOOM });
 Object.defineProperty(globalThis, "FASE_CHUNK_SIZE", { configurable: true, get: () => FASE_CHUNK_SIZE });
-Object.defineProperty(globalThis, "_fasePixiEnsureLoaded", { configurable: true, writable: true, value: _fasePixiEnsureLoaded });
-Object.defineProperty(globalThis, "faseDesmontarAtual", { configurable: true, writable: true, value: faseDesmontarAtual });
-Object.defineProperty(globalThis, "faseRendererMount", { configurable: true, writable: true, value: faseRendererMount });
-Object.defineProperty(globalThis, "_faseCameraUpdate", { configurable: true, writable: true, value: _faseCameraUpdate });
-Object.defineProperty(globalThis, "_faseRenderParedes", { configurable: true, writable: true, value: _faseRenderParedes });
-Object.defineProperty(globalThis, "_faseRenderPortas", { configurable: true, writable: true, value: _faseRenderPortas });
-Object.defineProperty(globalThis, "_faseCriarPortaSprite", { configurable: true, writable: true, value: _faseCriarPortaSprite });
-Object.defineProperty(globalThis, "_faseClicarPorta", { configurable: true, writable: true, value: _faseClicarPorta });
-Object.defineProperty(globalThis, "_faseRenderBaus", { configurable: true, writable: true, value: _faseRenderBaus });
-Object.defineProperty(globalThis, "_faseCriarBauSprite", { configurable: true, writable: true, value: _faseCriarBauSprite });
-Object.defineProperty(globalThis, "_faseAbrirBau", { configurable: true, writable: true, value: _faseAbrirBau });
-Object.defineProperty(globalThis, "_faseRenderSpawnPoints", { configurable: true, writable: true, value: _faseRenderSpawnPoints });
-Object.defineProperty(globalThis, "_faseRenderEntidades", { configurable: true, writable: true, value: _faseRenderEntidades });
-Object.defineProperty(globalThis, "_faseCriarEntidadeSprite", { configurable: true, writable: true, value: _faseCriarEntidadeSprite });
-Object.defineProperty(globalThis, "_faseClicarEntidade", { configurable: true, writable: true, value: _faseClicarEntidade });
-Object.defineProperty(globalThis, "_faseAtualizarEntidadeSprite", { configurable: true, writable: true, value: _faseAtualizarEntidadeSprite });
-Object.defineProperty(globalThis, "_faseEntidadesLoop", { configurable: true, writable: true, value: _faseEntidadesLoop });
-Object.defineProperty(globalThis, "_fasePatrularStep", { configurable: true, writable: true, value: _fasePatrularStep });
-Object.defineProperty(globalThis, "_fasePerseguirStep", { configurable: true, writable: true, value: _fasePerseguirStep });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_fasePixiEnsureLoaded", { configurable: true, get: () => _fasePixiEnsureLoaded, set: (__v) => { _fasePixiEnsureLoaded = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseDesmontarAtual", { configurable: true, get: () => faseDesmontarAtual, set: (__v) => { faseDesmontarAtual = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseRendererMount", { configurable: true, get: () => faseRendererMount, set: (__v) => { faseRendererMount = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseCameraUpdate", { configurable: true, get: () => _faseCameraUpdate, set: (__v) => { _faseCameraUpdate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseRenderParedes", { configurable: true, get: () => _faseRenderParedes, set: (__v) => { _faseRenderParedes = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseRenderPortas", { configurable: true, get: () => _faseRenderPortas, set: (__v) => { _faseRenderPortas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseCriarPortaSprite", { configurable: true, get: () => _faseCriarPortaSprite, set: (__v) => { _faseCriarPortaSprite = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseClicarPorta", { configurable: true, get: () => _faseClicarPorta, set: (__v) => { _faseClicarPorta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseRenderBaus", { configurable: true, get: () => _faseRenderBaus, set: (__v) => { _faseRenderBaus = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseCriarBauSprite", { configurable: true, get: () => _faseCriarBauSprite, set: (__v) => { _faseCriarBauSprite = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseAbrirBau", { configurable: true, get: () => _faseAbrirBau, set: (__v) => { _faseAbrirBau = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseRenderSpawnPoints", { configurable: true, get: () => _faseRenderSpawnPoints, set: (__v) => { _faseRenderSpawnPoints = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseRenderEntidades", { configurable: true, get: () => _faseRenderEntidades, set: (__v) => { _faseRenderEntidades = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseCriarEntidadeSprite", { configurable: true, get: () => _faseCriarEntidadeSprite, set: (__v) => { _faseCriarEntidadeSprite = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseClicarEntidade", { configurable: true, get: () => _faseClicarEntidade, set: (__v) => { _faseClicarEntidade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseAtualizarEntidadeSprite", { configurable: true, get: () => _faseAtualizarEntidadeSprite, set: (__v) => { _faseAtualizarEntidadeSprite = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseEntidadesLoop", { configurable: true, get: () => _faseEntidadesLoop, set: (__v) => { _faseEntidadesLoop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_fasePatrularStep", { configurable: true, get: () => _fasePatrularStep, set: (__v) => { _fasePatrularStep = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_fasePerseguirStep", { configurable: true, get: () => _fasePerseguirStep, set: (__v) => { _fasePerseguirStep = __v; } });
 Object.defineProperty(globalThis, "_faseCombateTimerAtivo", { configurable: true, get: () => _faseCombateTimerAtivo, set: (__v) => { _faseCombateTimerAtivo = __v; } });
-Object.defineProperty(globalThis, "_faseTriggerCombate", { configurable: true, writable: true, value: _faseTriggerCombate });
-Object.defineProperty(globalThis, "_faseMostrarCombateTimer", { configurable: true, writable: true, value: _faseMostrarCombateTimer });
-Object.defineProperty(globalThis, "_faseAceitarCombate", { configurable: true, writable: true, value: _faseAceitarCombate });
-Object.defineProperty(globalThis, "_faseRecusarCombate", { configurable: true, writable: true, value: _faseRecusarCombate });
-Object.defineProperty(globalThis, "_faseIniciarCombateTatico", { configurable: true, writable: true, value: _faseIniciarCombateTatico });
-Object.defineProperty(globalThis, "_faseChunksUpdate", { configurable: true, writable: true, value: _faseChunksUpdate });
-Object.defineProperty(globalThis, "_faseInicializarJogadores", { configurable: true, writable: true, value: _faseInicializarJogadores });
-Object.defineProperty(globalThis, "faseAtualizarPosJogador", { configurable: true, writable: true, value: faseAtualizarPosJogador });
-Object.defineProperty(globalThis, "_faseCriarTokenSprite", { configurable: true, writable: true, value: _faseCriarTokenSprite });
-Object.defineProperty(globalThis, "_faseMontarInputMovimento", { configurable: true, writable: true, value: _faseMontarInputMovimento });
-Object.defineProperty(globalThis, "_faseColisaoParede", { configurable: true, writable: true, value: _faseColisaoParede });
-Object.defineProperty(globalThis, "_faseMontarHUD", { configurable: true, writable: true, value: _faseMontarHUD });
-Object.defineProperty(globalThis, "faseModoMestreToggle", { configurable: true, writable: true, value: faseModoMestreToggle });
-Object.defineProperty(globalThis, "faseIAToggle", { configurable: true, writable: true, value: faseIAToggle });
-Object.defineProperty(globalThis, "faseAceitarCombate", { configurable: true, writable: true, value: faseAceitarCombate });
-Object.defineProperty(globalThis, "faseRecusarCombate", { configurable: true, writable: true, value: faseRecusarCombate });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseTriggerCombate", { configurable: true, get: () => _faseTriggerCombate, set: (__v) => { _faseTriggerCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseMostrarCombateTimer", { configurable: true, get: () => _faseMostrarCombateTimer, set: (__v) => { _faseMostrarCombateTimer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseAceitarCombate", { configurable: true, get: () => _faseAceitarCombate, set: (__v) => { _faseAceitarCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseRecusarCombate", { configurable: true, get: () => _faseRecusarCombate, set: (__v) => { _faseRecusarCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseIniciarCombateTatico", { configurable: true, get: () => _faseIniciarCombateTatico, set: (__v) => { _faseIniciarCombateTatico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseChunksUpdate", { configurable: true, get: () => _faseChunksUpdate, set: (__v) => { _faseChunksUpdate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseInicializarJogadores", { configurable: true, get: () => _faseInicializarJogadores, set: (__v) => { _faseInicializarJogadores = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseAtualizarPosJogador", { configurable: true, get: () => faseAtualizarPosJogador, set: (__v) => { faseAtualizarPosJogador = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseCriarTokenSprite", { configurable: true, get: () => _faseCriarTokenSprite, set: (__v) => { _faseCriarTokenSprite = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseMontarInputMovimento", { configurable: true, get: () => _faseMontarInputMovimento, set: (__v) => { _faseMontarInputMovimento = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseColisaoParede", { configurable: true, get: () => _faseColisaoParede, set: (__v) => { _faseColisaoParede = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseMontarHUD", { configurable: true, get: () => _faseMontarHUD, set: (__v) => { _faseMontarHUD = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseModoMestreToggle", { configurable: true, get: () => faseModoMestreToggle, set: (__v) => { faseModoMestreToggle = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseIAToggle", { configurable: true, get: () => faseIAToggle, set: (__v) => { faseIAToggle = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseAceitarCombate", { configurable: true, get: () => faseAceitarCombate, set: (__v) => { faseAceitarCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseRecusarCombate", { configurable: true, get: () => faseRecusarCombate, set: (__v) => { faseRecusarCombate = __v; } });

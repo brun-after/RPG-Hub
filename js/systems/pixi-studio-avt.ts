@@ -367,6 +367,22 @@ async function _psAvtLoadCfg(animId) {
   }
 }
 
+// ── Delay de viagem SÍNCRONO de uma animação do Studio ─────────────────────
+// avtPixiPlayAnimation é async (o cfg pode vir da rede), mas _avtPlaySkillAnim
+// e os callers que agendam animação de morte são síncronos. Quando o cfg já está
+// no cache de 30s, devolve o mesmo delay que _psAvtProjectile retornaria; sem
+// cache devolve null (desconhecido) e o caller usa 0 como hoje.
+function avtPixiGetAnimDelaySync(animId) {
+  const cache = (typeof PIXI_STUDIO_STATE !== 'undefined') ? PIXI_STUDIO_STATE._animCache : null;
+  const cfg = cache && animId ? cache[animId] : null;
+  if (!cfg) return null;
+  if ((cfg.behavior || 'one-shot') !== 'projectile') return 0;
+  const hasSpawnPath = (cfg.layers || []).some(l => l.tipo === 'emitter' && l.spawn_path?.length);
+  if (hasSpawnPath || (cfg.travel?.path && cfg.travel.path !== 'linear'))
+    return cfg.duracao_ms || cfg.duration || 1000; // espelha _psAvtProjectile (spawn_path/curvo)
+  return cfg.behavior_config?.projectile_speed_ms || 500; // espelha o caminho linear
+}
+
 // ── Build screen coordinates from entity (mirrors _avtPlaySkillAnim) ───────
 function _psAvtToScreen(ent) {
   const canvas = AVT_STATE.canvas;
@@ -1378,41 +1394,78 @@ Object.defineProperty(globalThis, "_PS_AVT_ACTIVE", { configurable: true, get: (
 Object.defineProperty(globalThis, "_PS_PERSISTENT", { configurable: true, get: () => _PS_PERSISTENT, set: (__v) => { _PS_PERSISTENT = __v; } });
 Object.defineProperty(globalThis, "_PS_ATAC_REF", { configurable: true, get: () => _PS_ATAC_REF });
 Object.defineProperty(globalThis, "_PS_ALVO_REF", { configurable: true, get: () => _PS_ALVO_REF });
-Object.defineProperty(globalThis, "_psStudioToScreen", { configurable: true, writable: true, value: _psStudioToScreen });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psStudioToScreen", { configurable: true, get: () => _psStudioToScreen, set: (__v) => { _psStudioToScreen = __v; } });
 Object.defineProperty(globalThis, "_PS_CHEST_FRAC", { configurable: true, get: () => _PS_CHEST_FRAC });
 Object.defineProperty(globalThis, "_PS_Z_FRAC", { configurable: true, get: () => _PS_Z_FRAC });
 Object.defineProperty(globalThis, "_PS_LEAN", { configurable: true, get: () => _PS_LEAN });
-Object.defineProperty(globalThis, "_avtVfxIsoOn", { configurable: true, writable: true, value: _avtVfxIsoOn });
-Object.defineProperty(globalThis, "_avtVfxBillboardOn", { configurable: true, writable: true, value: _avtVfxBillboardOn });
-Object.defineProperty(globalThis, "_avtVfxTokenPx", { configurable: true, writable: true, value: _avtVfxTokenPx });
-Object.defineProperty(globalThis, "_avtVfxAutoScale", { configurable: true, writable: true, value: _avtVfxAutoScale });
-Object.defineProperty(globalThis, "_avtVfxScale", { configurable: true, writable: true, value: _avtVfxScale });
-Object.defineProperty(globalThis, "_psNormAnchor", { configurable: true, writable: true, value: _psNormAnchor });
-Object.defineProperty(globalThis, "_psSourceEnt", { configurable: true, writable: true, value: _psSourceEnt });
-Object.defineProperty(globalThis, "_psPlanarAnchor", { configurable: true, writable: true, value: _psPlanarAnchor });
-Object.defineProperty(globalThis, "_psAnchorLift", { configurable: true, writable: true, value: _psAnchorLift });
-Object.defineProperty(globalThis, "_avtResolveAnchor", { configurable: true, writable: true, value: _avtResolveAnchor });
-Object.defineProperty(globalThis, "_avtVfxRoot", { configurable: true, writable: true, value: _avtVfxRoot });
-Object.defineProperty(globalThis, "_avtVfxTrackedRoot", { configurable: true, writable: true, value: _avtVfxTrackedRoot });
-Object.defineProperty(globalThis, "_psHandPath", { configurable: true, writable: true, value: _psHandPath });
-Object.defineProperty(globalThis, "_psBeamPath", { configurable: true, writable: true, value: _psBeamPath });
-Object.defineProperty(globalThis, "_psToAvtConfig", { configurable: true, writable: true, value: _psToAvtConfig });
-Object.defineProperty(globalThis, "_psAvtLoadCfg", { configurable: true, writable: true, value: _psAvtLoadCfg });
-Object.defineProperty(globalThis, "_psAvtToScreen", { configurable: true, writable: true, value: _psAvtToScreen });
-Object.defineProperty(globalThis, "_psAvtLiveEnds", { configurable: true, writable: true, value: _psAvtLiveEnds });
-Object.defineProperty(globalThis, "_psAvtInterpKf", { configurable: true, writable: true, value: _psAvtInterpKf });
-Object.defineProperty(globalThis, "_psAvtRenderSprites", { configurable: true, writable: true, value: _psAvtRenderSprites });
-Object.defineProperty(globalThis, "_psAvtInterpGeneric", { configurable: true, writable: true, value: _psAvtInterpGeneric });
-Object.defineProperty(globalThis, "_psAvtRenderShapes", { configurable: true, writable: true, value: _psAvtRenderShapes });
-Object.defineProperty(globalThis, "_psAvtLayerAnchor", { configurable: true, writable: true, value: _psAvtLayerAnchor });
-Object.defineProperty(globalThis, "_avtScaleEmitterCfg", { configurable: true, writable: true, value: _avtScaleEmitterCfg });
-Object.defineProperty(globalThis, "_psAvtRenderWithSpawnPath", { configurable: true, writable: true, value: _psAvtRenderWithSpawnPath });
-Object.defineProperty(globalThis, "avtPixiPlayAnimation", { configurable: true, writable: true, value: avtPixiPlayAnimation });
-Object.defineProperty(globalThis, "_psAvtPathPos", { configurable: true, writable: true, value: _psAvtPathPos });
-Object.defineProperty(globalThis, "_psAvtRenderTravel", { configurable: true, writable: true, value: _psAvtRenderTravel });
-Object.defineProperty(globalThis, "_psAvtProjectile", { configurable: true, writable: true, value: _psAvtProjectile });
-Object.defineProperty(globalThis, "_psAvtFollow", { configurable: true, writable: true, value: _psAvtFollow });
-Object.defineProperty(globalThis, "_psAvtChain", { configurable: true, writable: true, value: _psAvtChain });
-Object.defineProperty(globalThis, "avtPixiPlayPersistent", { configurable: true, writable: true, value: avtPixiPlayPersistent });
-Object.defineProperty(globalThis, "avtPixiStopPersistent", { configurable: true, writable: true, value: avtPixiStopPersistent });
-Object.defineProperty(globalThis, "avtPixiCleanupAll", { configurable: true, writable: true, value: avtPixiCleanupAll });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVfxIsoOn", { configurable: true, get: () => _avtVfxIsoOn, set: (__v) => { _avtVfxIsoOn = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVfxBillboardOn", { configurable: true, get: () => _avtVfxBillboardOn, set: (__v) => { _avtVfxBillboardOn = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVfxTokenPx", { configurable: true, get: () => _avtVfxTokenPx, set: (__v) => { _avtVfxTokenPx = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVfxAutoScale", { configurable: true, get: () => _avtVfxAutoScale, set: (__v) => { _avtVfxAutoScale = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVfxScale", { configurable: true, get: () => _avtVfxScale, set: (__v) => { _avtVfxScale = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psNormAnchor", { configurable: true, get: () => _psNormAnchor, set: (__v) => { _psNormAnchor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psSourceEnt", { configurable: true, get: () => _psSourceEnt, set: (__v) => { _psSourceEnt = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psPlanarAnchor", { configurable: true, get: () => _psPlanarAnchor, set: (__v) => { _psPlanarAnchor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAnchorLift", { configurable: true, get: () => _psAnchorLift, set: (__v) => { _psAnchorLift = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtResolveAnchor", { configurable: true, get: () => _avtResolveAnchor, set: (__v) => { _avtResolveAnchor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVfxRoot", { configurable: true, get: () => _avtVfxRoot, set: (__v) => { _avtVfxRoot = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVfxTrackedRoot", { configurable: true, get: () => _avtVfxTrackedRoot, set: (__v) => { _avtVfxTrackedRoot = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psHandPath", { configurable: true, get: () => _psHandPath, set: (__v) => { _psHandPath = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psBeamPath", { configurable: true, get: () => _psBeamPath, set: (__v) => { _psBeamPath = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psToAvtConfig", { configurable: true, get: () => _psToAvtConfig, set: (__v) => { _psToAvtConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtLoadCfg", { configurable: true, get: () => _psAvtLoadCfg, set: (__v) => { _psAvtLoadCfg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtToScreen", { configurable: true, get: () => _psAvtToScreen, set: (__v) => { _psAvtToScreen = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtLiveEnds", { configurable: true, get: () => _psAvtLiveEnds, set: (__v) => { _psAvtLiveEnds = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtInterpKf", { configurable: true, get: () => _psAvtInterpKf, set: (__v) => { _psAvtInterpKf = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtRenderSprites", { configurable: true, get: () => _psAvtRenderSprites, set: (__v) => { _psAvtRenderSprites = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtInterpGeneric", { configurable: true, get: () => _psAvtInterpGeneric, set: (__v) => { _psAvtInterpGeneric = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtRenderShapes", { configurable: true, get: () => _psAvtRenderShapes, set: (__v) => { _psAvtRenderShapes = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtLayerAnchor", { configurable: true, get: () => _psAvtLayerAnchor, set: (__v) => { _psAvtLayerAnchor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtScaleEmitterCfg", { configurable: true, get: () => _avtScaleEmitterCfg, set: (__v) => { _avtScaleEmitterCfg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtRenderWithSpawnPath", { configurable: true, get: () => _psAvtRenderWithSpawnPath, set: (__v) => { _psAvtRenderWithSpawnPath = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtPixiPlayAnimation", { configurable: true, get: () => avtPixiPlayAnimation, set: (__v) => { avtPixiPlayAnimation = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtPixiGetAnimDelaySync", { configurable: true, get: () => avtPixiGetAnimDelaySync, set: (__v) => { avtPixiGetAnimDelaySync = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtPathPos", { configurable: true, get: () => _psAvtPathPos, set: (__v) => { _psAvtPathPos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtRenderTravel", { configurable: true, get: () => _psAvtRenderTravel, set: (__v) => { _psAvtRenderTravel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtProjectile", { configurable: true, get: () => _psAvtProjectile, set: (__v) => { _psAvtProjectile = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtFollow", { configurable: true, get: () => _psAvtFollow, set: (__v) => { _psAvtFollow = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtChain", { configurable: true, get: () => _psAvtChain, set: (__v) => { _psAvtChain = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtPixiPlayPersistent", { configurable: true, get: () => avtPixiPlayPersistent, set: (__v) => { avtPixiPlayPersistent = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtPixiStopPersistent", { configurable: true, get: () => avtPixiStopPersistent, set: (__v) => { avtPixiStopPersistent = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtPixiCleanupAll", { configurable: true, get: () => avtPixiCleanupAll, set: (__v) => { avtPixiCleanupAll = __v; } });

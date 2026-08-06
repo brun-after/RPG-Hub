@@ -3324,184 +3324,361 @@ Object.defineProperty(globalThis, "PS_ATAC_REF", { configurable: true, get: () =
 Object.defineProperty(globalThis, "PS_ALVO_REF", { configurable: true, get: () => PS_ALVO_REF });
 Object.defineProperty(globalThis, "PS_EASING", { configurable: true, get: () => PS_EASING });
 Object.defineProperty(globalThis, "PS_EASING_NAMES", { configurable: true, get: () => PS_EASING_NAMES });
-Object.defineProperty(globalThis, "_psEase", { configurable: true, writable: true, value: _psEase });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psEase", { configurable: true, get: () => _psEase, set: (__v) => { _psEase = __v; } });
 Object.defineProperty(globalThis, "PIXI_STUDIO_STATE", { configurable: true, get: () => PIXI_STUDIO_STATE, set: (__v) => { PIXI_STUDIO_STATE = __v; } });
-Object.defineProperty(globalThis, "_psValidateEmitterCfg", { configurable: true, writable: true, value: _psValidateEmitterCfg });
-Object.defineProperty(globalThis, "_psPushHistory", { configurable: true, writable: true, value: _psPushHistory });
-Object.defineProperty(globalThis, "_psHistoryReset", { configurable: true, writable: true, value: _psHistoryReset });
-Object.defineProperty(globalThis, "psUndo", { configurable: true, writable: true, value: psUndo });
-Object.defineProperty(globalThis, "psRedo", { configurable: true, writable: true, value: psRedo });
-Object.defineProperty(globalThis, "pixiStudioInit", { configurable: true, writable: true, value: pixiStudioInit });
-Object.defineProperty(globalThis, "psRenderShell", { configurable: true, writable: true, value: psRenderShell });
-Object.defineProperty(globalThis, "psCarregarLista", { configurable: true, writable: true, value: psCarregarLista });
-Object.defineProperty(globalThis, "psFilterAnimList", { configurable: true, writable: true, value: psFilterAnimList });
-Object.defineProperty(globalThis, "_psRenderAnimList", { configurable: true, writable: true, value: _psRenderAnimList });
-Object.defineProperty(globalThis, "psDuplicarAnimacao", { configurable: true, writable: true, value: psDuplicarAnimacao });
-Object.defineProperty(globalThis, "psCarregarAnimacao", { configurable: true, writable: true, value: psCarregarAnimacao });
-Object.defineProperty(globalThis, "psNova", { configurable: true, writable: true, value: psNova });
-Object.defineProperty(globalThis, "_psDefaultConfig", { configurable: true, writable: true, value: _psDefaultConfig });
-Object.defineProperty(globalThis, "psSalvar", { configurable: true, writable: true, value: psSalvar });
-Object.defineProperty(globalThis, "psExcluirAtual", { configurable: true, writable: true, value: psExcluirAtual });
-Object.defineProperty(globalThis, "_psSetDirty", { configurable: true, writable: true, value: _psSetDirty });
-Object.defineProperty(globalThis, "psAddLayer", { configurable: true, writable: true, value: psAddLayer });
-Object.defineProperty(globalThis, "psDuplicateLayer", { configurable: true, writable: true, value: psDuplicateLayer });
-Object.defineProperty(globalThis, "psRemoveLayer", { configurable: true, writable: true, value: psRemoveLayer });
-Object.defineProperty(globalThis, "psMoveLayer", { configurable: true, writable: true, value: psMoveLayer });
-Object.defineProperty(globalThis, "psSelectLayer", { configurable: true, writable: true, value: psSelectLayer });
-Object.defineProperty(globalThis, "psUpdateLayerProp", { configurable: true, writable: true, value: psUpdateLayerProp });
-Object.defineProperty(globalThis, "psUpdateEmitterProp", { configurable: true, writable: true, value: psUpdateEmitterProp });
-Object.defineProperty(globalThis, "psAddKeyframe", { configurable: true, writable: true, value: psAddKeyframe });
-Object.defineProperty(globalThis, "psUpdateKeyframe", { configurable: true, writable: true, value: psUpdateKeyframe });
-Object.defineProperty(globalThis, "psRemoveKeyframe", { configurable: true, writable: true, value: psRemoveKeyframe });
-Object.defineProperty(globalThis, "_psGetLayer", { configurable: true, writable: true, value: _psGetLayer });
-Object.defineProperty(globalThis, "_psDefaultKeyframe", { configurable: true, writable: true, value: _psDefaultKeyframe });
-Object.defineProperty(globalThis, "_psRenderLayerList", { configurable: true, writable: true, value: _psRenderLayerList });
-Object.defineProperty(globalThis, "_psRenderPropsPanel", { configurable: true, writable: true, value: _psRenderPropsPanel });
-Object.defineProperty(globalThis, "_psLightPanelHtml", { configurable: true, writable: true, value: _psLightPanelHtml });
-Object.defineProperty(globalThis, "_psIsoConfigHtml", { configurable: true, writable: true, value: _psIsoConfigHtml });
-Object.defineProperty(globalThis, "_esc", { configurable: true, writable: true, value: _esc });
-Object.defineProperty(globalThis, "psUpdateConfigProp", { configurable: true, writable: true, value: psUpdateConfigProp });
-Object.defineProperty(globalThis, "_psSfxOptions", { configurable: true, writable: true, value: _psSfxOptions });
-Object.defineProperty(globalThis, "_psSfxFieldHtml", { configurable: true, writable: true, value: _psSfxFieldHtml });
-Object.defineProperty(globalThis, "_psAudioHtml", { configurable: true, writable: true, value: _psAudioHtml });
-Object.defineProperty(globalThis, "psSetAudio", { configurable: true, writable: true, value: psSetAudio });
-Object.defineProperty(globalThis, "psSetSfx", { configurable: true, writable: true, value: psSetSfx });
-Object.defineProperty(globalThis, "psTestSfx", { configurable: true, writable: true, value: psTestSfx });
-Object.defineProperty(globalThis, "psTestSfxId", { configurable: true, writable: true, value: psTestSfxId });
-Object.defineProperty(globalThis, "psAddAudioEvent", { configurable: true, writable: true, value: psAddAudioEvent });
-Object.defineProperty(globalThis, "psUpdateAudioEvent", { configurable: true, writable: true, value: psUpdateAudioEvent });
-Object.defineProperty(globalThis, "psRemoveAudioEvent", { configurable: true, writable: true, value: psRemoveAudioEvent });
-Object.defineProperty(globalThis, "_psLightingHtml", { configurable: true, writable: true, value: _psLightingHtml });
-Object.defineProperty(globalThis, "psToggleBloom", { configurable: true, writable: true, value: psToggleBloom });
-Object.defineProperty(globalThis, "psSetLighting", { configurable: true, writable: true, value: psSetLighting });
-Object.defineProperty(globalThis, "_psScreenFxHtml", { configurable: true, writable: true, value: _psScreenFxHtml });
-Object.defineProperty(globalThis, "_psQualityHtml", { configurable: true, writable: true, value: _psQualityHtml });
-Object.defineProperty(globalThis, "_psEmitterPanelHtml", { configurable: true, writable: true, value: _psEmitterPanelHtml });
-Object.defineProperty(globalThis, "_psLayerFxHtml", { configurable: true, writable: true, value: _psLayerFxHtml });
-Object.defineProperty(globalThis, "psToggleLayerGlow", { configurable: true, writable: true, value: psToggleLayerGlow });
-Object.defineProperty(globalThis, "psToggleLayerTrail", { configurable: true, writable: true, value: psToggleLayerTrail });
-Object.defineProperty(globalThis, "psToggleLayerLightCast", { configurable: true, writable: true, value: psToggleLayerLightCast });
-Object.defineProperty(globalThis, "psToggleSpritesheet", { configurable: true, writable: true, value: psToggleSpritesheet });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psValidateEmitterCfg", { configurable: true, get: () => _psValidateEmitterCfg, set: (__v) => { _psValidateEmitterCfg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psPushHistory", { configurable: true, get: () => _psPushHistory, set: (__v) => { _psPushHistory = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psHistoryReset", { configurable: true, get: () => _psHistoryReset, set: (__v) => { _psHistoryReset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUndo", { configurable: true, get: () => psUndo, set: (__v) => { psUndo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psRedo", { configurable: true, get: () => psRedo, set: (__v) => { psRedo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "pixiStudioInit", { configurable: true, get: () => pixiStudioInit, set: (__v) => { pixiStudioInit = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psRenderShell", { configurable: true, get: () => psRenderShell, set: (__v) => { psRenderShell = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psCarregarLista", { configurable: true, get: () => psCarregarLista, set: (__v) => { psCarregarLista = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psFilterAnimList", { configurable: true, get: () => psFilterAnimList, set: (__v) => { psFilterAnimList = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psRenderAnimList", { configurable: true, get: () => _psRenderAnimList, set: (__v) => { _psRenderAnimList = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psDuplicarAnimacao", { configurable: true, get: () => psDuplicarAnimacao, set: (__v) => { psDuplicarAnimacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psCarregarAnimacao", { configurable: true, get: () => psCarregarAnimacao, set: (__v) => { psCarregarAnimacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psNova", { configurable: true, get: () => psNova, set: (__v) => { psNova = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psDefaultConfig", { configurable: true, get: () => _psDefaultConfig, set: (__v) => { _psDefaultConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psSalvar", { configurable: true, get: () => psSalvar, set: (__v) => { psSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psExcluirAtual", { configurable: true, get: () => psExcluirAtual, set: (__v) => { psExcluirAtual = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psSetDirty", { configurable: true, get: () => _psSetDirty, set: (__v) => { _psSetDirty = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psAddLayer", { configurable: true, get: () => psAddLayer, set: (__v) => { psAddLayer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psDuplicateLayer", { configurable: true, get: () => psDuplicateLayer, set: (__v) => { psDuplicateLayer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psRemoveLayer", { configurable: true, get: () => psRemoveLayer, set: (__v) => { psRemoveLayer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psMoveLayer", { configurable: true, get: () => psMoveLayer, set: (__v) => { psMoveLayer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psSelectLayer", { configurable: true, get: () => psSelectLayer, set: (__v) => { psSelectLayer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateLayerProp", { configurable: true, get: () => psUpdateLayerProp, set: (__v) => { psUpdateLayerProp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateEmitterProp", { configurable: true, get: () => psUpdateEmitterProp, set: (__v) => { psUpdateEmitterProp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psAddKeyframe", { configurable: true, get: () => psAddKeyframe, set: (__v) => { psAddKeyframe = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateKeyframe", { configurable: true, get: () => psUpdateKeyframe, set: (__v) => { psUpdateKeyframe = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psRemoveKeyframe", { configurable: true, get: () => psRemoveKeyframe, set: (__v) => { psRemoveKeyframe = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psGetLayer", { configurable: true, get: () => _psGetLayer, set: (__v) => { _psGetLayer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psDefaultKeyframe", { configurable: true, get: () => _psDefaultKeyframe, set: (__v) => { _psDefaultKeyframe = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psRenderLayerList", { configurable: true, get: () => _psRenderLayerList, set: (__v) => { _psRenderLayerList = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psRenderPropsPanel", { configurable: true, get: () => _psRenderPropsPanel, set: (__v) => { _psRenderPropsPanel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psLightPanelHtml", { configurable: true, get: () => _psLightPanelHtml, set: (__v) => { _psLightPanelHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psIsoConfigHtml", { configurable: true, get: () => _psIsoConfigHtml, set: (__v) => { _psIsoConfigHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_esc", { configurable: true, get: () => _esc, set: (__v) => { _esc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateConfigProp", { configurable: true, get: () => psUpdateConfigProp, set: (__v) => { psUpdateConfigProp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psSfxOptions", { configurable: true, get: () => _psSfxOptions, set: (__v) => { _psSfxOptions = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psSfxFieldHtml", { configurable: true, get: () => _psSfxFieldHtml, set: (__v) => { _psSfxFieldHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAudioHtml", { configurable: true, get: () => _psAudioHtml, set: (__v) => { _psAudioHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psSetAudio", { configurable: true, get: () => psSetAudio, set: (__v) => { psSetAudio = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psSetSfx", { configurable: true, get: () => psSetSfx, set: (__v) => { psSetSfx = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psTestSfx", { configurable: true, get: () => psTestSfx, set: (__v) => { psTestSfx = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psTestSfxId", { configurable: true, get: () => psTestSfxId, set: (__v) => { psTestSfxId = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psAddAudioEvent", { configurable: true, get: () => psAddAudioEvent, set: (__v) => { psAddAudioEvent = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateAudioEvent", { configurable: true, get: () => psUpdateAudioEvent, set: (__v) => { psUpdateAudioEvent = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psRemoveAudioEvent", { configurable: true, get: () => psRemoveAudioEvent, set: (__v) => { psRemoveAudioEvent = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psLightingHtml", { configurable: true, get: () => _psLightingHtml, set: (__v) => { _psLightingHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psToggleBloom", { configurable: true, get: () => psToggleBloom, set: (__v) => { psToggleBloom = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psSetLighting", { configurable: true, get: () => psSetLighting, set: (__v) => { psSetLighting = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psScreenFxHtml", { configurable: true, get: () => _psScreenFxHtml, set: (__v) => { _psScreenFxHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psQualityHtml", { configurable: true, get: () => _psQualityHtml, set: (__v) => { _psQualityHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psEmitterPanelHtml", { configurable: true, get: () => _psEmitterPanelHtml, set: (__v) => { _psEmitterPanelHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psLayerFxHtml", { configurable: true, get: () => _psLayerFxHtml, set: (__v) => { _psLayerFxHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psToggleLayerGlow", { configurable: true, get: () => psToggleLayerGlow, set: (__v) => { psToggleLayerGlow = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psToggleLayerTrail", { configurable: true, get: () => psToggleLayerTrail, set: (__v) => { psToggleLayerTrail = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psToggleLayerLightCast", { configurable: true, get: () => psToggleLayerLightCast, set: (__v) => { psToggleLayerLightCast = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psToggleSpritesheet", { configurable: true, get: () => psToggleSpritesheet, set: (__v) => { psToggleSpritesheet = __v; } });
 Object.defineProperty(globalThis, "_PS_FILTER_PARAMS", { configurable: true, get: () => _PS_FILTER_PARAMS });
 Object.defineProperty(globalThis, "_PS_FILTER_TYPES", { configurable: true, get: () => _PS_FILTER_TYPES });
-Object.defineProperty(globalThis, "_psFilterArr", { configurable: true, writable: true, value: _psFilterArr });
-Object.defineProperty(globalThis, "_psFilterStackHtml", { configurable: true, writable: true, value: _psFilterStackHtml });
-Object.defineProperty(globalThis, "_psFilterStackHtmlFor", { configurable: true, writable: true, value: _psFilterStackHtmlFor });
-Object.defineProperty(globalThis, "psAddFilter", { configurable: true, writable: true, value: psAddFilter });
-Object.defineProperty(globalThis, "psRemoveFilter", { configurable: true, writable: true, value: psRemoveFilter });
-Object.defineProperty(globalThis, "psUpdateFilterParam", { configurable: true, writable: true, value: psUpdateFilterParam });
-Object.defineProperty(globalThis, "_psLayerCommonHtml", { configurable: true, writable: true, value: _psLayerCommonHtml });
-Object.defineProperty(globalThis, "_psAnchorBtnGroup", { configurable: true, writable: true, value: _psAnchorBtnGroup });
-Object.defineProperty(globalThis, "_psAnchorCellGrid", { configurable: true, writable: true, value: _psAnchorCellGrid });
-Object.defineProperty(globalThis, "_psLayerAnchorHtml", { configurable: true, writable: true, value: _psLayerAnchorHtml });
-Object.defineProperty(globalThis, "psSetAnchor", { configurable: true, writable: true, value: psSetAnchor });
-Object.defineProperty(globalThis, "psSetAnchorCell", { configurable: true, writable: true, value: psSetAnchorCell });
-Object.defineProperty(globalThis, "psSetAnchorHeight", { configurable: true, writable: true, value: psSetAnchorHeight });
-Object.defineProperty(globalThis, "_psRangeHtml", { configurable: true, writable: true, value: _psRangeHtml });
-Object.defineProperty(globalThis, "_psColorGradientHtml", { configurable: true, writable: true, value: _psColorGradientHtml });
-Object.defineProperty(globalThis, "_psCurveRowsHtml", { configurable: true, writable: true, value: _psCurveRowsHtml });
-Object.defineProperty(globalThis, "_psAlphaCurveHtml", { configurable: true, writable: true, value: _psAlphaCurveHtml });
-Object.defineProperty(globalThis, "_psScaleCurveHtml", { configurable: true, writable: true, value: _psScaleCurveHtml });
-Object.defineProperty(globalThis, "_psSpawnFieldsHtml", { configurable: true, writable: true, value: _psSpawnFieldsHtml });
-Object.defineProperty(globalThis, "_psSpriteShapeHtml", { configurable: true, writable: true, value: _psSpriteShapeHtml });
-Object.defineProperty(globalThis, "_psBgPanelHtml", { configurable: true, writable: true, value: _psBgPanelHtml });
-Object.defineProperty(globalThis, "psUpdateColorStop", { configurable: true, writable: true, value: psUpdateColorStop });
-Object.defineProperty(globalThis, "psAddColorStop", { configurable: true, writable: true, value: psAddColorStop });
-Object.defineProperty(globalThis, "psRemoveColorStop", { configurable: true, writable: true, value: psRemoveColorStop });
-Object.defineProperty(globalThis, "psUpdateAlphaStop", { configurable: true, writable: true, value: psUpdateAlphaStop });
-Object.defineProperty(globalThis, "psUpdateScaleStop", { configurable: true, writable: true, value: psUpdateScaleStop });
-Object.defineProperty(globalThis, "psAddAlphaStop", { configurable: true, writable: true, value: psAddAlphaStop });
-Object.defineProperty(globalThis, "psRemoveAlphaStop", { configurable: true, writable: true, value: psRemoveAlphaStop });
-Object.defineProperty(globalThis, "psUpdateAlphaStopTime", { configurable: true, writable: true, value: psUpdateAlphaStopTime });
-Object.defineProperty(globalThis, "psAddScaleStop", { configurable: true, writable: true, value: psAddScaleStop });
-Object.defineProperty(globalThis, "psRemoveScaleStop", { configurable: true, writable: true, value: psRemoveScaleStop });
-Object.defineProperty(globalThis, "psUpdateScaleStopTime", { configurable: true, writable: true, value: psUpdateScaleStopTime });
-Object.defineProperty(globalThis, "psUpdateLayerOffset", { configurable: true, writable: true, value: psUpdateLayerOffset });
-Object.defineProperty(globalThis, "psUpdateEmitterDir", { configurable: true, writable: true, value: psUpdateEmitterDir });
-Object.defineProperty(globalThis, "psSetSpawnType", { configurable: true, writable: true, value: psSetSpawnType });
-Object.defineProperty(globalThis, "psUpdateSpawnRect", { configurable: true, writable: true, value: psUpdateSpawnRect });
-Object.defineProperty(globalThis, "_psBeginDragOrigin", { configurable: true, writable: true, value: _psBeginDragOrigin });
-Object.defineProperty(globalThis, "_psCheckWebGLOK", { configurable: true, writable: true, value: _psCheckWebGLOK });
-Object.defineProperty(globalThis, "_psDrawUnsupportedMessage", { configurable: true, writable: true, value: _psDrawUnsupportedMessage });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFilterArr", { configurable: true, get: () => _psFilterArr, set: (__v) => { _psFilterArr = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFilterStackHtml", { configurable: true, get: () => _psFilterStackHtml, set: (__v) => { _psFilterStackHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFilterStackHtmlFor", { configurable: true, get: () => _psFilterStackHtmlFor, set: (__v) => { _psFilterStackHtmlFor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psAddFilter", { configurable: true, get: () => psAddFilter, set: (__v) => { psAddFilter = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psRemoveFilter", { configurable: true, get: () => psRemoveFilter, set: (__v) => { psRemoveFilter = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateFilterParam", { configurable: true, get: () => psUpdateFilterParam, set: (__v) => { psUpdateFilterParam = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psLayerCommonHtml", { configurable: true, get: () => _psLayerCommonHtml, set: (__v) => { _psLayerCommonHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAnchorBtnGroup", { configurable: true, get: () => _psAnchorBtnGroup, set: (__v) => { _psAnchorBtnGroup = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAnchorCellGrid", { configurable: true, get: () => _psAnchorCellGrid, set: (__v) => { _psAnchorCellGrid = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psLayerAnchorHtml", { configurable: true, get: () => _psLayerAnchorHtml, set: (__v) => { _psLayerAnchorHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psSetAnchor", { configurable: true, get: () => psSetAnchor, set: (__v) => { psSetAnchor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psSetAnchorCell", { configurable: true, get: () => psSetAnchorCell, set: (__v) => { psSetAnchorCell = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psSetAnchorHeight", { configurable: true, get: () => psSetAnchorHeight, set: (__v) => { psSetAnchorHeight = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psRangeHtml", { configurable: true, get: () => _psRangeHtml, set: (__v) => { _psRangeHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psColorGradientHtml", { configurable: true, get: () => _psColorGradientHtml, set: (__v) => { _psColorGradientHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psCurveRowsHtml", { configurable: true, get: () => _psCurveRowsHtml, set: (__v) => { _psCurveRowsHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAlphaCurveHtml", { configurable: true, get: () => _psAlphaCurveHtml, set: (__v) => { _psAlphaCurveHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psScaleCurveHtml", { configurable: true, get: () => _psScaleCurveHtml, set: (__v) => { _psScaleCurveHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psSpawnFieldsHtml", { configurable: true, get: () => _psSpawnFieldsHtml, set: (__v) => { _psSpawnFieldsHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psSpriteShapeHtml", { configurable: true, get: () => _psSpriteShapeHtml, set: (__v) => { _psSpriteShapeHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psBgPanelHtml", { configurable: true, get: () => _psBgPanelHtml, set: (__v) => { _psBgPanelHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateColorStop", { configurable: true, get: () => psUpdateColorStop, set: (__v) => { psUpdateColorStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psAddColorStop", { configurable: true, get: () => psAddColorStop, set: (__v) => { psAddColorStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psRemoveColorStop", { configurable: true, get: () => psRemoveColorStop, set: (__v) => { psRemoveColorStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateAlphaStop", { configurable: true, get: () => psUpdateAlphaStop, set: (__v) => { psUpdateAlphaStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateScaleStop", { configurable: true, get: () => psUpdateScaleStop, set: (__v) => { psUpdateScaleStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psAddAlphaStop", { configurable: true, get: () => psAddAlphaStop, set: (__v) => { psAddAlphaStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psRemoveAlphaStop", { configurable: true, get: () => psRemoveAlphaStop, set: (__v) => { psRemoveAlphaStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateAlphaStopTime", { configurable: true, get: () => psUpdateAlphaStopTime, set: (__v) => { psUpdateAlphaStopTime = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psAddScaleStop", { configurable: true, get: () => psAddScaleStop, set: (__v) => { psAddScaleStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psRemoveScaleStop", { configurable: true, get: () => psRemoveScaleStop, set: (__v) => { psRemoveScaleStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateScaleStopTime", { configurable: true, get: () => psUpdateScaleStopTime, set: (__v) => { psUpdateScaleStopTime = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateLayerOffset", { configurable: true, get: () => psUpdateLayerOffset, set: (__v) => { psUpdateLayerOffset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateEmitterDir", { configurable: true, get: () => psUpdateEmitterDir, set: (__v) => { psUpdateEmitterDir = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psSetSpawnType", { configurable: true, get: () => psSetSpawnType, set: (__v) => { psSetSpawnType = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUpdateSpawnRect", { configurable: true, get: () => psUpdateSpawnRect, set: (__v) => { psUpdateSpawnRect = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psBeginDragOrigin", { configurable: true, get: () => _psBeginDragOrigin, set: (__v) => { _psBeginDragOrigin = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psCheckWebGLOK", { configurable: true, get: () => _psCheckWebGLOK, set: (__v) => { _psCheckWebGLOK = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psDrawUnsupportedMessage", { configurable: true, get: () => _psDrawUnsupportedMessage, set: (__v) => { _psDrawUnsupportedMessage = __v; } });
 Object.defineProperty(globalThis, "_psResizeTimer", { configurable: true, get: () => _psResizeTimer, set: (__v) => { _psResizeTimer = __v; } });
-Object.defineProperty(globalThis, "psPreviewMount", { configurable: true, writable: true, value: psPreviewMount });
-Object.defineProperty(globalThis, "psPreviewUnmount", { configurable: true, writable: true, value: psPreviewUnmount });
-Object.defineProperty(globalThis, "_psDestroyFilters", { configurable: true, writable: true, value: _psDestroyFilters });
-Object.defineProperty(globalThis, "_psRemountOrRebuild", { configurable: true, writable: true, value: _psRemountOrRebuild });
-Object.defineProperty(globalThis, "psPreviewPlay", { configurable: true, writable: true, value: psPreviewPlay });
-Object.defineProperty(globalThis, "_psDoPlay", { configurable: true, writable: true, value: _psDoPlay });
-Object.defineProperty(globalThis, "_psPlayPreviewAudio", { configurable: true, writable: true, value: _psPlayPreviewAudio });
-Object.defineProperty(globalThis, "psPreviewPause", { configurable: true, writable: true, value: psPreviewPause });
-Object.defineProperty(globalThis, "psPreviewStop", { configurable: true, writable: true, value: psPreviewStop });
-Object.defineProperty(globalThis, "psPreviewToggleLoop", { configurable: true, writable: true, value: psPreviewToggleLoop });
-Object.defineProperty(globalThis, "psPreviewZoom", { configurable: true, writable: true, value: psPreviewZoom });
-Object.defineProperty(globalThis, "_psPreviewTick", { configurable: true, writable: true, value: _psPreviewTick });
-Object.defineProperty(globalThis, "_psUpdateTimeDisplay", { configurable: true, writable: true, value: _psUpdateTimeDisplay });
-Object.defineProperty(globalThis, "_psPreviewRenderFrame", { configurable: true, writable: true, value: _psPreviewRenderFrame });
-Object.defineProperty(globalThis, "_psBeginDragSprite", { configurable: true, writable: true, value: _psBeginDragSprite });
-Object.defineProperty(globalThis, "_psDragMove", { configurable: true, writable: true, value: _psDragMove });
-Object.defineProperty(globalThis, "_psDragEnd", { configurable: true, writable: true, value: _psDragEnd });
-Object.defineProperty(globalThis, "psToggleGravar", { configurable: true, writable: true, value: psToggleGravar });
-Object.defineProperty(globalThis, "_psRecordSelectOrigin", { configurable: true, writable: true, value: _psRecordSelectOrigin });
-Object.defineProperty(globalThis, "_psRecordStart", { configurable: true, writable: true, value: _psRecordStart });
-Object.defineProperty(globalThis, "_psRecordPoint", { configurable: true, writable: true, value: _psRecordPoint });
-Object.defineProperty(globalThis, "_psRecordFinish", { configurable: true, writable: true, value: _psRecordFinish });
-Object.defineProperty(globalThis, "_psSmoothPath", { configurable: true, writable: true, value: _psSmoothPath });
-Object.defineProperty(globalThis, "_psInterpKf", { configurable: true, writable: true, value: _psInterpKf });
-Object.defineProperty(globalThis, "psPreviewRebuildAll", { configurable: true, writable: true, value: psPreviewRebuildAll });
-Object.defineProperty(globalThis, "_psBuildSprite", { configurable: true, writable: true, value: _psBuildSprite });
-Object.defineProperty(globalThis, "_psDrawBackground", { configurable: true, writable: true, value: _psDrawBackground });
-Object.defineProperty(globalThis, "_psBuildSceneDummies", { configurable: true, writable: true, value: _psBuildSceneDummies });
-Object.defineProperty(globalThis, "_psSceneAnchor", { configurable: true, writable: true, value: _psSceneAnchor });
-Object.defineProperty(globalThis, "_psApplySceneFrame", { configurable: true, writable: true, value: _psApplySceneFrame });
-Object.defineProperty(globalThis, "psToggleFx", { configurable: true, writable: true, value: psToggleFx });
-Object.defineProperty(globalThis, "psToggleScene", { configurable: true, writable: true, value: psToggleScene });
-Object.defineProperty(globalThis, "_psFaseBtnSync", { configurable: true, writable: true, value: _psFaseBtnSync });
-Object.defineProperty(globalThis, "psToggleFase", { configurable: true, writable: true, value: psToggleFase });
-Object.defineProperty(globalThis, "psFaseSetChar", { configurable: true, writable: true, value: psFaseSetChar });
-Object.defineProperty(globalThis, "_psFaseCharList", { configurable: true, writable: true, value: _psFaseCharList });
-Object.defineProperty(globalThis, "_psFasePopulateChars", { configurable: true, writable: true, value: _psFasePopulateChars });
-Object.defineProperty(globalThis, "_psFaseTokenUrl", { configurable: true, writable: true, value: _psFaseTokenUrl });
-Object.defineProperty(globalThis, "_psFaseStyleLayer", { configurable: true, writable: true, value: _psFaseStyleLayer });
-Object.defineProperty(globalThis, "_psFaseCosX", { configurable: true, writable: true, value: _psFaseCosX });
-Object.defineProperty(globalThis, "_psFaseDrawFloor", { configurable: true, writable: true, value: _psFaseDrawFloor });
-Object.defineProperty(globalThis, "_psFaseStandToken", { configurable: true, writable: true, value: _psFaseStandToken });
-Object.defineProperty(globalThis, "_psBuildFaseStage", { configurable: true, writable: true, value: _psBuildFaseStage });
-Object.defineProperty(globalThis, "_psHexToInt", { configurable: true, writable: true, value: _psHexToInt });
-Object.defineProperty(globalThis, "_psApplyContainerFilters", { configurable: true, writable: true, value: _psApplyContainerFilters });
-Object.defineProperty(globalThis, "_psEnsureFiltersForCfg", { configurable: true, writable: true, value: _psEnsureFiltersForCfg });
-Object.defineProperty(globalThis, "_psCreateEmitter", { configurable: true, writable: true, value: _psCreateEmitter });
-Object.defineProperty(globalThis, "psPreviewSyncEmitter", { configurable: true, writable: true, value: psPreviewSyncEmitter });
-Object.defineProperty(globalThis, "_psDestroyAllEmitters", { configurable: true, writable: true, value: _psDestroyAllEmitters });
-Object.defineProperty(globalThis, "_psCaptureThumbnail", { configurable: true, writable: true, value: _psCaptureThumbnail });
-Object.defineProperty(globalThis, "psTimelineRender", { configurable: true, writable: true, value: psTimelineRender });
-Object.defineProperty(globalThis, "psTimelineScrubStart", { configurable: true, writable: true, value: psTimelineScrubStart });
-Object.defineProperty(globalThis, "psTimelineScrubMove", { configurable: true, writable: true, value: psTimelineScrubMove });
-Object.defineProperty(globalThis, "psTimelineScrubEnd", { configurable: true, writable: true, value: psTimelineScrubEnd });
-Object.defineProperty(globalThis, "psTimelineKfDragStart", { configurable: true, writable: true, value: psTimelineKfDragStart });
-Object.defineProperty(globalThis, "_psKfDragMove", { configurable: true, writable: true, value: _psKfDragMove });
-Object.defineProperty(globalThis, "_psKfDragEnd", { configurable: true, writable: true, value: _psKfDragEnd });
-Object.defineProperty(globalThis, "psTimelineLayerDragStart", { configurable: true, writable: true, value: psTimelineLayerDragStart });
-Object.defineProperty(globalThis, "_psLayerDragMove", { configurable: true, writable: true, value: _psLayerDragMove });
-Object.defineProperty(globalThis, "_psLayerDragEnd", { configurable: true, writable: true, value: _psLayerDragEnd });
-Object.defineProperty(globalThis, "psTimelineSpawnPathDragStart", { configurable: true, writable: true, value: psTimelineSpawnPathDragStart });
-Object.defineProperty(globalThis, "_psSpawnPathDragMove", { configurable: true, writable: true, value: _psSpawnPathDragMove });
-Object.defineProperty(globalThis, "_psSpawnPathDragEnd", { configurable: true, writable: true, value: _psSpawnPathDragEnd });
-Object.defineProperty(globalThis, "_psRenderBehaviorPanel", { configurable: true, writable: true, value: _psRenderBehaviorPanel });
-Object.defineProperty(globalThis, "psSetTravel", { configurable: true, writable: true, value: psSetTravel });
-Object.defineProperty(globalThis, "_psChainBuilderHtml", { configurable: true, writable: true, value: _psChainBuilderHtml });
-Object.defineProperty(globalThis, "_psChainSeq", { configurable: true, writable: true, value: _psChainSeq });
-Object.defineProperty(globalThis, "psChainAdd", { configurable: true, writable: true, value: psChainAdd });
-Object.defineProperty(globalThis, "psChainSetDelay", { configurable: true, writable: true, value: psChainSetDelay });
-Object.defineProperty(globalThis, "psChainRemove", { configurable: true, writable: true, value: psChainRemove });
-Object.defineProperty(globalThis, "psChainMove", { configurable: true, writable: true, value: psChainMove });
-Object.defineProperty(globalThis, "psPresetsAbrir", { configurable: true, writable: true, value: psPresetsAbrir });
-Object.defineProperty(globalThis, "psLoadPreset", { configurable: true, writable: true, value: psLoadPreset });
-Object.defineProperty(globalThis, "psImportarAbrir", { configurable: true, writable: true, value: psImportarAbrir });
-Object.defineProperty(globalThis, "psImportarJson", { configurable: true, writable: true, value: psImportarJson });
-Object.defineProperty(globalThis, "psImportarArquivo", { configurable: true, writable: true, value: psImportarArquivo });
-Object.defineProperty(globalThis, "psExportarJson", { configurable: true, writable: true, value: psExportarJson });
-Object.defineProperty(globalThis, "psUploadTexture", { configurable: true, writable: true, value: psUploadTexture });
-Object.defineProperty(globalThis, "psPickerAbrir", { configurable: true, writable: true, value: psPickerAbrir });
-Object.defineProperty(globalThis, "_psRenderPickerList", { configurable: true, writable: true, value: _psRenderPickerList });
-Object.defineProperty(globalThis, "psPickerSelecionar", { configurable: true, writable: true, value: psPickerSelecionar });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psPreviewMount", { configurable: true, get: () => psPreviewMount, set: (__v) => { psPreviewMount = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psPreviewUnmount", { configurable: true, get: () => psPreviewUnmount, set: (__v) => { psPreviewUnmount = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psDestroyFilters", { configurable: true, get: () => _psDestroyFilters, set: (__v) => { _psDestroyFilters = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psRemountOrRebuild", { configurable: true, get: () => _psRemountOrRebuild, set: (__v) => { _psRemountOrRebuild = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psPreviewPlay", { configurable: true, get: () => psPreviewPlay, set: (__v) => { psPreviewPlay = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psDoPlay", { configurable: true, get: () => _psDoPlay, set: (__v) => { _psDoPlay = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psPlayPreviewAudio", { configurable: true, get: () => _psPlayPreviewAudio, set: (__v) => { _psPlayPreviewAudio = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psPreviewPause", { configurable: true, get: () => psPreviewPause, set: (__v) => { psPreviewPause = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psPreviewStop", { configurable: true, get: () => psPreviewStop, set: (__v) => { psPreviewStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psPreviewToggleLoop", { configurable: true, get: () => psPreviewToggleLoop, set: (__v) => { psPreviewToggleLoop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psPreviewZoom", { configurable: true, get: () => psPreviewZoom, set: (__v) => { psPreviewZoom = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psPreviewTick", { configurable: true, get: () => _psPreviewTick, set: (__v) => { _psPreviewTick = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psUpdateTimeDisplay", { configurable: true, get: () => _psUpdateTimeDisplay, set: (__v) => { _psUpdateTimeDisplay = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psPreviewRenderFrame", { configurable: true, get: () => _psPreviewRenderFrame, set: (__v) => { _psPreviewRenderFrame = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psBeginDragSprite", { configurable: true, get: () => _psBeginDragSprite, set: (__v) => { _psBeginDragSprite = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psDragMove", { configurable: true, get: () => _psDragMove, set: (__v) => { _psDragMove = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psDragEnd", { configurable: true, get: () => _psDragEnd, set: (__v) => { _psDragEnd = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psToggleGravar", { configurable: true, get: () => psToggleGravar, set: (__v) => { psToggleGravar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psRecordSelectOrigin", { configurable: true, get: () => _psRecordSelectOrigin, set: (__v) => { _psRecordSelectOrigin = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psRecordStart", { configurable: true, get: () => _psRecordStart, set: (__v) => { _psRecordStart = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psRecordPoint", { configurable: true, get: () => _psRecordPoint, set: (__v) => { _psRecordPoint = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psRecordFinish", { configurable: true, get: () => _psRecordFinish, set: (__v) => { _psRecordFinish = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psSmoothPath", { configurable: true, get: () => _psSmoothPath, set: (__v) => { _psSmoothPath = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psInterpKf", { configurable: true, get: () => _psInterpKf, set: (__v) => { _psInterpKf = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psPreviewRebuildAll", { configurable: true, get: () => psPreviewRebuildAll, set: (__v) => { psPreviewRebuildAll = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psBuildSprite", { configurable: true, get: () => _psBuildSprite, set: (__v) => { _psBuildSprite = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psDrawBackground", { configurable: true, get: () => _psDrawBackground, set: (__v) => { _psDrawBackground = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psBuildSceneDummies", { configurable: true, get: () => _psBuildSceneDummies, set: (__v) => { _psBuildSceneDummies = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psSceneAnchor", { configurable: true, get: () => _psSceneAnchor, set: (__v) => { _psSceneAnchor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psApplySceneFrame", { configurable: true, get: () => _psApplySceneFrame, set: (__v) => { _psApplySceneFrame = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psToggleFx", { configurable: true, get: () => psToggleFx, set: (__v) => { psToggleFx = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psToggleScene", { configurable: true, get: () => psToggleScene, set: (__v) => { psToggleScene = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFaseBtnSync", { configurable: true, get: () => _psFaseBtnSync, set: (__v) => { _psFaseBtnSync = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psToggleFase", { configurable: true, get: () => psToggleFase, set: (__v) => { psToggleFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psFaseSetChar", { configurable: true, get: () => psFaseSetChar, set: (__v) => { psFaseSetChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFaseCharList", { configurable: true, get: () => _psFaseCharList, set: (__v) => { _psFaseCharList = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFasePopulateChars", { configurable: true, get: () => _psFasePopulateChars, set: (__v) => { _psFasePopulateChars = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFaseTokenUrl", { configurable: true, get: () => _psFaseTokenUrl, set: (__v) => { _psFaseTokenUrl = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFaseStyleLayer", { configurable: true, get: () => _psFaseStyleLayer, set: (__v) => { _psFaseStyleLayer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFaseCosX", { configurable: true, get: () => _psFaseCosX, set: (__v) => { _psFaseCosX = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFaseDrawFloor", { configurable: true, get: () => _psFaseDrawFloor, set: (__v) => { _psFaseDrawFloor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFaseStandToken", { configurable: true, get: () => _psFaseStandToken, set: (__v) => { _psFaseStandToken = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psBuildFaseStage", { configurable: true, get: () => _psBuildFaseStage, set: (__v) => { _psBuildFaseStage = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psHexToInt", { configurable: true, get: () => _psHexToInt, set: (__v) => { _psHexToInt = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psApplyContainerFilters", { configurable: true, get: () => _psApplyContainerFilters, set: (__v) => { _psApplyContainerFilters = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psEnsureFiltersForCfg", { configurable: true, get: () => _psEnsureFiltersForCfg, set: (__v) => { _psEnsureFiltersForCfg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psCreateEmitter", { configurable: true, get: () => _psCreateEmitter, set: (__v) => { _psCreateEmitter = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psPreviewSyncEmitter", { configurable: true, get: () => psPreviewSyncEmitter, set: (__v) => { psPreviewSyncEmitter = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psDestroyAllEmitters", { configurable: true, get: () => _psDestroyAllEmitters, set: (__v) => { _psDestroyAllEmitters = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psCaptureThumbnail", { configurable: true, get: () => _psCaptureThumbnail, set: (__v) => { _psCaptureThumbnail = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psTimelineRender", { configurable: true, get: () => psTimelineRender, set: (__v) => { psTimelineRender = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psTimelineScrubStart", { configurable: true, get: () => psTimelineScrubStart, set: (__v) => { psTimelineScrubStart = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psTimelineScrubMove", { configurable: true, get: () => psTimelineScrubMove, set: (__v) => { psTimelineScrubMove = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psTimelineScrubEnd", { configurable: true, get: () => psTimelineScrubEnd, set: (__v) => { psTimelineScrubEnd = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psTimelineKfDragStart", { configurable: true, get: () => psTimelineKfDragStart, set: (__v) => { psTimelineKfDragStart = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psKfDragMove", { configurable: true, get: () => _psKfDragMove, set: (__v) => { _psKfDragMove = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psKfDragEnd", { configurable: true, get: () => _psKfDragEnd, set: (__v) => { _psKfDragEnd = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psTimelineLayerDragStart", { configurable: true, get: () => psTimelineLayerDragStart, set: (__v) => { psTimelineLayerDragStart = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psLayerDragMove", { configurable: true, get: () => _psLayerDragMove, set: (__v) => { _psLayerDragMove = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psLayerDragEnd", { configurable: true, get: () => _psLayerDragEnd, set: (__v) => { _psLayerDragEnd = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psTimelineSpawnPathDragStart", { configurable: true, get: () => psTimelineSpawnPathDragStart, set: (__v) => { psTimelineSpawnPathDragStart = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psSpawnPathDragMove", { configurable: true, get: () => _psSpawnPathDragMove, set: (__v) => { _psSpawnPathDragMove = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psSpawnPathDragEnd", { configurable: true, get: () => _psSpawnPathDragEnd, set: (__v) => { _psSpawnPathDragEnd = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psRenderBehaviorPanel", { configurable: true, get: () => _psRenderBehaviorPanel, set: (__v) => { _psRenderBehaviorPanel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psSetTravel", { configurable: true, get: () => psSetTravel, set: (__v) => { psSetTravel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psChainBuilderHtml", { configurable: true, get: () => _psChainBuilderHtml, set: (__v) => { _psChainBuilderHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psChainSeq", { configurable: true, get: () => _psChainSeq, set: (__v) => { _psChainSeq = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psChainAdd", { configurable: true, get: () => psChainAdd, set: (__v) => { psChainAdd = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psChainSetDelay", { configurable: true, get: () => psChainSetDelay, set: (__v) => { psChainSetDelay = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psChainRemove", { configurable: true, get: () => psChainRemove, set: (__v) => { psChainRemove = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psChainMove", { configurable: true, get: () => psChainMove, set: (__v) => { psChainMove = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psPresetsAbrir", { configurable: true, get: () => psPresetsAbrir, set: (__v) => { psPresetsAbrir = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psLoadPreset", { configurable: true, get: () => psLoadPreset, set: (__v) => { psLoadPreset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psImportarAbrir", { configurable: true, get: () => psImportarAbrir, set: (__v) => { psImportarAbrir = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psImportarJson", { configurable: true, get: () => psImportarJson, set: (__v) => { psImportarJson = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psImportarArquivo", { configurable: true, get: () => psImportarArquivo, set: (__v) => { psImportarArquivo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psExportarJson", { configurable: true, get: () => psExportarJson, set: (__v) => { psExportarJson = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psUploadTexture", { configurable: true, get: () => psUploadTexture, set: (__v) => { psUploadTexture = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psPickerAbrir", { configurable: true, get: () => psPickerAbrir, set: (__v) => { psPickerAbrir = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psRenderPickerList", { configurable: true, get: () => _psRenderPickerList, set: (__v) => { _psRenderPickerList = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psPickerSelecionar", { configurable: true, get: () => psPickerSelecionar, set: (__v) => { psPickerSelecionar = __v; } });

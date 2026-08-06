@@ -252,16 +252,29 @@ Object.defineProperty(globalThis, "TUTORIAL_STEPS", { configurable: true, get: (
 Object.defineProperty(globalThis, "_TUTORIAL_ABA", { configurable: true, get: () => _TUTORIAL_ABA, set: (__v) => { _TUTORIAL_ABA = __v; } });
 Object.defineProperty(globalThis, "_TUTORIAL_PASSO", { configurable: true, get: () => _TUTORIAL_PASSO, set: (__v) => { _TUTORIAL_PASSO = __v; } });
 Object.defineProperty(globalThis, "_TUTORIAL_PASSOS", { configurable: true, get: () => _TUTORIAL_PASSOS, set: (__v) => { _TUTORIAL_PASSOS = __v; } });
-Object.defineProperty(globalThis, "tutorialGetState", { configurable: true, writable: true, value: tutorialGetState });
-Object.defineProperty(globalThis, "tutorialSetState", { configurable: true, writable: true, value: tutorialSetState });
-Object.defineProperty(globalThis, "tutorialIsAtivo", { configurable: true, writable: true, value: tutorialIsAtivo });
-Object.defineProperty(globalThis, "tutorialMostrar", { configurable: true, writable: true, value: tutorialMostrar });
-Object.defineProperty(globalThis, "_tutorialAtualizarUI", { configurable: true, writable: true, value: _tutorialAtualizarUI });
-Object.defineProperty(globalThis, "tutorialAvancar", { configurable: true, writable: true, value: tutorialAvancar });
-Object.defineProperty(globalThis, "tutorialProximo", { configurable: true, writable: true, value: tutorialProximo });
-Object.defineProperty(globalThis, "tutorialFecharAba", { configurable: true, writable: true, value: tutorialFecharAba });
-Object.defineProperty(globalThis, "tutorialPularTudo", { configurable: true, writable: true, value: tutorialPularTudo });
-Object.defineProperty(globalThis, "tutorialDesativarPermanente", { configurable: true, writable: true, value: tutorialDesativarPermanente });
-Object.defineProperty(globalThis, "_fecharDialogTutorial", { configurable: true, writable: true, value: _fecharDialogTutorial });
-Object.defineProperty(globalThis, "tutorialToggle", { configurable: true, writable: true, value: tutorialToggle });
-Object.defineProperty(globalThis, "tutorialReiniciar", { configurable: true, writable: true, value: tutorialReiniciar });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tutorialGetState", { configurable: true, get: () => tutorialGetState, set: (__v) => { tutorialGetState = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tutorialSetState", { configurable: true, get: () => tutorialSetState, set: (__v) => { tutorialSetState = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tutorialIsAtivo", { configurable: true, get: () => tutorialIsAtivo, set: (__v) => { tutorialIsAtivo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tutorialMostrar", { configurable: true, get: () => tutorialMostrar, set: (__v) => { tutorialMostrar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_tutorialAtualizarUI", { configurable: true, get: () => _tutorialAtualizarUI, set: (__v) => { _tutorialAtualizarUI = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tutorialAvancar", { configurable: true, get: () => tutorialAvancar, set: (__v) => { tutorialAvancar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tutorialProximo", { configurable: true, get: () => tutorialProximo, set: (__v) => { tutorialProximo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tutorialFecharAba", { configurable: true, get: () => tutorialFecharAba, set: (__v) => { tutorialFecharAba = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tutorialPularTudo", { configurable: true, get: () => tutorialPularTudo, set: (__v) => { tutorialPularTudo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tutorialDesativarPermanente", { configurable: true, get: () => tutorialDesativarPermanente, set: (__v) => { tutorialDesativarPermanente = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_fecharDialogTutorial", { configurable: true, get: () => _fecharDialogTutorial, set: (__v) => { _fecharDialogTutorial = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tutorialToggle", { configurable: true, get: () => tutorialToggle, set: (__v) => { tutorialToggle = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tutorialReiniciar", { configurable: true, get: () => tutorialReiniciar, set: (__v) => { tutorialReiniciar = __v; } });

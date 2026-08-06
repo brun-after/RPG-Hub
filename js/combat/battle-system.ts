@@ -789,5 +789,7 @@ Object.defineProperty(globalThis, "_BS_DEFAULTS", { configurable: true, get: () 
 Object.defineProperty(globalThis, "TRIGGER_TYPES", { configurable: true, get: () => TRIGGER_TYPES });
 Object.defineProperty(globalThis, "DEBUG_MODE", { configurable: true, get: () => DEBUG_MODE });
 Object.defineProperty(globalThis, "BATTLE_SYSTEM", { configurable: true, get: () => BATTLE_SYSTEM });
-Object.defineProperty(globalThis, "battleDispatchEvento", { configurable: true, writable: true, value: battleDispatchEvento });
-Object.defineProperty(globalThis, "battleRecuperarRecursosTurno", { configurable: true, writable: true, value: battleRecuperarRecursosTurno });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "battleDispatchEvento", { configurable: true, get: () => battleDispatchEvento, set: (__v) => { battleDispatchEvento = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "battleRecuperarRecursosTurno", { configurable: true, get: () => battleRecuperarRecursosTurno, set: (__v) => { battleRecuperarRecursosTurno = __v; } });

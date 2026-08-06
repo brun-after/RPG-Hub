@@ -2712,58 +2712,109 @@ if ('serviceWorker' in navigator) {
 /* [migração-esm] accessors globais */
 Object.defineProperty(globalThis, "IMPORT_MODE", { configurable: true, get: () => IMPORT_MODE, set: (__v) => { IMPORT_MODE = __v; } });
 Object.defineProperty(globalThis, "PLABELS", { configurable: true, get: () => PLABELS });
-Object.defineProperty(globalThis, "setImportMode", { configurable: true, writable: true, value: setImportMode });
-Object.defineProperty(globalThis, "preencherSeletorRPGs", { configurable: true, writable: true, value: preencherSeletorRPGs });
-Object.defineProperty(globalThis, "abrirImport", { configurable: true, writable: true, value: abrirImport });
-Object.defineProperty(globalThis, "fecharImport", { configurable: true, writable: true, value: fecharImport });
-Object.defineProperty(globalThis, "abrirPixiStudio", { configurable: true, writable: true, value: abrirPixiStudio });
-Object.defineProperty(globalThis, "fecharPixiStudio", { configurable: true, writable: true, value: fecharPixiStudio });
-Object.defineProperty(globalThis, "lerCSV", { configurable: true, writable: true, value: lerCSV });
-Object.defineProperty(globalThis, "lerCSVPaste", { configurable: true, writable: true, value: lerCSVPaste });
-Object.defineProperty(globalThis, "lerAllInOne", { configurable: true, writable: true, value: lerAllInOne });
-Object.defineProperty(globalThis, "lerAllInOnePaste", { configurable: true, writable: true, value: lerAllInOnePaste });
-Object.defineProperty(globalThis, "lerMapasJSONFile", { configurable: true, writable: true, value: lerMapasJSONFile });
-Object.defineProperty(globalThis, "lerMapasJSONPaste", { configurable: true, writable: true, value: lerMapasJSONPaste });
-Object.defineProperty(globalThis, "_processarMapasJSONTexto", { configurable: true, writable: true, value: _processarMapasJSONTexto });
-Object.defineProperty(globalThis, "importarSoMapas", { configurable: true, writable: true, value: importarSoMapas });
-Object.defineProperty(globalThis, "parseMultiSection", { configurable: true, writable: true, value: parseMultiSection });
-Object.defineProperty(globalThis, "parseCSV", { configurable: true, writable: true, value: parseCSV });
-Object.defineProperty(globalThis, "parseCSVLine", { configurable: true, writable: true, value: parseCSVLine });
-Object.defineProperty(globalThis, "enviarImport", { configurable: true, writable: true, value: enviarImport });
-Object.defineProperty(globalThis, "showSt", { configurable: true, writable: true, value: showSt });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "setImportMode", { configurable: true, get: () => setImportMode, set: (__v) => { setImportMode = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "preencherSeletorRPGs", { configurable: true, get: () => preencherSeletorRPGs, set: (__v) => { preencherSeletorRPGs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirImport", { configurable: true, get: () => abrirImport, set: (__v) => { abrirImport = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharImport", { configurable: true, get: () => fecharImport, set: (__v) => { fecharImport = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirPixiStudio", { configurable: true, get: () => abrirPixiStudio, set: (__v) => { abrirPixiStudio = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharPixiStudio", { configurable: true, get: () => fecharPixiStudio, set: (__v) => { fecharPixiStudio = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "lerCSV", { configurable: true, get: () => lerCSV, set: (__v) => { lerCSV = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "lerCSVPaste", { configurable: true, get: () => lerCSVPaste, set: (__v) => { lerCSVPaste = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "lerAllInOne", { configurable: true, get: () => lerAllInOne, set: (__v) => { lerAllInOne = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "lerAllInOnePaste", { configurable: true, get: () => lerAllInOnePaste, set: (__v) => { lerAllInOnePaste = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "lerMapasJSONFile", { configurable: true, get: () => lerMapasJSONFile, set: (__v) => { lerMapasJSONFile = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "lerMapasJSONPaste", { configurable: true, get: () => lerMapasJSONPaste, set: (__v) => { lerMapasJSONPaste = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_processarMapasJSONTexto", { configurable: true, get: () => _processarMapasJSONTexto, set: (__v) => { _processarMapasJSONTexto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "importarSoMapas", { configurable: true, get: () => importarSoMapas, set: (__v) => { importarSoMapas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "parseMultiSection", { configurable: true, get: () => parseMultiSection, set: (__v) => { parseMultiSection = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "parseCSV", { configurable: true, get: () => parseCSV, set: (__v) => { parseCSV = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "parseCSVLine", { configurable: true, get: () => parseCSVLine, set: (__v) => { parseCSVLine = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "enviarImport", { configurable: true, get: () => enviarImport, set: (__v) => { enviarImport = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "showSt", { configurable: true, get: () => showSt, set: (__v) => { showSt = __v; } });
 Object.defineProperty(globalThis, "SPECS", { configurable: true, get: () => SPECS });
 Object.defineProperty(globalThis, "SPEC_MAPAS_CONFIG", { configurable: true, get: () => SPEC_MAPAS_CONFIG });
-Object.defineProperty(globalThis, "gerarPromptMestre", { configurable: true, writable: true, value: gerarPromptMestre });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "gerarPromptMestre", { configurable: true, get: () => gerarPromptMestre, set: (__v) => { gerarPromptMestre = __v; } });
 Object.defineProperty(globalThis, "_mapasImportJSON", { configurable: true, get: () => _mapasImportJSON, set: (__v) => { _mapasImportJSON = __v; } });
-Object.defineProperty(globalThis, "lerMapasJSON", { configurable: true, writable: true, value: lerMapasJSON });
-Object.defineProperty(globalThis, "importarMapasJSON", { configurable: true, writable: true, value: importarMapasJSON });
-Object.defineProperty(globalThis, "abrirModalGerarMapaIA", { configurable: true, writable: true, value: abrirModalGerarMapaIA });
-Object.defineProperty(globalThis, "copiarPromptMapaMesa", { configurable: true, writable: true, value: copiarPromptMapaMesa });
-Object.defineProperty(globalThis, "copiarPromptMapaMesaSVG", { configurable: true, writable: true, value: copiarPromptMapaMesaSVG });
-Object.defineProperty(globalThis, "importarMapasMesaPaste", { configurable: true, writable: true, value: importarMapasMesaPaste });
-Object.defineProperty(globalThis, "gerarPromptMapasConfig", { configurable: true, writable: true, value: gerarPromptMapasConfig });
-Object.defineProperty(globalThis, "mapaRenderCanvas", { configurable: true, writable: true, value: mapaRenderCanvas });
-Object.defineProperty(globalThis, "_renderCidade", { configurable: true, writable: true, value: _renderCidade });
-Object.defineProperty(globalThis, "_th", { configurable: true, writable: true, value: _th });
-Object.defineProperty(globalThis, "_tnoise", { configurable: true, writable: true, value: _tnoise });
-Object.defineProperty(globalThis, "_hex2rgb", { configurable: true, writable: true, value: _hex2rgb });
-Object.defineProperty(globalThis, "_drawTile", { configurable: true, writable: true, value: _drawTile });
-Object.defineProperty(globalThis, "_renderBiomasTile", { configurable: true, writable: true, value: _renderBiomasTile });
-Object.defineProperty(globalThis, "_renderGeral", { configurable: true, writable: true, value: _renderGeral });
-Object.defineProperty(globalThis, "_renderAreaAberta", { configurable: true, writable: true, value: _renderAreaAberta });
-Object.defineProperty(globalThis, "_renderDungeon", { configurable: true, writable: true, value: _renderDungeon });
-Object.defineProperty(globalThis, "_renderEdificio", { configurable: true, writable: true, value: _renderEdificio });
-Object.defineProperty(globalThis, "_roundRect", { configurable: true, writable: true, value: _roundRect });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "lerMapasJSON", { configurable: true, get: () => lerMapasJSON, set: (__v) => { lerMapasJSON = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "importarMapasJSON", { configurable: true, get: () => importarMapasJSON, set: (__v) => { importarMapasJSON = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalGerarMapaIA", { configurable: true, get: () => abrirModalGerarMapaIA, set: (__v) => { abrirModalGerarMapaIA = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "copiarPromptMapaMesa", { configurable: true, get: () => copiarPromptMapaMesa, set: (__v) => { copiarPromptMapaMesa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "copiarPromptMapaMesaSVG", { configurable: true, get: () => copiarPromptMapaMesaSVG, set: (__v) => { copiarPromptMapaMesaSVG = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "importarMapasMesaPaste", { configurable: true, get: () => importarMapasMesaPaste, set: (__v) => { importarMapasMesaPaste = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "gerarPromptMapasConfig", { configurable: true, get: () => gerarPromptMapasConfig, set: (__v) => { gerarPromptMapasConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mapaRenderCanvas", { configurable: true, get: () => mapaRenderCanvas, set: (__v) => { mapaRenderCanvas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_renderCidade", { configurable: true, get: () => _renderCidade, set: (__v) => { _renderCidade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_th", { configurable: true, get: () => _th, set: (__v) => { _th = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_tnoise", { configurable: true, get: () => _tnoise, set: (__v) => { _tnoise = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_hex2rgb", { configurable: true, get: () => _hex2rgb, set: (__v) => { _hex2rgb = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_drawTile", { configurable: true, get: () => _drawTile, set: (__v) => { _drawTile = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_renderBiomasTile", { configurable: true, get: () => _renderBiomasTile, set: (__v) => { _renderBiomasTile = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_renderGeral", { configurable: true, get: () => _renderGeral, set: (__v) => { _renderGeral = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_renderAreaAberta", { configurable: true, get: () => _renderAreaAberta, set: (__v) => { _renderAreaAberta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_renderDungeon", { configurable: true, get: () => _renderDungeon, set: (__v) => { _renderDungeon = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_renderEdificio", { configurable: true, get: () => _renderEdificio, set: (__v) => { _renderEdificio = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_roundRect", { configurable: true, get: () => _roundRect, set: (__v) => { _roundRect = __v; } });
 Object.defineProperty(globalThis, "SCHEMA_MAPA_SVG", { configurable: true, get: () => SCHEMA_MAPA_SVG });
-Object.defineProperty(globalThis, "gerarPromptMapasSVGInicio", { configurable: true, writable: true, value: gerarPromptMapasSVGInicio });
-Object.defineProperty(globalThis, "gerarPromptMapasSVGAtualizacao", { configurable: true, writable: true, value: gerarPromptMapasSVGAtualizacao });
-Object.defineProperty(globalThis, "gerarPromptPacoteSessao", { configurable: true, writable: true, value: gerarPromptPacoteSessao });
-Object.defineProperty(globalThis, "copiarPromptSecao", { configurable: true, writable: true, value: copiarPromptSecao });
-Object.defineProperty(globalThis, "fbCopy", { configurable: true, writable: true, value: fbCopy });
-Object.defineProperty(globalThis, "salvarNav", { configurable: true, writable: true, value: salvarNav });
-Object.defineProperty(globalThis, "salvarAba", { configurable: true, writable: true, value: salvarAba });
-Object.defineProperty(globalThis, "_mapaInicializarLayout", { configurable: true, writable: true, value: _mapaInicializarLayout });
-Object.defineProperty(globalThis, "_mapaAjustarAlturaLayout", { configurable: true, writable: true, value: _mapaAjustarAlturaLayout });
-Object.defineProperty(globalThis, "_ctxSidebarLimpar", { configurable: true, writable: true, value: _ctxSidebarLimpar });
-Object.defineProperty(globalThis, "abrirAba", { configurable: true, writable: true, value: abrirAba });
-Object.defineProperty(globalThis, "mostrarToast", { configurable: true, writable: true, value: mostrarToast });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "gerarPromptMapasSVGInicio", { configurable: true, get: () => gerarPromptMapasSVGInicio, set: (__v) => { gerarPromptMapasSVGInicio = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "gerarPromptMapasSVGAtualizacao", { configurable: true, get: () => gerarPromptMapasSVGAtualizacao, set: (__v) => { gerarPromptMapasSVGAtualizacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "gerarPromptPacoteSessao", { configurable: true, get: () => gerarPromptPacoteSessao, set: (__v) => { gerarPromptPacoteSessao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "copiarPromptSecao", { configurable: true, get: () => copiarPromptSecao, set: (__v) => { copiarPromptSecao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fbCopy", { configurable: true, get: () => fbCopy, set: (__v) => { fbCopy = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarNav", { configurable: true, get: () => salvarNav, set: (__v) => { salvarNav = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarAba", { configurable: true, get: () => salvarAba, set: (__v) => { salvarAba = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_mapaInicializarLayout", { configurable: true, get: () => _mapaInicializarLayout, set: (__v) => { _mapaInicializarLayout = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_mapaAjustarAlturaLayout", { configurable: true, get: () => _mapaAjustarAlturaLayout, set: (__v) => { _mapaAjustarAlturaLayout = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_ctxSidebarLimpar", { configurable: true, get: () => _ctxSidebarLimpar, set: (__v) => { _ctxSidebarLimpar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirAba", { configurable: true, get: () => abrirAba, set: (__v) => { abrirAba = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mostrarToast", { configurable: true, get: () => mostrarToast, set: (__v) => { mostrarToast = __v; } });

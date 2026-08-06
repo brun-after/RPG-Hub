@@ -4296,10 +4296,14 @@ function _avtCleanupListeners() {
   window.removeEventListener('keydown', _avtCanvasKey);
   (AVT_STATE._pendingTimeouts || []).forEach(id => clearTimeout(id));
   AVT_STATE._pendingTimeouts = [];
+  if (AVT_STATE._fxAtivos) AVT_STATE._fxAtivos.length = 0;
   if (AVT_STATE._resizeObs) { AVT_STATE._resizeObs.disconnect(); AVT_STATE._resizeObs = null; }
   avtDpadStop();
   if (typeof avtPixiCleanupAll === 'function') avtPixiCleanupAll();
   _avtVfxHostDestroy();
+  // Tudo que o semáforo do fallback guardava acabou de ser destruído.
+  _avtPixiActiveApps = 0;
+  _avtPixiQueue.length = 0;
   // Texturas procedurais: PIXI.Texture.from(canvas) registra no TextureCache
   // global do PIXI, então sem destroy explícito elas (e o contexto GL antigo)
   // ficam retidas entre ciclos de entrar/sair. Aqui é o ponto seguro — depois
@@ -4314,7 +4318,14 @@ function _avtCleanupListeners() {
 }
 
 function _avtSetTimeout(fn, ms) {
-  const id = setTimeout(fn, ms);
+  // Auto-prune: sem remover o id ao disparar, _pendingTimeouts cresce sem limite
+  // (agora timers de dano/efeito de alta frequência também passam por aqui).
+  const id = setTimeout(() => {
+    const arr = AVT_STATE._pendingTimeouts;
+    const i = arr ? arr.indexOf(id) : -1;
+    if (i >= 0) arr.splice(i, 1);
+    fn();
+  }, ms);
   AVT_STATE._pendingTimeouts.push(id);
   return id;
 }
@@ -6684,6 +6695,10 @@ function _avtRenderFrame() {
     }
   }
 
+  // Efeitos de skill em canvas (projétil/onda/explosão/raio/aura/áreas) — desenhados
+  // pelo próprio loop para não competir com o clearRect (ver _avtCanvasEfeito).
+  try { _avtDesenharEfeitosCanvas(ctx, SZ, camera, now); } catch (e) { console.warn('[avt-fx] draw:', e); }
+
   // Atualizar posição do botão de rolar dados (desktop) para seguir o token ativo
   _avtAtualizarPosBotaoRolar();
   // Atualizar posição dos dados de inimigos acoplados ao token
@@ -7357,17 +7372,38 @@ function _avtEntViva(ref) {
 function _avtElPosicaoCanvas(ent) {
   if (!ent) return null;
   ent = _avtEntViva(ent);
-  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  const canvasEl = document.getElementById('avt-canvas');
-  const cr = canvasEl?.getBoundingClientRect() || { left:0, top:0 };
-  // Função dinâmica: lê renderX/Y no momento em que animarAtaque consultar,
-  // para que a animação acompanhe a posição atual do token (não a do início da batalha).
+  // Função dinâmica: lê renderX/Y (e o rect/zoom atuais) no momento em que
+  // animarAtaque consultar, para que a animação acompanhe a posição atual do
+  // token — o rect era capturado 1× e ficava stale após scroll/resize.
   return {
     getBoundingClientRect: () => {
       const live = _avtEntViva(ent);
-      const rx = (live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + cr.left;
-      const ry = (live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + cr.top;
-      return { left:rx, top:ry, width:SZ, height:SZ, x:rx, y:ry };
+      const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+      // Centro da célula em coordenadas locais do canvas (== locais do wrap).
+      const cx = (live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + SZ / 2;
+      const cy = (live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + SZ / 2;
+      const wrap = document.getElementById('avt-mapa-wrap');
+      // Modo isométrico: #avt-mapa-wrap tem rotateX/rotateZ/scale (origem no
+      // centro), mas animarAtaque desenha num canvas fixo em viewport — sem
+      // projetar, o placeholder saía deslocado do token. Mesma matemática de
+      // _avtIsoCanvasToScreen, ancorada no centro do client rect do wrap (uma
+      // transform afim com origem no centro mapeia centro → centro do bbox).
+      if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
+          && wrap && typeof _ISO_ANGLE_X !== 'undefined') {
+        const wr = wrap.getBoundingClientRect();
+        const k = _ISO_SCALE / Math.SQRT2;
+        const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
+        const cxd = cx - wrap.offsetWidth / 2, cyd = cy - wrap.offsetHeight / 2;
+        const sx = wr.left + wr.width / 2 + (cxd - cyd) * k;
+        const sy = wr.top + wr.height / 2 + (cxd + cyd) * k * cosX;
+        const l = sx - SZ / 2, t = sy - SZ / 2;
+        return { left: l, top: t, width: SZ, height: SZ, x: l, y: t };
+      }
+      const canvasEl = document.getElementById('avt-canvas');
+      const cr = canvasEl?.getBoundingClientRect() || { left: 0, top: 0 };
+      const rx = cr.left + cx - SZ / 2;
+      const ry = cr.top + cy - SZ / 2;
+      return { left: rx, top: ry, width: SZ, height: SZ, x: rx, y: ry };
     }
   };
 }
@@ -7563,7 +7599,16 @@ function _avtMostrarDotDrip(ent, variante) {
 // para críticos. Substitui a exibição anterior imediatamente; some após 2 s.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AVT_SLOT_MACHINE_MS = 12 * 42; // 504ms — duração da animação de sorteio dos dados
+const AVT_SLOT_MACHINE_MS = 12 * 42; // 504ms — duração default da animação de sorteio dos dados
+
+// Duração REAL do sorteio de dados: o mestre pode configurar duracao_anim_dados_ms
+// (100–2000ms) e _avtMostrarRollCenter gira em ticks de 42ms — dano/animações devem
+// esperar o mesmo tempo, senão disparam com o dado ainda girando. Espelha a fórmula
+// de ticks do HUD (Math.max(4, round(ms/42)) × 42 → 504 no default 500).
+function _avtSlotMachineMs() {
+  const ms = AVT_STATE?.rpg?.theme_json?.level_config?.duracao_anim_dados_ms ?? 500;
+  return Math.max(4, Math.round(ms / 42)) * 42;
+}
 
 (function _injetarCssEfeitoStatus() {
   if (document.getElementById('css-efeito-status')) return;
@@ -10116,16 +10161,20 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   const animCustomAB = !sk ? _abAnimCfg : null;
   const animPlaceholder = _avtAnimacaoPlaceholder(entJog || jogador, sk);
   const animFinal = animCustomAB?.tipo ? animCustomAB : (sk?.animacao?.tipo ? sk.animacao : animPlaceholder);
+  // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+  if (sk?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+    try { _psAvtLoadCfg(sk.animacao.pixi_studio_id); } catch (_) {}
+  }
   if (animFinal && typeof animarAtaque === 'function') {
     const atacEl = _avtElPosicaoCanvas(entJog || jogador);
     const alvoEl = _avtElPosicaoCanvas(ini);
     // Dispara após a animação de dados (slot machine) terminar — mesmo padrão dos ataques de NPC
     if (atacEl && alvoEl)
-      setTimeout(() => {
+      _avtSetTimeout(() => {
         animarAtaque({ atacEl, alvoEl, animacao: animFinal, dano: 0 });
         _avtSfxPosicional('hit_physical', ini, 0.5);
-      }, AVT_SLOT_MACHINE_MS);
-    try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: ini.nome, animacao: animFinal, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+      }, _avtSlotMachineMs());
+    try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: ini.nome, animacao: animFinal, delay: _avtSlotMachineMs() }); } catch(_) {}
   }
 
   // Aplicar cooldown OOC (multiplica turnos pelo tempo por turno).
@@ -10138,7 +10187,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   if (!sk && _abBuffs?.cdOocMs) _oocMs = Math.min(_oocMs, _abBuffs.cdOocMs);
   _avtSetOocCooldown(_oocKey, Date.now() + _oocMs);
 
-  setTimeout(() => {
+  _avtSetTimeout(() => {
     if (critMult === 0) {
       // Skill usada (mesmo errando) consome carga de orbe
       try { _avtOrbConsumirCargas(AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador); } catch(_) {}
@@ -10167,14 +10216,11 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       const _critMsgArea = critMult === 2 ? '🎯✦✦ CRÍTICO TOTAL! ' : critMult === 1.5 ? '🎯 CRÍTICO! ' : critMult === 1.2 ? '⭐ CRÍTICO MENOR! ' : '';
       mostrarToast(`${_critMsgArea}${skillNome} [${_areaLabel}] atinge ${_alvosAreaOoc.length} alvo(s)!`, 'ok');
 
-      // Animação de skill em área
-      if (sk && typeof _avtPlaySkillAnim === 'function') {
+      // Animação de skill em área (local + peers, geometria no payload)
+      if (sk) {
         const entJogVivoArea = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
-        _avtPlaySkillAnim(sk, entJogVivoArea, entJogVivoArea, true);
-        // Para skills de área, enviar a geometria (centro/linha) e ancorar no conjurador —
-        // o rótulo "_areaLabel" não resolve uma entidade nos peers, e _areaCentro/_areaLinha
-        // são estado local, então a animação não aparecia para quem não conjurou.
-        try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivoArea.nome, alvoNome: entJogVivoArea.nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: (AVT_STATE as any)._areaLinha || null }); } catch(_) {}
+        _avtSkillAnimEmit({ sk, casterEnt: entJogVivoArea, isArea: true,
+          areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null });
       }
 
       // Invocações (efeito 'invocar_catalogo'): vinculadas ao conjurador, uma vez por uso
@@ -10186,7 +10232,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       });
 
       _alvosAreaOoc.forEach((alvA, idxA) => {
-        setTimeout(() => {
+        _avtSetTimeout(() => {
           const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id) || alvA;
           if (entAlvA.hp <= 0) return;
 
@@ -10295,7 +10341,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
             Math.max(Math.abs(Math.round(e.x) - _jxM), Math.abs(Math.round(e.y) - _jyM)) <= _baseAlcOoc)
           .slice(0, _abBuffs.multiExtra);
         _extrasOoc.forEach((alvX, idxX) => {
-          setTimeout(() => {
+          _avtSetTimeout(() => {
             const entAlvX = AVT_STATE.entidades.find(e => e.id === alvX.id) || alvX;
             if (entAlvX.hp <= 0) return;
             // Anima o ataque básico em cada alvo extra (modificador multi-alvo).
@@ -10306,9 +10352,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
               try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: entAlvX.nome, animacao: animFinal }); } catch(_) {}
             }
             // Animação rica (pixi/partículas) configurada replica em cada alvo extra (paridade com combate e com o alvo primário OOC).
-            if (skEfetiva?.animacao?.tipo && skEfetiva.animacao.tipo !== 'nenhuma' && typeof _avtPlaySkillAnim === 'function') {
-              try { _avtPlaySkillAnim(skEfetiva, entAlvX, entJog || jogador); } catch(_) {}
-              try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entJog||jogador).nome, alvoNome: entAlvX.nome }); } catch(_) {}
+            if (skEfetiva?.animacao?.tipo && skEfetiva.animacao.tipo !== 'nenhuma') {
+              _avtSkillAnimEmit({ sk: skEfetiva, casterEnt: entJog || jogador, alvoEnt: entAlvX });
             }
             entAlvX.hp = Math.max(0, entAlvX.hp - real);
             _avtAplicarDanoPersistir(entAlvX, entAlvX.hp);
@@ -10381,11 +10426,10 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
 
       // Animação de skill / ataque básico configurada (pixi, partículas, etc.)
       const _temAnimRicaOOC = !!(skEfetiva?.animacao && skEfetiva.animacao.tipo && skEfetiva.animacao.tipo !== 'nenhuma');
-      if ((sk || _temAnimRicaOOC) && typeof _avtPlaySkillAnim === 'function') {
+      if (sk || _temAnimRicaOOC) {
         const entIniVivo = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
         const entJogVivo = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
-        _avtPlaySkillAnim(skEfetiva, entIniVivo, entJogVivo);
-        try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome: entJogVivo.nome, alvoNome: entIniVivo.nome }); } catch(_) {}
+        _avtSkillAnimEmit({ sk: skEfetiva, casterEnt: entJogVivo, alvoEnt: entIniVivo });
       }
 
       if (ini.hp <= 0) {
@@ -11277,13 +11321,10 @@ function _avtTickEfeitosOOC(now) {
                 if (_animOoc && typeof animarAtaque === 'function') {
                   const _atacElOoc = _avtElPosicaoCanvas(ent);
                   const _alvoElOoc = _avtElPosicaoCanvas(_alvoDom);
-                  if (_atacElOoc && _alvoElOoc) setTimeout(() => animarAtaque({ atacEl: _atacElOoc, alvoEl: _alvoElOoc, animacao: _animOoc, dano: 0 }), AVT_SLOT_MACHINE_MS);
-                  try { _avtBroadcast('avt_attack_anim', { atacanteNome: ent.nome, alvoNome: _alvoDom.nome, animacao: _animOoc, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+                  if (_atacElOoc && _alvoElOoc) _avtSetTimeout(() => animarAtaque({ atacEl: _atacElOoc, alvoEl: _alvoElOoc, animacao: _animOoc, dano: 0 }), _avtSlotMachineMs());
+                  try { _avtBroadcast('avt_attack_anim', { atacanteNome: ent.nome, alvoNome: _alvoDom.nome, animacao: _animOoc, delay: _avtSlotMachineMs() }); } catch(_) {}
                 }
-                if (_skUsadaOoc && typeof _avtPlaySkillAnim === 'function') {
-                  _avtPlaySkillAnim(_skUsadaOoc, _alvoDom, ent);
-                  try { _avtBroadcast('avt_skill_anim', { skillId: _skUsadaOoc.id || null, animacao: _skUsadaOoc.animacao || null, atacanteNome: ent.nome, alvoNome: _alvoDom.nome }); } catch(_) {}
-                }
+                if (_skUsadaOoc) _avtSkillAnimEmit({ sk: _skUsadaOoc, casterEnt: ent, alvoEnt: _alvoDom });
               } catch(_) {}
 
               if (_isFumbleOoc) {
@@ -11466,18 +11507,22 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   _avtMostrarD20AbaixoDaHead(ini, hitRoll, critMult);
 
   const animPlaceholder = _avtAnimacaoPlaceholder(ini, sk);
+  // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+  if (sk?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+    try { _psAvtLoadCfg(sk.animacao.pixi_studio_id); } catch (_) {}
+  }
   if (animPlaceholder && typeof animarAtaque === 'function') {
     const atacEl = _avtElPosicaoCanvas(ini);
     const alvoEl = _avtElPosicaoCanvas(alvo);
     if (atacEl && alvoEl)
-      setTimeout(() => {
+      _avtSetTimeout(() => {
         animarAtaque({ atacEl, alvoEl, animacao: animPlaceholder, dano: 0 });
         _avtSfxPosicional('hit_physical', alvo, 0.5);
-      }, AVT_SLOT_MACHINE_MS);
-      try { _avtBroadcast('avt_attack_anim', { atacanteNome: ini.nome, alvoNome: alvo.nome, animacao: animPlaceholder, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+      }, _avtSlotMachineMs());
+      try { _avtBroadcast('avt_attack_anim', { atacanteNome: ini.nome, alvoNome: alvo.nome, animacao: animPlaceholder, delay: _avtSlotMachineMs() }); } catch(_) {}
   }
 
-  setTimeout(() => {
+  _avtSetTimeout(() => {
     if (isFumble) {
       mostrarToast(`💨 ${ini.nome} errou o ataque! (d20: ${hitRoll})`, '');
       timer.inactionTimer = 0;
@@ -11501,8 +11546,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     if (alvo.tipo !== 'jogador') {
       try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
     }
-    if (sk && typeof _avtPlaySkillAnim === 'function') _avtPlaySkillAnim(sk, alvo, ini);
-    try { _avtBroadcast('avt_skill_anim', { skillId: sk?.id || null, animacao: sk?.animacao || null, atacanteNome: ini.nome, alvoNome: alvo.nome }); } catch(_) {}
+    _avtSkillAnimEmit({ sk, casterEnt: ini, alvoEnt: alvo });
     if (sk?.efeitos_bonus?.length && alvo.hp > 0) {
       const _entAlvoNpc = AVT_STATE.entidades.find(e => e.id === alvo.id) || alvo;
       const _coolEfNpc = _avtGetEfeitoCooldownMs();
@@ -11529,7 +11573,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
       _avtCancelarPerseguicao(enemyId);
       if (alvo.tipo === 'jogador') _avtProcessarMorteJogador(alvo, null);
     }
-  }, AVT_SLOT_MACHINE_MS + 200);
+  }, _avtSlotMachineMs() + 200);
 }
 
 function _avtMostrarBannerAceitarCombate() {
@@ -13528,10 +13572,7 @@ async function _avtSkillOverlaySel(skId) {
     _avtRenderHpBar();
     _avtBroadcastBatalha(b);
     mostrarToast(`✨ ${sk.habilidade} aplicado em si mesmo`, 'ok', 2500);
-    if (typeof _avtPlaySkillAnim === 'function') {
-      _avtPlaySkillAnim(sk, casterEnt, casterEnt, false);
-      try { _avtBroadcast('avt_skill_anim', { skillId: sk.id||null, animacao: sk.animacao||null, atacanteNome: casterEnt.nome, alvoNome: casterEnt.nome }); } catch(_) {}
-    }
+    _avtSkillAnimEmit({ sk, casterEnt });
     _avtJanelaMovimentoPosDado(b, ativo, () => _avtTurnoAvancar(b));
     return;
   }
@@ -13963,13 +14004,17 @@ async function _avtExecutarAtaque() {
   const _temAnimRicaAtk = !!(skEfetiva?.animacao && skEfetiva.animacao.tipo && skEfetiva.animacao.tipo !== 'nenhuma');
   const animPlaceholderAtk = _temAnimRicaAtk ? null : _avtAnimacaoPlaceholder(entAtacanteAnim || ativo, sk);
   const _animDuracao = skEfetiva?.animacao?.duracao ?? (animPlaceholderAtk as any)?.duracao ?? 600;
+  // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+  if (skEfetiva?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+    try { _psAvtLoadCfg(skEfetiva.animacao.pixi_studio_id); } catch (_) {}
+  }
   if (animPlaceholderAtk && typeof animarAtaque === 'function') {
     const entAlvoAnim = AVT_STATE.entidades.find(e => e.id === alvo.id);
     const atacEl = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
     const alvoEl = _avtElPosicaoCanvas(entAlvoAnim || alvo);
     if (atacEl && alvoEl)
-      setTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholderAtk, dano: 0 }), AVT_SLOT_MACHINE_MS);
-    try { _avtBroadcast('avt_attack_anim', { atacanteNome: (entAtacanteAnim||ativo).nome, alvoNome: alvo.nome, animacao: animPlaceholderAtk, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+      _avtSetTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholderAtk, dano: 0 }), _avtSlotMachineMs());
+    try { _avtBroadcast('avt_attack_anim', { atacanteNome: (entAtacanteAnim||ativo).nome, alvoNome: alvo.nome, animacao: animPlaceholderAtk, delay: _avtSlotMachineMs() }); } catch(_) {}
   }
 
   // Broadcast para todos verem a animação de dados
@@ -14070,18 +14115,16 @@ async function _avtExecutarAtaque() {
         _avtLog(`${isCrit ? '🎯 CRÍTICO! ' : ''}${ativo.nome} usa ${skillNome} [${areaLabel}] → ${_alvosAreaFinal.length} alvo(s)`, b.id);
         if (!_mobileAvtDisp) mostrarToast(`${isCrit ? '🎯 CRÍTICO! ' : ''}${skillNome} atinge ${_alvosAreaFinal.length} alvo(s)!`, 'ok');
 
-        // Animar área e limpar estado
-        const _delayMorteArea = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entCaster), _avtEntViva(entCaster), _isAreaAttack) : 0;
-        // Skills de área: enviar geometria (centro/linha) e ancorar no conjurador, pois o
-        // rótulo de área não resolve entidade nos peers e _areaCentro/_areaLinha são locais.
-        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAtacanteAnim||ativo).nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: (AVT_STATE as any)._areaLinha || null }); } catch(_) {} }
+        // Animar área (local + peers) e limpar estado
+        const _delayMorteArea = _avtSkillAnimEmit({ sk, casterEnt: entCaster, isArea: true,
+          areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null });
 
         // Números de dano nos peers: 1 broadcast em lote (o stagger de 80ms é
         // reproduzido no receptor) em vez de 1 evento por alvo dentro do loop.
         try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _alvosAreaFinal.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
         _alvosAreaFinal.forEach((alvA, idxA) => {
           const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id);
-          setTimeout(() => {
+          _avtSetTimeout(() => {
             if (alvA.hp <= 0) return;
             const realAlvo = _avtAplicarImunidadeDano(entAlvA || alvA, real);
             if (alvA.tipo === 'jogador') {
@@ -14146,7 +14189,7 @@ async function _avtExecutarAtaque() {
 
             if (alvA.hp <= 0) {
               _avtLog(`💀 ${alvA.nome} derrotado!`, b.id);
-              setTimeout(() => {
+              _avtSetTimeout(() => {
                 if (alvA.tipo === 'inimigo') { _avtNpcMorreu(entAlvA || alvA, b); _avtCheckVitoria(b); }
               }, _delayMorteArea + 100);
             }
@@ -14154,9 +14197,9 @@ async function _avtExecutarAtaque() {
           }, idxA * 80);
         });
 
-        (AVT_STATE as any)._areaCentro = null;
-        (AVT_STATE as any)._areaLinha  = null;
-        setTimeout(() => { _avtBroadcastBatalha(b); }, (_alvosAreaFinal.length * 80) + 100);
+        AVT_STATE._areaCentro = null;
+        AVT_STATE._areaLinha  = null;
+        _avtSetTimeout(() => { _avtBroadcastBatalha(b); }, (_alvosAreaFinal.length * 80) + 100);
       } else {
         // ── Alvo único ────────────────────────────────────────────────────
         real = _avtAplicarImunidadeDano(entAlvo || alvo, real);
@@ -14240,13 +14283,12 @@ async function _avtExecutarAtaque() {
           }
           _extrasMulti.forEach((alvX, idxX) => {
             const entAlvX = AVT_STATE.entidades.find(e => e.id === alvX.id);
-            setTimeout(() => {
+            _avtSetTimeout(() => {
               if (alvX.hp <= 0) return;
               // Anima o ataque em cada alvo extra (modificador multi-alvo): animação rica
               // (skill/ataque básico configurado) ou placeholder, conforme o ataque primário.
               if (_temAnimRicaAtk) {
-                try { _avtPlaySkillAnim(skEfetiva, _avtEntViva(entAlvX || alvX), _avtEntViva(entAtacanteAnim || ativo)); } catch(_) {}
-                try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome: alvX.nome }); } catch(_) {}
+                _avtSkillAnimEmit({ sk: skEfetiva, casterEnt: entAtacanteAnim || ativo, alvoEnt: entAlvX || alvX });
               } else if (animPlaceholderAtk && typeof animarAtaque === 'function') {
                 const _elXm = _avtElPosicaoCanvas(entAlvX || alvX);
                 const _elAm = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
@@ -14264,7 +14306,7 @@ async function _avtExecutarAtaque() {
               _avtLog(`  ↳ ${alvX.nome}: ${real} ${tipoDano} (multi-alvo)`, b.id);
               if (alvX.hp <= 0) {
                 _avtLog(`💀 ${alvX.nome} derrotado!`, b.id);
-                setTimeout(() => { if (alvX.tipo === 'inimigo') { _avtNpcMorreu(entAlvX || alvX, b); _avtCheckVitoria(b); } }, 100);
+                _avtSetTimeout(() => { if (alvX.tipo === 'inimigo') { _avtNpcMorreu(entAlvX || alvX, b); _avtCheckVitoria(b); } }, 100);
               }
               _avtRenderHpBar();
             }, (idxX + 1) * 80);
@@ -14273,11 +14315,12 @@ async function _avtExecutarAtaque() {
         }
         _avtRenderHpBar();
         const _playAnimAtk = sk || _temAnimRicaAtk;
-        const _delayMorte = _playAnimAtk ? _avtPlaySkillAnim(skEfetiva, _avtEntViva(entAlvo || alvo), _avtEntViva(entAtacanteAnim || ativo)) : 0;
-        if (_playAnimAtk) { try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAlvo||alvo).nome }); } catch(_) {} }
+        const _delayMorte = _playAnimAtk
+          ? _avtSkillAnimEmit({ sk: skEfetiva, casterEnt: entAtacanteAnim || ativo, alvoEnt: entAlvo || alvo })
+          : 0;
         if (alvo.hp <= 0) {
           _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
-          setTimeout(() => {
+          _avtSetTimeout(() => {
             if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
             else { _avtCheckDerrota(b); _avtProcessarMorteJogador(entAlvo || alvo, b); }
             if (AVT_STATE.alvoSelecionado === alvo.id) AVT_STATE.alvoSelecionado = null;
@@ -14297,7 +14340,7 @@ async function _avtExecutarAtaque() {
         _avtTurnoAvancar(b);
       }
     });
-  }, AVT_SLOT_MACHINE_MS + _animDuracao);
+  }, _avtSlotMachineMs() + _animDuracao);
 }
 
 // Receive skill-selected broadcast from another player
@@ -14886,10 +14929,7 @@ async function _avtExecutarSkillEmAliado(skId, alvoId) {
   if (!bat._cooldowns) bat._cooldowns = {};
   if (sk.cooldown_turnos > 0) bat._cooldowns[cdKey] = sk.cooldown_turnos;
 
-  if (typeof _avtPlaySkillAnim === 'function') {
-    _avtPlaySkillAnim(sk, entAlvoObj||entAlvo, caster, false);
-    try { _avtBroadcast('avt_skill_anim', { skillId: sk.id||null, animacao: sk.animacao||null, atacanteNome: ativo.nome, alvoNome: entAlvo.nome }); } catch(_) {}
-  }
+  _avtSkillAnimEmit({ sk, casterEnt: caster, alvoEnt: entAlvoObj || entAlvo });
 
   _avtRenderHpBar();
   _avtBroadcastBatalha(bat);
@@ -15167,13 +15207,17 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
     // Animação placeholder do NPC em direção ao alvo
     const animPlaceholderNpc = _avtAnimacaoPlaceholder(entNpc || npc, sk);
     const _animDuracaoNpc = sk?.animacao?.duracao ?? (animPlaceholderNpc as any)?.duracao ?? 600;
+    // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+    if (sk?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+      try { _psAvtLoadCfg(sk.animacao.pixi_studio_id); } catch (_) {}
+    }
     if (animPlaceholderNpc && typeof animarAtaque === 'function') {
       const entAlvoNpcAnim = AVT_STATE.entidades.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
       const atacElNpc = _avtElPosicaoCanvas(entNpc || npc);
       const alvoElNpc = _avtElPosicaoCanvas(entAlvoNpcAnim || skillAlvo);
       if (atacElNpc && alvoElNpc)
-        setTimeout(() => animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 }), AVT_SLOT_MACHINE_MS);
-      try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entNpc||npc).nome, alvoNome: skillAlvo.nome, animacao: animPlaceholderNpc, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+        _avtSetTimeout(() => animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 }), _avtSlotMachineMs());
+      try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entNpc||npc).nome, alvoNome: skillAlvo.nome, animacao: animPlaceholderNpc, delay: _avtSlotMachineMs() }); } catch(_) {}
     }
 
     _avtBroadcast('avt_dado_rolado', {
@@ -15204,11 +15248,16 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
           // Alvos do NPC = jogadores e aliados dos jogadores (avatares/dominados)
           const _ehAlvoNpc = e => (e.tipo === 'jogador' || e.tipo === 'avatar' || e.tipo === 'invocado') && e.hp > 0;
           const _cx = Math.round(skillAlvo.x), _cy = Math.round(skillAlvo.y);
-          let _alvosNpcArea;
+          // Geometria da área p/ animação local e broadcast — o caminho do NPC não
+          // passa pelo seletor de área do jogador, então _areaCentro/_areaLinha
+          // nunca são preenchidos aqui; sem isso a animação ancorava no NPC e os
+          // peers não recebiam geometria nenhuma.
+          let _alvosNpcArea, _areaGeoC = null, _areaGeoL = null;
           if (_npcTodos) {
             _alvosNpcArea = bat.iniciativa.filter(_ehAlvoNpc);
           } else if (_npcTipoArea === 'quadrado') {
             const _t = sk?.tamanho_area || 1;
+            _areaGeoC = { x: _cx, y: _cy, tamanho: _t };
             _alvosNpcArea = bat.iniciativa.filter(e => _ehAlvoNpc(e) &&
               Math.max(Math.abs(Math.round(e.x) - _cx), Math.abs(Math.round(e.y) - _cy)) <= _t);
           } else { // linha: do NPC em direção ao alvo primário
@@ -15217,6 +15266,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
             const _dyL = _cy === _ay ? 0 : (_cy > _ay ? 1 : -1);
             const _cells = [];
             for (let i = 1; i <= (skillAlcance || 1); i++) _cells.push({ x: _ax + _dxL * i, y: _ay + _dyL * i });
+            _areaGeoL = { cells: _cells };
             _alvosNpcArea = bat.iniciativa.filter(e => _ehAlvoNpc(e) &&
               _cells.some(c => c.x === Math.round(e.x) && c.y === Math.round(e.y)));
           }
@@ -15226,15 +15276,18 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
           const _areaLabelNpc = _npcTipoArea === 'linha' ? '▬ Linha' : '◼ Área';
           _avtLog(`👹 ${npc.nome} usa ${skillNome} [${_areaLabelNpc}] → ${_alvosNpcArea.length} alvo(s)`, bat.id);
           mostrarToast(`👹 ${npc.nome} usa ${skillNome} e atinge ${_alvosNpcArea.length} alvo(s)!`, 'aviso');
-          const _delayMorteNpcArea = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entNpc), _avtEntViva(entNpc), true) : 0;
-          if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:_areaLabelNpc }); } catch(_) {} }
+          // Animação local com a geometria da área + broadcast com geometria e
+          // âncora no conjurador (o rótulo "◼ Área"/"▬ Linha" não resolve
+          // entidade nos peers).
+          const _delayMorteNpcArea = _avtSkillAnimEmit({ sk, casterEnt: entNpc || npc,
+            isArea: true, areaCentro: _areaGeoC, areaLinha: _areaGeoL });
 
           // Números de dano nos peers: lote único (stagger reproduzido no receptor).
           try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _alvosNpcArea.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
           _alvosNpcArea.forEach((alvA, idxA) => {
             const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id) || alvA;
             const initA   = bat.iniciativa.find(e => e.id === alvA.id);
-            setTimeout(() => {
+            _avtSetTimeout(() => {
               if (alvA.hp <= 0) return;
               // Avatar: conta hit, não aplica dano em HP
               if (entAlvA?.tipo === 'avatar') {
@@ -15275,17 +15328,17 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
               if (alvA.hp <= 0) {
                 _avtLog(`💀 ${alvA.nome} caiu!`, bat.id);
                 if (alvA._dominado || entAlvA._dominado) {
-                  setTimeout(() => { _avtNpcMorreu(entAlvA, bat); _avtCheckVitoria(bat); }, _delayMorteNpcArea);
+                  _avtSetTimeout(() => { _avtNpcMorreu(entAlvA, bat); _avtCheckVitoria(bat); }, _delayMorteNpcArea);
                 } else if (alvA.tipo === 'jogador') {
-                  setTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(alvA, bat); }, _delayMorteNpcArea);
+                  _avtSetTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(alvA, bat); }, _delayMorteNpcArea);
                 }
               }
               _avtRenderHpBar();
             }, idxA * 80);
           });
 
-          setTimeout(() => { _avtBroadcastBatalha(bat); }, (_alvosNpcArea.length * 80) + 100);
-          setTimeout(() => _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat)), (_alvosNpcArea.length * 80) + 150);
+          _avtSetTimeout(() => { _avtBroadcastBatalha(bat); }, (_alvosNpcArea.length * 80) + 100);
+          _avtSetTimeout(() => _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat)), (_alvosNpcArea.length * 80) + 150);
           return;
         }
 
@@ -15348,23 +15401,22 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         const _critLabelNpc = critMult === 2 ? ' ✦✦ CRÍTICO TOTAL!' : critMult === 1.5 ? ' ✦ CRÍTICO!' : critMult === 1.2 ? ' ⭐ CRÍTICO MENOR!' : '';
         _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${_critLabelNpc}`, bat.id);
         mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${_critLabelNpc}`, 'aviso');
-        const _delayMorteNpc = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || skillAlvo), _avtEntViva(entNpc)) : 0;
-        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:(entAlvo||skillAlvo).nome }); } catch(_) {} }
+        const _delayMorteNpc = _avtSkillAnimEmit({ sk, casterEnt: entNpc || npc, alvoEnt: entAlvo || skillAlvo });
         _avtRenderHpBar();
         _avtBroadcastBatalha(bat);
         if (skillAlvo.hp <= 0) {
           _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id);
           if (skillAlvo._dominado || (entAlvo && entAlvo._dominado)) {
             // Dominado por Necromante morreu — tratar como NPC morto
-            setTimeout(() => { _avtNpcMorreu(entAlvo || skillAlvo, bat); _avtCheckVitoria(bat); }, _delayMorteNpc);
+            _avtSetTimeout(() => { _avtNpcMorreu(entAlvo || skillAlvo, bat); _avtCheckVitoria(bat); }, _delayMorteNpc);
           } else {
-            setTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }, _delayMorteNpc);
+            _avtSetTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }, _delayMorteNpc);
           }
         }
       }
       // Cooldown já foi gravado antes da animação (fix UI lag); nada a fazer aqui.
       _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat));
-    }, AVT_SLOT_MACHINE_MS + _animDuracaoNpc);
+    }, _avtSlotMachineMs() + _animDuracaoNpc);
   }, 800);
 }
 
@@ -17287,14 +17339,71 @@ function avtMestrePainel() {
   if (!open) _avtMestrePainelRender();
 }
 
-function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode?) {
-  if (!sk) return;
+// Tempo (ms) que a parte "viajante" da animação leva até o impacto no alvo.
+// Fonte única para o delay do SFX de impacto e para o retorno de _avtPlaySkillAnim
+// (que os callers usam para atrasar animações de morte). Espelha o que cada
+// branch do dispatcher desenha de fato.
+function _avtSkillTravelMs(anim, isAreaMode) {
+  const tipo = anim?.tipo || 'nenhuma';
+  const pos  = anim?.posicao || anim?.gsap_config?.alvo_efeito || 'alvo';
+  const viaja = ['trajetoria', 'raio', 'retorno'].includes(pos);
+  if (tipo === 'gsap') return viaja ? 400 : 0; // espelha o projétil de 400ms do branch gsap
+  if (['projetil', 'onda', 'explosao', 'raio', 'aura'].includes(tipo)) {
+    return viaja ? (anim.duracao || 600) : 0;
+  }
+  if (tipo === 'pixi_particulas') {
+    let cfg = anim.particle_config;
+    // Preset com envelope de fases: expande igual a _avtPixiParticleAnim, senão
+    // o impacto de presets tipo meteor_fall seria tratado como imediato.
+    if (cfg?.preset && !(cfg.phases || cfg.cast || cfg.travel || cfg.impact)) {
+      const pd = (typeof AVT_FX_PRESETS !== 'undefined') ? AVT_FX_PRESETS[cfg.preset] : null;
+      if (pd && (pd.phases || pd.cast || pd.travel || pd.impact)) cfg = Object.assign({}, pd, cfg);
+    }
+    if (cfg && (cfg.phases || cfg.cast || cfg.travel || cfg.impact)) {
+      return ((cfg.cast && cfg.cast.ms) || 0) + ((cfg.travel && cfg.travel.ms) || 0);
+    }
+    return (viaja && !isAreaMode) ? (anim.duracao || 600) : 0;
+  }
+  return 0; // simples/áreas/spine: impacto imediato; pixi_studio via avtPixiGetAnimDelaySync
+}
+
+// Toca a animação da skill localmente E replica nos peers (avt_skill_anim) —
+// o par play+broadcast que antes era copiado em cada coreografia de ataque.
+// Payload idêntico ao dos call sites que substitui; campos de área só quando
+// isArea (aditivo, retrocompatível). Devolve o delay (ms) a aplicar antes de
+// animações de morte.
+function _avtSkillAnimEmit({ sk, casterEnt, alvoEnt = null, isArea = false,
+                             areaCentro = null, areaLinha = null, alvoNome = null }: any = {}) {
+  if (!sk || !sk.animacao) return 0;
+  const caster = _avtEntViva(casterEnt);
+  const alvo = _avtEntViva(alvoEnt || casterEnt);
+  let delay = 0;
+  const _sc = AVT_STATE._areaCentro, _sl = AVT_STATE._areaLinha;
+  if (isArea) { AVT_STATE._areaCentro = areaCentro; AVT_STATE._areaLinha = areaLinha; }
+  try { delay = _avtPlaySkillAnim(sk, alvo, caster, isArea) || 0; }
+  catch (e) { console.warn('[avt-fx] play:', e); }
+  finally { if (isArea) { AVT_STATE._areaCentro = _sc; AVT_STATE._areaLinha = _sl; } }
+  try {
+    const payload: any = { skillId: sk.id || null, animacao: sk.animacao || null,
+      atacanteNome: caster?.nome, alvoNome: alvoNome || alvo?.nome };
+    if (isArea) {
+      // Âncora no conjurador: rótulos de área não resolvem entidade nos peers.
+      payload.alvoNome = caster?.nome;
+      payload.areaCentro = areaCentro; payload.areaLinha = areaLinha;
+    }
+    _avtBroadcast('avt_skill_anim', payload);
+  } catch (e) { console.warn('[avt-fx] broadcast:', e); }
+  return delay;
+}
+
+function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
+  if (!sk) return 0;
   alvoEnt = _avtEntViva(alvoEnt);
   atacanteEnt = atacanteEnt ? _avtEntViva(atacanteEnt) : null;
-  if (!alvoEnt) return;
+  if (!alvoEnt) return 0;
   const anim = sk.animacao || {};
   const tipo = anim.tipo || 'nenhuma';
-  if (tipo === 'nenhuma') return;
+  if (tipo === 'nenhuma') return 0;
 
   if (typeof AudioManager !== 'undefined') {
     const audioConf = anim.audio || {};
@@ -17314,12 +17423,16 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode?) {
     const impactSfx = audioConf.impact || autoSfx.impact;
     if (castSfx && volCast > 0.001) AudioManager.playSFX(castSfx, { volume: volCast, pitchVariance: 0.06 });
     if (impactSfx && volImp > 0.001) {
-      const travelTypes = ['projetil', 'onda', 'raio'];
-      const isTravel = travelTypes.includes(tipo) &&
-        ['trajetoria', 'raio', 'retorno'].includes(anim.posicao || '');
-      const impactDelay = isTravel ? (anim.duracao || 600) : 0;
+      // Delay alinhado ao tempo real de viagem do visual (inclui gsap com
+      // trajetória e envelopes pixi com fases cast→travel). Para pixi_studio,
+      // usa o delay síncrono do cache do Studio quando disponível.
+      let impactDelay = _avtSkillTravelMs(anim, isAreaMode);
+      if (anim.pixi_studio_id && typeof avtPixiGetAnimDelaySync === 'function') {
+        const dSync = avtPixiGetAnimDelaySync(anim.pixi_studio_id);
+        if (typeof dSync === 'number') impactDelay = dSync;
+      }
       if (impactDelay > 0) {
-        setTimeout(() => AudioManager.playSFX(impactSfx, { volume: volImp, pitchVariance: 0.06 }), impactDelay);
+        _avtSetTimeout(() => AudioManager.playSFX(impactSfx, { volume: volImp, pitchVariance: 0.06 }), impactDelay);
       } else {
         AudioManager.playSFX(impactSfx, { volume: volImp, pitchVariance: 0.06 });
       }
@@ -17327,13 +17440,14 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode?) {
   }
 
   const canvas = AVT_STATE.canvas;
-  if (!canvas) return;
-  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  if (!canvas) return 0;
+  // SZ recalculado a cada chamada: repetições/callbacks tardios usam o zoom atual.
   const toScreen = (ent) => {
     const live = _avtEntViva(ent);
+    const SZn = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
     return {
-      x: Math.round((live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + SZ / 2),
-      y: Math.round((live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + SZ / 2),
+      x: Math.round((live.renderX ?? live.x) * SZn - AVT_STATE.camera.x + SZn / 2),
+      y: Math.round((live.renderY ?? live.y) * SZn - AVT_STATE.camera.y + SZn / 2),
     };
   };
 
@@ -17358,7 +17472,7 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode?) {
       _avtCanvasFlash(alvoScr.x, alvoScr.y, cor, gc.preset || 'Impacto');
     } else if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno') {
       _avtCanvasEfeito('projetil', atacScr.x, atacScr.y, alvoScr.x, alvoScr.y, cor, 400, 20, true, null, posicao);
-      return 400;
+      return _avtSkillTravelMs(anim, isAreaMode);
     } else if (posicao === 'area') {
       _avtCanvasEfeito('explosao', midX, midY, midX, midY, cor, 600, 60, false, null);
     } else {
@@ -17396,39 +17510,36 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode?) {
     const trilha = !!anim.trilha;
     const icone = anim.icone || '';
 
-    const midX = Math.round((atacScr.x + alvoScr.x) / 2);
-    const midY = Math.round((atacScr.y + alvoScr.y) / 2);
-
     for (let r = 0; r < repeticoes; r++) {
-      setTimeout(() => {
+      _avtSetTimeout(() => {
+        // Posições recalculadas no disparo de cada repetição: entidades e câmera
+        // podem ter se movido desde o cast.
+        const aScr = toScreen(alvoEnt);
+        const cScr = atacanteEnt ? toScreen(atacanteEnt) : aScr;
+        const midX = Math.round((cScr.x + aScr.x) / 2);
+        const midY = Math.round((cScr.y + aScr.y) / 2);
         if (posicao === 'alvo') {
-          _avtCanvasEfeito(tipo, alvoScr.x, alvoScr.y, alvoScr.x, alvoScr.y, cor, dur, tamanho, trilha, icone);
+          _avtCanvasEfeito(tipo, aScr.x, aScr.y, aScr.x, aScr.y, cor, dur, tamanho, trilha, icone);
         } else if (posicao === 'atacante') {
-          _avtCanvasEfeito(tipo, atacScr.x, atacScr.y, atacScr.x, atacScr.y, cor, dur, tamanho, trilha, icone);
+          _avtCanvasEfeito(tipo, cScr.x, cScr.y, cScr.x, cScr.y, cor, dur, tamanho, trilha, icone);
         } else if (posicao === 'meio') {
           _avtCanvasEfeito(tipo, midX, midY, midX, midY, cor, dur, tamanho, trilha, icone);
         } else if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno') {
-          _avtCanvasEfeito(tipo, atacScr.x, atacScr.y, alvoScr.x, alvoScr.y, cor, dur, tamanho, trilha, icone, posicao);
+          _avtCanvasEfeito(tipo, cScr.x, cScr.y, aScr.x, aScr.y, cor, dur, tamanho, trilha, icone, posicao);
         } else if (posicao === 'area') {
           _avtCanvasEfeito('explosao', midX, midY, midX, midY, cor, dur, Math.max(tamanho, 60), trilha, icone);
         } else {
-          _avtCanvasEfeito(tipo, alvoScr.x, alvoScr.y, alvoScr.x, alvoScr.y, cor, dur, tamanho, trilha, icone);
+          _avtCanvasEfeito(tipo, aScr.x, aScr.y, aScr.x, aScr.y, cor, dur, tamanho, trilha, icone);
         }
       }, r * (dur + 100));
     }
-    const viajando = posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno';
-    return viajando ? dur : 0;
+    return _avtSkillTravelMs(anim, isAreaMode);
   }
 
   if (tipo === 'pixi_particulas' && anim.particle_config) {
     const posicao = isAreaMode ? 'area' : (anim.posicao || 'alvo');
     _avtPixiParticleAnim(anim.particle_config, atacScr, alvoScr, posicao);
-    const cfg = anim.particle_config;
-    if (cfg && (cfg.phases || cfg.cast || cfg.travel || cfg.impact)) {
-      return ((cfg.cast && cfg.cast.ms) || 0) + ((cfg.travel && cfg.travel.ms) || 0);
-    }
-    const viajando = posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno';
-    return viajando ? (anim.duracao || 600) : 0;
+    return _avtSkillTravelMs(anim, isAreaMode);
   }
 
   if (tipo === 'pixi_spine' && anim.spine_config) {
@@ -17441,28 +17552,59 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode?) {
     return 0;
   }
 
-  // Studio Pixi — play by animation ID
+  // Studio Pixi — play by animation ID. A execução é async (o cfg pode vir da
+  // rede), mas o delay de viagem sai síncrono do cache do Studio quando o cfg
+  // já foi carregado — senão 0 (comportamento antigo, degradação suave).
   if ((tipo === 'pixi_studio' || anim.pixi_studio_id) && anim.pixi_studio_id) {
     if (typeof avtPixiPlayAnimation === 'function') {
-      avtPixiPlayAnimation(anim.pixi_studio_id, atacanteEnt, alvoEnt, isAreaMode);
+      try {
+        const p = avtPixiPlayAnimation(anim.pixi_studio_id, atacanteEnt, alvoEnt, isAreaMode);
+        if (p && typeof p.catch === 'function') p.catch(e => console.warn('[avt-fx] pixi_studio:', e));
+      } catch (e) { console.warn('[avt-fx] pixi_studio:', e); }
     }
-    return 0;
+    const dSync = (typeof avtPixiGetAnimDelaySync === 'function')
+      ? avtPixiGetAnimDelaySync(anim.pixi_studio_id) : null;
+    return typeof dSync === 'number' ? dSync : 0;
   }
 
   return 0;
 }
 
+// Enfileira um efeito no registro world-space (AVT_STATE._fxAtivos). Antes: rAF
+// próprio desenhando no #avt-canvas — competia com o clearRect/fillRect do loop
+// principal (mesma corrida documentada em _avtCanvasFlash) e congelava as
+// coordenadas de tela no momento do cast. Agora o loop principal desenha os
+// efeitos a cada frame via _avtDesenharEfeitosCanvas, reconvertendo célula→tela
+// por frame (efeito acompanha pan/zoom da câmera).
 function _avtCanvasEfeito(tipo, x1, y1, x2, y2, cor, dur, tamanho, trilha, icone, trajetoMode?) {
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const startMs = performance.now();
+  const cam = AVT_STATE.camera || { x: 0, y: 0, zoom: 1 };
+  const SZ = Math.round(AVT_SZ * (cam.zoom || 1)) || AVT_SZ;
+  (AVT_STATE._fxAtivos = AVT_STATE._fxAtivos || []).push({
+    tipo,
+    w1x: (x1 + cam.x) / SZ, w1y: (y1 + cam.y) / SZ,
+    w2x: (x2 + cam.x) / SZ, w2y: (y2 + cam.y) / SZ,
+    cor, dur: dur || 600, tamCell: (tamanho || 40) / SZ,
+    trilha: !!trilha, icone: icone || '', trajetoMode: trajetoMode || null,
+    startMs: performance.now(),
+  });
+}
 
-  function lerp(a, b, t) { return a + (b - a) * t; }
-
-  function tick(now) {
-    const elapsed = now - startMs;
-    const t = Math.min(1, elapsed / dur);
+// Desenha os efeitos ativos — chamado 1× por frame pelo loop principal de render,
+// depois de tiles/entidades/objetos. Remove efeitos concluídos e dispara o flash
+// de impacto dos projéteis nas coordenadas atuais.
+function _avtDesenharEfeitosCanvas(ctx, SZ, camera, now) {
+  const list = AVT_STATE._fxAtivos;
+  if (!list || !list.length) return;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const fx = list[i];
+    const t = Math.min(1, (now - fx.startMs) / fx.dur);
+    const tipo = fx.tipo, cor = fx.cor, trilha = fx.trilha, icone = fx.icone, trajetoMode = fx.trajetoMode;
+    const x1 = fx.w1x * SZ - camera.x, y1 = fx.w1y * SZ - camera.y;
+    const x2 = fx.w2x * SZ - camera.x, y2 = fx.w2y * SZ - camera.y;
+    const tamanho = fx.tamCell * SZ;
 
     ctx.save();
     ctx.globalAlpha = 1 - t;
@@ -17633,15 +17775,12 @@ function _avtCanvasEfeito(tipo, x1, y1, x2, y2, cor, dur, tamanho, trilha, icone
 
     ctx.restore();
 
-    if (t < 1) requestAnimationFrame(tick);
-    else if (tipo === 'projetil' && (trajetoMode === 'retorno')) {
-      _avtCanvasFlash(x1, y1, cor, 'Impacto');
-    } else if (tipo === 'projetil') {
-      _avtCanvasFlash(x2, y2, cor, 'Impacto');
+    if (t >= 1) {
+      list.splice(i, 1);
+      if (tipo === 'projetil' && trajetoMode === 'retorno') _avtCanvasFlash(x1, y1, cor, 'Impacto');
+      else if (tipo === 'projetil') _avtCanvasFlash(x2, y2, cor, 'Impacto');
     }
   }
-
-  requestAnimationFrame(tick);
 }
 
 function _avtCanvasFlash(screenX, screenY, cor, tipo) {
@@ -19638,11 +19777,16 @@ function _avtVfxHost() {
       width: canvas.width, height: canvas.height, powerPreference: 'high-performance',
     });
     h = _avtVfxHostState = { app, canvasRef: canvas, overlayCanvas, active: new Set() };
+    // Tamanho CSS pretendido do overlay. Comparar overlayCanvas.width (backing
+    // store = CSS × resolution) com c.width falha sempre que resolution ≠ 1 (iso
+    // usa ~0.55) e disparava renderer.resize() a cada tick.
+    h._syncW = canvas.width; h._syncH = canvas.height;
     // Sincroniza tamanho/posição com o canvas do mapa (barato; roda só com efeitos ativos)
     h._syncFn = () => {
       const c = h.canvasRef;
       if (!c || !c.isConnected) return;
-      if (h.overlayCanvas.width !== c.width || h.overlayCanvas.height !== c.height) {
+      if (h._syncW !== c.width || h._syncH !== c.height) {
+        h._syncW = c.width; h._syncH = c.height;
         try { h.app.renderer.resize(c.width, c.height); } catch(_) {}
       }
       const l = c.offsetLeft + 'px', t = c.offsetTop + 'px';
@@ -19716,19 +19860,12 @@ let _avtPixiActiveApps = 0;
 const _AVT_PIXI_MAX_CONCURRENT = 3;
 const _avtPixiQueue = [];
 
-function _avtPixiRunOrQueue(fn) {
-  if (_avtPixiActiveApps < _AVT_PIXI_MAX_CONCURRENT) {
-    fn();
-  } else {
-    _avtPixiQueue.push(fn);
-  }
-}
-
 function _avtPixiDrainQueue() {
   if (_avtPixiQueue.length && _avtPixiActiveApps < _AVT_PIXI_MAX_CONCURRENT) {
-    _avtPixiActiveApps++;
-    const fn = _avtPixiQueue.shift();
-    fn();
+    // Sem pré-incremento: a closure re-entra _avtPixiParticleAnim, que faz o
+    // próprio check/incremento do semáforo. O incremento extra daqui nunca era
+    // liberado — o contador inflava até nenhum efeito do fallback tocar mais.
+    _avtPixiQueue.shift()();
   }
 }
 
@@ -20239,7 +20376,7 @@ function _avtPlayPhases(env, atacScr, alvoScr, posicao) {
   if (env.cast) {
     const castCfg = Object.assign({}, env.cast, { intensidade, cor });
     if (!castCfg.layers && !castCfg.preset) castCfg.preset = 'arcane_lance';
-    setTimeout(() => {
+    _avtSetTimeout(() => {
       _avtPixiParticleAnim(castCfg, atacScr, atacScr, 'atacante');
     }, 0);
   }
@@ -20247,7 +20384,7 @@ function _avtPlayPhases(env, atacScr, alvoScr, posicao) {
 
   // TRAVEL: corpo viajando + trail
   if (env.travel) {
-    setTimeout(() => _avtPlayTravelBody(env.travel, atacScr, alvoScr, cor, intensidade), castMs);
+    _avtSetTimeout(() => _avtPlayTravelBody(env.travel, atacScr, alvoScr, cor, intensidade), castMs);
   }
   const travelMs = (env.travel && env.travel.ms) || 0;
 
@@ -20255,7 +20392,7 @@ function _avtPlayPhases(env, atacScr, alvoScr, posicao) {
   if (env.impact) {
     const impactCfg = Object.assign({}, env.impact, { intensidade, cor });
     if (!impactCfg.layers && !impactCfg.preset) impactCfg.preset = 'precise_strike';
-    setTimeout(() => {
+    _avtSetTimeout(() => {
       _avtPixiParticleAnim(impactCfg, atacScr, alvoScr, 'alvo');
     }, castMs + travelMs);
   }
@@ -30672,12 +30809,16 @@ function _avtNpcTurnoInvocado(bat) {
     // Animação de ataque (placeholder ou da skill)
     const _animInv = _avtAnimacaoPlaceholder(entInv, _skUsada);
     const _animDuracaoInv = _skUsada?.animacao?.duracao ?? (_animInv as any)?.duracao ?? 600;
+    // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+    if (_skUsada?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+      try { _psAvtLoadCfg(_skUsada.animacao.pixi_studio_id); } catch (_) {}
+    }
     if (_animInv && typeof animarAtaque === 'function') {
       const _atacElInv = _avtElPosicaoCanvas(entInv);
       const _alvoElInv = _avtElPosicaoCanvas(alvo);
       if (_atacElInv && _alvoElInv)
-        setTimeout(() => animarAtaque({ atacEl: _atacElInv, alvoEl: _alvoElInv, animacao: _animInv, dano: 0 }), AVT_SLOT_MACHINE_MS);
-      try { _avtBroadcast('avt_attack_anim', { atacanteNome: entInv.nome, alvoNome: alvo.nome, animacao: _animInv, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+        _avtSetTimeout(() => animarAtaque({ atacEl: _atacElInv, alvoEl: _alvoElInv, animacao: _animInv, dano: 0 }), _avtSlotMachineMs());
+      try { _avtBroadcast('avt_attack_anim', { atacanteNome: entInv.nome, alvoNome: alvo.nome, animacao: _animInv, delay: _avtSlotMachineMs() }); } catch(_) {}
     }
 
     _avtSetTimeout(() => {
@@ -30708,10 +30849,7 @@ function _avtNpcTurnoInvocado(bat) {
       }
 
       // Animação de skill configurada
-      if (_skUsada && typeof _avtPlaySkillAnim === 'function') {
-        _avtPlaySkillAnim(_skUsada, _avtEntViva(alvo), _avtEntViva(entInv));
-        try { _avtBroadcast('avt_skill_anim', { skillId: _skUsada.id || null, animacao: _skUsada.animacao || null, atacanteNome: entInv.nome, alvoNome: alvo.nome }); } catch(_) {}
-      }
+      _avtSkillAnimEmit({ sk: _skUsada, casterEnt: entInv, alvoEnt: alvo });
 
       // Aplicar dano
       alvo.hp = Math.max(0, alvo.hp - _danoFinalInv);
@@ -30758,7 +30896,7 @@ function _avtNpcTurnoInvocado(bat) {
 
       _avtBroadcastBatalha(bat);
       _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
-    }, AVT_SLOT_MACHINE_MS + _animDuracaoInv);
+    }, _avtSlotMachineMs() + _animDuracaoInv);
     return;
   }
 
@@ -30793,39 +30931,65 @@ function _avtRolarFormulaInvocado(invDef, tipo, donoNome) {
 
 /* [migração-esm] accessors globais */
 Object.defineProperty(globalThis, "AVT_STATE", { configurable: true, get: () => AVT_STATE, set: (__v) => { AVT_STATE = __v; } });
-Object.defineProperty(globalThis, "_avtBroadcast", { configurable: true, writable: true, value: _avtBroadcast });
-Object.defineProperty(globalThis, "_avtBroadcastNpc", { configurable: true, writable: true, value: _avtBroadcastNpc });
-Object.defineProperty(globalThis, "_avtBcastTokenMove", { configurable: true, writable: true, value: _avtBcastTokenMove });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBroadcast", { configurable: true, get: () => _avtBroadcast, set: (__v) => { _avtBroadcast = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBroadcastNpc", { configurable: true, get: () => _avtBroadcastNpc, set: (__v) => { _avtBroadcastNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBcastTokenMove", { configurable: true, get: () => _avtBcastTokenMove, set: (__v) => { _avtBcastTokenMove = __v; } });
 Object.defineProperty(globalThis, "_AVT_MAX_PENDING_INPUTS", { configurable: true, get: () => _AVT_MAX_PENDING_INPUTS });
-Object.defineProperty(globalThis, "_avtEnviarMoveInput", { configurable: true, writable: true, value: _avtEnviarMoveInput });
-Object.defineProperty(globalThis, "_avtResetMovePredict", { configurable: true, writable: true, value: _avtResetMovePredict });
-Object.defineProperty(globalThis, "_avtMarcarAtividade", { configurable: true, writable: true, value: _avtMarcarAtividade });
-Object.defineProperty(globalThis, "_avtSalaEspera", { configurable: true, writable: true, value: _avtSalaEspera });
-Object.defineProperty(globalThis, "_avtSeededRng", { configurable: true, writable: true, value: _avtSeededRng });
-Object.defineProperty(globalThis, "_avtCalcHpJog", { configurable: true, writable: true, value: _avtCalcHpJog });
-Object.defineProperty(globalThis, "_avtReconciliarEntidades", { configurable: true, writable: true, value: _avtReconciliarEntidades });
-Object.defineProperty(globalThis, "_avtResyncEstado", { configurable: true, writable: true, value: _avtResyncEstado });
-Object.defineProperty(globalThis, "_avtGetSkillNumero", { configurable: true, writable: true, value: _avtGetSkillNumero });
-Object.defineProperty(globalThis, "_avtSkillsOrdenadasPorNumero", { configurable: true, writable: true, value: _avtSkillsOrdenadasPorNumero });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEnviarMoveInput", { configurable: true, get: () => _avtEnviarMoveInput, set: (__v) => { _avtEnviarMoveInput = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtResetMovePredict", { configurable: true, get: () => _avtResetMovePredict, set: (__v) => { _avtResetMovePredict = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMarcarAtividade", { configurable: true, get: () => _avtMarcarAtividade, set: (__v) => { _avtMarcarAtividade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalaEspera", { configurable: true, get: () => _avtSalaEspera, set: (__v) => { _avtSalaEspera = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSeededRng", { configurable: true, get: () => _avtSeededRng, set: (__v) => { _avtSeededRng = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCalcHpJog", { configurable: true, get: () => _avtCalcHpJog, set: (__v) => { _avtCalcHpJog = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtReconciliarEntidades", { configurable: true, get: () => _avtReconciliarEntidades, set: (__v) => { _avtReconciliarEntidades = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtResyncEstado", { configurable: true, get: () => _avtResyncEstado, set: (__v) => { _avtResyncEstado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetSkillNumero", { configurable: true, get: () => _avtGetSkillNumero, set: (__v) => { _avtGetSkillNumero = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillsOrdenadasPorNumero", { configurable: true, get: () => _avtSkillsOrdenadasPorNumero, set: (__v) => { _avtSkillsOrdenadasPorNumero = __v; } });
 Object.defineProperty(globalThis, "AVT_T", { configurable: true, get: () => AVT_T });
 Object.defineProperty(globalThis, "AVT_SZ", { configurable: true, get: () => AVT_SZ });
 Object.defineProperty(globalThis, "_avtYsortBuf", { configurable: true, get: () => _avtYsortBuf });
 Object.defineProperty(globalThis, "_avtAtmGrad", { configurable: true, get: () => _avtAtmGrad, set: (__v) => { _avtAtmGrad = __v; } });
 Object.defineProperty(globalThis, "_avtAtmGradR", { configurable: true, get: () => _avtAtmGradR, set: (__v) => { _avtAtmGradR = __v; } });
 Object.defineProperty(globalThis, "AVT_STATUS_COLORS", { configurable: true, get: () => AVT_STATUS_COLORS });
-Object.defineProperty(globalThis, "_avtHexRgb", { configurable: true, writable: true, value: _avtHexRgb });
-Object.defineProperty(globalThis, "_avtEfetosAtivosEnt", { configurable: true, writable: true, value: _avtEfetosAtivosEnt });
-Object.defineProperty(globalThis, "_avtEhAutoridade", { configurable: true, writable: true, value: _avtEhAutoridade });
-Object.defineProperty(globalThis, "_avtSetOocCooldown", { configurable: true, writable: true, value: _avtSetOocCooldown });
-Object.defineProperty(globalThis, "_avtRastroMarcarCelula", { configurable: true, writable: true, value: _avtRastroMarcarCelula });
-Object.defineProperty(globalThis, "_avtRastroEhHostil", { configurable: true, writable: true, value: _avtRastroEhHostil });
-Object.defineProperty(globalThis, "_avtRastroChecarEntrada", { configurable: true, writable: true, value: _avtRastroChecarEntrada });
-Object.defineProperty(globalThis, "_avtRastroCelulasTrajetoria", { configurable: true, writable: true, value: _avtRastroCelulasTrajetoria });
-Object.defineProperty(globalThis, "_avtRastroPersonaAtivo", { configurable: true, writable: true, value: _avtRastroPersonaAtivo });
-Object.defineProperty(globalThis, "_avtAplicarRastroEfeito", { configurable: true, writable: true, value: _avtAplicarRastroEfeito });
-Object.defineProperty(globalThis, "_avtAplicarEmpurrao", { configurable: true, writable: true, value: _avtAplicarEmpurrao });
-Object.defineProperty(globalThis, "_avtRastroPrune", { configurable: true, writable: true, value: _avtRastroPrune });
-Object.defineProperty(globalThis, "_avtRenderRastroCells", { configurable: true, writable: true, value: _avtRenderRastroCells });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtHexRgb", { configurable: true, get: () => _avtHexRgb, set: (__v) => { _avtHexRgb = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfetosAtivosEnt", { configurable: true, get: () => _avtEfetosAtivosEnt, set: (__v) => { _avtEfetosAtivosEnt = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEhAutoridade", { configurable: true, get: () => _avtEhAutoridade, set: (__v) => { _avtEhAutoridade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSetOocCooldown", { configurable: true, get: () => _avtSetOocCooldown, set: (__v) => { _avtSetOocCooldown = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRastroMarcarCelula", { configurable: true, get: () => _avtRastroMarcarCelula, set: (__v) => { _avtRastroMarcarCelula = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRastroEhHostil", { configurable: true, get: () => _avtRastroEhHostil, set: (__v) => { _avtRastroEhHostil = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRastroChecarEntrada", { configurable: true, get: () => _avtRastroChecarEntrada, set: (__v) => { _avtRastroChecarEntrada = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRastroCelulasTrajetoria", { configurable: true, get: () => _avtRastroCelulasTrajetoria, set: (__v) => { _avtRastroCelulasTrajetoria = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRastroPersonaAtivo", { configurable: true, get: () => _avtRastroPersonaAtivo, set: (__v) => { _avtRastroPersonaAtivo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAplicarRastroEfeito", { configurable: true, get: () => _avtAplicarRastroEfeito, set: (__v) => { _avtAplicarRastroEfeito = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAplicarEmpurrao", { configurable: true, get: () => _avtAplicarEmpurrao, set: (__v) => { _avtAplicarEmpurrao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRastroPrune", { configurable: true, get: () => _avtRastroPrune, set: (__v) => { _avtRastroPrune = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRenderRastroCells", { configurable: true, get: () => _avtRenderRastroCells, set: (__v) => { _avtRenderRastroCells = __v; } });
 Object.defineProperty(globalThis, "AVT_WARRIOR_SVG_A", { configurable: true, get: () => AVT_WARRIOR_SVG_A });
 Object.defineProperty(globalThis, "AVT_WARRIOR_SVG_B", { configurable: true, get: () => AVT_WARRIOR_SVG_B });
 Object.defineProperty(globalThis, "AVT_MAGE_SVG_A", { configurable: true, get: () => AVT_MAGE_SVG_A });
@@ -30847,733 +31011,1427 @@ Object.defineProperty(globalThis, "AVT_LADINO_SVG_B", { configurable: true, get:
 Object.defineProperty(globalThis, "AVT_LADINO_SVG_A_HEAD", { configurable: true, get: () => AVT_LADINO_SVG_A_HEAD });
 Object.defineProperty(globalThis, "AVT_LADINO_SVG_B_HEAD", { configurable: true, get: () => AVT_LADINO_SVG_B_HEAD });
 Object.defineProperty(globalThis, "_avtClasseImgCache", { configurable: true, get: () => _avtClasseImgCache });
-Object.defineProperty(globalThis, "_avtGetClasseImg", { configurable: true, writable: true, value: _avtGetClasseImg });
-Object.defineProperty(globalThis, "_avtClasseVariant", { configurable: true, writable: true, value: _avtClasseVariant });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetClasseImg", { configurable: true, get: () => _avtGetClasseImg, set: (__v) => { _avtGetClasseImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtClasseVariant", { configurable: true, get: () => _avtClasseVariant, set: (__v) => { _avtClasseVariant = __v; } });
 Object.defineProperty(globalThis, "AVT_TOPDOWN_GEN_PROMPT", { configurable: true, get: () => AVT_TOPDOWN_GEN_PROMPT });
 Object.defineProperty(globalThis, "AVT_ISO_GEN_PROMPT", { configurable: true, get: () => AVT_ISO_GEN_PROMPT });
 Object.defineProperty(globalThis, "AVT_TOPDOWN_COORD_PROMPT", { configurable: true, get: () => AVT_TOPDOWN_COORD_PROMPT });
 Object.defineProperty(globalThis, "AVT_CREATURE_MODELS", { configurable: true, get: () => AVT_CREATURE_MODELS });
 Object.defineProperty(globalThis, "AVT_NPC_PRESETS", { configurable: true, get: () => AVT_NPC_PRESETS });
 Object.defineProperty(globalThis, "AVT_PRESET_TO_CREATURE", { configurable: true, get: () => AVT_PRESET_TO_CREATURE });
-Object.defineProperty(globalThis, "_avtGetNpcClasses", { configurable: true, writable: true, value: _avtGetNpcClasses });
-Object.defineProperty(globalThis, "_hexVary", { configurable: true, writable: true, value: _hexVary });
-Object.defineProperty(globalThis, "_avtGetCreatureImg", { configurable: true, writable: true, value: _avtGetCreatureImg });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetNpcClasses", { configurable: true, get: () => _avtGetNpcClasses, set: (__v) => { _avtGetNpcClasses = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_hexVary", { configurable: true, get: () => _hexVary, set: (__v) => { _hexVary = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetCreatureImg", { configurable: true, get: () => _avtGetCreatureImg, set: (__v) => { _avtGetCreatureImg = __v; } });
 Object.defineProperty(globalThis, "AVT_BULK_MASK_CORES", { configurable: true, get: () => AVT_BULK_MASK_CORES });
-Object.defineProperty(globalThis, "_avtSb", { configurable: true, writable: true, value: _avtSb });
-Object.defineProperty(globalThis, "_avtNovaLinhagemId", { configurable: true, writable: true, value: _avtNovaLinhagemId });
-Object.defineProperty(globalThis, "_avtBuscarIrmaosLinhagem", { configurable: true, writable: true, value: _avtBuscarIrmaosLinhagem });
-Object.defineProperty(globalThis, "_avtSyncLinhagem", { configurable: true, writable: true, value: _avtSyncLinhagem });
-Object.defineProperty(globalThis, "_avtSyncLinhagemInventario", { configurable: true, writable: true, value: _avtSyncLinhagemInventario });
-Object.defineProperty(globalThis, "_avtSyncLinhagemSkills", { configurable: true, writable: true, value: _avtSyncLinhagemSkills });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSb", { configurable: true, get: () => _avtSb, set: (__v) => { _avtSb = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNovaLinhagemId", { configurable: true, get: () => _avtNovaLinhagemId, set: (__v) => { _avtNovaLinhagemId = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBuscarIrmaosLinhagem", { configurable: true, get: () => _avtBuscarIrmaosLinhagem, set: (__v) => { _avtBuscarIrmaosLinhagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSyncLinhagem", { configurable: true, get: () => _avtSyncLinhagem, set: (__v) => { _avtSyncLinhagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSyncLinhagemInventario", { configurable: true, get: () => _avtSyncLinhagemInventario, set: (__v) => { _avtSyncLinhagemInventario = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSyncLinhagemSkills", { configurable: true, get: () => _avtSyncLinhagemSkills, set: (__v) => { _avtSyncLinhagemSkills = __v; } });
 Object.defineProperty(globalThis, "_avtBackfillLinhagemFeito", { configurable: true, get: () => _avtBackfillLinhagemFeito, set: (__v) => { _avtBackfillLinhagemFeito = __v; } });
-Object.defineProperty(globalThis, "_avtBackfillLinhagem", { configurable: true, writable: true, value: _avtBackfillLinhagem });
-Object.defineProperty(globalThis, "_avtEsc", { configurable: true, writable: true, value: _avtEsc });
-Object.defineProperty(globalThis, "aventuraCarregarLista", { configurable: true, writable: true, value: aventuraCarregarLista });
-Object.defineProperty(globalThis, "avtHubRenderSection", { configurable: true, writable: true, value: avtHubRenderSection });
-Object.defineProperty(globalThis, "abrirCriarAventura", { configurable: true, writable: true, value: abrirCriarAventura });
-Object.defineProperty(globalThis, "fecharCriarAventura", { configurable: true, writable: true, value: fecharCriarAventura });
-Object.defineProperty(globalThis, "_avtCriarRenderEtapa", { configurable: true, writable: true, value: _avtCriarRenderEtapa });
-Object.defineProperty(globalThis, "_avtCriarRenderModoEscolha", { configurable: true, writable: true, value: _avtCriarRenderModoEscolha });
-Object.defineProperty(globalThis, "_avtCriarRenderIdentidade", { configurable: true, writable: true, value: _avtCriarRenderIdentidade });
-Object.defineProperty(globalThis, "_avtCriarRenderPersonagens", { configurable: true, writable: true, value: _avtCriarRenderPersonagens });
-Object.defineProperty(globalThis, "_avtCriarCarregarAventurasImport", { configurable: true, writable: true, value: _avtCriarCarregarAventurasImport });
-Object.defineProperty(globalThis, "_avtCriarRenderAventurasImport", { configurable: true, writable: true, value: _avtCriarRenderAventurasImport });
-Object.defineProperty(globalThis, "_avtCriarToggleAventuraExpand", { configurable: true, writable: true, value: _avtCriarToggleAventuraExpand });
-Object.defineProperty(globalThis, "_avtCriarToggleCharSelecao", { configurable: true, writable: true, value: _avtCriarToggleCharSelecao });
-Object.defineProperty(globalThis, "_avtCriarConfirmarImportIndividual", { configurable: true, writable: true, value: _avtCriarConfirmarImportIndividual });
-Object.defineProperty(globalThis, "_avtCriarRenderCharsLista", { configurable: true, writable: true, value: _avtCriarRenderCharsLista });
-Object.defineProperty(globalThis, "_avtAbrirConfigPersonagem", { configurable: true, writable: true, value: _avtAbrirConfigPersonagem });
-Object.defineProperty(globalThis, "_avtCfgSwitchTab", { configurable: true, writable: true, value: _avtCfgSwitchTab });
-Object.defineProperty(globalThis, "_avtCfgHpPreview", { configurable: true, writable: true, value: _avtCfgHpPreview });
-Object.defineProperty(globalThis, "_avtCfgAtualizarTokenPrev", { configurable: true, writable: true, value: _avtCfgAtualizarTokenPrev });
-Object.defineProperty(globalThis, "_avtCfgAtualizarPerfilPrev", { configurable: true, writable: true, value: _avtCfgAtualizarPerfilPrev });
-Object.defineProperty(globalThis, "_avtCfgFileUpload", { configurable: true, writable: true, value: _avtCfgFileUpload });
-Object.defineProperty(globalThis, "_avtCriarRenderMapa", { configurable: true, writable: true, value: _avtCriarRenderMapa });
-Object.defineProperty(globalThis, "avtCriarSelecionarMapa", { configurable: true, writable: true, value: avtCriarSelecionarMapa });
-Object.defineProperty(globalThis, "_avtCriarRenderMapaSub", { configurable: true, writable: true, value: _avtCriarRenderMapaSub });
-Object.defineProperty(globalThis, "_avtProcHandleTilesetImg", { configurable: true, writable: true, value: _avtProcHandleTilesetImg });
-Object.defineProperty(globalThis, "_avtProcCopiarPromptTileset", { configurable: true, writable: true, value: _avtProcCopiarPromptTileset });
-Object.defineProperty(globalThis, "avtCriarSetCor", { configurable: true, writable: true, value: avtCriarSetCor });
-Object.defineProperty(globalThis, "avtCriarAddChar", { configurable: true, writable: true, value: avtCriarAddChar });
-Object.defineProperty(globalThis, "avtCriarRemChar", { configurable: true, writable: true, value: avtCriarRemChar });
-Object.defineProperty(globalThis, "avtCriarImportCampanha", { configurable: true, writable: true, value: avtCriarImportCampanha });
-Object.defineProperty(globalThis, "_avtCriarVoltar", { configurable: true, writable: true, value: _avtCriarVoltar });
-Object.defineProperty(globalThis, "_avtCriarAvancar", { configurable: true, writable: true, value: _avtCriarAvancar });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBackfillLinhagem", { configurable: true, get: () => _avtBackfillLinhagem, set: (__v) => { _avtBackfillLinhagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEsc", { configurable: true, get: () => _avtEsc, set: (__v) => { _avtEsc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "aventuraCarregarLista", { configurable: true, get: () => aventuraCarregarLista, set: (__v) => { aventuraCarregarLista = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtHubRenderSection", { configurable: true, get: () => avtHubRenderSection, set: (__v) => { avtHubRenderSection = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirCriarAventura", { configurable: true, get: () => abrirCriarAventura, set: (__v) => { abrirCriarAventura = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharCriarAventura", { configurable: true, get: () => fecharCriarAventura, set: (__v) => { fecharCriarAventura = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarRenderEtapa", { configurable: true, get: () => _avtCriarRenderEtapa, set: (__v) => { _avtCriarRenderEtapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarRenderModoEscolha", { configurable: true, get: () => _avtCriarRenderModoEscolha, set: (__v) => { _avtCriarRenderModoEscolha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarRenderIdentidade", { configurable: true, get: () => _avtCriarRenderIdentidade, set: (__v) => { _avtCriarRenderIdentidade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarRenderPersonagens", { configurable: true, get: () => _avtCriarRenderPersonagens, set: (__v) => { _avtCriarRenderPersonagens = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarCarregarAventurasImport", { configurable: true, get: () => _avtCriarCarregarAventurasImport, set: (__v) => { _avtCriarCarregarAventurasImport = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarRenderAventurasImport", { configurable: true, get: () => _avtCriarRenderAventurasImport, set: (__v) => { _avtCriarRenderAventurasImport = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarToggleAventuraExpand", { configurable: true, get: () => _avtCriarToggleAventuraExpand, set: (__v) => { _avtCriarToggleAventuraExpand = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarToggleCharSelecao", { configurable: true, get: () => _avtCriarToggleCharSelecao, set: (__v) => { _avtCriarToggleCharSelecao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarConfirmarImportIndividual", { configurable: true, get: () => _avtCriarConfirmarImportIndividual, set: (__v) => { _avtCriarConfirmarImportIndividual = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarRenderCharsLista", { configurable: true, get: () => _avtCriarRenderCharsLista, set: (__v) => { _avtCriarRenderCharsLista = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAbrirConfigPersonagem", { configurable: true, get: () => _avtAbrirConfigPersonagem, set: (__v) => { _avtAbrirConfigPersonagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCfgSwitchTab", { configurable: true, get: () => _avtCfgSwitchTab, set: (__v) => { _avtCfgSwitchTab = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCfgHpPreview", { configurable: true, get: () => _avtCfgHpPreview, set: (__v) => { _avtCfgHpPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCfgAtualizarTokenPrev", { configurable: true, get: () => _avtCfgAtualizarTokenPrev, set: (__v) => { _avtCfgAtualizarTokenPrev = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCfgAtualizarPerfilPrev", { configurable: true, get: () => _avtCfgAtualizarPerfilPrev, set: (__v) => { _avtCfgAtualizarPerfilPrev = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCfgFileUpload", { configurable: true, get: () => _avtCfgFileUpload, set: (__v) => { _avtCfgFileUpload = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarRenderMapa", { configurable: true, get: () => _avtCriarRenderMapa, set: (__v) => { _avtCriarRenderMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtCriarSelecionarMapa", { configurable: true, get: () => avtCriarSelecionarMapa, set: (__v) => { avtCriarSelecionarMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarRenderMapaSub", { configurable: true, get: () => _avtCriarRenderMapaSub, set: (__v) => { _avtCriarRenderMapaSub = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtProcHandleTilesetImg", { configurable: true, get: () => _avtProcHandleTilesetImg, set: (__v) => { _avtProcHandleTilesetImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtProcCopiarPromptTileset", { configurable: true, get: () => _avtProcCopiarPromptTileset, set: (__v) => { _avtProcCopiarPromptTileset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtCriarSetCor", { configurable: true, get: () => avtCriarSetCor, set: (__v) => { avtCriarSetCor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtCriarAddChar", { configurable: true, get: () => avtCriarAddChar, set: (__v) => { avtCriarAddChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtCriarRemChar", { configurable: true, get: () => avtCriarRemChar, set: (__v) => { avtCriarRemChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtCriarImportCampanha", { configurable: true, get: () => avtCriarImportCampanha, set: (__v) => { avtCriarImportCampanha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarVoltar", { configurable: true, get: () => _avtCriarVoltar, set: (__v) => { _avtCriarVoltar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarAvancar", { configurable: true, get: () => _avtCriarAvancar, set: (__v) => { _avtCriarAvancar = __v; } });
 Object.defineProperty(globalThis, "_avtEd", { configurable: true, get: () => _avtEd, set: (__v) => { _avtEd = __v; } });
-Object.defineProperty(globalThis, "_avtEditorTamanho", { configurable: true, writable: true, value: _avtEditorTamanho });
-Object.defineProperty(globalThis, "_avtEditorInit", { configurable: true, writable: true, value: _avtEditorInit });
-Object.defineProperty(globalThis, "_avtEditorReset", { configurable: true, writable: true, value: _avtEditorReset });
-Object.defineProperty(globalThis, "_avtEditorLimpar", { configurable: true, writable: true, value: _avtEditorLimpar });
-Object.defineProperty(globalThis, "_avtEditorAcaoSet", { configurable: true, writable: true, value: _avtEditorAcaoSet });
-Object.defineProperty(globalThis, "_avtEditorRenderCanvas", { configurable: true, writable: true, value: _avtEditorRenderCanvas });
-Object.defineProperty(globalThis, "_avtEditorExport", { configurable: true, writable: true, value: _avtEditorExport });
-Object.defineProperty(globalThis, "_avtGetGridParams", { configurable: true, writable: true, value: _avtGetGridParams });
-Object.defineProperty(globalThis, "_avtGerarPromptJson", { configurable: true, writable: true, value: _avtGerarPromptJson });
-Object.defineProperty(globalThis, "_avtJsonAtualizarPrompt", { configurable: true, writable: true, value: _avtJsonAtualizarPrompt });
-Object.defineProperty(globalThis, "_avtCopiarPromptJson", { configurable: true, writable: true, value: _avtCopiarPromptJson });
-Object.defineProperty(globalThis, "_avtJsonParsePreview", { configurable: true, writable: true, value: _avtJsonParsePreview });
-Object.defineProperty(globalThis, "_avtJsonToDungeon", { configurable: true, writable: true, value: _avtJsonToDungeon });
-Object.defineProperty(globalThis, "_avtGerarComClaude", { configurable: true, writable: true, value: _avtGerarComClaude });
-Object.defineProperty(globalThis, "_avtMontarPromptPersonagens", { configurable: true, writable: true, value: _avtMontarPromptPersonagens });
-Object.defineProperty(globalThis, "_avtGerarPersonagensComIA", { configurable: true, writable: true, value: _avtGerarPersonagensComIA });
-Object.defineProperty(globalThis, "_avtCopiarPromptPersonagensExterno", { configurable: true, writable: true, value: _avtCopiarPromptPersonagensExterno });
-Object.defineProperty(globalThis, "_avtAplicarPersonagensIA", { configurable: true, writable: true, value: _avtAplicarPersonagensIA });
-Object.defineProperty(globalThis, "_avtAplicarPersonagensExterno", { configurable: true, writable: true, value: _avtAplicarPersonagensExterno });
-Object.defineProperty(globalThis, "aventuraCriarSubmit", { configurable: true, writable: true, value: aventuraCriarSubmit });
-Object.defineProperty(globalThis, "_avtCarregarAtribuicaoJogador", { configurable: true, writable: true, value: _avtCarregarAtribuicaoJogador });
-Object.defineProperty(globalThis, "_avtMestreAtribuirJogador", { configurable: true, writable: true, value: _avtMestreAtribuirJogador });
-Object.defineProperty(globalThis, "avtReceberMemberLinked", { configurable: true, writable: true, value: avtReceberMemberLinked });
-Object.defineProperty(globalThis, "_avtMestreSelecionarPersonagem", { configurable: true, writable: true, value: _avtMestreSelecionarPersonagem });
-Object.defineProperty(globalThis, "_avtMestreAddXp", { configurable: true, writable: true, value: _avtMestreAddXp });
-Object.defineProperty(globalThis, "_avtGetBauById", { configurable: true, writable: true, value: _avtGetBauById });
-Object.defineProperty(globalThis, "_avtMestreAddBau", { configurable: true, writable: true, value: _avtMestreAddBau });
-Object.defineProperty(globalThis, "_avtEntrarModoBauPlacement", { configurable: true, writable: true, value: _avtEntrarModoBauPlacement });
-Object.defineProperty(globalThis, "_avtMestreRemoverBau", { configurable: true, writable: true, value: _avtMestreRemoverBau });
-Object.defineProperty(globalThis, "_avtMestreReabrirBau", { configurable: true, writable: true, value: _avtMestreReabrirBau });
-Object.defineProperty(globalThis, "_avtMestreEditarBau", { configurable: true, writable: true, value: _avtMestreEditarBau });
-Object.defineProperty(globalThis, "_avtBauAddItem", { configurable: true, writable: true, value: _avtBauAddItem });
-Object.defineProperty(globalThis, "_avtBauAddItemManual", { configurable: true, writable: true, value: _avtBauAddItemManual });
-Object.defineProperty(globalThis, "_avtBauRemoverItem", { configurable: true, writable: true, value: _avtBauRemoverItem });
-Object.defineProperty(globalThis, "_avtBauUploadImg", { configurable: true, writable: true, value: _avtBauUploadImg });
-Object.defineProperty(globalThis, "_avtBauSalvar", { configurable: true, writable: true, value: _avtBauSalvar });
-Object.defineProperty(globalThis, "_avtMestreDarItemChar", { configurable: true, writable: true, value: _avtMestreDarItemChar });
-Object.defineProperty(globalThis, "_avtItensSelChar", { configurable: true, writable: true, value: _avtItensSelChar });
-Object.defineProperty(globalThis, "_avtMestreAtualizarOuroChar", { configurable: true, writable: true, value: _avtMestreAtualizarOuroChar });
-Object.defineProperty(globalThis, "_avtMestreRemoverItemChar", { configurable: true, writable: true, value: _avtMestreRemoverItemChar });
-Object.defineProperty(globalThis, "_avtMestreDesequiparSlotChar", { configurable: true, writable: true, value: _avtMestreDesequiparSlotChar });
-Object.defineProperty(globalThis, "_avtMestreCarregarInvChar", { configurable: true, writable: true, value: _avtMestreCarregarInvChar });
-Object.defineProperty(globalThis, "_avtBauPreParaMapa", { configurable: true, writable: true, value: _avtBauPreParaMapa });
-Object.defineProperty(globalThis, "_avtRemoverBauPre", { configurable: true, writable: true, value: _avtRemoverBauPre });
-Object.defineProperty(globalThis, "_avtBausPreDungeonParaMapa", { configurable: true, writable: true, value: _avtBausPreDungeonParaMapa });
-Object.defineProperty(globalThis, "_avtGravarDungeonNoSlot", { configurable: true, writable: true, value: _avtGravarDungeonNoSlot });
-Object.defineProperty(globalThis, "_avtSalvarDungeon", { configurable: true, writable: true, value: _avtSalvarDungeon });
-Object.defineProperty(globalThis, "_avtSalvarThemeJson", { configurable: true, writable: true, value: _avtSalvarThemeJson });
-Object.defineProperty(globalThis, "_avtDeepClone", { configurable: true, writable: true, value: _avtDeepClone });
-Object.defineProperty(globalThis, "_avtSkillScalingAttrs", { configurable: true, writable: true, value: _avtSkillScalingAttrs });
-Object.defineProperty(globalThis, "_migrarSkillsIntOnly", { configurable: true, writable: true, value: _migrarSkillsIntOnly });
-Object.defineProperty(globalThis, "_avtAdicionarMembro", { configurable: true, writable: true, value: _avtAdicionarMembro });
-Object.defineProperty(globalThis, "_avtRemoverMembro", { configurable: true, writable: true, value: _avtRemoverMembro });
-Object.defineProperty(globalThis, "_avtCarregarDados", { configurable: true, writable: true, value: _avtCarregarDados });
-Object.defineProperty(globalThis, "_avtIniciarCanvas", { configurable: true, writable: true, value: _avtIniciarCanvas });
-Object.defineProperty(globalThis, "_avtIniciarRTNet", { configurable: true, writable: true, value: _avtIniciarRTNet });
-Object.defineProperty(globalThis, "_avtMostrarAventuraScreen", { configurable: true, writable: true, value: _avtMostrarAventuraScreen });
-Object.defineProperty(globalThis, "entrarAventura", { configurable: true, writable: true, value: entrarAventura });
-Object.defineProperty(globalThis, "_avtFlushPersistencia", { configurable: true, writable: true, value: _avtFlushPersistencia });
-Object.defineProperty(globalThis, "_avtCleanupListeners", { configurable: true, writable: true, value: _avtCleanupListeners });
-Object.defineProperty(globalThis, "_avtSetTimeout", { configurable: true, writable: true, value: _avtSetTimeout });
-Object.defineProperty(globalThis, "_avtGerarDungeon", { configurable: true, writable: true, value: _avtGerarDungeon });
-Object.defineProperty(globalThis, "_avtGerarPortasInternas", { configurable: true, writable: true, value: _avtGerarPortasInternas });
-Object.defineProperty(globalThis, "_avtBlocoFuncao", { configurable: true, writable: true, value: _avtBlocoFuncao });
-Object.defineProperty(globalThis, "_avtBlocoChavePorCelula", { configurable: true, writable: true, value: _avtBlocoChavePorCelula });
-Object.defineProperty(globalThis, "_avtClasseCelula", { configurable: true, writable: true, value: _avtClasseCelula });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEditorTamanho", { configurable: true, get: () => _avtEditorTamanho, set: (__v) => { _avtEditorTamanho = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEditorInit", { configurable: true, get: () => _avtEditorInit, set: (__v) => { _avtEditorInit = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEditorReset", { configurable: true, get: () => _avtEditorReset, set: (__v) => { _avtEditorReset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEditorLimpar", { configurable: true, get: () => _avtEditorLimpar, set: (__v) => { _avtEditorLimpar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEditorAcaoSet", { configurable: true, get: () => _avtEditorAcaoSet, set: (__v) => { _avtEditorAcaoSet = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEditorRenderCanvas", { configurable: true, get: () => _avtEditorRenderCanvas, set: (__v) => { _avtEditorRenderCanvas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEditorExport", { configurable: true, get: () => _avtEditorExport, set: (__v) => { _avtEditorExport = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetGridParams", { configurable: true, get: () => _avtGetGridParams, set: (__v) => { _avtGetGridParams = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGerarPromptJson", { configurable: true, get: () => _avtGerarPromptJson, set: (__v) => { _avtGerarPromptJson = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtJsonAtualizarPrompt", { configurable: true, get: () => _avtJsonAtualizarPrompt, set: (__v) => { _avtJsonAtualizarPrompt = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCopiarPromptJson", { configurable: true, get: () => _avtCopiarPromptJson, set: (__v) => { _avtCopiarPromptJson = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtJsonParsePreview", { configurable: true, get: () => _avtJsonParsePreview, set: (__v) => { _avtJsonParsePreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtJsonToDungeon", { configurable: true, get: () => _avtJsonToDungeon, set: (__v) => { _avtJsonToDungeon = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGerarComClaude", { configurable: true, get: () => _avtGerarComClaude, set: (__v) => { _avtGerarComClaude = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMontarPromptPersonagens", { configurable: true, get: () => _avtMontarPromptPersonagens, set: (__v) => { _avtMontarPromptPersonagens = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGerarPersonagensComIA", { configurable: true, get: () => _avtGerarPersonagensComIA, set: (__v) => { _avtGerarPersonagensComIA = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCopiarPromptPersonagensExterno", { configurable: true, get: () => _avtCopiarPromptPersonagensExterno, set: (__v) => { _avtCopiarPromptPersonagensExterno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAplicarPersonagensIA", { configurable: true, get: () => _avtAplicarPersonagensIA, set: (__v) => { _avtAplicarPersonagensIA = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAplicarPersonagensExterno", { configurable: true, get: () => _avtAplicarPersonagensExterno, set: (__v) => { _avtAplicarPersonagensExterno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "aventuraCriarSubmit", { configurable: true, get: () => aventuraCriarSubmit, set: (__v) => { aventuraCriarSubmit = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCarregarAtribuicaoJogador", { configurable: true, get: () => _avtCarregarAtribuicaoJogador, set: (__v) => { _avtCarregarAtribuicaoJogador = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreAtribuirJogador", { configurable: true, get: () => _avtMestreAtribuirJogador, set: (__v) => { _avtMestreAtribuirJogador = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberMemberLinked", { configurable: true, get: () => avtReceberMemberLinked, set: (__v) => { avtReceberMemberLinked = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreSelecionarPersonagem", { configurable: true, get: () => _avtMestreSelecionarPersonagem, set: (__v) => { _avtMestreSelecionarPersonagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreAddXp", { configurable: true, get: () => _avtMestreAddXp, set: (__v) => { _avtMestreAddXp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetBauById", { configurable: true, get: () => _avtGetBauById, set: (__v) => { _avtGetBauById = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreAddBau", { configurable: true, get: () => _avtMestreAddBau, set: (__v) => { _avtMestreAddBau = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEntrarModoBauPlacement", { configurable: true, get: () => _avtEntrarModoBauPlacement, set: (__v) => { _avtEntrarModoBauPlacement = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreRemoverBau", { configurable: true, get: () => _avtMestreRemoverBau, set: (__v) => { _avtMestreRemoverBau = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreReabrirBau", { configurable: true, get: () => _avtMestreReabrirBau, set: (__v) => { _avtMestreReabrirBau = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreEditarBau", { configurable: true, get: () => _avtMestreEditarBau, set: (__v) => { _avtMestreEditarBau = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBauAddItem", { configurable: true, get: () => _avtBauAddItem, set: (__v) => { _avtBauAddItem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBauAddItemManual", { configurable: true, get: () => _avtBauAddItemManual, set: (__v) => { _avtBauAddItemManual = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBauRemoverItem", { configurable: true, get: () => _avtBauRemoverItem, set: (__v) => { _avtBauRemoverItem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBauUploadImg", { configurable: true, get: () => _avtBauUploadImg, set: (__v) => { _avtBauUploadImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBauSalvar", { configurable: true, get: () => _avtBauSalvar, set: (__v) => { _avtBauSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreDarItemChar", { configurable: true, get: () => _avtMestreDarItemChar, set: (__v) => { _avtMestreDarItemChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtItensSelChar", { configurable: true, get: () => _avtItensSelChar, set: (__v) => { _avtItensSelChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreAtualizarOuroChar", { configurable: true, get: () => _avtMestreAtualizarOuroChar, set: (__v) => { _avtMestreAtualizarOuroChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreRemoverItemChar", { configurable: true, get: () => _avtMestreRemoverItemChar, set: (__v) => { _avtMestreRemoverItemChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreDesequiparSlotChar", { configurable: true, get: () => _avtMestreDesequiparSlotChar, set: (__v) => { _avtMestreDesequiparSlotChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreCarregarInvChar", { configurable: true, get: () => _avtMestreCarregarInvChar, set: (__v) => { _avtMestreCarregarInvChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBauPreParaMapa", { configurable: true, get: () => _avtBauPreParaMapa, set: (__v) => { _avtBauPreParaMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRemoverBauPre", { configurable: true, get: () => _avtRemoverBauPre, set: (__v) => { _avtRemoverBauPre = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBausPreDungeonParaMapa", { configurable: true, get: () => _avtBausPreDungeonParaMapa, set: (__v) => { _avtBausPreDungeonParaMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGravarDungeonNoSlot", { configurable: true, get: () => _avtGravarDungeonNoSlot, set: (__v) => { _avtGravarDungeonNoSlot = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarDungeon", { configurable: true, get: () => _avtSalvarDungeon, set: (__v) => { _avtSalvarDungeon = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarThemeJson", { configurable: true, get: () => _avtSalvarThemeJson, set: (__v) => { _avtSalvarThemeJson = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDeepClone", { configurable: true, get: () => _avtDeepClone, set: (__v) => { _avtDeepClone = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillScalingAttrs", { configurable: true, get: () => _avtSkillScalingAttrs, set: (__v) => { _avtSkillScalingAttrs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_migrarSkillsIntOnly", { configurable: true, get: () => _migrarSkillsIntOnly, set: (__v) => { _migrarSkillsIntOnly = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAdicionarMembro", { configurable: true, get: () => _avtAdicionarMembro, set: (__v) => { _avtAdicionarMembro = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRemoverMembro", { configurable: true, get: () => _avtRemoverMembro, set: (__v) => { _avtRemoverMembro = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCarregarDados", { configurable: true, get: () => _avtCarregarDados, set: (__v) => { _avtCarregarDados = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtIniciarCanvas", { configurable: true, get: () => _avtIniciarCanvas, set: (__v) => { _avtIniciarCanvas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtIniciarRTNet", { configurable: true, get: () => _avtIniciarRTNet, set: (__v) => { _avtIniciarRTNet = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarAventuraScreen", { configurable: true, get: () => _avtMostrarAventuraScreen, set: (__v) => { _avtMostrarAventuraScreen = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "entrarAventura", { configurable: true, get: () => entrarAventura, set: (__v) => { entrarAventura = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFlushPersistencia", { configurable: true, get: () => _avtFlushPersistencia, set: (__v) => { _avtFlushPersistencia = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCleanupListeners", { configurable: true, get: () => _avtCleanupListeners, set: (__v) => { _avtCleanupListeners = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSetTimeout", { configurable: true, get: () => _avtSetTimeout, set: (__v) => { _avtSetTimeout = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGerarDungeon", { configurable: true, get: () => _avtGerarDungeon, set: (__v) => { _avtGerarDungeon = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGerarPortasInternas", { configurable: true, get: () => _avtGerarPortasInternas, set: (__v) => { _avtGerarPortasInternas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBlocoFuncao", { configurable: true, get: () => _avtBlocoFuncao, set: (__v) => { _avtBlocoFuncao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBlocoChavePorCelula", { configurable: true, get: () => _avtBlocoChavePorCelula, set: (__v) => { _avtBlocoChavePorCelula = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtClasseCelula", { configurable: true, get: () => _avtClasseCelula, set: (__v) => { _avtClasseCelula = __v; } });
 Object.defineProperty(globalThis, "_AVT_VIZ_DIRS", { configurable: true, get: () => _AVT_VIZ_DIRS });
-Object.defineProperty(globalThis, "_avtAssinaturaVizinhanca", { configurable: true, writable: true, value: _avtAssinaturaVizinhanca });
-Object.defineProperty(globalThis, "_avtAprenderPlacements", { configurable: true, writable: true, value: _avtAprenderPlacements });
-Object.defineProperty(globalThis, "_avtDerivarStats", { configurable: true, writable: true, value: _avtDerivarStats });
-Object.defineProperty(globalThis, "_avtMesclarPerfilEstilo", { configurable: true, writable: true, value: _avtMesclarPerfilEstilo });
-Object.defineProperty(globalThis, "_avtAplicarRegrasEstilo", { configurable: true, writable: true, value: _avtAplicarRegrasEstilo });
-Object.defineProperty(globalThis, "_avtGerarDungeonProcedural", { configurable: true, writable: true, value: _avtGerarDungeonProcedural });
-Object.defineProperty(globalThis, "_avtInitNpcTimer", { configurable: true, writable: true, value: _avtInitNpcTimer });
-Object.defineProperty(globalThis, "_avtNivelarNpc", { configurable: true, writable: true, value: _avtNivelarNpc });
-Object.defineProperty(globalThis, "_avtSeedFromStr", { configurable: true, writable: true, value: _avtSeedFromStr });
-Object.defineProperty(globalThis, "_avtGerarParticleConfigFase", { configurable: true, writable: true, value: _avtGerarParticleConfigFase });
-Object.defineProperty(globalThis, "_avtFaseMageSkill", { configurable: true, writable: true, value: _avtFaseMageSkill });
-Object.defineProperty(globalThis, "_avtCelulaValidaMaisProxima", { configurable: true, writable: true, value: _avtCelulaValidaMaisProxima });
-Object.defineProperty(globalThis, "_avtPopularEntidadesInimigos", { configurable: true, writable: true, value: _avtPopularEntidadesInimigos });
-Object.defineProperty(globalThis, "_avtPopularEntidades", { configurable: true, writable: true, value: _avtPopularEntidades });
-Object.defineProperty(globalThis, "_avtDetectarSalas", { configurable: true, writable: true, value: _avtDetectarSalas });
-Object.defineProperty(globalThis, "_avtCanvasInit", { configurable: true, writable: true, value: _avtCanvasInit });
-Object.defineProperty(globalThis, "_avtCanvasResize", { configurable: true, writable: true, value: _avtCanvasResize });
-Object.defineProperty(globalThis, "_avtCameraCenter", { configurable: true, writable: true, value: _avtCameraCenter });
-Object.defineProperty(globalThis, "_avtCameraUpdate", { configurable: true, writable: true, value: _avtCameraUpdate });
-Object.defineProperty(globalThis, "_avtCameraFocarEntidades", { configurable: true, writable: true, value: _avtCameraFocarEntidades });
-Object.defineProperty(globalThis, "_avtCameraUpdateCentralizada", { configurable: true, writable: true, value: _avtCameraUpdateCentralizada });
-Object.defineProperty(globalThis, "_avtRenderLoop", { configurable: true, writable: true, value: _avtRenderLoop });
-Object.defineProperty(globalThis, "_avtGridStyle", { configurable: true, writable: true, value: _avtGridStyle });
-Object.defineProperty(globalThis, "_avtObjImg", { configurable: true, writable: true, value: _avtObjImg });
-Object.defineProperty(globalThis, "_avtRenderFrame", { configurable: true, writable: true, value: _avtRenderFrame });
-Object.defineProperty(globalThis, "_avtRenderMinimap", { configurable: true, writable: true, value: _avtRenderMinimap });
-Object.defineProperty(globalThis, "_avtRenderEffectCountersOverlay", { configurable: true, writable: true, value: _avtRenderEffectCountersOverlay });
-Object.defineProperty(globalThis, "_avtAtualizarPosRollInimigos", { configurable: true, writable: true, value: _avtAtualizarPosRollInimigos });
-Object.defineProperty(globalThis, "_avtMostrarRollInimigo", { configurable: true, writable: true, value: _avtMostrarRollInimigo });
-Object.defineProperty(globalThis, "_avtCarregarTodasAparencias", { configurable: true, writable: true, value: _avtCarregarTodasAparencias });
-Object.defineProperty(globalThis, "_avtCarregarAparencia", { configurable: true, writable: true, value: _avtCarregarAparencia });
-Object.defineProperty(globalThis, "_avtCarregarTopdownIa", { configurable: true, writable: true, value: _avtCarregarTopdownIa });
-Object.defineProperty(globalThis, "_avtSetEntState", { configurable: true, writable: true, value: _avtSetEntState });
-Object.defineProperty(globalThis, "_avtAnimAtualizar", { configurable: true, writable: true, value: _avtAnimAtualizar });
-Object.defineProperty(globalThis, "_avtInterp", { configurable: true, writable: true, value: _avtInterp });
-Object.defineProperty(globalThis, "_avtFrameTransform", { configurable: true, writable: true, value: _avtFrameTransform });
-Object.defineProperty(globalThis, "_avtDesenharTopdownIa", { configurable: true, writable: true, value: _avtDesenharTopdownIa });
-Object.defineProperty(globalThis, "_avtIsoFacing", { configurable: true, writable: true, value: _avtIsoFacing });
-Object.defineProperty(globalThis, "_avtDesenharIsoIa", { configurable: true, writable: true, value: _avtDesenharIsoIa });
-Object.defineProperty(globalThis, "_avtDesenharAparencia", { configurable: true, writable: true, value: _avtDesenharAparencia });
-Object.defineProperty(globalThis, "_avtGetVelocidadeMovimento", { configurable: true, writable: true, value: _avtGetVelocidadeMovimento });
-Object.defineProperty(globalThis, "_avtPathfindSimples", { configurable: true, writable: true, value: _avtPathfindSimples });
-Object.defineProperty(globalThis, "_avtCorMago", { configurable: true, writable: true, value: _avtCorMago });
-Object.defineProperty(globalThis, "_avtAnimacaoPlaceholder", { configurable: true, writable: true, value: _avtAnimacaoPlaceholder });
-Object.defineProperty(globalThis, "_avtEntViva", { configurable: true, writable: true, value: _avtEntViva });
-Object.defineProperty(globalThis, "_avtElPosicaoCanvas", { configurable: true, writable: true, value: _avtElPosicaoCanvas });
-Object.defineProperty(globalThis, "_avtDadoSvg", { configurable: true, writable: true, value: _avtDadoSvg });
-Object.defineProperty(globalThis, "_avtMostrarDadosAcimaDaHeadCompleto", { configurable: true, writable: true, value: _avtMostrarDadosAcimaDaHeadCompleto });
-Object.defineProperty(globalThis, "_avtMostrarDanoAbaixoHp", { configurable: true, writable: true, value: _avtMostrarDanoAbaixoHp });
-Object.defineProperty(globalThis, "_avtMostrarD20AbaixoDaHead", { configurable: true, writable: true, value: _avtMostrarD20AbaixoDaHead });
-Object.defineProperty(globalThis, "_avtMostrarDanoAcimaDaHead", { configurable: true, writable: true, value: _avtMostrarDanoAcimaDaHead });
-Object.defineProperty(globalThis, "_avtMostrarCuraAcimaDaHead", { configurable: true, writable: true, value: _avtMostrarCuraAcimaDaHead });
-Object.defineProperty(globalThis, "_avtMostrarDotDrip", { configurable: true, writable: true, value: _avtMostrarDotDrip });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAssinaturaVizinhanca", { configurable: true, get: () => _avtAssinaturaVizinhanca, set: (__v) => { _avtAssinaturaVizinhanca = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAprenderPlacements", { configurable: true, get: () => _avtAprenderPlacements, set: (__v) => { _avtAprenderPlacements = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDerivarStats", { configurable: true, get: () => _avtDerivarStats, set: (__v) => { _avtDerivarStats = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMesclarPerfilEstilo", { configurable: true, get: () => _avtMesclarPerfilEstilo, set: (__v) => { _avtMesclarPerfilEstilo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAplicarRegrasEstilo", { configurable: true, get: () => _avtAplicarRegrasEstilo, set: (__v) => { _avtAplicarRegrasEstilo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGerarDungeonProcedural", { configurable: true, get: () => _avtGerarDungeonProcedural, set: (__v) => { _avtGerarDungeonProcedural = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInitNpcTimer", { configurable: true, get: () => _avtInitNpcTimer, set: (__v) => { _avtInitNpcTimer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNivelarNpc", { configurable: true, get: () => _avtNivelarNpc, set: (__v) => { _avtNivelarNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSeedFromStr", { configurable: true, get: () => _avtSeedFromStr, set: (__v) => { _avtSeedFromStr = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGerarParticleConfigFase", { configurable: true, get: () => _avtGerarParticleConfigFase, set: (__v) => { _avtGerarParticleConfigFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFaseMageSkill", { configurable: true, get: () => _avtFaseMageSkill, set: (__v) => { _avtFaseMageSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCelulaValidaMaisProxima", { configurable: true, get: () => _avtCelulaValidaMaisProxima, set: (__v) => { _avtCelulaValidaMaisProxima = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPopularEntidadesInimigos", { configurable: true, get: () => _avtPopularEntidadesInimigos, set: (__v) => { _avtPopularEntidadesInimigos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPopularEntidades", { configurable: true, get: () => _avtPopularEntidades, set: (__v) => { _avtPopularEntidades = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDetectarSalas", { configurable: true, get: () => _avtDetectarSalas, set: (__v) => { _avtDetectarSalas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCanvasInit", { configurable: true, get: () => _avtCanvasInit, set: (__v) => { _avtCanvasInit = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCanvasResize", { configurable: true, get: () => _avtCanvasResize, set: (__v) => { _avtCanvasResize = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCameraCenter", { configurable: true, get: () => _avtCameraCenter, set: (__v) => { _avtCameraCenter = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCameraUpdate", { configurable: true, get: () => _avtCameraUpdate, set: (__v) => { _avtCameraUpdate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCameraFocarEntidades", { configurable: true, get: () => _avtCameraFocarEntidades, set: (__v) => { _avtCameraFocarEntidades = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCameraUpdateCentralizada", { configurable: true, get: () => _avtCameraUpdateCentralizada, set: (__v) => { _avtCameraUpdateCentralizada = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRenderLoop", { configurable: true, get: () => _avtRenderLoop, set: (__v) => { _avtRenderLoop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGridStyle", { configurable: true, get: () => _avtGridStyle, set: (__v) => { _avtGridStyle = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtObjImg", { configurable: true, get: () => _avtObjImg, set: (__v) => { _avtObjImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRenderFrame", { configurable: true, get: () => _avtRenderFrame, set: (__v) => { _avtRenderFrame = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRenderMinimap", { configurable: true, get: () => _avtRenderMinimap, set: (__v) => { _avtRenderMinimap = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRenderEffectCountersOverlay", { configurable: true, get: () => _avtRenderEffectCountersOverlay, set: (__v) => { _avtRenderEffectCountersOverlay = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtualizarPosRollInimigos", { configurable: true, get: () => _avtAtualizarPosRollInimigos, set: (__v) => { _avtAtualizarPosRollInimigos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarRollInimigo", { configurable: true, get: () => _avtMostrarRollInimigo, set: (__v) => { _avtMostrarRollInimigo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCarregarTodasAparencias", { configurable: true, get: () => _avtCarregarTodasAparencias, set: (__v) => { _avtCarregarTodasAparencias = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCarregarAparencia", { configurable: true, get: () => _avtCarregarAparencia, set: (__v) => { _avtCarregarAparencia = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCarregarTopdownIa", { configurable: true, get: () => _avtCarregarTopdownIa, set: (__v) => { _avtCarregarTopdownIa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSetEntState", { configurable: true, get: () => _avtSetEntState, set: (__v) => { _avtSetEntState = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAnimAtualizar", { configurable: true, get: () => _avtAnimAtualizar, set: (__v) => { _avtAnimAtualizar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInterp", { configurable: true, get: () => _avtInterp, set: (__v) => { _avtInterp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFrameTransform", { configurable: true, get: () => _avtFrameTransform, set: (__v) => { _avtFrameTransform = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDesenharTopdownIa", { configurable: true, get: () => _avtDesenharTopdownIa, set: (__v) => { _avtDesenharTopdownIa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtIsoFacing", { configurable: true, get: () => _avtIsoFacing, set: (__v) => { _avtIsoFacing = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDesenharIsoIa", { configurable: true, get: () => _avtDesenharIsoIa, set: (__v) => { _avtDesenharIsoIa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDesenharAparencia", { configurable: true, get: () => _avtDesenharAparencia, set: (__v) => { _avtDesenharAparencia = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetVelocidadeMovimento", { configurable: true, get: () => _avtGetVelocidadeMovimento, set: (__v) => { _avtGetVelocidadeMovimento = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPathfindSimples", { configurable: true, get: () => _avtPathfindSimples, set: (__v) => { _avtPathfindSimples = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCorMago", { configurable: true, get: () => _avtCorMago, set: (__v) => { _avtCorMago = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAnimacaoPlaceholder", { configurable: true, get: () => _avtAnimacaoPlaceholder, set: (__v) => { _avtAnimacaoPlaceholder = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEntViva", { configurable: true, get: () => _avtEntViva, set: (__v) => { _avtEntViva = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtElPosicaoCanvas", { configurable: true, get: () => _avtElPosicaoCanvas, set: (__v) => { _avtElPosicaoCanvas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDadoSvg", { configurable: true, get: () => _avtDadoSvg, set: (__v) => { _avtDadoSvg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarDadosAcimaDaHeadCompleto", { configurable: true, get: () => _avtMostrarDadosAcimaDaHeadCompleto, set: (__v) => { _avtMostrarDadosAcimaDaHeadCompleto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarDanoAbaixoHp", { configurable: true, get: () => _avtMostrarDanoAbaixoHp, set: (__v) => { _avtMostrarDanoAbaixoHp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarD20AbaixoDaHead", { configurable: true, get: () => _avtMostrarD20AbaixoDaHead, set: (__v) => { _avtMostrarD20AbaixoDaHead = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarDanoAcimaDaHead", { configurable: true, get: () => _avtMostrarDanoAcimaDaHead, set: (__v) => { _avtMostrarDanoAcimaDaHead = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarCuraAcimaDaHead", { configurable: true, get: () => _avtMostrarCuraAcimaDaHead, set: (__v) => { _avtMostrarCuraAcimaDaHead = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarDotDrip", { configurable: true, get: () => _avtMostrarDotDrip, set: (__v) => { _avtMostrarDotDrip = __v; } });
 Object.defineProperty(globalThis, "AVT_SLOT_MACHINE_MS", { configurable: true, get: () => AVT_SLOT_MACHINE_MS });
-Object.defineProperty(globalThis, "_avtGetOrCreateRollHud", { configurable: true, writable: true, value: _avtGetOrCreateRollHud });
-Object.defineProperty(globalThis, "_avtMostrarRollCenter", { configurable: true, writable: true, value: _avtMostrarRollCenter });
-Object.defineProperty(globalThis, "_avtAtivarModoAlvo", { configurable: true, writable: true, value: _avtAtivarModoAlvo });
-Object.defineProperty(globalThis, "_avtLimparModoAlvo", { configurable: true, writable: true, value: _avtLimparModoAlvo });
-Object.defineProperty(globalThis, "_avtAtivarIndicadorTeleporte", { configurable: true, writable: true, value: _avtAtivarIndicadorTeleporte });
-Object.defineProperty(globalThis, "_avtMostrarBotaoRolar", { configurable: true, writable: true, value: _avtMostrarBotaoRolar });
-Object.defineProperty(globalThis, "_avtEsconderBotaoRolar", { configurable: true, writable: true, value: _avtEsconderBotaoRolar });
-Object.defineProperty(globalThis, "_avtAtualizarPosBotaoRolar", { configurable: true, writable: true, value: _avtAtualizarPosBotaoRolar });
-Object.defineProperty(globalThis, "_avtNpcPatrulharFrame", { configurable: true, writable: true, value: _avtNpcPatrulharFrame });
-Object.defineProperty(globalThis, "_avtRolarDados", { configurable: true, writable: true, value: _avtRolarDados });
-Object.defineProperty(globalThis, "_avtCelulaOcupada", { configurable: true, writable: true, value: _avtCelulaOcupada });
-Object.defineProperty(globalThis, "_avtBFS", { configurable: true, writable: true, value: _avtBFS });
-Object.defineProperty(globalThis, "_avtCanvasClick", { configurable: true, writable: true, value: _avtCanvasClick });
-Object.defineProperty(globalThis, "_avtCanvasDblClick", { configurable: true, writable: true, value: _avtCanvasDblClick });
-Object.defineProperty(globalThis, "_avtCanvasKey", { configurable: true, writable: true, value: _avtCanvasKey });
-Object.defineProperty(globalThis, "_avtPcCiclarAlvo", { configurable: true, writable: true, value: _avtPcCiclarAlvo });
-Object.defineProperty(globalThis, "_avtNumpadDispararSkill", { configurable: true, writable: true, value: _avtNumpadDispararSkill });
-Object.defineProperty(globalThis, "_avtDpadControle", { configurable: true, writable: true, value: _avtDpadControle });
-Object.defineProperty(globalThis, "_avtPresencaTs", { configurable: true, writable: true, value: _avtPresencaTs });
-Object.defineProperty(globalThis, "_avtPersonagemCombateAtivo", { configurable: true, writable: true, value: _avtPersonagemCombateAtivo });
-Object.defineProperty(globalThis, "_avtJogadorEstaOnline", { configurable: true, writable: true, value: _avtJogadorEstaOnline });
-Object.defineProperty(globalThis, "_avtAtualizarVisibilidadeOffline", { configurable: true, writable: true, value: _avtAtualizarVisibilidadeOffline });
-Object.defineProperty(globalThis, "_avtRenderBannerPausa", { configurable: true, writable: true, value: _avtRenderBannerPausa });
-Object.defineProperty(globalThis, "_avtVerificarInatividade", { configurable: true, writable: true, value: _avtVerificarInatividade });
-Object.defineProperty(globalThis, "_avtMeuJogador", { configurable: true, writable: true, value: _avtMeuJogador });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetOrCreateRollHud", { configurable: true, get: () => _avtGetOrCreateRollHud, set: (__v) => { _avtGetOrCreateRollHud = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarRollCenter", { configurable: true, get: () => _avtMostrarRollCenter, set: (__v) => { _avtMostrarRollCenter = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtivarModoAlvo", { configurable: true, get: () => _avtAtivarModoAlvo, set: (__v) => { _avtAtivarModoAlvo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtLimparModoAlvo", { configurable: true, get: () => _avtLimparModoAlvo, set: (__v) => { _avtLimparModoAlvo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtivarIndicadorTeleporte", { configurable: true, get: () => _avtAtivarIndicadorTeleporte, set: (__v) => { _avtAtivarIndicadorTeleporte = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarBotaoRolar", { configurable: true, get: () => _avtMostrarBotaoRolar, set: (__v) => { _avtMostrarBotaoRolar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEsconderBotaoRolar", { configurable: true, get: () => _avtEsconderBotaoRolar, set: (__v) => { _avtEsconderBotaoRolar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtualizarPosBotaoRolar", { configurable: true, get: () => _avtAtualizarPosBotaoRolar, set: (__v) => { _avtAtualizarPosBotaoRolar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcPatrulharFrame", { configurable: true, get: () => _avtNpcPatrulharFrame, set: (__v) => { _avtNpcPatrulharFrame = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRolarDados", { configurable: true, get: () => _avtRolarDados, set: (__v) => { _avtRolarDados = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCelulaOcupada", { configurable: true, get: () => _avtCelulaOcupada, set: (__v) => { _avtCelulaOcupada = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBFS", { configurable: true, get: () => _avtBFS, set: (__v) => { _avtBFS = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCanvasClick", { configurable: true, get: () => _avtCanvasClick, set: (__v) => { _avtCanvasClick = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCanvasDblClick", { configurable: true, get: () => _avtCanvasDblClick, set: (__v) => { _avtCanvasDblClick = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCanvasKey", { configurable: true, get: () => _avtCanvasKey, set: (__v) => { _avtCanvasKey = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPcCiclarAlvo", { configurable: true, get: () => _avtPcCiclarAlvo, set: (__v) => { _avtPcCiclarAlvo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNumpadDispararSkill", { configurable: true, get: () => _avtNumpadDispararSkill, set: (__v) => { _avtNumpadDispararSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDpadControle", { configurable: true, get: () => _avtDpadControle, set: (__v) => { _avtDpadControle = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPresencaTs", { configurable: true, get: () => _avtPresencaTs, set: (__v) => { _avtPresencaTs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPersonagemCombateAtivo", { configurable: true, get: () => _avtPersonagemCombateAtivo, set: (__v) => { _avtPersonagemCombateAtivo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtJogadorEstaOnline", { configurable: true, get: () => _avtJogadorEstaOnline, set: (__v) => { _avtJogadorEstaOnline = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtualizarVisibilidadeOffline", { configurable: true, get: () => _avtAtualizarVisibilidadeOffline, set: (__v) => { _avtAtualizarVisibilidadeOffline = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRenderBannerPausa", { configurable: true, get: () => _avtRenderBannerPausa, set: (__v) => { _avtRenderBannerPausa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVerificarInatividade", { configurable: true, get: () => _avtVerificarInatividade, set: (__v) => { _avtVerificarInatividade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMeuJogador", { configurable: true, get: () => _avtMeuJogador, set: (__v) => { _avtMeuJogador = __v; } });
 Object.defineProperty(globalThis, "AVT_SFX_AVENTURA_MULT", { configurable: true, get: () => AVT_SFX_AVENTURA_MULT });
 Object.defineProperty(globalThis, "AVT_SFX_DIST_MAX", { configurable: true, get: () => AVT_SFX_DIST_MAX });
-Object.defineProperty(globalThis, "_avtSfxOuvinte", { configurable: true, writable: true, value: _avtSfxOuvinte });
-Object.defineProperty(globalThis, "_avtSfxVolDist", { configurable: true, writable: true, value: _avtSfxVolDist });
-Object.defineProperty(globalThis, "_avtMinhaFase", { configurable: true, writable: true, value: _avtMinhaFase });
-Object.defineProperty(globalThis, "_avtEntidadeControlada", { configurable: true, writable: true, value: _avtEntidadeControlada });
-Object.defineProperty(globalThis, "_avtMoverJogador", { configurable: true, writable: true, value: _avtMoverJogador });
-Object.defineProperty(globalThis, "_avtCheckEntradaCombateAtivo", { configurable: true, writable: true, value: _avtCheckEntradaCombateAtivo });
-Object.defineProperty(globalThis, "_avtDefaultAtaqueBasico", { configurable: true, writable: true, value: _avtDefaultAtaqueBasico });
-Object.defineProperty(globalThis, "_avtSkillSinteticaAtaqueBasico", { configurable: true, writable: true, value: _avtSkillSinteticaAtaqueBasico });
-Object.defineProperty(globalThis, "_avtEfeitoVaiParaUsuario", { configurable: true, writable: true, value: _avtEfeitoVaiParaUsuario });
-Object.defineProperty(globalThis, "_avtAtaqueBasicoBuffs", { configurable: true, writable: true, value: _avtAtaqueBasicoBuffs });
-Object.defineProperty(globalThis, "_avtAlcanceBasicoJogador", { configurable: true, writable: true, value: _avtAlcanceBasicoJogador });
-Object.defineProperty(globalThis, "_avtAlcanceAlvoJogador", { configurable: true, writable: true, value: _avtAlcanceAlvoJogador });
-Object.defineProperty(globalThis, "_avtAlcanceBasicoNpc", { configurable: true, writable: true, value: _avtAlcanceBasicoNpc });
-Object.defineProperty(globalThis, "_avtAtaqueBasicoEfetivo", { configurable: true, writable: true, value: _avtAtaqueBasicoEfetivo });
-Object.defineProperty(globalThis, "_avtVerificarAutoAtaqueBasico", { configurable: true, writable: true, value: _avtVerificarAutoAtaqueBasico });
-Object.defineProperty(globalThis, "_avtMaxAlcanceJogador", { configurable: true, writable: true, value: _avtMaxAlcanceJogador });
-Object.defineProperty(globalThis, "_avtCheckPrimeiroAtaque", { configurable: true, writable: true, value: _avtCheckPrimeiroAtaque });
-Object.defineProperty(globalThis, "_avtEnquadrarAlvosCamera", { configurable: true, writable: true, value: _avtEnquadrarAlvosCamera });
-Object.defineProperty(globalThis, "_avtMostrarPrimeiroAtaqueModal", { configurable: true, writable: true, value: _avtMostrarPrimeiroAtaqueModal });
-Object.defineProperty(globalThis, "_avtFecharPrimeiroAtaqueModal", { configurable: true, writable: true, value: _avtFecharPrimeiroAtaqueModal });
-Object.defineProperty(globalThis, "_avtPrimeiroAtaqueSelecionarSkill", { configurable: true, writable: true, value: _avtPrimeiroAtaqueSelecionarSkill });
-Object.defineProperty(globalThis, "_avtMostrarListaAliadosParaSkillOoc", { configurable: true, writable: true, value: _avtMostrarListaAliadosParaSkillOoc });
-Object.defineProperty(globalThis, "_avtAplicarSkillAliadoOoc", { configurable: true, writable: true, value: _avtAplicarSkillAliadoOoc });
-Object.defineProperty(globalThis, "_avtAtivarModoAlvoPrimeiroAtaque", { configurable: true, writable: true, value: _avtAtivarModoAlvoPrimeiroAtaque });
-Object.defineProperty(globalThis, "_avtMostrarBotaoRolarPerseguicaoMobile", { configurable: true, writable: true, value: _avtMostrarBotaoRolarPerseguicaoMobile });
-Object.defineProperty(globalThis, "_avtRolarDadosPrimAtaqueMobile", { configurable: true, writable: true, value: _avtRolarDadosPrimAtaqueMobile });
-Object.defineProperty(globalThis, "_avtVerificarAlvoAindaNoRangeMobile", { configurable: true, writable: true, value: _avtVerificarAlvoAindaNoRangeMobile });
-Object.defineProperty(globalThis, "_avtMostrarListaAlvosPrimeiroAtaque", { configurable: true, writable: true, value: _avtMostrarListaAlvosPrimeiroAtaque });
-Object.defineProperty(globalThis, "_avtSelecionarAlvoPrimeiroAtaque", { configurable: true, writable: true, value: _avtSelecionarAlvoPrimeiroAtaque });
-Object.defineProperty(globalThis, "_avtExecutarPrimeiroAtaqueCore", { configurable: true, writable: true, value: _avtExecutarPrimeiroAtaqueCore });
-Object.defineProperty(globalThis, "_avtExecutarPrimeiroAtaque", { configurable: true, writable: true, value: _avtExecutarPrimeiroAtaque });
-Object.defineProperty(globalThis, "avtReceberPrimeiroAtaque", { configurable: true, writable: true, value: avtReceberPrimeiroAtaque });
-Object.defineProperty(globalThis, "_avtCheckProximidadeInimigos", { configurable: true, writable: true, value: _avtCheckProximidadeInimigos });
-Object.defineProperty(globalThis, "_avtAtualizarPaciencias", { configurable: true, writable: true, value: _avtAtualizarPaciencias });
-Object.defineProperty(globalThis, "_avtRolarPacienciaNpc", { configurable: true, writable: true, value: _avtRolarPacienciaNpc });
-Object.defineProperty(globalThis, "_avtSalvarPacienciaConfig", { configurable: true, writable: true, value: _avtSalvarPacienciaConfig });
-Object.defineProperty(globalThis, "_avtGetVelocidadePerseguicao", { configurable: true, writable: true, value: _avtGetVelocidadePerseguicao });
-Object.defineProperty(globalThis, "_avtGetVelocidadePatrulha", { configurable: true, writable: true, value: _avtGetVelocidadePatrulha });
-Object.defineProperty(globalThis, "_avtGetVelocidadeCorridaMs", { configurable: true, writable: true, value: _avtGetVelocidadeCorridaMs });
-Object.defineProperty(globalThis, "_avtGetDestrezaVelPct", { configurable: true, writable: true, value: _avtGetDestrezaVelPct });
-Object.defineProperty(globalThis, "_avtGetVelocidadePerseguicaoNpc", { configurable: true, writable: true, value: _avtGetVelocidadePerseguicaoNpc });
-Object.defineProperty(globalThis, "_avtGetSecsPerTurno", { configurable: true, writable: true, value: _avtGetSecsPerTurno });
-Object.defineProperty(globalThis, "_avtGetRaioConviteAliado", { configurable: true, writable: true, value: _avtGetRaioConviteAliado });
-Object.defineProperty(globalThis, "_avtGetRangeAceitarCombate", { configurable: true, writable: true, value: _avtGetRangeAceitarCombate });
-Object.defineProperty(globalThis, "_avtGetEfeitoCooldownMs", { configurable: true, writable: true, value: _avtGetEfeitoCooldownMs });
-Object.defineProperty(globalThis, "_avtGetPerseguicaoDesistirAposMs", { configurable: true, writable: true, value: _avtGetPerseguicaoDesistirAposMs });
-Object.defineProperty(globalThis, "_avtGetPerseguicaoDesistirChance", { configurable: true, writable: true, value: _avtGetPerseguicaoDesistirChance });
-Object.defineProperty(globalThis, "_avtGetPerseguicaoDesistirIntervaloMs", { configurable: true, writable: true, value: _avtGetPerseguicaoDesistirIntervaloMs });
-Object.defineProperty(globalThis, "_avtGetAtaqueBasicoCooldown", { configurable: true, writable: true, value: _avtGetAtaqueBasicoCooldown });
-Object.defineProperty(globalThis, "_avtIniciarPerseguicao", { configurable: true, writable: true, value: _avtIniciarPerseguicao });
-Object.defineProperty(globalThis, "_avtCancelarPerseguicao", { configurable: true, writable: true, value: _avtCancelarPerseguicao });
-Object.defineProperty(globalThis, "_avtInimigoReageADominado", { configurable: true, writable: true, value: _avtInimigoReageADominado });
-Object.defineProperty(globalThis, "_avtAtualizarPerseguicoes", { configurable: true, writable: true, value: _avtAtualizarPerseguicoes });
-Object.defineProperty(globalThis, "_avtAtualizarDominados", { configurable: true, writable: true, value: _avtAtualizarDominados });
-Object.defineProperty(globalThis, "_avtIniciarAnimPersistente", { configurable: true, writable: true, value: _avtIniciarAnimPersistente });
-Object.defineProperty(globalThis, "_avtPararAnimPersistente", { configurable: true, writable: true, value: _avtPararAnimPersistente });
-Object.defineProperty(globalThis, "_avtTickEfeitosOOC", { configurable: true, writable: true, value: _avtTickEfeitosOOC });
-Object.defineProperty(globalThis, "_avtPerseguicaoAtaqueNpc", { configurable: true, writable: true, value: _avtPerseguicaoAtaqueNpc });
-Object.defineProperty(globalThis, "_avtMostrarBannerAceitarCombate", { configurable: true, writable: true, value: _avtMostrarBannerAceitarCombate });
-Object.defineProperty(globalThis, "_avtAtualizarBannerAceitarCombate", { configurable: true, writable: true, value: _avtAtualizarBannerAceitarCombate });
-Object.defineProperty(globalThis, "_avtAceitarCombate", { configurable: true, writable: true, value: _avtAceitarCombate });
-Object.defineProperty(globalThis, "_avtConvidarAliadosProximos", { configurable: true, writable: true, value: _avtConvidarAliadosProximos });
-Object.defineProperty(globalThis, "_avtMostrarConviteCombate", { configurable: true, writable: true, value: _avtMostrarConviteCombate });
-Object.defineProperty(globalThis, "_avtAceitarConviteCombate", { configurable: true, writable: true, value: _avtAceitarConviteCombate });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSfxOuvinte", { configurable: true, get: () => _avtSfxOuvinte, set: (__v) => { _avtSfxOuvinte = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSfxVolDist", { configurable: true, get: () => _avtSfxVolDist, set: (__v) => { _avtSfxVolDist = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMinhaFase", { configurable: true, get: () => _avtMinhaFase, set: (__v) => { _avtMinhaFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEntidadeControlada", { configurable: true, get: () => _avtEntidadeControlada, set: (__v) => { _avtEntidadeControlada = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMoverJogador", { configurable: true, get: () => _avtMoverJogador, set: (__v) => { _avtMoverJogador = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCheckEntradaCombateAtivo", { configurable: true, get: () => _avtCheckEntradaCombateAtivo, set: (__v) => { _avtCheckEntradaCombateAtivo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDefaultAtaqueBasico", { configurable: true, get: () => _avtDefaultAtaqueBasico, set: (__v) => { _avtDefaultAtaqueBasico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillSinteticaAtaqueBasico", { configurable: true, get: () => _avtSkillSinteticaAtaqueBasico, set: (__v) => { _avtSkillSinteticaAtaqueBasico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfeitoVaiParaUsuario", { configurable: true, get: () => _avtEfeitoVaiParaUsuario, set: (__v) => { _avtEfeitoVaiParaUsuario = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtaqueBasicoBuffs", { configurable: true, get: () => _avtAtaqueBasicoBuffs, set: (__v) => { _avtAtaqueBasicoBuffs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAlcanceBasicoJogador", { configurable: true, get: () => _avtAlcanceBasicoJogador, set: (__v) => { _avtAlcanceBasicoJogador = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAlcanceAlvoJogador", { configurable: true, get: () => _avtAlcanceAlvoJogador, set: (__v) => { _avtAlcanceAlvoJogador = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAlcanceBasicoNpc", { configurable: true, get: () => _avtAlcanceBasicoNpc, set: (__v) => { _avtAlcanceBasicoNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtaqueBasicoEfetivo", { configurable: true, get: () => _avtAtaqueBasicoEfetivo, set: (__v) => { _avtAtaqueBasicoEfetivo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVerificarAutoAtaqueBasico", { configurable: true, get: () => _avtVerificarAutoAtaqueBasico, set: (__v) => { _avtVerificarAutoAtaqueBasico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMaxAlcanceJogador", { configurable: true, get: () => _avtMaxAlcanceJogador, set: (__v) => { _avtMaxAlcanceJogador = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCheckPrimeiroAtaque", { configurable: true, get: () => _avtCheckPrimeiroAtaque, set: (__v) => { _avtCheckPrimeiroAtaque = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEnquadrarAlvosCamera", { configurable: true, get: () => _avtEnquadrarAlvosCamera, set: (__v) => { _avtEnquadrarAlvosCamera = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarPrimeiroAtaqueModal", { configurable: true, get: () => _avtMostrarPrimeiroAtaqueModal, set: (__v) => { _avtMostrarPrimeiroAtaqueModal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFecharPrimeiroAtaqueModal", { configurable: true, get: () => _avtFecharPrimeiroAtaqueModal, set: (__v) => { _avtFecharPrimeiroAtaqueModal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPrimeiroAtaqueSelecionarSkill", { configurable: true, get: () => _avtPrimeiroAtaqueSelecionarSkill, set: (__v) => { _avtPrimeiroAtaqueSelecionarSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarListaAliadosParaSkillOoc", { configurable: true, get: () => _avtMostrarListaAliadosParaSkillOoc, set: (__v) => { _avtMostrarListaAliadosParaSkillOoc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAplicarSkillAliadoOoc", { configurable: true, get: () => _avtAplicarSkillAliadoOoc, set: (__v) => { _avtAplicarSkillAliadoOoc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtivarModoAlvoPrimeiroAtaque", { configurable: true, get: () => _avtAtivarModoAlvoPrimeiroAtaque, set: (__v) => { _avtAtivarModoAlvoPrimeiroAtaque = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarBotaoRolarPerseguicaoMobile", { configurable: true, get: () => _avtMostrarBotaoRolarPerseguicaoMobile, set: (__v) => { _avtMostrarBotaoRolarPerseguicaoMobile = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRolarDadosPrimAtaqueMobile", { configurable: true, get: () => _avtRolarDadosPrimAtaqueMobile, set: (__v) => { _avtRolarDadosPrimAtaqueMobile = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVerificarAlvoAindaNoRangeMobile", { configurable: true, get: () => _avtVerificarAlvoAindaNoRangeMobile, set: (__v) => { _avtVerificarAlvoAindaNoRangeMobile = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarListaAlvosPrimeiroAtaque", { configurable: true, get: () => _avtMostrarListaAlvosPrimeiroAtaque, set: (__v) => { _avtMostrarListaAlvosPrimeiroAtaque = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSelecionarAlvoPrimeiroAtaque", { configurable: true, get: () => _avtSelecionarAlvoPrimeiroAtaque, set: (__v) => { _avtSelecionarAlvoPrimeiroAtaque = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtExecutarPrimeiroAtaqueCore", { configurable: true, get: () => _avtExecutarPrimeiroAtaqueCore, set: (__v) => { _avtExecutarPrimeiroAtaqueCore = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtExecutarPrimeiroAtaque", { configurable: true, get: () => _avtExecutarPrimeiroAtaque, set: (__v) => { _avtExecutarPrimeiroAtaque = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberPrimeiroAtaque", { configurable: true, get: () => avtReceberPrimeiroAtaque, set: (__v) => { avtReceberPrimeiroAtaque = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCheckProximidadeInimigos", { configurable: true, get: () => _avtCheckProximidadeInimigos, set: (__v) => { _avtCheckProximidadeInimigos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtualizarPaciencias", { configurable: true, get: () => _avtAtualizarPaciencias, set: (__v) => { _avtAtualizarPaciencias = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRolarPacienciaNpc", { configurable: true, get: () => _avtRolarPacienciaNpc, set: (__v) => { _avtRolarPacienciaNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarPacienciaConfig", { configurable: true, get: () => _avtSalvarPacienciaConfig, set: (__v) => { _avtSalvarPacienciaConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetVelocidadePerseguicao", { configurable: true, get: () => _avtGetVelocidadePerseguicao, set: (__v) => { _avtGetVelocidadePerseguicao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetVelocidadePatrulha", { configurable: true, get: () => _avtGetVelocidadePatrulha, set: (__v) => { _avtGetVelocidadePatrulha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetVelocidadeCorridaMs", { configurable: true, get: () => _avtGetVelocidadeCorridaMs, set: (__v) => { _avtGetVelocidadeCorridaMs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetDestrezaVelPct", { configurable: true, get: () => _avtGetDestrezaVelPct, set: (__v) => { _avtGetDestrezaVelPct = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetVelocidadePerseguicaoNpc", { configurable: true, get: () => _avtGetVelocidadePerseguicaoNpc, set: (__v) => { _avtGetVelocidadePerseguicaoNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetSecsPerTurno", { configurable: true, get: () => _avtGetSecsPerTurno, set: (__v) => { _avtGetSecsPerTurno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetRaioConviteAliado", { configurable: true, get: () => _avtGetRaioConviteAliado, set: (__v) => { _avtGetRaioConviteAliado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetRangeAceitarCombate", { configurable: true, get: () => _avtGetRangeAceitarCombate, set: (__v) => { _avtGetRangeAceitarCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetEfeitoCooldownMs", { configurable: true, get: () => _avtGetEfeitoCooldownMs, set: (__v) => { _avtGetEfeitoCooldownMs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetPerseguicaoDesistirAposMs", { configurable: true, get: () => _avtGetPerseguicaoDesistirAposMs, set: (__v) => { _avtGetPerseguicaoDesistirAposMs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetPerseguicaoDesistirChance", { configurable: true, get: () => _avtGetPerseguicaoDesistirChance, set: (__v) => { _avtGetPerseguicaoDesistirChance = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetPerseguicaoDesistirIntervaloMs", { configurable: true, get: () => _avtGetPerseguicaoDesistirIntervaloMs, set: (__v) => { _avtGetPerseguicaoDesistirIntervaloMs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetAtaqueBasicoCooldown", { configurable: true, get: () => _avtGetAtaqueBasicoCooldown, set: (__v) => { _avtGetAtaqueBasicoCooldown = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtIniciarPerseguicao", { configurable: true, get: () => _avtIniciarPerseguicao, set: (__v) => { _avtIniciarPerseguicao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCancelarPerseguicao", { configurable: true, get: () => _avtCancelarPerseguicao, set: (__v) => { _avtCancelarPerseguicao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInimigoReageADominado", { configurable: true, get: () => _avtInimigoReageADominado, set: (__v) => { _avtInimigoReageADominado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtualizarPerseguicoes", { configurable: true, get: () => _avtAtualizarPerseguicoes, set: (__v) => { _avtAtualizarPerseguicoes = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtualizarDominados", { configurable: true, get: () => _avtAtualizarDominados, set: (__v) => { _avtAtualizarDominados = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtIniciarAnimPersistente", { configurable: true, get: () => _avtIniciarAnimPersistente, set: (__v) => { _avtIniciarAnimPersistente = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPararAnimPersistente", { configurable: true, get: () => _avtPararAnimPersistente, set: (__v) => { _avtPararAnimPersistente = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtTickEfeitosOOC", { configurable: true, get: () => _avtTickEfeitosOOC, set: (__v) => { _avtTickEfeitosOOC = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPerseguicaoAtaqueNpc", { configurable: true, get: () => _avtPerseguicaoAtaqueNpc, set: (__v) => { _avtPerseguicaoAtaqueNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarBannerAceitarCombate", { configurable: true, get: () => _avtMostrarBannerAceitarCombate, set: (__v) => { _avtMostrarBannerAceitarCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtualizarBannerAceitarCombate", { configurable: true, get: () => _avtAtualizarBannerAceitarCombate, set: (__v) => { _avtAtualizarBannerAceitarCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAceitarCombate", { configurable: true, get: () => _avtAceitarCombate, set: (__v) => { _avtAceitarCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtConvidarAliadosProximos", { configurable: true, get: () => _avtConvidarAliadosProximos, set: (__v) => { _avtConvidarAliadosProximos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarConviteCombate", { configurable: true, get: () => _avtMostrarConviteCombate, set: (__v) => { _avtMostrarConviteCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAceitarConviteCombate", { configurable: true, get: () => _avtAceitarConviteCombate, set: (__v) => { _avtAceitarConviteCombate = __v; } });
 Object.defineProperty(globalThis, "_avtDpadTimer", { configurable: true, get: () => _avtDpadTimer, set: (__v) => { _avtDpadTimer = __v; } });
-Object.defineProperty(globalThis, "avtDpad", { configurable: true, writable: true, value: avtDpad });
-Object.defineProperty(globalThis, "avtDpadStop", { configurable: true, writable: true, value: avtDpadStop });
-Object.defineProperty(globalThis, "_avtDpadDoMove", { configurable: true, writable: true, value: _avtDpadDoMove });
-Object.defineProperty(globalThis, "_avtToggleDpad", { configurable: true, writable: true, value: _avtToggleDpad });
-Object.defineProperty(globalThis, "avtReceberMovimento", { configurable: true, writable: true, value: avtReceberMovimento });
-Object.defineProperty(globalThis, "avtReceberCombateInicio", { configurable: true, writable: true, value: avtReceberCombateInicio });
-Object.defineProperty(globalThis, "_avtCriarBatalhaDePayload", { configurable: true, writable: true, value: _avtCriarBatalhaDePayload });
-Object.defineProperty(globalThis, "_avtBroadcastBatalha", { configurable: true, writable: true, value: _avtBroadcastBatalha });
-Object.defineProperty(globalThis, "avtReceberBatalhaUpdate", { configurable: true, writable: true, value: avtReceberBatalhaUpdate });
-Object.defineProperty(globalThis, "_avtSetColisao", { configurable: true, writable: true, value: _avtSetColisao });
-Object.defineProperty(globalThis, "avtReceberColisaoConfig", { configurable: true, writable: true, value: avtReceberColisaoConfig });
-Object.defineProperty(globalThis, "avtReceberEntidadeNova", { configurable: true, writable: true, value: avtReceberEntidadeNova });
-Object.defineProperty(globalThis, "_avtBroadcastFimBatalha", { configurable: true, writable: true, value: _avtBroadcastFimBatalha });
-Object.defineProperty(globalThis, "avtReceberFimBatalha", { configurable: true, writable: true, value: avtReceberFimBatalha });
-Object.defineProperty(globalThis, "_avtBroadcastJoinBatalha", { configurable: true, writable: true, value: _avtBroadcastJoinBatalha });
-Object.defineProperty(globalThis, "avtReceberJoinBatalha", { configurable: true, writable: true, value: avtReceberJoinBatalha });
-Object.defineProperty(globalThis, "_avtBroadcastNpcMorreu", { configurable: true, writable: true, value: _avtBroadcastNpcMorreu });
-Object.defineProperty(globalThis, "avtReceberNpcMorreu", { configurable: true, writable: true, value: avtReceberNpcMorreu });
-Object.defineProperty(globalThis, "_avtBroadcastNpcRespawn", { configurable: true, writable: true, value: _avtBroadcastNpcRespawn });
-Object.defineProperty(globalThis, "avtReceberNpcRespawn", { configurable: true, writable: true, value: avtReceberNpcRespawn });
-Object.defineProperty(globalThis, "avtReceberNpcPerseguindo", { configurable: true, writable: true, value: avtReceberNpcPerseguindo });
-Object.defineProperty(globalThis, "avtReceberConviteCombate", { configurable: true, writable: true, value: avtReceberConviteCombate });
-Object.defineProperty(globalThis, "_avtXpParaNivel", { configurable: true, writable: true, value: _avtXpParaNivel });
-Object.defineProperty(globalThis, "_avtBroadcastXpGanho", { configurable: true, writable: true, value: _avtBroadcastXpGanho });
-Object.defineProperty(globalThis, "avtReceberXpGanho", { configurable: true, writable: true, value: avtReceberXpGanho });
-Object.defineProperty(globalThis, "_avtBroadcastLevelUp", { configurable: true, writable: true, value: _avtBroadcastLevelUp });
-Object.defineProperty(globalThis, "avtReceberLevelUp", { configurable: true, writable: true, value: avtReceberLevelUp });
-Object.defineProperty(globalThis, "_avtProcessarMorteJogador", { configurable: true, writable: true, value: _avtProcessarMorteJogador });
-Object.defineProperty(globalThis, "avtReceberJogadorMorreu", { configurable: true, writable: true, value: avtReceberJogadorMorreu });
-Object.defineProperty(globalThis, "avtReceberJogadorRessurgiu", { configurable: true, writable: true, value: avtReceberJogadorRessurgiu });
-Object.defineProperty(globalThis, "avtReceberJogadorVisivel", { configurable: true, writable: true, value: avtReceberJogadorVisivel });
-Object.defineProperty(globalThis, "_avtMostrarXpFloat", { configurable: true, writable: true, value: _avtMostrarXpFloat });
-Object.defineProperty(globalThis, "_avtMostrarXpLoss", { configurable: true, writable: true, value: _avtMostrarXpLoss });
-Object.defineProperty(globalThis, "_avtGetCharScreenPos", { configurable: true, writable: true, value: _avtGetCharScreenPos });
-Object.defineProperty(globalThis, "_avtLevelUpParticleEffect", { configurable: true, writable: true, value: _avtLevelUpParticleEffect });
-Object.defineProperty(globalThis, "_avtAgendarRespawnNpc", { configurable: true, writable: true, value: _avtAgendarRespawnNpc });
-Object.defineProperty(globalThis, "avtRespawnNpc", { configurable: true, writable: true, value: avtRespawnNpc });
-Object.defineProperty(globalThis, "_avtRecarregarNpcs", { configurable: true, writable: true, value: _avtRecarregarNpcs });
-Object.defineProperty(globalThis, "_avtDistribuirXpNpc", { configurable: true, writable: true, value: _avtDistribuirXpNpc });
-Object.defineProperty(globalThis, "_avtAutoLevelUp", { configurable: true, writable: true, value: _avtAutoLevelUp });
-Object.defineProperty(globalThis, "_avtNpcMorreu", { configurable: true, writable: true, value: _avtNpcMorreu });
-Object.defineProperty(globalThis, "_avtNecromanteDominar", { configurable: true, writable: true, value: _avtNecromanteDominar });
-Object.defineProperty(globalThis, "_avtEscolherPorPeso", { configurable: true, writable: true, value: _avtEscolherPorPeso });
-Object.defineProperty(globalThis, "_avtSpawnObjMapa", { configurable: true, writable: true, value: _avtSpawnObjMapa });
-Object.defineProperty(globalThis, "_avtProcessarDropsNpc", { configurable: true, writable: true, value: _avtProcessarDropsNpc });
-Object.defineProperty(globalThis, "_avtGerarDropNpc", { configurable: true, writable: true, value: _avtGerarDropNpc });
-Object.defineProperty(globalThis, "_avtGerarOrbeNpc", { configurable: true, writable: true, value: _avtGerarOrbeNpc });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtDpad", { configurable: true, get: () => avtDpad, set: (__v) => { avtDpad = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtDpadStop", { configurable: true, get: () => avtDpadStop, set: (__v) => { avtDpadStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDpadDoMove", { configurable: true, get: () => _avtDpadDoMove, set: (__v) => { _avtDpadDoMove = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtToggleDpad", { configurable: true, get: () => _avtToggleDpad, set: (__v) => { _avtToggleDpad = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberMovimento", { configurable: true, get: () => avtReceberMovimento, set: (__v) => { avtReceberMovimento = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberCombateInicio", { configurable: true, get: () => avtReceberCombateInicio, set: (__v) => { avtReceberCombateInicio = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarBatalhaDePayload", { configurable: true, get: () => _avtCriarBatalhaDePayload, set: (__v) => { _avtCriarBatalhaDePayload = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBroadcastBatalha", { configurable: true, get: () => _avtBroadcastBatalha, set: (__v) => { _avtBroadcastBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberBatalhaUpdate", { configurable: true, get: () => avtReceberBatalhaUpdate, set: (__v) => { avtReceberBatalhaUpdate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSetColisao", { configurable: true, get: () => _avtSetColisao, set: (__v) => { _avtSetColisao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberColisaoConfig", { configurable: true, get: () => avtReceberColisaoConfig, set: (__v) => { avtReceberColisaoConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberEntidadeNova", { configurable: true, get: () => avtReceberEntidadeNova, set: (__v) => { avtReceberEntidadeNova = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBroadcastFimBatalha", { configurable: true, get: () => _avtBroadcastFimBatalha, set: (__v) => { _avtBroadcastFimBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberFimBatalha", { configurable: true, get: () => avtReceberFimBatalha, set: (__v) => { avtReceberFimBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBroadcastJoinBatalha", { configurable: true, get: () => _avtBroadcastJoinBatalha, set: (__v) => { _avtBroadcastJoinBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberJoinBatalha", { configurable: true, get: () => avtReceberJoinBatalha, set: (__v) => { avtReceberJoinBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBroadcastNpcMorreu", { configurable: true, get: () => _avtBroadcastNpcMorreu, set: (__v) => { _avtBroadcastNpcMorreu = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberNpcMorreu", { configurable: true, get: () => avtReceberNpcMorreu, set: (__v) => { avtReceberNpcMorreu = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBroadcastNpcRespawn", { configurable: true, get: () => _avtBroadcastNpcRespawn, set: (__v) => { _avtBroadcastNpcRespawn = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberNpcRespawn", { configurable: true, get: () => avtReceberNpcRespawn, set: (__v) => { avtReceberNpcRespawn = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberNpcPerseguindo", { configurable: true, get: () => avtReceberNpcPerseguindo, set: (__v) => { avtReceberNpcPerseguindo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberConviteCombate", { configurable: true, get: () => avtReceberConviteCombate, set: (__v) => { avtReceberConviteCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtXpParaNivel", { configurable: true, get: () => _avtXpParaNivel, set: (__v) => { _avtXpParaNivel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBroadcastXpGanho", { configurable: true, get: () => _avtBroadcastXpGanho, set: (__v) => { _avtBroadcastXpGanho = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberXpGanho", { configurable: true, get: () => avtReceberXpGanho, set: (__v) => { avtReceberXpGanho = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBroadcastLevelUp", { configurable: true, get: () => _avtBroadcastLevelUp, set: (__v) => { _avtBroadcastLevelUp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberLevelUp", { configurable: true, get: () => avtReceberLevelUp, set: (__v) => { avtReceberLevelUp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtProcessarMorteJogador", { configurable: true, get: () => _avtProcessarMorteJogador, set: (__v) => { _avtProcessarMorteJogador = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberJogadorMorreu", { configurable: true, get: () => avtReceberJogadorMorreu, set: (__v) => { avtReceberJogadorMorreu = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberJogadorRessurgiu", { configurable: true, get: () => avtReceberJogadorRessurgiu, set: (__v) => { avtReceberJogadorRessurgiu = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberJogadorVisivel", { configurable: true, get: () => avtReceberJogadorVisivel, set: (__v) => { avtReceberJogadorVisivel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarXpFloat", { configurable: true, get: () => _avtMostrarXpFloat, set: (__v) => { _avtMostrarXpFloat = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarXpLoss", { configurable: true, get: () => _avtMostrarXpLoss, set: (__v) => { _avtMostrarXpLoss = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetCharScreenPos", { configurable: true, get: () => _avtGetCharScreenPos, set: (__v) => { _avtGetCharScreenPos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtLevelUpParticleEffect", { configurable: true, get: () => _avtLevelUpParticleEffect, set: (__v) => { _avtLevelUpParticleEffect = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAgendarRespawnNpc", { configurable: true, get: () => _avtAgendarRespawnNpc, set: (__v) => { _avtAgendarRespawnNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtRespawnNpc", { configurable: true, get: () => avtRespawnNpc, set: (__v) => { avtRespawnNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRecarregarNpcs", { configurable: true, get: () => _avtRecarregarNpcs, set: (__v) => { _avtRecarregarNpcs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDistribuirXpNpc", { configurable: true, get: () => _avtDistribuirXpNpc, set: (__v) => { _avtDistribuirXpNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAutoLevelUp", { configurable: true, get: () => _avtAutoLevelUp, set: (__v) => { _avtAutoLevelUp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcMorreu", { configurable: true, get: () => _avtNpcMorreu, set: (__v) => { _avtNpcMorreu = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNecromanteDominar", { configurable: true, get: () => _avtNecromanteDominar, set: (__v) => { _avtNecromanteDominar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEscolherPorPeso", { configurable: true, get: () => _avtEscolherPorPeso, set: (__v) => { _avtEscolherPorPeso = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSpawnObjMapa", { configurable: true, get: () => _avtSpawnObjMapa, set: (__v) => { _avtSpawnObjMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtProcessarDropsNpc", { configurable: true, get: () => _avtProcessarDropsNpc, set: (__v) => { _avtProcessarDropsNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGerarDropNpc", { configurable: true, get: () => _avtGerarDropNpc, set: (__v) => { _avtGerarDropNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGerarOrbeNpc", { configurable: true, get: () => _avtGerarOrbeNpc, set: (__v) => { _avtGerarOrbeNpc = __v; } });
 Object.defineProperty(globalThis, "_avtSavePosTimers", { configurable: true, get: () => _avtSavePosTimers, set: (__v) => { _avtSavePosTimers = __v; } });
-Object.defineProperty(globalThis, "_avtDebounceSalvarPosicao", { configurable: true, writable: true, value: _avtDebounceSalvarPosicao });
-Object.defineProperty(globalThis, "_avtDebounceSalvarPosicaoNpc", { configurable: true, writable: true, value: _avtDebounceSalvarPosicaoNpc });
-Object.defineProperty(globalThis, "_avtMinhaBatalha", { configurable: true, writable: true, value: _avtMinhaBatalha });
-Object.defineProperty(globalThis, "_avtBatalhaDeEnt", { configurable: true, writable: true, value: _avtBatalhaDeEnt });
-Object.defineProperty(globalThis, "_avtCheckAbandonoCombate", { configurable: true, writable: true, value: _avtCheckAbandonoCombate });
-Object.defineProperty(globalThis, "avtCombateIniciar", { configurable: true, writable: true, value: avtCombateIniciar });
-Object.defineProperty(globalThis, "avtCombateEncerrar", { configurable: true, writable: true, value: avtCombateEncerrar });
-Object.defineProperty(globalThis, "avtEncerrarMeuCombate", { configurable: true, writable: true, value: avtEncerrarMeuCombate });
-Object.defineProperty(globalThis, "_avtAtivo", { configurable: true, writable: true, value: _avtAtivo });
-Object.defineProperty(globalThis, "_avtHudMostrar", { configurable: true, writable: true, value: _avtHudMostrar });
-Object.defineProperty(globalThis, "_avtSkillOverlayGetAlvoScreenPos", { configurable: true, writable: true, value: _avtSkillOverlayGetAlvoScreenPos });
-Object.defineProperty(globalThis, "_avtMostrarListaAlvosMobile", { configurable: true, writable: true, value: _avtMostrarListaAlvosMobile });
-Object.defineProperty(globalThis, "_avtMostrarSkillOverlay", { configurable: true, writable: true, value: _avtMostrarSkillOverlay });
-Object.defineProperty(globalThis, "_avtSkillOverlaySel", { configurable: true, writable: true, value: _avtSkillOverlaySel });
-Object.defineProperty(globalThis, "_avtMostrarListaAlvosComSkill", { configurable: true, writable: true, value: _avtMostrarListaAlvosComSkill });
-Object.defineProperty(globalThis, "_avtSelecionarAlvoComSkill", { configurable: true, writable: true, value: _avtSelecionarAlvoComSkill });
-Object.defineProperty(globalThis, "_avtSkillOverlayCancelar", { configurable: true, writable: true, value: _avtSkillOverlayCancelar });
-Object.defineProperty(globalThis, "_avtMostrarDiceOverlay", { configurable: true, writable: true, value: _avtMostrarDiceOverlay });
-Object.defineProperty(globalThis, "_avtMostrarResultadoDice", { configurable: true, writable: true, value: _avtMostrarResultadoDice });
-Object.defineProperty(globalThis, "_avtExecutarAtaque", { configurable: true, writable: true, value: _avtExecutarAtaque });
-Object.defineProperty(globalThis, "avtReceberSkillSelecionada", { configurable: true, writable: true, value: avtReceberSkillSelecionada });
-Object.defineProperty(globalThis, "avtReceberDadoRolado", { configurable: true, writable: true, value: avtReceberDadoRolado });
-Object.defineProperty(globalThis, "avtReceberDanoVisual", { configurable: true, writable: true, value: avtReceberDanoVisual });
-Object.defineProperty(globalThis, "avtReceberDanoVisualBatch", { configurable: true, writable: true, value: avtReceberDanoVisualBatch });
-Object.defineProperty(globalThis, "avtReceberHpUpdate", { configurable: true, writable: true, value: avtReceberHpUpdate });
-Object.defineProperty(globalThis, "avtReceberRsvUpdate", { configurable: true, writable: true, value: avtReceberRsvUpdate });
-Object.defineProperty(globalThis, "_avtHudUpdate", { configurable: true, writable: true, value: _avtHudUpdate });
-Object.defineProperty(globalThis, "avtHudAtacar", { configurable: true, writable: true, value: avtHudAtacar });
-Object.defineProperty(globalThis, "avtHudMover", { configurable: true, writable: true, value: avtHudMover });
-Object.defineProperty(globalThis, "avtHudPassar", { configurable: true, writable: true, value: avtHudPassar });
-Object.defineProperty(globalThis, "_avtTeleportarParaAlvo", { configurable: true, writable: true, value: _avtTeleportarParaAlvo });
-Object.defineProperty(globalThis, "_avtVerificarPortaInterna", { configurable: true, writable: true, value: _avtVerificarPortaInterna });
-Object.defineProperty(globalThis, "_avtNpcTentarPorta", { configurable: true, writable: true, value: _avtNpcTentarPorta });
-Object.defineProperty(globalThis, "_avtCriarAvatar", { configurable: true, writable: true, value: _avtCriarAvatar });
-Object.defineProperty(globalThis, "_avtDestruirAvatar", { configurable: true, writable: true, value: _avtDestruirAvatar });
-Object.defineProperty(globalThis, "_avtProcessarStatusEffects", { configurable: true, writable: true, value: _avtProcessarStatusEffects });
-Object.defineProperty(globalThis, "_avtMostrarListaAliadosParaSkill", { configurable: true, writable: true, value: _avtMostrarListaAliadosParaSkill });
-Object.defineProperty(globalThis, "_avtExecutarSkillEmAliado", { configurable: true, writable: true, value: _avtExecutarSkillEmAliado });
-Object.defineProperty(globalThis, "_avtTurnoAvancar", { configurable: true, writable: true, value: _avtTurnoAvancar });
-Object.defineProperty(globalThis, "_avtGetMovimentoMax", { configurable: true, writable: true, value: _avtGetMovimentoMax });
-Object.defineProperty(globalThis, "_avtNpcEscolherSkill", { configurable: true, writable: true, value: _avtNpcEscolherSkill });
-Object.defineProperty(globalThis, "_avtNpcExecutarAtaque", { configurable: true, writable: true, value: _avtNpcExecutarAtaque });
-Object.defineProperty(globalThis, "_avtNpcPensarDelay", { configurable: true, writable: true, value: _avtNpcPensarDelay });
-Object.defineProperty(globalThis, "_avtJanelaMovimentoPosDado", { configurable: true, writable: true, value: _avtJanelaMovimentoPosDado });
-Object.defineProperty(globalThis, "_avtIaMovimentoPosDado", { configurable: true, writable: true, value: _avtIaMovimentoPosDado });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDebounceSalvarPosicao", { configurable: true, get: () => _avtDebounceSalvarPosicao, set: (__v) => { _avtDebounceSalvarPosicao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDebounceSalvarPosicaoNpc", { configurable: true, get: () => _avtDebounceSalvarPosicaoNpc, set: (__v) => { _avtDebounceSalvarPosicaoNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMinhaBatalha", { configurable: true, get: () => _avtMinhaBatalha, set: (__v) => { _avtMinhaBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBatalhaDeEnt", { configurable: true, get: () => _avtBatalhaDeEnt, set: (__v) => { _avtBatalhaDeEnt = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCheckAbandonoCombate", { configurable: true, get: () => _avtCheckAbandonoCombate, set: (__v) => { _avtCheckAbandonoCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtCombateIniciar", { configurable: true, get: () => avtCombateIniciar, set: (__v) => { avtCombateIniciar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtCombateEncerrar", { configurable: true, get: () => avtCombateEncerrar, set: (__v) => { avtCombateEncerrar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtEncerrarMeuCombate", { configurable: true, get: () => avtEncerrarMeuCombate, set: (__v) => { avtEncerrarMeuCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtivo", { configurable: true, get: () => _avtAtivo, set: (__v) => { _avtAtivo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtHudMostrar", { configurable: true, get: () => _avtHudMostrar, set: (__v) => { _avtHudMostrar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillOverlayGetAlvoScreenPos", { configurable: true, get: () => _avtSkillOverlayGetAlvoScreenPos, set: (__v) => { _avtSkillOverlayGetAlvoScreenPos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarListaAlvosMobile", { configurable: true, get: () => _avtMostrarListaAlvosMobile, set: (__v) => { _avtMostrarListaAlvosMobile = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarSkillOverlay", { configurable: true, get: () => _avtMostrarSkillOverlay, set: (__v) => { _avtMostrarSkillOverlay = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillOverlaySel", { configurable: true, get: () => _avtSkillOverlaySel, set: (__v) => { _avtSkillOverlaySel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarListaAlvosComSkill", { configurable: true, get: () => _avtMostrarListaAlvosComSkill, set: (__v) => { _avtMostrarListaAlvosComSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSelecionarAlvoComSkill", { configurable: true, get: () => _avtSelecionarAlvoComSkill, set: (__v) => { _avtSelecionarAlvoComSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillOverlayCancelar", { configurable: true, get: () => _avtSkillOverlayCancelar, set: (__v) => { _avtSkillOverlayCancelar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarDiceOverlay", { configurable: true, get: () => _avtMostrarDiceOverlay, set: (__v) => { _avtMostrarDiceOverlay = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarResultadoDice", { configurable: true, get: () => _avtMostrarResultadoDice, set: (__v) => { _avtMostrarResultadoDice = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtExecutarAtaque", { configurable: true, get: () => _avtExecutarAtaque, set: (__v) => { _avtExecutarAtaque = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberSkillSelecionada", { configurable: true, get: () => avtReceberSkillSelecionada, set: (__v) => { avtReceberSkillSelecionada = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberDadoRolado", { configurable: true, get: () => avtReceberDadoRolado, set: (__v) => { avtReceberDadoRolado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberDanoVisual", { configurable: true, get: () => avtReceberDanoVisual, set: (__v) => { avtReceberDanoVisual = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberDanoVisualBatch", { configurable: true, get: () => avtReceberDanoVisualBatch, set: (__v) => { avtReceberDanoVisualBatch = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberHpUpdate", { configurable: true, get: () => avtReceberHpUpdate, set: (__v) => { avtReceberHpUpdate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberRsvUpdate", { configurable: true, get: () => avtReceberRsvUpdate, set: (__v) => { avtReceberRsvUpdate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtHudUpdate", { configurable: true, get: () => _avtHudUpdate, set: (__v) => { _avtHudUpdate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtHudAtacar", { configurable: true, get: () => avtHudAtacar, set: (__v) => { avtHudAtacar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtHudMover", { configurable: true, get: () => avtHudMover, set: (__v) => { avtHudMover = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtHudPassar", { configurable: true, get: () => avtHudPassar, set: (__v) => { avtHudPassar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtTeleportarParaAlvo", { configurable: true, get: () => _avtTeleportarParaAlvo, set: (__v) => { _avtTeleportarParaAlvo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVerificarPortaInterna", { configurable: true, get: () => _avtVerificarPortaInterna, set: (__v) => { _avtVerificarPortaInterna = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcTentarPorta", { configurable: true, get: () => _avtNpcTentarPorta, set: (__v) => { _avtNpcTentarPorta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarAvatar", { configurable: true, get: () => _avtCriarAvatar, set: (__v) => { _avtCriarAvatar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDestruirAvatar", { configurable: true, get: () => _avtDestruirAvatar, set: (__v) => { _avtDestruirAvatar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtProcessarStatusEffects", { configurable: true, get: () => _avtProcessarStatusEffects, set: (__v) => { _avtProcessarStatusEffects = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarListaAliadosParaSkill", { configurable: true, get: () => _avtMostrarListaAliadosParaSkill, set: (__v) => { _avtMostrarListaAliadosParaSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtExecutarSkillEmAliado", { configurable: true, get: () => _avtExecutarSkillEmAliado, set: (__v) => { _avtExecutarSkillEmAliado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtTurnoAvancar", { configurable: true, get: () => _avtTurnoAvancar, set: (__v) => { _avtTurnoAvancar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGetMovimentoMax", { configurable: true, get: () => _avtGetMovimentoMax, set: (__v) => { _avtGetMovimentoMax = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcEscolherSkill", { configurable: true, get: () => _avtNpcEscolherSkill, set: (__v) => { _avtNpcEscolherSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcExecutarAtaque", { configurable: true, get: () => _avtNpcExecutarAtaque, set: (__v) => { _avtNpcExecutarAtaque = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcPensarDelay", { configurable: true, get: () => _avtNpcPensarDelay, set: (__v) => { _avtNpcPensarDelay = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtJanelaMovimentoPosDado", { configurable: true, get: () => _avtJanelaMovimentoPosDado, set: (__v) => { _avtJanelaMovimentoPosDado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtIaMovimentoPosDado", { configurable: true, get: () => _avtIaMovimentoPosDado, set: (__v) => { _avtIaMovimentoPosDado = __v; } });
 Object.defineProperty(globalThis, "_avtHpSaveTimers", { configurable: true, get: () => _avtHpSaveTimers, set: (__v) => { _avtHpSaveTimers = __v; } });
-Object.defineProperty(globalThis, "_avtPersistirHpChar", { configurable: true, writable: true, value: _avtPersistirHpChar });
-Object.defineProperty(globalThis, "_avtFlushCharHpBuffer", { configurable: true, writable: true, value: _avtFlushCharHpBuffer });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPersistirHpChar", { configurable: true, get: () => _avtPersistirHpChar, set: (__v) => { _avtPersistirHpChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFlushCharHpBuffer", { configurable: true, get: () => _avtFlushCharHpBuffer, set: (__v) => { _avtFlushCharHpBuffer = __v; } });
 Object.defineProperty(globalThis, "_avtEstadoInimigosTimer", { configurable: true, get: () => _avtEstadoInimigosTimer, set: (__v) => { _avtEstadoInimigosTimer = __v; } });
-Object.defineProperty(globalThis, "_avtPersistirEstadoInimigos", { configurable: true, writable: true, value: _avtPersistirEstadoInimigos });
-Object.defineProperty(globalThis, "_avtAplicarDanoPersistir", { configurable: true, writable: true, value: _avtAplicarDanoPersistir });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPersistirEstadoInimigos", { configurable: true, get: () => _avtPersistirEstadoInimigos, set: (__v) => { _avtPersistirEstadoInimigos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAplicarDanoPersistir", { configurable: true, get: () => _avtAplicarDanoPersistir, set: (__v) => { _avtAplicarDanoPersistir = __v; } });
 Object.defineProperty(globalThis, "_avtBatalhaSaveTimers", { configurable: true, get: () => _avtBatalhaSaveTimers, set: (__v) => { _avtBatalhaSaveTimers = __v; } });
-Object.defineProperty(globalThis, "_avtPersistirBatalha", { configurable: true, writable: true, value: _avtPersistirBatalha });
-Object.defineProperty(globalThis, "_avtRemoverBatalhaDb", { configurable: true, writable: true, value: _avtRemoverBatalhaDb });
-Object.defineProperty(globalThis, "_avtCarregarBatalhasAtivas", { configurable: true, writable: true, value: _avtCarregarBatalhasAtivas });
-Object.defineProperty(globalThis, "_avtAplicarEstadoInimigosPersistido", { configurable: true, writable: true, value: _avtAplicarEstadoInimigosPersistido });
-Object.defineProperty(globalThis, "avtGetFichaImg", { configurable: true, writable: true, value: avtGetFichaImg });
-Object.defineProperty(globalThis, "_avtNpcAtualizarPerseguicao", { configurable: true, writable: true, value: _avtNpcAtualizarPerseguicao });
-Object.defineProperty(globalThis, "_avtNpcMelhorDirecao", { configurable: true, writable: true, value: _avtNpcMelhorDirecao });
-Object.defineProperty(globalThis, "_avtDanoEsperado", { configurable: true, writable: true, value: _avtDanoEsperado });
-Object.defineProperty(globalThis, "_avtNpcTurno", { configurable: true, writable: true, value: _avtNpcTurno });
-Object.defineProperty(globalThis, "_avtCheckVitoria", { configurable: true, writable: true, value: _avtCheckVitoria });
-Object.defineProperty(globalThis, "_avtCheckDerrota", { configurable: true, writable: true, value: _avtCheckDerrota });
-Object.defineProperty(globalThis, "_avtRolarFormula", { configurable: true, writable: true, value: _avtRolarFormula });
-Object.defineProperty(globalThis, "_avtLog", { configurable: true, writable: true, value: _avtLog });
-Object.defineProperty(globalThis, "_avtRenderLog", { configurable: true, writable: true, value: _avtRenderLog });
-Object.defineProperty(globalThis, "_avtRenderHpBar", { configurable: true, writable: true, value: _avtRenderHpBar });
-Object.defineProperty(globalThis, "_avtToggleLog", { configurable: true, writable: true, value: _avtToggleLog });
-Object.defineProperty(globalThis, "_avtDetectarMestre", { configurable: true, writable: true, value: _avtDetectarMestre });
-Object.defineProperty(globalThis, "_avtSouMestre", { configurable: true, writable: true, value: _avtSouMestre });
-Object.defineProperty(globalThis, "_avtHostHeartbeatStart", { configurable: true, writable: true, value: _avtHostHeartbeatStart });
-Object.defineProperty(globalThis, "_avtHostHeartbeatStop", { configurable: true, writable: true, value: _avtHostHeartbeatStop });
-Object.defineProperty(globalThis, "avtReceberHostHeartbeat", { configurable: true, writable: true, value: avtReceberHostHeartbeat });
-Object.defineProperty(globalThis, "_avtSouHostAventura", { configurable: true, writable: true, value: _avtSouHostAventura });
-Object.defineProperty(globalThis, "_avtSouHostBatalha", { configurable: true, writable: true, value: _avtSouHostBatalha });
-Object.defineProperty(globalThis, "_avtAtualizarUiPorRole", { configurable: true, writable: true, value: _avtAtualizarUiPorRole });
-Object.defineProperty(globalThis, "_avtToggleModoJogador", { configurable: true, writable: true, value: _avtToggleModoJogador });
-Object.defineProperty(globalThis, "_avtRecuperarPorMovimento", { configurable: true, writable: true, value: _avtRecuperarPorMovimento });
-Object.defineProperty(globalThis, "_avtPatchRpgData", { configurable: true, writable: true, value: _avtPatchRpgData });
-Object.defineProperty(globalThis, "_avtCalcManaMaxChar", { configurable: true, writable: true, value: _avtCalcManaMaxChar });
-Object.defineProperty(globalThis, "_avtRecursosDoChar", { configurable: true, writable: true, value: _avtRecursosDoChar });
-Object.defineProperty(globalThis, "_avtDescontarCustoSkill", { configurable: true, writable: true, value: _avtDescontarCustoSkill });
-Object.defineProperty(globalThis, "avtUsarConsumivel", { configurable: true, writable: true, value: avtUsarConsumivel });
-Object.defineProperty(globalThis, "avtDescansar", { configurable: true, writable: true, value: avtDescansar });
-Object.defineProperty(globalThis, "avtJogadorPainel", { configurable: true, writable: true, value: avtJogadorPainel });
-Object.defineProperty(globalThis, "avtJogadorPainelRender", { configurable: true, writable: true, value: avtJogadorPainelRender });
-Object.defineProperty(globalThis, "_avtBauNaPosicao", { configurable: true, writable: true, value: _avtBauNaPosicao });
-Object.defineProperty(globalThis, "_avtColetarObjsNaPosicao", { configurable: true, writable: true, value: _avtColetarObjsNaPosicao });
-Object.defineProperty(globalThis, "avtAbrirBau", { configurable: true, writable: true, value: avtAbrirBau });
-Object.defineProperty(globalThis, "avtReceberBauAberto", { configurable: true, writable: true, value: avtReceberBauAberto });
-Object.defineProperty(globalThis, "avtReceberObjSpawn", { configurable: true, writable: true, value: avtReceberObjSpawn });
-Object.defineProperty(globalThis, "avtReceberObjPickup", { configurable: true, writable: true, value: avtReceberObjPickup });
-Object.defineProperty(globalThis, "avtImportarCatalogo", { configurable: true, writable: true, value: avtImportarCatalogo });
-Object.defineProperty(globalThis, "avtImportarCatalogoConfirmar", { configurable: true, writable: true, value: avtImportarCatalogoConfirmar });
-Object.defineProperty(globalThis, "_avtCatItemEditor", { configurable: true, writable: true, value: _avtCatItemEditor });
-Object.defineProperty(globalThis, "_avtCatItemUploadImg", { configurable: true, writable: true, value: _avtCatItemUploadImg });
-Object.defineProperty(globalThis, "_avtCatItemSalvar", { configurable: true, writable: true, value: _avtCatItemSalvar });
-Object.defineProperty(globalThis, "_avtCatItemRemover", { configurable: true, writable: true, value: _avtCatItemRemover });
-Object.defineProperty(globalThis, "avtMestrePainel", { configurable: true, writable: true, value: avtMestrePainel });
-Object.defineProperty(globalThis, "_avtPlaySkillAnim", { configurable: true, writable: true, value: _avtPlaySkillAnim });
-Object.defineProperty(globalThis, "_avtCanvasEfeito", { configurable: true, writable: true, value: _avtCanvasEfeito });
-Object.defineProperty(globalThis, "_avtCanvasFlash", { configurable: true, writable: true, value: _avtCanvasFlash });
-Object.defineProperty(globalThis, "_avtEnsurePixiCore", { configurable: true, writable: true, value: _avtEnsurePixiCore });
-Object.defineProperty(globalThis, "_avtEnsurePixiParticles", { configurable: true, writable: true, value: _avtEnsurePixiParticles });
-Object.defineProperty(globalThis, "_avtEnsurePixiFilter", { configurable: true, writable: true, value: _avtEnsurePixiFilter });
-Object.defineProperty(globalThis, "_avtBuildPixiFilters", { configurable: true, writable: true, value: _avtBuildPixiFilters });
-Object.defineProperty(globalThis, "_avtLoadPixiTextures", { configurable: true, writable: true, value: _avtLoadPixiTextures });
-Object.defineProperty(globalThis, "_avtEnsurePixiSpine", { configurable: true, writable: true, value: _avtEnsurePixiSpine });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPersistirBatalha", { configurable: true, get: () => _avtPersistirBatalha, set: (__v) => { _avtPersistirBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRemoverBatalhaDb", { configurable: true, get: () => _avtRemoverBatalhaDb, set: (__v) => { _avtRemoverBatalhaDb = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCarregarBatalhasAtivas", { configurable: true, get: () => _avtCarregarBatalhasAtivas, set: (__v) => { _avtCarregarBatalhasAtivas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAplicarEstadoInimigosPersistido", { configurable: true, get: () => _avtAplicarEstadoInimigosPersistido, set: (__v) => { _avtAplicarEstadoInimigosPersistido = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtGetFichaImg", { configurable: true, get: () => avtGetFichaImg, set: (__v) => { avtGetFichaImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcAtualizarPerseguicao", { configurable: true, get: () => _avtNpcAtualizarPerseguicao, set: (__v) => { _avtNpcAtualizarPerseguicao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcMelhorDirecao", { configurable: true, get: () => _avtNpcMelhorDirecao, set: (__v) => { _avtNpcMelhorDirecao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDanoEsperado", { configurable: true, get: () => _avtDanoEsperado, set: (__v) => { _avtDanoEsperado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcTurno", { configurable: true, get: () => _avtNpcTurno, set: (__v) => { _avtNpcTurno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCheckVitoria", { configurable: true, get: () => _avtCheckVitoria, set: (__v) => { _avtCheckVitoria = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCheckDerrota", { configurable: true, get: () => _avtCheckDerrota, set: (__v) => { _avtCheckDerrota = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRolarFormula", { configurable: true, get: () => _avtRolarFormula, set: (__v) => { _avtRolarFormula = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtLog", { configurable: true, get: () => _avtLog, set: (__v) => { _avtLog = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRenderLog", { configurable: true, get: () => _avtRenderLog, set: (__v) => { _avtRenderLog = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRenderHpBar", { configurable: true, get: () => _avtRenderHpBar, set: (__v) => { _avtRenderHpBar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtToggleLog", { configurable: true, get: () => _avtToggleLog, set: (__v) => { _avtToggleLog = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDetectarMestre", { configurable: true, get: () => _avtDetectarMestre, set: (__v) => { _avtDetectarMestre = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSouMestre", { configurable: true, get: () => _avtSouMestre, set: (__v) => { _avtSouMestre = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtHostHeartbeatStart", { configurable: true, get: () => _avtHostHeartbeatStart, set: (__v) => { _avtHostHeartbeatStart = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtHostHeartbeatStop", { configurable: true, get: () => _avtHostHeartbeatStop, set: (__v) => { _avtHostHeartbeatStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberHostHeartbeat", { configurable: true, get: () => avtReceberHostHeartbeat, set: (__v) => { avtReceberHostHeartbeat = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSouHostAventura", { configurable: true, get: () => _avtSouHostAventura, set: (__v) => { _avtSouHostAventura = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSouHostBatalha", { configurable: true, get: () => _avtSouHostBatalha, set: (__v) => { _avtSouHostBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAtualizarUiPorRole", { configurable: true, get: () => _avtAtualizarUiPorRole, set: (__v) => { _avtAtualizarUiPorRole = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtToggleModoJogador", { configurable: true, get: () => _avtToggleModoJogador, set: (__v) => { _avtToggleModoJogador = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRecuperarPorMovimento", { configurable: true, get: () => _avtRecuperarPorMovimento, set: (__v) => { _avtRecuperarPorMovimento = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPatchRpgData", { configurable: true, get: () => _avtPatchRpgData, set: (__v) => { _avtPatchRpgData = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCalcManaMaxChar", { configurable: true, get: () => _avtCalcManaMaxChar, set: (__v) => { _avtCalcManaMaxChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRecursosDoChar", { configurable: true, get: () => _avtRecursosDoChar, set: (__v) => { _avtRecursosDoChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDescontarCustoSkill", { configurable: true, get: () => _avtDescontarCustoSkill, set: (__v) => { _avtDescontarCustoSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtUsarConsumivel", { configurable: true, get: () => avtUsarConsumivel, set: (__v) => { avtUsarConsumivel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtDescansar", { configurable: true, get: () => avtDescansar, set: (__v) => { avtDescansar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtJogadorPainel", { configurable: true, get: () => avtJogadorPainel, set: (__v) => { avtJogadorPainel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtJogadorPainelRender", { configurable: true, get: () => avtJogadorPainelRender, set: (__v) => { avtJogadorPainelRender = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBauNaPosicao", { configurable: true, get: () => _avtBauNaPosicao, set: (__v) => { _avtBauNaPosicao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtColetarObjsNaPosicao", { configurable: true, get: () => _avtColetarObjsNaPosicao, set: (__v) => { _avtColetarObjsNaPosicao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtAbrirBau", { configurable: true, get: () => avtAbrirBau, set: (__v) => { avtAbrirBau = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberBauAberto", { configurable: true, get: () => avtReceberBauAberto, set: (__v) => { avtReceberBauAberto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberObjSpawn", { configurable: true, get: () => avtReceberObjSpawn, set: (__v) => { avtReceberObjSpawn = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberObjPickup", { configurable: true, get: () => avtReceberObjPickup, set: (__v) => { avtReceberObjPickup = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtImportarCatalogo", { configurable: true, get: () => avtImportarCatalogo, set: (__v) => { avtImportarCatalogo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtImportarCatalogoConfirmar", { configurable: true, get: () => avtImportarCatalogoConfirmar, set: (__v) => { avtImportarCatalogoConfirmar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCatItemEditor", { configurable: true, get: () => _avtCatItemEditor, set: (__v) => { _avtCatItemEditor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCatItemUploadImg", { configurable: true, get: () => _avtCatItemUploadImg, set: (__v) => { _avtCatItemUploadImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCatItemSalvar", { configurable: true, get: () => _avtCatItemSalvar, set: (__v) => { _avtCatItemSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCatItemRemover", { configurable: true, get: () => _avtCatItemRemover, set: (__v) => { _avtCatItemRemover = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtMestrePainel", { configurable: true, get: () => avtMestrePainel, set: (__v) => { avtMestrePainel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPlaySkillAnim", { configurable: true, get: () => _avtPlaySkillAnim, set: (__v) => { _avtPlaySkillAnim = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCanvasEfeito", { configurable: true, get: () => _avtCanvasEfeito, set: (__v) => { _avtCanvasEfeito = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCanvasFlash", { configurable: true, get: () => _avtCanvasFlash, set: (__v) => { _avtCanvasFlash = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEnsurePixiCore", { configurable: true, get: () => _avtEnsurePixiCore, set: (__v) => { _avtEnsurePixiCore = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEnsurePixiParticles", { configurable: true, get: () => _avtEnsurePixiParticles, set: (__v) => { _avtEnsurePixiParticles = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEnsurePixiFilter", { configurable: true, get: () => _avtEnsurePixiFilter, set: (__v) => { _avtEnsurePixiFilter = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBuildPixiFilters", { configurable: true, get: () => _avtBuildPixiFilters, set: (__v) => { _avtBuildPixiFilters = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtLoadPixiTextures", { configurable: true, get: () => _avtLoadPixiTextures, set: (__v) => { _avtLoadPixiTextures = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEnsurePixiSpine", { configurable: true, get: () => _avtEnsurePixiSpine, set: (__v) => { _avtEnsurePixiSpine = __v; } });
 Object.defineProperty(globalThis, "_AVT_PROC_TEX_CACHE", { configurable: true, get: () => _AVT_PROC_TEX_CACHE, set: (__v) => { _AVT_PROC_TEX_CACHE = __v; } });
-Object.defineProperty(globalThis, "_avtProcTextures", { configurable: true, writable: true, value: _avtProcTextures });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtProcTextures", { configurable: true, get: () => _avtProcTextures, set: (__v) => { _avtProcTextures = __v; } });
 Object.defineProperty(globalThis, "AVT_FX_PRESETS", { configurable: true, get: () => AVT_FX_PRESETS, set: (__v) => { AVT_FX_PRESETS = __v; } });
-Object.defineProperty(globalThis, "_avtIntensityProfile", { configurable: true, writable: true, value: _avtIntensityProfile });
-Object.defineProperty(globalThis, "_avtBuildBody", { configurable: true, writable: true, value: _avtBuildBody });
-Object.defineProperty(globalThis, "_avtUpdateBody", { configurable: true, writable: true, value: _avtUpdateBody });
-Object.defineProperty(globalThis, "_avtFxDeepMerge", { configurable: true, writable: true, value: _avtFxDeepMerge });
-Object.defineProperty(globalThis, "_avtFxNormalize", { configurable: true, writable: true, value: _avtFxNormalize });
-Object.defineProperty(globalThis, "_avtFxResolveTextures", { configurable: true, writable: true, value: _avtFxResolveTextures });
-Object.defineProperty(globalThis, "_avtCameraFX", { configurable: true, writable: true, value: _avtCameraFX });
-Object.defineProperty(globalThis, "_avtHexToInt", { configurable: true, writable: true, value: _avtHexToInt });
-Object.defineProperty(globalThis, "_fxUpdateTrail", { configurable: true, writable: true, value: _fxUpdateTrail });
-Object.defineProperty(globalThis, "_fxTintMatrix", { configurable: true, writable: true, value: _fxTintMatrix });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtIntensityProfile", { configurable: true, get: () => _avtIntensityProfile, set: (__v) => { _avtIntensityProfile = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBuildBody", { configurable: true, get: () => _avtBuildBody, set: (__v) => { _avtBuildBody = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtUpdateBody", { configurable: true, get: () => _avtUpdateBody, set: (__v) => { _avtUpdateBody = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFxDeepMerge", { configurable: true, get: () => _avtFxDeepMerge, set: (__v) => { _avtFxDeepMerge = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFxNormalize", { configurable: true, get: () => _avtFxNormalize, set: (__v) => { _avtFxNormalize = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFxResolveTextures", { configurable: true, get: () => _avtFxResolveTextures, set: (__v) => { _avtFxResolveTextures = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCameraFX", { configurable: true, get: () => _avtCameraFX, set: (__v) => { _avtCameraFX = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtHexToInt", { configurable: true, get: () => _avtHexToInt, set: (__v) => { _avtHexToInt = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_fxUpdateTrail", { configurable: true, get: () => _fxUpdateTrail, set: (__v) => { _fxUpdateTrail = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_fxTintMatrix", { configurable: true, get: () => _fxTintMatrix, set: (__v) => { _fxTintMatrix = __v; } });
 Object.defineProperty(globalThis, "_avtPixiActiveApps", { configurable: true, get: () => _avtPixiActiveApps, set: (__v) => { _avtPixiActiveApps = __v; } });
 Object.defineProperty(globalThis, "_AVT_PIXI_MAX_CONCURRENT", { configurable: true, get: () => _AVT_PIXI_MAX_CONCURRENT });
 Object.defineProperty(globalThis, "_avtPixiQueue", { configurable: true, get: () => _avtPixiQueue });
-Object.defineProperty(globalThis, "_avtPixiRunOrQueue", { configurable: true, writable: true, value: _avtPixiRunOrQueue });
-Object.defineProperty(globalThis, "_avtPixiDrainQueue", { configurable: true, writable: true, value: _avtPixiDrainQueue });
-Object.defineProperty(globalThis, "_avtPixiParticleAnim", { configurable: true, writable: true, value: _avtPixiParticleAnim });
-Object.defineProperty(globalThis, "_avtPlayPhases", { configurable: true, writable: true, value: _avtPlayPhases });
-Object.defineProperty(globalThis, "_avtPlayTravelBody", { configurable: true, writable: true, value: _avtPlayTravelBody });
-Object.defineProperty(globalThis, "_avtFxSpawnSub", { configurable: true, writable: true, value: _avtFxSpawnSub });
-Object.defineProperty(globalThis, "_avtPixiSpineAnim", { configurable: true, writable: true, value: _avtPixiSpineAnim });
-Object.defineProperty(globalThis, "_avtMestrePainelRender", { configurable: true, writable: true, value: _avtMestrePainelRender });
-Object.defineProperty(globalThis, "_avtMpAba", { configurable: true, writable: true, value: _avtMpAba });
-Object.defineProperty(globalThis, "_avtMpConteudoAba", { configurable: true, writable: true, value: _avtMpConteudoAba });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPixiDrainQueue", { configurable: true, get: () => _avtPixiDrainQueue, set: (__v) => { _avtPixiDrainQueue = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPixiParticleAnim", { configurable: true, get: () => _avtPixiParticleAnim, set: (__v) => { _avtPixiParticleAnim = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPlayPhases", { configurable: true, get: () => _avtPlayPhases, set: (__v) => { _avtPlayPhases = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPlayTravelBody", { configurable: true, get: () => _avtPlayTravelBody, set: (__v) => { _avtPlayTravelBody = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFxSpawnSub", { configurable: true, get: () => _avtFxSpawnSub, set: (__v) => { _avtFxSpawnSub = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPixiSpineAnim", { configurable: true, get: () => _avtPixiSpineAnim, set: (__v) => { _avtPixiSpineAnim = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestrePainelRender", { configurable: true, get: () => _avtMestrePainelRender, set: (__v) => { _avtMestrePainelRender = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMpAba", { configurable: true, get: () => _avtMpAba, set: (__v) => { _avtMpAba = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMpConteudoAba", { configurable: true, get: () => _avtMpConteudoAba, set: (__v) => { _avtMpConteudoAba = __v; } });
 Object.defineProperty(globalThis, "_AVT_ED_SZ", { configurable: true, get: () => _AVT_ED_SZ });
-Object.defineProperty(globalThis, "_avtMestreAbrirEditorUnificado", { configurable: true, writable: true, value: _avtMestreAbrirEditorUnificado });
-Object.defineProperty(globalThis, "_avtEdStatus", { configurable: true, writable: true, value: _avtEdStatus });
-Object.defineProperty(globalThis, "_avtEdAtualizarBotoes", { configurable: true, writable: true, value: _avtEdAtualizarBotoes });
-Object.defineProperty(globalThis, "_avtEdSetTool", { configurable: true, writable: true, value: _avtEdSetTool });
-Object.defineProperty(globalThis, "_avtEdDistribuirTileset", { configurable: true, writable: true, value: _avtEdDistribuirTileset });
-Object.defineProperty(globalThis, "_avtEdAplicarTool", { configurable: true, writable: true, value: _avtEdAplicarTool });
-Object.defineProperty(globalThis, "_avtEdApagar", { configurable: true, writable: true, value: _avtEdApagar });
-Object.defineProperty(globalThis, "_avtEdAbrirConfigPorta", { configurable: true, writable: true, value: _avtEdAbrirConfigPorta });
-Object.defineProperty(globalThis, "_avtEdConfirmarPorta", { configurable: true, writable: true, value: _avtEdConfirmarPorta });
-Object.defineProperty(globalThis, "_avtEdCompletarPortaInterna", { configurable: true, writable: true, value: _avtEdCompletarPortaInterna });
-Object.defineProperty(globalThis, "_avtMestreSalvarMapaUnificado", { configurable: true, writable: true, value: _avtMestreSalvarMapaUnificado });
-Object.defineProperty(globalThis, "avtReceberDungeonUpdate", { configurable: true, writable: true, value: avtReceberDungeonUpdate });
-Object.defineProperty(globalThis, "_avtSalvarBossDoorConfig", { configurable: true, writable: true, value: _avtSalvarBossDoorConfig });
-Object.defineProperty(globalThis, "_avtSalvarSkillScalingAttrs", { configurable: true, writable: true, value: _avtSalvarSkillScalingAttrs });
-Object.defineProperty(globalThis, "_avtSalvarPontosAttrPorNivel", { configurable: true, writable: true, value: _avtSalvarPontosAttrPorNivel });
-Object.defineProperty(globalThis, "_avtSalvarJanelaMovimento", { configurable: true, writable: true, value: _avtSalvarJanelaMovimento });
-Object.defineProperty(globalThis, "_avtSalvarHpConfig", { configurable: true, writable: true, value: _avtSalvarHpConfig });
-Object.defineProperty(globalThis, "_avtSalvarVelocidadePerseguicao", { configurable: true, writable: true, value: _avtSalvarVelocidadePerseguicao });
-Object.defineProperty(globalThis, "_avtSalvarVelocidadeCorrida", { configurable: true, writable: true, value: _avtSalvarVelocidadeCorrida });
-Object.defineProperty(globalThis, "_avtSalvarDropsConfig", { configurable: true, writable: true, value: _avtSalvarDropsConfig });
-Object.defineProperty(globalThis, "_avtOrbeConfigEditor", { configurable: true, writable: true, value: _avtOrbeConfigEditor });
-Object.defineProperty(globalThis, "_avtSalvarOrbeTiers", { configurable: true, writable: true, value: _avtSalvarOrbeTiers });
-Object.defineProperty(globalThis, "_avtSalvarDestrezaVelPct", { configurable: true, writable: true, value: _avtSalvarDestrezaVelPct });
-Object.defineProperty(globalThis, "_avtSalvarVelocidadesIA", { configurable: true, writable: true, value: _avtSalvarVelocidadesIA });
-Object.defineProperty(globalThis, "_avtSalvarAtaqueBasicoNpc", { configurable: true, writable: true, value: _avtSalvarAtaqueBasicoNpc });
-Object.defineProperty(globalThis, "_avtMestreSalvarAtaqueBasicoJog", { configurable: true, writable: true, value: _avtMestreSalvarAtaqueBasicoJog });
-Object.defineProperty(globalThis, "_avtSalvarPerseguicaoDesistir", { configurable: true, writable: true, value: _avtSalvarPerseguicaoDesistir });
-Object.defineProperty(globalThis, "avtReceberLevelConfigUpdate", { configurable: true, writable: true, value: avtReceberLevelConfigUpdate });
-Object.defineProperty(globalThis, "avtReceberSkillAnim", { configurable: true, writable: true, value: avtReceberSkillAnim });
-Object.defineProperty(globalThis, "avtReceberEfeitoAnimStart", { configurable: true, writable: true, value: avtReceberEfeitoAnimStart });
-Object.defineProperty(globalThis, "avtReceberEfeitoAnimStop", { configurable: true, writable: true, value: avtReceberEfeitoAnimStop });
-Object.defineProperty(globalThis, "avtReceberAttackAnim", { configurable: true, writable: true, value: avtReceberAttackAnim });
-Object.defineProperty(globalThis, "avtAplicarSnapshotMerge", { configurable: true, writable: true, value: avtAplicarSnapshotMerge });
-Object.defineProperty(globalThis, "_avtSalvarSecsPerTurno", { configurable: true, writable: true, value: _avtSalvarSecsPerTurno });
-Object.defineProperty(globalThis, "_avtSalvarManaSabedoria", { configurable: true, writable: true, value: _avtSalvarManaSabedoria });
-Object.defineProperty(globalThis, "_avtSalvarManaRegenTurno", { configurable: true, writable: true, value: _avtSalvarManaRegenTurno });
-Object.defineProperty(globalThis, "_avtSalvarManaRegenOoc", { configurable: true, writable: true, value: _avtSalvarManaRegenOoc });
-Object.defineProperty(globalThis, "_avtSalvarAtaqueBasicoCooldown", { configurable: true, writable: true, value: _avtSalvarAtaqueBasicoCooldown });
-Object.defineProperty(globalThis, "_avtSalvarAtaqueBasicoForcaMult", { configurable: true, writable: true, value: _avtSalvarAtaqueBasicoForcaMult });
-Object.defineProperty(globalThis, "_avtSalvarRaioAliado", { configurable: true, writable: true, value: _avtSalvarRaioAliado });
-Object.defineProperty(globalThis, "_avtSalvarRangeAceitarCombate", { configurable: true, writable: true, value: _avtSalvarRangeAceitarCombate });
-Object.defineProperty(globalThis, "_avtSalvarDuracaoAnimDados", { configurable: true, writable: true, value: _avtSalvarDuracaoAnimDados });
-Object.defineProperty(globalThis, "_avtSalvarEfeitoCooldownMs", { configurable: true, writable: true, value: _avtSalvarEfeitoCooldownMs });
-Object.defineProperty(globalThis, "_avtSalvarXpPerdaMorte", { configurable: true, writable: true, value: _avtSalvarXpPerdaMorte });
-Object.defineProperty(globalThis, "_avtSalvarXpDecayAtivo", { configurable: true, writable: true, value: _avtSalvarXpDecayAtivo });
-Object.defineProperty(globalThis, "_avtSalvarDowngradeMorte", { configurable: true, writable: true, value: _avtSalvarDowngradeMorte });
-Object.defineProperty(globalThis, "_avtSalvarHpRecuperacaoMorte", { configurable: true, writable: true, value: _avtSalvarHpRecuperacaoMorte });
-Object.defineProperty(globalThis, "_avtSalvarInvisibilidadeMorte", { configurable: true, writable: true, value: _avtSalvarInvisibilidadeMorte });
-Object.defineProperty(globalThis, "_avtSalvarHpRegen", { configurable: true, writable: true, value: _avtSalvarHpRegen });
-Object.defineProperty(globalThis, "_avtSalvarTrilhaSonora", { configurable: true, writable: true, value: _avtSalvarTrilhaSonora });
-Object.defineProperty(globalThis, "_avtPreviewTrilha", { configurable: true, writable: true, value: _avtPreviewTrilha });
-Object.defineProperty(globalThis, "_avtPreviewTrilhaTipo", { configurable: true, writable: true, value: _avtPreviewTrilhaTipo });
-Object.defineProperty(globalThis, "_avtAudioPresetChange", { configurable: true, writable: true, value: _avtAudioPresetChange });
-Object.defineProperty(globalThis, "_avtBulkAttrAplicar", { configurable: true, writable: true, value: _avtBulkAttrAplicar });
-Object.defineProperty(globalThis, "_avtBulkNpcSkillAplicar", { configurable: true, writable: true, value: _avtBulkNpcSkillAplicar });
-Object.defineProperty(globalThis, "_avtSalvarNpcPortaChance", { configurable: true, writable: true, value: _avtSalvarNpcPortaChance });
-Object.defineProperty(globalThis, "_avtMestreExcluirCampanha", { configurable: true, writable: true, value: _avtMestreExcluirCampanha });
-Object.defineProperty(globalThis, "_avtPackageAdicionar", { configurable: true, writable: true, value: _avtPackageAdicionar });
-Object.defineProperty(globalThis, "_avtPackageRemover", { configurable: true, writable: true, value: _avtPackageRemover });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreAbrirEditorUnificado", { configurable: true, get: () => _avtMestreAbrirEditorUnificado, set: (__v) => { _avtMestreAbrirEditorUnificado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEdStatus", { configurable: true, get: () => _avtEdStatus, set: (__v) => { _avtEdStatus = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEdAtualizarBotoes", { configurable: true, get: () => _avtEdAtualizarBotoes, set: (__v) => { _avtEdAtualizarBotoes = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEdSetTool", { configurable: true, get: () => _avtEdSetTool, set: (__v) => { _avtEdSetTool = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEdDistribuirTileset", { configurable: true, get: () => _avtEdDistribuirTileset, set: (__v) => { _avtEdDistribuirTileset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEdAplicarTool", { configurable: true, get: () => _avtEdAplicarTool, set: (__v) => { _avtEdAplicarTool = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEdApagar", { configurable: true, get: () => _avtEdApagar, set: (__v) => { _avtEdApagar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEdAbrirConfigPorta", { configurable: true, get: () => _avtEdAbrirConfigPorta, set: (__v) => { _avtEdAbrirConfigPorta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEdConfirmarPorta", { configurable: true, get: () => _avtEdConfirmarPorta, set: (__v) => { _avtEdConfirmarPorta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEdCompletarPortaInterna", { configurable: true, get: () => _avtEdCompletarPortaInterna, set: (__v) => { _avtEdCompletarPortaInterna = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreSalvarMapaUnificado", { configurable: true, get: () => _avtMestreSalvarMapaUnificado, set: (__v) => { _avtMestreSalvarMapaUnificado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberDungeonUpdate", { configurable: true, get: () => avtReceberDungeonUpdate, set: (__v) => { avtReceberDungeonUpdate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarBossDoorConfig", { configurable: true, get: () => _avtSalvarBossDoorConfig, set: (__v) => { _avtSalvarBossDoorConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarSkillScalingAttrs", { configurable: true, get: () => _avtSalvarSkillScalingAttrs, set: (__v) => { _avtSalvarSkillScalingAttrs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarPontosAttrPorNivel", { configurable: true, get: () => _avtSalvarPontosAttrPorNivel, set: (__v) => { _avtSalvarPontosAttrPorNivel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarJanelaMovimento", { configurable: true, get: () => _avtSalvarJanelaMovimento, set: (__v) => { _avtSalvarJanelaMovimento = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarHpConfig", { configurable: true, get: () => _avtSalvarHpConfig, set: (__v) => { _avtSalvarHpConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarVelocidadePerseguicao", { configurable: true, get: () => _avtSalvarVelocidadePerseguicao, set: (__v) => { _avtSalvarVelocidadePerseguicao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarVelocidadeCorrida", { configurable: true, get: () => _avtSalvarVelocidadeCorrida, set: (__v) => { _avtSalvarVelocidadeCorrida = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarDropsConfig", { configurable: true, get: () => _avtSalvarDropsConfig, set: (__v) => { _avtSalvarDropsConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtOrbeConfigEditor", { configurable: true, get: () => _avtOrbeConfigEditor, set: (__v) => { _avtOrbeConfigEditor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarOrbeTiers", { configurable: true, get: () => _avtSalvarOrbeTiers, set: (__v) => { _avtSalvarOrbeTiers = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarDestrezaVelPct", { configurable: true, get: () => _avtSalvarDestrezaVelPct, set: (__v) => { _avtSalvarDestrezaVelPct = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarVelocidadesIA", { configurable: true, get: () => _avtSalvarVelocidadesIA, set: (__v) => { _avtSalvarVelocidadesIA = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarAtaqueBasicoNpc", { configurable: true, get: () => _avtSalvarAtaqueBasicoNpc, set: (__v) => { _avtSalvarAtaqueBasicoNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreSalvarAtaqueBasicoJog", { configurable: true, get: () => _avtMestreSalvarAtaqueBasicoJog, set: (__v) => { _avtMestreSalvarAtaqueBasicoJog = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarPerseguicaoDesistir", { configurable: true, get: () => _avtSalvarPerseguicaoDesistir, set: (__v) => { _avtSalvarPerseguicaoDesistir = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberLevelConfigUpdate", { configurable: true, get: () => avtReceberLevelConfigUpdate, set: (__v) => { avtReceberLevelConfigUpdate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberSkillAnim", { configurable: true, get: () => avtReceberSkillAnim, set: (__v) => { avtReceberSkillAnim = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberEfeitoAnimStart", { configurable: true, get: () => avtReceberEfeitoAnimStart, set: (__v) => { avtReceberEfeitoAnimStart = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberEfeitoAnimStop", { configurable: true, get: () => avtReceberEfeitoAnimStop, set: (__v) => { avtReceberEfeitoAnimStop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberAttackAnim", { configurable: true, get: () => avtReceberAttackAnim, set: (__v) => { avtReceberAttackAnim = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtAplicarSnapshotMerge", { configurable: true, get: () => avtAplicarSnapshotMerge, set: (__v) => { avtAplicarSnapshotMerge = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarSecsPerTurno", { configurable: true, get: () => _avtSalvarSecsPerTurno, set: (__v) => { _avtSalvarSecsPerTurno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarManaSabedoria", { configurable: true, get: () => _avtSalvarManaSabedoria, set: (__v) => { _avtSalvarManaSabedoria = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarManaRegenTurno", { configurable: true, get: () => _avtSalvarManaRegenTurno, set: (__v) => { _avtSalvarManaRegenTurno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarManaRegenOoc", { configurable: true, get: () => _avtSalvarManaRegenOoc, set: (__v) => { _avtSalvarManaRegenOoc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarAtaqueBasicoCooldown", { configurable: true, get: () => _avtSalvarAtaqueBasicoCooldown, set: (__v) => { _avtSalvarAtaqueBasicoCooldown = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarAtaqueBasicoForcaMult", { configurable: true, get: () => _avtSalvarAtaqueBasicoForcaMult, set: (__v) => { _avtSalvarAtaqueBasicoForcaMult = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarRaioAliado", { configurable: true, get: () => _avtSalvarRaioAliado, set: (__v) => { _avtSalvarRaioAliado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarRangeAceitarCombate", { configurable: true, get: () => _avtSalvarRangeAceitarCombate, set: (__v) => { _avtSalvarRangeAceitarCombate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarDuracaoAnimDados", { configurable: true, get: () => _avtSalvarDuracaoAnimDados, set: (__v) => { _avtSalvarDuracaoAnimDados = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarEfeitoCooldownMs", { configurable: true, get: () => _avtSalvarEfeitoCooldownMs, set: (__v) => { _avtSalvarEfeitoCooldownMs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarXpPerdaMorte", { configurable: true, get: () => _avtSalvarXpPerdaMorte, set: (__v) => { _avtSalvarXpPerdaMorte = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarXpDecayAtivo", { configurable: true, get: () => _avtSalvarXpDecayAtivo, set: (__v) => { _avtSalvarXpDecayAtivo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarDowngradeMorte", { configurable: true, get: () => _avtSalvarDowngradeMorte, set: (__v) => { _avtSalvarDowngradeMorte = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarHpRecuperacaoMorte", { configurable: true, get: () => _avtSalvarHpRecuperacaoMorte, set: (__v) => { _avtSalvarHpRecuperacaoMorte = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarInvisibilidadeMorte", { configurable: true, get: () => _avtSalvarInvisibilidadeMorte, set: (__v) => { _avtSalvarInvisibilidadeMorte = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarHpRegen", { configurable: true, get: () => _avtSalvarHpRegen, set: (__v) => { _avtSalvarHpRegen = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarTrilhaSonora", { configurable: true, get: () => _avtSalvarTrilhaSonora, set: (__v) => { _avtSalvarTrilhaSonora = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPreviewTrilha", { configurable: true, get: () => _avtPreviewTrilha, set: (__v) => { _avtPreviewTrilha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPreviewTrilhaTipo", { configurable: true, get: () => _avtPreviewTrilhaTipo, set: (__v) => { _avtPreviewTrilhaTipo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAudioPresetChange", { configurable: true, get: () => _avtAudioPresetChange, set: (__v) => { _avtAudioPresetChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBulkAttrAplicar", { configurable: true, get: () => _avtBulkAttrAplicar, set: (__v) => { _avtBulkAttrAplicar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBulkNpcSkillAplicar", { configurable: true, get: () => _avtBulkNpcSkillAplicar, set: (__v) => { _avtBulkNpcSkillAplicar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarNpcPortaChance", { configurable: true, get: () => _avtSalvarNpcPortaChance, set: (__v) => { _avtSalvarNpcPortaChance = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreExcluirCampanha", { configurable: true, get: () => _avtMestreExcluirCampanha, set: (__v) => { _avtMestreExcluirCampanha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPackageAdicionar", { configurable: true, get: () => _avtPackageAdicionar, set: (__v) => { _avtPackageAdicionar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPackageRemover", { configurable: true, get: () => _avtPackageRemover, set: (__v) => { _avtPackageRemover = __v; } });
 Object.defineProperty(globalThis, "_avtMpTilesetFile", { configurable: true, get: () => _avtMpTilesetFile, set: (__v) => { _avtMpTilesetFile = __v; } });
-Object.defineProperty(globalThis, "_avtMestreToggleTrocaTileset", { configurable: true, writable: true, value: _avtMestreToggleTrocaTileset });
-Object.defineProperty(globalThis, "_avtMestreCopiarPromptTileset", { configurable: true, writable: true, value: _avtMestreCopiarPromptTileset });
-Object.defineProperty(globalThis, "_avtMestreHandleTilesetUpload", { configurable: true, writable: true, value: _avtMestreHandleTilesetUpload });
-Object.defineProperty(globalThis, "_avtMestreAplicarTilesetUpload", { configurable: true, writable: true, value: _avtMestreAplicarTilesetUpload });
-Object.defineProperty(globalThis, "_avtMestreNovaFase", { configurable: true, writable: true, value: _avtMestreNovaFase });
-Object.defineProperty(globalThis, "_avtMestreNovaFaseRender", { configurable: true, writable: true, value: _avtMestreNovaFaseRender });
-Object.defineProperty(globalThis, "_avtNfCancelar", { configurable: true, writable: true, value: _avtNfCancelar });
-Object.defineProperty(globalThis, "_avtNfLockChange", { configurable: true, writable: true, value: _avtNfLockChange });
-Object.defineProperty(globalThis, "_avtNfSelecionarMapa", { configurable: true, writable: true, value: _avtNfSelecionarMapa });
-Object.defineProperty(globalThis, "_avtNfRenderMapaSub", { configurable: true, writable: true, value: _avtNfRenderMapaSub });
-Object.defineProperty(globalThis, "_avtNfGerarProcedural", { configurable: true, writable: true, value: _avtNfGerarProcedural });
-Object.defineProperty(globalThis, "_avtNfJsonParse", { configurable: true, writable: true, value: _avtNfJsonParse });
-Object.defineProperty(globalThis, "_avtNfGerarComClaude", { configurable: true, writable: true, value: _avtNfGerarComClaude });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreToggleTrocaTileset", { configurable: true, get: () => _avtMestreToggleTrocaTileset, set: (__v) => { _avtMestreToggleTrocaTileset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreCopiarPromptTileset", { configurable: true, get: () => _avtMestreCopiarPromptTileset, set: (__v) => { _avtMestreCopiarPromptTileset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreHandleTilesetUpload", { configurable: true, get: () => _avtMestreHandleTilesetUpload, set: (__v) => { _avtMestreHandleTilesetUpload = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreAplicarTilesetUpload", { configurable: true, get: () => _avtMestreAplicarTilesetUpload, set: (__v) => { _avtMestreAplicarTilesetUpload = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreNovaFase", { configurable: true, get: () => _avtMestreNovaFase, set: (__v) => { _avtMestreNovaFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreNovaFaseRender", { configurable: true, get: () => _avtMestreNovaFaseRender, set: (__v) => { _avtMestreNovaFaseRender = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfCancelar", { configurable: true, get: () => _avtNfCancelar, set: (__v) => { _avtNfCancelar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfLockChange", { configurable: true, get: () => _avtNfLockChange, set: (__v) => { _avtNfLockChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfSelecionarMapa", { configurable: true, get: () => _avtNfSelecionarMapa, set: (__v) => { _avtNfSelecionarMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfRenderMapaSub", { configurable: true, get: () => _avtNfRenderMapaSub, set: (__v) => { _avtNfRenderMapaSub = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfGerarProcedural", { configurable: true, get: () => _avtNfGerarProcedural, set: (__v) => { _avtNfGerarProcedural = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfJsonParse", { configurable: true, get: () => _avtNfJsonParse, set: (__v) => { _avtNfJsonParse = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfGerarComClaude", { configurable: true, get: () => _avtNfGerarComClaude, set: (__v) => { _avtNfGerarComClaude = __v; } });
 Object.defineProperty(globalThis, "_avtNfEd", { configurable: true, get: () => _avtNfEd });
-Object.defineProperty(globalThis, "_avtNfEditorInit", { configurable: true, writable: true, value: _avtNfEditorInit });
-Object.defineProperty(globalThis, "_avtNfEditorDraw", { configurable: true, writable: true, value: _avtNfEditorDraw });
-Object.defineProperty(globalThis, "_avtNfEditorAcao", { configurable: true, writable: true, value: _avtNfEditorAcao });
-Object.defineProperty(globalThis, "_avtNfEditorTamanho", { configurable: true, writable: true, value: _avtNfEditorTamanho });
-Object.defineProperty(globalThis, "_avtNfEditorLimpar", { configurable: true, writable: true, value: _avtNfEditorLimpar });
-Object.defineProperty(globalThis, "_avtNfEditorExport", { configurable: true, writable: true, value: _avtNfEditorExport });
-Object.defineProperty(globalThis, "_avtNfHandleTilesetImg", { configurable: true, writable: true, value: _avtNfHandleTilesetImg });
-Object.defineProperty(globalThis, "_avtNfRemoverTileset", { configurable: true, writable: true, value: _avtNfRemoverTileset });
-Object.defineProperty(globalThis, "_avtNfIniciarPlacement", { configurable: true, writable: true, value: _avtNfIniciarPlacement });
-Object.defineProperty(globalThis, "_avtMestreSalvarNovaFase", { configurable: true, writable: true, value: _avtMestreSalvarNovaFase });
-Object.defineProperty(globalThis, "_avtMestreRemoverFase", { configurable: true, writable: true, value: _avtMestreRemoverFase });
-Object.defineProperty(globalThis, "_avtSalvarFaseBalance", { configurable: true, writable: true, value: _avtSalvarFaseBalance });
-Object.defineProperty(globalThis, "_avtFasesOrdenadas", { configurable: true, writable: true, value: _avtFasesOrdenadas });
-Object.defineProperty(globalThis, "_avtFaseAtualObj", { configurable: true, writable: true, value: _avtFaseAtualObj });
-Object.defineProperty(globalThis, "_avtProximaFase", { configurable: true, writable: true, value: _avtProximaFase });
-Object.defineProperty(globalThis, "_avtGerarProximaFaseAuto", { configurable: true, writable: true, value: _avtGerarProximaFaseAuto });
-Object.defineProperty(globalThis, "_avtOnBossMorto", { configurable: true, writable: true, value: _avtOnBossMorto });
-Object.defineProperty(globalThis, "_avtVerificarPortaFase", { configurable: true, writable: true, value: _avtVerificarPortaFase });
-Object.defineProperty(globalThis, "_avtTilesetConfigPrincipal", { configurable: true, writable: true, value: _avtTilesetConfigPrincipal });
-Object.defineProperty(globalThis, "_avtFasePrincipalObj", { configurable: true, writable: true, value: _avtFasePrincipalObj });
-Object.defineProperty(globalThis, "_avtSnapshotFaseAtual", { configurable: true, writable: true, value: _avtSnapshotFaseAtual });
-Object.defineProperty(globalThis, "_avtAplicarTilesetFase", { configurable: true, writable: true, value: _avtAplicarTilesetFase });
-Object.defineProperty(globalThis, "_avtCarregarFase", { configurable: true, writable: true, value: _avtCarregarFase });
-Object.defineProperty(globalThis, "_avtEntrarFaseExtra", { configurable: true, writable: true, value: _avtEntrarFaseExtra });
-Object.defineProperty(globalThis, "_avtPhaseHostCheck", { configurable: true, writable: true, value: _avtPhaseHostCheck });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfEditorInit", { configurable: true, get: () => _avtNfEditorInit, set: (__v) => { _avtNfEditorInit = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfEditorDraw", { configurable: true, get: () => _avtNfEditorDraw, set: (__v) => { _avtNfEditorDraw = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfEditorAcao", { configurable: true, get: () => _avtNfEditorAcao, set: (__v) => { _avtNfEditorAcao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfEditorTamanho", { configurable: true, get: () => _avtNfEditorTamanho, set: (__v) => { _avtNfEditorTamanho = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfEditorLimpar", { configurable: true, get: () => _avtNfEditorLimpar, set: (__v) => { _avtNfEditorLimpar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfEditorExport", { configurable: true, get: () => _avtNfEditorExport, set: (__v) => { _avtNfEditorExport = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfHandleTilesetImg", { configurable: true, get: () => _avtNfHandleTilesetImg, set: (__v) => { _avtNfHandleTilesetImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfRemoverTileset", { configurable: true, get: () => _avtNfRemoverTileset, set: (__v) => { _avtNfRemoverTileset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNfIniciarPlacement", { configurable: true, get: () => _avtNfIniciarPlacement, set: (__v) => { _avtNfIniciarPlacement = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreSalvarNovaFase", { configurable: true, get: () => _avtMestreSalvarNovaFase, set: (__v) => { _avtMestreSalvarNovaFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreRemoverFase", { configurable: true, get: () => _avtMestreRemoverFase, set: (__v) => { _avtMestreRemoverFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarFaseBalance", { configurable: true, get: () => _avtSalvarFaseBalance, set: (__v) => { _avtSalvarFaseBalance = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFasesOrdenadas", { configurable: true, get: () => _avtFasesOrdenadas, set: (__v) => { _avtFasesOrdenadas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFaseAtualObj", { configurable: true, get: () => _avtFaseAtualObj, set: (__v) => { _avtFaseAtualObj = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtProximaFase", { configurable: true, get: () => _avtProximaFase, set: (__v) => { _avtProximaFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtGerarProximaFaseAuto", { configurable: true, get: () => _avtGerarProximaFaseAuto, set: (__v) => { _avtGerarProximaFaseAuto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtOnBossMorto", { configurable: true, get: () => _avtOnBossMorto, set: (__v) => { _avtOnBossMorto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVerificarPortaFase", { configurable: true, get: () => _avtVerificarPortaFase, set: (__v) => { _avtVerificarPortaFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtTilesetConfigPrincipal", { configurable: true, get: () => _avtTilesetConfigPrincipal, set: (__v) => { _avtTilesetConfigPrincipal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFasePrincipalObj", { configurable: true, get: () => _avtFasePrincipalObj, set: (__v) => { _avtFasePrincipalObj = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSnapshotFaseAtual", { configurable: true, get: () => _avtSnapshotFaseAtual, set: (__v) => { _avtSnapshotFaseAtual = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAplicarTilesetFase", { configurable: true, get: () => _avtAplicarTilesetFase, set: (__v) => { _avtAplicarTilesetFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCarregarFase", { configurable: true, get: () => _avtCarregarFase, set: (__v) => { _avtCarregarFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEntrarFaseExtra", { configurable: true, get: () => _avtEntrarFaseExtra, set: (__v) => { _avtEntrarFaseExtra = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPhaseHostCheck", { configurable: true, get: () => _avtPhaseHostCheck, set: (__v) => { _avtPhaseHostCheck = __v; } });
 Object.defineProperty(globalThis, "FASE_HOST_DEAD", { configurable: true, get: () => FASE_HOST_DEAD });
 Object.defineProperty(globalThis, "FASE_HOST_REASSERT", { configurable: true, get: () => FASE_HOST_REASSERT });
-Object.defineProperty(globalThis, "_avtMeuUid", { configurable: true, writable: true, value: _avtMeuUid });
-Object.defineProperty(globalThis, "_avtFaseHostFresco", { configurable: true, writable: true, value: _avtFaseHostFresco });
-Object.defineProperty(globalThis, "_avtSouHostDaFaseAtual", { configurable: true, writable: true, value: _avtSouHostDaFaseAtual });
-Object.defineProperty(globalThis, "_avtRegistrarHostFase", { configurable: true, writable: true, value: _avtRegistrarHostFase });
-Object.defineProperty(globalThis, "_avtClaimHostFase", { configurable: true, writable: true, value: _avtClaimHostFase });
-Object.defineProperty(globalThis, "_avtReafirmarHostFase", { configurable: true, writable: true, value: _avtReafirmarHostFase });
-Object.defineProperty(globalThis, "avtReceberFaseHost", { configurable: true, writable: true, value: avtReceberFaseHost });
-Object.defineProperty(globalThis, "_avtIniciarFaseHostLoop", { configurable: true, writable: true, value: _avtIniciarFaseHostLoop });
-Object.defineProperty(globalThis, "_avtResolverHostDaFase", { configurable: true, writable: true, value: _avtResolverHostDaFase });
-Object.defineProperty(globalThis, "_avtPromptHostFase", { configurable: true, writable: true, value: _avtPromptHostFase });
-Object.defineProperty(globalThis, "_avtSalaEsperaFase", { configurable: true, writable: true, value: _avtSalaEsperaFase });
-Object.defineProperty(globalThis, "_avtVerificarSaida", { configurable: true, writable: true, value: _avtVerificarSaida });
-Object.defineProperty(globalThis, "_avtPromptFase", { configurable: true, writable: true, value: _avtPromptFase });
-Object.defineProperty(globalThis, "_avtVoltarFaseAnterior", { configurable: true, writable: true, value: _avtVoltarFaseAnterior });
-Object.defineProperty(globalThis, "_avtMestreGerarPersonagensExterno", { configurable: true, writable: true, value: _avtMestreGerarPersonagensExterno });
-Object.defineProperty(globalThis, "_avtMestreAplicarPersonagensExterno", { configurable: true, writable: true, value: _avtMestreAplicarPersonagensExterno });
-Object.defineProperty(globalThis, "_avtMestreAssumir", { configurable: true, writable: true, value: _avtMestreAssumir });
-Object.defineProperty(globalThis, "_avtMestreIniciarRepos", { configurable: true, writable: true, value: _avtMestreIniciarRepos });
-Object.defineProperty(globalThis, "_avtPassarTurnoBatalha", { configurable: true, writable: true, value: _avtPassarTurnoBatalha });
-Object.defineProperty(globalThis, "_avtMestreAddInimigo", { configurable: true, writable: true, value: _avtMestreAddInimigo });
-Object.defineProperty(globalThis, "_avtNpcPresetSel", { configurable: true, writable: true, value: _avtNpcPresetSel });
-Object.defineProperty(globalThis, "_avtNpcConfirmarAdd", { configurable: true, writable: true, value: _avtNpcConfirmarAdd });
-Object.defineProperty(globalThis, "_avtNpcSetPaciencia", { configurable: true, writable: true, value: _avtNpcSetPaciencia });
-Object.defineProperty(globalThis, "_avtNpcSetRaio", { configurable: true, writable: true, value: _avtNpcSetRaio });
-Object.defineProperty(globalThis, "_avtNpcSetBoss", { configurable: true, writable: true, value: _avtNpcSetBoss });
-Object.defineProperty(globalThis, "_avtNpcSetCor", { configurable: true, writable: true, value: _avtNpcSetCor });
-Object.defineProperty(globalThis, "_avtMestreToggleVisao", { configurable: true, writable: true, value: _avtMestreToggleVisao });
-Object.defineProperty(globalThis, "avtHudAtacarNpc", { configurable: true, writable: true, value: avtHudAtacarNpc });
-Object.defineProperty(globalThis, "abrirAvtCharEditor", { configurable: true, writable: true, value: abrirAvtCharEditor });
-Object.defineProperty(globalThis, "fecharAvtCharEditor", { configurable: true, writable: true, value: fecharAvtCharEditor });
-Object.defineProperty(globalThis, "_avtDefaultAttrs", { configurable: true, writable: true, value: _avtDefaultAttrs });
-Object.defineProperty(globalThis, "_avtCharEditorRender", { configurable: true, writable: true, value: _avtCharEditorRender });
-Object.defineProperty(globalThis, "_avtCe2HpDelta", { configurable: true, writable: true, value: _avtCe2HpDelta });
-Object.defineProperty(globalThis, "_avtCe2SalvarCorCritico", { configurable: true, writable: true, value: _avtCe2SalvarCorCritico });
-Object.defineProperty(globalThis, "_avtCe2PodeEditarImg", { configurable: true, writable: true, value: _avtCe2PodeEditarImg });
-Object.defineProperty(globalThis, "_avtCe2TrocarImagemTipo", { configurable: true, writable: true, value: _avtCe2TrocarImagemTipo });
-Object.defineProperty(globalThis, "_avtCe2TrocarImagem", { configurable: true, writable: true, value: _avtCe2TrocarImagem });
-Object.defineProperty(globalThis, "_avtCe2SalvarImgUrlTipo", { configurable: true, writable: true, value: _avtCe2SalvarImgUrlTipo });
-Object.defineProperty(globalThis, "_avtCe2SalvarImgUrl", { configurable: true, writable: true, value: _avtCe2SalvarImgUrl });
-Object.defineProperty(globalThis, "_avtCe2UploadImg", { configurable: true, writable: true, value: _avtCe2UploadImg });
-Object.defineProperty(globalThis, "_avtCharEditorRenderRight", { configurable: true, writable: true, value: _avtCharEditorRenderRight });
-Object.defineProperty(globalThis, "_avtCharEditorTab", { configurable: true, writable: true, value: _avtCharEditorTab });
-Object.defineProperty(globalThis, "_avtCe2EditStatCard", { configurable: true, writable: true, value: _avtCe2EditStatCard });
-Object.defineProperty(globalThis, "_avtCharEditorRenderAttrs", { configurable: true, writable: true, value: _avtCharEditorRenderAttrs });
-Object.defineProperty(globalThis, "_avtAttrDelta", { configurable: true, writable: true, value: _avtAttrDelta });
-Object.defineProperty(globalThis, "_avtAttrDeltaRpg", { configurable: true, writable: true, value: _avtAttrDeltaRpg });
-Object.defineProperty(globalThis, "_avtAttrHpBaseOverride", { configurable: true, writable: true, value: _avtAttrHpBaseOverride });
-Object.defineProperty(globalThis, "_avtAttrHpMax", { configurable: true, writable: true, value: _avtAttrHpMax });
-Object.defineProperty(globalThis, "_avtCharSalvarAttrs", { configurable: true, writable: true, value: _avtCharSalvarAttrs });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMeuUid", { configurable: true, get: () => _avtMeuUid, set: (__v) => { _avtMeuUid = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFaseHostFresco", { configurable: true, get: () => _avtFaseHostFresco, set: (__v) => { _avtFaseHostFresco = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSouHostDaFaseAtual", { configurable: true, get: () => _avtSouHostDaFaseAtual, set: (__v) => { _avtSouHostDaFaseAtual = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRegistrarHostFase", { configurable: true, get: () => _avtRegistrarHostFase, set: (__v) => { _avtRegistrarHostFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtClaimHostFase", { configurable: true, get: () => _avtClaimHostFase, set: (__v) => { _avtClaimHostFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtReafirmarHostFase", { configurable: true, get: () => _avtReafirmarHostFase, set: (__v) => { _avtReafirmarHostFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberFaseHost", { configurable: true, get: () => avtReceberFaseHost, set: (__v) => { avtReceberFaseHost = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtIniciarFaseHostLoop", { configurable: true, get: () => _avtIniciarFaseHostLoop, set: (__v) => { _avtIniciarFaseHostLoop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtResolverHostDaFase", { configurable: true, get: () => _avtResolverHostDaFase, set: (__v) => { _avtResolverHostDaFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPromptHostFase", { configurable: true, get: () => _avtPromptHostFase, set: (__v) => { _avtPromptHostFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalaEsperaFase", { configurable: true, get: () => _avtSalaEsperaFase, set: (__v) => { _avtSalaEsperaFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVerificarSaida", { configurable: true, get: () => _avtVerificarSaida, set: (__v) => { _avtVerificarSaida = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPromptFase", { configurable: true, get: () => _avtPromptFase, set: (__v) => { _avtPromptFase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtVoltarFaseAnterior", { configurable: true, get: () => _avtVoltarFaseAnterior, set: (__v) => { _avtVoltarFaseAnterior = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreGerarPersonagensExterno", { configurable: true, get: () => _avtMestreGerarPersonagensExterno, set: (__v) => { _avtMestreGerarPersonagensExterno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreAplicarPersonagensExterno", { configurable: true, get: () => _avtMestreAplicarPersonagensExterno, set: (__v) => { _avtMestreAplicarPersonagensExterno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreAssumir", { configurable: true, get: () => _avtMestreAssumir, set: (__v) => { _avtMestreAssumir = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreIniciarRepos", { configurable: true, get: () => _avtMestreIniciarRepos, set: (__v) => { _avtMestreIniciarRepos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPassarTurnoBatalha", { configurable: true, get: () => _avtPassarTurnoBatalha, set: (__v) => { _avtPassarTurnoBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreAddInimigo", { configurable: true, get: () => _avtMestreAddInimigo, set: (__v) => { _avtMestreAddInimigo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcPresetSel", { configurable: true, get: () => _avtNpcPresetSel, set: (__v) => { _avtNpcPresetSel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcConfirmarAdd", { configurable: true, get: () => _avtNpcConfirmarAdd, set: (__v) => { _avtNpcConfirmarAdd = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcSetPaciencia", { configurable: true, get: () => _avtNpcSetPaciencia, set: (__v) => { _avtNpcSetPaciencia = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcSetRaio", { configurable: true, get: () => _avtNpcSetRaio, set: (__v) => { _avtNpcSetRaio = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcSetBoss", { configurable: true, get: () => _avtNpcSetBoss, set: (__v) => { _avtNpcSetBoss = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcSetCor", { configurable: true, get: () => _avtNpcSetCor, set: (__v) => { _avtNpcSetCor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMestreToggleVisao", { configurable: true, get: () => _avtMestreToggleVisao, set: (__v) => { _avtMestreToggleVisao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtHudAtacarNpc", { configurable: true, get: () => avtHudAtacarNpc, set: (__v) => { avtHudAtacarNpc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirAvtCharEditor", { configurable: true, get: () => abrirAvtCharEditor, set: (__v) => { abrirAvtCharEditor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharAvtCharEditor", { configurable: true, get: () => fecharAvtCharEditor, set: (__v) => { fecharAvtCharEditor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDefaultAttrs", { configurable: true, get: () => _avtDefaultAttrs, set: (__v) => { _avtDefaultAttrs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCharEditorRender", { configurable: true, get: () => _avtCharEditorRender, set: (__v) => { _avtCharEditorRender = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCe2HpDelta", { configurable: true, get: () => _avtCe2HpDelta, set: (__v) => { _avtCe2HpDelta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCe2SalvarCorCritico", { configurable: true, get: () => _avtCe2SalvarCorCritico, set: (__v) => { _avtCe2SalvarCorCritico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCe2PodeEditarImg", { configurable: true, get: () => _avtCe2PodeEditarImg, set: (__v) => { _avtCe2PodeEditarImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCe2TrocarImagemTipo", { configurable: true, get: () => _avtCe2TrocarImagemTipo, set: (__v) => { _avtCe2TrocarImagemTipo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCe2TrocarImagem", { configurable: true, get: () => _avtCe2TrocarImagem, set: (__v) => { _avtCe2TrocarImagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCe2SalvarImgUrlTipo", { configurable: true, get: () => _avtCe2SalvarImgUrlTipo, set: (__v) => { _avtCe2SalvarImgUrlTipo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCe2SalvarImgUrl", { configurable: true, get: () => _avtCe2SalvarImgUrl, set: (__v) => { _avtCe2SalvarImgUrl = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCe2UploadImg", { configurable: true, get: () => _avtCe2UploadImg, set: (__v) => { _avtCe2UploadImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCharEditorRenderRight", { configurable: true, get: () => _avtCharEditorRenderRight, set: (__v) => { _avtCharEditorRenderRight = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCharEditorTab", { configurable: true, get: () => _avtCharEditorTab, set: (__v) => { _avtCharEditorTab = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCe2EditStatCard", { configurable: true, get: () => _avtCe2EditStatCard, set: (__v) => { _avtCe2EditStatCard = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCharEditorRenderAttrs", { configurable: true, get: () => _avtCharEditorRenderAttrs, set: (__v) => { _avtCharEditorRenderAttrs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAttrDelta", { configurable: true, get: () => _avtAttrDelta, set: (__v) => { _avtAttrDelta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAttrDeltaRpg", { configurable: true, get: () => _avtAttrDeltaRpg, set: (__v) => { _avtAttrDeltaRpg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAttrHpBaseOverride", { configurable: true, get: () => _avtAttrHpBaseOverride, set: (__v) => { _avtAttrHpBaseOverride = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAttrHpMax", { configurable: true, get: () => _avtAttrHpMax, set: (__v) => { _avtAttrHpMax = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCharSalvarAttrs", { configurable: true, get: () => _avtCharSalvarAttrs, set: (__v) => { _avtCharSalvarAttrs = __v; } });
 Object.defineProperty(globalThis, "AVT_EQUIP_SLOTS", { configurable: true, get: () => AVT_EQUIP_SLOTS });
-Object.defineProperty(globalThis, "_avtCharEditorRenderEquip", { configurable: true, writable: true, value: _avtCharEditorRenderEquip });
-Object.defineProperty(globalThis, "_avtEquiparItem", { configurable: true, writable: true, value: _avtEquiparItem });
-Object.defineProperty(globalThis, "_avtDesequiparItem", { configurable: true, writable: true, value: _avtDesequiparItem });
-Object.defineProperty(globalThis, "_avtCharEditorRenderSkills", { configurable: true, writable: true, value: _avtCharEditorRenderSkills });
-Object.defineProperty(globalThis, "_avtCharEditorRenderInvocacoes", { configurable: true, writable: true, value: _avtCharEditorRenderInvocacoes });
-Object.defineProperty(globalThis, "_avtDispensarInvocacao", { configurable: true, writable: true, value: _avtDispensarInvocacao });
-Object.defineProperty(globalThis, "_avtSkillToggleChar", { configurable: true, writable: true, value: _avtSkillToggleChar });
-Object.defineProperty(globalThis, "_avtSetSkillNumero", { configurable: true, writable: true, value: _avtSetSkillNumero });
-Object.defineProperty(globalThis, "_avtSetArcSkill", { configurable: true, writable: true, value: _avtSetArcSkill });
-Object.defineProperty(globalThis, "_avtCharEditorRenderSkillEdit", { configurable: true, writable: true, value: _avtCharEditorRenderSkillEdit });
-Object.defineProperty(globalThis, "_avtSkillCardHtml", { configurable: true, writable: true, value: _avtSkillCardHtml });
-Object.defineProperty(globalThis, "_avtSkillField", { configurable: true, writable: true, value: _avtSkillField });
-Object.defineProperty(globalThis, "_avtSkmAreaTipoChange", { configurable: true, writable: true, value: _avtSkmAreaTipoChange });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCharEditorRenderEquip", { configurable: true, get: () => _avtCharEditorRenderEquip, set: (__v) => { _avtCharEditorRenderEquip = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEquiparItem", { configurable: true, get: () => _avtEquiparItem, set: (__v) => { _avtEquiparItem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDesequiparItem", { configurable: true, get: () => _avtDesequiparItem, set: (__v) => { _avtDesequiparItem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCharEditorRenderSkills", { configurable: true, get: () => _avtCharEditorRenderSkills, set: (__v) => { _avtCharEditorRenderSkills = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCharEditorRenderInvocacoes", { configurable: true, get: () => _avtCharEditorRenderInvocacoes, set: (__v) => { _avtCharEditorRenderInvocacoes = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDispensarInvocacao", { configurable: true, get: () => _avtDispensarInvocacao, set: (__v) => { _avtDispensarInvocacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillToggleChar", { configurable: true, get: () => _avtSkillToggleChar, set: (__v) => { _avtSkillToggleChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSetSkillNumero", { configurable: true, get: () => _avtSetSkillNumero, set: (__v) => { _avtSetSkillNumero = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSetArcSkill", { configurable: true, get: () => _avtSetArcSkill, set: (__v) => { _avtSetArcSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCharEditorRenderSkillEdit", { configurable: true, get: () => _avtCharEditorRenderSkillEdit, set: (__v) => { _avtCharEditorRenderSkillEdit = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillCardHtml", { configurable: true, get: () => _avtSkillCardHtml, set: (__v) => { _avtSkillCardHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillField", { configurable: true, get: () => _avtSkillField, set: (__v) => { _avtSkillField = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkmAreaTipoChange", { configurable: true, get: () => _avtSkmAreaTipoChange, set: (__v) => { _avtSkmAreaTipoChange = __v; } });
 Object.defineProperty(globalThis, "_AVT_SK_MODAL", { configurable: true, get: () => _AVT_SK_MODAL, set: (__v) => { _AVT_SK_MODAL = __v; } });
 Object.defineProperty(globalThis, "_AVT_SKM_PREV", { configurable: true, get: () => _AVT_SKM_PREV, set: (__v) => { _AVT_SKM_PREV = __v; } });
-Object.defineProperty(globalThis, "_avtSkMFBCarregarFormula", { configurable: true, writable: true, value: _avtSkMFBCarregarFormula });
-Object.defineProperty(globalThis, "_avtSkMFBFormula", { configurable: true, writable: true, value: _avtSkMFBFormula });
-Object.defineProperty(globalThis, "_avtSkMFBAtualizarUI", { configurable: true, writable: true, value: _avtSkMFBAtualizarUI });
-Object.defineProperty(globalThis, "_avtSkMFBAdd", { configurable: true, writable: true, value: _avtSkMFBAdd });
-Object.defineProperty(globalThis, "_avtSkMFBRem", { configurable: true, writable: true, value: _avtSkMFBRem });
-Object.defineProperty(globalThis, "_avtSkMFBAddBonus", { configurable: true, writable: true, value: _avtSkMFBAddBonus });
-Object.defineProperty(globalThis, "_avtSkMFBLimpar", { configurable: true, writable: true, value: _avtSkMFBLimpar });
-Object.defineProperty(globalThis, "_avtSkmAtualizarPreview", { configurable: true, writable: true, value: _avtSkmAtualizarPreview });
-Object.defineProperty(globalThis, "_avtEfFBFormula", { configurable: true, writable: true, value: _avtEfFBFormula });
-Object.defineProperty(globalThis, "_avtEfFBAtualizarUI", { configurable: true, writable: true, value: _avtEfFBAtualizarUI });
-Object.defineProperty(globalThis, "_avtEfFBAdd", { configurable: true, writable: true, value: _avtEfFBAdd });
-Object.defineProperty(globalThis, "_avtEfFBRem", { configurable: true, writable: true, value: _avtEfFBRem });
-Object.defineProperty(globalThis, "_avtEfFBAddBonus", { configurable: true, writable: true, value: _avtEfFBAddBonus });
-Object.defineProperty(globalThis, "_avtEfFBLimpar", { configurable: true, writable: true, value: _avtEfFBLimpar });
-Object.defineProperty(globalThis, "_avtEfFBParseFormula", { configurable: true, writable: true, value: _avtEfFBParseFormula });
-Object.defineProperty(globalThis, "_avtSkmMiniDiceBuilderHTML", { configurable: true, writable: true, value: _avtSkmMiniDiceBuilderHTML });
-Object.defineProperty(globalThis, "_avtSkmRenderEfeitos", { configurable: true, writable: true, value: _avtSkmRenderEfeitos });
-Object.defineProperty(globalThis, "_avtSkmEfTipoChange", { configurable: true, writable: true, value: _avtSkmEfTipoChange });
-Object.defineProperty(globalThis, "_avtEfPixiCarregar", { configurable: true, writable: true, value: _avtEfPixiCarregar });
-Object.defineProperty(globalThis, "_avtEfPixiFiltrar", { configurable: true, writable: true, value: _avtEfPixiFiltrar });
-Object.defineProperty(globalThis, "_avtEfPixiRenderRows", { configurable: true, writable: true, value: _avtEfPixiRenderRows });
-Object.defineProperty(globalThis, "_avtEfPixiSelecionar", { configurable: true, writable: true, value: _avtEfPixiSelecionar });
-Object.defineProperty(globalThis, "_avtEfPixiLimpar", { configurable: true, writable: true, value: _avtEfPixiLimpar });
-Object.defineProperty(globalThis, "_avtSkmIniciarPreviewAnim", { configurable: true, writable: true, value: _avtSkmIniciarPreviewAnim });
-Object.defineProperty(globalThis, "_avtSkmPararPreviewAnim", { configurable: true, writable: true, value: _avtSkmPararPreviewAnim });
-Object.defineProperty(globalThis, "_avtSkmDesenharPreview", { configurable: true, writable: true, value: _avtSkmDesenharPreview });
-Object.defineProperty(globalThis, "_avtSkmAnimCfgHTML", { configurable: true, writable: true, value: _avtSkmAnimCfgHTML });
-Object.defineProperty(globalThis, "_avtAbrirModalSkill", { configurable: true, writable: true, value: _avtAbrirModalSkill });
-Object.defineProperty(globalThis, "_avtSkmAnimTipoChange", { configurable: true, writable: true, value: _avtSkmAnimTipoChange });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkMFBCarregarFormula", { configurable: true, get: () => _avtSkMFBCarregarFormula, set: (__v) => { _avtSkMFBCarregarFormula = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkMFBFormula", { configurable: true, get: () => _avtSkMFBFormula, set: (__v) => { _avtSkMFBFormula = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkMFBAtualizarUI", { configurable: true, get: () => _avtSkMFBAtualizarUI, set: (__v) => { _avtSkMFBAtualizarUI = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkMFBAdd", { configurable: true, get: () => _avtSkMFBAdd, set: (__v) => { _avtSkMFBAdd = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkMFBRem", { configurable: true, get: () => _avtSkMFBRem, set: (__v) => { _avtSkMFBRem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkMFBAddBonus", { configurable: true, get: () => _avtSkMFBAddBonus, set: (__v) => { _avtSkMFBAddBonus = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkMFBLimpar", { configurable: true, get: () => _avtSkMFBLimpar, set: (__v) => { _avtSkMFBLimpar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkmAtualizarPreview", { configurable: true, get: () => _avtSkmAtualizarPreview, set: (__v) => { _avtSkmAtualizarPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfFBFormula", { configurable: true, get: () => _avtEfFBFormula, set: (__v) => { _avtEfFBFormula = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfFBAtualizarUI", { configurable: true, get: () => _avtEfFBAtualizarUI, set: (__v) => { _avtEfFBAtualizarUI = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfFBAdd", { configurable: true, get: () => _avtEfFBAdd, set: (__v) => { _avtEfFBAdd = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfFBRem", { configurable: true, get: () => _avtEfFBRem, set: (__v) => { _avtEfFBRem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfFBAddBonus", { configurable: true, get: () => _avtEfFBAddBonus, set: (__v) => { _avtEfFBAddBonus = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfFBLimpar", { configurable: true, get: () => _avtEfFBLimpar, set: (__v) => { _avtEfFBLimpar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfFBParseFormula", { configurable: true, get: () => _avtEfFBParseFormula, set: (__v) => { _avtEfFBParseFormula = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkmMiniDiceBuilderHTML", { configurable: true, get: () => _avtSkmMiniDiceBuilderHTML, set: (__v) => { _avtSkmMiniDiceBuilderHTML = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkmRenderEfeitos", { configurable: true, get: () => _avtSkmRenderEfeitos, set: (__v) => { _avtSkmRenderEfeitos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkmEfTipoChange", { configurable: true, get: () => _avtSkmEfTipoChange, set: (__v) => { _avtSkmEfTipoChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfPixiCarregar", { configurable: true, get: () => _avtEfPixiCarregar, set: (__v) => { _avtEfPixiCarregar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfPixiFiltrar", { configurable: true, get: () => _avtEfPixiFiltrar, set: (__v) => { _avtEfPixiFiltrar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfPixiRenderRows", { configurable: true, get: () => _avtEfPixiRenderRows, set: (__v) => { _avtEfPixiRenderRows = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfPixiSelecionar", { configurable: true, get: () => _avtEfPixiSelecionar, set: (__v) => { _avtEfPixiSelecionar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtEfPixiLimpar", { configurable: true, get: () => _avtEfPixiLimpar, set: (__v) => { _avtEfPixiLimpar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkmIniciarPreviewAnim", { configurable: true, get: () => _avtSkmIniciarPreviewAnim, set: (__v) => { _avtSkmIniciarPreviewAnim = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkmPararPreviewAnim", { configurable: true, get: () => _avtSkmPararPreviewAnim, set: (__v) => { _avtSkmPararPreviewAnim = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkmDesenharPreview", { configurable: true, get: () => _avtSkmDesenharPreview, set: (__v) => { _avtSkmDesenharPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkmAnimCfgHTML", { configurable: true, get: () => _avtSkmAnimCfgHTML, set: (__v) => { _avtSkmAnimCfgHTML = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAbrirModalSkill", { configurable: true, get: () => _avtAbrirModalSkill, set: (__v) => { _avtAbrirModalSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkmAnimTipoChange", { configurable: true, get: () => _avtSkmAnimTipoChange, set: (__v) => { _avtSkmAnimTipoChange = __v; } });
 Object.defineProperty(globalThis, "_AVT_PIXI_STUDIO_CACHE", { configurable: true, get: () => _AVT_PIXI_STUDIO_CACHE, set: (__v) => { _AVT_PIXI_STUDIO_CACHE = __v; } });
-Object.defineProperty(globalThis, "_avtPixiStudioCarregar", { configurable: true, writable: true, value: _avtPixiStudioCarregar });
-Object.defineProperty(globalThis, "_avtPixiStudioFiltrar", { configurable: true, writable: true, value: _avtPixiStudioFiltrar });
-Object.defineProperty(globalThis, "_avtPixiStudioRenderLista", { configurable: true, writable: true, value: _avtPixiStudioRenderLista });
-Object.defineProperty(globalThis, "_avtPixiStudioSelecionar", { configurable: true, writable: true, value: _avtPixiStudioSelecionar });
-Object.defineProperty(globalThis, "_isSfxUrlDireta", { configurable: true, writable: true, value: _isSfxUrlDireta });
-Object.defineProperty(globalThis, "_avtSkTestarSfx", { configurable: true, writable: true, value: _avtSkTestarSfx });
-Object.defineProperty(globalThis, "_avtSfxBibliotecaToggle", { configurable: true, writable: true, value: _avtSfxBibliotecaToggle });
-Object.defineProperty(globalThis, "_avtSfxBibliotecaListHTML", { configurable: true, writable: true, value: _avtSfxBibliotecaListHTML });
-Object.defineProperty(globalThis, "_avtSfxBibliotecaUpload", { configurable: true, writable: true, value: _avtSfxBibliotecaUpload });
-Object.defineProperty(globalThis, "_avtSfxBibliotecaRemover", { configurable: true, writable: true, value: _avtSfxBibliotecaRemover });
-Object.defineProperty(globalThis, "_avtSfxDropdownsRefresh", { configurable: true, writable: true, value: _avtSfxDropdownsRefresh });
-Object.defineProperty(globalThis, "_avtFecharModalSkill", { configurable: true, writable: true, value: _avtFecharModalSkill });
-Object.defineProperty(globalThis, "_avtModalSkillSalvar", { configurable: true, writable: true, value: _avtModalSkillSalvar });
-Object.defineProperty(globalThis, "_avtCalcLimiarCrit", { configurable: true, writable: true, value: _avtCalcLimiarCrit });
-Object.defineProperty(globalThis, "_avtCritMultFromD20", { configurable: true, writable: true, value: _avtCritMultFromD20 });
-Object.defineProperty(globalThis, "_avtCarismaChanceCriticoD20", { configurable: true, writable: true, value: _avtCarismaChanceCriticoD20 });
-Object.defineProperty(globalThis, "_avtMostrarAnimacaoCarismaCritico", { configurable: true, writable: true, value: _avtMostrarAnimacaoCarismaCritico });
-Object.defineProperty(globalThis, "_avtSalvarCarismaCritConfig", { configurable: true, writable: true, value: _avtSalvarCarismaCritConfig });
-Object.defineProperty(globalThis, "_avtTokenTremer", { configurable: true, writable: true, value: _avtTokenTremer });
-Object.defineProperty(globalThis, "_avtAbrirModalAnimAtaqueBasico", { configurable: true, writable: true, value: _avtAbrirModalAnimAtaqueBasico });
-Object.defineProperty(globalThis, "_avtAbrirModalAtaqueBasico", { configurable: true, writable: true, value: _avtAbrirModalAtaqueBasico });
-Object.defineProperty(globalThis, "_avtSalvarAtaqueBasico", { configurable: true, writable: true, value: _avtSalvarAtaqueBasico });
-Object.defineProperty(globalThis, "_avtSkillEfeitoField", { configurable: true, writable: true, value: _avtSkillEfeitoField });
-Object.defineProperty(globalThis, "_avtSkillAddEfeito", { configurable: true, writable: true, value: _avtSkillAddEfeito });
-Object.defineProperty(globalThis, "_avtSkillRemEfeito", { configurable: true, writable: true, value: _avtSkillRemEfeito });
-Object.defineProperty(globalThis, "_avtSkillAnimSetTipo", { configurable: true, writable: true, value: _avtSkillAnimSetTipo });
-Object.defineProperty(globalThis, "_avtSkillAnimSetTipoSel", { configurable: true, writable: true, value: _avtSkillAnimSetTipoSel });
-Object.defineProperty(globalThis, "_avtSkillAnimField", { configurable: true, writable: true, value: _avtSkillAnimField });
-Object.defineProperty(globalThis, "_avtSkillAnimCfgHtml", { configurable: true, writable: true, value: _avtSkillAnimCfgHtml });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPixiStudioCarregar", { configurable: true, get: () => _avtPixiStudioCarregar, set: (__v) => { _avtPixiStudioCarregar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPixiStudioFiltrar", { configurable: true, get: () => _avtPixiStudioFiltrar, set: (__v) => { _avtPixiStudioFiltrar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPixiStudioRenderLista", { configurable: true, get: () => _avtPixiStudioRenderLista, set: (__v) => { _avtPixiStudioRenderLista = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtPixiStudioSelecionar", { configurable: true, get: () => _avtPixiStudioSelecionar, set: (__v) => { _avtPixiStudioSelecionar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_isSfxUrlDireta", { configurable: true, get: () => _isSfxUrlDireta, set: (__v) => { _isSfxUrlDireta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkTestarSfx", { configurable: true, get: () => _avtSkTestarSfx, set: (__v) => { _avtSkTestarSfx = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSfxBibliotecaToggle", { configurable: true, get: () => _avtSfxBibliotecaToggle, set: (__v) => { _avtSfxBibliotecaToggle = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSfxBibliotecaListHTML", { configurable: true, get: () => _avtSfxBibliotecaListHTML, set: (__v) => { _avtSfxBibliotecaListHTML = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSfxBibliotecaUpload", { configurable: true, get: () => _avtSfxBibliotecaUpload, set: (__v) => { _avtSfxBibliotecaUpload = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSfxBibliotecaRemover", { configurable: true, get: () => _avtSfxBibliotecaRemover, set: (__v) => { _avtSfxBibliotecaRemover = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSfxDropdownsRefresh", { configurable: true, get: () => _avtSfxDropdownsRefresh, set: (__v) => { _avtSfxDropdownsRefresh = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtFecharModalSkill", { configurable: true, get: () => _avtFecharModalSkill, set: (__v) => { _avtFecharModalSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtModalSkillSalvar", { configurable: true, get: () => _avtModalSkillSalvar, set: (__v) => { _avtModalSkillSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCalcLimiarCrit", { configurable: true, get: () => _avtCalcLimiarCrit, set: (__v) => { _avtCalcLimiarCrit = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCritMultFromD20", { configurable: true, get: () => _avtCritMultFromD20, set: (__v) => { _avtCritMultFromD20 = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCarismaChanceCriticoD20", { configurable: true, get: () => _avtCarismaChanceCriticoD20, set: (__v) => { _avtCarismaChanceCriticoD20 = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMostrarAnimacaoCarismaCritico", { configurable: true, get: () => _avtMostrarAnimacaoCarismaCritico, set: (__v) => { _avtMostrarAnimacaoCarismaCritico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarCarismaCritConfig", { configurable: true, get: () => _avtSalvarCarismaCritConfig, set: (__v) => { _avtSalvarCarismaCritConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtTokenTremer", { configurable: true, get: () => _avtTokenTremer, set: (__v) => { _avtTokenTremer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAbrirModalAnimAtaqueBasico", { configurable: true, get: () => _avtAbrirModalAnimAtaqueBasico, set: (__v) => { _avtAbrirModalAnimAtaqueBasico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAbrirModalAtaqueBasico", { configurable: true, get: () => _avtAbrirModalAtaqueBasico, set: (__v) => { _avtAbrirModalAtaqueBasico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarAtaqueBasico", { configurable: true, get: () => _avtSalvarAtaqueBasico, set: (__v) => { _avtSalvarAtaqueBasico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillEfeitoField", { configurable: true, get: () => _avtSkillEfeitoField, set: (__v) => { _avtSkillEfeitoField = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillAddEfeito", { configurable: true, get: () => _avtSkillAddEfeito, set: (__v) => { _avtSkillAddEfeito = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillRemEfeito", { configurable: true, get: () => _avtSkillRemEfeito, set: (__v) => { _avtSkillRemEfeito = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillAnimSetTipo", { configurable: true, get: () => _avtSkillAnimSetTipo, set: (__v) => { _avtSkillAnimSetTipo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillAnimSetTipoSel", { configurable: true, get: () => _avtSkillAnimSetTipoSel, set: (__v) => { _avtSkillAnimSetTipoSel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillAnimField", { configurable: true, get: () => _avtSkillAnimField, set: (__v) => { _avtSkillAnimField = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillAnimCfgHtml", { configurable: true, get: () => _avtSkillAnimCfgHtml, set: (__v) => { _avtSkillAnimCfgHtml = __v; } });
 Object.defineProperty(globalThis, "_AVT_SK_SAVE_TIMERS", { configurable: true, get: () => _AVT_SK_SAVE_TIMERS });
-Object.defineProperty(globalThis, "_avtSkillAutoSave", { configurable: true, writable: true, value: _avtSkillAutoSave });
-Object.defineProperty(globalThis, "_avtSkillAnimGsapField", { configurable: true, writable: true, value: _avtSkillAnimGsapField });
-Object.defineProperty(globalThis, "_avtSkillAnexarRefImg", { configurable: true, writable: true, value: _avtSkillAnexarRefImg });
-Object.defineProperty(globalThis, "_avtSkillRemoverRefImg", { configurable: true, writable: true, value: _avtSkillRemoverRefImg });
-Object.defineProperty(globalThis, "_avtSkillAnimParticleJson", { configurable: true, writable: true, value: _avtSkillAnimParticleJson });
-Object.defineProperty(globalThis, "_avtSkillAnimSpineJson", { configurable: true, writable: true, value: _avtSkillAnimSpineJson });
-Object.defineProperty(globalThis, "_avtSkillPromptIA", { configurable: true, writable: true, value: _avtSkillPromptIA });
-Object.defineProperty(globalThis, "_avtSkillCopiarPromptIA", { configurable: true, writable: true, value: _avtSkillCopiarPromptIA });
-Object.defineProperty(globalThis, "_avtSkillGerarAnimIA", { configurable: true, writable: true, value: _avtSkillGerarAnimIA });
-Object.defineProperty(globalThis, "_avtSkillAnimTipo", { configurable: true, writable: true, value: _avtSkillAnimTipo });
-Object.defineProperty(globalThis, "_avtSkillNova", { configurable: true, writable: true, value: _avtSkillNova });
-Object.defineProperty(globalThis, "_avtSkillSalvar", { configurable: true, writable: true, value: _avtSkillSalvar });
-Object.defineProperty(globalThis, "_avtSkillDeletar", { configurable: true, writable: true, value: _avtSkillDeletar });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillAutoSave", { configurable: true, get: () => _avtSkillAutoSave, set: (__v) => { _avtSkillAutoSave = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillAnimGsapField", { configurable: true, get: () => _avtSkillAnimGsapField, set: (__v) => { _avtSkillAnimGsapField = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillAnexarRefImg", { configurable: true, get: () => _avtSkillAnexarRefImg, set: (__v) => { _avtSkillAnexarRefImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillRemoverRefImg", { configurable: true, get: () => _avtSkillRemoverRefImg, set: (__v) => { _avtSkillRemoverRefImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillAnimParticleJson", { configurable: true, get: () => _avtSkillAnimParticleJson, set: (__v) => { _avtSkillAnimParticleJson = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillAnimSpineJson", { configurable: true, get: () => _avtSkillAnimSpineJson, set: (__v) => { _avtSkillAnimSpineJson = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillPromptIA", { configurable: true, get: () => _avtSkillPromptIA, set: (__v) => { _avtSkillPromptIA = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillCopiarPromptIA", { configurable: true, get: () => _avtSkillCopiarPromptIA, set: (__v) => { _avtSkillCopiarPromptIA = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillGerarAnimIA", { configurable: true, get: () => _avtSkillGerarAnimIA, set: (__v) => { _avtSkillGerarAnimIA = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillAnimTipo", { configurable: true, get: () => _avtSkillAnimTipo, set: (__v) => { _avtSkillAnimTipo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillNova", { configurable: true, get: () => _avtSkillNova, set: (__v) => { _avtSkillNova = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillSalvar", { configurable: true, get: () => _avtSkillSalvar, set: (__v) => { _avtSkillSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSkillDeletar", { configurable: true, get: () => _avtSkillDeletar, set: (__v) => { _avtSkillDeletar = __v; } });
 Object.defineProperty(globalThis, "_AVT_ANIM_PROMPT", { configurable: true, get: () => _AVT_ANIM_PROMPT });
-Object.defineProperty(globalThis, "_avtCharImportarAparencia", { configurable: true, writable: true, value: _avtCharImportarAparencia });
-Object.defineProperty(globalThis, "_avtAparTabSwitch", { configurable: true, writable: true, value: _avtAparTabSwitch });
-Object.defineProperty(globalThis, "_avtIsoPreviewImagem", { configurable: true, writable: true, value: _avtIsoPreviewImagem });
-Object.defineProperty(globalThis, "_avtTdPreviewImagem", { configurable: true, writable: true, value: _avtTdPreviewImagem });
-Object.defineProperty(globalThis, "_avtCopiarTexto", { configurable: true, writable: true, value: _avtCopiarTexto });
-Object.defineProperty(globalThis, "_avtAnimPreview", { configurable: true, writable: true, value: _avtAnimPreview });
-Object.defineProperty(globalThis, "_avtAnimSalvar", { configurable: true, writable: true, value: _avtAnimSalvar });
-Object.defineProperty(globalThis, "_avtTopdownIaSalvar", { configurable: true, writable: true, value: _avtTopdownIaSalvar });
-Object.defineProperty(globalThis, "_avtIsoIaSalvar", { configurable: true, writable: true, value: _avtIsoIaSalvar });
-Object.defineProperty(globalThis, "_avtWalkStudioImgUrl", { configurable: true, writable: true, value: _avtWalkStudioImgUrl });
-Object.defineProperty(globalThis, "_avtWalkStudioAbrir", { configurable: true, writable: true, value: _avtWalkStudioAbrir });
-Object.defineProperty(globalThis, "_avtWalkStudioFechar", { configurable: true, writable: true, value: _avtWalkStudioFechar });
-Object.defineProperty(globalThis, "_avtWalkStudioSelectPreset", { configurable: true, writable: true, value: _avtWalkStudioSelectPreset });
-Object.defineProperty(globalThis, "_avtWalkStudioSetState", { configurable: true, writable: true, value: _avtWalkStudioSetState });
-Object.defineProperty(globalThis, "_avtWalkStudioFlip", { configurable: true, writable: true, value: _avtWalkStudioFlip });
-Object.defineProperty(globalThis, "_avtWalkStudioTogglePernas", { configurable: true, writable: true, value: _avtWalkStudioTogglePernas });
-Object.defineProperty(globalThis, "_avtWalkStudioSetFacingMode", { configurable: true, writable: true, value: _avtWalkStudioSetFacingMode });
-Object.defineProperty(globalThis, "_avtWalkStudioSetParam", { configurable: true, writable: true, value: _avtWalkStudioSetParam });
-Object.defineProperty(globalThis, "_avtWalkStudioSetWeapon", { configurable: true, writable: true, value: _avtWalkStudioSetWeapon });
-Object.defineProperty(globalThis, "_avtWalkStudioLoop", { configurable: true, writable: true, value: _avtWalkStudioLoop });
-Object.defineProperty(globalThis, "_avtWalkStudioSlider", { configurable: true, writable: true, value: _avtWalkStudioSlider });
-Object.defineProperty(globalThis, "_avtWalkStudioRender", { configurable: true, writable: true, value: _avtWalkStudioRender });
-Object.defineProperty(globalThis, "_avtWalkPresetSalvar", { configurable: true, writable: true, value: _avtWalkPresetSalvar });
-Object.defineProperty(globalThis, "_avtNpcClassesSecao", { configurable: true, writable: true, value: _avtNpcClassesSecao });
-Object.defineProperty(globalThis, "_avtSalvarNpcClasse", { configurable: true, writable: true, value: _avtSalvarNpcClasse });
-Object.defineProperty(globalThis, "_avtCriarNpcClasse", { configurable: true, writable: true, value: _avtCriarNpcClasse });
-Object.defineProperty(globalThis, "_avtExcluirNpcClasse", { configurable: true, writable: true, value: _avtExcluirNpcClasse });
-Object.defineProperty(globalThis, "_avtBulkAparSecaoPreset", { configurable: true, writable: true, value: _avtBulkAparSecaoPreset });
-Object.defineProperty(globalThis, "_avtBulkAplicarAparenciaPreset", { configurable: true, writable: true, value: _avtBulkAplicarAparenciaPreset });
-Object.defineProperty(globalThis, "_avtBulkAparMassaSecoes", { configurable: true, writable: true, value: _avtBulkAparMassaSecoes });
-Object.defineProperty(globalThis, "_avtBulkMaskPng", { configurable: true, writable: true, value: _avtBulkMaskPng });
-Object.defineProperty(globalThis, "_avtBulkUpload", { configurable: true, writable: true, value: _avtBulkUpload });
-Object.defineProperty(globalThis, "_avtInvocacoesDisponiveis", { configurable: true, writable: true, value: _avtInvocacoesDisponiveis });
-Object.defineProperty(globalThis, "_avtAplicarEfeitoInvocar", { configurable: true, writable: true, value: _avtAplicarEfeitoInvocar });
-Object.defineProperty(globalThis, "avtInvocar", { configurable: true, writable: true, value: avtInvocar });
-Object.defineProperty(globalThis, "_avtCriarEntidadeInvocacao", { configurable: true, writable: true, value: _avtCriarEntidadeInvocacao });
-Object.defineProperty(globalThis, "_avtDestruirInvocacao", { configurable: true, writable: true, value: _avtDestruirInvocacao });
-Object.defineProperty(globalThis, "_avtInvocacaoExplosao", { configurable: true, writable: true, value: _avtInvocacaoExplosao });
-Object.defineProperty(globalThis, "_avtNpcTurnoInvocado", { configurable: true, writable: true, value: _avtNpcTurnoInvocado });
-Object.defineProperty(globalThis, "avtReceberInvocacaoDestruida", { configurable: true, writable: true, value: avtReceberInvocacaoDestruida });
-Object.defineProperty(globalThis, "_avtRolarFormulaInvocado", { configurable: true, writable: true, value: _avtRolarFormulaInvocado });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCharImportarAparencia", { configurable: true, get: () => _avtCharImportarAparencia, set: (__v) => { _avtCharImportarAparencia = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAparTabSwitch", { configurable: true, get: () => _avtAparTabSwitch, set: (__v) => { _avtAparTabSwitch = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtIsoPreviewImagem", { configurable: true, get: () => _avtIsoPreviewImagem, set: (__v) => { _avtIsoPreviewImagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtTdPreviewImagem", { configurable: true, get: () => _avtTdPreviewImagem, set: (__v) => { _avtTdPreviewImagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCopiarTexto", { configurable: true, get: () => _avtCopiarTexto, set: (__v) => { _avtCopiarTexto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAnimPreview", { configurable: true, get: () => _avtAnimPreview, set: (__v) => { _avtAnimPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAnimSalvar", { configurable: true, get: () => _avtAnimSalvar, set: (__v) => { _avtAnimSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtTopdownIaSalvar", { configurable: true, get: () => _avtTopdownIaSalvar, set: (__v) => { _avtTopdownIaSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtIsoIaSalvar", { configurable: true, get: () => _avtIsoIaSalvar, set: (__v) => { _avtIsoIaSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioImgUrl", { configurable: true, get: () => _avtWalkStudioImgUrl, set: (__v) => { _avtWalkStudioImgUrl = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioAbrir", { configurable: true, get: () => _avtWalkStudioAbrir, set: (__v) => { _avtWalkStudioAbrir = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioFechar", { configurable: true, get: () => _avtWalkStudioFechar, set: (__v) => { _avtWalkStudioFechar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioSelectPreset", { configurable: true, get: () => _avtWalkStudioSelectPreset, set: (__v) => { _avtWalkStudioSelectPreset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioSetState", { configurable: true, get: () => _avtWalkStudioSetState, set: (__v) => { _avtWalkStudioSetState = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioFlip", { configurable: true, get: () => _avtWalkStudioFlip, set: (__v) => { _avtWalkStudioFlip = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioTogglePernas", { configurable: true, get: () => _avtWalkStudioTogglePernas, set: (__v) => { _avtWalkStudioTogglePernas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioSetFacingMode", { configurable: true, get: () => _avtWalkStudioSetFacingMode, set: (__v) => { _avtWalkStudioSetFacingMode = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioSetParam", { configurable: true, get: () => _avtWalkStudioSetParam, set: (__v) => { _avtWalkStudioSetParam = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioSetWeapon", { configurable: true, get: () => _avtWalkStudioSetWeapon, set: (__v) => { _avtWalkStudioSetWeapon = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioLoop", { configurable: true, get: () => _avtWalkStudioLoop, set: (__v) => { _avtWalkStudioLoop = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioSlider", { configurable: true, get: () => _avtWalkStudioSlider, set: (__v) => { _avtWalkStudioSlider = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkStudioRender", { configurable: true, get: () => _avtWalkStudioRender, set: (__v) => { _avtWalkStudioRender = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtWalkPresetSalvar", { configurable: true, get: () => _avtWalkPresetSalvar, set: (__v) => { _avtWalkPresetSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcClassesSecao", { configurable: true, get: () => _avtNpcClassesSecao, set: (__v) => { _avtNpcClassesSecao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSalvarNpcClasse", { configurable: true, get: () => _avtSalvarNpcClasse, set: (__v) => { _avtSalvarNpcClasse = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarNpcClasse", { configurable: true, get: () => _avtCriarNpcClasse, set: (__v) => { _avtCriarNpcClasse = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtExcluirNpcClasse", { configurable: true, get: () => _avtExcluirNpcClasse, set: (__v) => { _avtExcluirNpcClasse = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBulkAparSecaoPreset", { configurable: true, get: () => _avtBulkAparSecaoPreset, set: (__v) => { _avtBulkAparSecaoPreset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBulkAplicarAparenciaPreset", { configurable: true, get: () => _avtBulkAplicarAparenciaPreset, set: (__v) => { _avtBulkAplicarAparenciaPreset = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBulkAparMassaSecoes", { configurable: true, get: () => _avtBulkAparMassaSecoes, set: (__v) => { _avtBulkAparMassaSecoes = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBulkMaskPng", { configurable: true, get: () => _avtBulkMaskPng, set: (__v) => { _avtBulkMaskPng = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtBulkUpload", { configurable: true, get: () => _avtBulkUpload, set: (__v) => { _avtBulkUpload = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInvocacoesDisponiveis", { configurable: true, get: () => _avtInvocacoesDisponiveis, set: (__v) => { _avtInvocacoesDisponiveis = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAplicarEfeitoInvocar", { configurable: true, get: () => _avtAplicarEfeitoInvocar, set: (__v) => { _avtAplicarEfeitoInvocar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvocar", { configurable: true, get: () => avtInvocar, set: (__v) => { avtInvocar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCriarEntidadeInvocacao", { configurable: true, get: () => _avtCriarEntidadeInvocacao, set: (__v) => { _avtCriarEntidadeInvocacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDestruirInvocacao", { configurable: true, get: () => _avtDestruirInvocacao, set: (__v) => { _avtDestruirInvocacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInvocacaoExplosao", { configurable: true, get: () => _avtInvocacaoExplosao, set: (__v) => { _avtInvocacaoExplosao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtNpcTurnoInvocado", { configurable: true, get: () => _avtNpcTurnoInvocado, set: (__v) => { _avtNpcTurnoInvocado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberInvocacaoDestruida", { configurable: true, get: () => avtReceberInvocacaoDestruida, set: (__v) => { avtReceberInvocacaoDestruida = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtRolarFormulaInvocado", { configurable: true, get: () => _avtRolarFormulaInvocado, set: (__v) => { _avtRolarFormulaInvocado = __v; } });

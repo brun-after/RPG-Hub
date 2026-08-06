@@ -1,5 +1,5 @@
-# Typecheck + build em pull requests — o deploy.yml só roda em push na main,
-# então sem este gate um PR quebrado só falhava depois de mergeado.
+# Typecheck + testes + build em pull requests — o deploy.yml só roda em push
+# na main, então sem este gate um PR quebrado só falhava depois de mergeado.
 name: CI
 
 on:
@@ -24,4 +24,29 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
       - run: npm run build
+      - run: npx playwright install chromium --with-deps
+      - run: npm run test:e2e -- --project=smoke
+
+  # Gameplay multiplayer (2 browsers + WebRTC) — a classe de teste mais sujeita
+  # a flake em runner compartilhado. Não bloqueia merge durante o burn-in;
+  # remover o continue-on-error após ~2 semanas verde.
+  e2e-aventura:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install chromium --with-deps
+      - run: npm run test:e2e -- --project=aventura
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: aventura-traces
+          path: test-results/

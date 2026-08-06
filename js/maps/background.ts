@@ -723,36 +723,67 @@ console.log('ISO Grid + NM BG Tabs loaded ✓');
 Object.defineProperty(globalThis, "_nmBgTab", { configurable: true, get: () => _nmBgTab, set: (__v) => { _nmBgTab = __v; } });
 Object.defineProperty(globalThis, "_nmUploadDataUrl", { configurable: true, get: () => _nmUploadDataUrl, set: (__v) => { _nmUploadDataUrl = __v; } });
 Object.defineProperty(globalThis, "_nmSvgDataUrl", { configurable: true, get: () => _nmSvgDataUrl, set: (__v) => { _nmSvgDataUrl = __v; } });
-Object.defineProperty(globalThis, "nmBgTab", { configurable: true, writable: true, value: nmBgTab });
-Object.defineProperty(globalThis, "nmBgGetFinal", { configurable: true, writable: true, value: nmBgGetFinal });
-Object.defineProperty(globalThis, "nmceFullscreenAbrir", { configurable: true, writable: true, value: nmceFullscreenAbrir });
-Object.defineProperty(globalThis, "nmceFullscreenFechar", { configurable: true, writable: true, value: nmceFullscreenFechar });
-Object.defineProperty(globalThis, "nmceFullscreenConcluir", { configurable: true, writable: true, value: nmceFullscreenConcluir });
-Object.defineProperty(globalThis, "_nmceRestaurarCanvas", { configurable: true, writable: true, value: _nmceRestaurarCanvas });
-Object.defineProperty(globalThis, "nmBgUrlPreview", { configurable: true, writable: true, value: nmBgUrlPreview });
-Object.defineProperty(globalThis, "nmBgUpload", { configurable: true, writable: true, value: nmBgUpload });
-Object.defineProperty(globalThis, "nmBgClearUpload", { configurable: true, writable: true, value: nmBgClearUpload });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmBgTab", { configurable: true, get: () => nmBgTab, set: (__v) => { nmBgTab = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmBgGetFinal", { configurable: true, get: () => nmBgGetFinal, set: (__v) => { nmBgGetFinal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceFullscreenAbrir", { configurable: true, get: () => nmceFullscreenAbrir, set: (__v) => { nmceFullscreenAbrir = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceFullscreenFechar", { configurable: true, get: () => nmceFullscreenFechar, set: (__v) => { nmceFullscreenFechar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceFullscreenConcluir", { configurable: true, get: () => nmceFullscreenConcluir, set: (__v) => { nmceFullscreenConcluir = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_nmceRestaurarCanvas", { configurable: true, get: () => _nmceRestaurarCanvas, set: (__v) => { _nmceRestaurarCanvas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmBgUrlPreview", { configurable: true, get: () => nmBgUrlPreview, set: (__v) => { nmBgUrlPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmBgUpload", { configurable: true, get: () => nmBgUpload, set: (__v) => { nmBgUpload = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmBgClearUpload", { configurable: true, get: () => nmBgClearUpload, set: (__v) => { nmBgClearUpload = __v; } });
 Object.defineProperty(globalThis, "_NM_SVG_PROMPT", { configurable: true, get: () => _NM_SVG_PROMPT });
-Object.defineProperty(globalThis, "nmBgSvgPreview", { configurable: true, writable: true, value: nmBgSvgPreview });
-Object.defineProperty(globalThis, "nmCopiarPromptSVG", { configurable: true, writable: true, value: nmCopiarPromptSVG });
-Object.defineProperty(globalThis, "nmCopiarPromptContextual", { configurable: true, writable: true, value: nmCopiarPromptContextual });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmBgSvgPreview", { configurable: true, get: () => nmBgSvgPreview, set: (__v) => { nmBgSvgPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmCopiarPromptSVG", { configurable: true, get: () => nmCopiarPromptSVG, set: (__v) => { nmCopiarPromptSVG = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmCopiarPromptContextual", { configurable: true, get: () => nmCopiarPromptContextual, set: (__v) => { nmCopiarPromptContextual = __v; } });
 Object.defineProperty(globalThis, "nmCE", { configurable: true, get: () => nmCE });
-Object.defineProperty(globalThis, "nmceInit", { configurable: true, writable: true, value: nmceInit });
-Object.defineProperty(globalThis, "nmceBgRender", { configurable: true, writable: true, value: nmceBgRender });
-Object.defineProperty(globalThis, "nmceBgLoad", { configurable: true, writable: true, value: nmceBgLoad });
-Object.defineProperty(globalThis, "nmceSetTool", { configurable: true, writable: true, value: nmceSetTool });
-Object.defineProperty(globalThis, "nmcePickColor", { configurable: true, writable: true, value: nmcePickColor });
-Object.defineProperty(globalThis, "nmcePushHistory", { configurable: true, writable: true, value: nmcePushHistory });
-Object.defineProperty(globalThis, "nmceUndo", { configurable: true, writable: true, value: nmceUndo });
-Object.defineProperty(globalThis, "nmceClear", { configurable: true, writable: true, value: nmceClear });
-Object.defineProperty(globalThis, "nmceExport", { configurable: true, writable: true, value: nmceExport });
-Object.defineProperty(globalThis, "nmceCoords", { configurable: true, writable: true, value: nmceCoords });
-Object.defineProperty(globalThis, "nmceDown", { configurable: true, writable: true, value: nmceDown });
-Object.defineProperty(globalThis, "nmceMove", { configurable: true, writable: true, value: nmceMove });
-Object.defineProperty(globalThis, "nmceUp", { configurable: true, writable: true, value: nmceUp });
-Object.defineProperty(globalThis, "nmceTDown", { configurable: true, writable: true, value: nmceTDown });
-Object.defineProperty(globalThis, "nmceTMove", { configurable: true, writable: true, value: nmceTMove });
-Object.defineProperty(globalThis, "nmceFill", { configurable: true, writable: true, value: nmceFill });
-Object.defineProperty(globalThis, "_nmceHex2rgb", { configurable: true, writable: true, value: _nmceHex2rgb });
-Object.defineProperty(globalThis, "_drawIsoGrid", { configurable: true, writable: true, value: _drawIsoGrid });
-Object.defineProperty(globalThis, "nmceUpdateIsoGuide", { configurable: true, writable: true, value: nmceUpdateIsoGuide });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceInit", { configurable: true, get: () => nmceInit, set: (__v) => { nmceInit = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceBgRender", { configurable: true, get: () => nmceBgRender, set: (__v) => { nmceBgRender = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceBgLoad", { configurable: true, get: () => nmceBgLoad, set: (__v) => { nmceBgLoad = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceSetTool", { configurable: true, get: () => nmceSetTool, set: (__v) => { nmceSetTool = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmcePickColor", { configurable: true, get: () => nmcePickColor, set: (__v) => { nmcePickColor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmcePushHistory", { configurable: true, get: () => nmcePushHistory, set: (__v) => { nmcePushHistory = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceUndo", { configurable: true, get: () => nmceUndo, set: (__v) => { nmceUndo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceClear", { configurable: true, get: () => nmceClear, set: (__v) => { nmceClear = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceExport", { configurable: true, get: () => nmceExport, set: (__v) => { nmceExport = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceCoords", { configurable: true, get: () => nmceCoords, set: (__v) => { nmceCoords = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceDown", { configurable: true, get: () => nmceDown, set: (__v) => { nmceDown = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceMove", { configurable: true, get: () => nmceMove, set: (__v) => { nmceMove = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceUp", { configurable: true, get: () => nmceUp, set: (__v) => { nmceUp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceTDown", { configurable: true, get: () => nmceTDown, set: (__v) => { nmceTDown = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceTMove", { configurable: true, get: () => nmceTMove, set: (__v) => { nmceTMove = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceFill", { configurable: true, get: () => nmceFill, set: (__v) => { nmceFill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_nmceHex2rgb", { configurable: true, get: () => _nmceHex2rgb, set: (__v) => { _nmceHex2rgb = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_drawIsoGrid", { configurable: true, get: () => _drawIsoGrid, set: (__v) => { _drawIsoGrid = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmceUpdateIsoGuide", { configurable: true, get: () => nmceUpdateIsoGuide, set: (__v) => { nmceUpdateIsoGuide = __v; } });

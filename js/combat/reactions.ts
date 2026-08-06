@@ -275,21 +275,39 @@ window.batalhaReceberReacaoExecutada = function(payload) {
 console.log('[Reactions] UI de reações e defesa ativa carregado ✓');
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "mostrarPainelReacao", { configurable: true, writable: true, value: mostrarPainelReacao });
-Object.defineProperty(globalThis, "reacaoAceitar", { configurable: true, writable: true, value: reacaoAceitar });
-Object.defineProperty(globalThis, "reacaoRecusar", { configurable: true, writable: true, value: reacaoRecusar });
-Object.defineProperty(globalThis, "fecharPainelReacao", { configurable: true, writable: true, value: fecharPainelReacao });
-Object.defineProperty(globalThis, "mostrarPainelDefesaAtiva", { configurable: true, writable: true, value: mostrarPainelDefesaAtiva });
-Object.defineProperty(globalThis, "defesaRolar", { configurable: true, writable: true, value: defesaRolar });
-Object.defineProperty(globalThis, "defesaRecusar", { configurable: true, writable: true, value: defesaRecusar });
-Object.defineProperty(globalThis, "fecharPainelDefesaAtiva", { configurable: true, writable: true, value: fecharPainelDefesaAtiva });
-Object.defineProperty(globalThis, "abrirModalConfigBatalha", { configurable: true, writable: true, value: abrirModalConfigBatalha });
-Object.defineProperty(globalThis, "fecharModalConfigBatalha", { configurable: true, writable: true, value: fecharModalConfigBatalha });
-Object.defineProperty(globalThis, "salvarConfigBatalha", { configurable: true, writable: true, value: salvarConfigBatalha });
-Object.defineProperty(globalThis, "bcfgSistemaChange", { configurable: true, writable: true, value: bcfgSistemaChange });
-Object.defineProperty(globalThis, "_escHtml", { configurable: true, writable: true, value: _escHtml });
-Object.defineProperty(globalThis, "_setVal", { configurable: true, writable: true, value: _setVal });
-Object.defineProperty(globalThis, "_setChk", { configurable: true, writable: true, value: _setChk });
-Object.defineProperty(globalThis, "_getVal", { configurable: true, writable: true, value: _getVal });
-Object.defineProperty(globalThis, "_getChk", { configurable: true, writable: true, value: _getChk });
-Object.defineProperty(globalThis, "_iniciarTimer", { configurable: true, writable: true, value: _iniciarTimer });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mostrarPainelReacao", { configurable: true, get: () => mostrarPainelReacao, set: (__v) => { mostrarPainelReacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "reacaoAceitar", { configurable: true, get: () => reacaoAceitar, set: (__v) => { reacaoAceitar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "reacaoRecusar", { configurable: true, get: () => reacaoRecusar, set: (__v) => { reacaoRecusar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharPainelReacao", { configurable: true, get: () => fecharPainelReacao, set: (__v) => { fecharPainelReacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "mostrarPainelDefesaAtiva", { configurable: true, get: () => mostrarPainelDefesaAtiva, set: (__v) => { mostrarPainelDefesaAtiva = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "defesaRolar", { configurable: true, get: () => defesaRolar, set: (__v) => { defesaRolar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "defesaRecusar", { configurable: true, get: () => defesaRecusar, set: (__v) => { defesaRecusar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharPainelDefesaAtiva", { configurable: true, get: () => fecharPainelDefesaAtiva, set: (__v) => { fecharPainelDefesaAtiva = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalConfigBatalha", { configurable: true, get: () => abrirModalConfigBatalha, set: (__v) => { abrirModalConfigBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalConfigBatalha", { configurable: true, get: () => fecharModalConfigBatalha, set: (__v) => { fecharModalConfigBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarConfigBatalha", { configurable: true, get: () => salvarConfigBatalha, set: (__v) => { salvarConfigBatalha = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "bcfgSistemaChange", { configurable: true, get: () => bcfgSistemaChange, set: (__v) => { bcfgSistemaChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_escHtml", { configurable: true, get: () => _escHtml, set: (__v) => { _escHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_setVal", { configurable: true, get: () => _setVal, set: (__v) => { _setVal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_setChk", { configurable: true, get: () => _setChk, set: (__v) => { _setChk = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_getVal", { configurable: true, get: () => _getVal, set: (__v) => { _getVal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_getChk", { configurable: true, get: () => _getChk, set: (__v) => { _getChk = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_iniciarTimer", { configurable: true, get: () => _iniciarTimer, set: (__v) => { _iniciarTimer = __v; } });

@@ -700,16 +700,29 @@ Object.defineProperty(globalThis, "_EQUIP_ATTACH", { configurable: true, get: ()
 Object.defineProperty(globalThis, "_NATIVE_W", { configurable: true, get: () => _NATIVE_W });
 Object.defineProperty(globalThis, "_NATIVE_H", { configurable: true, get: () => _NATIVE_H });
 Object.defineProperty(globalThis, "_TEX_SCALE", { configurable: true, get: () => _TEX_SCALE });
-Object.defineProperty(globalThis, "_pixiEnsureLoaded", { configurable: true, writable: true, value: _pixiEnsureLoaded });
-Object.defineProperty(globalThis, "_svgToTexture", { configurable: true, writable: true, value: _svgToTexture });
-Object.defineProperty(globalThis, "_safeTextureFrom", { configurable: true, writable: true, value: _safeTextureFrom });
-Object.defineProperty(globalThis, "_preloadTextures", { configurable: true, writable: true, value: _preloadTextures });
-Object.defineProperty(globalThis, "_animLerp", { configurable: true, writable: true, value: _animLerp });
-Object.defineProperty(globalThis, "_animComputeTransforms", { configurable: true, writable: true, value: _animComputeTransforms });
-Object.defineProperty(globalThis, "_buildScene", { configurable: true, writable: true, value: _buildScene });
-Object.defineProperty(globalThis, "_updateSprites", { configurable: true, writable: true, value: _updateSprites });
-Object.defineProperty(globalThis, "_buildSceneV2", { configurable: true, writable: true, value: _buildSceneV2 });
-Object.defineProperty(globalThis, "_updateContainersV2", { configurable: true, writable: true, value: _updateContainersV2 });
-Object.defineProperty(globalThis, "animRendererMount", { configurable: true, writable: true, value: animRendererMount });
-Object.defineProperty(globalThis, "animRendererStaticFrame", { configurable: true, writable: true, value: animRendererStaticFrame });
-Object.defineProperty(globalThis, "animRendererUpdateEquipment", { configurable: true, writable: true, value: animRendererUpdateEquipment });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_pixiEnsureLoaded", { configurable: true, get: () => _pixiEnsureLoaded, set: (__v) => { _pixiEnsureLoaded = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_svgToTexture", { configurable: true, get: () => _svgToTexture, set: (__v) => { _svgToTexture = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_safeTextureFrom", { configurable: true, get: () => _safeTextureFrom, set: (__v) => { _safeTextureFrom = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_preloadTextures", { configurable: true, get: () => _preloadTextures, set: (__v) => { _preloadTextures = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_animLerp", { configurable: true, get: () => _animLerp, set: (__v) => { _animLerp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_animComputeTransforms", { configurable: true, get: () => _animComputeTransforms, set: (__v) => { _animComputeTransforms = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_buildScene", { configurable: true, get: () => _buildScene, set: (__v) => { _buildScene = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_updateSprites", { configurable: true, get: () => _updateSprites, set: (__v) => { _updateSprites = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_buildSceneV2", { configurable: true, get: () => _buildSceneV2, set: (__v) => { _buildSceneV2 = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_updateContainersV2", { configurable: true, get: () => _updateContainersV2, set: (__v) => { _updateContainersV2 = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animRendererMount", { configurable: true, get: () => animRendererMount, set: (__v) => { animRendererMount = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animRendererStaticFrame", { configurable: true, get: () => animRendererStaticFrame, set: (__v) => { animRendererStaticFrame = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animRendererUpdateEquipment", { configurable: true, get: () => animRendererUpdateEquipment, set: (__v) => { animRendererUpdateEquipment = __v; } });

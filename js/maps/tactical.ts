@@ -2233,90 +2233,164 @@ window.editarObjetoCanvas = editarObjetoCanvas;
 
 /* [migração-esm] accessors globais */
 Object.defineProperty(globalThis, "WALLS_STATE", { configurable: true, get: () => WALLS_STATE });
-Object.defineProperty(globalThis, "paredeBloqueiaMovimento", { configurable: true, writable: true, value: paredeBloqueiaMovimento });
-Object.defineProperty(globalThis, "portaAdjacenteAo", { configurable: true, writable: true, value: portaAdjacenteAo });
-Object.defineProperty(globalThis, "usarPorta", { configurable: true, writable: true, value: usarPorta });
-Object.defineProperty(globalThis, "_portaTransportarChar", { configurable: true, writable: true, value: _portaTransportarChar });
-Object.defineProperty(globalThis, "_charTemChave", { configurable: true, writable: true, value: _charTemChave });
-Object.defineProperty(globalThis, "paredePorRenderizar", { configurable: true, writable: true, value: paredePorRenderizar });
-Object.defineProperty(globalThis, "_snapParede", { configurable: true, writable: true, value: _snapParede });
-Object.defineProperty(globalThis, "_gerarSegmentos", { configurable: true, writable: true, value: _gerarSegmentos });
-Object.defineProperty(globalThis, "paredAdicionarPonto", { configurable: true, writable: true, value: paredAdicionarPonto });
-Object.defineProperty(globalThis, "paredRemover", { configurable: true, writable: true, value: paredRemover });
-Object.defineProperty(globalThis, "portaAdicionar", { configurable: true, writable: true, value: portaAdicionar });
-Object.defineProperty(globalThis, "portaEditar", { configurable: true, writable: true, value: portaEditar });
-Object.defineProperty(globalThis, "salvarRenderData", { configurable: true, writable: true, value: salvarRenderData });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "paredeBloqueiaMovimento", { configurable: true, get: () => paredeBloqueiaMovimento, set: (__v) => { paredeBloqueiaMovimento = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "portaAdjacenteAo", { configurable: true, get: () => portaAdjacenteAo, set: (__v) => { portaAdjacenteAo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "usarPorta", { configurable: true, get: () => usarPorta, set: (__v) => { usarPorta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_portaTransportarChar", { configurable: true, get: () => _portaTransportarChar, set: (__v) => { _portaTransportarChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_charTemChave", { configurable: true, get: () => _charTemChave, set: (__v) => { _charTemChave = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "paredePorRenderizar", { configurable: true, get: () => paredePorRenderizar, set: (__v) => { paredePorRenderizar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_snapParede", { configurable: true, get: () => _snapParede, set: (__v) => { _snapParede = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_gerarSegmentos", { configurable: true, get: () => _gerarSegmentos, set: (__v) => { _gerarSegmentos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "paredAdicionarPonto", { configurable: true, get: () => paredAdicionarPonto, set: (__v) => { paredAdicionarPonto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "paredRemover", { configurable: true, get: () => paredRemover, set: (__v) => { paredRemover = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "portaAdicionar", { configurable: true, get: () => portaAdicionar, set: (__v) => { portaAdicionar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "portaEditar", { configurable: true, get: () => portaEditar, set: (__v) => { portaEditar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarRenderData", { configurable: true, get: () => salvarRenderData, set: (__v) => { salvarRenderData = __v; } });
 Object.defineProperty(globalThis, "_origCtxGerarWalls", { configurable: true, get: () => _origCtxGerarWalls });
 Object.defineProperty(globalThis, "_origCtxExecutar", { configurable: true, get: () => _origCtxExecutar });
 Object.defineProperty(globalThis, "CENARIO_STATE", { configurable: true, get: () => CENARIO_STATE });
-Object.defineProperty(globalThis, "abrirPainelCenario", { configurable: true, writable: true, value: abrirPainelCenario });
-Object.defineProperty(globalThis, "fecharPainelCenario", { configurable: true, writable: true, value: fecharPainelCenario });
-Object.defineProperty(globalThis, "cenarioTab", { configurable: true, writable: true, value: cenarioTab });
-Object.defineProperty(globalThis, "cenarioBauLootChange", { configurable: true, writable: true, value: cenarioBauLootChange });
-Object.defineProperty(globalThis, "cenarioBuscarItem", { configurable: true, writable: true, value: cenarioBuscarItem });
-Object.defineProperty(globalThis, "cenarioSelecionarItem", { configurable: true, writable: true, value: cenarioSelecionarItem });
-Object.defineProperty(globalThis, "cenarioAtivarPlacement", { configurable: true, writable: true, value: cenarioAtivarPlacement });
-Object.defineProperty(globalThis, "cenarioHandleMapaClick", { configurable: true, writable: true, value: cenarioHandleMapaClick });
-Object.defineProperty(globalThis, "cenarioRenderObjetos", { configurable: true, writable: true, value: cenarioRenderObjetos });
-Object.defineProperty(globalThis, "cenarioRemoverObjeto", { configurable: true, writable: true, value: cenarioRemoverObjeto });
-Object.defineProperty(globalThis, "cenarioAbrirBauEditor", { configurable: true, writable: true, value: cenarioAbrirBauEditor });
-Object.defineProperty(globalThis, "cenarioRenderObjetos_mapa", { configurable: true, writable: true, value: cenarioRenderObjetos_mapa });
-Object.defineProperty(globalThis, "cenarioInteragirObjeto", { configurable: true, writable: true, value: cenarioInteragirObjeto });
-Object.defineProperty(globalThis, "_cenarioSalvarObj", { configurable: true, writable: true, value: _cenarioSalvarObj });
-Object.defineProperty(globalThis, "cenarioAbrirPorta", { configurable: true, writable: true, value: cenarioAbrirPorta });
-Object.defineProperty(globalThis, "cenarioPegarChave", { configurable: true, writable: true, value: cenarioPegarChave });
-Object.defineProperty(globalThis, "cenarioAbrirBau", { configurable: true, writable: true, value: cenarioAbrirBau });
-Object.defineProperty(globalThis, "cenarioObstaculoBloqueiaMovimento", { configurable: true, writable: true, value: cenarioObstaculoBloqueiaMovimento });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirPainelCenario", { configurable: true, get: () => abrirPainelCenario, set: (__v) => { abrirPainelCenario = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharPainelCenario", { configurable: true, get: () => fecharPainelCenario, set: (__v) => { fecharPainelCenario = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioTab", { configurable: true, get: () => cenarioTab, set: (__v) => { cenarioTab = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioBauLootChange", { configurable: true, get: () => cenarioBauLootChange, set: (__v) => { cenarioBauLootChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioBuscarItem", { configurable: true, get: () => cenarioBuscarItem, set: (__v) => { cenarioBuscarItem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioSelecionarItem", { configurable: true, get: () => cenarioSelecionarItem, set: (__v) => { cenarioSelecionarItem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioAtivarPlacement", { configurable: true, get: () => cenarioAtivarPlacement, set: (__v) => { cenarioAtivarPlacement = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioHandleMapaClick", { configurable: true, get: () => cenarioHandleMapaClick, set: (__v) => { cenarioHandleMapaClick = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioRenderObjetos", { configurable: true, get: () => cenarioRenderObjetos, set: (__v) => { cenarioRenderObjetos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioRemoverObjeto", { configurable: true, get: () => cenarioRemoverObjeto, set: (__v) => { cenarioRemoverObjeto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioAbrirBauEditor", { configurable: true, get: () => cenarioAbrirBauEditor, set: (__v) => { cenarioAbrirBauEditor = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioRenderObjetos_mapa", { configurable: true, get: () => cenarioRenderObjetos_mapa, set: (__v) => { cenarioRenderObjetos_mapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioInteragirObjeto", { configurable: true, get: () => cenarioInteragirObjeto, set: (__v) => { cenarioInteragirObjeto = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_cenarioSalvarObj", { configurable: true, get: () => _cenarioSalvarObj, set: (__v) => { _cenarioSalvarObj = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioAbrirPorta", { configurable: true, get: () => cenarioAbrirPorta, set: (__v) => { cenarioAbrirPorta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioPegarChave", { configurable: true, get: () => cenarioPegarChave, set: (__v) => { cenarioPegarChave = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioAbrirBau", { configurable: true, get: () => cenarioAbrirBau, set: (__v) => { cenarioAbrirBau = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioObstaculoBloqueiaMovimento", { configurable: true, get: () => cenarioObstaculoBloqueiaMovimento, set: (__v) => { cenarioObstaculoBloqueiaMovimento = __v; } });
 Object.defineProperty(globalThis, "_origCtxGerarCenario", { configurable: true, get: () => _origCtxGerarCenario });
 Object.defineProperty(globalThis, "_origCtxExecutarCenario", { configurable: true, get: () => _origCtxExecutarCenario });
 Object.defineProperty(globalThis, "CENA_ED", { configurable: true, get: () => CENA_ED });
-Object.defineProperty(globalThis, "abrirEditorCena", { configurable: true, writable: true, value: abrirEditorCena });
-Object.defineProperty(globalThis, "fecharEditorCena", { configurable: true, writable: true, value: fecharEditorCena });
-Object.defineProperty(globalThis, "cenaSetFerramenta", { configurable: true, writable: true, value: cenaSetFerramenta });
-Object.defineProperty(globalThis, "_cenaBotoesAtualizar", { configurable: true, writable: true, value: _cenaBotoesAtualizar });
-Object.defineProperty(globalThis, "cenaRenderizarCanvas", { configurable: true, writable: true, value: cenaRenderizarCanvas });
-Object.defineProperty(globalThis, "cenaGrade", { configurable: true, writable: true, value: cenaGrade });
-Object.defineProperty(globalThis, "cenaRenderizarSVG", { configurable: true, writable: true, value: cenaRenderizarSVG });
-Object.defineProperty(globalThis, "_cenaSvgEl", { configurable: true, writable: true, value: _cenaSvgEl });
-Object.defineProperty(globalThis, "_cenaHandleClick", { configurable: true, writable: true, value: _cenaHandleClick });
-Object.defineProperty(globalThis, "_cenaCoordsFromEvent", { configurable: true, writable: true, value: _cenaCoordsFromEvent });
-Object.defineProperty(globalThis, "cenaRemoverParede", { configurable: true, writable: true, value: cenaRemoverParede });
-Object.defineProperty(globalThis, "cenaRemoverObj", { configurable: true, writable: true, value: cenaRemoverObj });
-Object.defineProperty(globalThis, "cfgPortaConfirmar", { configurable: true, writable: true, value: cfgPortaConfirmar });
-Object.defineProperty(globalThis, "cfgChaveConfirmar", { configurable: true, writable: true, value: cfgChaveConfirmar });
-Object.defineProperty(globalThis, "cfgBauTab", { configurable: true, writable: true, value: cfgBauTab });
-Object.defineProperty(globalThis, "cfgBauRenderLista", { configurable: true, writable: true, value: cfgBauRenderLista });
-Object.defineProperty(globalThis, "cfgBauToggleItem", { configurable: true, writable: true, value: cfgBauToggleItem });
-Object.defineProperty(globalThis, "cfgBauRenderSelecionados", { configurable: true, writable: true, value: cfgBauRenderSelecionados });
-Object.defineProperty(globalThis, "cfgBauConfirmar", { configurable: true, writable: true, value: cfgBauConfirmar });
-Object.defineProperty(globalThis, "cenaLimparTudo", { configurable: true, writable: true, value: cenaLimparTudo });
-Object.defineProperty(globalThis, "cenaSalvar", { configurable: true, writable: true, value: cenaSalvar });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirEditorCena", { configurable: true, get: () => abrirEditorCena, set: (__v) => { abrirEditorCena = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharEditorCena", { configurable: true, get: () => fecharEditorCena, set: (__v) => { fecharEditorCena = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenaSetFerramenta", { configurable: true, get: () => cenaSetFerramenta, set: (__v) => { cenaSetFerramenta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_cenaBotoesAtualizar", { configurable: true, get: () => _cenaBotoesAtualizar, set: (__v) => { _cenaBotoesAtualizar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenaRenderizarCanvas", { configurable: true, get: () => cenaRenderizarCanvas, set: (__v) => { cenaRenderizarCanvas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenaGrade", { configurable: true, get: () => cenaGrade, set: (__v) => { cenaGrade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenaRenderizarSVG", { configurable: true, get: () => cenaRenderizarSVG, set: (__v) => { cenaRenderizarSVG = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_cenaSvgEl", { configurable: true, get: () => _cenaSvgEl, set: (__v) => { _cenaSvgEl = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_cenaHandleClick", { configurable: true, get: () => _cenaHandleClick, set: (__v) => { _cenaHandleClick = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_cenaCoordsFromEvent", { configurable: true, get: () => _cenaCoordsFromEvent, set: (__v) => { _cenaCoordsFromEvent = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenaRemoverParede", { configurable: true, get: () => cenaRemoverParede, set: (__v) => { cenaRemoverParede = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenaRemoverObj", { configurable: true, get: () => cenaRemoverObj, set: (__v) => { cenaRemoverObj = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cfgPortaConfirmar", { configurable: true, get: () => cfgPortaConfirmar, set: (__v) => { cfgPortaConfirmar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cfgChaveConfirmar", { configurable: true, get: () => cfgChaveConfirmar, set: (__v) => { cfgChaveConfirmar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cfgBauTab", { configurable: true, get: () => cfgBauTab, set: (__v) => { cfgBauTab = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cfgBauRenderLista", { configurable: true, get: () => cfgBauRenderLista, set: (__v) => { cfgBauRenderLista = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cfgBauToggleItem", { configurable: true, get: () => cfgBauToggleItem, set: (__v) => { cfgBauToggleItem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cfgBauRenderSelecionados", { configurable: true, get: () => cfgBauRenderSelecionados, set: (__v) => { cfgBauRenderSelecionados = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cfgBauConfirmar", { configurable: true, get: () => cfgBauConfirmar, set: (__v) => { cfgBauConfirmar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenaLimparTudo", { configurable: true, get: () => cenaLimparTudo, set: (__v) => { cenaLimparTudo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenaSalvar", { configurable: true, get: () => cenaSalvar, set: (__v) => { cenaSalvar = __v; } });
 Object.defineProperty(globalThis, "_origParedePorRenderizar", { configurable: true, get: () => _origParedePorRenderizar });
-Object.defineProperty(globalThis, "_renderizarObjetosNoMapa", { configurable: true, writable: true, value: _renderizarObjetosNoMapa });
-Object.defineProperty(globalThis, "_objetoClicar", { configurable: true, writable: true, value: _objetoClicar });
-Object.defineProperty(globalThis, "_coletarChave", { configurable: true, writable: true, value: _coletarChave });
-Object.defineProperty(globalThis, "charTemChave", { configurable: true, writable: true, value: charTemChave });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_renderizarObjetosNoMapa", { configurable: true, get: () => _renderizarObjetosNoMapa, set: (__v) => { _renderizarObjetosNoMapa = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_objetoClicar", { configurable: true, get: () => _objetoClicar, set: (__v) => { _objetoClicar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_coletarChave", { configurable: true, get: () => _coletarChave, set: (__v) => { _coletarChave = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "charTemChave", { configurable: true, get: () => charTemChave, set: (__v) => { charTemChave = __v; } });
 Object.defineProperty(globalThis, "_origUsarPorta", { configurable: true, get: () => _origUsarPorta });
 Object.defineProperty(globalThis, "_origParedeBloq", { configurable: true, get: () => _origParedeBloq });
 Object.defineProperty(globalThis, "_origCtxGerarPortas", { configurable: true, get: () => _origCtxGerarPortas });
 Object.defineProperty(globalThis, "_origCtxExecPortas", { configurable: true, get: () => _origCtxExecPortas });
-Object.defineProperty(globalThis, "_abrirBauModal", { configurable: true, writable: true, value: _abrirBauModal });
-Object.defineProperty(globalThis, "abrirBauConfirmar", { configurable: true, writable: true, value: abrirBauConfirmar });
-Object.defineProperty(globalThis, "_rarPeso", { configurable: true, writable: true, value: _rarPeso });
-Object.defineProperty(globalThis, "_abrirModalAtacarPorta", { configurable: true, writable: true, value: _abrirModalAtacarPorta });
-Object.defineProperty(globalThis, "_aplicarDanoPorta", { configurable: true, writable: true, value: _aplicarDanoPorta });
-Object.defineProperty(globalThis, "_abrirModalAtacarObstaculo", { configurable: true, writable: true, value: _abrirModalAtacarObstaculo });
-Object.defineProperty(globalThis, "_aplicarDanoObstaculo", { configurable: true, writable: true, value: _aplicarDanoObstaculo });
-Object.defineProperty(globalThis, "calcularDanoHabilidade", { configurable: true, writable: true, value: calcularDanoHabilidade });
-Object.defineProperty(globalThis, "nmAtivarModoParede", { configurable: true, writable: true, value: nmAtivarModoParede });
-Object.defineProperty(globalThis, "nmAtivarModoPorta", { configurable: true, writable: true, value: nmAtivarModoPorta });
-Object.defineProperty(globalThis, "nmRenderParedesList", { configurable: true, writable: true, value: nmRenderParedesList });
-Object.defineProperty(globalThis, "cenarioPortaPopularMapas", { configurable: true, writable: true, value: cenarioPortaPopularMapas });
-Object.defineProperty(globalThis, "trocarAbaCenario", { configurable: true, writable: true, value: trocarAbaCenario });
-Object.defineProperty(globalThis, "atualizarResumoObjetosCenario", { configurable: true, writable: true, value: atualizarResumoObjetosCenario });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_abrirBauModal", { configurable: true, get: () => _abrirBauModal, set: (__v) => { _abrirBauModal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirBauConfirmar", { configurable: true, get: () => abrirBauConfirmar, set: (__v) => { abrirBauConfirmar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_rarPeso", { configurable: true, get: () => _rarPeso, set: (__v) => { _rarPeso = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_abrirModalAtacarPorta", { configurable: true, get: () => _abrirModalAtacarPorta, set: (__v) => { _abrirModalAtacarPorta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aplicarDanoPorta", { configurable: true, get: () => _aplicarDanoPorta, set: (__v) => { _aplicarDanoPorta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_abrirModalAtacarObstaculo", { configurable: true, get: () => _abrirModalAtacarObstaculo, set: (__v) => { _abrirModalAtacarObstaculo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aplicarDanoObstaculo", { configurable: true, get: () => _aplicarDanoObstaculo, set: (__v) => { _aplicarDanoObstaculo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "calcularDanoHabilidade", { configurable: true, get: () => calcularDanoHabilidade, set: (__v) => { calcularDanoHabilidade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmAtivarModoParede", { configurable: true, get: () => nmAtivarModoParede, set: (__v) => { nmAtivarModoParede = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmAtivarModoPorta", { configurable: true, get: () => nmAtivarModoPorta, set: (__v) => { nmAtivarModoPorta = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "nmRenderParedesList", { configurable: true, get: () => nmRenderParedesList, set: (__v) => { nmRenderParedesList = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "cenarioPortaPopularMapas", { configurable: true, get: () => cenarioPortaPopularMapas, set: (__v) => { cenarioPortaPopularMapas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "trocarAbaCenario", { configurable: true, get: () => trocarAbaCenario, set: (__v) => { trocarAbaCenario = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "atualizarResumoObjetosCenario", { configurable: true, get: () => atualizarResumoObjetosCenario, set: (__v) => { atualizarResumoObjetosCenario = __v; } });
 Object.defineProperty(globalThis, "CANVAS_CONTEXT", { configurable: true, get: () => CANVAS_CONTEXT, set: (__v) => { CANVAS_CONTEXT = __v; } });
-Object.defineProperty(globalThis, "abrirModalCenarioNoCanvas", { configurable: true, writable: true, value: abrirModalCenarioNoCanvas });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalCenarioNoCanvas", { configurable: true, get: () => abrirModalCenarioNoCanvas, set: (__v) => { abrirModalCenarioNoCanvas = __v; } });
 Object.defineProperty(globalThis, "cenarioAtivarPlacement_original", { configurable: true, get: () => cenarioAtivarPlacement_original });
-Object.defineProperty(globalThis, "coletarDadosFormularioCenario", { configurable: true, writable: true, value: coletarDadosFormularioCenario });
-Object.defineProperty(globalThis, "adicionarObjetoAoCanvas", { configurable: true, writable: true, value: adicionarObjetoAoCanvas });
-Object.defineProperty(globalThis, "editarObjetoCanvas", { configurable: true, writable: true, value: editarObjetoCanvas });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "coletarDadosFormularioCenario", { configurable: true, get: () => coletarDadosFormularioCenario, set: (__v) => { coletarDadosFormularioCenario = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "adicionarObjetoAoCanvas", { configurable: true, get: () => adicionarObjetoAoCanvas, set: (__v) => { adicionarObjetoAoCanvas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "editarObjetoCanvas", { configurable: true, get: () => editarObjetoCanvas, set: (__v) => { editarObjetoCanvas = __v; } });

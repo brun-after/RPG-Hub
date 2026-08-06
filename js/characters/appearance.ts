@@ -2192,71 +2192,139 @@ Object.defineProperty(globalThis, "APMOD_PARTS", { configurable: true, get: () =
 Object.defineProperty(globalThis, "CHAR_JSON_TEMPLATES", { configurable: true, get: () => CHAR_JSON_TEMPLATES, set: (__v) => { CHAR_JSON_TEMPLATES = __v; } });
 Object.defineProperty(globalThis, "EQUIP_SLOT_LIMITS", { configurable: true, get: () => EQUIP_SLOT_LIMITS });
 Object.defineProperty(globalThis, "CREATURE_MODELS", { configurable: true, get: () => CREATURE_MODELS });
-Object.defineProperty(globalThis, "_hexDarken2", { configurable: true, writable: true, value: _hexDarken2 });
-Object.defineProperty(globalThis, "_hexDarken", { configurable: true, writable: true, value: _hexDarken });
-Object.defineProperty(globalThis, "_svgPart", { configurable: true, writable: true, value: _svgPart });
-Object.defineProperty(globalThis, "apmodRenderFront", { configurable: true, writable: true, value: apmodRenderFront });
-Object.defineProperty(globalThis, "apmodRenderIso", { configurable: true, writable: true, value: apmodRenderIso });
-Object.defineProperty(globalThis, "apmodRenderHead", { configurable: true, writable: true, value: apmodRenderHead });
-Object.defineProperty(globalThis, "apmodTokenSVG", { configurable: true, writable: true, value: apmodTokenSVG });
-Object.defineProperty(globalThis, "abrirModalAparencia", { configurable: true, writable: true, value: abrirModalAparencia });
-Object.defineProperty(globalThis, "_apmodTabJson", { configurable: true, writable: true, value: _apmodTabJson });
-Object.defineProperty(globalThis, "_apmodTabBuilder", { configurable: true, writable: true, value: _apmodTabBuilder });
-Object.defineProperty(globalThis, "_apmodTabSvg", { configurable: true, writable: true, value: _apmodTabSvg });
-Object.defineProperty(globalThis, "_apmodTabCriatura", { configurable: true, writable: true, value: _apmodTabCriatura });
-Object.defineProperty(globalThis, "apmodTogglePreviewPanel", { configurable: true, writable: true, value: apmodTogglePreviewPanel });
-Object.defineProperty(globalThis, "apmodSwitchTab", { configurable: true, writable: true, value: apmodSwitchTab });
-Object.defineProperty(globalThis, "apmodFiltrarEstilo", { configurable: true, writable: true, value: apmodFiltrarEstilo });
-Object.defineProperty(globalThis, "apmodSelecionarParte", { configurable: true, writable: true, value: apmodSelecionarParte });
-Object.defineProperty(globalThis, "apmodSelecionarCriatura", { configurable: true, writable: true, value: apmodSelecionarCriatura });
-Object.defineProperty(globalThis, "apmodCarregarTemplate", { configurable: true, writable: true, value: apmodCarregarTemplate });
-Object.defineProperty(globalThis, "apmodPreencherBuilder", { configurable: true, writable: true, value: apmodPreencherBuilder });
-Object.defineProperty(globalThis, "apmodGetBaseAparencia", { configurable: true, writable: true, value: apmodGetBaseAparencia });
-Object.defineProperty(globalThis, "apmodGetCurrentAparencia", { configurable: true, writable: true, value: apmodGetCurrentAparencia });
-Object.defineProperty(globalThis, "apmodFecharModal", { configurable: true, writable: true, value: apmodFecharModal });
-Object.defineProperty(globalThis, "apmodAtualizarPreview", { configurable: true, writable: true, value: apmodAtualizarPreview });
-Object.defineProperty(globalThis, "apmodTogglePreviewGrande", { configurable: true, writable: true, value: apmodTogglePreviewGrande });
-Object.defineProperty(globalThis, "apmodSharpenImg", { configurable: true, writable: true, value: apmodSharpenImg });
-Object.defineProperty(globalThis, "apmodFileToBase64", { configurable: true, writable: true, value: apmodFileToBase64 });
-Object.defineProperty(globalThis, "apmodCopiarPromptSvg", { configurable: true, writable: true, value: apmodCopiarPromptSvg });
-Object.defineProperty(globalThis, "apmodParseSvgJson", { configurable: true, writable: true, value: apmodParseSvgJson });
-Object.defineProperty(globalThis, "_aeqGenerateComposedImg", { configurable: true, writable: true, value: _aeqGenerateComposedImg });
-Object.defineProperty(globalThis, "apmodSalvar", { configurable: true, writable: true, value: apmodSalvar });
-Object.defineProperty(globalThis, "tintOverlayHtml", { configurable: true, writable: true, value: tintOverlayHtml });
-Object.defineProperty(globalThis, "tintFilterString", { configurable: true, writable: true, value: tintFilterString });
-Object.defineProperty(globalThis, "tintWrapImg", { configurable: true, writable: true, value: tintWrapImg });
-Object.defineProperty(globalThis, "_apmodTabTint", { configurable: true, writable: true, value: _apmodTabTint });
-Object.defineProperty(globalThis, "_apmodTintLinhaHtml", { configurable: true, writable: true, value: _apmodTintLinhaHtml });
-Object.defineProperty(globalThis, "apmodTintIniciar", { configurable: true, writable: true, value: apmodTintIniciar });
-Object.defineProperty(globalThis, "apmodTintAdicionar", { configurable: true, writable: true, value: apmodTintAdicionar });
-Object.defineProperty(globalThis, "apmodTintAtualizar", { configurable: true, writable: true, value: apmodTintAtualizar });
-Object.defineProperty(globalThis, "apmodTintRemover", { configurable: true, writable: true, value: apmodTintRemover });
-Object.defineProperty(globalThis, "apmodTintRefresh", { configurable: true, writable: true, value: apmodTintRefresh });
-Object.defineProperty(globalThis, "apmodTintAtualizarPreview", { configurable: true, writable: true, value: apmodTintAtualizarPreview });
-Object.defineProperty(globalThis, "apmodRemoverEquip", { configurable: true, writable: true, value: apmodRemoverEquip });
-Object.defineProperty(globalThis, "_apmodTabEquip", { configurable: true, writable: true, value: _apmodTabEquip });
-Object.defineProperty(globalThis, "_apmodRefreshEquipLista", { configurable: true, writable: true, value: _apmodRefreshEquipLista });
-Object.defineProperty(globalThis, "apmodToggleEquipCamada", { configurable: true, writable: true, value: apmodToggleEquipCamada });
-Object.defineProperty(globalThis, "_aeqSlots", { configurable: true, writable: true, value: _aeqSlots });
-Object.defineProperty(globalThis, "apmodAbrirAdicionarEquip", { configurable: true, writable: true, value: apmodAbrirAdicionarEquip });
-Object.defineProperty(globalThis, "_aeqRenderChar", { configurable: true, writable: true, value: _aeqRenderChar });
-Object.defineProperty(globalThis, "_aeqUpdateVisual", { configurable: true, writable: true, value: _aeqUpdateVisual });
-Object.defineProperty(globalThis, "_aeqPositionDrag", { configurable: true, writable: true, value: _aeqPositionDrag });
-Object.defineProperty(globalThis, "_aeqFromInputs", { configurable: true, writable: true, value: _aeqFromInputs });
-Object.defineProperty(globalThis, "_aeqSetCamada", { configurable: true, writable: true, value: _aeqSetCamada });
-Object.defineProperty(globalThis, "_aeqAttachHandlers", { configurable: true, writable: true, value: _aeqAttachHandlers });
-Object.defineProperty(globalThis, "_aeqOnMove", { configurable: true, writable: true, value: _aeqOnMove });
-Object.defineProperty(globalThis, "_aeqOnUp", { configurable: true, writable: true, value: _aeqOnUp });
-Object.defineProperty(globalThis, "_aeqComputeMatrix3d", { configurable: true, writable: true, value: _aeqComputeMatrix3d });
-Object.defineProperty(globalThis, "_aeqRepaintWarpLayer", { configurable: true, writable: true, value: _aeqRepaintWarpLayer });
-Object.defineProperty(globalThis, "_aeqWarpGridInner", { configurable: true, writable: true, value: _aeqWarpGridInner });
-Object.defineProperty(globalThis, "_aeqBuildWarpLayer", { configurable: true, writable: true, value: _aeqBuildWarpLayer });
-Object.defineProperty(globalThis, "_aeqWarpMoveDoc", { configurable: true, writable: true, value: _aeqWarpMoveDoc });
-Object.defineProperty(globalThis, "_aeqWarpUpDoc", { configurable: true, writable: true, value: _aeqWarpUpDoc });
-Object.defineProperty(globalThis, "_aeqToggleWarpMode", { configurable: true, writable: true, value: _aeqToggleWarpMode });
-Object.defineProperty(globalThis, "_aeqResetWarp", { configurable: true, writable: true, value: _aeqResetWarp });
-Object.defineProperty(globalThis, "_aeqClearWarp", { configurable: true, writable: true, value: _aeqClearWarp });
-Object.defineProperty(globalThis, "aeqModoVisual", { configurable: true, writable: true, value: aeqModoVisual });
-Object.defineProperty(globalThis, "aeqFileUpload", { configurable: true, writable: true, value: aeqFileUpload });
-Object.defineProperty(globalThis, "aeqAdicionarBonusRow", { configurable: true, writable: true, value: aeqAdicionarBonusRow });
-Object.defineProperty(globalThis, "apmodConfirmarEquip", { configurable: true, writable: true, value: apmodConfirmarEquip });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_hexDarken2", { configurable: true, get: () => _hexDarken2, set: (__v) => { _hexDarken2 = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_hexDarken", { configurable: true, get: () => _hexDarken, set: (__v) => { _hexDarken = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_svgPart", { configurable: true, get: () => _svgPart, set: (__v) => { _svgPart = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodRenderFront", { configurable: true, get: () => apmodRenderFront, set: (__v) => { apmodRenderFront = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodRenderIso", { configurable: true, get: () => apmodRenderIso, set: (__v) => { apmodRenderIso = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodRenderHead", { configurable: true, get: () => apmodRenderHead, set: (__v) => { apmodRenderHead = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodTokenSVG", { configurable: true, get: () => apmodTokenSVG, set: (__v) => { apmodTokenSVG = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalAparencia", { configurable: true, get: () => abrirModalAparencia, set: (__v) => { abrirModalAparencia = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_apmodTabJson", { configurable: true, get: () => _apmodTabJson, set: (__v) => { _apmodTabJson = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_apmodTabBuilder", { configurable: true, get: () => _apmodTabBuilder, set: (__v) => { _apmodTabBuilder = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_apmodTabSvg", { configurable: true, get: () => _apmodTabSvg, set: (__v) => { _apmodTabSvg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_apmodTabCriatura", { configurable: true, get: () => _apmodTabCriatura, set: (__v) => { _apmodTabCriatura = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodTogglePreviewPanel", { configurable: true, get: () => apmodTogglePreviewPanel, set: (__v) => { apmodTogglePreviewPanel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodSwitchTab", { configurable: true, get: () => apmodSwitchTab, set: (__v) => { apmodSwitchTab = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodFiltrarEstilo", { configurable: true, get: () => apmodFiltrarEstilo, set: (__v) => { apmodFiltrarEstilo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodSelecionarParte", { configurable: true, get: () => apmodSelecionarParte, set: (__v) => { apmodSelecionarParte = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodSelecionarCriatura", { configurable: true, get: () => apmodSelecionarCriatura, set: (__v) => { apmodSelecionarCriatura = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodCarregarTemplate", { configurable: true, get: () => apmodCarregarTemplate, set: (__v) => { apmodCarregarTemplate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodPreencherBuilder", { configurable: true, get: () => apmodPreencherBuilder, set: (__v) => { apmodPreencherBuilder = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodGetBaseAparencia", { configurable: true, get: () => apmodGetBaseAparencia, set: (__v) => { apmodGetBaseAparencia = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodGetCurrentAparencia", { configurable: true, get: () => apmodGetCurrentAparencia, set: (__v) => { apmodGetCurrentAparencia = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodFecharModal", { configurable: true, get: () => apmodFecharModal, set: (__v) => { apmodFecharModal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodAtualizarPreview", { configurable: true, get: () => apmodAtualizarPreview, set: (__v) => { apmodAtualizarPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodTogglePreviewGrande", { configurable: true, get: () => apmodTogglePreviewGrande, set: (__v) => { apmodTogglePreviewGrande = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodSharpenImg", { configurable: true, get: () => apmodSharpenImg, set: (__v) => { apmodSharpenImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodFileToBase64", { configurable: true, get: () => apmodFileToBase64, set: (__v) => { apmodFileToBase64 = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodCopiarPromptSvg", { configurable: true, get: () => apmodCopiarPromptSvg, set: (__v) => { apmodCopiarPromptSvg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodParseSvgJson", { configurable: true, get: () => apmodParseSvgJson, set: (__v) => { apmodParseSvgJson = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqGenerateComposedImg", { configurable: true, get: () => _aeqGenerateComposedImg, set: (__v) => { _aeqGenerateComposedImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodSalvar", { configurable: true, get: () => apmodSalvar, set: (__v) => { apmodSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tintOverlayHtml", { configurable: true, get: () => tintOverlayHtml, set: (__v) => { tintOverlayHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tintFilterString", { configurable: true, get: () => tintFilterString, set: (__v) => { tintFilterString = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "tintWrapImg", { configurable: true, get: () => tintWrapImg, set: (__v) => { tintWrapImg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_apmodTabTint", { configurable: true, get: () => _apmodTabTint, set: (__v) => { _apmodTabTint = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_apmodTintLinhaHtml", { configurable: true, get: () => _apmodTintLinhaHtml, set: (__v) => { _apmodTintLinhaHtml = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodTintIniciar", { configurable: true, get: () => apmodTintIniciar, set: (__v) => { apmodTintIniciar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodTintAdicionar", { configurable: true, get: () => apmodTintAdicionar, set: (__v) => { apmodTintAdicionar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodTintAtualizar", { configurable: true, get: () => apmodTintAtualizar, set: (__v) => { apmodTintAtualizar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodTintRemover", { configurable: true, get: () => apmodTintRemover, set: (__v) => { apmodTintRemover = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodTintRefresh", { configurable: true, get: () => apmodTintRefresh, set: (__v) => { apmodTintRefresh = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodTintAtualizarPreview", { configurable: true, get: () => apmodTintAtualizarPreview, set: (__v) => { apmodTintAtualizarPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodRemoverEquip", { configurable: true, get: () => apmodRemoverEquip, set: (__v) => { apmodRemoverEquip = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_apmodTabEquip", { configurable: true, get: () => _apmodTabEquip, set: (__v) => { _apmodTabEquip = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_apmodRefreshEquipLista", { configurable: true, get: () => _apmodRefreshEquipLista, set: (__v) => { _apmodRefreshEquipLista = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodToggleEquipCamada", { configurable: true, get: () => apmodToggleEquipCamada, set: (__v) => { apmodToggleEquipCamada = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqSlots", { configurable: true, get: () => _aeqSlots, set: (__v) => { _aeqSlots = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodAbrirAdicionarEquip", { configurable: true, get: () => apmodAbrirAdicionarEquip, set: (__v) => { apmodAbrirAdicionarEquip = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqRenderChar", { configurable: true, get: () => _aeqRenderChar, set: (__v) => { _aeqRenderChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqUpdateVisual", { configurable: true, get: () => _aeqUpdateVisual, set: (__v) => { _aeqUpdateVisual = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqPositionDrag", { configurable: true, get: () => _aeqPositionDrag, set: (__v) => { _aeqPositionDrag = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqFromInputs", { configurable: true, get: () => _aeqFromInputs, set: (__v) => { _aeqFromInputs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqSetCamada", { configurable: true, get: () => _aeqSetCamada, set: (__v) => { _aeqSetCamada = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqAttachHandlers", { configurable: true, get: () => _aeqAttachHandlers, set: (__v) => { _aeqAttachHandlers = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqOnMove", { configurable: true, get: () => _aeqOnMove, set: (__v) => { _aeqOnMove = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqOnUp", { configurable: true, get: () => _aeqOnUp, set: (__v) => { _aeqOnUp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqComputeMatrix3d", { configurable: true, get: () => _aeqComputeMatrix3d, set: (__v) => { _aeqComputeMatrix3d = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqRepaintWarpLayer", { configurable: true, get: () => _aeqRepaintWarpLayer, set: (__v) => { _aeqRepaintWarpLayer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqWarpGridInner", { configurable: true, get: () => _aeqWarpGridInner, set: (__v) => { _aeqWarpGridInner = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqBuildWarpLayer", { configurable: true, get: () => _aeqBuildWarpLayer, set: (__v) => { _aeqBuildWarpLayer = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqWarpMoveDoc", { configurable: true, get: () => _aeqWarpMoveDoc, set: (__v) => { _aeqWarpMoveDoc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqWarpUpDoc", { configurable: true, get: () => _aeqWarpUpDoc, set: (__v) => { _aeqWarpUpDoc = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqToggleWarpMode", { configurable: true, get: () => _aeqToggleWarpMode, set: (__v) => { _aeqToggleWarpMode = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqResetWarp", { configurable: true, get: () => _aeqResetWarp, set: (__v) => { _aeqResetWarp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_aeqClearWarp", { configurable: true, get: () => _aeqClearWarp, set: (__v) => { _aeqClearWarp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "aeqModoVisual", { configurable: true, get: () => aeqModoVisual, set: (__v) => { aeqModoVisual = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "aeqFileUpload", { configurable: true, get: () => aeqFileUpload, set: (__v) => { aeqFileUpload = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "aeqAdicionarBonusRow", { configurable: true, get: () => aeqAdicionarBonusRow, set: (__v) => { aeqAdicionarBonusRow = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "apmodConfirmarEquip", { configurable: true, get: () => apmodConfirmarEquip, set: (__v) => { apmodConfirmarEquip = __v; } });

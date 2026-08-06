@@ -353,24 +353,45 @@ function chatEscapar(texto) {
 Object.defineProperty(globalThis, "CHAT_TTL", { configurable: true, get: () => CHAT_TTL });
 Object.defineProperty(globalThis, "CHAT_CHAR_CAP", { configurable: true, get: () => CHAT_CHAR_CAP });
 Object.defineProperty(globalThis, "CHAT_LORE_SEC", { configurable: true, get: () => CHAT_LORE_SEC });
-Object.defineProperty(globalThis, "chatSerializar", { configurable: true, writable: true, value: chatSerializar });
-Object.defineProperty(globalThis, "chatSalvarLocal", { configurable: true, writable: true, value: chatSalvarLocal });
-Object.defineProperty(globalThis, "chatLerLocal", { configurable: true, writable: true, value: chatLerLocal });
-Object.defineProperty(globalThis, "chatAgendarSalvoBanco", { configurable: true, writable: true, value: chatAgendarSalvoBanco });
-Object.defineProperty(globalThis, "chatCarregarDoBanco", { configurable: true, writable: true, value: chatCarregarDoBanco });
-Object.defineProperty(globalThis, "chatIniciar", { configurable: true, writable: true, value: chatIniciar });
-Object.defineProperty(globalThis, "chatAtualizarIdentidade", { configurable: true, writable: true, value: chatAtualizarIdentidade });
-Object.defineProperty(globalThis, "chatPopularNPCSel", { configurable: true, writable: true, value: chatPopularNPCSel });
-Object.defineProperty(globalThis, "chatEnviar", { configurable: true, writable: true, value: chatEnviar });
-Object.defineProperty(globalThis, "chatReceberMensagem", { configurable: true, writable: true, value: chatReceberMensagem });
-Object.defineProperty(globalThis, "chatRenderizar", { configurable: true, writable: true, value: chatRenderizar });
-Object.defineProperty(globalThis, "chatReceberPresenca", { configurable: true, writable: true, value: chatReceberPresenca });
-Object.defineProperty(globalThis, "chatAtualizarOnline", { configurable: true, writable: true, value: chatAtualizarOnline });
-Object.defineProperty(globalThis, "chatMostrar", { configurable: true, writable: true, value: chatMostrar });
-Object.defineProperty(globalThis, "chatOcultar", { configurable: true, writable: true, value: chatOcultar });
-Object.defineProperty(globalThis, "reflashDados", { configurable: true, writable: true, value: reflashDados });
-Object.defineProperty(globalThis, "chatToggle", { configurable: true, writable: true, value: chatToggle });
-Object.defineProperty(globalThis, "chatAbrir", { configurable: true, writable: true, value: chatAbrir });
-Object.defineProperty(globalThis, "chatAtualizarBadge", { configurable: true, writable: true, value: chatAtualizarBadge });
-Object.defineProperty(globalThis, "chatSalvarLog", { configurable: true, writable: true, value: chatSalvarLog });
-Object.defineProperty(globalThis, "chatEscapar", { configurable: true, writable: true, value: chatEscapar });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatSerializar", { configurable: true, get: () => chatSerializar, set: (__v) => { chatSerializar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatSalvarLocal", { configurable: true, get: () => chatSalvarLocal, set: (__v) => { chatSalvarLocal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatLerLocal", { configurable: true, get: () => chatLerLocal, set: (__v) => { chatLerLocal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatAgendarSalvoBanco", { configurable: true, get: () => chatAgendarSalvoBanco, set: (__v) => { chatAgendarSalvoBanco = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatCarregarDoBanco", { configurable: true, get: () => chatCarregarDoBanco, set: (__v) => { chatCarregarDoBanco = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatIniciar", { configurable: true, get: () => chatIniciar, set: (__v) => { chatIniciar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatAtualizarIdentidade", { configurable: true, get: () => chatAtualizarIdentidade, set: (__v) => { chatAtualizarIdentidade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatPopularNPCSel", { configurable: true, get: () => chatPopularNPCSel, set: (__v) => { chatPopularNPCSel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatEnviar", { configurable: true, get: () => chatEnviar, set: (__v) => { chatEnviar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatReceberMensagem", { configurable: true, get: () => chatReceberMensagem, set: (__v) => { chatReceberMensagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatRenderizar", { configurable: true, get: () => chatRenderizar, set: (__v) => { chatRenderizar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatReceberPresenca", { configurable: true, get: () => chatReceberPresenca, set: (__v) => { chatReceberPresenca = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatAtualizarOnline", { configurable: true, get: () => chatAtualizarOnline, set: (__v) => { chatAtualizarOnline = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatMostrar", { configurable: true, get: () => chatMostrar, set: (__v) => { chatMostrar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatOcultar", { configurable: true, get: () => chatOcultar, set: (__v) => { chatOcultar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "reflashDados", { configurable: true, get: () => reflashDados, set: (__v) => { reflashDados = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatToggle", { configurable: true, get: () => chatToggle, set: (__v) => { chatToggle = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatAbrir", { configurable: true, get: () => chatAbrir, set: (__v) => { chatAbrir = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatAtualizarBadge", { configurable: true, get: () => chatAtualizarBadge, set: (__v) => { chatAtualizarBadge = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatSalvarLog", { configurable: true, get: () => chatSalvarLog, set: (__v) => { chatSalvarLog = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "chatEscapar", { configurable: true, get: () => chatEscapar, set: (__v) => { chatEscapar = __v; } });

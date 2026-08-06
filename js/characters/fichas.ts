@@ -570,18 +570,33 @@ window.fichasRefreshAtributos = fichasRefreshAtributos;
 
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "fichasSelectChar", { configurable: true, writable: true, value: fichasSelectChar });
-Object.defineProperty(globalThis, "fichasFiltrar", { configurable: true, writable: true, value: fichasFiltrar });
-Object.defineProperty(globalThis, "fichasFiltrarLimpar", { configurable: true, writable: true, value: fichasFiltrarLimpar });
-Object.defineProperty(globalThis, "buildFichasBtns", { configurable: true, writable: true, value: buildFichasBtns });
-Object.defineProperty(globalThis, "renderFichasBtns", { configurable: true, writable: true, value: renderFichasBtns });
-Object.defineProperty(globalThis, "fichasToggleSection", { configurable: true, writable: true, value: fichasToggleSection });
-Object.defineProperty(globalThis, "_fichasAccordion", { configurable: true, writable: true, value: _fichasAccordion });
-Object.defineProperty(globalThis, "fichasToggleEditPersonagem", { configurable: true, writable: true, value: fichasToggleEditPersonagem });
-Object.defineProperty(globalThis, "fichasToggleEditAtributos", { configurable: true, writable: true, value: fichasToggleEditAtributos });
-Object.defineProperty(globalThis, "fichasHpStep", { configurable: true, writable: true, value: fichasHpStep });
-Object.defineProperty(globalThis, "_fichasSecAparencia", { configurable: true, writable: true, value: _fichasSecAparencia });
-Object.defineProperty(globalThis, "_fichasSecPersonagem", { configurable: true, writable: true, value: _fichasSecPersonagem });
-Object.defineProperty(globalThis, "_fichasSecAtributos", { configurable: true, writable: true, value: _fichasSecAtributos });
-Object.defineProperty(globalThis, "renderFichaView", { configurable: true, writable: true, value: renderFichaView });
-Object.defineProperty(globalThis, "fichasRefreshAtributos", { configurable: true, writable: true, value: fichasRefreshAtributos });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fichasSelectChar", { configurable: true, get: () => fichasSelectChar, set: (__v) => { fichasSelectChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fichasFiltrar", { configurable: true, get: () => fichasFiltrar, set: (__v) => { fichasFiltrar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fichasFiltrarLimpar", { configurable: true, get: () => fichasFiltrarLimpar, set: (__v) => { fichasFiltrarLimpar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "buildFichasBtns", { configurable: true, get: () => buildFichasBtns, set: (__v) => { buildFichasBtns = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderFichasBtns", { configurable: true, get: () => renderFichasBtns, set: (__v) => { renderFichasBtns = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fichasToggleSection", { configurable: true, get: () => fichasToggleSection, set: (__v) => { fichasToggleSection = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_fichasAccordion", { configurable: true, get: () => _fichasAccordion, set: (__v) => { _fichasAccordion = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fichasToggleEditPersonagem", { configurable: true, get: () => fichasToggleEditPersonagem, set: (__v) => { fichasToggleEditPersonagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fichasToggleEditAtributos", { configurable: true, get: () => fichasToggleEditAtributos, set: (__v) => { fichasToggleEditAtributos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fichasHpStep", { configurable: true, get: () => fichasHpStep, set: (__v) => { fichasHpStep = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_fichasSecAparencia", { configurable: true, get: () => _fichasSecAparencia, set: (__v) => { _fichasSecAparencia = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_fichasSecPersonagem", { configurable: true, get: () => _fichasSecPersonagem, set: (__v) => { _fichasSecPersonagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_fichasSecAtributos", { configurable: true, get: () => _fichasSecAtributos, set: (__v) => { _fichasSecAtributos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderFichaView", { configurable: true, get: () => renderFichaView, set: (__v) => { renderFichaView = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fichasRefreshAtributos", { configurable: true, get: () => fichasRefreshAtributos, set: (__v) => { fichasRefreshAtributos = __v; } });

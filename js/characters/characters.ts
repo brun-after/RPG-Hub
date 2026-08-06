@@ -504,30 +504,56 @@ async function criarNovoPersonagem() {
 }
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "abrirModalLevelUp", { configurable: true, writable: true, value: abrirModalLevelUp });
-Object.defineProperty(globalThis, "executarLevelUp", { configurable: true, writable: true, value: executarLevelUp });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalLevelUp", { configurable: true, get: () => abrirModalLevelUp, set: (__v) => { abrirModalLevelUp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "executarLevelUp", { configurable: true, get: () => executarLevelUp, set: (__v) => { executarLevelUp = __v; } });
 Object.defineProperty(globalThis, "_xpModalNome", { configurable: true, get: () => _xpModalNome, set: (__v) => { _xpModalNome = __v; } });
-Object.defineProperty(globalThis, "abrirModalXP", { configurable: true, writable: true, value: abrirModalXP });
-Object.defineProperty(globalThis, "fecharModalXP", { configurable: true, writable: true, value: fecharModalXP });
-Object.defineProperty(globalThis, "xpAtualizarModalUI", { configurable: true, writable: true, value: xpAtualizarModalUI });
-Object.defineProperty(globalThis, "xpDarRapido", { configurable: true, writable: true, value: xpDarRapido });
-Object.defineProperty(globalThis, "xpDarParaTodos", { configurable: true, writable: true, value: xpDarParaTodos });
-Object.defineProperty(globalThis, "xpConfirmarTodos", { configurable: true, writable: true, value: xpConfirmarTodos });
-Object.defineProperty(globalThis, "xpSalvarManual", { configurable: true, writable: true, value: xpSalvarManual });
-Object.defineProperty(globalThis, "xpExecutarLevelUp", { configurable: true, writable: true, value: xpExecutarLevelUp });
-Object.defineProperty(globalThis, "xpForcarLevelUp", { configurable: true, writable: true, value: xpForcarLevelUp });
-Object.defineProperty(globalThis, "_xpParaNivel", { configurable: true, writable: true, value: _xpParaNivel });
-Object.defineProperty(globalThis, "xpChecarAutoLevelUp", { configurable: true, writable: true, value: xpChecarAutoLevelUp });
-Object.defineProperty(globalThis, "xpSalvarChar", { configurable: true, writable: true, value: xpSalvarChar });
-Object.defineProperty(globalThis, "distribuirPontosAttr", { configurable: true, writable: true, value: distribuirPontosAttr });
-Object.defineProperty(globalThis, "renderAttrButtons", { configurable: true, writable: true, value: renderAttrButtons });
-Object.defineProperty(globalThis, "renderAttrView", { configurable: true, writable: true, value: renderAttrView });
-Object.defineProperty(globalThis, "toggleEdit", { configurable: true, writable: true, value: toggleEdit });
-Object.defineProperty(globalThis, "toggleEditChar", { configurable: true, writable: true, value: toggleEditChar });
-Object.defineProperty(globalThis, "attrviewToggleOcultarAtribs", { configurable: true, writable: true, value: attrviewToggleOcultarAtribs });
-Object.defineProperty(globalThis, "charviewToggleOcultarAtribs", { configurable: true, writable: true, value: charviewToggleOcultarAtribs });
-Object.defineProperty(globalThis, "salvarAtributos", { configurable: true, writable: true, value: salvarAtributos });
-Object.defineProperty(globalThis, "salvarInfoPersonagem", { configurable: true, writable: true, value: salvarInfoPersonagem });
-Object.defineProperty(globalThis, "abrirModalNovoChar", { configurable: true, writable: true, value: abrirModalNovoChar });
-Object.defineProperty(globalThis, "fecharModalNovoChar", { configurable: true, writable: true, value: fecharModalNovoChar });
-Object.defineProperty(globalThis, "criarNovoPersonagem", { configurable: true, writable: true, value: criarNovoPersonagem });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalXP", { configurable: true, get: () => abrirModalXP, set: (__v) => { abrirModalXP = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalXP", { configurable: true, get: () => fecharModalXP, set: (__v) => { fecharModalXP = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "xpAtualizarModalUI", { configurable: true, get: () => xpAtualizarModalUI, set: (__v) => { xpAtualizarModalUI = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "xpDarRapido", { configurable: true, get: () => xpDarRapido, set: (__v) => { xpDarRapido = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "xpDarParaTodos", { configurable: true, get: () => xpDarParaTodos, set: (__v) => { xpDarParaTodos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "xpConfirmarTodos", { configurable: true, get: () => xpConfirmarTodos, set: (__v) => { xpConfirmarTodos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "xpSalvarManual", { configurable: true, get: () => xpSalvarManual, set: (__v) => { xpSalvarManual = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "xpExecutarLevelUp", { configurable: true, get: () => xpExecutarLevelUp, set: (__v) => { xpExecutarLevelUp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "xpForcarLevelUp", { configurable: true, get: () => xpForcarLevelUp, set: (__v) => { xpForcarLevelUp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_xpParaNivel", { configurable: true, get: () => _xpParaNivel, set: (__v) => { _xpParaNivel = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "xpChecarAutoLevelUp", { configurable: true, get: () => xpChecarAutoLevelUp, set: (__v) => { xpChecarAutoLevelUp = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "xpSalvarChar", { configurable: true, get: () => xpSalvarChar, set: (__v) => { xpSalvarChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "distribuirPontosAttr", { configurable: true, get: () => distribuirPontosAttr, set: (__v) => { distribuirPontosAttr = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderAttrButtons", { configurable: true, get: () => renderAttrButtons, set: (__v) => { renderAttrButtons = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "renderAttrView", { configurable: true, get: () => renderAttrView, set: (__v) => { renderAttrView = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "toggleEdit", { configurable: true, get: () => toggleEdit, set: (__v) => { toggleEdit = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "toggleEditChar", { configurable: true, get: () => toggleEditChar, set: (__v) => { toggleEditChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "attrviewToggleOcultarAtribs", { configurable: true, get: () => attrviewToggleOcultarAtribs, set: (__v) => { attrviewToggleOcultarAtribs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "charviewToggleOcultarAtribs", { configurable: true, get: () => charviewToggleOcultarAtribs, set: (__v) => { charviewToggleOcultarAtribs = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarAtributos", { configurable: true, get: () => salvarAtributos, set: (__v) => { salvarAtributos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarInfoPersonagem", { configurable: true, get: () => salvarInfoPersonagem, set: (__v) => { salvarInfoPersonagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalNovoChar", { configurable: true, get: () => abrirModalNovoChar, set: (__v) => { abrirModalNovoChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalNovoChar", { configurable: true, get: () => fecharModalNovoChar, set: (__v) => { fecharModalNovoChar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "criarNovoPersonagem", { configurable: true, get: () => criarNovoPersonagem, set: (__v) => { criarNovoPersonagem = __v; } });

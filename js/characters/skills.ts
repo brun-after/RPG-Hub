@@ -845,33 +845,63 @@ function skLimparPixiStudio() {
 
 /* [migração-esm] accessors globais */
 Object.defineProperty(globalThis, "SK_FB", { configurable: true, get: () => SK_FB, set: (__v) => { SK_FB = __v; } });
-Object.defineProperty(globalThis, "skFBAdicionarDado", { configurable: true, writable: true, value: skFBAdicionarDado });
-Object.defineProperty(globalThis, "skFBRemoverDado", { configurable: true, writable: true, value: skFBRemoverDado });
-Object.defineProperty(globalThis, "skFBMostrarInputBonus", { configurable: true, writable: true, value: skFBMostrarInputBonus });
-Object.defineProperty(globalThis, "skFBConfirmarBonus", { configurable: true, writable: true, value: skFBConfirmarBonus });
-Object.defineProperty(globalThis, "skFBCancelarBonus", { configurable: true, writable: true, value: skFBCancelarBonus });
-Object.defineProperty(globalThis, "skFBAdicionarBonus", { configurable: true, writable: true, value: skFBAdicionarBonus });
-Object.defineProperty(globalThis, "skFBLimpar", { configurable: true, writable: true, value: skFBLimpar });
-Object.defineProperty(globalThis, "skFBAtualizarUI", { configurable: true, writable: true, value: skFBAtualizarUI });
-Object.defineProperty(globalThis, "skFBCarregarFormula", { configurable: true, writable: true, value: skFBCarregarFormula });
-Object.defineProperty(globalThis, "skPopularAtributos", { configurable: true, writable: true, value: skPopularAtributos });
-Object.defineProperty(globalThis, "abrirModalSkill", { configurable: true, writable: true, value: abrirModalSkill });
-Object.defineProperty(globalThis, "fecharModalSkill", { configurable: true, writable: true, value: fecharModalSkill });
-Object.defineProperty(globalThis, "_skAplicarModoAtaqueBasico", { configurable: true, writable: true, value: _skAplicarModoAtaqueBasico });
-Object.defineProperty(globalThis, "abrirModalSkillAtaqueBasico", { configurable: true, writable: true, value: abrirModalSkillAtaqueBasico });
-Object.defineProperty(globalThis, "_skSalvarAtaqueBasicoRico", { configurable: true, writable: true, value: _skSalvarAtaqueBasicoRico });
-Object.defineProperty(globalThis, "skPreencherAnimacaoNoForm", { configurable: true, writable: true, value: skPreencherAnimacaoNoForm });
-Object.defineProperty(globalThis, "skLerAnimacaoDoForm", { configurable: true, writable: true, value: skLerAnimacaoDoForm });
-Object.defineProperty(globalThis, "skTipoHabilidadeChange", { configurable: true, writable: true, value: skTipoHabilidadeChange });
-Object.defineProperty(globalThis, "salvarSkill", { configurable: true, writable: true, value: salvarSkill });
-Object.defineProperty(globalThis, "removerSkill", { configurable: true, writable: true, value: removerSkill });
-Object.defineProperty(globalThis, "skToggleAudioSection", { configurable: true, writable: true, value: skToggleAudioSection });
-Object.defineProperty(globalThis, "_skPopularSelectSfx", { configurable: true, writable: true, value: _skPopularSelectSfx });
-Object.defineProperty(globalThis, "_skAtualizarAutoSfx", { configurable: true, writable: true, value: _skAtualizarAutoSfx });
-Object.defineProperty(globalThis, "skTestarSfx", { configurable: true, writable: true, value: skTestarSfx });
-Object.defineProperty(globalThis, "_skCarregarCamposReativos", { configurable: true, writable: true, value: _skCarregarCamposReativos });
-Object.defineProperty(globalThis, "skTipoReativaChange", { configurable: true, writable: true, value: skTipoReativaChange });
-Object.defineProperty(globalThis, "skToggleReativaSection", { configurable: true, writable: true, value: skToggleReativaSection });
-Object.defineProperty(globalThis, "skInvocacaoIlimitadoChange", { configurable: true, writable: true, value: skInvocacaoIlimitadoChange });
-Object.defineProperty(globalThis, "skEscolherPixiStudio", { configurable: true, writable: true, value: skEscolherPixiStudio });
-Object.defineProperty(globalThis, "skLimparPixiStudio", { configurable: true, writable: true, value: skLimparPixiStudio });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skFBAdicionarDado", { configurable: true, get: () => skFBAdicionarDado, set: (__v) => { skFBAdicionarDado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skFBRemoverDado", { configurable: true, get: () => skFBRemoverDado, set: (__v) => { skFBRemoverDado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skFBMostrarInputBonus", { configurable: true, get: () => skFBMostrarInputBonus, set: (__v) => { skFBMostrarInputBonus = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skFBConfirmarBonus", { configurable: true, get: () => skFBConfirmarBonus, set: (__v) => { skFBConfirmarBonus = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skFBCancelarBonus", { configurable: true, get: () => skFBCancelarBonus, set: (__v) => { skFBCancelarBonus = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skFBAdicionarBonus", { configurable: true, get: () => skFBAdicionarBonus, set: (__v) => { skFBAdicionarBonus = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skFBLimpar", { configurable: true, get: () => skFBLimpar, set: (__v) => { skFBLimpar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skFBAtualizarUI", { configurable: true, get: () => skFBAtualizarUI, set: (__v) => { skFBAtualizarUI = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skFBCarregarFormula", { configurable: true, get: () => skFBCarregarFormula, set: (__v) => { skFBCarregarFormula = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skPopularAtributos", { configurable: true, get: () => skPopularAtributos, set: (__v) => { skPopularAtributos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalSkill", { configurable: true, get: () => abrirModalSkill, set: (__v) => { abrirModalSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalSkill", { configurable: true, get: () => fecharModalSkill, set: (__v) => { fecharModalSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_skAplicarModoAtaqueBasico", { configurable: true, get: () => _skAplicarModoAtaqueBasico, set: (__v) => { _skAplicarModoAtaqueBasico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalSkillAtaqueBasico", { configurable: true, get: () => abrirModalSkillAtaqueBasico, set: (__v) => { abrirModalSkillAtaqueBasico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_skSalvarAtaqueBasicoRico", { configurable: true, get: () => _skSalvarAtaqueBasicoRico, set: (__v) => { _skSalvarAtaqueBasicoRico = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skPreencherAnimacaoNoForm", { configurable: true, get: () => skPreencherAnimacaoNoForm, set: (__v) => { skPreencherAnimacaoNoForm = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skLerAnimacaoDoForm", { configurable: true, get: () => skLerAnimacaoDoForm, set: (__v) => { skLerAnimacaoDoForm = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skTipoHabilidadeChange", { configurable: true, get: () => skTipoHabilidadeChange, set: (__v) => { skTipoHabilidadeChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "salvarSkill", { configurable: true, get: () => salvarSkill, set: (__v) => { salvarSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "removerSkill", { configurable: true, get: () => removerSkill, set: (__v) => { removerSkill = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skToggleAudioSection", { configurable: true, get: () => skToggleAudioSection, set: (__v) => { skToggleAudioSection = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_skPopularSelectSfx", { configurable: true, get: () => _skPopularSelectSfx, set: (__v) => { _skPopularSelectSfx = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_skAtualizarAutoSfx", { configurable: true, get: () => _skAtualizarAutoSfx, set: (__v) => { _skAtualizarAutoSfx = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skTestarSfx", { configurable: true, get: () => skTestarSfx, set: (__v) => { skTestarSfx = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_skCarregarCamposReativos", { configurable: true, get: () => _skCarregarCamposReativos, set: (__v) => { _skCarregarCamposReativos = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skTipoReativaChange", { configurable: true, get: () => skTipoReativaChange, set: (__v) => { skTipoReativaChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skToggleReativaSection", { configurable: true, get: () => skToggleReativaSection, set: (__v) => { skToggleReativaSection = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skInvocacaoIlimitadoChange", { configurable: true, get: () => skInvocacaoIlimitadoChange, set: (__v) => { skInvocacaoIlimitadoChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skEscolherPixiStudio", { configurable: true, get: () => skEscolherPixiStudio, set: (__v) => { skEscolherPixiStudio = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "skLimparPixiStudio", { configurable: true, get: () => skLimparPixiStudio, set: (__v) => { skLimparPixiStudio = __v; } });

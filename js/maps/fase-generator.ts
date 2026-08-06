@@ -548,31 +548,54 @@ async function faseExportarCombate(batalhaId) {
 }
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "faseGenGetApiKey", { configurable: true, writable: true, value: faseGenGetApiKey });
-Object.defineProperty(globalThis, "faseGenSetApiKey", { configurable: true, writable: true, value: faseGenSetApiKey });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenGetApiKey", { configurable: true, get: () => faseGenGetApiKey, set: (__v) => { faseGenGetApiKey = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenSetApiKey", { configurable: true, get: () => faseGenSetApiKey, set: (__v) => { faseGenSetApiKey = __v; } });
 Object.defineProperty(globalThis, "FASE_IMG_PROMPT_TEMPLATE", { configurable: true, get: () => FASE_IMG_PROMPT_TEMPLATE });
 Object.defineProperty(globalThis, "FASE_COORD_PROMPT", { configurable: true, get: () => FASE_COORD_PROMPT });
-Object.defineProperty(globalThis, "faseGenPromptExterno", { configurable: true, writable: true, value: faseGenPromptExterno });
-Object.defineProperty(globalThis, "_faseGenApiCall", { configurable: true, writable: true, value: _faseGenApiCall });
-Object.defineProperty(globalThis, "_faseFileToBase64", { configurable: true, writable: true, value: _faseFileToBase64 });
-Object.defineProperty(globalThis, "faseGenFromImage", { configurable: true, writable: true, value: faseGenFromImage });
-Object.defineProperty(globalThis, "faseGenValidarJSON", { configurable: true, writable: true, value: faseGenValidarJSON });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenPromptExterno", { configurable: true, get: () => faseGenPromptExterno, set: (__v) => { faseGenPromptExterno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseGenApiCall", { configurable: true, get: () => _faseGenApiCall, set: (__v) => { _faseGenApiCall = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseFileToBase64", { configurable: true, get: () => _faseFileToBase64, set: (__v) => { _faseFileToBase64 = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenFromImage", { configurable: true, get: () => faseGenFromImage, set: (__v) => { faseGenFromImage = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenValidarJSON", { configurable: true, get: () => faseGenValidarJSON, set: (__v) => { faseGenValidarJSON = __v; } });
 Object.defineProperty(globalThis, "_faseGenModalData", { configurable: true, get: () => _faseGenModalData, set: (__v) => { _faseGenModalData = __v; } });
 Object.defineProperty(globalThis, "_faseGenImgFile", { configurable: true, get: () => _faseGenImgFile, set: (__v) => { _faseGenImgFile = __v; } });
 Object.defineProperty(globalThis, "_faseGenMapId", { configurable: true, get: () => _faseGenMapId, set: (__v) => { _faseGenMapId = __v; } });
-Object.defineProperty(globalThis, "abrirModalFaseConfig", { configurable: true, writable: true, value: abrirModalFaseConfig });
-Object.defineProperty(globalThis, "fecharModalFaseConfig", { configurable: true, writable: true, value: fecharModalFaseConfig });
-Object.defineProperty(globalThis, "_faseGenAtualizarPreview", { configurable: true, writable: true, value: _faseGenAtualizarPreview });
-Object.defineProperty(globalThis, "faseGenHandleImageSelect", { configurable: true, writable: true, value: faseGenHandleImageSelect });
-Object.defineProperty(globalThis, "faseGenTiltChange", { configurable: true, writable: true, value: faseGenTiltChange });
-Object.defineProperty(globalThis, "faseGenCopiarPromptImagem", { configurable: true, writable: true, value: faseGenCopiarPromptImagem });
-Object.defineProperty(globalThis, "faseGenGerarCoordenadas", { configurable: true, writable: true, value: faseGenGerarCoordenadas });
-Object.defineProperty(globalThis, "_faseGenGerarCatalogoEPopularBaus", { configurable: true, writable: true, value: _faseGenGerarCatalogoEPopularBaus });
-Object.defineProperty(globalThis, "faseGenCopiarPromptExterno", { configurable: true, writable: true, value: faseGenCopiarPromptExterno });
-Object.defineProperty(globalThis, "faseGenToggleImportExterno", { configurable: true, writable: true, value: faseGenToggleImportExterno });
-Object.defineProperty(globalThis, "faseGenImportarJSONExterno", { configurable: true, writable: true, value: faseGenImportarJSONExterno });
-Object.defineProperty(globalThis, "_faseGenRenderEditorJSON", { configurable: true, writable: true, value: _faseGenRenderEditorJSON });
-Object.defineProperty(globalThis, "faseGenJSONEditado", { configurable: true, writable: true, value: faseGenJSONEditado });
-Object.defineProperty(globalThis, "faseGenSalvar", { configurable: true, writable: true, value: faseGenSalvar });
-Object.defineProperty(globalThis, "faseGenAdicionarEntidade", { configurable: true, writable: true, value: faseGenAdicionarEntidade });
-Object.defineProperty(globalThis, "faseExportarCombate", { configurable: true, writable: true, value: faseExportarCombate });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "abrirModalFaseConfig", { configurable: true, get: () => abrirModalFaseConfig, set: (__v) => { abrirModalFaseConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "fecharModalFaseConfig", { configurable: true, get: () => fecharModalFaseConfig, set: (__v) => { fecharModalFaseConfig = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseGenAtualizarPreview", { configurable: true, get: () => _faseGenAtualizarPreview, set: (__v) => { _faseGenAtualizarPreview = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenHandleImageSelect", { configurable: true, get: () => faseGenHandleImageSelect, set: (__v) => { faseGenHandleImageSelect = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenTiltChange", { configurable: true, get: () => faseGenTiltChange, set: (__v) => { faseGenTiltChange = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenCopiarPromptImagem", { configurable: true, get: () => faseGenCopiarPromptImagem, set: (__v) => { faseGenCopiarPromptImagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenGerarCoordenadas", { configurable: true, get: () => faseGenGerarCoordenadas, set: (__v) => { faseGenGerarCoordenadas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseGenGerarCatalogoEPopularBaus", { configurable: true, get: () => _faseGenGerarCatalogoEPopularBaus, set: (__v) => { _faseGenGerarCatalogoEPopularBaus = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenCopiarPromptExterno", { configurable: true, get: () => faseGenCopiarPromptExterno, set: (__v) => { faseGenCopiarPromptExterno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenToggleImportExterno", { configurable: true, get: () => faseGenToggleImportExterno, set: (__v) => { faseGenToggleImportExterno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenImportarJSONExterno", { configurable: true, get: () => faseGenImportarJSONExterno, set: (__v) => { faseGenImportarJSONExterno = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_faseGenRenderEditorJSON", { configurable: true, get: () => _faseGenRenderEditorJSON, set: (__v) => { _faseGenRenderEditorJSON = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenJSONEditado", { configurable: true, get: () => faseGenJSONEditado, set: (__v) => { faseGenJSONEditado = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenSalvar", { configurable: true, get: () => faseGenSalvar, set: (__v) => { faseGenSalvar = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseGenAdicionarEntidade", { configurable: true, get: () => faseGenAdicionarEntidade, set: (__v) => { faseGenAdicionarEntidade = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "faseExportarCombate", { configurable: true, get: () => faseExportarCombate, set: (__v) => { faseExportarCombate = __v; } });

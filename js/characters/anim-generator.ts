@@ -876,24 +876,45 @@ Object.defineProperty(globalThis, "ANIM_EQUIP_PROMPT_TPL", { configurable: true,
 Object.defineProperty(globalThis, "ANIM_DEFAULTS", { configurable: true, get: () => ANIM_DEFAULTS });
 Object.defineProperty(globalThis, "ANIM_SKELETON", { configurable: true, get: () => ANIM_SKELETON });
 Object.defineProperty(globalThis, "_ANIM_PART_ZINDEX", { configurable: true, get: () => _ANIM_PART_ZINDEX });
-Object.defineProperty(globalThis, "_animBoneParentName", { configurable: true, writable: true, value: _animBoneParentName });
-Object.defineProperty(globalThis, "_buildBboxFromLines", { configurable: true, writable: true, value: _buildBboxFromLines });
-Object.defineProperty(globalThis, "animGenGetApiKey", { configurable: true, writable: true, value: animGenGetApiKey });
-Object.defineProperty(globalThis, "animGenSetApiKey", { configurable: true, writable: true, value: animGenSetApiKey });
-Object.defineProperty(globalThis, "animGenFileToBase64", { configurable: true, writable: true, value: animGenFileToBase64 });
-Object.defineProperty(globalThis, "animGenFileToDataUrl", { configurable: true, writable: true, value: animGenFileToDataUrl });
-Object.defineProperty(globalThis, "_animCropPartFromImage", { configurable: true, writable: true, value: _animCropPartFromImage });
-Object.defineProperty(globalThis, "_animGenApiCall", { configurable: true, writable: true, value: _animGenApiCall });
-Object.defineProperty(globalThis, "animGenFromImage", { configurable: true, writable: true, value: animGenFromImage });
-Object.defineProperty(globalThis, "animGenEquipFromImage", { configurable: true, writable: true, value: animGenEquipFromImage });
-Object.defineProperty(globalThis, "animGenHandleImageSelect", { configurable: true, writable: true, value: animGenHandleImageSelect });
-Object.defineProperty(globalThis, "animGenHandleGenerate", { configurable: true, writable: true, value: animGenHandleGenerate });
-Object.defineProperty(globalThis, "animGenHandleEquipImage", { configurable: true, writable: true, value: animGenHandleEquipImage });
-Object.defineProperty(globalThis, "animGenSetPreviewAnim", { configurable: true, writable: true, value: animGenSetPreviewAnim });
-Object.defineProperty(globalThis, "animGenCopiarPromptPersonagem", { configurable: true, writable: true, value: animGenCopiarPromptPersonagem });
-Object.defineProperty(globalThis, "animGenCopiarPromptEquip", { configurable: true, writable: true, value: animGenCopiarPromptEquip });
-Object.defineProperty(globalThis, "animGenImportarJSON", { configurable: true, writable: true, value: animGenImportarJSON });
-Object.defineProperty(globalThis, "animGenToggleImport", { configurable: true, writable: true, value: animGenToggleImport });
-Object.defineProperty(globalThis, "animGenToggleEquipImport", { configurable: true, writable: true, value: animGenToggleEquipImport });
-Object.defineProperty(globalThis, "animGenImportarEquipJSON", { configurable: true, writable: true, value: animGenImportarEquipJSON });
-Object.defineProperty(globalThis, "_apmodTabAnimado", { configurable: true, writable: true, value: _apmodTabAnimado });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_animBoneParentName", { configurable: true, get: () => _animBoneParentName, set: (__v) => { _animBoneParentName = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_buildBboxFromLines", { configurable: true, get: () => _buildBboxFromLines, set: (__v) => { _buildBboxFromLines = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenGetApiKey", { configurable: true, get: () => animGenGetApiKey, set: (__v) => { animGenGetApiKey = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenSetApiKey", { configurable: true, get: () => animGenSetApiKey, set: (__v) => { animGenSetApiKey = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenFileToBase64", { configurable: true, get: () => animGenFileToBase64, set: (__v) => { animGenFileToBase64 = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenFileToDataUrl", { configurable: true, get: () => animGenFileToDataUrl, set: (__v) => { animGenFileToDataUrl = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_animCropPartFromImage", { configurable: true, get: () => _animCropPartFromImage, set: (__v) => { _animCropPartFromImage = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_animGenApiCall", { configurable: true, get: () => _animGenApiCall, set: (__v) => { _animGenApiCall = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenFromImage", { configurable: true, get: () => animGenFromImage, set: (__v) => { animGenFromImage = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenEquipFromImage", { configurable: true, get: () => animGenEquipFromImage, set: (__v) => { animGenEquipFromImage = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenHandleImageSelect", { configurable: true, get: () => animGenHandleImageSelect, set: (__v) => { animGenHandleImageSelect = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenHandleGenerate", { configurable: true, get: () => animGenHandleGenerate, set: (__v) => { animGenHandleGenerate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenHandleEquipImage", { configurable: true, get: () => animGenHandleEquipImage, set: (__v) => { animGenHandleEquipImage = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenSetPreviewAnim", { configurable: true, get: () => animGenSetPreviewAnim, set: (__v) => { animGenSetPreviewAnim = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenCopiarPromptPersonagem", { configurable: true, get: () => animGenCopiarPromptPersonagem, set: (__v) => { animGenCopiarPromptPersonagem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenCopiarPromptEquip", { configurable: true, get: () => animGenCopiarPromptEquip, set: (__v) => { animGenCopiarPromptEquip = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenImportarJSON", { configurable: true, get: () => animGenImportarJSON, set: (__v) => { animGenImportarJSON = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenToggleImport", { configurable: true, get: () => animGenToggleImport, set: (__v) => { animGenToggleImport = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenToggleEquipImport", { configurable: true, get: () => animGenToggleEquipImport, set: (__v) => { animGenToggleEquipImport = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "animGenImportarEquipJSON", { configurable: true, get: () => animGenImportarEquipJSON, set: (__v) => { animGenImportarEquipJSON = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_apmodTabAnimado", { configurable: true, get: () => _apmodTabAnimado, set: (__v) => { _apmodTabAnimado = __v; } });
