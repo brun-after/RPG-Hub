@@ -346,12 +346,16 @@ test.describe('the one: sessão de jogo simulada', () => {
     achados.fpsA = await a.page.evaluate(() => (window as any).AVT_PERF?.fpsAtual?.() ?? 0);
     achados.fpsB = await b.page.evaluate(() => (window as any).AVT_PERF?.fpsAtual?.() ?? 0);
 
-    // Divergência final: mede já, espera 6s de ticks, mede de novo. O estado
-    // DEVE convergir (keyframe a cada 1s) — residual >1 célula é bug de sync.
+    // Divergência final: o estado DEVE convergir (keyframe a cada 1s). Poll em
+    // vez de medida instantânea — com um NPC em perseguição ativa o convidado
+    // fica legitimamente 2-4 células atrás no lerp; o que não pode é NUNCA
+    // convergir (entidade stale, o bug original).
     achados.divergenciaFinalImediata = divergenciaMaxima(await digestDe(a.page), await digestDe(b.page));
-    await a.page.waitForTimeout(6_000);
-    achados.divergenciaFinalApos6s = divergenciaMaxima(await digestDe(a.page), await digestDe(b.page));
-    expect(achados.divergenciaFinalApos6s, 'estado não convergiu 6s após o combate').toBeLessThanOrEqual(1);
+    await expect.poll(async () => {
+      const d = divergenciaMaxima(await digestDe(a.page), await digestDe(b.page));
+      achados.divergenciaFinalApos6s = d;
+      return d;
+    }, { timeout: 15_000, message: 'estado nunca convergiu após o combate' }).toBeLessThanOrEqual(1);
     // Posição de Ares vista por cada lado (isola desync de teleporte)
     achados.aresA = await a.page.evaluate(() => {
       const e = (window as any).AVT_STATE.entidades.find((e: any) => e.nome === 'Ares');

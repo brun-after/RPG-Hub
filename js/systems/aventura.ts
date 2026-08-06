@@ -3529,6 +3529,200 @@ function _avtEntrarModoBauPlacement(bauId: any) {
   mostrarToast('📍 Clique no mapa para posicionar o baú', 'ok');
 }
 
+// ── Fontes de som ambiente ───────────────────────────────────────────────────
+// Objetos de render_data.objetos com `som = { sfxId, raio, vol }` — o loop
+// _avtAtualizarSonsAmbiente (4 Hz) mantém um Howl em loop por fonte com volume
+// atenuado pela distância do ouvinte (tocha, cachoeira, fogueira...).
+
+function _avtGetFonteSomById(id: any) {
+  return AVT_STATE.dungeon?.render_data?.objetos?.find((o: any) => String(o.id) === String(id)) || null;
+}
+
+function _avtFontesSomSecao(emJogo: any) {
+  const dungeon = AVT_STATE.dungeon;
+  const fontes = (dungeon?.render_data?.objetos || []).filter((o: any) => o.som);
+  const dw = dungeon?.w || 1, dh = dungeon?.h || 1;
+  return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🔊 Fontes de Som</div>
+        <div class="avt-mp-hint" style="margin-bottom:6px">Sons ambientes fixos no mapa (tocha, cachoeira...) — o volume aumenta conforme o jogador se aproxima da fonte.</div>
+        ${dungeon ? `
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:8px" onclick="_avtFonteSomCriar()">🔊 + Nova fonte de som</button>
+        ${fontes.length ? fontes.map((o: any) => {
+          const safe = String(o.id).replace(/'/g,"\\'");
+          const tx = Math.round((o.x ?? 0) * dw), ty = Math.round((o.y ?? 0) * dh);
+          const nomeSfx = (typeof AudioManager !== 'undefined') ? AudioManager.getSfxLabel(o.som.sfxId) : (o.som.sfxId || '');
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;padding:6px 8px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.12);border-radius:6px">
+            <span style="flex:1;font-size:0.72rem;color:#c8d8e8">🔊 ${(o.nome || nomeSfx || 'Fonte').toString().replace(/</g,'&lt;')} <span style="font-size:0.6rem;color:#7a92aa">Col ${tx}, Ln ${ty} · raio ${o.som.raio ?? 12}</span></span>
+            ${emJogo ? `<button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" title="Posicionar no mapa" onclick="document.getElementById('avt-mestre-panel').style.display='none';_avtEntrarModoFonteSomPlacement('${safe}')">📍</button>` : ''}
+            <button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" onclick="_avtFonteSomEditar('${safe}')">✏</button>
+            <button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 7px;font-size:0.65rem" onclick="_avtFonteSomRemover('${safe}')">✕</button>
+          </div>`;
+        }).join('') : '<div class="avt-mp-hint">Nenhuma fonte de som no mapa.</div>'}
+        ` : '<div class="avt-mp-hint">Sem mapa carregado.</div>'}
+      </div>`;
+}
+window._avtFontesSomSecao = _avtFontesSomSecao;
+
+function _avtFonteSomCriar() {
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd) { mostrarToast('Nenhum mapa carregado', 'aviso'); return; }
+  if (!Array.isArray(rd.objetos)) rd.objetos = [];
+  const id = 'som_' + Date.now();
+  rd.objetos.push({ id, tipo: 'som_ambiente', x: 0.5, y: 0.5, nome: 'Fonte de som',
+                    som: { sfxId: '', raio: 12, vol: 0.55 } });
+  _avtFonteSomEditar(id);
+}
+window._avtFonteSomCriar = _avtFonteSomCriar;
+
+// Options do select de SFX: biblioteca do usuário + catálogo padrão por categoria
+// (mesma composição do editor de skills).
+function _avtFonteSomSfxOpts(cur: any) {
+  if (typeof AudioManager === 'undefined') return '';
+  const cats = ['ambiente','ataque','impacto','magia','elemento','cura'];
+  const labels: Record<string, any> = {ambiente:'Ambiente',ataque:'Ataques',impacto:'Impactos',magia:'Magia',elemento:'Elementais',cura:'Cura'};
+  let html = '';
+  const userItems = AudioManager._userSfxBiblioteca || [];
+  if (userItems.length) {
+    html += `<optgroup label="⭐ Minha Biblioteca">${userItems.map((e: any)=>`<option value="${e.id}"${cur===e.id?' selected':''}>${(e.nome||e.id).replace(/</g,'&lt;')}</option>`).join('')}</optgroup>`;
+  }
+  html += cats.map(cat => {
+    const items = AudioManager.getSfxList(cat).filter((e: any) => !e._user);
+    if (!items.length) return '';
+    return `<optgroup label="${labels[cat]||cat}">${items.map(({id,label}: any)=>`<option value="${id}"${cur===id?' selected':''}>${label}</option>`).join('')}</optgroup>`;
+  }).join('');
+  return html;
+}
+
+function _avtFonteSomEditar(fonteId: any) {
+  const fonte = _avtGetFonteSomById(fonteId);
+  if (!fonte) return;
+  const som = fonte.som || (fonte.som = { sfxId: '', raio: 12, vol: 0.55 });
+  const emJogo = !(typeof _avtEmMenuConfig === 'function' && _avtEmMenuConfig());
+  const isUrl = typeof som.sfxId === 'string' && som.sfxId.startsWith('http');
+  const inpSt = 'width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem';
+
+  let overlay = document.getElementById('avt-som-editor-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'avt-som-editor-overlay';
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(overlay);
+  }
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  const tx = Math.round((fonte.x ?? 0.5) * dw), ty = Math.round((fonte.y ?? 0.5) * dh);
+  const safe = String(fonteId).replace(/'/g,"\\'");
+  overlay.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(79,163,209,0.3);border-radius:12px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-family:var(--fonte-d);font-size:1rem;color:#4fa3d1">🔊 Fonte de Som</div>
+        <button onclick="document.getElementById('avt-som-editor-overlay').style.display='none'" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem">×</button>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Nome</label>
+        <input id="avt-som-nome" value="${(fonte.nome||'Fonte de som').replace(/"/g,'&quot;')}" style="${inpSt}">
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Som (biblioteca)</label>
+        <select id="avt-som-sfx-sel" style="${inpSt};margin-bottom:4px">
+          <option value="">— Escolher da biblioteca —</option>
+          ${_avtFonteSomSfxOpts(isUrl ? '' : som.sfxId)}
+        </select>
+        <input id="avt-som-sfx-url" type="url" placeholder="ou URL direta (.mp3, .wav, .ogg)"
+          value="${isUrl ? String(som.sfxId).replace(/"/g,'&quot;') : ''}" style="${inpSt}">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Raio audível (células)</label>
+          <input id="avt-som-raio" type="number" min="1" max="60" value="${som.raio ?? 12}" style="${inpSt}">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Volume na fonte (0–1)</label>
+          <input id="avt-som-vol" type="number" min="0" max="1" step="0.05" value="${som.vol ?? 0.55}" style="${inpSt}">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="flex:1">
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Posição no mapa</label>
+          <div style="padding:5px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">Col ${tx}, Linha ${ty}</div>
+        </div>
+        ${emJogo ? `<button class="avt-mp-btn" style="padding:5px 10px;font-size:0.72rem;margin-top:14px;white-space:nowrap" onclick="document.getElementById('avt-som-editor-overlay').style.display='none';_avtEntrarModoFonteSomPlacement('${safe}')">📍 Posicionar no mapa</button>` : ''}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="avt-mp-btn" style="flex:0 0 auto;padding:6px 12px" onclick="_avtFonteSomTestar()">▶ Testar</button>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtFonteSomSalvar('${safe}')">💾 Salvar</button>
+        <button class="avt-mp-btn avt-mp-btn-danger" style="flex:1" onclick="document.getElementById('avt-som-editor-overlay').style.display='none'">✕ Fechar</button>
+      </div>
+    </div>`;
+  overlay.style!.display = 'flex';
+}
+window._avtFonteSomEditar = _avtFonteSomEditar;
+
+function _avtFonteSomIdSelecionado() {
+  const url = document.getElementById('avt-som-sfx-url')?.value!.trim!()! || '';
+  if (url) return url;
+  return document.getElementById('avt-som-sfx-sel')?.value || '';
+}
+
+function _avtFonteSomTestar() {
+  if (typeof AudioManager === 'undefined') return;
+  const sfxId = _avtFonteSomIdSelecionado();
+  if (!sfxId) { mostrarToast('Escolha um som primeiro', 'aviso'); return; }
+  const vol = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-som-vol')?.value!) || 0.55));
+  AudioManager.playSFX(sfxId, { volume: vol });
+}
+window._avtFonteSomTestar = _avtFonteSomTestar;
+
+function _avtFonteSomSalvar(fonteId: any) {
+  const fonte = _avtGetFonteSomById(fonteId);
+  if (!fonte) return;
+  const sfxId = _avtFonteSomIdSelecionado();
+  if (!sfxId) { mostrarToast('Escolha um som da biblioteca ou informe uma URL', 'aviso'); return; }
+  fonte.nome = document.getElementById('avt-som-nome')?.value!.trim!()! || 'Fonte de som';
+  fonte.som = {
+    sfxId,
+    raio: Math.max(1, Math.min(60, parseInt(document.getElementById('avt-som-raio')?.value!) || 12)),
+    vol:  Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-som-vol')?.value!) || 0.55)),
+  };
+  // Loop ativo antigo (se o sfx mudou) é recriado: derruba o registro atual e o
+  // tick de 4 Hz recria com o novo som.
+  try {
+    const reg = (AVT_STATE as any)._ambSounds;
+    const rec = reg?.get(String(fonte.id));
+    if (rec) { rec.howl.stop(); rec.howl.unload(); reg.delete(String(fonte.id)); }
+  } catch(_) {}
+  _avtSalvarDungeon();
+  const overlay = document.getElementById('avt-som-editor-overlay');
+  if (overlay) overlay.style!.display = 'none';
+  mostrarToast('Fonte de som salva', 'sucesso');
+  _avtMestrePainelRender();
+}
+window._avtFonteSomSalvar = _avtFonteSomSalvar;
+
+function _avtFonteSomRemover(fonteId: any) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd?.objetos) return;
+  const idx = rd.objetos.findIndex((o: any) => String(o.id) === String(fonteId));
+  if (idx >= 0) rd.objetos.splice(idx, 1);
+  // O tick de sons ambientes para o loop de fontes ausentes; fora do jogo o tick
+  // não roda, então derruba o registro aqui também.
+  try {
+    const reg = (AVT_STATE as any)._ambSounds;
+    const rec = reg?.get(String(fonteId));
+    if (rec) { rec.howl.stop(); rec.howl.unload(); reg.delete(String(fonteId)); }
+  } catch(_) {}
+  _avtSalvarDungeon();
+  _avtMestrePainelRender();
+}
+window._avtFonteSomRemover = _avtFonteSomRemover;
+
+function _avtEntrarModoFonteSomPlacement(fonteId: any) {
+  (AVT_STATE as any)._modoFonteSomPlacement = { fonteId };
+  if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = 'crosshair';
+  mostrarToast('📍 Clique no mapa para posicionar a fonte de som', 'ok');
+}
+window._avtEntrarModoFonteSomPlacement = _avtEntrarModoFonteSomPlacement;
+
 function _avtMestreRemoverBau(bauId: any) {
   const rd = AVT_STATE.dungeon?.render_data;
   if (!rd?.objetos) return;
@@ -3580,12 +3774,13 @@ function _avtMestreEditarBau(bauId: any) {
             const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
             const tx = Math.round((bau.x ?? 0.5) * dw), ty = Math.round((bau.y ?? 0.5) * dh);
             const posLabel = AVT_STATE.dungeon ? `Col ${tx}, Linha ${ty}` : 'Posição no mapa';
+            const podePosicionar = !(typeof _avtEmMenuConfig === 'function' && _avtEmMenuConfig());
             return `<div style="display:flex;align-items:center;gap:8px">
               <div style="flex:1">
                 <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Posição no mapa</label>
                 <div id="avt-bau-pos-label" style="padding:5px 8px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">${posLabel}</div>
               </div>
-              <button class="avt-mp-btn" style="padding:5px 10px;font-size:0.72rem;margin-top:14px;white-space:nowrap" onclick="document.getElementById('avt-bau-editor-overlay').style.display='none';_avtEntrarModoBauPlacement('${String(bauId).replace(/'/g,"\\'")}')">📍 Posicionar no mapa</button>
+              ${podePosicionar ? `<button class="avt-mp-btn" style="padding:5px 10px;font-size:0.72rem;margin-top:14px;white-space:nowrap" onclick="document.getElementById('avt-bau-editor-overlay').style.display='none';_avtEntrarModoBauPlacement('${String(bauId).replace(/'/g,"\\'")}')">📍 Posicionar no mapa</button>` : ''}
             </div>`;
           })()}
         </div>
@@ -3892,6 +4087,16 @@ function _avtGravarDungeonNoSlot(t: any) {
 }
 window._avtGravarDungeonNoSlot = _avtGravarDungeonNoSlot;
 
+// Guarda de salvamento: com AVT_STATE.rpg/rpgId anulados (ex.: após sairAventura),
+// o PATCH iria para rpg_id=eq.null — zero linhas, mas "sucesso" no PostgREST —
+// e o toast de "salvo!" mentiria. Falha visível em vez de silêncio.
+function _avtRpgAtivo() {
+  if (AVT_STATE.rpgId && AVT_STATE.rpg) return true;
+  try { mostrarToast('Nenhuma aventura carregada — configuração não salva.', 'erro'); } catch(_) {}
+  return false;
+}
+window._avtRpgAtivo = _avtRpgAtivo;
+
 // O theme_json é gravado INTEIRO (~34KB) — dois clientes salvando em paralelo se
 // sobrescrevem (last-writer-wins). Só mestre ou host da fase têm autoridade para
 // persistir; nos convidados os salvamentos viram no-op (o estado deles chega ao
@@ -3905,7 +4110,8 @@ function _avtPodeSalvarRegistro() {
 }
 
 async function _avtSalvarDungeon() {
-  if (!AVT_STATE.rpgId || !AVT_STATE.dungeon) return;
+  if (!AVT_STATE.dungeon) return;
+  if (!_avtRpgAtivo()) return;
   if (!_avtPodeSalvarRegistro()) return;
   const t = AVT_STATE.rpg?.theme_json || {};
   _avtGravarDungeonNoSlot(t);
@@ -3918,7 +4124,7 @@ async function _avtSalvarDungeon() {
 
 // Persiste o theme_json inteiro (level_config, fases_extras, etc.)
 async function _avtSalvarThemeJson() {
-  if (!AVT_STATE.rpgId || !AVT_STATE.rpg) return;
+  if (!_avtRpgAtivo()) return;
   if (!_avtPodeSalvarRegistro()) return;
   const t = AVT_STATE.rpg.theme_json || (AVT_STATE.rpg.theme_json = {});
   try {
@@ -4207,7 +4413,7 @@ function _avtMostrarAventuraScreen() {
   const _lcCols = t.level_config || {};
   AVT_STATE.colisaoJogJog = _lcCols.colisao_jog_jog ?? false;
   AVT_STATE.colisaoJogNpc = _lcCols.colisao_jog_npc ?? false;
-  if (typeof AudioManager !== 'undefined' && typeof window._avtMenuPlayerMusicPref === 'undefined') {
+  if (typeof AudioManager !== 'undefined') {
     AudioManager.onEnterPhase({ audio: t.audio || {} });
   }
   document.getElementById('hub')!.style!.display = 'none';
@@ -6748,6 +6954,17 @@ function _avtRenderFrame() {
         ctx.fillStyle = 'rgba(255,255,255,0.92)';
         ctx.fill();
         ctx.restore();
+      } else if (tipo === 'som_ambiente' && o.som) {
+        // Fonte de som ambiente: marcador de edição visível apenas ao mestre
+        // (jogadores só ouvem — a fonte não tem sprite no mundo).
+        if (_avtSouMestre()) {
+          ctx.save();
+          ctx.globalAlpha = 0.75;
+          ctx.font = `${Math.round(SZ * 0.5)}px serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('🔊', ocx, ocy);
+          ctx.restore();
+        }
       }
     }
   }
@@ -8301,6 +8518,22 @@ function _avtCanvasClick(e: any) {
     return;
   }
 
+  // Sound-source placement mode: click to set the ambient source position
+  if ((AVT_STATE as any)._modoFonteSomPlacement) {
+    const { fonteId } = (AVT_STATE as any)._modoFonteSomPlacement;
+    (AVT_STATE as any)._modoFonteSomPlacement = null;
+    canvas.style.cursor = '';
+    const fonte = _avtGetFonteSomById(fonteId);
+    if (fonte && AVT_STATE.dungeon) {
+      fonte.x = tileX / AVT_STATE.dungeon.w;
+      fonte.y = tileY / AVT_STATE.dungeon.h;
+      _avtSalvarDungeon();
+      mostrarToast(`Fonte de som posicionada em coluna ${tileX}, linha ${tileY}`, 'ok');
+      _avtFonteSomEditar(fonteId);
+    }
+    return;
+  }
+
   // Chest placement mode: click to set chest position on the map
   if ((AVT_STATE as any)._modoBauPlacement) {
     const { bauId } = (AVT_STATE as any)._modoBauPlacement;
@@ -8595,6 +8828,14 @@ function _avtCanvasKey(e: any) {
     if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
     mostrarToast('Posicionamento cancelado', 'aviso');
     _avtMestreEditarBau(bauId);
+    return;
+  }
+  if (e.key === 'Escape' && (AVT_STATE as any)._modoFonteSomPlacement) {
+    const { fonteId } = (AVT_STATE as any)._modoFonteSomPlacement;
+    (AVT_STATE as any)._modoFonteSomPlacement = null;
+    if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
+    mostrarToast('Posicionamento cancelado', 'aviso');
+    _avtFonteSomEditar(fonteId);
     return;
   }
 
@@ -8992,11 +9233,14 @@ function _avtSfxOuvinte() {
   return null;
 }
 
-// Volume final do SFX: aplica a redução de 25% e a atenuação linear por
-// distância (Chebyshev, como o sistema de alcance de skill). Retorna 0 quando a
-// fonte está fora do alcance audível, sinalizando ao chamador para não tocar.
+// Volume final do SFX: aplica o volume global de efeitos (slider do menu), a
+// redução de 25% e a atenuação linear por distância (Chebyshev, como o sistema
+// de alcance de skill). O volume global entra aqui porque playSFX com volume
+// explícito ignora AudioManager.volume.sfx. Retorna 0 quando a fonte está fora
+// do alcance audível, sinalizando ao chamador para não tocar.
 function _avtSfxVolDist(baseVol: any, fonte: any) {
-  let v = (baseVol ?? 0.75) * AVT_SFX_AVENTURA_MULT;
+  const globalSfx = (typeof AudioManager !== 'undefined') ? AudioManager.volume.sfx : 0.75;
+  let v = (baseVol ?? 0.75) * AVT_SFX_AVENTURA_MULT * globalSfx;
   const ouv = _avtSfxOuvinte();
   if (ouv && fonte && typeof fonte.x === 'number') {
     const dist = Math.max(Math.abs(ouv.x - fonte.x), Math.abs(ouv.y - fonte.y));
@@ -12085,8 +12329,8 @@ async function _avtSetColisao(tipo: any, valor: any) {
   if (tipo === 'jog_jog') AVT_STATE.colisaoJogJog = valor;
   if (tipo === 'jog_npc') AVT_STATE.colisaoJogNpc = valor;
   _avtBroadcast('avt_colisao_config', { colisaoJogJog: AVT_STATE.colisaoJogJog, colisaoJogNpc: AVT_STATE.colisaoJogNpc });
+  if (!_avtRpgAtivo()) return;
   const rpg = AVT_STATE.rpg;
-  if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
   rpg.theme_json.level_config.colisao_jog_jog = AVT_STATE.colisaoJogJog;
@@ -17402,6 +17646,9 @@ window._avtCatItemRemover = _avtCatItemRemover;
 // ─── END CATALOG IMPORT ───────────────────────────────────────────────────────
 
 function avtMestrePainel() {
+  // No menu pré-jogo o painel in-game está oculto sob a tela do menu — abrir
+  // aqui o deixaria escancarado sobre o mapa na próxima entrada no jogo.
+  if (typeof _avtEmMenuConfig === 'function' && _avtEmMenuConfig()) return;
   const panel = document.getElementById('avt-mestre-panel');
   if (!panel) return;
   if (!_avtSouMestre()) { panel.style!.display = 'none'; return; }
@@ -20714,6 +20961,12 @@ function _avtPixiSpineAnim(spineConfig: any, screenX: any, screenY: any) {
 }
 
 function _avtMestrePainelRender() {
+  // Contexto menu pré-jogo: o conteúdo está hospedado no painel de configurações
+  // do menu — repinta lá, senão o clique altera o estado sem feedback visual.
+  if (typeof _avtEmMenuConfig === 'function' && _avtEmMenuConfig()) {
+    _avtMenuAbrirConfigMestre(AVT_MENU_STATE.configAba || 'menu');
+    return;
+  }
   const panel = document.getElementById('avt-mestre-panel');
   if (!panel) return;
   if (!_avtSouMestre()) { panel.style!.display = 'none'; return; }
@@ -20756,6 +21009,10 @@ function _avtMestrePainelRender() {
 }
 
 function _avtMpAba(aba: any) {
+  if (typeof _avtEmMenuConfig === 'function' && _avtEmMenuConfig()) {
+    _avtMenuAbrirConfigMestre(aba);
+    return;
+  }
   AVT_STATE.mestrePainelAba = aba;
   _avtMestrePainelRender();
 }
@@ -20766,6 +21023,10 @@ function _avtMpConteudoAba() {
   const jogadores = AVT_STATE.entidades.filter((e: any) => e.tipo === 'jogador');
   const membros = AVT_STATE.membros.filter((m: any) => m.role !== 'mestre');
   const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  // No painel de configurações do menu pré-jogo só entram configurações
+  // persistentes; controles de sessão (mapa/combate ao vivo) ficam ocultos.
+  const emJogo = !(typeof _avtEmMenuConfig === 'function' && _avtEmMenuConfig());
+  const soEmJogoHint = '<div class="avt-mp-hint" style="margin-bottom:8px">🎮 Controles de sessão disponíveis durante o jogo.</div>';
 
   switch (AVT_STATE.mestrePainelAba) {
 
@@ -20782,7 +21043,7 @@ function _avtMpConteudoAba() {
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
             <span style="font-size:0.8rem">${isPri?'🏰':'🚪'}</span>
             <span style="flex:1;font-weight:600;font-size:0.78rem;color:#c8d8e8">${isPri?'Fase inicial':(f.nome||'Fase')}${atual?' <span style="font-size:0.6rem;color:#c8a84b">(atual)</span>':''}</span>
-            <button class="avt-mp-btn" style="flex:0;padding:3px 8px;min-width:0;font-size:0.65rem" onclick="_avtIrParaFase('${f.id}')" title="Ir para esta fase">▶ Ir</button>
+            ${emJogo ? `<button class="avt-mp-btn" style="flex:0;padding:3px 8px;min-width:0;font-size:0.65rem" onclick="_avtIrParaFase('${f.id}')" title="Ir para esta fase">▶ Ir</button>` : ''}
             ${isPri?'':`<button class="avt-mp-btn avt-mp-btn-danger" style="flex:0;padding:3px 8px;min-width:0;font-size:0.65rem" onclick="_avtMestreRemoverFase('${f.id}')">✕</button>`}
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -20808,6 +21069,7 @@ function _avtMpConteudoAba() {
     }
 
     case 'modo': return `
+      ${emJogo ? `
       <div class="avt-mp-secao">
         <div class="avt-mp-label">👤 Meu personagem (mestre)</div>
         <div class="avt-mp-hint" style="margin-bottom:6px">Personagem que você (mestre) controla com WASD/clique.</div>
@@ -20835,7 +21097,7 @@ function _avtMpConteudoAba() {
         </select>
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtMestreIniciarRepos()">📍 Iniciar reposicionamento</button>
         ${AVT_STATE.mestreReposicionando ? `<div class="avt-mp-hint" style="color:#c8a84b;margin-top:4px">⚡ Clique no mapa para mover a entidade selecionada</div>` : ''}
-      </div>
+      </div>` : soEmJogoHint}
       <div class="avt-mp-secao">
         <div class="avt-mp-label">💥 Colisões entre tokens</div>
         <div class="avt-mp-hint" style="margin-bottom:6px">Controla quais tokens bloqueiam a passagem dos outros. Por padrão ambos bloqueiam.</div>
@@ -20851,7 +21113,9 @@ function _avtMpConteudoAba() {
         </button>
       </div>`;
 
-    case 'combate': return `
+    case 'combate': {
+      if (!emJogo) return `<div class="avt-mp-secao">${soEmJogoHint}</div>`;
+      return `
       <div class="avt-mp-secao">
         <div class="avt-mp-row" style="flex-wrap:wrap;gap:6px;margin-bottom:8px">
           <button class="avt-mp-btn avt-mp-btn-ok" onclick="avtCombateIniciar(null);_avtMestrePainelRender()">⚔ Iniciar combate geral</button>
@@ -20881,15 +21145,17 @@ function _avtMpConteudoAba() {
           <div class="avt-mp-hint">Suspender impede que aproximação de inimigos inicie combate automaticamente.</div>
         </div>
       </div>`;
+    }
 
     case 'npcs': return `
       <div class="avt-mp-secao">
+        ${emJogo ? `
         <button class="avt-mp-toggle-btn ${AVT_STATE.npcIaAtiva ? 'avt-mp-toggle-on' : ''}"
           onclick="AVT_STATE.npcIaAtiva=!AVT_STATE.npcIaAtiva;_avtMestrePainelRender()">
           <span class="avt-mp-toggle-dot"></span>
           ${AVT_STATE.npcIaAtiva ? '🟢 IA de NPCs ATIVA' : '⚪ IA de NPCs INATIVA'}
-        </button>
-        ${npcs.length ? `
+        </button>` : soEmJogoHint}
+        ${emJogo && npcs.length ? `
           <div class="avt-mp-row" style="margin-top:8px">
             <select id="avt-mp-npc-sel" style="flex:1;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem">
               <option value="">Escolher NPC…</option>
@@ -20899,7 +21165,7 @@ function _avtMpConteudoAba() {
             ${AVT_STATE.npcControlando ? `<button class="avt-mp-btn avt-mp-btn-danger" onclick="AVT_STATE.npcControlando=null;_avtMestrePainelRender()">✕ Liberar</button>` : ''}
           </div>
         ` : ''}
-        ${(() => {
+        ${emJogo ? (() => {
           const mortos = AVT_STATE.entidades.filter((e: any) => e.tipo==='inimigo' && e.escondido);
           return mortos.length ? `
             <div class="avt-mp-label" style="margin-top:10px">💀 NPCs mortos (respawn manual)</div>
@@ -20907,9 +21173,10 @@ function _avtMpConteudoAba() {
               <span style="flex:1;font-size:0.72rem;color:#7a92aa">${e.nome}</span>
               <button class="avt-mp-btn avt-mp-btn-ok" onclick="avtRespawnNpc('${e.id}');_avtMestrePainelRender()">↺ Respawnar</button>
             </div>`).join('')}` : `<div class="avt-mp-hint" style="margin-top:6px">Nenhum NPC no momento.</div>`;
-        })()}
+        })() : ''}
+        ${emJogo ? `
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-top:8px" onclick="_avtRecarregarNpcs()">🔄 Recarregar NPCs (atualizar atributos e HP)</button>
-        <div class="avt-mp-hint" style="margin-top:3px">Respawna todos os NPCs com HP e atributos atualizados. Use após alterar Constituição ou HP Máximo.</div>
+        <div class="avt-mp-hint" style="margin-top:3px">Respawna todos os NPCs com HP e atributos atualizados. Use após alterar Constituição ou HP Máximo.</div>` : ''}
       </div>
       ${_avtNpcClassesSecao()}
       <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
@@ -21105,12 +21372,13 @@ function _avtMpConteudoAba() {
     case 'mapa': {
       const fases = AVT_STATE.rpg?.theme_json?.fases_extras || [];
       return `
+      ${emJogo ? `
       <div class="avt-mp-secao">
         <button class="avt-mp-toggle-btn ${AVT_STATE.mestreVisaoGeral?'avt-mp-toggle-on':''}" onclick="_avtMestreToggleVisao();_avtMestrePainelRender()">
           <span class="avt-mp-toggle-dot"></span>
           ${AVT_STATE.mestreVisaoGeral ? '👁 Visão geral ATIVA' : '👁 Visão geral INATIVA'}
         </button>
-      </div>
+      </div>` : ''}
       <div class="avt-mp-secao">
         <div class="avt-mp-label">Editar mapa</div>
         <div class="avt-mp-row" style="flex-wrap:wrap;gap:6px">
@@ -21118,7 +21386,8 @@ function _avtMpConteudoAba() {
           <button class="avt-mp-btn" onclick="_avtMestreAbrirEditorUnificado()">🗺 Editar mapa</button>
         </div>
       </div>
-      ${(AVT_STATE._faseStack && AVT_STATE._faseStack.length) ? `
+      ${_avtFontesSomSecao(emJogo)}
+      ${(emJogo && AVT_STATE._faseStack && AVT_STATE._faseStack.length) ? `
       <div class="avt-mp-secao">
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtVoltarFaseAnterior()">⬅ Voltar ao mapa anterior</button>
       </div>` : ''}
@@ -21127,13 +21396,13 @@ function _avtMpConteudoAba() {
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:8px" onclick="_avtMestreNovaFase()">🚪 + Nova Fase</button>
         <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:${((AVT_STATE as any)._faseAtualId||'principal')==='principal'?'rgba(200,168,75,0.10)':'rgba(79,163,209,0.04)'};border:1px solid rgba(200,168,75,0.25);margin-bottom:4px">
           <span style="flex:1;font-size:0.72rem;color:#c8d8e8">🏰 Fase inicial${(AVT_STATE._faseAtualId||'principal')==='principal'?' <span style=\"font-size:0.6rem;color:#c8a84b\">(atual)</span>':''}</span>
-          <button class="avt-mp-btn" style="flex:0;padding:3px 7px;min-width:0;font-size:0.65rem" onclick="_avtIrParaFase('principal')" title="Ir para fase inicial">▶</button>
+          ${emJogo ? `<button class="avt-mp-btn" style="flex:0;padding:3px 7px;min-width:0;font-size:0.65rem" onclick="_avtIrParaFase('principal')" title="Ir para fase inicial">▶</button>` : ''}
         </div>
         ${fases.length ? fases.map((f: any) => `
           <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:${(AVT_STATE as any)._faseAtualId===f.id?'rgba(200,168,75,0.10)':'rgba(79,163,209,0.04)'};border:1px solid rgba(79,163,209,0.1);margin-bottom:4px">
             <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${f.nome}${(AVT_STATE as any)._faseAtualId===f.id?' <span style=\"font-size:0.6rem;color:#c8a84b\">(atual)</span>':''}</span>
             <span style="font-size:0.62rem;color:#7a92aa">${f.porta.lock_type==='livre'?'🔓':f.porta.lock_type==='chave'?'🔑':'⚔'} (${f.porta.col},${f.porta.row})</span>
-            <button class="avt-mp-btn" style="flex:0;padding:3px 7px;min-width:0;font-size:0.65rem" onclick="_avtIrParaFase('${f.id}')">▶</button>
+            ${emJogo ? `<button class="avt-mp-btn" style="flex:0;padding:3px 7px;min-width:0;font-size:0.65rem" onclick="_avtIrParaFase('${f.id}')">▶</button>` : ''}
             <button class="avt-mp-btn avt-mp-btn-danger" style="flex:0;padding:3px 7px;min-width:0" onclick="_avtMestreRemoverFase('${f.id}')">✕</button>
           </div>`).join('')
         : `<div class="avt-mp-hint">Nenhuma fase extra criada.</div>`}
@@ -21308,7 +21577,7 @@ function _avtMpConteudoAba() {
           return `<div style="padding:8px;border:1px solid rgba(200,168,75,0.2);border-radius:6px;background:rgba(200,168,75,0.03);margin-bottom:6px">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
               <span style="flex:1;font-size:0.72rem;color:#c8a84b">${b.nome||'Baú'} ${b.aberto?'(aberto)':''} <span style="font-size:0.6rem;color:#7a92aa">Col ${tx}, Ln ${ty}</span></span>
-              <button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" title="Posicionar no mapa" onclick="document.getElementById('avt-mestre-panel').style.display='none';_avtEntrarModoBauPlacement('${safe}')">📍</button>
+              ${emJogo ? `<button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" title="Posicionar no mapa" onclick="document.getElementById('avt-mestre-panel').style.display='none';_avtEntrarModoBauPlacement('${safe}')">📍</button>` : ''}
               <button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" onclick="_avtMestreEditarBau('${safe}')">✏</button>
               <button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 7px;font-size:0.65rem" onclick="_avtMestreRemoverBau('${safe}')">✕</button>
             </div>
@@ -23105,8 +23374,8 @@ async function _avtSalvarTrilhaSonora() {
   const combateUrl    = document.getElementById('avt-mp-audio-combate')?.value!.trim!()! || '';
   const bossUrl       = document.getElementById('avt-mp-audio-boss')?.value!.trim!()! || '';
   const volume        = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-mp-audio-volume')?.value!) || 0.45));
+  if (!_avtRpgAtivo()) return;
   const rpg = AVT_STATE.rpg;
-  if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
   const audio: any = {};
   if (exploracaoUrl) (audio as any).exploracao_url = exploracaoUrl;
