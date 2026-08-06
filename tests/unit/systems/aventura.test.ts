@@ -180,3 +180,52 @@ describe('_avtCelulaOcupada', () => {
     expect(g._avtCelulaOcupada(3, 3, 'e2', 'jogador', false)).toBe(false);
   });
 });
+
+describe('_avtSfxVolDist (volume global de SFX + atenuação por distância)', () => {
+  beforeEach(() => {
+    g.AVT_STATE = { entidades: [], myCharNome: null, isMestre: false, camera: null, canvas: null };
+    g.AudioManager = { volume: { sfx: 1 } };
+  });
+
+  it('aplica -25% do modo aventura e o volume global do slider', () => {
+    expect(g._avtSfxVolDist(0.8, null)).toBeCloseTo(0.8 * 0.75 * 1);
+    g.AudioManager.volume.sfx = 0.5;
+    expect(g._avtSfxVolDist(0.8, null)).toBeCloseTo(0.8 * 0.75 * 0.5);
+  });
+
+  it('slider a zero silencia qualquer SFX posicional', () => {
+    g.AudioManager.volume.sfx = 0;
+    expect(g._avtSfxVolDist(0.8, null)).toBe(0);
+  });
+
+  it('atenua linearmente pela distância do ouvinte até silenciar a 20 células', () => {
+    g.AVT_STATE.myCharNome = 'Heroi';
+    g.AVT_STATE.entidades = [{ nome: 'Heroi', tipo: 'jogador', x: 0, y: 0, hp: 10 }];
+    expect(g._avtSfxVolDist(0.8, { x: 10, y: 0 })).toBeCloseTo(0.8 * 0.75 * 0.5);
+    expect(g._avtSfxVolDist(0.8, { x: 25, y: 0 })).toBe(0);
+  });
+});
+
+describe('_avtMpAba (roteamento do painel do mestre no contexto do menu)', () => {
+  beforeEach(() => {
+    g.AVT_STATE = { mestrePainelAba: 'menu', entidades: [], membros: [], batalhas: [] };
+    g.AVT_MENU_STATE = { configAba: 'menu', _configAberta: false };
+  });
+
+  it('no menu pré-jogo redireciona para o renderer do painel de config', () => {
+    g._avtEmMenuConfig = () => true;
+    g._avtMenuAbrirConfigMestre = vi.fn();
+    g._avtMpAba('itens');
+    expect(g._avtMenuAbrirConfigMestre).toHaveBeenCalledWith('itens');
+    // não vaza a aba para o estado do painel in-game
+    expect(g.AVT_STATE.mestrePainelAba).toBe('menu');
+  });
+
+  it('fora do menu mantém o fluxo in-game (troca a aba e re-renderiza)', () => {
+    g._avtEmMenuConfig = () => false;
+    g._avtMenuAbrirConfigMestre = vi.fn();
+    g._avtMpAba('npcs');
+    expect(g.AVT_STATE.mestrePainelAba).toBe('npcs');
+    expect(g._avtMenuAbrirConfigMestre).not.toHaveBeenCalled();
+  });
+});

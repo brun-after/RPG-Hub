@@ -9,7 +9,21 @@ var AVT_MENU_STATE = {
   sessionData: null as any,
   _saveTimer: null as any,
   configAba: 'menu',
+  _configAberta: false, // painel ⚙ Configurações do menu aberto (contexto fora do jogo)
 };
+
+// Contexto "configurações do menu": o painel ⚙ do menu pré-jogo está aberto e
+// visível. Usado pelo renderer compartilhado do painel do mestre (aventura.ts)
+// para redirecionar re-renders/trocas de aba ao painel do menu em vez do painel
+// in-game (oculto fora do jogo, o que engolia todo feedback visual).
+function _avtEmMenuConfig() {
+  if (!AVT_MENU_STATE._configAberta) return false;
+  const sc = document.getElementById('avt-menu-screen');
+  const panel = document.getElementById('avt-menu-panel');
+  return !!(sc && sc.style!.display !== 'none' &&
+            panel && panel.style!.display !== 'none' && panel.style!.display !== '');
+}
+window._avtEmMenuConfig = _avtEmMenuConfig;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GRÁFICOS — preferência individual, localStorage
@@ -841,6 +855,9 @@ function sairAventura() {
   AVT_STATE._lastFrameTs = 0;
   AVT_MENU_STATE.rpgId = null;
   AVT_MENU_STATE.sessionData = null;
+  AVT_MENU_STATE._configAberta = false;
+  // Preferência de trilhas é por aventura (rpg_members.session_data) — não vazar p/ a próxima.
+  try { if (typeof AudioManager !== 'undefined') AudioManager.setPlayerPref(null); } catch(_) {}
   if (typeof avtInvReset === 'function') avtInvReset();
 }
 window.sairAventura = sairAventura;
@@ -960,6 +977,8 @@ function _hexToRgb(hex: any) {
 function _avtMenuAbrirPanel(html: any, titulo: any) {
   const panel = document.getElementById('avt-menu-panel');
   if (!panel) return;
+  // Qualquer painel não-config zera o contexto; _avtMenuAbrirConfigMestre re-seta.
+  AVT_MENU_STATE._configAberta = false;
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid rgba(79,163,209,0.12);flex-shrink:0">
       <button onclick="_avtMenuFecharPanel()" style="background:none;border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer">← Voltar</button>
@@ -974,6 +993,7 @@ function _avtMenuAbrirPanel(html: any, titulo: any) {
 function _avtMenuFecharPanel() {
   const panel = document.getElementById('avt-menu-panel');
   if (panel) panel.style!.display = 'none';
+  AVT_MENU_STATE._configAberta = false;
 }
 window._avtMenuFecharPanel = _avtMenuFecharPanel;
 
@@ -1424,10 +1444,12 @@ function _avtMenuAbrirConfigMestre(aba: any) {
   AVT_MENU_STATE.configAba = aba;
   const abas = [
     { id: 'menu',          label: '🖼 Menu' },
+    { id: 'modo',          label: '🎮 Modo Mestre' },
     { id: 'combate',       label: '⚔ Combate' },
     { id: 'balanceamento', label: '⚖ Balanço' },
     { id: 'npcs',          label: '🤖 NPCs' },
     { id: 'loot_xp',       label: '📊 XP' },
+    { id: 'itens',         label: '🎒 Itens' },
     { id: 'mapa',          label: '🗺 Mapa' },
     { id: 'fases',         label: '🚪 Fases' },
     { id: 'campanha',      label: '🏰 Campanha' },
@@ -1454,6 +1476,7 @@ function _avtMenuAbrirConfigMestre(aba: any) {
 
   const content = _avtMenuConfigConteudoAba(aba);
   _avtMenuAbrirPanel(tabBar + content, '⚙ Configurações');
+  AVT_MENU_STATE._configAberta = true;
 
   if (aba === 'menu') _avtMenuBindColorPicker();
 }
@@ -1672,6 +1695,14 @@ function _avtMenuSetMobilePref(chave: any, valor: any) {
   sd.mobile_pref = sd.mobile_pref || {};
   sd.mobile_pref[chave] = valor;
   AVT_MENU_STATE.sessionData = sd;
+  if (chave === 'posicao') {
+    // Persistir onde o controle mobile de fato lê (catalog.ts: MOBILE_CTRL.modoCamara
+    // inicializa de localStorage['mc_modo_camera']) — senão a escolha do menu se
+    // perde na primeira ativação do controle em jogo.
+    const cam = valor === 'deadzone' ? 'deadzone' : 'centralizada';
+    try { localStorage.setItem('mc_modo_camera', cam); } catch(_) {}
+    if (typeof MOBILE_CTRL !== 'undefined') MOBILE_CTRL.modoCamara = cam;
+  }
   const grupo = chave === 'tipo' ? ['dispositivo','tv'] : ['centralizado','deadzone'];
   const prefixo = chave === 'tipo' ? 'avt-cfg-mobile-tipo-' : 'avt-cfg-mobile-pos-';
   grupo.forEach(v => {
@@ -1687,6 +1718,10 @@ window._avtMenuSetMobilePref = _avtMenuSetMobilePref;
 
 async function _avtMenuSalvarConfigMestre() {
   if (!AVT_STATE.isMestre) return;
+  if (!AVT_MENU_STATE.rpgId || !AVT_STATE.rpg) {
+    try { mostrarToast('Nenhuma aventura carregada — configuração não salva.', 'erro'); } catch(_) {}
+    return;
+  }
   const imgUrl   = document.getElementById('avt-cfg-menu-img')?.value || '';
   const color    = document.getElementById('avt-cfg-menu-color')?.value || '';
   const gridCor  = document.getElementById('avt-cfg-grid-color')?.value || '#ffffff';
@@ -1842,15 +1877,11 @@ async function _avtMenuEntrarJogo({ charNome, faseId }: any) {
       if (mb.posicao) MOBILE_CTRL.modoCamara = mb.posicao === 'deadzone' ? 'deadzone' : 'centralizada';
     }
 
-    // Aplicar preferência de música
-    const mp = (AVT_MENU_STATE.sessionData || {}).music_pref || {};
-    if (typeof AudioManager !== 'undefined' && mp.mode && mp.mode !== 'auto') {
-      window._avtMenuPlayerMusicPref = mp;
-      if (mp.mode === 'custom' && mp.tracks) {
-        AudioManager.setPlayerPref(mp);
-      }
-    } else {
-      delete window._avtMenuPlayerMusicPref;
+    // Preferência de música do jogador: o AudioManager resolve as trilhas
+    // efetivas em cada transição de fase/combate (o onEnterPhase real acontece
+    // em _avtMostrarAventuraScreen, logo abaixo).
+    if (typeof AudioManager !== 'undefined') {
+      AudioManager.setPlayerPref((AVT_MENU_STATE.sessionData || {}).music_pref || null);
     }
 
     _avtMostrarAventuraScreen();
