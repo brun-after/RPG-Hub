@@ -72,9 +72,9 @@ function animarAtaque3Camadas(atacanteNome: any, alvoNome: any, dano: any, tipoD
     const _polir = (typeof AVT_GRAFICOS === 'undefined' || AVT_GRAFICOS?.polimento !== false);
     const _danoExib = (dano===0||dano===null) ? dano : (_polir ? Math.round(dano) : dano);
     num.className='numero-flutuante'+(ehCura?' cura':ehCritico?' critico':dano===0||dano===null?' errou':' dano');
-    num.style.cssText='left:'+(rect.left-mapaRect.left+rect.width/2)+'px;top:'+(rect.top-mapaRect.top-10)+'px';
+    num.style!.cssText='left:'+(rect.left-mapaRect.left+rect.width/2)+'px;top:'+(rect.top-mapaRect.top-10)+'px';
     num.textContent = ehCura ? '+'+_danoExib : (dano===0||dano===null ? 'ERROU' : '-'+_danoExib);
-    mapaImg.style.position='relative'; mapaImg.appendChild(num); setTimeout(()=>num.remove(),1000);
+    mapaImg!.style!.position='relative'; mapaImg!.appendChild(num); setTimeout(()=>num.remove(),1000);
   }, 300);
 }
 
@@ -86,8 +86,8 @@ function _dispararParticulasToken(tokenEl: any, tipoClass: any) {
   for (let i=0;i<8;i++) {
     const ang=(Math.PI*2*i/8)+(Math.random()-0.5)*0.5, dist=20+Math.random()*30;
     const p=document.createElement('div'); p.className='particula-impacto';
-    p.style.cssText='left:'+cx+'px;top:'+cy+'px;width:5px;height:5px;background:'+cor+';--px:'+(Math.cos(ang)*dist)+'px;--py:'+(Math.sin(ang)*dist)+'px';
-    mapaImg.appendChild(p); setTimeout(()=>p.remove(),450);
+    p.style!.cssText='left:'+cx+'px;top:'+cy+'px;width:5px;height:5px;background:'+cor+';--px:'+(Math.cos(ang)*dist)+'px;--py:'+(Math.sin(ang)*dist)+'px';
+    mapaImg!.appendChild(p); setTimeout(()=>p.remove(),450);
   }
 }
 
@@ -138,7 +138,7 @@ function _aplicarIconesLootTokens() {
     const ca=c.custom_attrs||{}; if(!ca.morto||!ca.tem_loot) return;
     const tokenEl=document.querySelector('.mapa-token[data-nome="'+CSS.escape(c.nome)+'"]'); if(!tokenEl||tokenEl.querySelector('.loot-badge-v2')) return;
     const badge=document.createElement('div'); badge.className='loot-badge-v2';
-    badge.style.cssText='position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:rgba(200,168,75,0.95);border-radius:8px;padding:2px 6px;font-size:0.55rem;color:#050810;font-family:var(--fonte-d);z-index:20;pointer-events:none;white-space:nowrap;border:1px solid rgba(240,204,106,0.8);animation:lootPiscar 1.5s ease-in-out infinite';
+    badge.style!.cssText='position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:rgba(200,168,75,0.95);border-radius:8px;padding:2px 6px;font-size:0.55rem;color:#050810;font-family:var(--fonte-d);z-index:20;pointer-events:none;white-space:nowrap;border:1px solid rgba(240,204,106,0.8);animation:lootPiscar 1.5s ease-in-out infinite';
     badge.textContent='💰 Loot'; tokenEl.appendChild(badge);
   });
 }
@@ -151,7 +151,7 @@ function _verificarMapaIsoLegado(m: any) {
   if (m.transform3d?.depth||m.render_data?.transform3d?.depth) {
     if (!document.getElementById(bannerId)) {
       const b=document.createElement('div'); b.id=bannerId;
-      b.style.cssText='position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:25;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.4);border-radius:8px;padding:6px 14px;font-size:0.7rem;color:#f0cc6a;pointer-events:none;white-space:nowrap';
+      b.style!.cssText='position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:25;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.4);border-radius:8px;padding:6px 14px;font-size:0.7rem;color:#f0cc6a;pointer-events:none;white-space:nowrap';
       b.textContent='⚠ Mapa isométrico legado — posições dos tokens podem estar incorretas';
       document.getElementById('mapa-tokens')?.appendChild(b);
     }
@@ -192,16 +192,16 @@ window.mapaRenderCanvas = function(m) {
       const cW = W / largura;
       const cH = H / altura;
       const _hasTileset = typeof AVT_STATE !== 'undefined' && (AVT_STATE as any)._tilesetLoaded;
-      ctx.save();
-      ctx.strokeStyle = _hasTileset ? 'rgba(126,200,240,0.04)' : 'rgba(126,200,240,0.12)';
-      ctx.lineWidth   = _hasTileset ? 0.3 : 0.5;
+      ctx!.save();
+      ctx!.strokeStyle = _hasTileset ? 'rgba(126,200,240,0.04)' : 'rgba(126,200,240,0.12)';
+      ctx!.lineWidth   = _hasTileset ? 0.3 : 0.5;
       for (let c = 0; c <= largura; c++) {
-        ctx.beginPath(); ctx.moveTo(Math.round(c * cW) + 0.5, 0); ctx.lineTo(Math.round(c * cW) + 0.5, H); ctx.stroke();
+        ctx!.beginPath(); ctx!.moveTo(Math.round(c * cW) + 0.5, 0); ctx!.lineTo(Math.round(c * cW) + 0.5, H); ctx!.stroke();
       }
       for (let r = 0; r <= altura; r++) {
-        ctx.beginPath(); ctx.moveTo(0, Math.round(r * cH) + 0.5); ctx.lineTo(W, Math.round(r * cH) + 0.5); ctx.stroke();
+        ctx!.beginPath(); ctx!.moveTo(0, Math.round(r * cH) + 0.5); ctx!.lineTo(W, Math.round(r * cH) + 0.5); ctx!.stroke();
       }
-      ctx.restore();
+      ctx!.restore();
     }
   }
   return resultado;

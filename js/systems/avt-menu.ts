@@ -65,7 +65,7 @@ function _avtGraficosPreset(nome: any, opts: any) {
   // Atualiza a UI do menu se o painel de configurações estiver aberto
   try {
     const panel = document.getElementById('avt-menu-panel');
-    if (panel && panel.style.display !== 'none' && panel.style.display !== '') {
+    if (panel && panel.style!.display !== 'none' && panel.style!.display !== '') {
       _avtMenuAbrirConfigMestre(AVT_MENU_STATE.configAba || 'graficos');
     }
   } catch(_) {}
@@ -201,17 +201,17 @@ function _avtGraficosIsoAplicar() {
   // Host VFX é criado com resolution/antialias do modo vigente — recria no toggle.
   try { window._avtVfxHostDestroy?.(); } catch (_) {}
   if (AVT_GRAFICOS.isoAtivo) {
-    wrap.style.transform = `rotateX(${_ISO_ANGLE_X}deg) rotateZ(45deg) scale(${_ISO_SCALE})`;
-    wrap.style.transformOrigin = 'center center';
+    wrap.style!.transform = `rotateX(${_ISO_ANGLE_X}deg) rotateZ(45deg) scale(${_ISO_SCALE})`;
+    wrap.style!.transformOrigin = 'center center';
     // Estabiliza a camada de compositing 3D: evita re-rasterização (clarão) no mobile
     // quando overlays/efeitos são inseridos perto da camada transformada.
-    wrap.style.willChange = 'transform';
-    wrap.style.backfaceVisibility = 'hidden';
+    wrap.style!.willChange = 'transform';
+    wrap.style!.backfaceVisibility = 'hidden';
   } else {
-    wrap.style.transform = '';
-    wrap.style.transformOrigin = '';
-    wrap.style.willChange = '';
-    wrap.style.backfaceVisibility = '';
+    wrap.style!.transform = '';
+    wrap.style!.transformOrigin = '';
+    wrap.style!.willChange = '';
+    wrap.style!.backfaceVisibility = '';
   }
   _avtIsoLayoutAplicar();
   _avtAtmosferaAplicar();
@@ -228,16 +228,16 @@ function _avtAtmosferaAplicar() {
   if (!parent) return;
   let vig = document.getElementById('avt-atmosfera');
   const ativo = !!(AVT_GRAFICOS.isoAtivo && AVT_GRAFICOS.atmosfera);
-  if (!ativo) { if (vig) vig.style.display = 'none'; return; }
+  if (!ativo) { if (vig) vig.style!.display = 'none'; return; }
   if (!vig) {
     vig = document.createElement('div');
     vig.id = 'avt-atmosfera';
-    vig.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:20;'
+    vig.style!.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:20;'
       + 'background:radial-gradient(ellipse 62% 62% at 50% 48%,'
       + 'rgba(0,0,0,0) 38%,rgba(3,5,10,0.40) 72%,rgba(2,3,8,0.82) 100%);';
     parent.appendChild(vig);
   }
-  vig.style.display = 'block';
+  vig.style!.display = 'block';
 }
 window._avtAtmosferaAplicar = _avtAtmosferaAplicar;
 
@@ -257,22 +257,22 @@ function _avtIsoLayoutAplicar() {
   if (AVT_GRAFICOS.isoAtivo) {
     if (!wrap._isoLayoutPrev) {
       wrap._isoLayoutPrev = {
-        position: wrap.style.position, flex: wrap.style.flex,
-        width: wrap.style.width, height: wrap.style.height,
-        left: wrap.style.left, top: wrap.style.top,
-        parentOverflow: parent.style.overflow,
+        position: wrap.style!.position, flex: wrap.style!.flex,
+        width: wrap.style!.width, height: wrap.style!.height,
+        left: wrap.style!.left, top: wrap.style!.top,
+        parentOverflow: parent.style!.overflow,
       };
     }
-    parent.style.overflow = 'hidden';
-    wrap.style.position = 'absolute';
-    wrap.style.flex = 'none';
+    parent.style!.overflow = 'hidden';
+    wrap.style!.position = 'absolute';
+    wrap.style!.flex = 'none';
     _avtIsoSizeWrap();
   } else if (wrap._isoLayoutPrev) {
     const p = wrap._isoLayoutPrev;
-    wrap.style.position = p.position; wrap.style.flex = p.flex;
-    wrap.style.width = p.width; wrap.style.height = p.height;
-    wrap.style.left = p.left; wrap.style.top = p.top;
-    parent.style.overflow = p.parentOverflow;
+    wrap.style!.position = p.position; wrap.style!.flex = p.flex;
+    wrap.style!.width = p.width; wrap.style!.height = p.height;
+    wrap.style!.left = p.left; wrap.style!.top = p.top;
+    parent.style!.overflow = p.parentOverflow;
     wrap._isoLayoutPrev = null;
   }
   // Redimensiona o canvas para o novo tamanho do wrap.
@@ -289,10 +289,10 @@ function _avtIsoSizeWrap() {
   if (!parent || parent.clientWidth <= 0) return;
   const pw = parent.clientWidth, ph = parent.clientHeight;
   const f = _ISO_OVERSIZE;
-  wrap.style.width  = (pw * f) + 'px';
-  wrap.style.height = (ph * f) + 'px';
-  wrap.style.left = (pw * (1 - f) / 2) + 'px';
-  wrap.style.top  = (ph * (1 - f) / 2) + 'px';
+  wrap.style!.width  = (pw * f) + 'px';
+  wrap.style!.height = (ph * f) + 'px';
+  wrap.style!.left = (pw * (1 - f) / 2) + 'px';
+  wrap.style!.top  = (ph * (1 - f) / 2) + 'px';
 }
 window._avtIsoSizeWrap = _avtIsoSizeWrap;
 
@@ -402,7 +402,7 @@ function _avtIsoRefinosAtualizarUI() {
     const chk = document.getElementById('avt-cfg-iso-' + chave);
     if (chk) { chk.disabled = !isoOn; chk.checked = !!AVT_GRAFICOS[chave]; }
     const row = document.getElementById('avt-cfg-iso-' + chave + '-row');
-    if (row) row.style.opacity = isoOn ? '1' : '0.45';
+    if (row) row.style!.opacity = isoOn ? '1' : '0.45';
   });
   const pol = document.getElementById('avt-cfg-iso-polimento');
   if (pol) pol.checked = !!AVT_GRAFICOS.polimento;
@@ -434,9 +434,9 @@ function _avtGraficosControlesAplicar() {
   const showIsoDpad   = !!(AVT_GRAFICOS.isoAtivo && AVT_GRAFICOS.isoMobile && !AVT_GRAFICOS.analogico);
   const showAnalogico = !!AVT_GRAFICOS.analogico;
 
-  if (isoDpad)     isoDpad.style.display     = showIsoDpad   ? 'block' : 'none';
-  if (analogicoEl) analogicoEl.style.display = showAnalogico ? 'block' : 'none';
-  if (regularDpad && (showIsoDpad || showAnalogico)) regularDpad.style.display = 'none';
+  if (isoDpad)     isoDpad.style!.display     = showIsoDpad   ? 'block' : 'none';
+  if (analogicoEl) analogicoEl.style!.display = showAnalogico ? 'block' : 'none';
+  if (regularDpad && (showIsoDpad || showAnalogico)) regularDpad.style!.display = 'none';
 
   if (showAnalogico) _avtAnalogicoIniciar();
 }
@@ -473,12 +473,12 @@ function _avtAnalogicoIniciar() {
   }
 
   function _mover(ex: any, ey: any) {
-    const rect = outer.getBoundingClientRect();
+    const rect = outer!.getBoundingClientRect();
     let x = ex - (rect.left + rect.width  / 2);
     let y = ey - (rect.top  + rect.height / 2);
     const d = Math.sqrt(x * x + y * y);
     if (d > R) { x = x / d * R; y = y / d * R; }
-    knob.style.transform = `translate(${x}px,${y}px)`;
+    knob!.style!.transform = `translate(${x}px,${y}px)`;
 
     if (d < 14) { // deadzone
       if (_lastSector !== -1) { _lastSector = -1; if (typeof avtDpadStop === 'function') avtDpadStop(); }
@@ -497,7 +497,7 @@ function _avtAnalogicoIniciar() {
   outer.addEventListener('pointermove', (e: any) => { if (_active) _mover(e.clientX, e.clientY); });
   ['pointerup', 'pointercancel'].forEach(ev => outer.addEventListener(ev, () => {
     _active = false; _lastSector = -1;
-    knob.style.transform = '';
+    knob.style!.transform = '';
     if (typeof avtDpadStop === 'function') avtDpadStop();
   }));
 }
@@ -510,7 +510,7 @@ function _avtControlesAtualizarUI() {
     if (chk) chk.disabled = !isoOn;
   });
   const aviso = document.getElementById('avt-cfg-controles-aviso');
-  if (aviso) aviso.style.display = isoOn ? 'none' : 'block';
+  if (aviso) aviso.style!.display = isoOn ? 'none' : 'block';
 }
 
 function _avtMenuHtmlControles() {
@@ -580,10 +580,10 @@ function _avtGraficosAtualizarUI() {
     const btn = document.getElementById(`avt-cfg-tex3d-n${n}`);
     if (!btn) return;
     const sel = g.ativo && g.nivel === n;
-    btn.style.background = `rgba(200,168,75,${sel ? '0.15' : '0.04'})`;
-    btn.style.borderColor = `rgba(200,168,75,${sel ? '0.55' : '0.18'})`;
-    btn.style.color = sel ? '#f0cc6a' : '#7a92aa';
-    btn.style.opacity = g.ativo ? '1' : '0.45';
+    btn.style!.background = `rgba(200,168,75,${sel ? '0.15' : '0.04'})`;
+    btn.style!.borderColor = `rgba(200,168,75,${sel ? '0.55' : '0.18'})`;
+    btn.style!.color = sel ? '#f0cc6a' : '#7a92aa';
+    btn.style!.opacity = g.ativo ? '1' : '0.45';
   });
 }
 
@@ -770,10 +770,10 @@ async function avtMenuAbrir(rpgId: any) {
     AVT_MENU_STATE.sessionData = await _avtMenuCarregarSessionData(rpgId);
     ocultarLoading();
 
-    document.getElementById('hub').style.display = 'none';
+    document.getElementById('hub')!.style!.display = 'none';
     const sc = document.getElementById('avt-menu-screen');
     if (!sc) { _avtMenuFallback(rpgId); return; }
-    sc.style.display = 'flex';
+    sc.style!.display = 'flex';
 
     const t = AVT_STATE.rpg?.theme_json || {};
 
@@ -781,15 +781,15 @@ async function avtMenuAbrir(rpgId: any) {
     const bgEl = document.getElementById('avt-menu-bg-img');
     if (bgEl) {
       const imgUrl = t.menu_img_url || '';
-      bgEl.style.backgroundImage = imgUrl ? `url("${imgUrl.replace(/"/g, '%22')}")` : 'none';
-      bgEl.style.display = imgUrl ? 'block' : 'none';
+      bgEl.style!.backgroundImage = imgUrl ? `url("${imgUrl.replace(/"/g, '%22')}")` : 'none';
+      bgEl.style!.display = imgUrl ? 'block' : 'none';
     }
 
     // Cor de fundo
     if (t.menu_theme_color) {
-      sc.style.background = t.menu_theme_color;
+      sc.style!.background = t.menu_theme_color;
     } else {
-      sc.style.background = '#050810';
+      sc.style!.background = '#050810';
     }
 
     // Nome
@@ -798,7 +798,7 @@ async function avtMenuAbrir(rpgId: any) {
 
     // Esconder sub-painel
     const panel = document.getElementById('avt-menu-panel');
-    if (panel) panel.style.display = 'none';
+    if (panel) panel.style!.display = 'none';
 
     _avtMenuRenderBotoes();
   } catch (e: any) {
@@ -823,10 +823,10 @@ function sairAventura() {
   try { if (typeof _avtNpcSyncShutdown === 'function') _avtNpcSyncShutdown(); } catch(_){}
   try { const mm = document.getElementById('avt-minimap'); if (mm) mm.remove(); } catch(_) {}
   const avt = document.getElementById('aventura-screen');
-  if (avt) avt.style.display = 'none';
+  if (avt) avt.style!.display = 'none';
   const menu = document.getElementById('avt-menu-screen');
-  if (menu) menu.style.display = 'none';
-  document.getElementById('hub').style.display = 'block';
+  if (menu) menu.style!.display = 'none';
+  document.getElementById('hub')!.style!.display = 'block';
   avtHubRenderSection();
   AVT_STATE.rpgId   = null;
   AVT_STATE.dungeon = null;
@@ -852,7 +852,7 @@ async function voltarAoMenuDeJogo() {
   try { if (typeof _avtNpcSyncShutdown === 'function') _avtNpcSyncShutdown(); } catch(_){}
   try { const mm = document.getElementById('avt-minimap'); if (mm) mm.remove(); } catch(_) {}
   const avt = document.getElementById('aventura-screen');
-  if (avt) avt.style.display = 'none';
+  if (avt) avt.style!.display = 'none';
   const rpgId = AVT_STATE.rpgId;
   AVT_STATE.dungeon = null;
   AVT_STATE.entidades = [];
@@ -967,13 +967,13 @@ function _avtMenuAbrirPanel(html: any, titulo: any) {
     </div>
     <div style="padding:18px;flex:1;overflow-y:auto">${html}</div>
   `;
-  panel.style.display = 'flex';
-  panel.style.flexDirection = 'column';
+  panel.style!.display = 'flex';
+  panel.style!.flexDirection = 'column';
 }
 
 function _avtMenuFecharPanel() {
   const panel = document.getElementById('avt-menu-panel');
-  if (panel) panel.style.display = 'none';
+  if (panel) panel.style!.display = 'none';
 }
 window._avtMenuFecharPanel = _avtMenuFecharPanel;
 
@@ -1096,9 +1096,9 @@ function _avtMenuNovaFaseComRefresh() {
   const overlay = document.getElementById('avt-anim-import-overlay');
   if (!overlay) return;
   let _obs = new MutationObserver(() => {
-    if (overlay.style.display === 'none' || overlay.style.display === '') {
+    if (overlay.style!.display === 'none' || overlay.style!.display === '') {
       _obs.disconnect();
-      _obs = null;
+      _obs = null as any;
       _avtMenuAbrirFaseMestre();
     }
   });
@@ -1231,9 +1231,9 @@ function _avtMenuSetEditFaseLock(lockType: any) {
     const btn = document.getElementById(`avt-edit-fase-lock-${lt}`);
     if (!btn) return;
     const ativo = lt === lockType;
-    btn.style.background = `rgba(79,163,209,${ativo?'0.15':'0.04'})`;
-    btn.style.borderColor = `rgba(79,163,209,${ativo?'0.5':'0.15'})`;
-    btn.style.color = ativo ? '#4fa3d1' : '#7a92aa';
+    btn.style!.background = `rgba(79,163,209,${ativo?'0.15':'0.04'})`;
+    btn.style!.borderColor = `rgba(79,163,209,${ativo?'0.5':'0.15'})`;
+    btn.style!.color = ativo ? '#4fa3d1' : '#7a92aa';
   });
 }
 window._avtMenuSetEditFaseLock = _avtMenuSetEditFaseLock;
@@ -1630,21 +1630,21 @@ function _avtMenuBindColorPicker() {
     if (colorInp) {
       colorInp.addEventListener('input', () => {
         const val = document.getElementById('avt-cfg-menu-color-val');
-        if (val) val.textContent = colorInp.value;
+        if (val) val!.textContent = colorInp.value as any;
       });
     }
     const gridColorInp = document.getElementById('avt-cfg-grid-color');
     if (gridColorInp) {
       gridColorInp.addEventListener('input', () => {
         const val = document.getElementById('avt-cfg-grid-color-val');
-        if (val) val.textContent = gridColorInp.value;
+        if (val) val!.textContent = gridColorInp.value as any;
       });
     }
     const gridOpInp = document.getElementById('avt-cfg-grid-op');
     if (gridOpInp) {
       gridOpInp.addEventListener('input', () => {
         const val = document.getElementById('avt-cfg-grid-op-val');
-        if (val) val.textContent = parseFloat(gridOpInp.value).toFixed(2);
+        if (val) val.textContent = parseFloat(gridOpInp.value!).toFixed(2);
       });
     }
   }, 50);
@@ -1656,13 +1656,13 @@ function _avtMenuSelecionarMusicaMode(modo: any) {
   sd.music_pref.mode = modo;
   AVT_MENU_STATE.sessionData = sd;
   const trilhas = document.getElementById('avt-cfg-trilhas');
-  if (trilhas) trilhas.style.display = modo === 'custom' ? 'block' : 'none';
+  if (trilhas) trilhas.style!.display = modo === 'custom' ? 'block' : 'none';
   ['auto','master','custom'].forEach(m => {
     const btn = document.getElementById(`avt-cfg-music-${m}`);
     if (!btn) return;
     const ativo = m === modo;
-    btn.style.background = `rgba(79,163,209,${ativo?'0.12':'0.04'})`;
-    btn.style.borderColor = `rgba(79,163,209,${ativo?'0.45':'0.15'})`;
+    btn.style!.background = `rgba(79,163,209,${ativo?'0.12':'0.04'})`;
+    btn.style!.borderColor = `rgba(79,163,209,${ativo?'0.45':'0.15'})`;
   });
 }
 window._avtMenuSelecionarMusicaMode = _avtMenuSelecionarMusicaMode;
@@ -1678,9 +1678,9 @@ function _avtMenuSetMobilePref(chave: any, valor: any) {
     const btn = document.getElementById(prefixo + v);
     if (!btn) return;
     const ativo = v === valor;
-    btn.style.background = `rgba(79,163,209,${ativo?'0.12':'0.04'})`;
-    btn.style.borderColor = `rgba(79,163,209,${ativo?'0.45':'0.15'})`;
-    btn.style.color = ativo ? '#4fa3d1' : '#7a92aa';
+    btn.style!.background = `rgba(79,163,209,${ativo?'0.12':'0.04'})`;
+    btn.style!.borderColor = `rgba(79,163,209,${ativo?'0.45':'0.15'})`;
+    btn.style!.color = ativo ? '#4fa3d1' : '#7a92aa';
   });
 }
 window._avtMenuSetMobilePref = _avtMenuSetMobilePref;
@@ -1691,7 +1691,7 @@ async function _avtMenuSalvarConfigMestre() {
   const color    = document.getElementById('avt-cfg-menu-color')?.value || '';
   const gridCor  = document.getElementById('avt-cfg-grid-color')?.value || '#ffffff';
   const gridOpEl = document.getElementById('avt-cfg-grid-op');
-  const gridOp   = gridOpEl ? parseFloat(gridOpEl.value) : 0.09;
+  const gridOp   = gridOpEl ? parseFloat(gridOpEl.value!) : 0.09;
   try {
     const themeAtual = AVT_STATE.rpg?.theme_json || {};
     const novoTheme = { ...themeAtual, menu_img_url: imgUrl, menu_theme_color: color, grid_cor: gridCor, grid_opacidade: gridOp };
@@ -1700,9 +1700,9 @@ async function _avtMenuSalvarConfigMestre() {
     AVT_STATE.rpg.theme_json = novoTheme;
     // Atualizar menu visualmente
     const bgEl = document.getElementById('avt-menu-bg-img');
-    if (bgEl) { bgEl.style.backgroundImage = imgUrl ? `url("${imgUrl}")` : 'none'; bgEl.style.display = imgUrl ? 'block' : 'none'; }
+    if (bgEl) { bgEl.style!.backgroundImage = imgUrl ? `url("${imgUrl}")` : 'none'; bgEl.style!.display = imgUrl ? 'block' : 'none'; }
     const sc = document.getElementById('avt-menu-screen');
-    if (sc && color) sc.style.background = color;
+    if (sc && color) sc.style!.background = color;
     mostrarToast('Config do mestre salva!', 'ok');
   } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
 }
@@ -1796,9 +1796,9 @@ window._avtMenuAbrirGuia = _avtMenuAbrirGuia;
 
 function _avtMenuAbrirPixiStudio() {
   const menu = document.getElementById('avt-menu-screen');
-  if (menu) menu.style.display = 'none';
+  if (menu) menu.style!.display = 'none';
   const scr = document.getElementById('pixi-studio-screen');
-  if (scr) scr.style.display = 'flex';
+  if (scr) scr.style!.display = 'flex';
   if (typeof PIXI_STUDIO_STATE !== 'undefined') PIXI_STUDIO_STATE._origin = 'aventura';
   if (typeof pixiStudioInit === 'function') pixiStudioInit();
 }

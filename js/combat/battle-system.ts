@@ -571,7 +571,7 @@ const BATTLE_SYSTEM = {
     const rec = this.getRecursos(nomeAlvo);
     if (!rec) return null;
 
-    const temSlot    = rec.slots_defesa_restantes > 0;
+    const temSlot    = rec!.slots_defesa_restantes! > 0;
     const temReacao  = !cfg.defesa_consome_reacao || rec.reacao_disponivel;
     if (!temSlot || !temReacao) return null;
 

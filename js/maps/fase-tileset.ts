@@ -425,7 +425,7 @@ function _avtExtHandleImageSelect(input: any) {
   const url = URL.createObjectURL(file);
   (AVT_STATE._criando as any)._tilesetImgUrl = url;
   const prev = document.getElementById('avt-ext-img-preview');
-  if (prev) { prev.src = url; prev.style.display = 'block'; }
+  if (prev) { prev.src = url; prev.style!.display = 'block'; }
   const nome = document.getElementById('avt-ext-img-nome');
   if (nome) nome.textContent = file.name;
 }
@@ -544,7 +544,7 @@ function faseTilesetHandleImageSelect(input: any) {
   const url = URL.createObjectURL(file);
   (AVT_STATE._criando as any)._tilesetImgUrl = url;
   const prev = document.getElementById('avt-tileset-img-preview');
-  if (prev) { prev.src = url; prev.style.display = 'block'; }
+  if (prev) { prev.src = url; prev.style!.display = 'block'; }
   const nome = document.getElementById('avt-tileset-img-nome');
   if (nome) nome.textContent = file.name;
   // Mostra botão de troca após imagem selecionada
@@ -555,11 +555,11 @@ function faseTilesetHandleImageSelect(input: any) {
     btnTrocar.id = 'avt-tileset-trocar-btn';
     btnTrocar.type = 'button';
     btnTrocar.textContent = '🔄 Trocar imagem';
-    btnTrocar.style.cssText = 'margin-top:6px;padding:5px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:.05em';
+    btnTrocar.style!.cssText = 'margin-top:6px;padding:5px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:.05em';
     btnTrocar.onclick = faseTilesetTrocarImagem;
     labelUpload.parentNode.insertBefore(btnTrocar, labelUpload.nextSibling);
   }
-  if (btnTrocar) btnTrocar.style.display = 'inline-block';
+  if (btnTrocar) btnTrocar.style!.display = 'inline-block';
   if (labelUpload) labelUpload.style.display = 'none';
 }
 
@@ -570,14 +570,14 @@ function faseTilesetTrocarImagem() {
     (AVT_STATE._criando as any)._tilesetImgUrl = null;
   }
   const prev = document.getElementById('avt-tileset-img-preview');
-  if (prev) { prev.src = ''; prev.style.display = 'none'; }
+  if (prev) { prev.src = ''; prev.style!.display = 'none'; }
   const nome = document.getElementById('avt-tileset-img-nome');
   if (nome) nome.textContent = '';
   const btnTrocar = document.getElementById('avt-tileset-trocar-btn');
   if (btnTrocar) {
     const labelUpload = btnTrocar.previousElementSibling;
-    if (labelUpload && labelUpload.tagName === 'LABEL') labelUpload.style.display = '';
-    btnTrocar.style.display = 'none';
+    if (labelUpload && labelUpload.tagName === 'LABEL') labelUpload.style!.display = '';
+    btnTrocar.style!.display = 'none';
   }
 }
 
@@ -633,7 +633,7 @@ async function _avtCarregarTileset(imgUrl: any, config: any) {
     const canvas = document.createElement('canvas');
     canvas.width = w0; canvas.height = h0;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, x0, y0, w0, h0, 0, 0, w0, h0);
+    ctx!.drawImage(img, x0, y0, w0, h0, 0, 0, w0, h0);
 
     const tileImg = new Image();
     tileImg.src = canvas.toDataURL('image/png');

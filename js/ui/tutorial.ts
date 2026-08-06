@@ -100,7 +100,7 @@ function tutorialMostrar(aba: any) {
   const cfg = TUTORIAL_STEPS[aba];
   if (!cfg) return;
 
-  const st = tutorialGetState(RPG_DATA.rpgId);
+  const st = tutorialGetState(RPG_DATA!.rpgId);
   if (st.passos_vistos?.[aba]) return; // já viu esta aba nesta sessão
 
   _TUTORIAL_ABA = aba;
@@ -108,9 +108,9 @@ function tutorialMostrar(aba: any) {
   _TUTORIAL_PASSOS = cfg.passos;
 
   _tutorialAtualizarUI();
-  document.getElementById('tutorial-overlay').classList.add('ativo');
-  document.getElementById('tutorial-dialog').classList.add('visivel');
-  document.getElementById('tutorial-backdrop').style.display = 'block';
+  document.getElementById('tutorial-overlay')!.classList!.add!('ativo')!;
+  document.getElementById('tutorial-dialog')!.classList!.add!('visivel')!;
+  document.getElementById('tutorial-backdrop')!.style!.display = 'block';
 }
 
 function _tutorialAtualizarUI() {
@@ -118,20 +118,20 @@ function _tutorialAtualizarUI() {
   if (!cfg) return;
   const passo = _TUTORIAL_PASSOS[_TUTORIAL_PASSO];
 
-  document.getElementById('tutorial-aba-nome').textContent = cfg.titulo;
-  document.getElementById('tutorial-counter').textContent = `${_TUTORIAL_PASSO + 1} / ${_TUTORIAL_PASSOS.length}`;
-  document.getElementById('tutorial-titulo').textContent = passo.t;
-  document.getElementById('tutorial-texto').textContent = passo.txt;
+  document.getElementById('tutorial-aba-nome')!.textContent = cfg.titulo;
+  document.getElementById('tutorial-counter')!.textContent = `${_TUTORIAL_PASSO + 1} / ${_TUTORIAL_PASSOS.length}`;
+  document.getElementById('tutorial-titulo')!.textContent = passo.t;
+  document.getElementById('tutorial-texto')!.textContent = passo.txt;
 
   // Dots de progresso
-  document.getElementById('tutorial-prog-dots').innerHTML = _TUTORIAL_PASSOS.map((_: any,i: any) =>
+  document.getElementById('tutorial-prog-dots')!.innerHTML = _TUTORIAL_PASSOS.map((_: any,i: any) =>
     `<div class="tutorial-prog-dot ${i === _TUTORIAL_PASSO ? 'ativo' : ''}"></div>`
   ).join('');
 
   // Botão muda no último passo
   const isUltimo = _TUTORIAL_PASSO >= _TUTORIAL_PASSOS.length - 1;
   const btn = document.getElementById('tutorial-next-btn');
-  btn.textContent = isUltimo ? 'Entendido ✓' : 'Próximo →';
+  btn!.textContent = isUltimo ? 'Entendido ✓' : 'Próximo →';
 }
 
 function tutorialAvancar() {
@@ -183,9 +183,9 @@ function tutorialDesativarPermanente(checked: any) {
 }
 
 function _fecharDialogTutorial() {
-  document.getElementById('tutorial-overlay').classList.remove('ativo');
-  document.getElementById('tutorial-dialog').classList.remove('visivel');
-  document.getElementById('tutorial-backdrop').style.display = 'none';
+  document.getElementById('tutorial-overlay')!.classList!.remove!('ativo')!;
+  document.getElementById('tutorial-dialog')!.classList!.remove!('visivel')!;
+  document.getElementById('tutorial-backdrop')!.style!.display = 'none';
 }
 
 // Toggle nas configurações

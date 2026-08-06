@@ -396,7 +396,7 @@ async function psExcluirAtual() {
 function _psSetDirty(val: any) {
   PIXI_STUDIO_STATE._dirty = val;
   const badge = document.getElementById('ps-dirty-badge');
-  if (badge) badge.style.display = val ? 'block' : 'none';
+  if (badge) badge.style!.display = val ? 'block' : 'none';
   // Debounced snapshot so a settled edit becomes one undo step
   if (val) {
     clearTimeout(PIXI_STUDIO_STATE._historyTimer);
@@ -1344,7 +1344,7 @@ function psUpdateColorStop(layerId: any, idx: any, key: any, value: any) {
   const gradEl = document.querySelector(`#ps-props-panel [style*="linear-gradient"]`);
   if (gradEl) {
     const list = layer.emitter.color.list;
-    gradEl.style.background = `linear-gradient(to right,${list.map((s: any)=>`#${s.value} ${s.time*100}%`).join(',')})`;
+    gradEl.style!.background = `linear-gradient(to right,${list.map((s: any)=>`#${s.value} ${s.time*100}%`).join(',')})`;
   }
 }
 function psAddColorStop(layerId: any) {
@@ -1433,8 +1433,8 @@ function psUpdateLayerOffset(layerId: any, axis: any, value: any) {
 function psUpdateEmitterDir(layerId: any) {
   const layer = _psGetLayer(layerId);
   if (!layer || !layer.emitter) return;
-  const dir = parseFloat(document.getElementById('ps-dir-' + layerId)?.value) || 0;
-  const spread = parseFloat(document.getElementById('ps-spread-' + layerId)?.value);
+  const dir = parseFloat(document.getElementById('ps-dir-' + layerId)?.value!) || 0;
+  const spread = parseFloat(document.getElementById('ps-spread-' + layerId)?.value!);
   const sp = isNaN(spread) ? 360 : spread;
   layer.emitter.startRotation = { min: dir - sp / 2, max: dir + sp / 2 };
   _psSetDirty(true);
@@ -1552,7 +1552,7 @@ async function psPreviewMount() {
   try {
     PIXI_STUDIO_STATE.previewApp = app;
     // PIXI sets inline width/height styles — restore CSS fill
-    canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:6px;border:1px solid var(--borda)';
+    canvas.style!.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;border-radius:6px;border:1px solid var(--borda)';
     const worldRoot = new PIXI.Container();
     app.stage.addChild(worldRoot);
     PIXI_STUDIO_STATE._worldRoot = worldRoot;
@@ -1630,7 +1630,7 @@ function _psDoPlay() {
   _psPlayPreviewAudio();
   psPreviewRebuildAll();
   const loopBtn = document.getElementById('ps-loop-btn');
-  if (loopBtn) loopBtn.style.color = PIXI_STUDIO_STATE.previewLooping ? 'var(--primario)' : 'var(--suave)';
+  if (loopBtn) loopBtn.style!.color = PIXI_STUDIO_STATE.previewLooping ? 'var(--primario)' : 'var(--suave)';
 }
 
 // Play the animation's audio (cast/impact/timed events) during preview — mirrors avtPixiPlayAnimation
@@ -1669,7 +1669,7 @@ function psPreviewStop() {
 function psPreviewToggleLoop() {
   PIXI_STUDIO_STATE.previewLooping = !PIXI_STUDIO_STATE.previewLooping;
   const btn = document.getElementById('ps-loop-btn');
-  if (btn) btn.style.color = PIXI_STUDIO_STATE.previewLooping ? 'var(--primario)' : 'var(--suave)';
+  if (btn) btn.style!.color = PIXI_STUDIO_STATE.previewLooping ? 'var(--primario)' : 'var(--suave)';
 }
 
 function psPreviewZoom(val: any) {
@@ -1767,7 +1767,7 @@ function _psUpdateTimeDisplay(t: any, dur?: any) {
   if (el) el.textContent = `${((t * dur) / 1000).toFixed(1)}s / ${(dur / 1000).toFixed(1)}s`;
   // Move timeline playhead
   const ph = document.getElementById('ps-tl-playhead');
-  if (ph) ph.style.left = (t * 100) + '%';
+  if (ph) ph.style!.left = (t * 100) + '%';
 }
 
 function _psPreviewRenderFrame(t: any) {
@@ -1953,9 +1953,9 @@ function psToggleGravar() {
   if (phase === 'selecting') {
     PIXI_STUDIO_STATE._recordPhase = null;
     const canvas = document.getElementById('ps-preview-canvas');
-    if (canvas) { canvas.style.outline = ''; canvas.style.cursor = ''; canvas.removeEventListener('pointerdown', _psRecordSelectOrigin); }
+    if (canvas) { canvas.style!.outline = ''; canvas.style!.cursor = ''; canvas.removeEventListener('pointerdown', _psRecordSelectOrigin); }
     const btn = document.getElementById('ps-record-btn');
-    if (btn) { btn.textContent = '⏺ Gravar'; btn.style.color = ''; btn.style.borderColor = ''; }
+    if (btn) { btn.textContent = '⏺ Gravar'; btn.style!.color = ''; btn.style!.borderColor = ''; }
     return;
   }
   const layer = _psGetLayer(PIXI_STUDIO_STATE.layerSel);
@@ -1965,12 +1965,12 @@ function psToggleGravar() {
   PIXI_STUDIO_STATE._recordStartPos = null;
   const canvas = document.getElementById('ps-preview-canvas');
   if (canvas) {
-    canvas.style.outline = '2px dashed #f0cc6a';
-    canvas.style.cursor = 'crosshair';
+    canvas.style!.outline = '2px dashed #f0cc6a';
+    canvas.style!.cursor = 'crosshair';
     canvas.addEventListener('pointerdown', _psRecordSelectOrigin, { once: true });
   }
   const btn = document.getElementById('ps-record-btn');
-  if (btn) { btn.textContent = '✕ Cancelar'; btn.style.color = '#f0cc6a'; btn.style.borderColor = '#f0cc6a'; }
+  if (btn) { btn.textContent = '✕ Cancelar'; btn.style!.color = '#f0cc6a'; btn.style!.borderColor = '#f0cc6a'; }
   mostrarToast('Clique no canvas para definir o ponto de origem', 'aviso');
 }
 
@@ -1982,7 +1982,7 @@ function _psRecordSelectOrigin(e: any) {
     y: e.clientY - rect.top - rect.height / 2,
   };
   const canvas = document.getElementById('ps-preview-canvas');
-  if (canvas) canvas.style.cursor = '';
+  if (canvas) canvas.style!.cursor = '';
   _psRecordStart();
 }
 
@@ -1995,11 +1995,11 @@ function _psRecordStart() {
   const origin = PIXI_STUDIO_STATE._recordStartPos;
   if (origin) PIXI_STUDIO_STATE._recordPoints.push({ x: origin.x, y: origin.y, t: 0 });
   PIXI_STUDIO_STATE._recordStartTs = Date.now();
-  canvas.style.outline = '2px solid #e8604c';
+  canvas.style!.outline = '2px solid #e8604c';
   canvas.addEventListener('pointermove', _psRecordPoint);
   canvas.addEventListener('pointerup', _psRecordFinish);
   const btn = document.getElementById('ps-record-btn');
-  if (btn) { btn.textContent = '⏹ Parar'; btn.style.color = '#e8604c'; btn.style.borderColor = '#e8604c'; }
+  if (btn) { btn.textContent = '⏹ Parar'; btn.style!.color = '#e8604c'; btn.style!.borderColor = '#e8604c'; }
   PIXI_STUDIO_STATE.previewTime = 0; PIXI_STUDIO_STATE.previewPlaying = true;
   PIXI_STUDIO_STATE._lastTs = 0; psPreviewRebuildAll();
   mostrarToast('Mova o mouse no canvas. Solte para finalizar.', 'aviso');
@@ -2020,9 +2020,9 @@ function _psRecordFinish() {
   PIXI_STUDIO_STATE._recordPhase = null;
   PIXI_STUDIO_STATE.previewPlaying = false;
   const canvas = document.getElementById('ps-preview-canvas');
-  if (canvas) { canvas.style.outline = ''; canvas.removeEventListener('pointermove', _psRecordPoint); canvas.removeEventListener('pointerup', _psRecordFinish); }
+  if (canvas) { canvas.style!.outline = ''; canvas.removeEventListener('pointermove', _psRecordPoint); canvas.removeEventListener('pointerup', _psRecordFinish); }
   const btn = document.getElementById('ps-record-btn');
-  if (btn) { btn.textContent = '⏺ Gravar'; btn.style.color = ''; btn.style.borderColor = ''; }
+  if (btn) { btn.textContent = '⏺ Gravar'; btn.style!.color = ''; btn.style!.borderColor = ''; }
   const raw = PIXI_STUDIO_STATE._recordPoints;
   if (raw.length < 3) return mostrarToast('Mova mais para gravar trajetória', 'aviso');
   const smooth = _psSmoothPath(raw);
@@ -2311,10 +2311,10 @@ function _psDrawBackground(layer: any, container: any, cx: any, cy: any, app: an
     const ang = (layer.bg_angle || 90) * Math.PI / 180;
     const x1 = W / 2 - Math.cos(ang) * W / 2, y1 = H / 2 - Math.sin(ang) * H / 2;
     const x2 = W / 2 + Math.cos(ang) * W / 2, y2 = H / 2 + Math.sin(ang) * H / 2;
-    const grd = ctx.createLinearGradient(x1, y1, x2, y2);
+    const grd = ctx!.createLinearGradient(x1, y1, x2, y2);
     grd.addColorStop(0, layer.bg_color || '#000000');
     grd.addColorStop(1, layer.bg_color2 || '#000000');
-    ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+    ctx!.fillStyle = grd; ctx!.fillRect(0, 0, W, H);
     const sp = new PIXI.Sprite(PIXI.Texture.from(c));
     sp.position.set(-cx, -cy); sp.alpha = layer.bg_alpha ?? 1;
     container.addChildAt(sp, 0);
@@ -2395,7 +2395,7 @@ function psToggleFx() {
   PIXI_STUDIO_STATE._fxEnabled = ((PIXI_STUDIO_STATE as any)._fxEnabled === false);
   const on = (PIXI_STUDIO_STATE as any)._fxEnabled !== false;
   const btn = document.getElementById('ps-fx-btn');
-  if (btn) { btn.style.color = on ? 'var(--primario)' : 'var(--suave)'; btn.style.borderColor = on ? 'var(--primario)' : 'var(--borda)'; }
+  if (btn) { btn.style!.color = on ? 'var(--primario)' : 'var(--suave)'; btn.style!.borderColor = on ? 'var(--primario)' : 'var(--borda)'; }
   psPreviewRebuildAll();
 }
 
@@ -2404,7 +2404,7 @@ function psToggleScene() {
   const on = (PIXI_STUDIO_STATE as any)._sceneMode;
   if (on) { (PIXI_STUDIO_STATE as any)._faseMode = false; _psFaseBtnSync(); }
   const btn = document.getElementById('ps-scene-btn');
-  if (btn) { btn.style.color = on ? 'var(--primario)' : 'var(--suave)'; btn.style.borderColor = on ? 'var(--primario)' : 'var(--borda)'; }
+  if (btn) { btn.style!.color = on ? 'var(--primario)' : 'var(--suave)'; btn.style!.borderColor = on ? 'var(--primario)' : 'var(--borda)'; }
   psPreviewRebuildAll();
 }
 
@@ -2412,9 +2412,9 @@ function psToggleScene() {
 function _psFaseBtnSync() {
   const on = !!(PIXI_STUDIO_STATE as any)._faseMode;
   const btn = document.getElementById('ps-fase-btn');
-  if (btn) { btn.style.color = on ? 'var(--primario)' : 'var(--suave)'; btn.style.borderColor = on ? 'var(--primario)' : 'var(--borda)'; }
+  if (btn) { btn.style!.color = on ? 'var(--primario)' : 'var(--suave)'; btn.style!.borderColor = on ? 'var(--primario)' : 'var(--borda)'; }
   const sel = document.getElementById('ps-fase-char');
-  if (sel) sel.style.display = on ? '' : 'none';
+  if (sel) sel.style!.display = on ? '' : 'none';
 }
 function psToggleFase() {
   PIXI_STUDIO_STATE._faseMode = !(PIXI_STUDIO_STATE as any)._faseMode;
@@ -2422,7 +2422,7 @@ function psToggleFase() {
   const sel = document.getElementById('ps-fase-char');
   if ((PIXI_STUDIO_STATE as any)._faseMode && sel) _psFasePopulateChars(sel);
   const sceneBtn = document.getElementById('ps-scene-btn');
-  if (sceneBtn) { sceneBtn.style.color = 'var(--suave)'; sceneBtn.style.borderColor = 'var(--borda)'; }
+  if (sceneBtn) { sceneBtn.style!.color = 'var(--suave)'; sceneBtn.style!.borderColor = 'var(--borda)'; }
   _psFaseBtnSync();
   psPreviewRebuildAll();
 }
@@ -2782,7 +2782,7 @@ function psTimelineScrubMove(e: any) {
   const dur = PIXI_STUDIO_STATE.atual?.config_json?.duracao_ms || 1000;
   PIXI_STUDIO_STATE.previewTime = t * dur;
   const ph = document.getElementById('ps-tl-playhead');
-  if (ph) ph.style.left = (t * 100) + '%';
+  if (ph) ph.style!.left = (t * 100) + '%';
   _psUpdateTimeDisplay(t, dur);
   if (!PIXI_STUDIO_STATE.previewPlaying) _psPreviewRenderFrame(t);
 }
@@ -2986,7 +2986,7 @@ function psPresetsAbrir() {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'ps-presets-modal';
-    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1100;align-items:center;justify-content:center';
+    modal.style!.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1100;align-items:center;justify-content:center';
     modal.innerHTML = `<div style="background:var(--escuro);border:1px solid var(--borda);border-radius:12px;padding:24px;width:90%;max-width:640px;max-height:85vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <div style="font-family:var(--fonte-d);color:var(--destaque)">⚡ Biblioteca de Presets</div>
@@ -3012,7 +3012,7 @@ function psPresetsAbrir() {
       </div>`;
     }).join('');
   }
-  modal.style.display = 'flex';
+  modal.style!.display = 'flex';
 }
 
 function psLoadPreset(key: any) {
@@ -3047,7 +3047,7 @@ function psImportarAbrir() {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'ps-import-modal';
-    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1100;align-items:center;justify-content:center';
+    modal.style!.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1100;align-items:center;justify-content:center';
     modal.innerHTML = `<div style="background:var(--escuro);border:1px solid var(--borda);border-radius:12px;padding:24px;width:90%;max-width:560px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <div style="font-family:var(--fonte-d);color:var(--destaque)">⬆ Importar JSON</div>
@@ -3063,7 +3063,7 @@ function psImportarAbrir() {
     </div>`;
     document.body.appendChild(modal);
   }
-  modal.style.display = 'flex';
+  modal.style!.display = 'flex';
 }
 
 function psImportarJson(jsonStr: any) {
@@ -3099,7 +3099,7 @@ function psImportarJson(jsonStr: any) {
   _psRenderBehaviorPanel();
   _psRenderPropsPanel();
   psTimelineRender();
-  document.getElementById('ps-import-modal').style.display = 'none';
+  document.getElementById('ps-import-modal')!.style!.display = 'none';
   const afterMount = () => { _psDoPlay(); };
   if (!PIXI_STUDIO_STATE.previewApp) psPreviewMount().then(afterMount);
   else { psPreviewRebuildAll(); afterMount(); }
@@ -3112,8 +3112,8 @@ function psImportarArquivo(input: any) {
   const reader = new FileReader();
   reader.onload = e => {
     const ta = document.getElementById('ps-import-json-text');
-    if (ta) ta.value = (e.target.result) as any;
-    psImportarJson(e.target.result);
+    if (ta) ta.value = (e.target!.result) as any;
+    psImportarJson(e.target!.result);
   };
   reader.readAsText(file);
 }
@@ -3136,7 +3136,7 @@ function psExportarJson() {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'ps-export-modal';
-    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1100;align-items:center;justify-content:center';
+    modal.style!.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1100;align-items:center;justify-content:center';
     modal.innerHTML = `<div style="background:var(--escuro);border:1px solid var(--borda);border-radius:12px;padding:24px;width:90%;max-width:560px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="font-family:var(--fonte-d);color:var(--destaque)">⬇ Export JSON</div>
@@ -3152,7 +3152,7 @@ function psExportarJson() {
   }
   const ta = document.getElementById('ps-export-json-text');
   if (ta) ta.value = jsonStr;
-  modal.style.display = 'flex';
+  modal.style!.display = 'flex';
 }
 
 // ══ J — UPLOAD TEXTURE ════════════════════════════════════════════════════════
@@ -3179,7 +3179,7 @@ function psPickerAbrir(callbackFn: any) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'ps-picker-modal';
-    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1100;align-items:center;justify-content:center';
+    modal.style!.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1100;align-items:center;justify-content:center';
     modal.innerHTML = `<div style="background:var(--escuro);border:1px solid var(--borda);border-radius:12px;padding:20px;width:90%;max-width:480px;max-height:80vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div style="font-family:var(--fonte-d);color:var(--destaque)">✦ Escolher Animação</div>
@@ -3190,7 +3190,7 @@ function psPickerAbrir(callbackFn: any) {
     document.body.appendChild(modal);
   }
   _psRenderPickerList();
-  modal.style.display = 'flex';
+  modal.style!.display = 'flex';
 }
 
 function _psRenderPickerList() {
@@ -3211,7 +3211,7 @@ function _psRenderPickerList() {
 }
 
 function psPickerSelecionar(id: any, nome: any) {
-  document.getElementById('ps-picker-modal').style.display = 'none';
+  document.getElementById('ps-picker-modal')!.style!.display = 'none';
   if (typeof PIXI_STUDIO_STATE._pickerCb === 'function') {
     PIXI_STUDIO_STATE._pickerCb(id, nome);
     PIXI_STUDIO_STATE._pickerCb = null;
@@ -3312,7 +3312,7 @@ window.psFilterAnimList       = psFilterAnimList;
 
 // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Y / Ctrl+Shift+Z redo
 document.addEventListener('keydown', function(e) {
-  if (!document.getElementById('pixi-studio-screen') || document.getElementById('pixi-studio-screen').style.display === 'none') return;
+  if (!document.getElementById('pixi-studio-screen') || document.getElementById('pixi-studio-screen')!.style!.display === 'none') return;
   if ((e.ctrlKey || e.metaKey) && !e.altKey) {
     if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); psUndo(); }
     else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); psRedo(); }

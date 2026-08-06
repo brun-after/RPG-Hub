@@ -829,21 +829,21 @@
       tempCanvas.height = decalSize * 2 + margin * 2;
       const tempCtx = tempCanvas.getContext('2d');
       
-      tempCtx.save();
-      tempCtx.translate(tempCanvas.width / 2, tempCanvas.height / 2);
-      tempCtx.globalAlpha = decal.alpha || 0.3;
-      tempCtx.fillStyle = decalColor;
-      tempCtx.shadowColor = decalColor;
-      tempCtx.shadowBlur = decal.blur || 15;
+      tempCtx!.save();
+      tempCtx!.translate(tempCanvas.width / 2, tempCanvas.height / 2);
+      tempCtx!.globalAlpha = decal.alpha || 0.3;
+      tempCtx!.fillStyle = decalColor;
+      tempCtx!.shadowColor = decalColor;
+      tempCtx!.shadowBlur = decal.blur || 15;
       
       // Marca de queimadura/cicatriz
-      tempCtx.beginPath();
-      tempCtx.arc(0, 0, decalSize, 0, Math.PI*2);
-      tempCtx.fill();
-      tempCtx.restore();
+      tempCtx!.beginPath();
+      tempCtx!.arc(0, 0, decalSize, 0, Math.PI*2);
+      tempCtx!.fill();
+      tempCtx!.restore();
       
       // Capturar imageData
-      const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+      const imageData = tempCtx!.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
       
       // Adicionar ao array de decals com fade
       const fadeTime = decal.fadeTime || 3000;
@@ -1119,7 +1119,7 @@
       
       const div = document.createElement('div');
       div.id = 'sk-anim-campos-pixi';
-      div.style.display = 'none';
+      div.style!.display = 'none';
       div.innerHTML = `
         <div class="form-group" style="margin-bottom:8px">
           <label>🤖 Descreva o ataque para a IA</label>
@@ -1183,7 +1183,7 @@
           <canvas id="sk-anim-pixi-preview-canvas" width="320" height="120" style="max-width:100%;border-radius:6px;background:rgba(15,21,32,0.95)"></canvas>
           <button onclick="skAnimPixiPreviewPlay()" style="display:block;margin:8px auto 0;padding:4px 16px;background:rgba(123,47,190,0.15);border:1px solid rgba(123,47,190,0.4);border-radius:5px;color:#a084e8;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase">▶ Repetir</button>
         </div>`;
-      ref.parentNode.insertBefore(div, ref.nextSibling);
+      ref.parentNode!.insertBefore(div, ref.nextSibling);
     }
   }
 
@@ -1192,7 +1192,7 @@
     const posicao = document.getElementById('sk-anim-pixi-posicao')?.value;
     const wrap = document.getElementById('sk-anim-pixi-tipo-trajetoria-wrap');
     if (wrap) {
-      wrap.style.display = posicao === 'trajetoria' ? '' : 'none';
+      wrap.style!.display = posicao === 'trajetoria' ? '' : 'none';
     }
   };
 
@@ -1204,36 +1204,36 @@
     if (tipo === PIXI_TYPE || tipo === 'combo_total') {
       ['sk-anim-campos-canvas','sk-anim-campos-midia'].forEach(id => {
         const e = document.getElementById(id);
-        if (e) e.style.display = 'none';
+        if (e) e.style!.display = 'none';
       });
       ['sk-anim-preview-wrap','sk-anim-midia-preview-wrap'].forEach(id => {
         const e = document.getElementById(id);
-        if (e) e.style.display = 'none';
+        if (e) e.style!.display = 'none';
       });
-      if (pixi) pixi.style.display = '';
+      if (pixi) pixi.style!.display = '';
       skAnimPixiPosicaoChange();
       // combo_total: JSON unificado — ocultar seções individuais de GSAP e Spine
       ['sk-anim-campos-gsap','sk-anim-campos-spine'].forEach(id => {
         const e = document.getElementById(id);
-        if (e) e.style.display = 'none';
+        if (e) e.style!.display = 'none';
       });
       const lbl = document.getElementById('sk-anim-pixi-json-label');
       if (lbl) lbl.textContent = tipo === 'combo_total' ? 'JSON — Combo Completo (Pixi + GSAP + Esquelético)' : 'JSON — Pixi Particles SAKUGA';
       const btnP = document.getElementById('sk-anim-pixi-btn-prompt');
       if (btnP) btnP.textContent = tipo === 'combo_total' ? '📋 Gerar Prompt Combo Completo para IA' : '📋 Gerar Prompt para IA';
     } else {
-      if (pixi) pixi.style.display = 'none';
+      if (pixi) pixi.style!.display = 'none';
       if (typeof _origTipoChange === 'function') _origTipoChange.call(this);
     }
   };
 
   // ── Gerador de Prompt SAKUGA ADAPTATIVO ───────────────────────────────
   window.skAnimPixiGerarPrompt = function () {
-    const desc = document.getElementById('sk-anim-pixi-descricao')?.value.trim() || '';
-    const nome = document.getElementById('sk-habilidade')?.value.trim() || '';
+    const desc = document.getElementById('sk-anim-pixi-descricao')?.value!.trim!()! || '';
+    const nome = document.getElementById('sk-habilidade')?.value!.trim!()! || '';
     const posicao = document.getElementById('sk-anim-pixi-posicao')?.value || 'alvo';
     const tipoTraj = document.getElementById('sk-anim-pixi-tipo-trajetoria')?.value || 'arco';
-    const descSkill = document.getElementById('sk-efeito')?.value.trim() || '';
+    const descSkill = document.getElementById('sk-efeito')?.value!.trim!()! || '';
     const tipoDano = document.getElementById('sk-tipo-dano')?.value || '';
     const tipoHabilidade = document.getElementById('sk-tipo-habilidade')?.value || 'acao';
     const wrapEl = document.getElementById('sk-anim-pixi-prompt-wrap');
@@ -1373,16 +1373,16 @@ O que o observador VÊ quando "${nome}" é ativada? Construa uma identidade visu
 JSON:`;
 
     if (outEl) outEl.value = prompt;
-    if (wrapEl) wrapEl.style.display = '';
+    if (wrapEl) wrapEl.style!.display = '';
   };
 
   window.skAnimPixiCopiarPrompt = function () {
     const el = document.getElementById('sk-anim-pixi-prompt-out');
     const btn = document.getElementById('sk-anim-pixi-btn-copiar');
     if (!el) return;
-    el.select();
-    el.setSelectionRange(0, 99999);
-    navigator.clipboard?.writeText(el.value).catch(() => document.execCommand('copy'));
+    el.select!();
+    el.setSelectionRange!(0, 99999);
+    navigator.clipboard?.writeText(el.value!).catch(() => document.execCommand('copy'));
     if (btn) {
       btn.textContent = '✓ Copiado!';
       setTimeout(() => { btn.textContent = '📋 Copiar'; }, 1800);
@@ -1391,8 +1391,8 @@ JSON:`;
 
   // ── Gerador de Prompt Esquelético ─────────────────────────────────────
   window.skAnimSpineGerarPrompt = function () {
-    const nome = document.getElementById('sk-habilidade')?.value.trim() || '';
-    const descSkill = document.getElementById('sk-efeito')?.value.trim() || '';
+    const nome = document.getElementById('sk-habilidade')?.value!.trim!()! || '';
+    const descSkill = document.getElementById('sk-efeito')?.value!.trim!()! || '';
     const tipoDano = document.getElementById('sk-tipo-dano')?.value || '';
     const tipoHabilidade = document.getElementById('sk-tipo-habilidade')?.value || 'acao';
     const wrapEl = document.getElementById('sk-anim-spine-prompt-wrap');
@@ -1475,16 +1475,16 @@ Sem URLs, sem assets externos — apenas geometria, transformações e luz.
 JSON:`;
 
     if (outEl) outEl.value = prompt;
-    if (wrapEl) wrapEl.style.display = '';
+    if (wrapEl) wrapEl.style!.display = '';
   };
 
   window.skAnimSpineCopiarPrompt = function () {
     const el = document.getElementById('sk-anim-spine-prompt-out');
     const btn = document.getElementById('sk-anim-spine-btn-copiar');
     if (!el) return;
-    el.select();
-    el.setSelectionRange(0, 99999);
-    navigator.clipboard?.writeText(el.value).catch(() => document.execCommand('copy'));
+    el.select!();
+    el.setSelectionRange!(0, 99999);
+    navigator.clipboard?.writeText(el.value!).catch(() => document.execCommand('copy'));
     if (btn) {
       btn.textContent = '✓ Copiado!';
       setTimeout(() => { btn.textContent = '📋 Copiar'; }, 1800);
@@ -1492,14 +1492,14 @@ JSON:`;
   };
 
   window.skAnimSpineOnJsonChange = function () {
-    const val = document.getElementById('sk-anim-spine-json-config')?.value.trim() || '';
+    const val = document.getElementById('sk-anim-spine-json-config')?.value!.trim!()! || '';
     const err = document.getElementById('sk-anim-spine-json-erro');
-    if (!val) { if (err) err.style.display = 'none'; return; }
+    if (!val) { if (err) err.style!.display = 'none'; return; }
     try {
       JSON.parse(val);
-      if (err) err.style.display = 'none';
+      if (err) err.style!.display = 'none';
     } catch (e: any) {
-      if (err) { err.style.display = ''; err.textContent = '⚠ JSON inválido: ' + e.message; }
+      if (err) { err.style!.display = ''; err.textContent = '⚠ JSON inválido: ' + e.message; }
     }
   };
 
@@ -1507,12 +1507,12 @@ JSON:`;
   window.skAnimGSAPPreviewPlay = function () {
     const preset = document.getElementById('sk-anim-gsap-preset')?.value || 'impacto_shake';
     const cor = document.getElementById('sk-anim-gsap-cor')?.value || '#e74c3c';
-    const intensidade = parseFloat(document.getElementById('sk-anim-gsap-intensidade')?.value) || 1.0;
-    const duracao = parseInt(document.getElementById('sk-anim-gsap-duracao')?.value) || 800;
+    const intensidade = parseFloat(document.getElementById('sk-anim-gsap-intensidade')?.value!) || 1.0;
+    const duracao = parseInt(document.getElementById('sk-anim-gsap-duracao')?.value!) || 800;
     const wrap = document.getElementById('sk-anim-gsap-preview-wrap');
     const token = document.getElementById('sk-anim-gsap-preview-token');
     if (!token || typeof gsap === 'undefined') return;
-    if (wrap) wrap.style.display = '';
+    if (wrap) wrap.style!.display = '';
     gsap.killTweensOf(token);
     gsap.set(token, { clearProps: 'transform,filter,opacity' });
 
@@ -1578,15 +1578,15 @@ JSON:`;
     const wrap = document.getElementById('sk-anim-spine-preview-wrap');
     if (!jsonEl || !canvas) return;
     let cfg: any;
-    try { cfg = JSON.parse(jsonEl.value.trim()); } catch (_) { return; }
+    try { cfg = JSON.parse(jsonEl.value!.trim()); } catch (_) { return; }
     if (!cfg.skeleton) { return; }
-    if (wrap) wrap.style.display = '';
+    if (wrap) wrap.style!.display = '';
     // Stop any running preview
     if (canvas._esqueleticoStop) { canvas._esqueleticoStop(); delete canvas._esqueleticoStop; }
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext!('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const cx = canvas.width / 2, cy = canvas.height / 2;
+    const cx = canvas.width! / 2, cy = canvas.height! / 2;
     const durMs = cfg.duracao || 1500;
 
     const renderer = window._esqPreviewRender;
@@ -1616,9 +1616,9 @@ JSON:`;
 
   // ── Gerador de Prompt COMBO COMPLETO ─────────────────────────────────
   window.skAnimComboGerarPrompt = function () {
-    const nome = document.getElementById('sk-habilidade')?.value.trim() || '';
-    const desc = document.getElementById('sk-anim-pixi-descricao')?.value.trim() || '';
-    const descSkill = document.getElementById('sk-efeito')?.value.trim() || '';
+    const nome = document.getElementById('sk-habilidade')?.value!.trim!()! || '';
+    const desc = document.getElementById('sk-anim-pixi-descricao')?.value!.trim!()! || '';
+    const descSkill = document.getElementById('sk-efeito')?.value!.trim!()! || '';
     const tipoDano = document.getElementById('sk-tipo-dano')?.value || '';
     const posicao = document.getElementById('sk-anim-pixi-posicao')?.value || 'alvo';
     const tipoTraj = document.getElementById('sk-anim-pixi-tipo-trajetoria')?.value || 'arco';
@@ -1700,22 +1700,22 @@ Construa uma identidade visual única para "${nome}". Os sistemas devem se compl
 JSON:`;
 
     if (outEl) outEl.value = prompt;
-    if (wrapEl) wrapEl.style.display = '';
+    if (wrapEl) wrapEl.style!.display = '';
   };
 
   window.skAnimPixiOnJsonChange = function () {
-    const val = document.getElementById('sk-anim-pixi-json')?.value.trim() || '';
+    const val = document.getElementById('sk-anim-pixi-json')?.value!.trim!()! || '';
     const err = document.getElementById('sk-anim-pixi-json-erro');
     if (!val) {
-      if (err) err.style.display = 'none';
+      if (err) err.style!.display = 'none';
       return;
     }
     try {
       JSON.parse(val);
-      if (err) err.style.display = 'none';
+      if (err) err.style!.display = 'none';
     } catch (e: any) {
       if (err) {
-        err.style.display = '';
+        err.style!.display = '';
         err.textContent = '⚠ JSON inválido: ' + e.message;
       }
     }
@@ -1756,12 +1756,12 @@ JSON:`;
     
     let cfg;
     try {
-      cfg = JSON.parse(jsonEl.value.trim());
+      cfg = JSON.parse(jsonEl.value!.trim());
     } catch (_) {
       return;
     }
     
-    if (wrap) wrap.style.display = '';
+    if (wrap) wrap.style!.display = '';
 
     if (_previewEng) {
       _previewEng.stop();
@@ -1772,16 +1772,16 @@ JSON:`;
       _previewRaf = null;
     }
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext!('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const OX = 36, OY = canvas.height / 2;
-    const TX = canvas.width - 36, TY = canvas.height / 2;
+    const OX = 36, OY = canvas.height! / 2;
+    const TX = canvas.width! - 36, TY = canvas.height! / 2;
 
     if (posicao === 'raio') {
       // PREVIEW RAIO CONTÍNUO
       const layers = Array.isArray(cfg) ? cfg : [cfg];
-      const totalMs = Math.min(parseInt(document.getElementById('sk-anim-pixi-duracao')?.value) || 1500, 3000);
+      const totalMs = Math.min(parseInt(document.getElementById('sk-anim-pixi-duracao')?.value!) || 1500, 3000);
 
       const back = layers.filter(l => l.addAtBack);
       const front = layers.filter(l => !l.addAtBack);
@@ -1815,7 +1815,7 @@ JSON:`;
           eng.update(dt);
         });
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvas!.width, canvas!.height);
         engines.forEach(eng => eng.drawNoClear());
         _drawPreviewMarkers(ctx, OX, OY, TX, TY);
 
@@ -1839,7 +1839,7 @@ JSON:`;
     } else if (posicao === 'trajetoria') {
       // PREVIEW TRAJETÓRIA (código existente)
       const layers = Array.isArray(cfg) ? cfg : [cfg];
-      const totalMs = Math.min(parseInt(document.getElementById('sk-anim-pixi-duracao')?.value) || 1500, 3000);
+      const totalMs = Math.min(parseInt(document.getElementById('sk-anim-pixi-duracao')?.value!) || 1500, 3000);
       const origem = { x: OX, y: OY }, alvo = { x: TX, y: TY };
 
       const back = layers.filter(l => l.addAtBack);
@@ -1914,7 +1914,7 @@ JSON:`;
           eng.update(dt);
         });
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvas!.width, canvas!.height);
         engines.forEach(eng => eng.drawNoClear());
         _drawPreviewMarkers(ctx, OX, OY, TX, TY);
 
@@ -1940,7 +1940,7 @@ JSON:`;
       // PREVIEW FIXO (código existente)
       _drawPreviewMarkers(ctx, OX, OY, TX, TY);
       const layers = Array.isArray(cfg) ? cfg : [cfg];
-      const cx = canvas.width / 2, cy = canvas.height / 2;
+      const cx = canvas.width! / 2, cy = canvas.height! / 2;
 
       if (layers.length === 1) {
         const pcfg = { ...layers[0], emitterLifetime: Math.min(layers[0].emitterLifetime || 1, 2.5) };
@@ -1951,7 +1951,7 @@ JSON:`;
         const back = layers.filter(l => l.addAtBack);
         const front = layers.filter(l => !l.addAtBack);
         const ordered = [...back, ...front];
-        const durSecs = Math.min((parseInt(document.getElementById('sk-anim-pixi-duracao')?.value) || 1500) / 1000, 4);
+        const durSecs = Math.min((parseInt(document.getElementById('sk-anim-pixi-duracao')?.value!) || 1500) / 1000, 4);
 
         const previewEngines = ordered.map(lc => {
           const pc = { ...lc, emitterLifetime: Math.min(lc.emitterLifetime || 1, durSecs * 0.85) };
@@ -1969,8 +1969,8 @@ JSON:`;
             eng.pos = { x: cx, y: cy };
             eng.update(dt);
           });
-          const ctx2 = canvas.getContext('2d');
-          ctx2.clearRect(0, 0, canvas.width, canvas.height);
+          const ctx2 = canvas!.getContext!('2d');
+          ctx2.clearRect(0, 0, canvas!.width, canvas!.height);
           previewEngines.forEach(eng => eng.drawNoClear());
           _drawPreviewMarkers(ctx2, OX, OY, TX, TY);
           
@@ -2096,7 +2096,7 @@ JSON:`;
       return typeof _origSalvar === 'function' ? _origSalvar.call(this) : undefined;
     }
 
-    const rawJson = document.getElementById('sk-anim-pixi-json')?.value.trim() || '';
+    const rawJson = document.getElementById('sk-anim-pixi-json')?.value!.trim!()! || '';
     if (!rawJson) {
       mostrarToast('Configure as partículas antes de salvar', 'aviso');
       return;
@@ -2130,8 +2130,8 @@ JSON:`;
     const personagem = document.getElementById('modal-skill-personagem')?.value || '';
     const posicao = document.getElementById('sk-anim-pixi-posicao')?.value || 'alvo';
     const tipoTrajetoria = document.getElementById('sk-anim-pixi-tipo-trajetoria')?.value || 'arco';
-    const duracao = parseInt(document.getElementById('sk-anim-pixi-duracao')?.value) || 1500;
-    const repeticao = parseInt(document.getElementById('sk-anim-pixi-repeticao')?.value) || 1;
+    const duracao = parseInt(document.getElementById('sk-anim-pixi-duracao')?.value!) || 1500;
+    const repeticao = parseInt(document.getElementById('sk-anim-pixi-repeticao')?.value!) || 1;
 
     const animacaoPixi: Record<string, any> = {
       tipo: animTipo,
@@ -2152,7 +2152,7 @@ JSON:`;
     if (!window._pixiPatchPendente) window._pixiPatchPendente = {};
     if (skillIdEditar) window._pixiPatchPendente[skillIdEditar] = true;
 
-    document.getElementById('sk-anim-tipo').value = 'nenhuma';
+    document.getElementById('sk-anim-tipo')!.value = 'nenhuma';
 
     try {
       await _origSalvar.call(this);
@@ -2235,7 +2235,7 @@ JSON:`;
 
   function _mkCanvas() {
     const c = document.createElement('canvas');
-    c.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:8888;width:100vw;height:100vh';
+    c.style!.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:8888;width:100vw;height:100vh';
     c.width = innerWidth;
     c.height = innerHeight;
     document.body.appendChild(c);
@@ -2342,7 +2342,7 @@ JSON:`;
       });
 
       const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx!.clearRect(0, 0, canvas.width, canvas.height);
       engines.forEach(eng => eng.drawNoClear());
 
       if (elapsed < durMs + 800) {
@@ -2436,7 +2436,7 @@ JSON:`;
       });
 
       const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx!.clearRect(0, 0, canvas.width, canvas.height);
       engines.forEach(eng => eng.drawNoClear());
 
       if (elapsed < totalMs + 700) {
@@ -2492,7 +2492,7 @@ JSON:`;
       });
 
       const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx!.clearRect(0, 0, canvas.width, canvas.height);
       engines.forEach(eng => eng.drawNoClear());
 
       if (elapsed < totalMs + 400) {
@@ -2526,7 +2526,7 @@ JSON:`;
       if (typeof window.skAnimTipoChange === 'function') window.skAnimTipoChange();
     }
     const pixi = document.getElementById('sk-anim-campos-pixi');
-    if (pixi) pixi.style.display = '';
+    if (pixi) pixi.style!.display = '';
 
     const jEl = document.getElementById('sk-anim-pixi-json');
     const pEl = document.getElementById('sk-anim-pixi-posicao');
@@ -2572,7 +2572,7 @@ JSON:`;
     const ov = document.getElementById('modal-skill-overlay');
     if (ov) {
       new MutationObserver(() => {
-        if (ov.style.display !== 'none') _injetarUI();
+        if (ov.style!.display !== 'none') _injetarUI();
       }).observe(ov, { attributes: true, attributeFilter: ['style'] });
     }
     console.log('✓ Pixi Particles Plugin v7 — RAIOS E FADE GRADUAL DE DECALS');
@@ -2589,7 +2589,7 @@ JSON:`;
 // ── Abrir modal de colar pacote ───────────────────────────────────────────
 window._abrirModalPacote = function() {
   const m = document.getElementById('modal-colar-pacote');
-  if (m) { m.style.display = 'flex'; }
+  if (m) { m.style!.display = 'flex'; }
 };
 
 // Renderizar painel de sessão ao abrir aba mapas

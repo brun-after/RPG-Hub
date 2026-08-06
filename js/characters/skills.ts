@@ -25,9 +25,9 @@ function skFBMostrarInputBonus() {
   const wrap = document.getElementById('sk-bonus-input-wrap');
   const toggle = document.getElementById('sk-bonus-toggle');
   const inp = document.getElementById('sk-bonus-input');
-  if (wrap) { wrap.style.display = 'inline-flex'; }
-  if (toggle) toggle.style.display = 'none';
-  if (inp) { inp.value = ''; inp.focus(); }
+  if (wrap) { wrap.style!.display = 'inline-flex'; }
+  if (toggle) toggle.style!.display = 'none';
+  if (inp) { inp.value = ''; inp.focus!(); }
 }
 function skFBConfirmarBonus() {
   const inp = document.getElementById('sk-bonus-input');
@@ -43,8 +43,8 @@ function skFBConfirmarBonus() {
 function skFBCancelarBonus() {
   const wrap = document.getElementById('sk-bonus-input-wrap');
   const toggle = document.getElementById('sk-bonus-toggle');
-  if (wrap) wrap.style.display = 'none';
-  if (toggle) toggle.style.display = '';
+  if (wrap) wrap.style!.display = 'none';
+  if (toggle) toggle.style!.display = '';
 }
 function skFBAdicionarBonus() { skFBMostrarInputBonus(); }
 function skFBLimpar() { SK_FB = []; skFBAtualizarUI(); }
@@ -123,26 +123,26 @@ function skPopularAtributos() {
 // ── 14C: SKILLS ───────────────────────────────────────────────
 function abrirModalSkill(skillId: any, personagemNome: any) {
   const overlay = document.getElementById('modal-skill-overlay');
-  document.getElementById('modal-skill-id').value = skillId || '';
+  document.getElementById('modal-skill-id')!.value = skillId || '';
   if (skillId) {
-    const s = RPG_DATA.skills.find(x => x.id === skillId);
+    const s = RPG_DATA!.skills.find(x => x.id === skillId);
     if (!s) return;
     _skModalCharId = s.character_id || _skCharId(s.personagem);
-    document.getElementById('modal-skill-titulo').textContent = 'Editar Habilidade';
-    document.getElementById('modal-skill-personagem').value = s.personagem;
-    document.getElementById('sk-habilidade').value = s.habilidade || '';
-    document.getElementById('sk-custo').value = (s.custo_rsv || '') as any;
-    document.getElementById('sk-efeito').value = s.efeito || '';
+    document.getElementById('modal-skill-titulo')!.textContent = 'Editar Habilidade';
+    document.getElementById('modal-skill-personagem')!.value = s.personagem;
+    document.getElementById('sk-habilidade')!.value = s.habilidade || '';
+    document.getElementById('sk-custo')!.value = (s.custo_rsv || '') as any;
+    document.getElementById('sk-efeito')!.value = s.efeito || '';
     skFBCarregarFormula(s.formula_dano || ''); skPopularAtributos();
-    document.getElementById('sk-cooldown').value        = (s.cooldown_turnos || 0) as any;
-    document.getElementById('sk-tipo-dano').value       = s.tipo_dano || 'fisico';
-    document.getElementById('sk-alcance').value         = (s.alcance_celulas != null ? s.alcance_celulas : '') as any;
-    document.getElementById('sk-atributo-base').value   = s.atributo_base || '';
-    document.getElementById('sk-mod-atributo-pct').value = s.mod_atributo_pct != null ? s.mod_atributo_pct : '';
-    document.getElementById('sk-alvo-tipo').value       = s.alvo_tipo || 'inimigo';
+    document.getElementById('sk-cooldown')!.value        = (s.cooldown_turnos || 0) as any;
+    document.getElementById('sk-tipo-dano')!.value       = s.tipo_dano || 'fisico';
+    document.getElementById('sk-alcance')!.value         = (s.alcance_celulas != null ? s.alcance_celulas : '') as any;
+    document.getElementById('sk-atributo-base')!.value   = s.atributo_base || '';
+    document.getElementById('sk-mod-atributo-pct')!.value = s.mod_atributo_pct != null ? s.mod_atributo_pct : '';
+    document.getElementById('sk-alvo-tipo')!.value       = s.alvo_tipo || 'inimigo';
     skAlvoTipoChange();
-    document.getElementById('sk-crit-pos').value        = s.critico_positivo || '';
-    document.getElementById('sk-crit-neg').value        = s.critico_negativo || '';
+    document.getElementById('sk-crit-pos')!.value        = s.critico_positivo || '';
+    document.getElementById('sk-crit-neg')!.value        = s.critico_negativo || '';
     SK_EFEITOS_TEMP = Array.isArray(s.efeitos_bonus) ? JSON.parse(JSON.stringify(s.efeitos_bonus)) : [];
     skRenderEfeitosLista();
     // Tipo dano + campos de invocação
@@ -166,18 +166,18 @@ function abrirModalSkill(skillId: any, personagemNome: any) {
     if (psNome) psNome.textContent = s.animacao?.pixi_studio_nome || 'Nenhuma selecionada';
     // Animação
     const anim = s.animacao || {};
-    document.getElementById('sk-anim-tipo').value   = anim.tipo  || 'nenhuma';
-    document.getElementById('sk-anim-cor').value    = anim.cor   || '#e74c3c';
-    document.getElementById('sk-anim-icone').value  = anim.icone || '';
-    document.getElementById('sk-anim-trilha').checked = !!anim.trilha;
-    document.getElementById('sk-anim-url').value      = anim.url  || '';
-    document.getElementById('sk-anim-svg-code').value = anim.svg  || '';
-    document.getElementById('sk-anim-tamanho').value  = anim.tamanho  || 120;
-    document.getElementById('sk-anim-duracao').value  = anim.duracao  || 1500;
-    document.getElementById('sk-anim-repeticao').value = anim.repeticao || 1;
-    document.getElementById('sk-anim-duracao-canvas').value = anim.duracao || 600;
-    document.getElementById('sk-anim-repeticao-canvas').value = anim.repeticao || 1;
-    document.getElementById('sk-anim-posicao').value  = anim.posicao  || 'alvo';
+    document.getElementById('sk-anim-tipo')!.value   = anim.tipo  || 'nenhuma';
+    document.getElementById('sk-anim-cor')!.value    = anim.cor   || '#e74c3c';
+    document.getElementById('sk-anim-icone')!.value  = anim.icone || '';
+    document.getElementById('sk-anim-trilha')!.checked = !!anim.trilha;
+    document.getElementById('sk-anim-url')!.value      = anim.url  || '';
+    document.getElementById('sk-anim-svg-code')!.value = anim.svg  || '';
+    document.getElementById('sk-anim-tamanho')!.value  = anim.tamanho  || 120;
+    document.getElementById('sk-anim-duracao')!.value  = anim.duracao  || 1500;
+    document.getElementById('sk-anim-repeticao')!.value = anim.repeticao || 1;
+    document.getElementById('sk-anim-duracao-canvas')!.value = anim.duracao || 600;
+    document.getElementById('sk-anim-repeticao-canvas')!.value = anim.repeticao || 1;
+    document.getElementById('sk-anim-posicao')!.value  = anim.posicao  || 'alvo';
     // GSAP
     const gc = anim.gsap_config || {};
     const gcPreset = document.getElementById('sk-anim-gsap-preset');
@@ -210,26 +210,26 @@ function abrirModalSkill(skillId: any, personagemNome: any) {
     if (_castUrl)  _castUrl.value  = (_audCfg.cast?.startsWith?.('http') ? _audCfg.cast : '');
     if (_impSel)   _impSel.value   = (!_audCfg.impact || _audCfg.impact.startsWith('http')) ? '' : (_audCfg.impact || '');
     if (_impUrl)   _impUrl.value   = (_audCfg.impact?.startsWith?.('http') ? _audCfg.impact : '');
-    if (_volEl)  { _volEl.value = _audCfg.volume ?? 0.75; if (_volVal) _volVal.textContent = parseFloat(_volEl.value).toFixed(2); }
+    if (_volEl)  { _volEl.value = _audCfg.volume ?? 0.75; if (_volVal) _volVal.textContent = parseFloat(_volEl.value!).toFixed(2); }
     // Habilidade reativa
     _skCarregarCamposReativos(s);
   } else {
     _skModalCharId = _skCharId(personagemNome || CHAR_VIEW);
-    document.getElementById('modal-skill-titulo').textContent = 'Nova Habilidade';
-    document.getElementById('modal-skill-personagem').value = personagemNome || CHAR_VIEW || '';
-    document.getElementById('sk-habilidade').value       = '';
-    document.getElementById('sk-custo').value            = '';
-    document.getElementById('sk-efeito').value           = '';
+    document.getElementById('modal-skill-titulo')!.textContent = 'Nova Habilidade';
+    document.getElementById('modal-skill-personagem')!.value = personagemNome || CHAR_VIEW || '';
+    document.getElementById('sk-habilidade')!.value       = '';
+    document.getElementById('sk-custo')!.value            = '';
+    document.getElementById('sk-efeito')!.value           = '';
     skFBLimpar(); skPopularAtributos();
-    document.getElementById('sk-cooldown').value         = (0) as any;
-    document.getElementById('sk-tipo-dano').value        = 'fisico';
-    document.getElementById('sk-alcance').value          = '';
-    document.getElementById('sk-atributo-base').value    = '';
-    document.getElementById('sk-mod-atributo-pct').value = '';
-    document.getElementById('sk-alvo-tipo').value        = 'inimigo';
+    document.getElementById('sk-cooldown')!.value         = (0) as any;
+    document.getElementById('sk-tipo-dano')!.value        = 'fisico';
+    document.getElementById('sk-alcance')!.value          = '';
+    document.getElementById('sk-atributo-base')!.value    = '';
+    document.getElementById('sk-mod-atributo-pct')!.value = '';
+    document.getElementById('sk-alvo-tipo')!.value        = 'inimigo';
     skAlvoTipoChange();
-    document.getElementById('sk-crit-pos').value         = '';
-    document.getElementById('sk-crit-neg').value         = '';
+    document.getElementById('sk-crit-pos')!.value         = '';
+    document.getElementById('sk-crit-neg')!.value         = '';
     SK_EFEITOS_TEMP = [];
     skRenderEfeitosLista();
     // Tipo dano + campos de invocação
@@ -253,18 +253,18 @@ function abrirModalSkill(skillId: any, personagemNome: any) {
     if (_psIdEl) _psIdEl.value = '';
     if (_psNmEl) _psNmEl.textContent = 'Nenhuma selecionada';
     // Animação
-    document.getElementById('sk-anim-tipo').value    = 'nenhuma';
-    document.getElementById('sk-anim-cor').value     = '#e74c3c';
-    document.getElementById('sk-anim-icone').value   = '';
-    document.getElementById('sk-anim-trilha').checked = false;
-    document.getElementById('sk-anim-url').value      = '';
-    document.getElementById('sk-anim-svg-code').value = '';
-    document.getElementById('sk-anim-tamanho').value  = (120) as any;
-    document.getElementById('sk-anim-duracao').value  = (1500) as any;
-    document.getElementById('sk-anim-repeticao').value = (1) as any;
-    document.getElementById('sk-anim-duracao-canvas').value = (600) as any;
-    document.getElementById('sk-anim-repeticao-canvas').value = (1) as any;
-    document.getElementById('sk-anim-posicao').value  = 'alvo';
+    document.getElementById('sk-anim-tipo')!.value    = 'nenhuma';
+    document.getElementById('sk-anim-cor')!.value     = '#e74c3c';
+    document.getElementById('sk-anim-icone')!.value   = '';
+    document.getElementById('sk-anim-trilha')!.checked = false;
+    document.getElementById('sk-anim-url')!.value      = '';
+    document.getElementById('sk-anim-svg-code')!.value = '';
+    document.getElementById('sk-anim-tamanho')!.value  = (120) as any;
+    document.getElementById('sk-anim-duracao')!.value  = (1500) as any;
+    document.getElementById('sk-anim-repeticao')!.value = (1) as any;
+    document.getElementById('sk-anim-duracao-canvas')!.value = (600) as any;
+    document.getElementById('sk-anim-repeticao-canvas')!.value = (1) as any;
+    document.getElementById('sk-anim-posicao')!.value  = 'alvo';
     // GSAP (nova skill — valores padrão)
     const _gcPre = document.getElementById('sk-anim-gsap-preset');
     if (_gcPre) _gcPre.value = 'impacto_shake';
@@ -297,19 +297,19 @@ function abrirModalSkill(skillId: any, personagemNome: any) {
     // Habilidade reativa — limpar
     _skCarregarCamposReativos(null);
   }
-  overlay.style.display = 'flex';
-  overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
+  overlay!.style!.display = 'flex';
+  overlay!.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
   // Aplicar limites de duração conforme papel
   const _isMestre = RPG_DATA?.myRole === 'mestre';
   const _maxDur = _isMestre ? 10000 : 3000;
   ['sk-anim-duracao','sk-anim-duracao-canvas'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) { el.max = _maxDur; if (parseInt(el.value) > _maxDur) el.value = (_maxDur) as any; }
+    if (el) { el.max = _maxDur; if (parseInt(el.value!) > _maxDur) el.value = (_maxDur) as any; }
   });
   skAnimValidarDuracao();
 }
 function fecharModalSkill() {
-  document.getElementById('modal-skill-overlay').style.display = 'none';
+  document.getElementById('modal-skill-overlay')!.style!.display = 'none';
   if (window._skAtaqueBasicoMode) { _skAplicarModoAtaqueBasico(false); window._skAtaqueBasicoMode = null; }
 }
 
@@ -318,13 +318,13 @@ function fecharModalSkill() {
 // para configurar o ataque básico, salvando em custom_attrs.ataque_basico.
 function _skAplicarModoAtaqueBasico(on: any) {
   document.querySelectorAll('#modal-skill-overlay .sk-only-section').forEach(el => {
-    if (on) { if (el.dataset._abPrev === undefined) el.dataset._abPrev = el.style.display || ''; el.style.display = 'none'; }
-    else if (el.dataset._abPrev !== undefined) { el.style.display = el.dataset._abPrev; delete el.dataset._abPrev; }
+    if (on) { if (el.dataset!._abPrev === undefined) el.dataset!._abPrev = el.style!.display || ''; el.style!.display = 'none'; }
+    else if (el.dataset!._abPrev !== undefined) { el.style!.display = el.dataset!._abPrev; delete el.dataset!._abPrev; }
   });
   const _relabel = (id: any, txt: any) => {
     const el = document.getElementById(id); if (!el) return;
-    if (on) { if (el.dataset._abPrev === undefined) el.dataset._abPrev = el.textContent; el.textContent = txt; }
-    else if (el.dataset._abPrev !== undefined) { el.textContent = el.dataset._abPrev; delete el.dataset._abPrev; }
+    if (on) { if (el.dataset!._abPrev === undefined) el.dataset!._abPrev = el.textContent; el.textContent = txt; }
+    else if (el.dataset!._abPrev !== undefined) { el.textContent = el.dataset!._abPrev; delete el.dataset!._abPrev; }
   };
   _relabel('sk-mod-atributo-pct-label', 'Mult. de atributo (× aditivo)');
   _relabel('sk-cooldown-label', 'Cooldown (t) — vazio=global');
@@ -340,34 +340,34 @@ function abrirModalSkillAtaqueBasico(entId: any) {
   window._skAtaqueBasicoMode = { entId, dbCharId: dbChar.id, nome: ent.nome };
   const ab = dbChar.custom_attrs?.ataque_basico || {};
   const overlay = document.getElementById('modal-skill-overlay');
-  document.getElementById('modal-skill-titulo').textContent = '⚔ Ataque Básico — ' + ent.nome;
-  document.getElementById('modal-skill-id').value = '';
-  document.getElementById('modal-skill-personagem').value = ent.nome;
-  document.getElementById('sk-habilidade').value = ab.nome || 'Ataque básico';
-  document.getElementById('sk-custo').value = '';
-  document.getElementById('sk-efeito').value = ab.descricao || '';
+  document.getElementById('modal-skill-titulo')!.textContent = '⚔ Ataque Básico — ' + ent.nome;
+  document.getElementById('modal-skill-id')!.value = '';
+  document.getElementById('modal-skill-personagem')!.value = ent.nome;
+  document.getElementById('sk-habilidade')!.value = ab.nome || 'Ataque básico';
+  document.getElementById('sk-custo')!.value = '';
+  document.getElementById('sk-efeito')!.value = ab.descricao || '';
   skFBCarregarFormula(ab.formula_dano || '1d8');
   skPopularAtributos();
-  document.getElementById('sk-cooldown').value  = ab.cooldown_turnos != null ? ab.cooldown_turnos : '';
-  document.getElementById('sk-tipo-dano').value = ab.tipo_dano || 'fisico';
-  document.getElementById('sk-alcance').value   = ab.alcance_celulas != null ? ab.alcance_celulas : '';
-  document.getElementById('sk-atributo-base').value = ab.atributo_base || '';
-  document.getElementById('sk-mod-atributo-pct').value = ab.mod_atributo_mult != null ? ab.mod_atributo_mult : '';
-  document.getElementById('sk-alvo-tipo').value = 'inimigo';
+  document.getElementById('sk-cooldown')!.value  = ab.cooldown_turnos != null ? ab.cooldown_turnos : '';
+  document.getElementById('sk-tipo-dano')!.value = ab.tipo_dano || 'fisico';
+  document.getElementById('sk-alcance')!.value   = ab.alcance_celulas != null ? ab.alcance_celulas : '';
+  document.getElementById('sk-atributo-base')!.value = ab.atributo_base || '';
+  document.getElementById('sk-mod-atributo-pct')!.value = ab.mod_atributo_mult != null ? ab.mod_atributo_mult : '';
+  document.getElementById('sk-alvo-tipo')!.value = 'inimigo';
   if (typeof skAlvoTipoChange === 'function') skAlvoTipoChange();
-  document.getElementById('sk-crit-pos').value = ab.critico_positivo || '';
-  document.getElementById('sk-crit-neg').value = ab.critico_negativo || '';
+  document.getElementById('sk-crit-pos')!.value = ab.critico_positivo || '';
+  document.getElementById('sk-crit-neg')!.value = ab.critico_negativo || '';
   SK_EFEITOS_TEMP = Array.isArray(ab.efeitos_bonus) ? JSON.parse(JSON.stringify(ab.efeitos_bonus)) : [];
   skRenderEfeitosLista();
   skTipoDanoChange();
   skPreencherAnimacaoNoForm(ab.animacao || {});
   if (typeof _skCarregarCamposReativos === 'function') _skCarregarCamposReativos(null);
   _skAplicarModoAtaqueBasico(true);
-  overlay.style.display = 'flex';
-  overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
+  overlay!.style!.display = 'flex';
+  overlay!.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
   const _isMestre = RPG_DATA?.myRole === 'mestre';
   const _maxDur = _isMestre ? 10000 : 3000;
-  ['sk-anim-duracao','sk-anim-duracao-canvas'].forEach(id => { const el = document.getElementById(id); if (el) { el.max = _maxDur; if (parseInt(el.value) > _maxDur) el.value = (_maxDur) as any; } });
+  ['sk-anim-duracao','sk-anim-duracao-canvas'].forEach(id => { const el = document.getElementById(id); if (el) { el.max = _maxDur; if (parseInt(el.value!) > _maxDur) el.value = (_maxDur) as any; } });
   if (typeof skAnimValidarDuracao === 'function') skAnimValidarDuracao();
 }
 window.abrirModalSkillAtaqueBasico = abrirModalSkillAtaqueBasico;
@@ -377,25 +377,25 @@ async function _skSalvarAtaqueBasicoRico() {
   if (!mode) return;
   const dbChar = AVT_STATE.chars.find((c: any) => c.id === mode.dbCharId);
   if (!dbChar) { mostrarToast('Personagem não encontrado', 'erro'); return; }
-  const nome = document.getElementById('sk-habilidade').value.trim() || 'Ataque básico';
+  const nome = document.getElementById('sk-habilidade')!.value!.trim!()! || 'Ataque básico';
   const _animRes = skLerAnimacaoDoForm();
   if (_animRes.erro) return;
-  const _multRaw = document.getElementById('sk-mod-atributo-pct').value;
-  const _cdRaw   = document.getElementById('sk-cooldown').value;
-  const _alcRaw  = document.getElementById('sk-alcance').value;
+  const _multRaw = document.getElementById('sk-mod-atributo-pct')!.value!;
+  const _cdRaw   = document.getElementById('sk-cooldown')!.value!;
+  const _alcRaw  = document.getElementById('sk-alcance')!.value!;
   const ab: Record<string, any> = {
     nome,
-    descricao:        document.getElementById('sk-efeito').value.trim() || undefined,
-    formula_dano:     document.getElementById('sk-formula').value.trim() || '1d8',
-    tipo_dano:        document.getElementById('sk-tipo-dano').value || 'fisico',
-    alcance_celulas:  _alcRaw !== '' ? parseInt(_alcRaw) : 1,
-    atributo_base:    document.getElementById('sk-atributo-base').value.trim() || undefined,
-    critico_positivo: document.getElementById('sk-crit-pos').value.trim() || undefined,
-    critico_negativo: document.getElementById('sk-crit-neg').value.trim() || undefined,
+    descricao:        document.getElementById('sk-efeito')!.value!.trim!()! || undefined,
+    formula_dano:     document.getElementById('sk-formula')!.value!.trim!()! || '1d8',
+    tipo_dano:        document.getElementById('sk-tipo-dano')!.value! || 'fisico',
+    alcance_celulas:  _alcRaw !== '' ? parseInt(_alcRaw!) : 1,
+    atributo_base:    document.getElementById('sk-atributo-base')!.value!.trim!()! || undefined,
+    critico_positivo: document.getElementById('sk-crit-pos')!.value!.trim!()! || undefined,
+    critico_negativo: document.getElementById('sk-crit-neg')!.value!.trim!()! || undefined,
     animacao:         _animRes.animacao,
     efeitos_bonus:    SK_EFEITOS_TEMP.length ? JSON.parse(JSON.stringify(SK_EFEITOS_TEMP)) : undefined,
-    ...(_multRaw !== '' && !isNaN(parseFloat(_multRaw)) ? { mod_atributo_mult: parseFloat(_multRaw) } : {}),
-    ...(_cdRaw   !== '' && !isNaN(parseInt(_cdRaw))     ? { cooldown_turnos: Math.max(0, parseInt(_cdRaw)) } : {}),
+    ...(_multRaw !== '' && !isNaN(parseFloat(_multRaw!)) ? { mod_atributo_mult: parseFloat(_multRaw!) } : {}),
+    ...(_cdRaw   !== '' && !isNaN(parseInt(_cdRaw!))     ? { cooldown_turnos: Math.max(0, parseInt(_cdRaw!)) } : {}),
   };
   Object.keys(ab).forEach(k => ab[k] === undefined && delete ab[k]);
   if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
@@ -417,18 +417,18 @@ function skPreencherAnimacaoNoForm(anim: any) {
   const psNome = document.getElementById('sk-pixi-studio-nome');
   if (psId) psId.value = anim.pixi_studio_id || '';
   if (psNome) psNome.textContent = anim.pixi_studio_nome || 'Nenhuma selecionada';
-  document.getElementById('sk-anim-tipo').value    = anim.tipo  || 'nenhuma';
-  document.getElementById('sk-anim-cor').value     = anim.cor   || '#e74c3c';
-  document.getElementById('sk-anim-icone').value   = anim.icone || '';
-  document.getElementById('sk-anim-trilha').checked = !!anim.trilha;
-  document.getElementById('sk-anim-url').value      = anim.url  || '';
-  document.getElementById('sk-anim-svg-code').value = anim.svg  || '';
-  document.getElementById('sk-anim-tamanho').value  = anim.tamanho  || 120;
-  document.getElementById('sk-anim-duracao').value  = anim.duracao  || 1500;
-  document.getElementById('sk-anim-repeticao').value = anim.repeticao || 1;
-  document.getElementById('sk-anim-duracao-canvas').value = anim.duracao || 600;
-  document.getElementById('sk-anim-repeticao-canvas').value = anim.repeticao || 1;
-  document.getElementById('sk-anim-posicao').value  = anim.posicao  || 'alvo';
+  document.getElementById('sk-anim-tipo')!.value    = anim.tipo  || 'nenhuma';
+  document.getElementById('sk-anim-cor')!.value     = anim.cor   || '#e74c3c';
+  document.getElementById('sk-anim-icone')!.value   = anim.icone || '';
+  document.getElementById('sk-anim-trilha')!.checked = !!anim.trilha;
+  document.getElementById('sk-anim-url')!.value      = anim.url  || '';
+  document.getElementById('sk-anim-svg-code')!.value = anim.svg  || '';
+  document.getElementById('sk-anim-tamanho')!.value  = anim.tamanho  || 120;
+  document.getElementById('sk-anim-duracao')!.value  = anim.duracao  || 1500;
+  document.getElementById('sk-anim-repeticao')!.value = anim.repeticao || 1;
+  document.getElementById('sk-anim-duracao-canvas')!.value = anim.duracao || 600;
+  document.getElementById('sk-anim-repeticao-canvas')!.value = anim.repeticao || 1;
+  document.getElementById('sk-anim-posicao')!.value  = anim.posicao  || 'alvo';
   const gc = anim.gsap_config || {};
   const gcPreset = document.getElementById('sk-anim-gsap-preset'); if (gcPreset) gcPreset.value = gc.preset || 'impacto_shake';
   const gcCor = document.getElementById('sk-anim-gsap-cor'); if (gcCor) gcCor.value = gc.cor || '#e74c3c';
@@ -451,12 +451,12 @@ function skPreencherAnimacaoNoForm(anim: any) {
   if (_castUrl)  _castUrl.value  = (_audCfg.cast?.startsWith?.('http') ? _audCfg.cast : '');
   if (_impSel)   _impSel.value   = (!_audCfg.impact || _audCfg.impact.startsWith('http')) ? '' : (_audCfg.impact || '');
   if (_impUrl)   _impUrl.value   = (_audCfg.impact?.startsWith?.('http') ? _audCfg.impact : '');
-  if (_volEl)  { _volEl.value = _audCfg.volume ?? 0.75; if (_volVal) _volVal.textContent = parseFloat(_volEl.value).toFixed(2); }
+  if (_volEl)  { _volEl.value = _audCfg.volume ?? 0.75; if (_volVal) _volVal.textContent = parseFloat(_volEl.value!).toFixed(2); }
 }
 
 // Lê os campos de animação + áudio do modal → { animacao } ou { erro:true }.
 function skLerAnimacaoDoForm() {
-  const animTipo = document.getElementById('sk-anim-tipo').value;
+  const animTipo = document.getElementById('sk-anim-tipo')!.value!;
   if (!animTipo || animTipo === 'nenhuma') return { animacao: null };
   const _isMidia  = ['gif','imagem','svg','iframe'].includes(animTipo);
   const _isCanvas = ['projetil','onda','explosao','raio','aura'].includes(animTipo);
@@ -465,37 +465,37 @@ function skLerAnimacaoDoForm() {
   const _isMestre = RPG_DATA?.myRole === 'mestre';
   const _maxTotal = _isMestre ? 10000 : 3000;
   if (_isMidia) {
-    const dur = parseInt(document.getElementById('sk-anim-duracao').value) || 1500;
-    const rep = parseInt(document.getElementById('sk-anim-repeticao').value) || 1;
+    const dur = parseInt(document.getElementById('sk-anim-duracao')!.value!) || 1500;
+    const rep = parseInt(document.getElementById('sk-anim-repeticao')!.value!) || 1;
     if (dur * rep > _maxTotal) { mostrarToast(`Duração total (${dur*rep}ms) excede o limite de ${_maxTotal}ms`, 'erro'); return { erro: true }; }
   }
   if (_isCanvas) {
-    const dur = parseInt(document.getElementById('sk-anim-duracao-canvas').value) || 600;
-    const rep = parseInt(document.getElementById('sk-anim-repeticao-canvas').value) || 1;
+    const dur = parseInt(document.getElementById('sk-anim-duracao-canvas')!.value!) || 600;
+    const rep = parseInt(document.getElementById('sk-anim-repeticao-canvas')!.value!) || 1;
     if (dur * rep > _maxTotal) { mostrarToast(`Duração total (${dur*rep}ms) excede o limite de ${_maxTotal}ms`, 'erro'); return { erro: true }; }
   }
   const animacao: any = {
     tipo:      animTipo,
-    cor:       !_isMidia ? (document.getElementById('sk-anim-cor').value  || '#e74c3c') : undefined,
-    icone:     !_isMidia ? (document.getElementById('sk-anim-icone').value.trim() || '') : undefined,
-    trilha:    _isCanvas ? document.getElementById('sk-anim-trilha').checked : undefined,
-    duracao:   _isMidia ? (parseInt(document.getElementById('sk-anim-duracao').value) || 1500)
-             : _isCanvas ? (parseInt(document.getElementById('sk-anim-duracao-canvas').value) || 600) : undefined,
-    repeticao: _isMidia ? (parseInt(document.getElementById('sk-anim-repeticao').value) || 1)
-             : _isCanvas ? (parseInt(document.getElementById('sk-anim-repeticao-canvas').value) || 1) : undefined,
-    url:       _isMidia && animTipo !== 'svg' ? document.getElementById('sk-anim-url').value.trim() : undefined,
-    svg:       animTipo === 'svg' ? document.getElementById('sk-anim-svg-code').value.trim() : undefined,
-    tamanho:   _isMidia ? (parseInt(document.getElementById('sk-anim-tamanho').value) || 120) : undefined,
-    posicao:   _isMidia ? (document.getElementById('sk-anim-posicao').value || 'alvo') : undefined,
+    cor:       !_isMidia ? (document.getElementById('sk-anim-cor')!.value!  || '#e74c3c') : undefined,
+    icone:     !_isMidia ? (document.getElementById('sk-anim-icone')!.value!.trim!()! || '') : undefined,
+    trilha:    _isCanvas ? document.getElementById('sk-anim-trilha')!.checked! : undefined,
+    duracao:   _isMidia ? (parseInt(document.getElementById('sk-anim-duracao')!.value!) || 1500)
+             : _isCanvas ? (parseInt(document.getElementById('sk-anim-duracao-canvas')!.value!) || 600) : undefined,
+    repeticao: _isMidia ? (parseInt(document.getElementById('sk-anim-repeticao')!.value!) || 1)
+             : _isCanvas ? (parseInt(document.getElementById('sk-anim-repeticao-canvas')!.value!) || 1) : undefined,
+    url:       _isMidia && animTipo !== 'svg' ? document.getElementById('sk-anim-url')!.value!.trim!()! : undefined,
+    svg:       animTipo === 'svg' ? document.getElementById('sk-anim-svg-code')!.value!.trim!()! : undefined,
+    tamanho:   _isMidia ? (parseInt(document.getElementById('sk-anim-tamanho')!.value!) || 120) : undefined,
+    posicao:   _isMidia ? (document.getElementById('sk-anim-posicao')!.value! || 'alvo') : undefined,
     gsap_config: _isGSAP ? {
       preset:      document.getElementById('sk-anim-gsap-preset')?.value       || 'impacto_shake',
       cor:         document.getElementById('sk-anim-gsap-cor')?.value          || '#e74c3c',
-      duracao:     parseInt(document.getElementById('sk-anim-gsap-duracao')?.value)      || 800,
-      intensidade: parseFloat(document.getElementById('sk-anim-gsap-intensidade')?.value) || 1.0,
+      duracao:     parseInt(document.getElementById('sk-anim-gsap-duracao')?.value!)      || 800,
+      intensidade: parseFloat(document.getElementById('sk-anim-gsap-intensidade')?.value!) || 1.0,
       alvo_efeito: document.getElementById('sk-anim-gsap-alvo')?.value         || 'alvo',
     } : undefined,
     spine_config: _isSpine ? (() => {
-      const raw = document.getElementById('sk-anim-spine-json-config')?.value.trim() || '';
+      const raw = document.getElementById('sk-anim-spine-json-config')?.value!.trim!()! || '';
       try {
         if (!raw) return undefined;
         const parsed = JSON.parse(raw);
@@ -507,11 +507,11 @@ function skLerAnimacaoDoForm() {
     pixi_studio_nome: animTipo === 'pixi_studio' ? (document.getElementById('sk-pixi-studio-nome')?.textContent || null) : undefined,
   };
   Object.keys(animacao).forEach(k => animacao[k] === undefined && delete animacao[k]);
-  const _skAudCast   = document.getElementById('sk-audio-cast-url')?.value.trim()
+  const _skAudCast   = document.getElementById('sk-audio-cast-url')?.value!.trim!()!
                      || document.getElementById('sk-audio-cast-sel')?.value || '';
-  const _skAudImpact = document.getElementById('sk-audio-impact-url')?.value.trim()
+  const _skAudImpact = document.getElementById('sk-audio-impact-url')?.value!.trim!()!
                      || document.getElementById('sk-audio-impact-sel')?.value || '';
-  const _skAudVol    = parseFloat(document.getElementById('sk-audio-volume')?.value) || 0.75;
+  const _skAudVol    = parseFloat(document.getElementById('sk-audio-volume')?.value!) || 0.75;
   if (_skAudCast || _skAudImpact) {
     (animacao as any).audio = {};
     if (_skAudCast)   (animacao as any).audio.cast   = _skAudCast;
@@ -529,52 +529,52 @@ function skTipoHabilidadeChange() {
   const gatilhoWrap = document.getElementById('sk-gatilho-wrap');
   const momentoWrap = document.getElementById('sk-momento-wrap');
   const autoWrap    = document.getElementById('sk-auto-trigger-wrap');
-  if (gatilhoWrap) gatilhoWrap.style.display = ehReativo ? '' : 'none';
-  if (momentoWrap) momentoWrap.style.display = ehInterrupt ? '' : 'none';
-  if (autoWrap)    autoWrap.style.display    = ehPassiva   ? '' : 'none';
+  if (gatilhoWrap) gatilhoWrap.style!.display = ehReativo ? '' : 'none';
+  if (momentoWrap) momentoWrap.style!.display = ehInterrupt ? '' : 'none';
+  if (autoWrap)    autoWrap.style!.display    = ehPassiva   ? '' : 'none';
 }
 
 async function salvarSkill() {
   if (window._skAtaqueBasicoMode) { return _skSalvarAtaqueBasicoRico(); }
-  const skillId = document.getElementById('modal-skill-id').value;
-  const personagem = document.getElementById('modal-skill-personagem').value;
+  const skillId = document.getElementById('modal-skill-id')!.value!;
+  const personagem = document.getElementById('modal-skill-personagem')!.value!;
   if (!podeEditarPersonagem(personagem)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }
-  const habilidade = document.getElementById('sk-habilidade').value.trim();
+  const habilidade = document.getElementById('sk-habilidade')!.value!.trim!()!;
   if (!habilidade) { mostrarToast('Nome da habilidade obrigatório', 'erro'); return; }
   const body: any = {
-    rpg_id: RPG_DATA.rpgId,
+    rpg_id: RPG_DATA!.rpgId,
     personagem,
     character_id: _skModalCharId || _skCharId(personagem),
     habilidade,
-    custo_rsv:        document.getElementById('sk-custo').value.trim() || null,
-    efeito:           document.getElementById('sk-efeito').value.trim(),
-    formula_dano:     document.getElementById('sk-formula').value.trim() || null,
-    cooldown_turnos:  parseInt(document.getElementById('sk-cooldown').value) || 0,
-    tipo_dano:        document.getElementById('sk-tipo-dano').value || 'fisico',
-    alcance_celulas:  document.getElementById('sk-alcance').value !== '' ? parseInt(document.getElementById('sk-alcance').value) : null,
-    atributo_base:    document.getElementById('sk-atributo-base').value.trim() || null,
-    mod_atributo_pct: document.getElementById('sk-mod-atributo-pct').value !== ''
-                        ? parseFloat(document.getElementById('sk-mod-atributo-pct').value) : null,
-    alvo_tipo:        document.getElementById('sk-alvo-tipo').value || 'inimigo',
+    custo_rsv:        document.getElementById('sk-custo')!.value!.trim!()! || null,
+    efeito:           document.getElementById('sk-efeito')!.value!.trim!()!,
+    formula_dano:     document.getElementById('sk-formula')!.value!.trim!()! || null,
+    cooldown_turnos:  parseInt(document.getElementById('sk-cooldown')!.value!) || 0,
+    tipo_dano:        document.getElementById('sk-tipo-dano')!.value! || 'fisico',
+    alcance_celulas:  document.getElementById('sk-alcance')!.value !== '' ? parseInt(document.getElementById('sk-alcance')!.value!) : null,
+    atributo_base:    document.getElementById('sk-atributo-base')!.value!.trim!()! || null,
+    mod_atributo_pct: document.getElementById('sk-mod-atributo-pct')!.value !== ''
+                        ? parseFloat(document.getElementById('sk-mod-atributo-pct')!.value!) : null,
+    alvo_tipo:        document.getElementById('sk-alvo-tipo')!.value! || 'inimigo',
     efeitos_bonus:    SK_EFEITOS_TEMP.length ? SK_EFEITOS_TEMP : null,
-    critico_positivo: document.getElementById('sk-crit-pos').value.trim() || null,
-    critico_negativo: document.getElementById('sk-crit-neg').value.trim() || null,
+    critico_positivo: document.getElementById('sk-crit-pos')!.value!.trim!()! || null,
+    critico_negativo: document.getElementById('sk-crit-neg')!.value!.trim!()! || null,
     // Invocação
-    invocar_nome:          document.getElementById('sk-invocar-nome')?.value.trim() || null,
+    invocar_nome:          document.getElementById('sk-invocar-nome')?.value!.trim!()! || null,
     invocar_duracao_turnos: document.getElementById('sk-invocar-ilimitado')?.checked
       ? 0
-      : (parseInt(document.getElementById('sk-invocar-duracao')?.value) || 3),
+      : (parseInt(document.getElementById('sk-invocar-duracao')?.value!) || 3),
     // Habilidade reativa / passiva (UI: sk-tipo-reativa; DB: tipo_habilidade)
     tipo_habilidade:   document.getElementById('sk-tipo-reativa')?.value || 'acao',
     gatilho_tipo:      document.getElementById('sk-gatilho-tipo')?.value || null,
-    gatilho_descricao: document.getElementById('sk-gatilho-condicoes')?.value.trim() || null,
+    gatilho_descricao: document.getElementById('sk-gatilho-condicoes')?.value!.trim!()! || null,
     custo_reativa:     document.getElementById('sk-custo-reativa')?.value || null,
     momento:           document.getElementById('sk-momento-reativa')?.value || 'after',
     auto_trigger:             !!(document.getElementById('sk-auto-reativa')?.checked),
-    movimento_bonus_cancelar: parseInt(document.getElementById('sk-mov-bonus-cancelar')?.value) || 0,
+    movimento_bonus_cancelar: parseInt(document.getElementById('sk-mov-bonus-cancelar')?.value!) || 0,
   };
   // Animação (omite se tipo=nenhuma)
-  const animTipo = document.getElementById('sk-anim-tipo').value;
+  const animTipo = document.getElementById('sk-anim-tipo')!.value!;
   if (animTipo && animTipo !== 'nenhuma') {
     const _isMidia  = ['gif','imagem','svg','iframe'].includes(animTipo);
     const _isCanvas = ['projetil','onda','explosao','raio','aura'].includes(animTipo);
@@ -584,16 +584,16 @@ async function salvarSkill() {
     const _maxTotal = _isMestre ? 10000 : 3000;
 
     if (_isMidia) {
-      const dur = parseInt(document.getElementById('sk-anim-duracao').value) || 1500;
-      const rep = parseInt(document.getElementById('sk-anim-repeticao').value) || 1;
+      const dur = parseInt(document.getElementById('sk-anim-duracao')!.value!) || 1500;
+      const rep = parseInt(document.getElementById('sk-anim-repeticao')!.value!) || 1;
       const total = dur * rep;
       if (total > _maxTotal) {
         mostrarToast(`Duração total (${total}ms) excede o limite de ${_maxTotal}ms`, 'erro'); return;
       }
     }
     if (_isCanvas) {
-      const dur = parseInt(document.getElementById('sk-anim-duracao-canvas').value) || 600;
-      const rep = parseInt(document.getElementById('sk-anim-repeticao-canvas').value) || 1;
+      const dur = parseInt(document.getElementById('sk-anim-duracao-canvas')!.value!) || 600;
+      const rep = parseInt(document.getElementById('sk-anim-repeticao-canvas')!.value!) || 1;
       const total = dur * rep;
       if (total > _maxTotal) {
         mostrarToast(`Duração total (${total}ms) excede o limite de ${_maxTotal}ms`, 'erro'); return;
@@ -602,26 +602,26 @@ async function salvarSkill() {
 
     (body as any).animacao = {
       tipo:      animTipo,
-      cor:       !_isMidia ? (document.getElementById('sk-anim-cor').value  || '#e74c3c') : undefined,
-      icone:     !_isMidia ? (document.getElementById('sk-anim-icone').value.trim() || '') : undefined,
-      trilha:    _isCanvas ? document.getElementById('sk-anim-trilha').checked : undefined,
-      duracao:   _isMidia ? (parseInt(document.getElementById('sk-anim-duracao').value) || 1500)
-               : _isCanvas ? (parseInt(document.getElementById('sk-anim-duracao-canvas').value) || 600) : undefined,
-      repeticao: _isMidia ? (parseInt(document.getElementById('sk-anim-repeticao').value) || 1)
-               : _isCanvas ? (parseInt(document.getElementById('sk-anim-repeticao-canvas').value) || 1) : undefined,
-      url:       _isMidia && animTipo !== 'svg' ? document.getElementById('sk-anim-url').value.trim() : undefined,
-      svg:       animTipo === 'svg' ? document.getElementById('sk-anim-svg-code').value.trim() : undefined,
-      tamanho:   _isMidia ? (parseInt(document.getElementById('sk-anim-tamanho').value) || 120) : undefined,
-      posicao:   _isMidia ? (document.getElementById('sk-anim-posicao').value || 'alvo') : undefined,
+      cor:       !_isMidia ? (document.getElementById('sk-anim-cor')!.value!  || '#e74c3c') : undefined,
+      icone:     !_isMidia ? (document.getElementById('sk-anim-icone')!.value!.trim!()! || '') : undefined,
+      trilha:    _isCanvas ? document.getElementById('sk-anim-trilha')!.checked! : undefined,
+      duracao:   _isMidia ? (parseInt(document.getElementById('sk-anim-duracao')!.value!) || 1500)
+               : _isCanvas ? (parseInt(document.getElementById('sk-anim-duracao-canvas')!.value!) || 600) : undefined,
+      repeticao: _isMidia ? (parseInt(document.getElementById('sk-anim-repeticao')!.value!) || 1)
+               : _isCanvas ? (parseInt(document.getElementById('sk-anim-repeticao-canvas')!.value!) || 1) : undefined,
+      url:       _isMidia && animTipo !== 'svg' ? document.getElementById('sk-anim-url')!.value!.trim!()! : undefined,
+      svg:       animTipo === 'svg' ? document.getElementById('sk-anim-svg-code')!.value!.trim!()! : undefined,
+      tamanho:   _isMidia ? (parseInt(document.getElementById('sk-anim-tamanho')!.value!) || 120) : undefined,
+      posicao:   _isMidia ? (document.getElementById('sk-anim-posicao')!.value! || 'alvo') : undefined,
       gsap_config: _isGSAP ? {
         preset:      document.getElementById('sk-anim-gsap-preset')?.value       || 'impacto_shake',
         cor:         document.getElementById('sk-anim-gsap-cor')?.value          || '#e74c3c',
-        duracao:     parseInt(document.getElementById('sk-anim-gsap-duracao')?.value)      || 800,
-        intensidade: parseFloat(document.getElementById('sk-anim-gsap-intensidade')?.value) || 1.0,
+        duracao:     parseInt(document.getElementById('sk-anim-gsap-duracao')?.value!)      || 800,
+        intensidade: parseFloat(document.getElementById('sk-anim-gsap-intensidade')?.value!) || 1.0,
         alvo_efeito: document.getElementById('sk-anim-gsap-alvo')?.value         || 'alvo',
       } : undefined,
       spine_config: _isSpine ? (() => {
-        const raw = document.getElementById('sk-anim-spine-json-config')?.value.trim() || '';
+        const raw = document.getElementById('sk-anim-spine-json-config')?.value!.trim!()! || '';
         try {
           if (!raw) return undefined;
           const parsed = JSON.parse(raw);
@@ -636,11 +636,11 @@ async function salvarSkill() {
     // Limpar campos undefined
     Object.keys(body.animacao).forEach(k => body.animacao[k] === undefined && delete (body as any).animacao[k]);
     // Áudio da skill
-    const _skAudCast   = document.getElementById('sk-audio-cast-url')?.value.trim()
+    const _skAudCast   = document.getElementById('sk-audio-cast-url')?.value!.trim!()!
                        || document.getElementById('sk-audio-cast-sel')?.value || '';
-    const _skAudImpact = document.getElementById('sk-audio-impact-url')?.value.trim()
+    const _skAudImpact = document.getElementById('sk-audio-impact-url')?.value!.trim!()!
                        || document.getElementById('sk-audio-impact-sel')?.value || '';
-    const _skAudVol    = parseFloat(document.getElementById('sk-audio-volume')?.value) || 0.75;
+    const _skAudVol    = parseFloat(document.getElementById('sk-audio-volume')?.value!) || 0.75;
     if (_skAudCast || _skAudImpact) {
       (body as any).animacao.audio = {};
       if (_skAudCast)   (body as any).animacao.audio.cast   = _skAudCast;
@@ -653,11 +653,11 @@ async function salvarSkill() {
   try {
     if (skillId) {
       await sb(`skills?id=eq.${encodeURIComponent(skillId)}`, { method: 'PATCH', body: JSON.stringify(body) });
-      const idx = RPG_DATA.skills.findIndex(s => s.id == skillId);
-      if (idx >= 0) RPG_DATA.skills[idx] = { ...RPG_DATA.skills[idx], ...body };
+      const idx = RPG_DATA!.skills.findIndex(s => s.id == skillId);
+      if (idx >= 0) RPG_DATA!.skills[idx] = { ...RPG_DATA!.skills[idx], ...body };
     } else {
       const [nova] = await sb('skills', { method: 'POST', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify(body) });
-      RPG_DATA.skills.push(nova || body);
+      RPG_DATA!.skills.push(nova || body);
     }
     fecharModalSkill();
     if (FICHAS_VIEW === personagem && typeof renderFichaView === 'function') renderFichaView(personagem); else if (CHAR_VIEW === personagem) renderCharView(personagem);
@@ -669,7 +669,7 @@ async function removerSkill(skillId: any, nome: any, personagem: any) {
   if (!confirm(`Remover habilidade "${nome}"?`)) return;
   try {
     await sb(`skills?id=eq.${encodeURIComponent(skillId)}`, { method: 'DELETE' });
-    RPG_DATA.skills = RPG_DATA.skills.filter(s => s.id != skillId);
+    RPG_DATA!.skills = RPG_DATA!.skills.filter(s => s.id != skillId);
     if (FICHAS_VIEW === personagem && typeof renderFichaView === 'function') renderFichaView(personagem); else if (CHAR_VIEW === personagem) renderCharView(personagem);
     mostrarToast('Habilidade removida', 'sucesso');
   } catch(e) { mostrarToast('Erro ao remover', 'erro'); }
@@ -681,8 +681,8 @@ function skToggleAudioSection() {
   const fields  = document.getElementById('sk-audio-fields');
   const chevron = document.getElementById('sk-audio-chevron');
   if (!fields) return;
-  const open = fields.style.display !== 'none';
-  fields.style.display  = open ? 'none' : '';
+  const open = fields.style!.display !== 'none';
+  fields.style!.display  = open ? 'none' : '';
   if (chevron) chevron.textContent = open ? '▶' : '▼';
 }
 
@@ -729,8 +729,8 @@ function skTestarSfx(tipo: any) {
   if (typeof AudioManager === 'undefined') { mostrarToast('AudioManager não disponível', 'aviso'); return; }
   const urlEl = document.getElementById(`sk-audio-${tipo}-url`);
   const selEl = document.getElementById(`sk-audio-${tipo}-sel`);
-  const vol   = parseFloat(document.getElementById('sk-audio-volume')?.value) || 0.75;
-  const sfxId = urlEl?.value.trim() || selEl?.value || '';
+  const vol   = parseFloat(document.getElementById('sk-audio-volume')?.value!) || 0.75;
+  const sfxId = urlEl?.value!.trim!()! || selEl?.value || '';
   if (!sfxId) {
     // Usa o auto-detectado
     const tipo_anim = document.getElementById('sk-anim-tipo')?.value || '';
@@ -772,19 +772,19 @@ function _skCarregarCamposReativos(s: any) {
   const nivelEl = document.getElementById('sk-nivel-magia');
   if (nivelEl) nivelEl.value = s?.nivel_magia ?? 0;
 
-  if (extra) extra.style.display = tipo ? 'block' : 'none';
+  if (extra) extra.style!.display = tipo ? 'block' : 'none';
 
   // Fechar seção ao limpar
   const fields = document.getElementById('sk-reativa-fields');
-  if (fields && !tipo) fields.style.display = 'none';
+  if (fields && !tipo) fields.style!.display = 'none';
   const chevron = document.getElementById('sk-reativa-chevron');
-  if (chevron) chevron.textContent = fields?.style.display !== 'none' ? '▼' : '▶';
+  if (chevron) chevron.textContent = fields?.style!.display !== 'none' ? '▼' : '▶';
 }
 
 function skTipoReativaChange() {
   const tipo  = document.getElementById('sk-tipo-reativa')?.value || '';
   const extra = document.getElementById('sk-reativa-extra');
-  if (extra) extra.style.display = tipo ? 'block' : 'none';
+  if (extra) extra.style!.display = tipo ? 'block' : 'none';
 
   // Se passiva → marcar auto automaticamente
   const autoEl = document.getElementById('sk-auto-reativa');
@@ -799,8 +799,8 @@ function skToggleReativaSection() {
   const fields  = document.getElementById('sk-reativa-fields');
   const chevron = document.getElementById('sk-reativa-chevron');
   if (!fields) return;
-  const aberto = fields.style.display !== 'none';
-  fields.style.display = aberto ? 'none' : 'block';
+  const aberto = fields.style!.display !== 'none';
+  fields.style!.display = aberto ? 'none' : 'block';
   if (chevron) chevron.textContent = aberto ? '▶' : '▼';
 }
 
@@ -808,8 +808,8 @@ function skInvocacaoIlimitadoChange() {
   const ilimitado = document.getElementById('sk-invocar-ilimitado')?.checked;
   const duracaoWrap = document.getElementById('sk-invocar-duracao-wrap');
   const infoIlim    = document.getElementById('sk-invocar-ilimitado-info');
-  if (duracaoWrap) duracaoWrap.style.display = ilimitado ? 'none' : 'flex';
-  if (infoIlim)    infoIlim.style.display    = ilimitado ? 'block' : 'none';
+  if (duracaoWrap) duracaoWrap.style!.display = ilimitado ? 'none' : 'flex';
+  if (infoIlim)    infoIlim.style!.display    = ilimitado ? 'block' : 'none';
 }
 
 // ─── STUDIO PIXI — skill picker helpers ──────────────────────────────────────

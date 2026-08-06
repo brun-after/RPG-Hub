@@ -422,16 +422,16 @@ function tokenPrepareMountNode(node: any) {
 
   const mount = document.createElement('div');
   mount.className    = 'animado-token-mount';
-  mount.dataset.char = char.nome || charNome;
-  mount.dataset.w    = String(displayW);
-  mount.dataset.h    = String(displayH);
-  mount.style.cssText = `width:${displayW}px;height:${displayH}px;display:block;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;pointer-events:none`;
+  mount.dataset!.char = char!.nome || charNome;
+  mount.dataset!.w    = String(displayW);
+  mount.dataset!.h    = String(displayH);
+  mount.style!.cssText = `width:${displayW}px;height:${displayH}px;display:block;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;pointer-events:none`;
 
   const fallbackSrc = ap.composed_img || animado.parts?._full?.texture || '';
   if (fallbackSrc) {
     const img = document.createElement('img');
     img.src = fallbackSrc;
-    img.style.cssText = `width:${displayW}px;height:${displayH}px;object-fit:contain;image-rendering:pixelated;display:block`;
+    img.style!.cssText = `width:${displayW}px;height:${displayH}px;object-fit:contain;image-rendering:pixelated;display:block`;
     mount.appendChild(img);
   }
 
@@ -551,26 +551,26 @@ function tokenRenderizarNoMapa(tokensEl: any, chars: any, mapId: any, mapaObj: a
 
     const el = document.createElement('div');
     el.className    = 'mapa-token';
-    el.dataset.nome = c.nome;
+    el.dataset!.nome = c.nome;
     el.title        = c.nome;
 
     const _col     = pos.col ?? pos.x ?? 0;
     const _row     = pos.row ?? pos.y ?? 0;
     const _leftPct = ((_col + 0.5) / _gridW) * 100;
     const _topPct  = ((_row + 0.5) / _gridH) * 100;
-    el.style.cssText = `left:${_leftPct.toFixed(2)}%;top:${_topPct.toFixed(2)}%;transform:translate(-50%,-50%)`;
+    el.style!.cssText = `left:${_leftPct.toFixed(2)}%;top:${_topPct.toFixed(2)}%;transform:translate(-50%,-50%)`;
 
-    if (isProjected) el.dataset.projected = '1';
+    if (isProjected) el.dataset!.projected = '1';
 
     const fator = Math.max(0.4, ca.aparencia?.tamanho || 1.0);
-    el.dataset.baseTamanho = String(fator);
+    el.dataset!.baseTamanho = String(fator);
 
     const { html, isAnimado, cssClass } = tokenBuildHtml(c, { isNpc, isProjected, tamanhoFator: fator });
 
     // CSS filter só é seguro em tokens não-animados (não há canvas WebGL como descendente)
     if (!isAnimado) {
       const { filterValue } = _tokHpState(c, false);
-      if (filterValue) el.style.filter = filterValue;
+      if (filterValue) el.style!.filter = filterValue;
     }
     if (cssClass) el.classList.add(cssClass);
 

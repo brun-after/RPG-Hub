@@ -60,20 +60,20 @@ function abrirModalSolicitarAtaque() {
   if (!meuChar) { arToast('Você não tem personagem na arena', 'erro'); return; }
   const c = AR.chars.find((x: any) => x.nome === meuChar);
   if (c && c.hp_atual <= 0) { arToast('Seu personagem está incapacitado', 'erro'); return; }
-  document.getElementById('ar-atk-sol-atacante').textContent = meuChar;
+  document.getElementById('ar-atk-sol-atacante')!.textContent = meuChar;
   // Preencher alvos
   const sel = document.getElementById('ar-atk-sol-alvo');
-  sel.innerHTML = AR.chars.filter((x: any) => x.nome !== meuChar).map((x: any) =>
+  sel!.innerHTML = AR.chars.filter((x: any) => x.nome !== meuChar).map((x: any) =>
     `<option value="${x.nome}">${x.nome}${x.hp_atual <= 0 ? ' [INCAP]' : ''}</option>`
   ).join('');
-  document.getElementById('ar-atk-sol-descricao').value = '';
+  document.getElementById('ar-atk-sol-descricao')!.value = '';
   abrirModal('ar-modal-atk-solicitar');
 }
 
 async function arEnviarSolicitacaoAtaque() {
   const atacante = arMeuChar();
-  const alvo = document.getElementById('ar-atk-sol-alvo').value;
-  const desc = document.getElementById('ar-atk-sol-descricao').value.trim();
+  const alvo = document.getElementById('ar-atk-sol-alvo')!.value!;
+  const desc = document.getElementById('ar-atk-sol-descricao')!.value!.trim!()!;
   if (!atacante) { arToast('Sem personagem', 'erro'); return; }
   if (!desc) { arToast('Descreva a ação', 'erro'); return; }
   const id = 'atkarena_' + Date.now();
@@ -120,7 +120,7 @@ function arRenderAtaquesArenaMestre() {
   const rolagens = (AR.estado.ataques_arena || []).filter((a: any) => a.status === 'rolagem_enviada');
 
   const temQualquer = pendentes.length > 0 || rolagens.length > 0;
-  el.style.display = temQualquer ? 'block' : 'none';
+  el.style!.display = temQualquer ? 'block' : 'none';
   if (!temQualquer) { el.innerHTML = ''; return; }
 
   let html = '';
@@ -175,17 +175,17 @@ function arRenderAtaquesArenaMestre() {
 function abrirModalAvaliarAtaque(id: any) {
   const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
-  document.getElementById('ar-atk-av-id').value = id;
-  document.getElementById('ar-atk-av-atacante').textContent = atk.atacante;
-  document.getElementById('ar-atk-av-alvo').textContent = atk.alvo;
-  document.getElementById('ar-atk-av-desc').textContent = atk.descricao;
-  document.getElementById('ar-atk-av-dc').value = '';
+  document.getElementById('ar-atk-av-id')!.value = id;
+  document.getElementById('ar-atk-av-atacante')!.textContent = atk.atacante;
+  document.getElementById('ar-atk-av-alvo')!.textContent = atk.alvo;
+  document.getElementById('ar-atk-av-desc')!.textContent = atk.descricao;
+  document.getElementById('ar-atk-av-dc')!.value = '';
   abrirModal('ar-modal-atk-mestre-avaliar');
 }
 
 async function arMestreAprovarAtaque() {
-  const id = document.getElementById('ar-atk-av-id').value;
-  const dc = parseInt(document.getElementById('ar-atk-av-dc').value);
+  const id = document.getElementById('ar-atk-av-id')!.value!;
+  const dc = parseInt(document.getElementById('ar-atk-av-dc')!.value!);
   if (!id || isNaN(dc) || dc < 1) { arToast('Informe a DC (mínimo 1)', 'erro'); return; }
   const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
@@ -198,7 +198,7 @@ async function arMestreAprovarAtaque() {
 }
 
 async function arMestreRejeitarAtaque() {
-  const id = document.getElementById('ar-atk-av-id').value;
+  const id = document.getElementById('ar-atk-av-id')!.value!;
   await arMestreRejeitarAtaqueId(id);
   fecharModal('ar-modal-atk-mestre-avaliar');
 }
@@ -219,7 +219,7 @@ async function arMestreRejeitarAtaqueId(id: any) {
 
 // Fechar modal de dano sem aplicar — avança turno mesmo assim
 async function arMestreSemDanoFechar() {
-  const id = document.getElementById('ar-atk-dn-id').value;
+  const id = document.getElementById('ar-atk-dn-id')!.value!;
   const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (atk && atk.status !== 'concluido') {
     atk.status = 'concluido';
@@ -239,23 +239,23 @@ function abrirModalRolarEfetividade(id: any) {
   if (!atk) return;
   const dado = arGetDadoEfetividade();
   const pen = arCalcularPenalidadeHP(atk.atacante);
-  document.getElementById('ar-atk-rl-id').value = id;
-  document.getElementById('ar-atk-rl-desc').textContent = atk.descricao;
-  document.getElementById('ar-atk-rl-dado-label').textContent = `d${dado}`;
-  document.getElementById('ar-atk-rl-dc').textContent = atk.dc;
+  document.getElementById('ar-atk-rl-id')!.value = id;
+  document.getElementById('ar-atk-rl-desc')!.textContent = atk.descricao;
+  document.getElementById('ar-atk-rl-dado-label')!.textContent = `d${dado}`;
+  document.getElementById('ar-atk-rl-dc')!.textContent = atk.dc;
   const penEl = document.getElementById('ar-atk-rl-penalidade-info');
-  if (pen > 0) { penEl.textContent = `⚠ Penalidade por HP baixo: −${pen} na rolagem`; penEl.style.display = 'block'; }
-  else { penEl.style.display = 'none'; }
-  document.getElementById('ar-atk-rl-resultado').textContent = '—';
-  document.getElementById('ar-atk-rl-resultado-sub').textContent = 'Pronto para rolar';
-  document.getElementById('ar-atk-rl-resultado').style.color = '#e8604c';
-  document.getElementById('ar-atk-rl-btn-confirmar').style.display = 'none';
-  document.getElementById('ar-atk-rl-btn-rolar').style.display = '';
+  if (pen > 0) { penEl!.textContent = `⚠ Penalidade por HP baixo: −${pen} na rolagem`; penEl!.style!.display = 'block'; }
+  else { penEl!.style!.display = 'none'; }
+  document.getElementById('ar-atk-rl-resultado')!.textContent = '—';
+  document.getElementById('ar-atk-rl-resultado-sub')!.textContent = 'Pronto para rolar';
+  document.getElementById('ar-atk-rl-resultado')!.style!.color = '#e8604c';
+  document.getElementById('ar-atk-rl-btn-confirmar')!.style!.display = 'none';
+  document.getElementById('ar-atk-rl-btn-rolar')!.style!.display = '';
   abrirModal('ar-modal-atk-rolar');
 }
 
 function arRolarEfetividade() {
-  const id = document.getElementById('ar-atk-rl-id').value;
+  const id = document.getElementById('ar-atk-rl-id')!.value!;
   const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
   const dado = arGetDadoEfetividade();
@@ -265,22 +265,22 @@ function arRolarEfetividade() {
   const sucesso = rolagemFinal >= (atk.dc || 0);
 
   const el = document.getElementById('ar-atk-rl-resultado');
-  el.style.transform = 'scale(0.6)'; el.style.opacity = '0';
+  el!.style!.transform = 'scale(0.6)'; el!.style!.opacity = '0';
   setTimeout(() => {
-    el.textContent = rolagemFinal + (pen > 0 && pen !== 0 ? ` (${rolagem}−${pen})` : '');
-    el.style.color = sucesso ? '#5ee09a' : '#e74c3c';
-    el.style.transform = 'scale(1)'; el.style.opacity = '1';
-    document.getElementById('ar-atk-rl-resultado-sub').textContent = sucesso ? `✓ Sucesso! Tirou ${rolagemFinal} ≥ ${atk.dc}` : `✕ Falha. Tirou ${rolagemFinal} < ${atk.dc}`;
-    document.getElementById('ar-atk-rl-btn-rolar').style.display = 'none';
-    document.getElementById('ar-atk-rl-btn-confirmar').style.display = '';
+    el!.textContent = rolagemFinal + (pen > 0 && pen !== 0 ? ` (${rolagem}−${pen})` : '');
+    el!.style!.color = sucesso ? '#5ee09a' : '#e74c3c';
+    el!.style!.transform = 'scale(1)'; el!.style!.opacity = '1';
+    document.getElementById('ar-atk-rl-resultado-sub')!.textContent = sucesso ? `✓ Sucesso! Tirou ${rolagemFinal} ≥ ${atk.dc}` : `✕ Falha. Tirou ${rolagemFinal} < ${atk.dc}`;
+    document.getElementById('ar-atk-rl-btn-rolar')!.style!.display = 'none';
+    document.getElementById('ar-atk-rl-btn-confirmar')!.style!.display = '';
     // Guardar temporariamente
     (document.getElementById('ar-atk-rl-btn-confirmar') as any).dataset.rolagem = rolagemFinal;
   }, 150);
 }
 
 async function arConfirmarRolagemEfetividade() {
-  const id = document.getElementById('ar-atk-rl-id').value;
-  const rolagemFinal = parseInt(document.getElementById('ar-atk-rl-btn-confirmar').dataset.rolagem);
+  const id = document.getElementById('ar-atk-rl-id')!.value!;
+  const rolagemFinal = parseInt(document.getElementById('ar-atk-rl-btn-confirmar')!.dataset!.rolagem!);
   const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
   atk.rolagem = rolagemFinal;
@@ -309,19 +309,19 @@ async function arConfirmarRolagemEfetividade() {
 function abrirModalDefinirDano(id: any) {
   const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
-  document.getElementById('ar-atk-dn-id').value = id;
-  document.getElementById('ar-atk-dn-atacante').textContent = atk.atacante;
-  document.getElementById('ar-atk-dn-alvo').textContent = atk.alvo;
-  document.getElementById('ar-atk-dn-desc').textContent = atk.descricao;
-  document.getElementById('ar-atk-dn-dc').textContent = atk.dc ?? '?';
+  document.getElementById('ar-atk-dn-id')!.value = id;
+  document.getElementById('ar-atk-dn-atacante')!.textContent = atk.atacante;
+  document.getElementById('ar-atk-dn-alvo')!.textContent = atk.alvo;
+  document.getElementById('ar-atk-dn-desc')!.textContent = atk.descricao;
+  document.getElementById('ar-atk-dn-dc')!.textContent = atk.dc ?? '?';
   const rolEl = document.getElementById('ar-atk-dn-rolagem');
   const sucesso = typeof atk.rolagem === 'number' && typeof atk.dc === 'number' && atk.rolagem >= atk.dc;
-  rolEl.textContent = atk.rolagem ?? '?';
-  rolEl.style.color = sucesso ? '#5ee09a' : '#e8604c';
-  document.getElementById('ar-atk-dn-status-badge').innerHTML = `<span style="font-family:'Cinzel',serif;font-size:0.72rem;padding:3px 8px;border-radius:4px;background:${sucesso?'rgba(39,174,96,0.1)':'rgba(192,57,43,0.1)'};color:${sucesso?'#5ee09a':'#e8604c'};border:1px solid ${sucesso?'rgba(39,174,96,0.3)':'rgba(192,57,43,0.3)'}">${sucesso?'Sucesso':'Falha'}</span>`;
+  rolEl!.textContent = atk.rolagem ?? '?';
+  rolEl!.style!.color = sucesso ? '#5ee09a' : '#e8604c';
+  document.getElementById('ar-atk-dn-status-badge')!.innerHTML = `<span style="font-family:'Cinzel',serif;font-size:0.72rem;padding:3px 8px;border-radius:4px;background:${sucesso?'rgba(39,174,96,0.1)':'rgba(192,57,43,0.1)'};color:${sucesso?'#5ee09a':'#e8604c'};border:1px solid ${sucesso?'rgba(39,174,96,0.3)':'rgba(192,57,43,0.3)'}">${sucesso?'Sucesso':'Falha'}</span>`;
   // Alvos possíveis — todos participantes
   const alvosEl = document.getElementById('ar-atk-dn-alvos-check');
-  alvosEl.innerHTML = AR.chars.map((c: any) => {
+  alvosEl!.innerHTML = AR.chars.map((c: any) => {
     const isAlvoPrincipal = c.nome === atk.alvo;
     return `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(20,12,12,0.6);border:1px solid rgba(60,30,30,0.5);border-radius:6px;cursor:pointer;${isAlvoPrincipal?'border-color:rgba(232,80,60,0.3)':''}">
       <input type="checkbox" value="${c.nome}" ${isAlvoPrincipal?'checked':''} style="accent-color:#e8604c">
@@ -331,21 +331,21 @@ function abrirModalDefinirDano(id: any) {
   }).join('');
   // Resetar modo dano
   arAtkDnModo('dado');
-  document.getElementById('ar-atk-dn-resultado-dado').textContent = '—';
-  document.getElementById('ar-atk-dn-resultado-dado').dataset.total = '';
-  document.getElementById('ar-atk-dn-valor-fixo').value = '';
+  document.getElementById('ar-atk-dn-resultado-dado')!.textContent = '—';
+  document.getElementById('ar-atk-dn-resultado-dado')!.dataset!.total = '';
+  document.getElementById('ar-atk-dn-valor-fixo')!.value = '';
   // Reset animação
   const el_tipo = document.getElementById('ar-atk-dn-anim-tipo');
   if (el_tipo) { el_tipo.value = 'nenhuma'; arAnimDnTipoChange(); }
   const _arRId = (id: any) => document.getElementById(id);
-  if (_arRId('ar-atk-dn-anim-icone'))   _arRId('ar-atk-dn-anim-icone').value  = '';
-  if (_arRId('ar-atk-dn-anim-cor'))     _arRId('ar-atk-dn-anim-cor').value    = '#e74c3c';
-  if (_arRId('ar-atk-dn-anim-trilha'))  _arRId('ar-atk-dn-anim-trilha').checked = false;
-  if (_arRId('ar-atk-dn-anim-url'))     _arRId('ar-atk-dn-anim-url').value    = '';
-  if (_arRId('ar-atk-dn-anim-svg'))     _arRId('ar-atk-dn-anim-svg').value    = '';
-  if (_arRId('ar-atk-dn-anim-tamanho')) _arRId('ar-atk-dn-anim-tamanho').value = (120) as any;
-  if (_arRId('ar-atk-dn-anim-duracao')) _arRId('ar-atk-dn-anim-duracao').value = (1500) as any;
-  if (_arRId('ar-atk-dn-anim-posicao')) _arRId('ar-atk-dn-anim-posicao').value = 'alvo';
+  if (_arRId('ar-atk-dn-anim-icone'))   _arRId('ar-atk-dn-anim-icone')!.value  = '';
+  if (_arRId('ar-atk-dn-anim-cor'))     _arRId('ar-atk-dn-anim-cor')!.value    = '#e74c3c';
+  if (_arRId('ar-atk-dn-anim-trilha'))  _arRId('ar-atk-dn-anim-trilha')!.checked = false;
+  if (_arRId('ar-atk-dn-anim-url'))     _arRId('ar-atk-dn-anim-url')!.value    = '';
+  if (_arRId('ar-atk-dn-anim-svg'))     _arRId('ar-atk-dn-anim-svg')!.value    = '';
+  if (_arRId('ar-atk-dn-anim-tamanho')) _arRId('ar-atk-dn-anim-tamanho')!.value = (120) as any;
+  if (_arRId('ar-atk-dn-anim-duracao')) _arRId('ar-atk-dn-anim-duracao')!.value = (1500) as any;
+  if (_arRId('ar-atk-dn-anim-posicao')) _arRId('ar-atk-dn-anim-posicao')!.value = 'alvo';
   abrirModal('ar-modal-atk-mestre-dano');
 }
 
@@ -355,38 +355,38 @@ function arAtkDnModo(modo: any) {
   const btnDado = document.getElementById('ar-atk-dn-modo-dado');
   const btnFixo = document.getElementById('ar-atk-dn-modo-fixo');
   if (modo === 'dado') {
-    dado.style.display = 'flex'; fixo.style.display = 'none';
-    btnDado.style.background = 'rgba(232,80,60,0.12)'; btnDado.style.color = '#e8604c'; btnDado.style.borderColor = 'rgba(232,80,60,0.4)';
-    btnFixo.style.background = 'transparent'; btnFixo.style.color = '#7a6060'; btnFixo.style.borderColor = 'rgba(60,30,30,0.6)';
+    dado!.style!.display = 'flex'; fixo!.style!.display = 'none';
+    btnDado!.style!.background = 'rgba(232,80,60,0.12)'; btnDado!.style!.color = '#e8604c'; btnDado!.style!.borderColor = 'rgba(232,80,60,0.4)';
+    btnFixo!.style!.background = 'transparent'; btnFixo!.style!.color = '#7a6060'; btnFixo!.style!.borderColor = 'rgba(60,30,30,0.6)';
   } else {
-    dado.style.display = 'none'; fixo.style.display = 'block';
-    btnFixo.style.background = 'rgba(232,80,60,0.12)'; btnFixo.style.color = '#e8604c'; btnFixo.style.borderColor = 'rgba(232,80,60,0.4)';
-    btnDado.style.background = 'transparent'; btnDado.style.color = '#7a6060'; btnDado.style.borderColor = 'rgba(60,30,30,0.6)';
+    dado!.style!.display = 'none'; fixo!.style!.display = 'block';
+    btnFixo!.style!.background = 'rgba(232,80,60,0.12)'; btnFixo!.style!.color = '#e8604c'; btnFixo!.style!.borderColor = 'rgba(232,80,60,0.4)';
+    btnDado!.style!.background = 'transparent'; btnDado!.style!.color = '#7a6060'; btnDado!.style!.borderColor = 'rgba(60,30,30,0.6)';
   }
 }
 
 function arAtkDnRolarDado() {
-  const qtd = parseInt(document.getElementById('ar-atk-dn-qtd').value) || 1;
-  const faces = parseInt(document.getElementById('ar-atk-dn-tipo-dado').value) || 6;
+  const qtd = parseInt(document.getElementById('ar-atk-dn-qtd')!.value!) || 1;
+  const faces = parseInt(document.getElementById('ar-atk-dn-tipo-dado')!.value!) || 6;
   let total = 0; const rolls = [];
   for (let i = 0; i < qtd; i++) { const r = Math.floor(Math.random()*faces)+1; rolls.push(r); total += r; }
   const el = document.getElementById('ar-atk-dn-resultado-dado');
-  el.textContent = total + (rolls.length > 1 ? ` (${rolls.join('+')})` : '');
+  el!.textContent = total + (rolls.length > 1 ? ` (${rolls.join('+')})` : '');
   (el as any).dataset.total = total;
 }
 
 async function arMestreAplicarDano() {
-  const id = document.getElementById('ar-atk-dn-id').value;
+  const id = document.getElementById('ar-atk-dn-id')!.value!;
   const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
 
   // Calcular dano
   let dano = 0;
-  const modoFixo = document.getElementById('ar-atk-dn-campos-fixo').style.display !== 'none';
+  const modoFixo = document.getElementById('ar-atk-dn-campos-fixo')!.style!.display !== 'none';
   if (modoFixo) {
-    dano = parseInt(document.getElementById('ar-atk-dn-valor-fixo').value) || 0;
+    dano = parseInt(document.getElementById('ar-atk-dn-valor-fixo')!.value!) || 0;
   } else {
-    dano = parseInt(document.getElementById('ar-atk-dn-resultado-dado').dataset.total) || 0;
+    dano = parseInt(document.getElementById('ar-atk-dn-resultado-dado')!.dataset!.total!) || 0;
   }
 
   // Alvos selecionados
@@ -401,14 +401,14 @@ async function arMestreAplicarDano() {
     const _arIsMidia = ['gif','imagem','svg','iframe'].includes(arAnimTipo);
     const arAnim: any = { tipo: arAnimTipo };
     if (_arIsMidia) {
-      (arAnim as any).url     = (arAnimTipo !== 'svg' ? document.getElementById('ar-atk-dn-anim-url')?.value.trim() : '') || '';
-      (arAnim as any).svg     = arAnimTipo === 'svg' ? document.getElementById('ar-atk-dn-anim-svg')?.value.trim() : '';
-      (arAnim as any).tamanho = parseInt(document.getElementById('ar-atk-dn-anim-tamanho')?.value) || 120;
-      (arAnim as any).duracao = parseInt(document.getElementById('ar-atk-dn-anim-duracao')?.value) || 1500;
+      (arAnim as any).url     = (arAnimTipo !== 'svg' ? document.getElementById('ar-atk-dn-anim-url')?.value!.trim!()! : '') || '';
+      (arAnim as any).svg     = arAnimTipo === 'svg' ? document.getElementById('ar-atk-dn-anim-svg')?.value!.trim!()! : '';
+      (arAnim as any).tamanho = parseInt(document.getElementById('ar-atk-dn-anim-tamanho')?.value!) || 120;
+      (arAnim as any).duracao = parseInt(document.getElementById('ar-atk-dn-anim-duracao')?.value!) || 1500;
       (arAnim as any).posicao = document.getElementById('ar-atk-dn-anim-posicao')?.value || 'alvo';
     } else {
       (arAnim as any).cor    = document.getElementById('ar-atk-dn-anim-cor')?.value   || '#e74c3c';
-      (arAnim as any).icone  = document.getElementById('ar-atk-dn-anim-icone')?.value.trim() || '';
+      (arAnim as any).icone  = document.getElementById('ar-atk-dn-anim-icone')?.value!.trim!()! || '';
       arAnim.trilha = document.getElementById('ar-atk-dn-anim-trilha')?.checked || false;
     }
     // Para cada alvo, animar atacante→alvo
@@ -467,14 +467,14 @@ window.arAcaoAtacar = async function() {
 function arPreviewCenarioListaImg(url: any) {
   const prev = document.getElementById('ar-cenario-lista-img-preview');
   const img = document.getElementById('ar-cenario-lista-img-el');
-  if (!url) { prev.style.display = 'none'; return; }
-  img.src = url;
-  prev.style.display = 'block';
+  if (!url) { prev!.style!.display = 'none'; return; }
+  img!.src = url;
+  prev!.style!.display = 'block';
 }
 
 function abrirModalCriarCenarioLista(idEditar: any) {
   const modal = document.getElementById('ar-modal-cenario-lista');
-  document.getElementById('ar-cenario-lista-id').value = idEditar || '';
+  document.getElementById('ar-cenario-lista-id')!.value = idEditar || '';
   // Reset bg tabs
   arCenBgTab('url');
   arCenBgClearUpload();
@@ -484,42 +484,42 @@ function abrirModalCriarCenarioLista(idEditar: any) {
   const svgInput = document.getElementById('ar-cen-svg-input');
   if (svgInput) svgInput.value = '';
   const svgPrev = document.getElementById('ar-cen-svg-preview-wrap');
-  if (svgPrev) svgPrev.style.display = 'none';
+  if (svgPrev) svgPrev.style!.display = 'none';
   const cvPrev = document.getElementById('ar-cen-canvas-preview-wrap');
-  if (cvPrev) cvPrev.style.display = 'none';
+  if (cvPrev) cvPrev.style!.display = 'none';
 
   if (idEditar) {
     const cen = (AR.estado.cenarios_lista || []).find((c: any) => c.id === idEditar);
     if (!cen) return;
-    document.getElementById('ar-cenario-lista-titulo').textContent = 'Editar Cenário';
-    document.getElementById('ar-cenario-lista-nome').value = cen.nome || '';
-    document.getElementById('ar-cenario-lista-desc').value = cen.descricao || '';
+    document.getElementById('ar-cenario-lista-titulo')!.textContent = 'Editar Cenário';
+    document.getElementById('ar-cenario-lista-nome')!.value = cen.nome || '';
+    document.getElementById('ar-cenario-lista-desc')!.value = cen.descricao || '';
     // Pré-preencher URL se existir
-    document.getElementById('ar-cen-img').value = cen.img || '';
+    document.getElementById('ar-cen-img')!.value = cen.img || '';
     if (cen.img) arCenBgUrlPreview(cen.img);
-    document.getElementById('ar-cenario-lista-grid').value = cen.grid ?? '20';
-    document.getElementById('ar-cenario-lista-escala-val').value = cen.escala_val ?? '1.5';
-    document.getElementById('ar-cenario-lista-escala-unit').value = cen.escala_unit || 'm';
+    document.getElementById('ar-cenario-lista-grid')!.value = cen.grid ?? '20';
+    document.getElementById('ar-cenario-lista-escala-val')!.value = cen.escala_val ?? '1.5';
+    document.getElementById('ar-cenario-lista-escala-unit')!.value = cen.escala_unit || 'm';
   } else {
-    document.getElementById('ar-cenario-lista-titulo').textContent = 'Novo Cenário';
-    document.getElementById('ar-cenario-lista-nome').value = '';
-    document.getElementById('ar-cenario-lista-desc').value = '';
-    document.getElementById('ar-cen-img').value = '';
-    document.getElementById('ar-cenario-lista-grid').value = '20';
-    document.getElementById('ar-cenario-lista-escala-val').value = '1.5';
-    document.getElementById('ar-cenario-lista-escala-unit').value = 'm';
+    document.getElementById('ar-cenario-lista-titulo')!.textContent = 'Novo Cenário';
+    document.getElementById('ar-cenario-lista-nome')!.value = '';
+    document.getElementById('ar-cenario-lista-desc')!.value = '';
+    document.getElementById('ar-cen-img')!.value = '';
+    document.getElementById('ar-cenario-lista-grid')!.value = '20';
+    document.getElementById('ar-cenario-lista-escala-val')!.value = '1.5';
+    document.getElementById('ar-cenario-lista-escala-unit')!.value = 'm';
   }
   abrirModal('ar-modal-cenario-lista');
 }
 
 async function salvarCenarioLista() {
-  const idEditar = document.getElementById('ar-cenario-lista-id').value;
-  const nome = document.getElementById('ar-cenario-lista-nome').value.trim();
-  const desc = document.getElementById('ar-cenario-lista-desc').value.trim();
+  const idEditar = document.getElementById('ar-cenario-lista-id')!.value!;
+  const nome = document.getElementById('ar-cenario-lista-nome')!.value!.trim!()!;
+  const desc = document.getElementById('ar-cenario-lista-desc')!.value!.trim!()!;
   const img = arCenBgGetFinal();
-  const grid = parseInt(document.getElementById('ar-cenario-lista-grid').value) || 0;
-  const escalaVal = parseFloat(document.getElementById('ar-cenario-lista-escala-val').value) || 1.5;
-  const escalaUnit = document.getElementById('ar-cenario-lista-escala-unit').value || 'm';
+  const grid = parseInt(document.getElementById('ar-cenario-lista-grid')!.value!) || 0;
+  const escalaVal = parseFloat(document.getElementById('ar-cenario-lista-escala-val')!.value!) || 1.5;
+  const escalaUnit = document.getElementById('ar-cenario-lista-escala-unit')!.value! || 'm';
   if (!nome) { arToast('Informe o título', 'erro'); return; }
 
   if (!AR.estado.cenarios_lista) AR.estado.cenarios_lista = [];
@@ -653,9 +653,9 @@ function arCenBgTab(tab: any) {
     const panel = document.getElementById('ar-cen-panel-' + t);
     if (!btn || !panel) return;
     const active = t === tab;
-    btn.style.background = active ? '#e8604c' : 'transparent';
-    btn.style.color      = active ? '#fff' : '#7a6060';
-    panel.style.display  = active ? 'block' : 'none';
+    btn.style!.background = active ? '#e8604c' : 'transparent';
+    btn.style!.color      = active ? '#fff' : '#7a6060';
+    panel.style!.display  = active ? 'block' : 'none';
   });
 }
 
@@ -670,8 +670,8 @@ function arCenBgGetFinal() {
 function arCenBgUrlPreview(url: any) {
   const prev = document.getElementById('ar-cen-img-preview');
   if (!prev) return;
-  if (url) { prev.src = url; prev.style.display = 'block'; }
-  else { prev.style.display = 'none'; }
+  if (url) { prev.src = url; prev.style!.display = 'block'; }
+  else { prev.style!.display = 'none'; }
 }
 
 async function arCenBgUpload(input: any) {
@@ -682,7 +682,7 @@ async function arCenBgUpload(input: any) {
     const preview = document.getElementById('ar-cen-upload-preview');
     const wrap    = document.getElementById('ar-cen-upload-preview-wrap');
     if (preview) preview.src = _arCenUploadDataUrl;
-    if (wrap)    wrap.style.display = 'block';
+    if (wrap)    wrap.style!.display = 'block';
   } catch(e) {
     mostrarToast('Erro no upload do cenário', 'erro');
     console.error(e);
@@ -696,7 +696,7 @@ function arCenBgClearUpload() {
   const wrap    = document.getElementById('ar-cen-upload-preview-wrap');
   if (input)   input.value = '';
   if (preview) preview.src = '';
-  if (wrap)    wrap.style.display = 'none';
+  if (wrap)    wrap.style!.display = 'none';
 }
 
 function arCenBgSvgPreview(svgText: any) {
@@ -705,22 +705,22 @@ function arCenBgSvgPreview(svgText: any) {
   const prevEl   = document.getElementById('ar-cen-svg-preview');
   if (!svgText.trim()) {
     _arCenSvgDataUrl = null;
-    if (prevWrap) prevWrap.style.display = 'none';
-    if (warn) warn.style.display = 'none';
+    if (prevWrap) prevWrap.style!.display = 'none';
+    if (warn) warn.style!.display = 'none';
     return;
   }
   if (!svgText.trim().startsWith('<svg') && !svgText.trim().startsWith('<?xml')) {
-    if (warn) { warn.style.display = 'block'; warn.style.background = 'rgba(192,57,43,0.1)'; warn.style.color = '#e74c3c'; warn.style.border = '1px solid rgba(192,57,43,0.2)'; warn.textContent = '⚠ Isso não parece um SVG válido.'; }
-    if (prevWrap) prevWrap.style.display = 'none';
+    if (warn) { warn.style!.display = 'block'; warn.style!.background = 'rgba(192,57,43,0.1)'; warn.style!.color = '#e74c3c'; warn.style!.border = '1px solid rgba(192,57,43,0.2)'; warn.textContent = '⚠ Isso não parece um SVG válido.'; }
+    if (prevWrap) prevWrap.style!.display = 'none';
     _arCenSvgDataUrl = null;
     return;
   }
-  if (warn) warn.style.display = 'none';
+  if (warn) warn.style!.display = 'none';
   const blob = new Blob([svgText], {type:'image/svg+xml'});
   const url = URL.createObjectURL(blob);
   _arCenSvgDataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgText)));
   if (prevEl) prevEl.innerHTML = `<img src="${url}" style="max-height:130px;max-width:100%;object-fit:contain">`;
-  if (prevWrap) prevWrap.style.display = 'block';
+  if (prevWrap) prevWrap.style!.display = 'block';
 }
 
 function arCenCopiarPromptSVG() {
@@ -754,8 +754,8 @@ Retorne APENAS o código SVG completo, sem explicações, sem markdown.`;
     const btn = document.getElementById('ar-cen-svg-copy-btn');
     const lbl = document.getElementById('ar-cen-svg-copy-lbl');
     if (lbl) lbl.textContent = '✓ Copiado!';
-    if (btn) btn.style.color = '#5ee09a';
-    setTimeout(() => { if (lbl) lbl.textContent = 'Copiar prompt SVG (genérico)'; if (btn) btn.style.color = '#f0cc6a'; }, 2000);
+    if (btn) btn.style!.color = '#5ee09a';
+    setTimeout(() => { if (lbl) lbl.textContent = 'Copiar prompt SVG (genérico)'; if (btn) btn.style!.color = '#f0cc6a'; }, 2000);
   });
 }
 
@@ -773,7 +773,7 @@ function arCenAbrirCanvas() {
     const img = new Image();
     img.onload = () => {
       const c = document.getElementById('nmce-canvas');
-      if (c) { const ctx = c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img,0,0,c.width,c.height); nmCE.history = []; if (typeof nmcePushHistory === 'function') nmcePushHistory(); }
+      if (c) { const ctx = c.getContext!('2d'); ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img,0,0,c.width,c.height); nmCE.history = []; if (typeof nmcePushHistory === 'function') nmcePushHistory(); }
     };
     img.src = _arCenCanvasDataUrl;
   }
@@ -787,7 +787,7 @@ window.renderPropostasCenario = function() {
   const list = document.getElementById('ar-cenario-propostas-list');
   if (!wrap || !list || AR.myRole !== 'mestre') return;
   const propostas = AR.estado.propostas_cenario || [];
-  wrap.style.display = propostas.length ? 'block' : 'none';
+  wrap.style!.display = propostas.length ? 'block' : 'none';
   list.innerHTML = propostas.map((p: any) => {
     const isCriacao = p.tipo === 'criacao' || !p.tipo;
     const isEdicao = p.tipo === 'edicao';
@@ -957,8 +957,8 @@ window.criativoRenderMestre = function() {
     console.log('[Aprovações Campanha] Elemento não encontrado. Criando dinamicamente...');
     wrap = document.createElement('div');
     wrap.id = 'criativos-mestre-wrap';
-    wrap.style.display = 'none';
-    wrap.style.marginTop = '10px';
+    wrap.style!.display = 'none';
+    wrap.style!.marginTop = '10px';
     
     // Tentar inserir no painel de ações da mesa
     const mesaAcaoPainel = document.getElementById('mesa-acao-painel');
@@ -991,21 +991,21 @@ window.criativoRenderMestre = function() {
   const isMestre = RPG_DATA?.myRole === 'mestre';
   
   if (!isMestre) {
-    wrap.style.display = 'none';
+    wrap.style!.display = 'none';
     console.log('[Aprovações Campanha] Painel oculto - usuário não é mestre');
     return wrap;
   }
 
   // Filtrar criativos pendentes
   const pendentes = (CRIATIVOS_CAMP || []).filter(c => 
-    ['pendente', 'dc_rolado_sucesso', 'aprovado_dc', 'aprovado_aguardando_rolagem'].includes(c.status)
+    ['pendente', 'dc_rolado_sucesso', 'aprovado_dc', 'aprovado_aguardando_rolagem'].includes(c.status!)
   );
 
   console.log('[Aprovações Campanha] Pendentes encontrados:', pendentes.length);
 
   // Se não há pendentes, ocultar painel
   if (!pendentes.length) {
-    wrap.style.display = 'none';
+    wrap.style!.display = 'none';
     wrap.innerHTML = '';
     if (typeof _limparNotifCreativo === 'function') {
       _limparNotifCreativo();
@@ -1015,16 +1015,16 @@ window.criativoRenderMestre = function() {
   }
 
   // Mostrar painel e renderizar aprovações
-  wrap.style.display = 'block';
-  wrap.style.visibility = 'visible';
-  wrap.style.opacity = '1';
-  wrap.style.position = 'relative';
-  wrap.style.zIndex = '10';
-  wrap.style.background = 'var(--painel)';
-  wrap.style.padding = '12px';
-  wrap.style.borderRadius = '8px';
-  wrap.style.border = '1px solid var(--borda)';
-  wrap.style.marginBottom = '12px';
+  wrap.style!.display = 'block';
+  wrap.style!.visibility = 'visible';
+  wrap.style!.opacity = '1';
+  wrap.style!.position = 'relative';
+  wrap.style!.zIndex = '10';
+  wrap.style!.background = 'var(--painel)';
+  wrap.style!.padding = '12px';
+  wrap.style!.borderRadius = '8px';
+  wrap.style!.border = '1px solid var(--borda)';
+  wrap.style!.marginBottom = '12px';
   
   console.log('[Aprovações Campanha] Painel exibido - renderizando', pendentes.length, 'aprovações');
   
@@ -1150,7 +1150,7 @@ window.criativoRenderMestre = function() {
   `;
   
   console.log('[Aprovações] innerHTML definido. Comprimento:', wrap.innerHTML.length);
-  console.log('[Aprovações] wrap.style.display:', wrap.style.display);
+  console.log('[Aprovações] wrap.style.display:', wrap.style!.display);
   console.log('[Aprovações] wrap visível no DOM?', wrap.offsetHeight > 0);
   
   // NÃO chamar _mesaRenderAcoes() aqui - causa loop infinito!
@@ -1399,29 +1399,29 @@ window.abrirModalDanoCriativo = function(criativoId: any) {
   }
   
   // Preencher dados
-  document.getElementById('dano-criativo-atacante').textContent = criativo.atacante || '—';
-  document.getElementById('dano-criativo-alvo').textContent = criativo.alvo || '—';
-  document.getElementById('dano-criativo-desc').textContent = criativo.descricao || '';
-  document.getElementById('dano-criativo-valor').value = '';
+  document.getElementById('dano-criativo-atacante')!.textContent = criativo.atacante || '—';
+  document.getElementById('dano-criativo-alvo')!.textContent = criativo.alvo || '—';
+  document.getElementById('dano-criativo-desc')!.textContent = criativo.descricao || '';
+  document.getElementById('dano-criativo-valor')!.value = '';
   
   // Guardar ID do criativo
-  modal.dataset.criativoId = criativoId;
+  modal.dataset!.criativoId = criativoId;
   
   // Mostrar modal
-  modal.style.display = 'flex';
+  modal.style!.display = 'flex';
 };
 
 window.fecharModalDanoCriativo = function() {
   const modal = document.getElementById('modal-dano-criativo');
   if (modal) {
-    modal.style.display = 'none';
+    modal.style!.display = 'none';
   }
 };
 
 window.aplicarDanoCriativo = async function() {
   const modal = document.getElementById('modal-dano-criativo');
   const criativoId = modal?.dataset?.criativoId;
-  const dano = parseInt(document.getElementById('dano-criativo-valor').value) || 0;
+  const dano = parseInt(document.getElementById('dano-criativo-valor')!.value!) || 0;
   
   if (!criativoId) {
     console.error('[Aplicar Dano] ID do criativo não encontrado');
@@ -1455,7 +1455,7 @@ window.aplicarDanoCriativo = async function() {
   // Salvar no banco
   try {
     if (typeof sb === 'function') {
-      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(criativo.alvo)}`, {
+      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(criativo.alvo!)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
         body: JSON.stringify({ hp_atual: novoHP })
@@ -1571,9 +1571,9 @@ function abrirModalAprovacaoCompleta(criativoId: any) {
   var ehArea      = alvoTipo === 'area';
 
   // Campos ocultos de contexto
-  document.getElementById('apr-criativo-id').value  = criativoId;
-  document.getElementById('apr-tipo-acao').value    = tipo;
-  document.getElementById('apr-alvo-tipo').value    = alvoTipo;
+  document.getElementById('apr-criativo-id')!.value  = criativoId;
+  document.getElementById('apr-tipo-acao')!.value    = tipo;
+  document.getElementById('apr-alvo-tipo')!.value    = alvoTipo;
 
   // Header
   var tituloMap: Record<string, any> = { ataque:'⚔ Aprovar Ataque', suporte:'✨ Aprovar Suporte', narrativo:'📖 Aprovar Narrativo', area:'💥 Aprovar Área' };
@@ -1581,26 +1581,26 @@ function abrirModalAprovacaoCompleta(criativoId: any) {
   if (tituloEl) tituloEl.textContent = tituloMap[ehArea ? 'area' : tipo] || '📋 Aprovar Ação Criativa';
   var infoEl = document.getElementById('apr-info-linha');
   if (infoEl) infoEl.textContent = criativo.atacante + (criativo.alvo ? ' → ' + criativo.alvo : '');
-  document.getElementById('apr-descricao').textContent = (criativo.descricao||'').replace(/^\[.*?\]\s*/,'');
+  document.getElementById('apr-descricao')!.textContent = (criativo.descricao||'').replace(/^\[.*?\]\s*/,'');
 
   // DC — reset, d20 selecionado por padrão
-  document.getElementById('apr-dc').value = '';
+  document.getElementById('apr-dc')!.value = '';
   var dcPrev = document.getElementById('apr-dc-preview');
   if (dcPrev) dcPrev.textContent = '';
   document.querySelectorAll('.apr-dado-btn').forEach(function(b) {
-    var sel = b.dataset.faces === '20';
+    var sel = b.dataset!.faces === '20';
     b.classList.toggle('apr-dado-sel', sel);
-    b.style.background = sel ? 'rgba(200,168,75,0.25)' : 'rgba(200,168,75,0.08)';
-    b.style.borderColor = sel ? 'rgba(200,168,75,0.6)' : 'rgba(200,168,75,0.2)';
+    b.style!.background = sel ? 'rgba(200,168,75,0.25)' : 'rgba(200,168,75,0.08)';
+    b.style!.borderColor = sel ? 'rgba(200,168,75,0.6)' : 'rgba(200,168,75,0.2)';
   });
 
   // Seção de dano: visível para ataque e área, oculto para suporte/narrativo
   var secDano = document.getElementById('apr-sec-dano');
-  if (secDano) secDano.style.display = (!ehSuporte && !ehNarrativo) ? '' : 'none';
+  if (secDano) secDano.style!.display = (!ehSuporte && !ehNarrativo) ? '' : 'none';
 
   // Seção alvos de área
   var secArea = document.getElementById('apr-sec-area');
-  if (secArea) secArea.style.display = ehArea ? '' : 'none';
+  if (secArea) secArea.style!.display = ehArea ? '' : 'none';
   var alvosEl = document.getElementById('apr-alvos-area');
   if (alvosEl) alvosEl.value = '';
 
@@ -1608,10 +1608,10 @@ function abrirModalAprovacaoCompleta(criativoId: any) {
   var painelAtk = document.getElementById('apr-efeitos-ataque');
   var painelSup = document.getElementById('apr-efeitos-suporte');
   var tituloEf  = document.getElementById('apr-efeitos-base-titulo');
-  if (painelAtk) painelAtk.style.display = ehSuporte ? 'none' : '';
-  if (painelSup) painelSup.style.display = ehSuporte ? '' : 'none';
+  if (painelAtk) painelAtk.style!.display = ehSuporte ? 'none' : '';
+  if (painelSup) painelSup.style!.display = ehSuporte ? '' : 'none';
   if (tituloEf) {
-    tituloEf.style.color = ehSuporte ? '#5ee09a' : '#e8604c';
+    tituloEf.style!.color = ehSuporte ? '#5ee09a' : '#e8604c';
     tituloEf.textContent = ehSuporte
       ? '✨ Efeitos Base (buff / cura ao passar na DC)'
       : '☠ Efeitos Base (debuff / dano extra ao passar na DC)';
@@ -1623,7 +1623,7 @@ function abrirModalAprovacaoCompleta(criativoId: any) {
 
   // Reset builder de dano
   window._aprBuilder = [];
-  document.getElementById('apr-bonus').value = '0';
+  document.getElementById('apr-bonus')!.value = '0';
   aprBuilderAtualizar();
 
   // Reset todos checkboxes de efeitos base
@@ -1635,34 +1635,34 @@ function abrirModalAprovacaoCompleta(criativoId: any) {
   ['cx2-dot-fields','cx2-debuff-fields','cx2-imob-fields','cx2-stun-fields',
    'cx2-cura-fields','cx2-hot-fields','cx2-boost-fields','cx2-def-fields','cx2-hptemp-fields'].forEach(function(id) {
     var el = document.getElementById(id);
-    if (el) el.style.display = 'none';
+    if (el) el.style!.display = 'none';
   });
 
   // Reset efeito crítico
-  document.getElementById('apr-efeito-critico').value = '';
+  document.getElementById('apr-efeito-critico')!.value = '';
   aprEfeitoCriticoChange();
 
   // Mostrar seção de cadastro de skill só para mestre
   var skillSec = document.getElementById('apr-skill-section');
   if (skillSec) {
-    skillSec.style.display = (RPG_DATA?.myRole === 'mestre') ? '' : 'none';
+    skillSec.style!.display = (RPG_DATA?.myRole === 'mestre') ? '' : 'none';
     var chk = document.getElementById('apr-cadastrar-skill');
     if (chk) chk.checked = false;
     var campos = document.getElementById('apr-skill-campos');
-    if (campos) campos.style.display = 'none';
+    if (campos) campos.style!.display = 'none';
     var skNome = document.getElementById('apr-skill-nome');
     if (skNome) skNome.value = (criativo.descricao || '').replace(/^\[.*?\]\s*/,'').slice(0,40);
     var skEfeito = document.getElementById('apr-skill-efeito');
     if (skEfeito) skEfeito.value = '';
   }
 
-  document.getElementById('modal-aprovacao-completa').style.display = 'flex';
+  document.getElementById('modal-aprovacao-completa')!.style!.display = 'flex';
 }
 
 function aprSkillToggle() {
   var campos = document.getElementById('apr-skill-campos');
   var chk    = document.getElementById('apr-cadastrar-skill');
-  if (campos && chk) campos.style.display = chk.checked ? '' : 'none';
+  if (campos && chk) campos.style!.display = chk.checked ? '' : 'none';
 }
 
 function atualizarFormulaPreview() { aprBuilderAtualizar(); }
@@ -1670,8 +1670,8 @@ function atualizarFormulaPreview() { aprBuilderAtualizar(); }
 function aprSelecionarDado(btn: any, faces: any) {
   document.querySelectorAll('.apr-dado-btn').forEach(function(b) {
     b.classList.remove('apr-dado-sel');
-    b.style.background = 'rgba(200,168,75,0.08)';
-    b.style.borderColor = 'rgba(200,168,75,0.2)';
+    b.style!.background = 'rgba(200,168,75,0.08)';
+    b.style!.borderColor = 'rgba(200,168,75,0.2)';
   });
   btn.classList.add('apr-dado-sel');
   btn.style.background = 'rgba(200,168,75,0.25)';
@@ -1681,8 +1681,8 @@ function aprSelecionarDado(btn: any, faces: any) {
 
 function aprDCPreview() {
   var dadoBtn = document.querySelector('.apr-dado-btn.apr-dado-sel');
-  var faces = dadoBtn ? parseInt(dadoBtn.dataset.faces) : 20;
-  var dc = parseInt(document.getElementById('apr-dc')?.value) || 0;
+  var faces = dadoBtn ? parseInt(dadoBtn.dataset!.faces!) : 20;
+  var dc = parseInt(document.getElementById('apr-dc')?.value!) || 0;
   var el = document.getElementById('apr-dc-preview');
   if (!el) return;
   if (!dc) { el.textContent = ''; return; }
@@ -1708,7 +1708,7 @@ function aprBuilderRemove(faces: any) {
 
 function aprBuilderAtualizar() {
   var builder = window._aprBuilder || [];
-  var bonus = parseInt(document.getElementById('apr-bonus')?.value) || 0;
+  var bonus = parseInt(document.getElementById('apr-bonus')?.value!) || 0;
   var chipsEl = document.getElementById('apr-builder-chips');
   var previewEl = document.getElementById('apr-formula-preview');
   if (chipsEl) chipsEl.innerHTML = builder.map(function(g: any) {
@@ -1726,8 +1726,8 @@ function aprEfeitoCriticoChange() {
   var val = document.getElementById('apr-efeito-critico')?.value || '';
   var dotF = document.getElementById('apr-crit-dot-fields');
   var hotF = document.getElementById('apr-crit-hot-fields');
-  if (dotF) dotF.style.display = val === 'dot' ? 'flex' : 'none';
-  if (hotF) hotF.style.display = val === 'hot' ? 'flex' : 'none';
+  if (dotF) dotF.style!.display = val === 'dot' ? 'flex' : 'none';
+  if (hotF) hotF.style!.display = val === 'hot' ? 'flex' : 'none';
 }
 
 // Lê todos os efeitos base e crítico do modal e retorna objeto serializado
@@ -1739,26 +1739,26 @@ function _lerEfeitosModal() {
 
   if (ehSuporte) {
     if (document.getElementById('cx2-cura-on')?.checked) {
-      var qtd = parseInt(document.getElementById('cx2-cura-qtd')?.value) || 10;
+      var qtd = parseInt(document.getElementById('cx2-cura-qtd')?.value!) || 10;
       efeitosBase.push({ tipo:'cura_imediata', valor: qtd, nome:'Cura ' + qtd });
     }
     if (document.getElementById('cx2-hot-on')?.checked) {
       var form = document.getElementById('cx2-hot-formula')?.value?.trim() || '1d6';
-      var turn = parseInt(document.getElementById('cx2-hot-turnos')?.value) || 3;
+      var turn = parseInt(document.getElementById('cx2-hot-turnos')?.value!) || 3;
       efeitosBase.push({ hot_formula: form, hot_turnos: turn, nome:'HOT ' + form + 'x' + turn + 't' });
     }
     if (document.getElementById('cx2-boost-on')?.checked) {
-      var mod = parseInt(document.getElementById('cx2-boost-mod')?.value) || 3;
-      var turn = parseInt(document.getElementById('cx2-boost-turnos')?.value) || 2;
+      var mod = parseInt(document.getElementById('cx2-boost-mod')?.value!) || 3;
+      var turn = parseInt(document.getElementById('cx2-boost-turnos')?.value!) || 2;
       efeitosBase.push({ boost_dano: mod, boost_dano_turnos: turn, nome:'+' + mod + ' Dano x' + turn + 't' });
     }
     if (document.getElementById('cx2-def-on')?.checked) {
-      var mod = parseInt(document.getElementById('cx2-def-mod')?.value) || 3;
-      var turn = parseInt(document.getElementById('cx2-def-turnos')?.value) || 2;
+      var mod = parseInt(document.getElementById('cx2-def-mod')?.value!) || 3;
+      var turn = parseInt(document.getElementById('cx2-def-turnos')?.value!) || 2;
       efeitosBase.push({ boost_defesa: mod, boost_defesa_turnos: turn, nome:'+' + mod + ' Defesa x' + turn + 't' });
     }
     if (document.getElementById('cx2-hptemp-on')?.checked) {
-      var qtd = parseInt(document.getElementById('cx2-hptemp-qtd')?.value) || 10;
+      var qtd = parseInt(document.getElementById('cx2-hptemp-qtd')?.value!) || 10;
       efeitosBase.push({ hp_temp: qtd, nome:'+' + qtd + ' HP temp' });
     }
     if (document.getElementById('cx2-removedebuff-on')?.checked) {
@@ -1767,21 +1767,21 @@ function _lerEfeitosModal() {
   } else {
     if (document.getElementById('cx2-dot-on')?.checked) {
       var form = document.getElementById('cx2-dot-formula')?.value?.trim() || '1d4';
-      var turn = parseInt(document.getElementById('cx2-dot-turnos')?.value) || 3;
+      var turn = parseInt(document.getElementById('cx2-dot-turnos')?.value!) || 3;
       efeitosBase.push({ dot_formula: form, dot_turnos: turn, nome:'DOT ' + form + 'x' + turn + 't' });
     }
     if (document.getElementById('cx2-debuff-on')?.checked) {
-      var mod = parseInt(document.getElementById('cx2-debuff-mod')?.value) || -3;
-      var turn = parseInt(document.getElementById('cx2-debuff-turnos')?.value) || 2;
+      var mod = parseInt(document.getElementById('cx2-debuff-mod')?.value!) || -3;
+      var turn = parseInt(document.getElementById('cx2-debuff-turnos')?.value!) || 2;
       efeitosBase.push({ mod_dano: mod, mod_dano_turnos: turn, nome: mod + ' Dano x' + turn + 't' });
     }
     if (document.getElementById('cx2-imob-on')?.checked) {
-      var turn = parseInt(document.getElementById('cx2-imob-turnos')?.value) || 1;
+      var turn = parseInt(document.getElementById('cx2-imob-turnos')?.value!) || 1;
       efeitosBase.push({ sem_movimento: true, sem_movimento_turnos: turn, tipo:'debuff', nome:'🚫 Imobilizado x' + turn + 't' });
     }
     if (document.getElementById('cx2-stun-on')?.checked) {
       var stunTipo = document.getElementById('cx2-stun-tipo')?.value || 'todos';
-      var turn = parseInt(document.getElementById('cx2-stun-turnos')?.value) || 1;
+      var turn = parseInt(document.getElementById('cx2-stun-turnos')?.value!) || 1;
       efeitosBase.push({ sem_ataque: true, sem_ataque_tipo: stunTipo, sem_ataque_turnos: turn, tipo:'debuff', nome:'⚔🚫 Atordoado x' + turn + 't' });
     }
   }
@@ -1792,11 +1792,11 @@ function _lerEfeitosModal() {
     var critObj: any = { tipo: critTipo };
     if (critTipo === 'dot') {
       (critObj as any).formula = document.getElementById('apr-crit-dot-formula')?.value?.trim() || '1d4';
-      (critObj as any).turnos  = parseInt(document.getElementById('apr-crit-dot-turnos')?.value) || 2;
+      (critObj as any).turnos  = parseInt(document.getElementById('apr-crit-dot-turnos')?.value!) || 2;
     }
     if (critTipo === 'hot') {
       (critObj as any).formula = document.getElementById('apr-crit-hot-formula')?.value?.trim() || '1d4';
-      critObj.turnos  = parseInt(document.getElementById('apr-crit-hot-turnos')?.value) || 2;
+      critObj.turnos  = parseInt(document.getElementById('apr-crit-hot-turnos')?.value!) || 2;
     }
     efeitoCritico = critObj;
   }
@@ -1805,17 +1805,17 @@ function _lerEfeitosModal() {
 }
 
 async function aprovarCriativoCompleto() {
-  var criativoId  = document.getElementById('apr-criativo-id').value;
-  var tipo        = document.getElementById('apr-tipo-acao').value || 'ataque';
-  var alvoTipo    = document.getElementById('apr-alvo-tipo').value || 'unico';
+  var criativoId  = document.getElementById('apr-criativo-id')!.value!;
+  var tipo        = document.getElementById('apr-tipo-acao')!.value! || 'ataque';
+  var alvoTipo    = document.getElementById('apr-alvo-tipo')!.value! || 'unico';
   var ehSuporte   = tipo === 'suporte';
   var ehNarrativo = tipo === 'narrativo';
   var ehArea      = alvoTipo === 'area';
 
   var dadoBtn  = document.querySelector('.apr-dado-btn.apr-dado-sel');
-  var dadoFaces = dadoBtn ? parseInt(dadoBtn.dataset.faces) : 20;
-  var dc       = parseInt(document.getElementById('apr-dc').value);
-  var bonus    = parseInt(document.getElementById('apr-bonus').value) || 0;
+  var dadoFaces = dadoBtn ? parseInt(dadoBtn.dataset!.faces!) : 20;
+  var dc       = parseInt(document.getElementById('apr-dc')!.value!);
+  var bonus    = parseInt(document.getElementById('apr-bonus')!.value!) || 0;
   var builder  = window._aprBuilder || [];
 
   if (!dc || dc < 1) { if (typeof mostrarToast === 'function') mostrarToast('Defina a DC primeiro', 'erro'); return; }
@@ -1846,7 +1846,7 @@ async function aprovarCriativoCompleto() {
   var formulaAprovada = '__PRONTO__' + JSON.stringify(prontoData);
 
   try {
-    await sb('criativos?id=eq.' + encodeURIComponent(criativoId), {
+    await sb('criativos?id=eq.' + encodeURIComponent(criativoId!), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ status: 'aprovado_pronto', formula_aprovada: formulaAprovada })
@@ -1859,7 +1859,7 @@ async function aprovarCriativoCompleto() {
       criativo._pronto          = prontoData;
     }
 
-    document.getElementById('modal-aprovacao-completa').style.display = 'none';
+    document.getElementById('modal-aprovacao-completa')!.style!.display = 'none';
     if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
 
     // ── Cadastrar skill se mestre marcou a opção ──────────────────────────
@@ -1908,7 +1908,7 @@ async function aprovarCriativoCompleto() {
 }
 
 function fecharModalAprovacaoCompleta() {
-  document.getElementById('modal-aprovacao-completa').style.display = 'none';
+  document.getElementById('modal-aprovacao-completa')!.style!.display = 'none';
 }
 
 // ── Modal de Execução (Jogador) ───────────────────────────────
@@ -1929,20 +1929,20 @@ function abrirModalExecucaoCriativo(criativoId: any) {
   const dc     = pronto.dc || '?';
 
   EXEC_CRIATIVO_ATUAL = criativo;
-  document.getElementById('exec-descricao').textContent = criativo.descricao;
-  document.getElementById('exec-alvo').textContent      = criativo.alvo || 'N/A';
-  document.getElementById('exec-dc').textContent        = dc;
+  document.getElementById('exec-descricao')!.textContent = criativo.descricao as any;
+  document.getElementById('exec-alvo')!.textContent      = criativo.alvo || 'N/A';
+  document.getElementById('exec-dc')!.textContent        = dc;
   let formula = `${dd.quantidade}d${dd.tipo}`;
   if (dd.bonus > 0) formula += ` +${dd.bonus}`;
   else if (dd.bonus < 0) formula += ` ${dd.bonus}`;
-  document.getElementById('exec-formula').textContent = formula;
-  document.getElementById('etapa-acerto').style.display    = 'block';
-  document.getElementById('resultado-acerto').innerHTML    = '';
-  document.getElementById('etapa-dano').style.display      = 'none';
-  document.getElementById('resultado-dano').innerHTML      = '';
-  document.getElementById('resultado-final').style.display = 'none';
-  document.getElementById('dano-final-valor').innerHTML    = '';
-  document.getElementById('modal-executar-criativo').style.display = 'flex';
+  document.getElementById('exec-formula')!.textContent = formula;
+  document.getElementById('etapa-acerto')!.style!.display    = 'block';
+  document.getElementById('resultado-acerto')!.innerHTML    = '';
+  document.getElementById('etapa-dano')!.style!.display      = 'none';
+  document.getElementById('resultado-dano')!.innerHTML      = '';
+  document.getElementById('resultado-final')!.style!.display = 'none';
+  document.getElementById('dano-final-valor')!.innerHTML    = '';
+  document.getElementById('modal-executar-criativo')!.style!.display = 'flex';
 }
 
 function rolarAcertoCriativo() {
@@ -1963,18 +1963,18 @@ function rolarAcertoCriativo() {
   const resultEl = document.getElementById('resultado-acerto');
 
   if (erro) {
-    resultEl.innerHTML = `<div style="padding:10px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px">💀 Rolou 1 (d${dadoFaces})</div><div style="color:#e74c3c;font-weight:bold">ERRO CRÍTICO!</div><div style="color:#c0392b;font-size:0.9rem">Sem efeito!</div></div>`;
+    resultEl!.innerHTML = `<div style="padding:10px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px">💀 Rolou 1 (d${dadoFaces})</div><div style="color:#e74c3c;font-weight:bold">ERRO CRÍTICO!</div><div style="color:#c0392b;font-size:0.9rem">Sem efeito!</div></div>`;
     criativo._d20 = resultado; criativo._danoFinal = 0;
     finalizarExecucaoCriativo();
   } else if (!sucesso) {
-    resultEl.innerHTML = `<div style="padding:10px;background:rgba(231,76,60,0.05);border:1px solid rgba(231,76,60,0.2);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px">✕ Rolou ${resultado} (d${dadoFaces})</div><div style="color:#e8604c">FALHOU! (DC ${dc})</div><div style="color:#c0392b;font-size:0.9rem">Sem efeito!</div></div>`;
+    resultEl!.innerHTML = `<div style="padding:10px;background:rgba(231,76,60,0.05);border:1px solid rgba(231,76,60,0.2);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px">✕ Rolou ${resultado} (d${dadoFaces})</div><div style="color:#e8604c">FALHOU! (DC ${dc})</div><div style="color:#c0392b;font-size:0.9rem">Sem efeito!</div></div>`;
     criativo._d20 = resultado; criativo._danoFinal = 0;
     finalizarExecucaoCriativo();
   } else {
     let criticoHtml = '', criticoCor = '#5ee09a';
     if (tipoCritico === 'critico_menor') { criticoHtml = '<div style="color:#f39c12;font-weight:bold;margin-top:5px">⭐ Crítico! (+20% dano)</div>'; criticoCor = '#f39c12'; }
     else if (tipoCritico === 'critico_maior') { criticoHtml = '<div style="color:#f0cc6a;font-weight:bold;margin-top:5px">🌟 CRÍTICO MÁXIMO! (+30% + efeito extra)</div>'; criticoCor = '#f0cc6a'; }
-    resultEl.innerHTML = `<div style="padding:10px;background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.3);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px;color:${criticoCor}">✓ Rolou ${resultado} (d${dadoFaces})</div><div style="color:#5ee09a;font-weight:bold">SUCESSO! (DC ${dc})</div>${criticoHtml}</div>`;
+    resultEl!.innerHTML = `<div style="padding:10px;background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.3);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px;color:${criticoCor}">✓ Rolou ${resultado} (d${dadoFaces})</div><div style="color:#5ee09a;font-weight:bold">SUCESSO! (DC ${dc})</div>${criticoHtml}</div>`;
     criativo._d20 = resultado; criativo._tipoCritico = tipoCritico;
     // Para suporte/narrativo: não há dado de dano, ir direto ao final
     const ehSuporte = (pronto.tipo_acao === 'suporte' || pronto.tipo_acao === 'narrativo');
@@ -1982,7 +1982,7 @@ function rolarAcertoCriativo() {
       criativo._danoFinal = 0;
       finalizarExecucaoCriativo();
     } else {
-      document.getElementById('etapa-dano').style.display = 'block';
+      document.getElementById('etapa-dano')!.style!.display = 'block';
     }
   }
 }
@@ -2016,7 +2016,7 @@ function rolarDanoCriativo() {
   const bonus = dd.bonus || 0;
   const subtotal = total + bonus;
 
-  document.getElementById('resultado-dano').innerHTML = `
+  document.getElementById('resultado-dano')!.innerHTML = `
     <div style="padding:10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;margin-top:8px">
       ${rollsHtml}
       ${bonus !== 0 ? `<div style="font-size:0.85rem;color:#9ab8d0">Bônus fixo: ${bonus>0?'+':''}${bonus}</div>` : ''}
@@ -2051,7 +2051,7 @@ function rolarDanoCriativo() {
 
   let criticoHtml = resultado.mensagem ? `<div style="font-size:0.9rem;color:${resultado.cor||'#f39c12'};margin-bottom:5px">${resultado.mensagem}</div>` : '';
 
-  document.getElementById('dano-final-valor').innerHTML = `
+  document.getElementById('dano-final-valor')!.innerHTML = `
     <div style="padding:15px;background:rgba(192,57,43,0.1);border:2px solid rgba(192,57,43,0.3);border-radius:8px;text-align:center">
       ${criticoHtml}
       <div style="font-size:2rem;font-weight:bold;color:#e8604c">${resultado.dano}</div>
@@ -2059,7 +2059,7 @@ function rolarDanoCriativo() {
       ${efeitoCriticoHtml}
     </div>
     ${efeitosBaseHtml}`;
-  document.getElementById('resultado-final').style.display = 'block';
+  document.getElementById('resultado-final')!.style!.display = 'block';
 }
 
 async function aplicarDanoFinalCriativo() {
@@ -2082,7 +2082,7 @@ async function aplicarDanoFinalCriativo() {
         if (char) {
           char.hp_atual = Math.max(0, (char.hp_atual || 0) - dano);
           if (typeof saveCharacterStats === 'function') {
-            await saveCharacterStats(RPG_DATA.rpgId, char.nome, { hp_atual: char.hp_atual });
+            await saveCharacterStats(RPG_DATA!.rpgId, char.nome, { hp_atual: char.hp_atual });
           }
         }
       }
@@ -2108,7 +2108,7 @@ async function aplicarDanoFinalCriativo() {
               const hpMax = char.custom_attrs?.hp_max || char.custom_attrs?.hp || 100;
               char.hp_atual = Math.min(hpMax, (char.hp_atual || 0) + curaFinal);
               if (typeof saveCharacterStats === 'function') {
-                await saveCharacterStats(RPG_DATA.rpgId, char.nome, { hp_atual: char.hp_atual });
+                await saveCharacterStats(RPG_DATA!.rpgId, char.nome, { hp_atual: char.hp_atual });
               }
             }
           }
@@ -2164,7 +2164,7 @@ async function aplicarDanoFinalCriativo() {
       mostrarAnimacaoCritico(criativo._tipoCritico, criativo.atacante, dano, dano);
     }
 
-    document.getElementById('modal-executar-criativo').style.display = 'none';
+    document.getElementById('modal-executar-criativo')!.style!.display = 'none';
     EXEC_CRIATIVO_ATUAL = null;
     if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
     if (typeof _finalizarAtaqueCampanha === 'function') await _finalizarAtaqueCampanha();
@@ -2177,11 +2177,11 @@ async function aplicarDanoFinalCriativo() {
 
 function finalizarExecucaoCriativo() {
   // Pula direto para o final quando erro/falha
-  document.getElementById('etapa-dano').style.display = 'none';
-  document.getElementById('resultado-final').style.display = 'block';
+  document.getElementById('etapa-dano')!.style!.display = 'none';
+  document.getElementById('resultado-final')!.style!.display = 'block';
   
   const finalEl = document.getElementById('dano-final-valor');
-  finalEl.innerHTML = `
+  finalEl!.innerHTML = `
     <div style="padding:15px;background:rgba(127,140,141,0.1);border:2px solid rgba(127,140,141,0.3);border-radius:8px;text-align:center">
       <div style="font-size:2rem;font-weight:bold;color:#7f8c8d">0</div>
       <div style="font-size:0.8rem;color:#95a5a6;margin-top:5px">SEM DANO</div>
@@ -2190,7 +2190,7 @@ function finalizarExecucaoCriativo() {
 }
 
 function fecharModalExecucaoCriativo() {
-  document.getElementById('modal-executar-criativo').style.display = 'none';
+  document.getElementById('modal-executar-criativo')!.style!.display = 'none';
   EXEC_CRIATIVO_ATUAL = null;
 }
 

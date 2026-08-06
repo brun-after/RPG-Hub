@@ -52,22 +52,22 @@ const RARIDADE_CORES: Record<string, any> = {
 };
 
 function abrirCatalogo() {
-  document.getElementById('modal-catalogo-overlay').style.display = 'flex';
+  document.getElementById('modal-catalogo-overlay')!.style!.display = 'flex';
   carregarCatalogo();
 }
 function fecharCatalogo() {
-  document.getElementById('modal-catalogo-overlay').style.display = 'none';
+  document.getElementById('modal-catalogo-overlay')!.style!.display = 'none';
 }
 
 async function carregarCatalogo() {
   const rpgId = CURRENT_RPG?.id; if (!rpgId) return;
-  document.getElementById('cat-lista').innerHTML = '<div style="text-align:center;padding:40px;color:var(--suave);font-style:italic">Carregando...</div>';
+  document.getElementById('cat-lista')!.innerHTML = '<div style="text-align:center;padding:40px;color:var(--suave);font-style:italic">Carregando...</div>';
   try {
     const data = await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&order=nome`);
     CATALOGO_STATE.itens = data || [];
     filtrarCatalogo();
   } catch (e: any) {
-    document.getElementById('cat-lista').innerHTML = `<div style="color:var(--perigo);padding:20px;text-align:center">${e.message}</div>`;
+    document.getElementById('cat-lista')!.innerHTML = `<div style="color:var(--perigo);padding:20px;text-align:center">${e.message}</div>`;
   }
 }
 
@@ -87,12 +87,12 @@ function filtrarCatalogo() {
 function renderListaCatalogo() {
   const lista = CATALOGO_STATE.filtrados;
   const el = document.getElementById('cat-lista');
-  document.getElementById('cat-subtitle').textContent = `${lista.length} item(ns) encontrado(s)`;
+  document.getElementById('cat-subtitle')!.textContent = `${lista.length} item(ns) encontrado(s)`;
   if (!lista.length) {
-    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--suave);font-style:italic;font-size:0.85rem">Nenhum item. Crie o primeiro!</div>';
+    el!.innerHTML = '<div style="text-align:center;padding:40px;color:var(--suave);font-style:italic;font-size:0.85rem">Nenhum item. Crie o primeiro!</div>';
     return;
   }
-  el.innerHTML = lista.map(it => {
+  el!.innerHTML = lista.map(it => {
     const rc = RARIDADE_CORES[it.raridade] || RARIDADE_CORES.comum;
     const vc = it.visual_config || {};
     const emoji = (vc.tipo_visual==='emoji'||!vc.tipo_visual) ? (vc.valor||TIPO_DEFAULTS[it.tipo_canonico]?.emoji||'📦') : '📦';
@@ -126,29 +126,29 @@ function abrirFormItem(id: any) {
   const overlay = document.getElementById('modal-item-overlay');
   CATALOGO_STATE.bonusLinhas = [];
   CATALOGO_STATE.efeitosLista = [];
-  overlay.style.display = 'flex';
+  overlay!.style!.display = 'flex';
   trocarAbaItem('identidade');
-  document.getElementById('fi-btn-duplicar').style.display = 'none';
-  document.getElementById('fi-btn-deletar').style.display = 'none';
+  document.getElementById('fi-btn-duplicar')!.style!.display = 'none';
+  document.getElementById('fi-btn-deletar')!.style!.display = 'none';
   if (!id) {
     // Novo item
-    document.getElementById('form-item-titulo').textContent = 'Novo Item';
-    document.getElementById('fi-id').value = '';
-    document.getElementById('fi-nome').value = '';
-    document.getElementById('fi-tipo').value = '';
-    document.getElementById('fi-raridade').value = 'comum';
-    document.getElementById('fi-subtipo').value = '';
-    document.getElementById('fi-slot').value = '';
-    document.getElementById('fi-grupo').value = '';
-    document.getElementById('fi-descricao').value = '';
-    document.getElementById('fi-aceita-amuleto').checked = true;
-    document.getElementById('fi-nivel').value = (1) as any;
-    document.getElementById('fi-nivel-val').textContent = '1';
-    document.getElementById('fi-nivel-min').value = (1) as any;
-    document.getElementById('fi-nivel-min-val').textContent = '1';
-    document.getElementById('fi-unico').checked = false;
-    document.getElementById('fi-droppable').checked = false;
-    document.getElementById('fi-drop-config').style.display = 'none';
+    document.getElementById('form-item-titulo')!.textContent = 'Novo Item';
+    document.getElementById('fi-id')!.value = '';
+    document.getElementById('fi-nome')!.value = '';
+    document.getElementById('fi-tipo')!.value = '';
+    document.getElementById('fi-raridade')!.value = 'comum';
+    document.getElementById('fi-subtipo')!.value = '';
+    document.getElementById('fi-slot')!.value = '';
+    document.getElementById('fi-grupo')!.value = '';
+    document.getElementById('fi-descricao')!.value = '';
+    document.getElementById('fi-aceita-amuleto')!.checked = true;
+    document.getElementById('fi-nivel')!.value = (1) as any;
+    document.getElementById('fi-nivel-val')!.textContent = '1';
+    document.getElementById('fi-nivel-min')!.value = (1) as any;
+    document.getElementById('fi-nivel-min-val')!.textContent = '1';
+    document.getElementById('fi-unico')!.checked = false;
+    document.getElementById('fi-droppable')!.checked = false;
+    document.getElementById('fi-drop-config')!.style!.display = 'none';
     CATALOGO_STATE.visualConfig = { tipo_visual:'emoji', valor:'✨', cor_fundo:'#1a1a2e', cor_borda:'#888888', animacao:'none' };
     _aplicarVisualConfig();
     renderLinhasBonus();
@@ -160,27 +160,27 @@ function abrirFormItem(id: any) {
   const it = CATALOGO_STATE.itens.find(x=>x.id==id);
   if (!it) return;
   CATALOGO_STATE.itemEditando = it;
-  document.getElementById('form-item-titulo').textContent = 'Editar: ' + it.nome;
-  document.getElementById('fi-id').value = it.id;
-  document.getElementById('fi-nome').value = it.nome || '';
-  document.getElementById('fi-tipo').value = it.tipo_canonico || '';
-  document.getElementById('fi-raridade').value = it.raridade || 'comum';
-  document.getElementById('fi-subtipo').value = it.subtipo || '';
-  document.getElementById('fi-slot').value = it.slot_padrao || '';
-  document.getElementById('fi-grupo').value = it.grupo_atributo_base || '';
-  document.getElementById('fi-descricao').value = it.descricao || '';
-  document.getElementById('fi-aceita-amuleto').checked = it.aceita_amuleto_aninhado !== false;
-  document.getElementById('fi-nivel').value = it.nivel || 1;
-  document.getElementById('fi-nivel-val').textContent = it.nivel || 1;
-  document.getElementById('fi-nivel-min').value = it.nivel_minimo_uso || 1;
-  document.getElementById('fi-nivel-min-val').textContent = it.nivel_minimo_uso || 1;
-  document.getElementById('fi-unico').checked = !!it.unico_no_mundo;
-  document.getElementById('fi-droppable').checked = !!it.droppable;
+  document.getElementById('form-item-titulo')!.textContent = 'Editar: ' + it.nome;
+  document.getElementById('fi-id')!.value = it.id;
+  document.getElementById('fi-nome')!.value = it.nome || '';
+  document.getElementById('fi-tipo')!.value = it.tipo_canonico || '';
+  document.getElementById('fi-raridade')!.value = it.raridade || 'comum';
+  document.getElementById('fi-subtipo')!.value = it.subtipo || '';
+  document.getElementById('fi-slot')!.value = it.slot_padrao || '';
+  document.getElementById('fi-grupo')!.value = it.grupo_atributo_base || '';
+  document.getElementById('fi-descricao')!.value = it.descricao || '';
+  document.getElementById('fi-aceita-amuleto')!.checked = it.aceita_amuleto_aninhado !== false;
+  document.getElementById('fi-nivel')!.value = it.nivel || 1;
+  document.getElementById('fi-nivel-val')!.textContent = it.nivel || 1;
+  document.getElementById('fi-nivel-min')!.value = it.nivel_minimo_uso || 1;
+  document.getElementById('fi-nivel-min-val')!.textContent = it.nivel_minimo_uso || 1;
+  document.getElementById('fi-unico')!.checked = !!it.unico_no_mundo;
+  document.getElementById('fi-droppable')!.checked = !!it.droppable;
   toggleDropConfig();
   if (it.droppable) {
-    document.getElementById('fi-drop-rate').value = it.drop_rate || 5;
-    document.getElementById('fi-tier-min').value = it.tier_min || 1;
-    document.getElementById('fi-tier-max').value = it.tier_max || 5;
+    document.getElementById('fi-drop-rate')!.value = it.drop_rate || 5;
+    document.getElementById('fi-tier-min')!.value = it.tier_min || 1;
+    document.getElementById('fi-tier-max')!.value = it.tier_max || 5;
   }
   CATALOGO_STATE.visualConfig = it.visual_config || { tipo_visual:'emoji', valor:'✨', cor_fundo:'#1a1a2e', cor_borda:'#888888', animacao:'none' };
   _aplicarVisualConfig();
@@ -193,13 +193,13 @@ function abrirFormItem(id: any) {
   renderLinhasBonus();
   CATALOGO_STATE.efeitosLista = it.efeitos || [];
   renderEfeitosLista();
-  document.getElementById('fi-btn-duplicar').style.display = '';
-  document.getElementById('fi-btn-deletar').style.display = '';
+  document.getElementById('fi-btn-duplicar')!.style!.display = '';
+  document.getElementById('fi-btn-deletar')!.style!.display = '';
   atualizarPreviewCard();
 }
 
 function fecharFormItem() {
-  document.getElementById('modal-item-overlay').style.display = 'none';
+  document.getElementById('modal-item-overlay')!.style!.display = 'none';
   CATALOGO_STATE.itemEditando = null;
 }
 
@@ -222,59 +222,59 @@ function abrirEditarItemCatalogo(id: any) {
 
 function trocarAbaItem(aba: any) {
   document.querySelectorAll('.item-form-tab').forEach(b => {
-    const ativo = b.dataset.tab === aba;
+    const ativo = b.dataset!.tab === aba;
     b.classList.toggle('active', ativo);
-    b.style.color = ativo ? 'var(--primario)' : 'var(--suave)';
-    b.style.borderBottomColor = ativo ? 'var(--primario)' : 'transparent';
+    b.style!.color = ativo ? 'var(--primario)' : 'var(--suave)';
+    b.style!.borderBottomColor = ativo ? 'var(--primario)' : 'transparent';
   });
   document.querySelectorAll('.item-form-aba').forEach(d => {
-    d.style.display = d.id === 'aba-' + aba ? 'block' : 'none';
+    d.style!.display = d.id === 'aba-' + aba ? 'block' : 'none';
   });
 }
 
 function itemTipoChange() {
-  const tipo = document.getElementById('fi-tipo').value;
+  const tipo = document.getElementById('fi-tipo')!.value!;
   const def = TIPO_DEFAULTS[tipo] || {};
-  if (def.slot_padrao || def.slot) document.getElementById('fi-slot').value = def.slot_padrao || def.slot;
-  if (def.grupo) document.getElementById('fi-grupo').value = def.grupo;
-  if (def.emoji && !document.getElementById('fi-emoji').value) {
+  if (def.slot_padrao || def.slot) document.getElementById('fi-slot')!.value = def.slot_padrao || def.slot;
+  if (def.grupo) document.getElementById('fi-grupo')!.value = def.grupo;
+  if (def.emoji && !document.getElementById('fi-emoji')!.value!) {
     CATALOGO_STATE.visualConfig.valor = def.emoji;
-    document.getElementById('fi-emoji').value = def.emoji;
+    document.getElementById('fi-emoji')!.value = def.emoji;
   }
   atualizarPreviewCard();
 }
 
 function itemRaridadeChange() {
-  const rar = document.getElementById('fi-raridade').value;
+  const rar = document.getElementById('fi-raridade')!.value!;
   const rc = RARIDADE_CORES[rar] || RARIDADE_CORES.comum;
   CATALOGO_STATE.visualConfig.cor_borda = rc.borda;
   CATALOGO_STATE.visualConfig.cor_fundo = rc.fundo;
-  document.getElementById('fi-cor-borda').value = rc.borda;
-  document.getElementById('fi-cor-fundo').value = rc.fundo;
-  document.getElementById('fi-cor-borda-txt').textContent = rc.borda;
-  document.getElementById('fi-cor-fundo-txt').textContent = rc.fundo;
+  document.getElementById('fi-cor-borda')!.value = rc.borda;
+  document.getElementById('fi-cor-fundo')!.value = rc.fundo;
+  document.getElementById('fi-cor-borda-txt')!.textContent = rc.borda;
+  document.getElementById('fi-cor-fundo-txt')!.textContent = rc.fundo;
   atualizarPreviewCard();
 }
 
 function setVisualTipo(tipo: any) {
   CATALOGO_STATE.visualConfig.tipo_visual = tipo;
   document.querySelectorAll('.vis-tipo-btn').forEach(b=>{
-    const ativo = b.dataset.tipo === tipo;
-    b.style.background = ativo ? 'rgba(200,168,75,0.15)' : 'rgba(30,45,66,0.4)';
-    b.style.borderColor = ativo ? 'rgba(200,168,75,0.4)' : 'var(--borda)';
-    b.style.color = ativo ? 'var(--destaque)' : 'var(--suave)';
+    const ativo = b.dataset!.tipo === tipo;
+    b.style!.background = ativo ? 'rgba(200,168,75,0.15)' : 'rgba(30,45,66,0.4)';
+    b.style!.borderColor = ativo ? 'rgba(200,168,75,0.4)' : 'var(--borda)';
+    b.style!.color = ativo ? 'var(--destaque)' : 'var(--suave)';
   });
-  document.getElementById('vis-campo-emoji').style.display = tipo==='emoji' ? '' : 'none';
-  document.getElementById('vis-campo-url').style.display = tipo==='url' ? '' : 'none';
+  document.getElementById('vis-campo-emoji')!.style!.display = tipo==='emoji' ? '' : 'none';
+  document.getElementById('vis-campo-url')!.style!.display = tipo==='url' ? '' : 'none';
   atualizarPreviewCard();
 }
 
 function fiImgurlChange() {
-  const val = document.getElementById('fi-imgurl').value.trim();
+  const val = document.getElementById('fi-imgurl')!.value!.trim!()!;
   const wrap = document.getElementById('fi-img-preview-wrap');
   const img = document.getElementById('fi-img-preview');
-  if (val) { img.src = val; wrap.style.display = ''; }
-  else { wrap.style.display = 'none'; }
+  if (val) { img!.src = val; wrap!.style!.display = ''; }
+  else { wrap!.style!.display = 'none'; }
   atualizarPreviewCard();
 }
 
@@ -283,10 +283,10 @@ async function fiUploadImagem(input: any) {
   try {
     mostrarToast('Enviando imagem…', 'info');
     const url = await uploadToStorage(file, 'items');
-    document.getElementById('fi-imgurl').value = url;
+    document.getElementById('fi-imgurl')!.value = url;
     const wrap = document.getElementById('fi-img-preview-wrap');
     const img = document.getElementById('fi-img-preview');
-    img.src = url; wrap.style.display = '';
+    img!.src = url; wrap!.style!.display = '';
     atualizarPreviewCard();
     mostrarToast('Imagem enviada!', 'ok');
   } catch(e) {
@@ -298,25 +298,25 @@ async function fiUploadImagem(input: any) {
 function setAnimacao(anim: any) {
   CATALOGO_STATE.visualConfig.animacao = anim;
   document.querySelectorAll('.anim-btn').forEach(b=>{
-    const ativo = b.dataset.anim === anim;
-    b.style.background = ativo ? 'rgba(200,168,75,0.15)' : 'rgba(30,45,66,0.4)';
-    b.style.borderColor = ativo ? 'rgba(200,168,75,0.4)' : 'var(--borda)';
-    b.style.color = ativo ? 'var(--destaque)' : 'var(--suave)';
+    const ativo = b.dataset!.anim === anim;
+    b.style!.background = ativo ? 'rgba(200,168,75,0.15)' : 'rgba(30,45,66,0.4)';
+    b.style!.borderColor = ativo ? 'rgba(200,168,75,0.4)' : 'var(--borda)';
+    b.style!.color = ativo ? 'var(--destaque)' : 'var(--suave)';
   });
   atualizarPreviewCard();
 }
 
 function restaurarAparenciaPadrao() {
-  const tipo = document.getElementById('fi-tipo').value;
+  const tipo = document.getElementById('fi-tipo')!.value!;
   const def = TIPO_DEFAULTS[tipo] || TIPO_DEFAULTS.customizado;
-  const rar = document.getElementById('fi-raridade').value;
+  const rar = document.getElementById('fi-raridade')!.value!;
   const rc = RARIDADE_CORES[rar] || RARIDADE_CORES.comum;
   CATALOGO_STATE.visualConfig = { tipo_visual:'emoji', valor:def.emoji, cor_fundo:rc.fundo, cor_borda:rc.borda, animacao:'none' };
-  document.getElementById('fi-emoji').value = def.emoji;
-  document.getElementById('fi-cor-borda').value = rc.borda;
-  document.getElementById('fi-cor-fundo').value = rc.fundo;
-  document.getElementById('fi-cor-borda-txt').textContent = rc.borda;
-  document.getElementById('fi-cor-fundo-txt').textContent = rc.fundo;
+  document.getElementById('fi-emoji')!.value = def.emoji;
+  document.getElementById('fi-cor-borda')!.value = rc.borda;
+  document.getElementById('fi-cor-fundo')!.value = rc.fundo;
+  document.getElementById('fi-cor-borda-txt')!.textContent = rc.borda;
+  document.getElementById('fi-cor-fundo-txt')!.textContent = rc.fundo;
   setAnimacao('none');
   atualizarPreviewCard();
 }
@@ -324,24 +324,24 @@ function restaurarAparenciaPadrao() {
 function _aplicarVisualConfig() {
   const vc = CATALOGO_STATE.visualConfig;
   setVisualTipo(vc.tipo_visual || 'emoji');
-  document.getElementById('fi-emoji').value = vc.tipo_visual==='emoji' ? (vc.valor||'✨') : '✨';
+  document.getElementById('fi-emoji')!.value = vc.tipo_visual==='emoji' ? (vc.valor||'✨') : '✨';
   const imgUrl = vc.tipo_visual==='url' ? (vc.valor||'') : '';
-  document.getElementById('fi-imgurl').value = imgUrl;
+  document.getElementById('fi-imgurl')!.value = imgUrl;
   // Mostrar preview se houver imagem
   const wrap = document.getElementById('fi-img-preview-wrap');
   const previewImg = document.getElementById('fi-img-preview');
-  if (imgUrl) { previewImg.src = imgUrl; wrap.style.display = ''; }
-  else { wrap.style.display = 'none'; }
-  document.getElementById('fi-cor-borda').value = vc.cor_borda || '#888888';
-  document.getElementById('fi-cor-fundo').value = vc.cor_fundo || '#1a1a2e';
-  document.getElementById('fi-cor-borda-txt').textContent = vc.cor_borda || '#888888';
-  document.getElementById('fi-cor-fundo-txt').textContent = vc.cor_fundo || '#1a1a2e';
+  if (imgUrl) { previewImg!.src = imgUrl; wrap!.style!.display = ''; }
+  else { wrap!.style!.display = 'none'; }
+  document.getElementById('fi-cor-borda')!.value = vc.cor_borda || '#888888';
+  document.getElementById('fi-cor-fundo')!.value = vc.cor_fundo || '#1a1a2e';
+  document.getElementById('fi-cor-borda-txt')!.textContent = vc.cor_borda || '#888888';
+  document.getElementById('fi-cor-fundo-txt')!.textContent = vc.cor_fundo || '#1a1a2e';
   // animação
   document.querySelectorAll('.anim-btn').forEach(b=>{
-    const ativo = b.dataset.anim === (vc.animacao||'none');
-    b.style.background = ativo ? 'rgba(200,168,75,0.15)' : 'rgba(30,45,66,0.4)';
-    b.style.borderColor = ativo ? 'rgba(200,168,75,0.4)' : 'var(--borda)';
-    b.style.color = ativo ? 'var(--destaque)' : 'var(--suave)';
+    const ativo = b.dataset!.anim === (vc.animacao||'none');
+    b.style!.background = ativo ? 'rgba(200,168,75,0.15)' : 'rgba(30,45,66,0.4)';
+    b.style!.borderColor = ativo ? 'rgba(200,168,75,0.4)' : 'var(--borda)';
+    b.style!.color = ativo ? 'var(--destaque)' : 'var(--suave)';
   });
 }
 
@@ -355,8 +355,8 @@ function atualizarPreviewCard() {
   // Cor de borda e fundo (live do seletor)
   const borda = document.getElementById('fi-cor-borda')?.value || rc.borda;
   const fundo = document.getElementById('fi-cor-fundo')?.value || rc.fundo;
-  document.getElementById('fi-cor-borda-txt').textContent = borda;
-  document.getElementById('fi-cor-fundo-txt').textContent = fundo;
+  document.getElementById('fi-cor-borda-txt')!.textContent = borda;
+  document.getElementById('fi-cor-fundo-txt')!.textContent = fundo;
   CATALOGO_STATE.visualConfig.cor_borda = borda;
   CATALOGO_STATE.visualConfig.cor_fundo = fundo;
 
@@ -366,7 +366,7 @@ function atualizarPreviewCard() {
   if (tipo === 'url') {
     const url = document.getElementById('fi-imgurl')?.value;
     iconHtml = url ? `<img src="${url}" style="width:48px;height:48px;object-fit:cover;border-radius:6px" onerror="this.style.display='none'">` : '📦';
-    CATALOGO_STATE.visualConfig.valor = url;
+    CATALOGO_STATE!.visualConfig!.valor = url as any;
   } else {
     const em = document.getElementById('fi-emoji')?.value || '✨';
     CATALOGO_STATE.visualConfig.valor = em;
@@ -374,20 +374,20 @@ function atualizarPreviewCard() {
   }
 
   const card = document.getElementById('fi-preview-card');
-  card.style.borderColor = borda;
-  card.style.background = fundo;
+  card!.style!.borderColor = borda;
+  card!.style!.background = fundo;
   const anim = vc.animacao || 'none';
-  card.className = anim !== 'none' ? `anim-${anim}` : '';
+  card!.className = anim !== 'none' ? `anim-${anim}` : '';
 
-  document.getElementById('fi-preview-badge').textContent = rc.label;
-  document.getElementById('fi-preview-badge').className = `cat-item-badge ${rc.badge}`;
-  document.getElementById('fi-preview-icon').innerHTML = iconHtml;
-  document.getElementById('fi-preview-nome').textContent = nome;
-  document.getElementById('fi-preview-nivel').textContent = `Nível ${nivel}`;
+  document.getElementById('fi-preview-badge')!.textContent = rc.label;
+  document.getElementById('fi-preview-badge')!.className = `cat-item-badge ${rc.badge}`;
+  document.getElementById('fi-preview-icon')!.innerHTML = iconHtml;
+  document.getElementById('fi-preview-nome')!.textContent = nome;
+  document.getElementById('fi-preview-nivel')!.textContent = `Nível ${nivel}`;
 
   // Stats no preview
   const statsEl = document.getElementById('fi-preview-stats');
-  statsEl.innerHTML = CATALOGO_STATE.bonusLinhas.map(l=>{
+  statsEl!.innerHTML = CATALOGO_STATE.bonusLinhas.map(l=>{
     const n = parseFloat(l.valor)||0;
     const suf = l.modo==='pct' ? '%' : '';
     const cor = n >= 0 ? '#4eca7e' : '#e05040';
@@ -417,15 +417,15 @@ function adicionarLinhaBonus() {
 function renderLinhasBonus() {
   const el = document.getElementById('fi-bonus-lista');
   const temPenalidade = CATALOGO_STATE.bonusLinhas.some(l => parseFloat(l.valor) < 0);
-  document.getElementById('fi-tradeoff-aviso').style.display = temPenalidade ? '' : 'none';
+  document.getElementById('fi-tradeoff-aviso')!.style!.display = temPenalidade ? '' : 'none';
 
   if (!CATALOGO_STATE.bonusLinhas.length) {
-    el.innerHTML = '<div style="font-size:0.75rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Nenhum bônus definido</div>';
+    el!.innerHTML = '<div style="font-size:0.75rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Nenhum bônus definido</div>';
     return;
   }
   // Atributos numéricos disponíveis no jogo
   const attrsDef = (RPG_DATA?.attrDefs || []).filter(a => a.tipo === 'number' || a.tipo === 'status' || !a.tipo);
-  el.innerHTML = CATALOGO_STATE.bonusLinhas.map((l,i)=>{
+  el!.innerHTML = CATALOGO_STATE.bonusLinhas.map((l,i)=>{
     const n = parseFloat(l.valor)||0;
     const cor = n < 0 ? '#e05040' : '#4eca7e';
     const optsAttr = attrsDef.map(a =>
@@ -455,10 +455,10 @@ function adicionarEfeito() {
 function renderEfeitosLista() {
   const el = document.getElementById('fi-efeitos-lista');
   if (!CATALOGO_STATE.efeitosLista.length) {
-    el.innerHTML = '<div style="font-size:0.75rem;color:var(--suave);font-style:italic;text-align:center;padding:16px">Nenhum efeito. Clique em "＋ Efeito" para adicionar.</div>';
+    el!.innerHTML = '<div style="font-size:0.75rem;color:var(--suave);font-style:italic;text-align:center;padding:16px">Nenhum efeito. Clique em "＋ Efeito" para adicionar.</div>';
     return;
   }
-  el.innerHTML = CATALOGO_STATE.efeitosLista.map((ef,i)=>{
+  el!.innerHTML = CATALOGO_STATE.efeitosLista.map((ef,i)=>{
     const desc = _descreverEfeito(ef);
     return `<div style="padding:10px;background:rgba(123,47,190,0.08);border:1px solid rgba(123,47,190,0.25);border-radius:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
@@ -534,14 +534,14 @@ function _descreverEfeito(ef: any) {
 
 function toggleDropConfig() {
   const ativo = document.getElementById('fi-droppable')?.checked;
-  document.getElementById('fi-drop-config').style.display = ativo ? '' : 'none';
+  document.getElementById('fi-drop-config')!.style!.display = ativo ? '' : 'none';
 }
 
 // ── SALVAR ITEM ──
 async function salvarItem() {
-  const id = document.getElementById('fi-id').value;
-  const nome = document.getElementById('fi-nome').value.trim();
-  const tipo = document.getElementById('fi-tipo').value;
+  const id = document.getElementById('fi-id')!.value!;
+  const nome = document.getElementById('fi-nome')!.value!.trim!()!;
+  const tipo = document.getElementById('fi-tipo')!.value!;
   if (!nome) { mostrarToast('Nome obrigatório', 'erro'); trocarAbaItem('identidade'); return; }
   if (!tipo) { mostrarToast('Tipo canônico obrigatório', 'erro'); trocarAbaItem('identidade'); return; }
 
@@ -561,8 +561,8 @@ async function salvarItem() {
   }
 
   const vc = { ...CATALOGO_STATE.visualConfig };
-  if (vc.tipo_visual === 'emoji') vc.valor = document.getElementById('fi-emoji').value || '✨';
-  if (vc.tipo_visual === 'url') vc.valor = document.getElementById('fi-imgurl').value || '';
+  if (vc.tipo_visual === 'emoji') vc.valor = document.getElementById('fi-emoji')!.value! || '✨';
+  if (vc.tipo_visual === 'url') vc.valor = document.getElementById('fi-imgurl')!.value! || '';
 
   const iconeEmoji = vc.tipo_visual === 'emoji' ? (vc.valor || '✨') : (TIPO_DEFAULTS[tipo]?.emoji || '📦');
 
@@ -571,27 +571,27 @@ async function salvarItem() {
     nome,
     icone: iconeEmoji,
     tipo_canonico: tipo,
-    subtipo: document.getElementById('fi-subtipo').value.trim() || null,
-    raridade: document.getElementById('fi-raridade').value,
-    descricao: document.getElementById('fi-descricao').value.trim() || null,
-    slot_padrao: document.getElementById('fi-slot').value || null,
-    grupo_atributo_base: document.getElementById('fi-grupo').value || null,
-    aceita_amuleto_aninhado: document.getElementById('fi-aceita-amuleto').checked,
+    subtipo: document.getElementById('fi-subtipo')!.value!.trim!()! || null,
+    raridade: document.getElementById('fi-raridade')!.value!,
+    descricao: document.getElementById('fi-descricao')!.value!.trim!()! || null,
+    slot_padrao: document.getElementById('fi-slot')!.value! || null,
+    grupo_atributo_base: document.getElementById('fi-grupo')!.value! || null,
+    aceita_amuleto_aninhado: document.getElementById('fi-aceita-amuleto')!.checked!,
     atributos_bonus: Object.keys(bonusObj).length ? bonusObj : null,
     trade_offs: Object.keys(tradeoffs).length ? tradeoffs : null,
     efeitos: CATALOGO_STATE.efeitosLista.length ? CATALOGO_STATE.efeitosLista : null,
     visual_config: vc,
-    nivel: parseInt(document.getElementById('fi-nivel').value) || 1,
-    nivel_minimo_uso: parseInt(document.getElementById('fi-nivel-min').value) || 1,
-    unico_no_mundo: document.getElementById('fi-unico').checked,
-    droppable: document.getElementById('fi-droppable').checked,
-    drop_rate: document.getElementById('fi-droppable').checked ? (parseFloat(document.getElementById('fi-drop-rate').value)||5) : null,
-    tier_min: document.getElementById('fi-droppable').checked ? (parseInt(document.getElementById('fi-tier-min').value)||1) : null,
-    tier_max: document.getElementById('fi-droppable').checked ? (parseInt(document.getElementById('fi-tier-max').value)||5) : null
+    nivel: parseInt(document.getElementById('fi-nivel')!.value!) || 1,
+    nivel_minimo_uso: parseInt(document.getElementById('fi-nivel-min')!.value!) || 1,
+    unico_no_mundo: document.getElementById('fi-unico')!.checked!,
+    droppable: document.getElementById('fi-droppable')!.checked!,
+    drop_rate: document.getElementById('fi-droppable')!.checked! ? (parseFloat(document.getElementById('fi-drop-rate')!.value!)||5) : null,
+    tier_min: document.getElementById('fi-droppable')!.checked! ? (parseInt(document.getElementById('fi-tier-min')!.value!)||1) : null,
+    tier_max: document.getElementById('fi-droppable')!.checked! ? (parseInt(document.getElementById('fi-tier-max')!.value!)||5) : null
   };
 
   const btn = document.getElementById('fi-btn-salvar');
-  btn.disabled = true; btn.textContent = 'Salvando...';
+  btn!.disabled = true; btn!.textContent = 'Salvando...';
   try {
     let savedRow = null;
     if (id) {
@@ -615,7 +615,7 @@ async function salvarItem() {
   } catch (e: any) {
     mostrarToast('Erro: ' + (e.message || 'Falha ao salvar'), 'erro');
   } finally {
-    btn.disabled = false; btn.textContent = '💾 SALVAR ITEM';
+    btn!.disabled = false; btn!.textContent = '💾 SALVAR ITEM';
   }
 }
 
@@ -634,8 +634,8 @@ async function duplicarItemAtual() {
 }
 
 async function deletarItemAtual() {
-  const id = document.getElementById('fi-id').value;
-  const nome = document.getElementById('fi-nome').value;
+  const id = document.getElementById('fi-id')!.value!;
+  const nome = document.getElementById('fi-nome')!.value!;
   if (!id) return;
   if (!confirm(`Deletar "${nome}" permanentemente?`)) return;
   try {
@@ -651,15 +651,15 @@ let _darItemId: any = null;
 function abrirDarItem(itemId: any) {
   _darItemId = itemId;
   const it = CATALOGO_STATE.itens.find(x=>x.id==itemId);
-  document.getElementById('dar-item-nome').textContent = it?.nome || 'item';
+  document.getElementById('dar-item-nome')!.textContent = it?.nome || 'item';
   const sel = document.getElementById('dar-item-personagem');
   const chars = RPG_DATA?.characters || [];
-  sel.innerHTML = '<option value="">Selecione...</option>' + chars.map(c=>`<option value="${c.nome}">${c.nome}</option>`).join('');
-  document.getElementById('modal-dar-item-overlay').style.display = 'flex';
+  sel!.innerHTML = '<option value="">Selecione...</option>' + chars.map(c=>`<option value="${c.nome}">${c.nome}</option>`).join('');
+  document.getElementById('modal-dar-item-overlay')!.style!.display = 'flex';
 }
 
 async function confirmarDarItem() {
-  const personagem = document.getElementById('dar-item-personagem').value;
+  const personagem = document.getElementById('dar-item-personagem')!.value!;
   if (!personagem) { mostrarToast('Selecione um personagem', 'erro'); return; }
   const it = CATALOGO_STATE.itens.find(x=>x.id==_darItemId);
   if (!it) return;
@@ -680,7 +680,7 @@ async function confirmarDarItem() {
       headers:{'Prefer':'return=minimal'}
     });
     mostrarToast(`✓ ${it.nome} dado a ${personagem}`, 'ok');
-    document.getElementById('modal-dar-item-overlay').style.display = 'none';
+    document.getElementById('modal-dar-item-overlay')!.style!.display = 'none';
     // Broadcast
     if (typeof emitirEvento === 'function') {
       emitirEvento('item_dropado', {
@@ -700,7 +700,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const tabBtns = document.querySelector('#tabelas-mestre-btns');
   if (tabBtns) {
     const btn = document.createElement('button');
-    btn.style.cssText='padding:7px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;letter-spacing:0.06em';
+    btn.style!.cssText='padding:7px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;letter-spacing:0.06em';
     btn.textContent = '📦 Itens';
     btn.setAttribute('data-mestre-only','');
     btn.onclick = abrirCatalogo;
@@ -764,14 +764,14 @@ async function abrirInventario(nomeChar: any) {
   if (!INV.itemDefs.length && (RPG_DATA?.rpgId || CURRENT_RPG?.id)) {
     await invCarregarDados(RPG_DATA?.rpgId || CURRENT_RPG?.id);
   }
-  document.getElementById('inv-titulo').textContent = `🎒 ${nomeChar}`;
-  document.getElementById('modal-inv-overlay').style.display = 'flex';
+  document.getElementById('inv-titulo')!.textContent = `🎒 ${nomeChar}`;
+  document.getElementById('modal-inv-overlay')!.style!.display = 'flex';
   invTrocarAba('equipamentos');
   await carregarInventarioChar(c.id);
 }
 
 function fecharInventario() {
-  document.getElementById('modal-inv-overlay').style.display = 'none';
+  document.getElementById('modal-inv-overlay')!.style!.display = 'none';
 }
 
 // ── I2 — CARREGAR INVENTÁRIO ──────────────────────────────────────────────
@@ -814,7 +814,7 @@ function renderInvSlots() {
     const amuleto  = itens.find((i: any) => i.equipado && i.slot_equipado === slot.id + '_amuleto');
     html += renderSlotCard(slot, equipado, amuleto, podeEditar, charNivel);
   }
-  document.getElementById('inv-slots-grid').innerHTML = html;
+  document.getElementById('inv-slots-grid')!.innerHTML = html;
 }
 
 function renderSlotCard(slot: any, equipado: any, amuleto: any, podeEditar: any, charNivel: any) {
@@ -869,14 +869,14 @@ function renderInvMochila() {
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const podeEditar = podeEditarPersonagem(INV.charAtivo);
   const wrapper  = document.getElementById('inv-btn-adicionar-wrap');
-  if (wrapper) wrapper.style.display = isMestre ? '' : 'none';
+  if (wrapper) wrapper.style!.display = isMestre ? '' : 'none';
 
   const el = document.getElementById('inv-mochila-lista');
   if (!itens.length) {
-    el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--suave);font-style:italic;font-size:0.85rem">Mochila vazia</div>';
+    el!.innerHTML = '<div style="text-align:center;padding:30px;color:var(--suave);font-style:italic;font-size:0.85rem">Mochila vazia</div>';
     return;
   }
-  el.innerHTML = itens.map((inv: any) => {
+  el!.innerHTML = itens.map((inv: any) => {
     const it  = inv.item || {};
     const vc  = it.visual_config || {};
     const icon = _itemIcon(it);
@@ -927,7 +927,7 @@ function renderInvCarga() {
   const el = document.getElementById('inv-carga-info');
   if (el) {
     el.textContent = `Mochila: ${cargaAtual}/${cargaMax}`;
-    el.style.color = pct >= 0.8 ? cor : 'var(--suave)';
+    el.style!.color = pct >= 0.8 ? cor : 'var(--suave)';
   }
   if (pct >= 1.0) mostrarToast('⚠️ Mochila cheia! Não é possível carregar mais.', 'erro');
 }
@@ -1120,7 +1120,7 @@ function invAbrirPosicionarEquip(invId: any) {
   // Cria overlay simplificado — apenas posicionamento, sem edição de aparência
   const ov = document.createElement('div');
   ov.id = 'aeq-overlay'; // reutiliza o mesmo id para as funções de canvas funcionarem
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:9400;display:flex;flex-direction:column;overflow:hidden';
+  ov.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:9400;display:flex;flex-direction:column;overflow:hidden';
   ov.innerHTML = `
   <div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:9px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <div>
@@ -1195,18 +1195,18 @@ async function invConfirmarPosicionarEquip() {
   if (saveBtn) {
     saveBtn.disabled = true;
     saveBtn.textContent = '⏳ Salvando...';
-    saveBtn.style.opacity = '0.7';
+    saveBtn.style!.opacity = '0.7';
   }
 
   // Lê posição atual do working state + inputs
   const w = window._aeqWorking || {};
-  const x       = parseFloat(document.getElementById('aeq-x')?.value)      ?? w.x      ?? 50;
-  const y       = parseFloat(document.getElementById('aeq-y')?.value)      ?? w.y      ?? 45;
-  const escala  = parseFloat(document.getElementById('aeq-escala')?.value) ?? w.escala ?? 90;
-  const rotacao = parseFloat(document.getElementById('aeq-rot-num')?.value)?? w.rotacao?? 0;
-  const rotacaoH = parseFloat(document.getElementById('aeq-roth-num')?.value) || w.rotacaoH || 0;
-  const skewX   = parseFloat(document.getElementById('aeq-skewx-num')?.value) || w.skewX || 0;
-  const skewY   = parseFloat(document.getElementById('aeq-skewy-num')?.value) || w.skewY || 0;
+  const x       = parseFloat(document.getElementById('aeq-x')?.value!)      ?? w.x      ?? 50;
+  const y       = parseFloat(document.getElementById('aeq-y')?.value!)      ?? w.y      ?? 45;
+  const escala  = parseFloat(document.getElementById('aeq-escala')?.value!) ?? w.escala ?? 90;
+  const rotacao = parseFloat(document.getElementById('aeq-rot-num')?.value!)?? w.rotacao?? 0;
+  const rotacaoH = parseFloat(document.getElementById('aeq-roth-num')?.value!) || w.rotacaoH || 0;
+  const skewX   = parseFloat(document.getElementById('aeq-skewx-num')?.value!) || w.skewX || 0;
+  const skewY   = parseFloat(document.getElementById('aeq-skewy-num')?.value!) || w.skewY || 0;
   const camada  = w.camada || 'frente';
 
   // Atualiza apenas posição/escala/rotação/camada — preserva img, svg, bonus_attrs e resto
@@ -1225,7 +1225,7 @@ async function invConfirmarPosicionarEquip() {
 
   try {
     await sb(
-      `characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(ctx.nomeChar)}`,
+      `characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(ctx.nomeChar)}`,
       { method: 'PATCH', body: JSON.stringify({ custom_attrs: novoCa }) }
     );
     c.custom_attrs = novoCa;
@@ -1251,7 +1251,7 @@ async function invConfirmarPosicionarEquip() {
     }
     if (typeof renderAttrView === 'function') renderAttrView?.(ctx.nomeChar);
     if (MAPA_STATE?.mapaAtualId) {
-      const entry = (RPG_DATA.mapas || []).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+      const entry = (RPG_DATA!.mapas || []).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
       if (entry) mapaRenderTokens(entry.mapa);
     }
 
@@ -1260,10 +1260,10 @@ async function invConfirmarPosicionarEquip() {
       if (!composedUrl) return;
       novaAparencia.composed_img = composedUrl;
       c.custom_attrs = { ...c.custom_attrs, aparencia: novaAparencia };
-      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(ctx.nomeChar)}`,
+      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(ctx.nomeChar)}`,
         { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) }
       ).then(() => {
-        if (MAPA_STATE?.mapaAtualId) { const entry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId); if(entry) mapaRenderTokens(entry.mapa); }
+        if (MAPA_STATE?.mapaAtualId) { const entry = (RPG_DATA!.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId); if(entry) mapaRenderTokens(entry.mapa); }
         if (typeof renderCharView === 'function' && typeof CHAR_VIEW !== 'undefined' && CHAR_VIEW === ctx.nomeChar) renderCharView(ctx.nomeChar);
         renderInvVisual();
         if (window._apmodNome === ctx.nomeChar && typeof apmodAtualizarPreview === 'function') apmodAtualizarPreview();
@@ -1272,7 +1272,7 @@ async function invConfirmarPosicionarEquip() {
 
   } catch(err) {
     mostrarToast('Erro ao salvar posição', 'erro');
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Salvar Posição'; saveBtn.style.opacity = '1'; }
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Salvar Posição'; saveBtn.style!.opacity = '1'; }
   }
 }
 function invClicarItem(invId: any) {
@@ -1309,8 +1309,8 @@ function invClicarItem(invId: any) {
     ...efeitos.map((ef: any)=>`<div style="color:#a070d8;font-size:0.72rem">${_descreverEfeito(ef)}</div>`)
   ].join('') || '<div style="color:var(--suave);font-style:italic;font-size:0.78rem">Sem bônus</div>';
 
-  document.getElementById('inv-detail-titulo').textContent = it.nome || 'Item';
-  document.getElementById('inv-detail-corpo').innerHTML = `
+  document.getElementById('inv-detail-titulo')!.textContent = it.nome || 'Item';
+  document.getElementById('inv-detail-corpo')!.innerHTML = `
     <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:14px">
       <div style="width:64px;height:64px;border-radius:10px;background:${corFundo};border:2px solid ${corBorda};display:flex;align-items:center;justify-content:center;font-size:2.2rem;flex-shrink:0">${icon}</div>
       <div>
@@ -1329,40 +1329,40 @@ function invClicarItem(invId: any) {
 
   // Botões de ação
   const btns = document.getElementById('inv-detail-btns');
-  btns.innerHTML = '';
+  btns!.innerHTML = '';
 
   if (podeEditar) {
     if (inv.equipado) {
       const b = document.createElement('button');
       b.textContent = '🔽 Desequipar';
-      b.style.cssText = 'width:100%;padding:12px;background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.35);border-radius:8px;color:#e05040;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;letter-spacing:0.06em';
+      b.style!.cssText = 'width:100%;padding:12px;background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.35);border-radius:8px;color:#e05040;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;letter-spacing:0.06em';
       b.onclick = () => invDesequipar(invId);
-      btns.appendChild(b);
+      btns!.appendChild(b);
     } else {
       const b = document.createElement('button');
       b.textContent = inv.bloqueado_por_nivel ? `🔒 Bloqueado (Nv.${it.nivel_minimo_uso} necessário)` : '⬆ Equipar';
       b.disabled = !!inv.bloqueado_por_nivel;
-      b.style.cssText = `width:100%;padding:12px;background:${inv.bloqueado_por_nivel?'rgba(200,168,75,0.05)':'rgba(79,163,209,0.12)'};border:1px solid ${inv.bloqueado_por_nivel?'rgba(200,168,75,0.2)':'rgba(79,163,209,0.35)'};border-radius:8px;color:${inv.bloqueado_por_nivel?'var(--suave)':'var(--primario-v)'};font-family:var(--fonte-d);font-size:0.72rem;cursor:${inv.bloqueado_por_nivel?'not-allowed':'pointer'};letter-spacing:0.06em`;
+      b.style!.cssText = `width:100%;padding:12px;background:${inv.bloqueado_por_nivel?'rgba(200,168,75,0.05)':'rgba(79,163,209,0.12)'};border:1px solid ${inv.bloqueado_por_nivel?'rgba(200,168,75,0.2)':'rgba(79,163,209,0.35)'};border-radius:8px;color:${inv.bloqueado_por_nivel?'var(--suave)':'var(--primario-v)'};font-family:var(--fonte-d);font-size:0.72rem;cursor:${inv.bloqueado_por_nivel?'not-allowed':'pointer'};letter-spacing:0.06em`;
       if (!inv.bloqueado_por_nivel) b.onclick = () => invEquipar(invId);
-      btns.appendChild(b);
+      btns!.appendChild(b);
     }
 
     // Botão remover
     const bRem = document.createElement('button');
     bRem.textContent = '🗑 Remover do inventário';
-    bRem.style.cssText = 'width:100%;padding:10px;background:none;border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#e05040;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;opacity:0.7';
+    bRem.style!.cssText = 'width:100%;padding:10px;background:none;border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#e05040;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;opacity:0.7';
     bRem.onclick = () => invRemoverItem(invId);
-    btns.appendChild(bRem);
+    btns!.appendChild(bRem);
   }
 
   // Fechar
   const bFechar = document.createElement('button');
   bFechar.textContent = 'Fechar';
-  bFechar.style.cssText = 'width:100%;padding:10px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer';
-  bFechar.onclick = () => document.getElementById('modal-inv-item-overlay').style.display='none';
-  btns.appendChild(bFechar);
+  bFechar.style!.cssText = 'width:100%;padding:10px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer';
+  bFechar.onclick = () => document.getElementById('modal-inv-item-overlay')!.style!.display='none';
+  btns!.appendChild(bFechar);
 
-  document.getElementById('modal-inv-item-overlay').style.display = 'flex';
+  document.getElementById('modal-inv-item-overlay')!.style!.display = 'flex';
 }
 
 // ── I3 — EQUIPAR ─────────────────────────────────────────────────────────
@@ -1453,7 +1453,7 @@ async function invEquipar(invId: any) {
       (INV.inventarios as any)[charId][idx].slot_equipado = slotAlvo;
       (INV.inventarios as any)[charId][idx].bonus_snapshot = snapshot;
     }
-    document.getElementById('modal-inv-item-overlay').style.display = 'none';
+    document.getElementById('modal-inv-item-overlay')!.style!.display = 'none';
     mostrarToast(`✓ ${it.nome} equipado!`, 'ok');
     renderInvCompleto();
     if (typeof renderCharView === 'function') renderCharView(INV.charAtivo);
@@ -1511,7 +1511,7 @@ async function invDesequipar(invId: any, silencioso = false) {
       (INV.inventarios as any)[charId][idx].bonus_snapshot = null;
     }
     if (!silencioso) {
-      document.getElementById('modal-inv-item-overlay').style.display = 'none';
+      document.getElementById('modal-inv-item-overlay')!.style!.display = 'none';
       mostrarToast(`✓ ${it.nome} desequipado`, '');
       renderInvCompleto();
       if (typeof renderCharView === 'function') renderCharView(INV.charAtivo);
@@ -1532,7 +1532,7 @@ async function invRemoverItem(invId: any) {
   try {
     await sb(`inventario?id=eq.${invId}`, { method: 'DELETE', headers:{'Prefer':'return=minimal'} });
     (INV.inventarios as any)[charId] = (INV.inventarios as any)[charId].filter((i: any) => i.id !== invId);
-    document.getElementById('modal-inv-item-overlay').style.display = 'none';
+    document.getElementById('modal-inv-item-overlay')!.style!.display = 'none';
     mostrarToast('Item removido', '');
     renderInvCompleto();
   } catch (e: any) { mostrarToast('Erro: ' + e.message, 'erro'); }
@@ -1541,15 +1541,15 @@ async function invRemoverItem(invId: any) {
 // ── ADICIONAR ITEM (MESTRE) ───────────────────────────────────────────────
 async function abrirAdicionarItemInv() {
   const rpgId = CURRENT_RPG?.id; if (!rpgId) return;
-  document.getElementById('modal-add-inv-overlay').style.display = 'flex';
-  document.getElementById('add-inv-busca').value = '';
+  document.getElementById('modal-add-inv-overlay')!.style!.display = 'flex';
+  document.getElementById('add-inv-busca')!.value = '';
   // Carregar catálogo
   try {
     const data = await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&order=nome`);
     INV.catalogo = data || [];
     filtrarAddInv();
   } catch (e: any) {
-    document.getElementById('add-inv-lista').innerHTML = `<div style="color:var(--perigo);padding:20px">${e.message}</div>`;
+    document.getElementById('add-inv-lista')!.innerHTML = `<div style="color:var(--perigo);padding:20px">${e.message}</div>`;
   }
 }
 
@@ -1558,7 +1558,7 @@ function filtrarAddInv() {
   const itens = INV.catalogo.filter((it: any) => !busca || it.nome.toLowerCase().includes(busca));
   const c = RPG_DATA?.characters?.find(x=>x.nome===INV.charAtivo);
   const charNivel = c?.custom_attrs?.nivel || 1;
-  document.getElementById('add-inv-lista').innerHTML = itens.slice(0, 50).map((it: any) => {
+  document.getElementById('add-inv-lista')!.innerHTML = itens.slice(0, 50).map((it: any) => {
     const rc = RARIDADE_CORES[it.raridade] || RARIDADE_CORES.comum;
     const icon = _itemIcon(it);
     const bloq = charNivel < (it.nivel_minimo_uso || 1);
@@ -1594,7 +1594,7 @@ async function addInvConfirmar(catalogId: any) {
     };
     const res = await sb('inventario', { method:'POST', body: JSON.stringify(payload) });
     mostrarToast(`✓ ${it.nome} adicionado${bloq?' (bloqueado, Nv.'+it.nivel_minimo_uso+')':''}`, 'ok');
-    document.getElementById('modal-add-inv-overlay').style.display = 'none';
+    document.getElementById('modal-add-inv-overlay')!.style!.display = 'none';
     await carregarInventarioChar(charId);
     // Broadcast
     _invBroadcastDrop(it, INV.charAtivo, 'doacao_mestre');
@@ -1721,13 +1721,13 @@ async function renderInvMoedas() {
 
 function invTrocarAba(aba: any) {
   document.querySelectorAll('.inv-tab').forEach(b=>{
-    const ativo = b.dataset.tab === aba;
+    const ativo = b.dataset!.tab === aba;
     b.classList.toggle('active', ativo);
-    b.style.color = ativo ? 'var(--primario)' : 'var(--suave)';
-    b.style.borderBottomColor = ativo ? 'var(--primario)' : 'transparent';
+    b.style!.color = ativo ? 'var(--primario)' : 'var(--suave)';
+    b.style!.borderBottomColor = ativo ? 'var(--primario)' : 'transparent';
   });
   document.querySelectorAll('.inv-aba').forEach(d=>{
-    d.style.display = d.id === 'inv-aba-' + aba ? 'block' : 'none';
+    d.style!.display = d.id === 'inv-aba-' + aba ? 'block' : 'none';
   });
   if (aba === 'moedas') renderInvMoedas();
   if (aba === 'bau') renderInvBau();
@@ -1739,7 +1739,7 @@ function _criarModalMoedaTxSeNecessario() {
   if (document.getElementById('modal-moeda-tx-overlay')) return;
   const el = document.createElement('div');
   el.id = 'modal-moeda-tx-overlay';
-  el.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9500;align-items:center;justify-content:center;padding:16px';
+  el.style!.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9500;align-items:center;justify-content:center;padding:16px';
   el.innerHTML = `
     <div style="background:var(--escuro,#0d1520);border:1px solid var(--borda,rgba(79,163,209,0.2));border-radius:14px;padding:24px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.7)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
@@ -1779,28 +1779,28 @@ function _criarModalMoedaTxSeNecessario() {
 function abrirTxMoeda(tipo: any, denomDefault: any) {
   _criarModalMoedaTxSeNecessario();
   const overlay = document.getElementById('modal-moeda-tx-overlay');
-  document.getElementById('moeda-tx-tipo').value  = tipo;
+  document.getElementById('moeda-tx-tipo')!.value  = tipo;
   const titulos: Record<string, any> = { dar:'＋ Adicionar Moedas', remover:'− Remover Moedas', transferir:'→ Transferir Moedas' };
-  document.getElementById('moeda-tx-titulo').textContent = titulos[tipo] || tipo;
+  document.getElementById('moeda-tx-titulo')!.textContent = titulos[tipo] || tipo;
   const denoms = CURRENT_RPG?.theme?.denominacoes_moeda || MOEDAS_DEFAULTS;
   const sel = document.getElementById('moeda-tx-denom');
-  sel.innerHTML = denoms.map((d: any)=>`<option value="${d.nome}" ${d.nome===denomDefault?'selected':''}>${d.emoji} ${d.nome}</option>`).join('');
-  document.getElementById('moeda-tx-qtd').value = (1) as any;
-  document.getElementById('moeda-tx-desc').value = '';
+  sel!.innerHTML = denoms.map((d: any)=>`<option value="${d.nome}" ${d.nome===denomDefault?'selected':''}>${d.emoji} ${d.nome}</option>`).join('');
+  document.getElementById('moeda-tx-qtd')!.value = (1) as any;
+  document.getElementById('moeda-tx-desc')!.value = '';
   const destWrap = document.getElementById('moeda-tx-destino-wrap');
-  destWrap.style.display = tipo === 'transferir' ? '' : 'none';
+  destWrap!.style!.display = tipo === 'transferir' ? '' : 'none';
   if (tipo === 'transferir') {
     const chars = (RPG_DATA?.characters||[]).filter(c=>c.nome!==INV.charAtivo);
-    document.getElementById('moeda-tx-destino').innerHTML = chars.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+    document.getElementById('moeda-tx-destino')!.innerHTML = chars.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
   }
-  overlay.style.display = 'flex';
+  overlay!.style!.display = 'flex';
 }
 
 async function confirmarTransacaoMoeda() {
-  const tipo    = document.getElementById('moeda-tx-tipo').value;
-  const denom   = document.getElementById('moeda-tx-denom').value;
-  const qtd     = parseInt(document.getElementById('moeda-tx-qtd').value) || 0;
-  const desc    = document.getElementById('moeda-tx-desc').value.trim();
+  const tipo    = document.getElementById('moeda-tx-tipo')!.value!;
+  const denom   = document.getElementById('moeda-tx-denom')!.value!;
+  const qtd     = parseInt(document.getElementById('moeda-tx-qtd')!.value!) || 0;
+  const desc    = document.getElementById('moeda-tx-desc')!.value!.trim!()!;
   const charId  = INV.charId;
   if (!qtd || qtd <= 0) { mostrarToast('Quantidade inválida', 'erro'); return; }
 
@@ -1810,11 +1810,11 @@ async function confirmarTransacaoMoeda() {
       await _moedaLog(charId, null, denom, qtd, tipo==='dar'?'receber':'remover', desc);
       mostrarToast(`✓ ${tipo==='dar'?'Adicionado':'Removido'}: ${qtd} ${denom}`, 'ok');
     } else if (tipo === 'transferir') {
-      const destId = document.getElementById('moeda-tx-destino').value;
+      const destId = document.getElementById('moeda-tx-destino')!.value!;
       if (!destId) { mostrarToast('Selecione um destino', 'erro'); return; }
       // Verificar saldo antes de debitar
       const saldoAtual = await sb(
-        `moedas?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}&dono_id=eq.${charId}&denominacao=eq.${encodeURIComponent(denom)}&select=quantidade`
+        `moedas?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}&dono_id=eq.${charId}&denominacao=eq.${encodeURIComponent(denom!)}&select=quantidade`
       ).catch((): any[] => []);
       const saldo = saldoAtual?.[0]?.quantidade || 0;
       if (saldo < qtd) { mostrarToast(`❌ Saldo insuficiente — você tem ${saldo} ${denom}`, 'erro'); return; }
@@ -1824,7 +1824,7 @@ async function confirmarTransacaoMoeda() {
       const destChar = RPG_DATA?.characters?.find(x=>x.id==destId);
       mostrarToast(`✓ ${qtd} ${denom} transferido(s) para ${destChar?.nome||'destino'}`, 'ok');
     }
-    document.getElementById('modal-moeda-tx-overlay').style.display = 'none';
+    document.getElementById('modal-moeda-tx-overlay')!.style!.display = 'none';
     renderInvMoedas();
   } catch (e: any) { mostrarToast('Erro: ' + e.message, 'erro'); }
 }
@@ -1908,12 +1908,12 @@ function _cfgMoedasMover(i: any, dir: any) {
 function cfgMoedasAdicionar() {
   const nome  = document.getElementById('cfg-moeda-nova-nome')?.value?.trim();
   const emoji = document.getElementById('cfg-moeda-nova-emoji')?.value?.trim() || '🪙';
-  const base  = parseInt(document.getElementById('cfg-moeda-nova-base')?.value) || 1;
+  const base  = parseInt(document.getElementById('cfg-moeda-nova-base')?.value!) || 1;
   if (!nome) { mostrarToast('Digite o nome da moeda', 'aviso'); return; }
   _cfgMoedasTemp.push({ nome, emoji, cor: '#c8a84b', valor_base: base });
-  document.getElementById('cfg-moeda-nova-nome').value  = '';
-  document.getElementById('cfg-moeda-nova-emoji').value = '';
-  document.getElementById('cfg-moeda-nova-base').value  = '';
+  document.getElementById('cfg-moeda-nova-nome')!.value  = '';
+  document.getElementById('cfg-moeda-nova-emoji')!.value = '';
+  document.getElementById('cfg-moeda-nova-base')!.value  = '';
   cfgMoedasRender();
 }
 
@@ -2002,7 +2002,7 @@ function _patchWsItemDropado(payload: any) {
     return `<div style="font-size:0.68rem;color:${n>=0?'#4eca7e':'#e05040'}">${n>=0?'↑ +':'↓ '}${n} ${k}</div>`;
   }).join('');
   const card = document.createElement('div');
-  card.style.cssText = `position:fixed;top:80px;right:12px;z-index:9999;width:160px;border-radius:10px;padding:12px;text-align:center;border:2px solid ${corBorda};background:${corFundo};box-shadow:0 8px 32px rgba(0,0,0,0.6);animation:slideDown 0.25s ease-out;opacity:0;transition:opacity 0.2s`;
+  card.style!.cssText = `position:fixed;top:80px;right:12px;z-index:9999;width:160px;border-radius:10px;padding:12px;text-align:center;border:2px solid ${corBorda};background:${corFundo};box-shadow:0 8px 32px rgba(0,0,0,0.6);animation:slideDown 0.25s ease-out;opacity:0;transition:opacity 0.2s`;
   card.className = animCls;
   card.innerHTML = `
     <div class="cat-item-badge ${rc.badge}" style="margin-bottom:6px">${rc.label}</div>
@@ -2012,9 +2012,9 @@ function _patchWsItemDropado(payload: any) {
     ${bonusHtml}
     ${data.personagem_destino?`<div style="font-size:0.65rem;color:#4eca7e;margin-top:6px;border-top:1px solid rgba(255,255,255,0.08);padding-top:4px">→ ${data.personagem_destino}</div>`:''}`;
   document.body.appendChild(card);
-  requestAnimationFrame(() => { card.style.opacity = '1'; });
+  requestAnimationFrame(() => { card.style!.opacity = '1'; });
   setTimeout(() => {
-    card.style.opacity = '0';
+    card.style!.opacity = '0';
     setTimeout(() => card.remove(), 300);
   }, dur);
 }
@@ -2114,7 +2114,7 @@ async function itemGerarNome() {
   const rar = document.getElementById('fi-raridade')?.value || 'comum';
   const partes = await _gerarPartesNome(RPG_DATA?.rpgId, tipo, subtipo, rar);
   const painelPartes = document.getElementById('fi-nome-partes');
-  if (painelPartes) painelPartes.style.display = 'block';
+  if (painelPartes) painelPartes.style!.display = 'block';
   const matEl = document.getElementById('fi-nome-material');
   const adjEl = document.getElementById('fi-nome-adjetivo');
   const oriEl = document.getElementById('fi-nome-origem');
@@ -2151,7 +2151,7 @@ function itemAplicarNomeGerado() {
   if (typeof itemAtualizarPreview === 'function') itemAtualizarPreview();
   // Fechar painel de partes
   const painel = document.getElementById('fi-nome-partes');
-  if (painel) painel.style.display = 'none';
+  if (painel) painel.style!.display = 'none';
 }
 
 // Exportar função pública de geração de nome
@@ -2530,7 +2530,7 @@ async function _executarDropNPC(rpgId: any, npcNome: any, npcChar: any) {
       await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(npcNome)}`,
         { method:'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
       // Re-renderizar token no mapa
-      const entry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE?.mapaAtualId);
+      const entry = (RPG_DATA!.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE?.mapaAtualId);
       if (entry) mapaRenderTokens(entry.mapa);
     }
   } catch(e) {}
@@ -2681,14 +2681,14 @@ window.abrirModalLootNPC = async function(npcNome: any) {
   // Popular destino
   const chars = (RPG_DATA?.characters||[]).filter(c=>(c.hp_atual??c.custom_attrs?.hp_max??100)>0 && (c.custom_attrs?.tipo==='jogador'||c.custom_attrs?.tipo==='personagem'));
   const sel = document.getElementById('loot-destino-sel');
-  sel.innerHTML = `<option value="">Selecione o personagem...</option>` + chars.map(c=>`<option value="${c.id}|${c.nome}">${c.nome}</option>`).join('');
+  sel!.innerHTML = `<option value="">Selecione o personagem...</option>` + chars.map(c=>`<option value="${c.id}|${c.nome}">${c.nome}</option>`).join('');
 
-  document.getElementById('loot-titulo').textContent = `💰 Loot de ${npcNome}`;
-  document.getElementById('loot-subtitulo').textContent = `${LOOT_STATE.itens.length} ite(ns) disponíve(is) — clique para selecionar`;
+  document.getElementById('loot-titulo')!.textContent = `💰 Loot de ${npcNome}`;
+  document.getElementById('loot-subtitulo')!.textContent = `${LOOT_STATE.itens.length} ite(ns) disponíve(is) — clique para selecionar`;
   renderLootCards();
 
   const overlay = document.getElementById('modal-loot-overlay');
-  overlay.style.display = 'flex';
+  overlay!.style!.display = 'flex';
 };
 
 function renderLootCards() {
@@ -2754,7 +2754,7 @@ window.confirmarSaque = async function() {
 };
 
 window.fecharModalLoot = function() {
-  document.getElementById('modal-loot-overlay').style.display = 'none';
+  document.getElementById('modal-loot-overlay')!.style!.display = 'none';
 };
 
 
@@ -2890,12 +2890,12 @@ async function abrirModalTrade(charNome: any, charId: any) {
   TRADE_STATE.itens_selecionados = new Set();
   TRADE_STATE.proposta_pendente = null;
 
-  document.getElementById('trade-subtitulo').textContent = `De: ${charNome}`;
+  document.getElementById('trade-subtitulo')!.textContent = `De: ${charNome}`;
 
   // Popular destino (outros personagens)
   const chars = (RPG_DATA?.characters||[]).filter(c=>c.nome !== charNome && (c.hp_atual??100)>0 && (c.custom_attrs?.tipo==='jogador'||c.custom_attrs?.tipo==='personagem'));
   const sel = document.getElementById('trade-destino-sel');
-  sel.innerHTML = `<option value="">Para quem...</option>` + chars.map(c=>`<option value="${c.id}|${c.nome}">${c.nome}</option>`).join('');
+  sel!.innerHTML = `<option value="">Para quem...</option>` + chars.map(c=>`<option value="${c.id}|${c.nome}">${c.nome}</option>`).join('');
 
   // Carregar itens da mochila do remetente
   let mochila = ((INV.inventarios as any)[charId]||[]).filter((i: any)=>!i.equipado);
@@ -2907,13 +2907,13 @@ async function abrirModalTrade(charNome: any, charId: any) {
   }
 
   const grid = document.getElementById('trade-oferta-grid');
-  grid.innerHTML = mochila.map((inst: any)=>{
+  grid!.innerHTML = mochila.map((inst: any)=>{
     const it = inst.item_catalog || inst;
     return _renderItemCard(it, { onclick:`toggleTradeSel('${inst.id}')`, selecionado: false });
   }).join('') || `<div style="color:var(--suave);font-size:0.82rem;font-style:italic">Mochila vazia</div>`;
 
-  document.getElementById('trade-proposta-recebida').style.display = 'none';
-  document.getElementById('modal-trade-overlay').style.display = 'flex';
+  document.getElementById('trade-proposta-recebida')!.style!.display = 'none';
+  document.getElementById('modal-trade-overlay')!.style!.display = 'flex';
 }
 
 window.toggleTradeSel = function(instId: any) {
@@ -2922,8 +2922,8 @@ window.toggleTradeSel = function(instId: any) {
   // Reatualizar visual
   document.querySelectorAll('#trade-oferta-grid [onclick]').forEach(el=>{
     const fn = el.getAttribute('onclick');
-    const id = fn.match(/'([^']+)'/)?.[1];
-    if (id) el.style.boxShadow = TRADE_STATE.itens_selecionados.has(id) ? '0 0 0 2px #4eca7e' : '';
+    const id = fn!.match(/'([^']+)'/)?.[1];
+    if (id) el.style!.boxShadow = TRADE_STATE.itens_selecionados.has(id) ? '0 0 0 2px #4eca7e' : '';
   });
 };
 
@@ -3012,7 +3012,7 @@ window.responderTrade = async function(acao: any) {
   }
 
   TRADE_STATE.proposta_pendente = null;
-  document.getElementById('trade-proposta-recebida').style.display = 'none';
+  document.getElementById('trade-proposta-recebida')!.style!.display = 'none';
   fecharModalTrade();
 };
 
@@ -3030,7 +3030,7 @@ function _broadcastTradeEvento(evento: any, dados: any) {
 }
 
 window.fecharModalTrade = function() {
-  document.getElementById('modal-trade-overlay').style.display = 'none';
+  document.getElementById('modal-trade-overlay')!.style!.display = 'none';
 };
 
 // Botão de Trade no inventário (injetado dinamicamente)
@@ -3044,7 +3044,7 @@ function adicionarBotaoTrade(charNome: any, charId: any) {
     const btn = document.createElement('button');
     btn.id = 'inv-btn-trade';
     btn.textContent = '🔄 Propor Trade';
-    btn.style.cssText = 'width:100%;margin-top:8px;padding:11px;background:rgba(79,163,209,0.08);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--primario);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.06em';
+    btn.style!.cssText = 'width:100%;margin-top:8px;padding:11px;background:rgba(79,163,209,0.08);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--primario);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.06em';
     btn.onclick = () => abrirModalTrade(charNome, charId);
     wrap.after(btn);
   }
@@ -3238,7 +3238,7 @@ function _atualizarBannerControleMobile() {
   const naAbaMapas = document.getElementById('tab-mapas')?.classList.contains('active');
   const temLinked = !!(RPG_DATA?.linked || (_emModoAventura() && AVT_STATE?.myCharNome));
   // Mostrar se: é touch device, está na aba mesa, tem personagem vinculado
-  banner.style.display = (isMobile && naAbaMapas && temLinked) ? 'block' : 'none';
+  banner.style!.display = (isMobile && naAbaMapas && temLinked) ? 'block' : 'none';
   _atualizarBotaoControleMobile();
 }
 window._atualizarBannerControleMobile = _atualizarBannerControleMobile;
@@ -3259,7 +3259,7 @@ function _mostrarSeletorModoControle() {
   document.getElementById('mc-modo-seletor')?.remove();
   const d = document.createElement('div');
   d.id = 'mc-modo-seletor';
-  d.style.cssText = [
+  d.style!.cssText = [
     'position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,0.88)',
     'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px',
     'font-family:var(--fonte-d)'
@@ -3297,7 +3297,7 @@ function _mostrarSeletorModoControle() {
     d.remove();
     const d2 = document.createElement('div');
     d2.id = 'mc-modo-seletor';
-    d2.style.cssText = [
+    d2.style!.cssText = [
       'position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,0.88)',
       'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px',
       'font-family:var(--fonte-d)'
@@ -3332,23 +3332,23 @@ function _mostrarSeletorModoControle() {
       d2.remove();
       _ativar('dispositivo');
     };
-    d2.querySelector('#mc-cam-deadzone').addEventListener('click', () => _ativarCam('deadzone'));
-    d2.querySelector('#mc-cam-deadzone').addEventListener('touchend', e => { e.preventDefault(); _ativarCam('deadzone'); });
-    d2.querySelector('#mc-cam-central').addEventListener('click', () => _ativarCam('centralizada'));
-    d2.querySelector('#mc-cam-central').addEventListener('touchend', e => { e.preventDefault(); _ativarCam('centralizada'); });
-    d2.querySelector('#mc-cam-cancel').addEventListener('click', () => d2.remove());
-    d2.querySelector('#mc-cam-cancel').addEventListener('touchend', e => { e.preventDefault(); d2.remove(); });
+    d2.querySelector('#mc-cam-deadzone')!.addEventListener('click', () => _ativarCam('deadzone'))!;
+    d2.querySelector('#mc-cam-deadzone')!.addEventListener('touchend', e => { e.preventDefault(); _ativarCam('deadzone'); })!;
+    d2.querySelector('#mc-cam-central')!.addEventListener('click', () => _ativarCam('centralizada'))!;
+    d2.querySelector('#mc-cam-central')!.addEventListener('touchend', e => { e.preventDefault(); _ativarCam('centralizada'); })!;
+    d2.querySelector('#mc-cam-cancel')!.addEventListener('click', () => d2.remove());
+    d2.querySelector('#mc-cam-cancel')!.addEventListener('touchend', e => { e.preventDefault(); d2.remove(); })!;
     document.body.appendChild(d2);
   };
   const tvBtn = d.querySelector('#mc-modo-tv');
   const dpBtn = d.querySelector('#mc-modo-disp');
   const caBtn = d.querySelector('#mc-modo-cancel');
-  tvBtn.addEventListener('click', () => _ativar('tv'));
-  tvBtn.addEventListener('touchend', e => { e.preventDefault(); _ativar('tv'); });
-  dpBtn.addEventListener('click', () => _mostrarSelecaoCamera());
-  dpBtn.addEventListener('touchend', e => { e.preventDefault(); _mostrarSelecaoCamera(); });
-  caBtn.addEventListener('click', () => d.remove());
-  caBtn.addEventListener('touchend', e => { e.preventDefault(); d.remove(); });
+  tvBtn!.addEventListener('click', () => _ativar('tv'));
+  tvBtn!.addEventListener('touchend', e => { e.preventDefault(); _ativar('tv'); });
+  dpBtn!.addEventListener('click', () => _mostrarSelecaoCamera());
+  dpBtn!.addEventListener('touchend', e => { e.preventDefault(); _mostrarSelecaoCamera(); });
+  caBtn!.addEventListener('click', () => d.remove());
+  caBtn!.addEventListener('touchend', e => { e.preventDefault(); d.remove(); });
   document.body.appendChild(d);
 }
 
@@ -3358,17 +3358,17 @@ function _atualizarBotaoControleMobile() {
   const btn = document.getElementById('btn-modo-controle');
   if (btn) {
     btn.textContent = ativo ? '🎮 Sair do Controle' : '🎮 Modo Controle';
-    btn.style.background  = ativo ? 'rgba(94,224,154,0.12)' : 'rgba(79,163,209,0.08)';
-    btn.style.borderColor = ativo ? 'rgba(94,224,154,0.4)'  : 'rgba(79,163,209,0.25)';
-    btn.style.color       = ativo ? '#5ee09a' : '#7ec8f0';
+    btn.style!.background  = ativo ? 'rgba(94,224,154,0.12)' : 'rgba(79,163,209,0.08)';
+    btn.style!.borderColor = ativo ? 'rgba(94,224,154,0.4)'  : 'rgba(79,163,209,0.25)';
+    btn.style!.color       = ativo ? '#5ee09a' : '#7ec8f0';
   }
   // Botão no header da tela de aventura
   const btnAvt = document.getElementById('avt-btn-controle');
   if (btnAvt) {
     btnAvt.textContent    = ativo ? '🎮 Sair' : '🎮 Controle';
-    btnAvt.style.background  = ativo ? 'rgba(94,224,154,0.12)' : 'rgba(79,163,209,0.08)';
-    btnAvt.style.borderColor = ativo ? 'rgba(94,224,154,0.4)'  : 'rgba(79,163,209,0.25)';
-    btnAvt.style.color       = ativo ? '#5ee09a' : '#7ec8f0';
+    btnAvt.style!.background  = ativo ? 'rgba(94,224,154,0.12)' : 'rgba(79,163,209,0.08)';
+    btnAvt.style!.borderColor = ativo ? 'rgba(94,224,154,0.4)'  : 'rgba(79,163,209,0.25)';
+    btnAvt.style!.color       = ativo ? '#5ee09a' : '#7ec8f0';
   }
 }
 
@@ -3379,7 +3379,7 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(_verificarModoMob
 // ── Detectar se está no modo aventura ───────────────────────────────────
 function _emModoAventura() {
   return typeof AVT_STATE !== 'undefined'
-    && document.getElementById('aventura-screen')?.style.display !== 'none'
+    && document.getElementById('aventura-screen')?.style!.display !== 'none'
     && !!AVT_STATE?.rpgId;
 }
 
@@ -3435,7 +3435,7 @@ function _ativarControleMobile() {
 
     if (emAventuraDisp) {
       // Aventura + dispositivo: strip fixo na parte inferior, mapa totalmente visível acima
-      overlay.style.cssText = [
+      overlay.style!.cssText = [
         'position:fixed;bottom:0;left:0;right:0;z-index:8100;display:grid',
         'grid-template-columns:38% 24% 38%',
         'pointer-events:none;touch-action:none',
@@ -3443,7 +3443,7 @@ function _ativarControleMobile() {
       ].join(';');
     } else if (isDispositivo) {
       // Dispositivo (campanha): overlay transparente, controles nas bordas inferiores
-      overlay.style.cssText = [
+      overlay.style!.cssText = [
         'position:fixed;inset:0;z-index:8000;display:grid',
         'grid-template-columns:35% 30% 35%',
         'grid-template-rows:1fr',
@@ -3453,7 +3453,7 @@ function _ativarControleMobile() {
       ].join(';');
     } else {
       // Modo TV: fundo preto opaco (comportamento original)
-      overlay.style.cssText = [
+      overlay.style!.cssText = [
         'position:fixed;inset:0;z-index:8000;display:grid',
         'grid-template-columns:35% 30% 35%',
         'pointer-events:auto;touch-action:none',
@@ -3464,15 +3464,15 @@ function _ativarControleMobile() {
       if (!MOBILE_CTRL.ativo) return;
       const isLand = window.innerWidth > window.innerHeight;
       if (emAventuraDisp) {
-        overlay.style.gridTemplateColumns = isLand ? '38% 24% 38%' : '35% 30% 35%';
+        overlay!.style!.gridTemplateColumns = isLand ? '38% 24% 38%' : '35% 30% 35%';
       } else if (isDispositivo) {
-        overlay.style.gridTemplateColumns = isLand ? '35% 30% 35%' : '30% 40% 30%';
-        overlay.style.gridTemplateRows = '1fr';
-        overlay.style.alignItems = 'flex-end';
+        overlay!.style!.gridTemplateColumns = isLand ? '35% 30% 35%' : '30% 40% 30%';
+        overlay!.style!.gridTemplateRows = '1fr';
+        overlay!.style!.alignItems = 'flex-end';
       } else {
-        overlay.style.gridTemplateColumns = isLand ? '35% 30% 35%' : '20% 60% 20%';
-        overlay.style.gridTemplateRows = isLand ? '1fr' : '1fr 1fr 1fr';
-        overlay.style.alignItems = isLand ? 'center' : 'end';
+        overlay!.style!.gridTemplateColumns = isLand ? '35% 30% 35%' : '20% 60% 20%';
+        overlay!.style!.gridTemplateRows = isLand ? '1fr' : '1fr 1fr 1fr';
+        overlay!.style!.alignItems = isLand ? 'center' : 'end';
       }
     };
     window.addEventListener('resize', _adaptarOrientacao);
@@ -3481,21 +3481,21 @@ function _ativarControleMobile() {
     document.body.appendChild(overlay);
     _iniciarJoystick();
   }
-  overlay.style.display = 'grid';
+  overlay.style!.display = 'grid';
 
   // No modo dispositivo/aventura, habilitar pointer-events somente nas zonas de controle
   if (isDispositivo || emAventuraDisp) {
     overlay.querySelectorAll('#mc-zona-esq, #mc-zona-central, #mc-zona-dir').forEach(z => {
-      z.style.pointerEvents = 'auto';
+      z.style!.pointerEvents = 'auto';
     });
   } else {
-    overlay.style.background = '#000';
+    overlay.style!.background = '#000';
     // Bloquear interação com sidebar e resto da UI enquanto controle ativo
     const sidebar = document.getElementById('mapa-sidebar');
     if (sidebar) {
-      sidebar._prevPointerEvents = sidebar.style.pointerEvents;
-      sidebar.style.pointerEvents = 'none';
-      sidebar.style.visibility = 'hidden';
+      sidebar._prevPointerEvents = sidebar.style!.pointerEvents;
+      sidebar.style!.pointerEvents = 'none';
+      sidebar.style!.visibility = 'hidden';
     }
   }
 
@@ -3503,26 +3503,26 @@ function _ativarControleMobile() {
   if (emAventuraDisp) {
     const header = document.getElementById('avt-header');
     const hud    = document.getElementById('avt-hud');
-    if (header && header.style.display !== 'none') {
-      header._prevDisplay = header.style.display;
-      header.style.display = 'none';
+    if (header && header.style!.display !== 'none') {
+      header._prevDisplay = header.style!.display;
+      header.style!.display = 'none';
     }
     // HUD gerenciado por _avtHudMostrar; só esconder se estiver visível
-    if (hud && hud.style.display !== 'none') {
-      hud._prevDisplay = hud.style.display;
-      hud.style.display = 'none';
+    if (hud && hud.style!.display !== 'none') {
+      hud._prevDisplay = hud.style!.display;
+      hud.style!.display = 'none';
     }
     // Bloquear scroll do body para evitar que o bounce do iOS Safari cause
     // jitter visual no canvas quando o jogador pressiona o d-pad
     const _b = document.body;
-    _b._prevOverflow = _b.style.overflow;
-    _b._prevPosition = _b.style.position;
-    _b._prevWidth    = _b.style.width;
-    _b._prevHeight   = _b.style.height;
-    _b.style.overflow = 'hidden';
-    _b.style.position = 'fixed';
-    _b.style.width    = '100%';
-    _b.style.height   = '100%';
+    _b._prevOverflow = _b.style!.overflow;
+    _b._prevPosition = _b.style!.position;
+    _b._prevWidth    = _b.style!.width;
+    _b._prevHeight   = _b.style!.height;
+    _b.style!.overflow = 'hidden';
+    _b.style!.position = 'fixed';
+    _b.style!.width    = '100%';
+    _b.style!.height   = '100%';
     // Redimensionar canvas para preencher a tela toda
     if (typeof _avtCanvasResize === 'function') setTimeout(_avtCanvasResize, 50);
   }
@@ -3537,7 +3537,7 @@ function _ativarControleMobile() {
   if (emAventuraDisp) _avtMinimapSetMobile(true);
 
   const tabMapas = document.getElementById('tab-mapas');
-  if (tabMapas) tabMapas.style.overflow = 'hidden';
+  if (tabMapas) tabMapas.style!.overflow = 'hidden';
 }
 
 function _desativarControleMobile() {
@@ -3552,32 +3552,32 @@ function _desativarControleMobile() {
     }
   } catch(e) {}
   const overlay = document.getElementById('mobile-ctrl-overlay');
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) overlay.style!.display = 'none';
   // Restaurar sidebar (modo TV campanha)
   const sidebar = document.getElementById('mapa-sidebar');
   if (sidebar) {
-    sidebar.style.pointerEvents = sidebar._prevPointerEvents || '';
-    sidebar.style.visibility = '';
+    sidebar.style!.pointerEvents = sidebar._prevPointerEvents || '';
+    sidebar.style!.visibility = '';
   }
   // Restaurar header e HUD da aventura (modo dispositivo)
   const header = document.getElementById('avt-header');
   if (header && header._prevDisplay !== undefined) {
-    header.style.display = header._prevDisplay || '';
+    header.style!.display = header._prevDisplay || '';
     delete header._prevDisplay;
   } else if (header) {
-    header.style.display = '';
+    header.style!.display = '';
   }
   const hud = document.getElementById('avt-hud');
   if (hud && hud._prevDisplay !== undefined) {
-    hud.style.display = hud._prevDisplay || '';
+    hud.style!.display = hud._prevDisplay || '';
     delete hud._prevDisplay;
   }
   // Restaurar scroll do body (bloqueado no modo aventura+dispositivo)
   const _b = document.body;
-  if (_b._prevOverflow !== undefined) { _b.style.overflow  = _b._prevOverflow;  delete _b._prevOverflow; }
-  if (_b._prevPosition !== undefined) { _b.style.position  = _b._prevPosition;  delete _b._prevPosition; }
-  if (_b._prevWidth    !== undefined) { _b.style.width     = _b._prevWidth;     delete _b._prevWidth; }
-  if (_b._prevHeight   !== undefined) { _b.style.height    = _b._prevHeight;    delete _b._prevHeight; }
+  if (_b._prevOverflow !== undefined) { _b.style!.overflow  = _b._prevOverflow;  delete _b._prevOverflow; }
+  if (_b._prevPosition !== undefined) { _b.style!.position  = _b._prevPosition;  delete _b._prevPosition; }
+  if (_b._prevWidth    !== undefined) { _b.style!.width     = _b._prevWidth;     delete _b._prevWidth; }
+  if (_b._prevHeight   !== undefined) { _b.style!.height    = _b._prevHeight;    delete _b._prevHeight; }
   // Fechar ficha mobile e painel de log mobile se estiverem abertos
   document.getElementById('avt-ficha-mobile-modal')?.remove();
   document.getElementById('avt-log-mobile-panel')?.remove();
@@ -3594,7 +3594,7 @@ function _avtMinimapSetMobile(mobile: any) {
   if (!mm) return;
   if (mobile) {
     mm.width = 90; mm.height = 90;
-    mm.style.cssText = [
+    mm.style!.cssText = [
       'position:fixed',
       'left:12px',
       'bottom:200px',
@@ -3609,7 +3609,7 @@ function _avtMinimapSetMobile(mobile: any) {
     ].join(';');
   } else {
     mm.width = 120; mm.height = 120;
-    mm.style.cssText = [
+    mm.style!.cssText = [
       'position:fixed',
       'left:12px',
       'top:50%',
@@ -3771,10 +3771,10 @@ function _iniciarDpadReposicionamento() {
   if (!center || !zonaEsq) return;
 
   // Limpar qualquer position:fixed residual de versão anterior
-  zonaEsq.style.position = '';
-  zonaEsq.style.left = '';
-  zonaEsq.style.bottom = '';
-  zonaEsq.style.top = '';
+  zonaEsq.style!.position = '';
+  zonaEsq.style!.left = '';
+  zonaEsq.style!.bottom = '';
+  zonaEsq.style!.top = '';
 
   let holdTimer: any = null;
   let reposMode = false;
@@ -3790,7 +3790,7 @@ function _iniciarDpadReposicionamento() {
     try {
       const saved = JSON.parse(localStorage.getItem(_dpadPosKey()) || 'null');
       if (saved?.dx != null) {
-        zonaEsq.style.transform = `translate(${saved.dx}px,${saved.dy}px)`;
+        zonaEsq.style!.transform = `translate(${saved.dx}px,${saved.dy}px)`;
       }
     } catch (_) {}
   };
@@ -3798,13 +3798,13 @@ function _iniciarDpadReposicionamento() {
 
   center.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    center.style.transition = 'background 10s linear';
-    center.style.background = 'rgba(200,168,75,0.4)';
+    center.style!.transition = 'background 10s linear';
+    center.style!.background = 'rgba(200,168,75,0.4)';
     holdTimer = setTimeout(() => {
       reposMode = true;
-      center.style.background = 'rgba(200,168,75,0.7)';
-      center.style.transition = '';
-      center.style.cursor = 'grabbing';
+      center.style!.background = 'rgba(200,168,75,0.7)';
+      center.style!.transition = '';
+      center.style!.cursor = 'grabbing';
       if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
       // Ler translação atual acumulada
       const m = new DOMMatrix(getComputedStyle(zonaEsq).transform);
@@ -3822,15 +3822,15 @@ function _iniciarDpadReposicionamento() {
     }
     const dx = touch.clientX - dragStart.x + dragStart.baseDx;
     const dy = touch.clientY - dragStart.y + dragStart.baseDy;
-    zonaEsq.style.transform = `translate(${dx}px,${dy}px)`;
+    zonaEsq.style!.transform = `translate(${dx}px,${dy}px)`;
   }, { passive: false });
 
   const _finalizarHold = (e: any) => {
     if (e) e.preventDefault();
     clearTimeout(holdTimer);
-    center.style.background = '';
-    center.style.transition = '';
-    center.style.cursor = 'grab';
+    center.style!.background = '';
+    center.style!.transition = '';
+    center.style!.cursor = 'grab';
     if (reposMode) {
       const m = new DOMMatrix(getComputedStyle(zonaEsq).transform);
       try {
@@ -3867,7 +3867,7 @@ window._avtToggleLogMobile = function() {
   if (existing) { existing.remove(); return; }
   const panel = document.createElement('div');
   panel.id = 'avt-log-mobile-panel';
-  panel.style.cssText = [
+  panel.style!.cssText = [
     'position:fixed;top:32px;left:8px',
     'width:min(168px,43vw);max-height:29vh',
     'background:rgba(5,8,16,0.96)',
@@ -3882,11 +3882,11 @@ window._avtToggleLogMobile = function() {
   ].join(';');
   const logSrc = document.getElementById('avt-log');
   const title = document.createElement('div');
-  title.style.cssText = 'font-family:var(--fonte-d);font-size:0.52rem;color:rgba(79,163,209,0.5);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between';
+  title.style!.cssText = 'font-family:var(--fonte-d);font-size:0.52rem;color:rgba(79,163,209,0.5);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between';
   title.innerHTML = '<span>Registro de combate</span><span ontouchend="event.preventDefault();document.getElementById(\'avt-log-mobile-panel\')?.remove()" onclick="document.getElementById(\'avt-log-mobile-panel\')?.remove()" style="cursor:pointer;padding:0 4px;font-size:0.8rem;color:#7a92aa">×</span>';
   const content = document.createElement('div');
   content.id = 'avt-log-mobile-content';
-  content.style.cssText = 'display:flex;flex-direction:column;gap:3px';
+  content.style!.cssText = 'display:flex;flex-direction:column;gap:3px';
   content.innerHTML = logSrc?.innerHTML || '<div style="color:#6a5840;font-size:0.7rem;text-align:center;padding:8px">Nenhuma ação registrada</div>';
   panel.appendChild(title);
   panel.appendChild(content);
@@ -3956,7 +3956,7 @@ function _dpadMoverToken(dc: any, dr: any) {
   const movido = _moverTokenPorSeta(nome, dc, dr);
   
   // NOVO: Consumir movimento se estiver em batalha
-  if (movido && batalhaId) {
+  if ((movido as any) && batalhaId) {   // BUG latente: movido é Promise (faltou await?) — sempre truthy hoje; comportamento preservado
     const bs = MAPA_STATE.batalhas[batalhaId];
     if (!bs.movimentoRestante) bs.movimentoRestante = {};
     
@@ -4033,8 +4033,8 @@ function _atualizarEstadoDpad() {
   if (dpad) {
     const btns = dpad.querySelectorAll('.mc-dpad-btn');
     btns.forEach(btn => {
-      btn.style.opacity = podeMover ? '1' : '0.4';
-      btn.style.pointerEvents = podeMover ? 'auto' : 'none';
+      btn.style!.opacity = podeMover ? '1' : '0.4';
+      btn.style!.pointerEvents = podeMover ? 'auto' : 'none';
     });
   }
 
@@ -4088,7 +4088,7 @@ function _atualizarZonaCentralAventura() {
       ${recursoHtml}${movHtml}</div>`;
   }
 
-  if (skWrap) skWrap.style.display = 'none';
+  if (skWrap) skWrap.style!.display = 'none';
 
   // Turno status
   const bat2 = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
@@ -4096,7 +4096,7 @@ function _atualizarZonaCentralAventura() {
     const ativo = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
     const emMeuTurno = bat2 && ativo && ativo.id === jogador.id;
     turnoEl.textContent = bat2 ? (emMeuTurno ? '⚔ Seu turno' : '⏳ Aguardando') : '';
-    turnoEl.style.color = emMeuTurno ? 'rgba(94,224,154,0.8)' : 'rgba(200,168,75,0.5)';
+    turnoEl.style!.color = emMeuTurno ? 'rgba(94,224,154,0.8)' : 'rgba(200,168,75,0.5)';
   }
 
   // Lista de alvos / botão dados na zona central
@@ -4257,7 +4257,7 @@ function _atualizarZonaCentral() {
     ? `<div style="font-size:0.6rem;color:rgba(200,168,75,0.8);margin-top:3px">${movRest}/${movMax} mov</div>`
     : '';
 
-  document.getElementById('mc-stats').innerHTML = `
+  document.getElementById('mc-stats')!.innerHTML = `
     <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:${hpCor};font-weight:500">
       <span>HP</span><span>${hp}/${hpMax}</span>
     </div>
@@ -4273,26 +4273,26 @@ function _atualizarZonaCentral() {
   MOBILE_CTRL.petNome = petNome;
   const tabWrap = document.getElementById('mc-tab-wrapper');
   if (tabWrap) {
-    tabWrap.style.display = petNome ? 'block' : 'none';
+    tabWrap.style!.display = petNome ? 'block' : 'none';
     if (petNome) {
       const tabPet = document.getElementById('mc-tab-pet');
-      tabPet.textContent = `🐾 ${petNome.split(' ')[0]}`;
-      document.getElementById('mc-tab-char').style.background = MOBILE_CTRL.modoPet ? 'transparent'    : 'rgba(79,163,209,0.2)';
-      document.getElementById('mc-tab-char').style.color      = MOBILE_CTRL.modoPet ? 'rgba(255,255,255,0.4)' : '#7ec8f0';
-      tabPet.style.background  = MOBILE_CTRL.modoPet ? 'rgba(157,125,216,0.2)' : 'transparent';
-      tabPet.style.color       = MOBILE_CTRL.modoPet ? '#b07ef0' : 'rgba(255,255,255,0.4)';
+      tabPet!.textContent = `🐾 ${petNome.split(' ')[0]}`;
+      document.getElementById('mc-tab-char')!.style!.background = MOBILE_CTRL.modoPet ? 'transparent'    : 'rgba(79,163,209,0.2)';
+      document.getElementById('mc-tab-char')!.style!.color      = MOBILE_CTRL.modoPet ? 'rgba(255,255,255,0.4)' : '#7ec8f0';
+      tabPet!.style!.background  = MOBILE_CTRL.modoPet ? 'rgba(157,125,216,0.2)' : 'transparent';
+      tabPet!.style!.color       = MOBILE_CTRL.modoPet ? '#b07ef0' : 'rgba(255,255,255,0.4)';
       // Pulse animation on first appearance to aid discoverability
       if (!(MOBILE_CTRL as any)._petTabShown) {
         (MOBILE_CTRL as any)._petTabShown = true;
-        tabPet.style.animation = 'none';
+        tabPet!.style!.animation = 'none';
         if (!document.getElementById('_mc-pet-pulse-style')) {
           const s = document.createElement('style');
           s.id = '_mc-pet-pulse-style';
           s.textContent = '@keyframes _mcPetPulse{0%,100%{box-shadow:0 0 0 0 rgba(176,126,240,0.6)}50%{box-shadow:0 0 0 6px rgba(176,126,240,0)}}';
           document.head.appendChild(s);
         }
-        tabPet.style.animation = '_mcPetPulse 0.7s ease 3';
-        tabPet.addEventListener('animationend', () => { tabPet.style.animation = ''; }, { once: true });
+        tabPet!.style!.animation = '_mcPetPulse 0.7s ease 3';
+        tabPet!.addEventListener('animationend', () => { tabPet!.style!.animation = ''; }, { once: true });
       }
     }
   }
@@ -4305,17 +4305,17 @@ function _atualizarZonaCentral() {
       const habilidades = atkGetHabilidadesCampanha(charNome);
       const skProprias  = habilidades.filter((h: any) => h.alvo_tipo === 'proprio');
       if (skProprias.length) {
-        skWrap.style.display = 'flex';
+        skWrap.style!.display = 'flex';
         skWrap.innerHTML = skProprias.map((h: any) => `
           <button onclick="mobileUsarSkillPropria(${JSON.stringify(h.nome).replace(/'/g, "\'")})"
             style="padding:5px 8px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;min-height:32px;touch-action:manipulation">
             ${h.nome}
           </button>`).join('');
       } else {
-        skWrap.style.display = 'none';
+        skWrap.style!.display = 'none';
       }
     } else {
-      skWrap.style.display = 'none';
+      skWrap.style!.display = 'none';
     }
   }
 
@@ -4344,7 +4344,7 @@ function _atualizarZonaCentral() {
       }
     }
     turnoEl.innerHTML = (emTurno ? '⚔ Seu turno' : '⏳ Aguardando') + labelMestre + zonaHtml;
-    turnoEl.style.color = emTurno ? 'rgba(94,224,154,0.8)' : 'rgba(200,168,75,0.5)';
+    turnoEl.style!.color = emTurno ? 'rgba(94,224,154,0.8)' : 'rgba(200,168,75,0.5)';
   }
 }
 
@@ -4407,7 +4407,7 @@ function _atualizarZonaDireitaAventura() {
   // ── FIX BUG #1 (skills atrás de aceitar/ignorar): reset do padding-bottom da zona direita.
   // Será re-aplicado abaixo somente quando aceitar/ignorar estiver visível.
   const _zonaDirEl = document.getElementById('mc-zona-dir');
-  if (_zonaDirEl) _zonaDirEl.style.paddingBottom = '';
+  if (_zonaDirEl) _zonaDirEl.style!.paddingBottom = '';
 
 
 
@@ -4428,7 +4428,7 @@ function _atualizarZonaDireitaAventura() {
       const hpPct   = Math.round(Math.max(0, Math.min(100, (hpAtual / hpMax) * 100)));
       const hpCor   = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
       const obs = document.createElement('div');
-      obs.style.cssText = 'width:100%;font-family:var(--fonte-d);font-size:0.6rem;text-align:center;padding:6px 4px';
+      obs.style!.cssText = 'width:100%;font-family:var(--fonte-d);font-size:0.6rem;text-align:center;padding:6px 4px';
       obs.innerHTML = `
         <div style="color:rgba(200,168,75,0.6);font-size:0.55rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Rodada ${bat.turno_round||1}</div>
         <div style="color:rgba(255,255,255,0.7);margin-bottom:6px">⚔ <strong style="color:#f0cc6a">${ativo.nome}</strong></div>
@@ -4500,29 +4500,29 @@ function _atualizarZonaDireitaAventura() {
   const _alvosEl = document.getElementById('mc-alvos-central');
   if (recolhido) {
     // Arco: container quadrado de 160px com posicionamento absoluto dos filhos
-    ctxEl.style.flex = '0 0 auto';
-    ctxEl.style.width = '160px';
-    ctxEl.style.height = '160px';
-    ctxEl.style.overflow = 'visible';
-    ctxEl.style.position = 'relative';
-    ctxEl.style.display = 'block';
+    ctxEl.style!.flex = '0 0 auto';
+    ctxEl.style!.width = '160px';
+    ctxEl.style!.height = '160px';
+    ctxEl.style!.overflow = 'visible';
+    ctxEl.style!.position = 'relative';
+    ctxEl.style!.display = 'block';
   } else {
-    ctxEl.style.flex = '6';
-    ctxEl.style.width = '';
-    ctxEl.style.height = '';
-    ctxEl.style.overflow = '';
-    ctxEl.style.position = '';
-    ctxEl.style.display = '';
+    ctxEl.style!.flex = '6';
+    ctxEl.style!.width = '';
+    ctxEl.style!.height = '';
+    ctxEl.style!.overflow = '';
+    ctxEl.style!.position = '';
+    ctxEl.style!.display = '';
   }
   if (_alvosEl) {
     if (recolhido) {
-      _alvosEl.style.flex = '0 0 auto';
-      _alvosEl.style.width = 'calc(40% - 1px)';
-      if (_dirRow) _dirRow.style.justifyContent = 'flex-end';
+      _alvosEl.style!.flex = '0 0 auto';
+      _alvosEl.style!.width = 'calc(40% - 1px)';
+      if (_dirRow) _dirRow.style!.justifyContent = 'flex-end';
     } else {
-      _alvosEl.style.flex = '4';
-      _alvosEl.style.width = '';
-      if (_dirRow) _dirRow.style.justifyContent = '';
+      _alvosEl.style!.flex = '4';
+      _alvosEl.style!.width = '';
+      if (_dirRow) _dirRow.style!.justifyContent = '';
     }
   }
 
@@ -4545,7 +4545,7 @@ function _atualizarZonaDireitaAventura() {
     const isUltDisabled = !ultItem || ultItem.cd > 0 || (alvoDistancia !== null && alvoDistancia > ultItem.alcance);
     const ultLabel = !ultItem ? '⚡' : (ultItem.cd > 0 ? '⏱' : (ultItem.num != null ? String(ultItem.num) : '⚡'));
     const btnUlt = document.createElement('button');
-    btnUlt.style.cssText = `position:absolute;top:66px;left:66px;` +
+    btnUlt.style!.cssText = `position:absolute;top:66px;left:66px;` +
       `width:54px;height:54px;padding:0;border-radius:50%;` +
       `background:rgba(${isUltSel?'200,168,75,0.45':ultItem?'150,80,220,0.28':'100,60,150,0.12'});` +
       `border:2px solid rgba(${isUltSel?'200,168,75,0.9':ultItem?'150,80,220,0.65':'130,80,180,0.3'});` +
@@ -4566,7 +4566,7 @@ function _atualizarZonaDireitaAventura() {
     // Botão Norte (slot 0): avança o anel; scroll direita = retrocede
     const btnNorte = document.createElement('button');
     const posN = _ARC_SLOTS[0];
-    btnNorte.style.cssText = `position:absolute;top:${posN.top}px;left:${posN.left}px;` +
+    btnNorte.style!.cssText = `position:absolute;top:${posN.top}px;left:${posN.left}px;` +
       `width:44px;height:44px;padding:0;border-radius:50%;` +
       `background:rgba(79,163,209,0.18);border:1.5px solid rgba(79,163,209,0.55);` +
       `color:#7ec8f0;font-size:0.85rem;line-height:1;cursor:pointer;touch-action:manipulation;` +
@@ -4590,7 +4590,7 @@ function _atualizarZonaDireitaAventura() {
       const isDisabled = item.cd > 0 || (alvoDistancia !== null && alvoDistancia > item.alcance);
       const label = item.basico ? '⚔' : (item.num != null ? String(item.num) : '•');
       const btn = document.createElement('button');
-      btn.style.cssText = `position:absolute;top:${pos.top}px;left:${pos.left}px;` +
+      btn.style!.cssText = `position:absolute;top:${pos.top}px;left:${pos.left}px;` +
         `width:44px;height:44px;padding:0;border-radius:50%;` +
         `background:rgba(${isSel?'200,168,75,0.45':'79,163,209,0.25'});` +
         `border:1.5px solid rgba(${isSel?'200,168,75,0.9':'79,163,209,0.5'});` +
@@ -4609,7 +4609,7 @@ function _atualizarZonaDireitaAventura() {
     // Botão Oeste (slot 4): retrocede o anel
     const btnOeste = document.createElement('button');
     const posO = _ARC_SLOTS[4];
-    btnOeste.style.cssText = `position:absolute;top:${posO.top}px;left:${posO.left}px;` +
+    btnOeste.style!.cssText = `position:absolute;top:${posO.top}px;left:${posO.left}px;` +
       `width:44px;height:44px;padding:0;border-radius:50%;` +
       `background:rgba(79,163,209,0.18);border:1.5px solid rgba(79,163,209,0.55);` +
       `color:#7ec8f0;font-size:0.85rem;line-height:1;cursor:pointer;touch-action:manipulation;` +
@@ -4622,7 +4622,7 @@ function _atualizarZonaDireitaAventura() {
 
     // Botão expandir (fora do arco, canto superior-direito)
     const expandBtn = document.createElement('button');
-    expandBtn.style.cssText = `position:absolute;top:-28px;left:138px;` +
+    expandBtn.style!.cssText = `position:absolute;top:-28px;left:138px;` +
       `width:40px;height:18px;padding:0;` +
       `background:rgba(79,163,209,0.18);border:1px solid rgba(79,163,209,0.45);border-radius:4px;` +
       `color:#7ec8f0;font-size:0.7rem;line-height:1;cursor:pointer;touch-action:manipulation`;
@@ -4635,7 +4635,7 @@ function _atualizarZonaDireitaAventura() {
     // Auto-alvo compacto (fora do arco, abaixo do botão Norte)
     const autoAtivoArc = MOBILE_CTRL.autoAlvo;
     const autoBtnArc = document.createElement('button');
-    autoBtnArc.style.cssText = `position:absolute;top:${posN.top + 46}px;left:${posN.left}px;` +
+    autoBtnArc.style!.cssText = `position:absolute;top:${posN.top + 46}px;left:${posN.left}px;` +
       `width:44px;height:20px;padding:0;border-radius:4px;font-size:0.6rem;cursor:pointer;touch-action:manipulation;` +
       `background:rgba(${autoAtivoArc?'94,224,154,0.3':'255,255,255,0.07'});` +
       `border:1px solid rgba(${autoAtivoArc?'94,224,154,0.6':'255,255,255,0.2'})`;
@@ -4650,7 +4650,7 @@ function _atualizarZonaDireitaAventura() {
 
     // Botão toggle collapse
     const toggleBtn = document.createElement('button');
-    toggleBtn.style.cssText = `align-self:flex-end;width:22px;height:18px;padding:0;margin-bottom:3px;` +
+    toggleBtn.style!.cssText = `align-self:flex-end;width:22px;height:18px;padding:0;margin-bottom:3px;` +
       `background:rgba(79,163,209,0.18);border:1px solid rgba(79,163,209,0.45);border-radius:4px;` +
       `color:#7ec8f0;font-size:0.7rem;line-height:1;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
     toggleBtn.innerHTML = '▶';
@@ -4662,13 +4662,13 @@ function _atualizarZonaDireitaAventura() {
     // Lista de skills
     const listEl = document.createElement('div');
     listEl.id = 'mc-skills-lista';
-    listEl.style.cssText = 'flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;width:100%';
+    listEl.style!.cssText = 'flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;width:100%';
 
     for (const item of skillItems) {
       const isSel = skId === item.id;
       const isDisabled = item.cd > 0 || (alvoDistancia !== null && alvoDistancia > item.alcance);
       const btn = document.createElement('button');
-      btn.style.cssText = `flex:1;min-width:0;padding:5px 6px;border-radius:6px;` +
+      btn.style!.cssText = `flex:1;min-width:0;padding:5px 6px;border-radius:6px;` +
         `background:rgba(${isSel?'200,168,75,0.38':'79,163,209,0.22'});` +
         `border:1px solid rgba(${isSel?'200,168,75,0.8':'79,163,209,0.45'});` +
         `font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;touch-action:manipulation;` +
@@ -4681,10 +4681,10 @@ function _atualizarZonaDireitaAventura() {
       btn.addEventListener('click', () => _avtCtrlSelecionarSkill(itemId));
       if (item.id) {
         const rowEl = document.createElement('div');
-        rowEl.style.cssText = 'display:flex;gap:3px;align-items:stretch;width:100%';
+        rowEl.style!.cssText = 'display:flex;gap:3px;align-items:stretch;width:100%';
         const isUltThis = ultId === item.id;
         const ultToggle = document.createElement('button');
-        ultToggle.style.cssText = `width:22px;flex-shrink:0;padding:0;border-radius:6px;font-size:0.7rem;cursor:pointer;touch-action:manipulation;` +
+        ultToggle.style!.cssText = `width:22px;flex-shrink:0;padding:0;border-radius:6px;font-size:0.7rem;cursor:pointer;touch-action:manipulation;` +
           `background:rgba(${isUltThis?'150,80,220,0.45':'255,255,255,0.05'});` +
           `border:1px solid rgba(${isUltThis?'150,80,220,0.8':'255,255,255,0.15'});` +
           `color:${isUltThis?'#d8a8f8':'rgba(200,180,220,0.35)'}`;
@@ -4708,16 +4708,16 @@ function _atualizarZonaDireitaAventura() {
 
     // Toggle auto-alvo (modo expandido)
     const autoRow = document.createElement('div');
-    autoRow.style.cssText = 'display:flex;gap:3px;margin-top:4px;width:100%;flex-shrink:0';
+    autoRow.style!.cssText = 'display:flex;gap:3px;margin-top:4px;width:100%;flex-shrink:0';
     const autoAtivo = MOBILE_CTRL.autoAlvo;
     const autoBtn = document.createElement('button');
-    autoBtn.style.cssText = `flex:1;padding:4px 5px;border-radius:4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;touch-action:manipulation;text-align:left;` +
+    autoBtn.style!.cssText = `flex:1;padding:4px 5px;border-radius:4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;touch-action:manipulation;text-align:left;` +
       `background:rgba(${autoAtivo?'94,224,154,0.25':'255,255,255,0.07'});border:1px solid rgba(${autoAtivo?'94,224,154,0.55':'255,255,255,0.18'});` +
       `color:${autoAtivo?'#5ee09a':'rgba(255,255,255,0.45)'}`;
     autoBtn.textContent = autoAtivo ? '🎯 Auto' : '🎯 Manual';
     if (autoAtivo) {
       const prefBtn = document.createElement('button');
-      prefBtn.style.cssText = `padding:4px 5px;border-radius:4px;font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer;touch-action:manipulation;` +
+      prefBtn.style!.cssText = `padding:4px 5px;border-radius:4px;font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer;touch-action:manipulation;` +
         `background:rgba(200,168,75,0.2);border:1px solid rgba(200,168,75,0.45);color:#c8a84b`;
       prefBtn.textContent = MOBILE_CTRL.autoAlvoPrefMenorHP ? '❤️↓HP' : '📍Próx';
       prefBtn.title = MOBILE_CTRL.autoAlvoPrefMenorHP ? 'Preferência: menor HP' : 'Preferência: mais próximo';
@@ -4736,14 +4736,14 @@ function _atualizarZonaDireitaAventura() {
     const moverAtivo = bat.moverModo;
     const movRest = bat.movimentoRestante?.[jogador?.id] ?? (typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : '?');
     const btnsRow = document.createElement('div');
-    btnsRow.style.cssText = 'display:flex;gap:3px;margin-top:3px;width:100%;flex-shrink:0';
+    btnsRow.style!.cssText = 'display:flex;gap:3px;margin-top:3px;width:100%;flex-shrink:0';
     const btnMov = document.createElement('button');
-    btnMov.style.cssText = `flex:1;padding:4px 3px;background:rgba(${moverAtivo?'94,224,154':'79,163,209'},0.22);border:1px solid rgba(${moverAtivo?'94,224,154':'79,163,209'},0.55);border-radius:6px;font-family:var(--fonte-d);font-size:0.55rem;color:${moverAtivo?'#5ee09a':'#7ec8f0'};cursor:pointer;touch-action:manipulation;min-height:32px`;
+    btnMov.style!.cssText = `flex:1;padding:4px 3px;background:rgba(${moverAtivo?'94,224,154':'79,163,209'},0.22);border:1px solid rgba(${moverAtivo?'94,224,154':'79,163,209'},0.55);border-radius:6px;font-family:var(--fonte-d);font-size:0.55rem;color:${moverAtivo?'#5ee09a':'#7ec8f0'};cursor:pointer;touch-action:manipulation;min-height:32px`;
     btnMov.textContent = `🚶 ${movRest}`;
     btnMov.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtHudMover === 'function') { avtHudMover(); _atualizarZonaDireita(); } });
     btnMov.addEventListener('click', () => { if (typeof avtHudMover === 'function') { avtHudMover(); _atualizarZonaDireita(); } });
     const btnPass = document.createElement('button');
-    btnPass.style.cssText = 'flex:1;padding:4px 3px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:6px;font-family:var(--fonte-d);font-size:0.55rem;color:#c0392b;cursor:pointer;touch-action:manipulation;min-height:32px';
+    btnPass.style!.cssText = 'flex:1;padding:4px 3px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:6px;font-family:var(--fonte-d);font-size:0.55rem;color:#c0392b;cursor:pointer;touch-action:manipulation;min-height:32px';
     btnPass.textContent = '→ Passar';
     btnPass.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtHudPassar === 'function') avtHudPassar(); });
     btnPass.addEventListener('click', () => { if (typeof avtHudPassar === 'function') avtHudPassar(); });
@@ -4772,7 +4772,7 @@ function _atualizarZonaDireitaAventura() {
       if (algPersegNaoIgnorado) {
         const btnAc = document.createElement('button');
         btnAc.id = 'avt-ctrl-aceitar-circulo';
-        btnAc.style.cssText = _btnBase +
+        btnAc.style!.cssText = _btnBase +
           `bottom:${_overlayH + 52}px;background:rgba(232,96,76,0.92);border-color:rgba(232,96,76,1)`;
         btnAc.title = 'Aceitar Combate';
         btnAc.innerHTML = '⚔';
@@ -4783,7 +4783,7 @@ function _atualizarZonaDireitaAventura() {
 
       const btnIgn = document.createElement('button');
       btnIgn.id = 'avt-ctrl-ignorar-circulo';
-      btnIgn.style.cssText = _btnBase +
+      btnIgn.style!.cssText = _btnBase +
         `bottom:${_overlayH + 8}px;background:rgba(200,168,75,0.92);border-color:rgba(200,168,75,1)`;
       btnIgn.title = 'Ignorar';
       btnIgn.innerHTML = '✕';
@@ -4792,17 +4792,17 @@ function _atualizarZonaDireitaAventura() {
       document.body.appendChild(btnIgn);
     } else {
       // Fora do modo controle: botões tradicionais
-      if (_zonaDirEl) _zonaDirEl.style.paddingBottom = '96px';
+      if (_zonaDirEl) _zonaDirEl.style!.paddingBottom = '96px';
       if (algPersegNaoIgnorado) {
         const btnAc = document.createElement('button');
-        btnAc.style.cssText = 'width:100%;padding:5px 4px;background:rgba(232,96,76,0.88);border:1px solid rgba(232,96,76,1);border-radius:5px;color:#fff;cursor:pointer;font-size:0.58rem;font-family:var(--fonte-d);touch-action:manipulation;font-weight:600';
+        btnAc.style!.cssText = 'width:100%;padding:5px 4px;background:rgba(232,96,76,0.88);border:1px solid rgba(232,96,76,1);border-radius:5px;color:#fff;cursor:pointer;font-size:0.58rem;font-family:var(--fonte-d);touch-action:manipulation;font-weight:600';
         btnAc.textContent = '⚔ Aceitar Combate';
         btnAc.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtAceitarCombate === 'function') _avtAceitarCombate(); });
         btnAc.addEventListener('click', () => { if (typeof _avtAceitarCombate === 'function') _avtAceitarCombate(); });
         aceitarIgnorarEl.appendChild(btnAc);
       }
       const btnIgn = document.createElement('button');
-      btnIgn.style.cssText = 'width:100%;padding:4px;background:rgba(80,30,20,0.9);border:1px solid rgba(192,57,43,0.8);border-radius:5px;color:rgba(255,160,140,1);cursor:pointer;font-size:0.55rem;font-family:var(--fonte-d);touch-action:manipulation;font-weight:600';
+      btnIgn.style!.cssText = 'width:100%;padding:4px;background:rgba(80,30,20,0.9);border:1px solid rgba(192,57,43,0.8);border-radius:5px;color:rgba(255,160,140,1);cursor:pointer;font-size:0.55rem;font-family:var(--fonte-d);touch-action:manipulation;font-weight:600';
       btnIgn.textContent = '✕ Ignorar';
       btnIgn.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtFecharPrimeiroAtaqueModal === 'function') { _avtFecharPrimeiroAtaqueModal(); _atualizarZonaDireita(); _atualizarZonaCentral(); } });
       btnIgn.addEventListener('click', () => { if (typeof _avtFecharPrimeiroAtaqueModal === 'function') { _avtFecharPrimeiroAtaqueModal(); _atualizarZonaDireita(); _atualizarZonaCentral(); } });
@@ -4932,7 +4932,7 @@ function _atualizarZonaDireita() {
       ? (t.ehCura ? `${t.danoTotal} cura` : `${t.danoTotal} dano`)
       : '';
     const btnConf = document.createElement('button');
-    btnConf.style.cssText = 'width:100%;min-height:56px;padding:10px;background:linear-gradient(135deg,rgba(192,57,43,0.35),rgba(192,57,43,0.18));border:2px solid rgba(192,57,43,0.7);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px;animation:pulse 1s infinite';
+    btnConf.style!.cssText = 'width:100%;min-height:56px;padding:10px;background:linear-gradient(135deg,rgba(192,57,43,0.35),rgba(192,57,43,0.18));border:2px solid rgba(192,57,43,0.7);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px;animation:pulse 1s infinite';
     btnConf.innerHTML = `<div>${t.ehCritico ? '🎯 CRÍTICO! ' : '⚔ '}${t.nomeAtaque}</div><div style="font-size:0.9rem;font-weight:700;margin-top:2px">${labelDano}</div><div style="font-size:0.55rem;opacity:0.7;margin-top:2px">toque para confirmar</div>`;
     btnConf.addEventListener('touchend', e => {
       e.preventDefault();
@@ -4946,18 +4946,18 @@ function _atualizarZonaDireita() {
   if (bs && (bs.fase === 'iniciativa' || bs.fase === 'empate')) {
     const jaRolei = charNome && bs.iniciativasRoladas?.[charNome] != null;
     const lbl = document.createElement('div');
-    lbl.style.cssText = 'font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-align:center;margin-bottom:6px';
+    lbl.style!.cssText = 'font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-align:center;margin-bottom:6px';
     lbl.textContent = bs.fase === 'empate' ? '⚠ Empate — re-role' : '🎲 Rolando iniciativas…';
     ctxEl.appendChild(lbl);
     if (!jaRolei || bs.fase === 'empate') {
       const btnIni = document.createElement('button');
-      btnIni.style.cssText = 'width:100%;min-height:52px;padding:10px;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.45);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.1em;touch-action:manipulation';
+      btnIni.style!.cssText = 'width:100%;min-height:52px;padding:10px;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.45);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.1em;touch-action:manipulation';
       btnIni.textContent = '🎲 Rolar Iniciativa';
       btnIni.addEventListener('touchend', e => { e.preventDefault(); abrirModalIniciativa(); });
       ctxEl.appendChild(btnIni);
     } else {
       const wait = document.createElement('div');
-      wait.style.cssText = 'font-size:0.62rem;color:var(--suave);text-align:center;padding:8px;font-style:italic';
+      wait.style!.cssText = 'font-size:0.62rem;color:var(--suave);text-align:center;padding:8px;font-style:italic';
       wait.textContent = '✓ Aguardando outros jogadores…';
       ctxEl.appendChild(wait);
     }
@@ -4979,7 +4979,7 @@ function _atualizarZonaDireita() {
       const hpCor   = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
       const rodada  = bs.turno_round || 1;
       const obs = document.createElement('div');
-      obs.style.cssText = 'width:100%;font-family:var(--fonte-d);font-size:0.6rem;text-align:center;padding:6px 4px';
+      obs.style!.cssText = 'width:100%;font-family:var(--fonte-d);font-size:0.6rem;text-align:center;padding:6px 4px';
       obs.innerHTML = `
         <div style="color:rgba(200,168,75,0.6);margin-bottom:4px;font-size:0.55rem;text-transform:uppercase;letter-spacing:.06em">Rodada ${rodada}</div>
         <div style="color:rgba(255,255,255,0.7);margin-bottom:6px">⚔ <strong style="color:#f0cc6a">${atacanteNomeTurno}</strong></div>
@@ -5010,7 +5010,7 @@ function _atualizarZonaDireita() {
           ctxEl.appendChild(wrap);
           // botão de cancelar/voltar ao início
           const btnCancel = document.createElement('button');
-          btnCancel.style.cssText = 'width:100%;min-height:36px;margin-top:6px;padding:6px;background:none;border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;touch-action:manipulation';
+          btnCancel.style!.cssText = 'width:100%;min-height:36px;margin-top:6px;padding:6px;background:none;border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;touch-action:manipulation';
           btnCancel.textContent = '✕ Cancelar ataque';
           btnCancel.addEventListener('touchend', e => {
             e.preventDefault();
@@ -5025,7 +5025,7 @@ function _atualizarZonaDireita() {
       }
 
       const btnAtk = document.createElement('button');
-      btnAtk.style.cssText = 'width:100%;min-height:48px;padding:8px;background:linear-gradient(135deg,rgba(192,57,43,0.3),rgba(192,57,43,0.15));border:1px solid rgba(192,57,43,0.5);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px';
+      btnAtk.style!.cssText = 'width:100%;min-height:48px;padding:8px;background:linear-gradient(135deg,rgba(192,57,43,0.3),rgba(192,57,43,0.15));border:1px solid rgba(192,57,43,0.5);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px';
       btnAtk.textContent = '⚔ Atacar';
       btnAtk.addEventListener('touchend', e => {
         e.preventDefault();
@@ -5036,14 +5036,14 @@ function _atualizarZonaDireita() {
       ctxEl.appendChild(btnAtk);
 
       const btnPass = document.createElement('button');
-      btnPass.style.cssText = 'width:100%;min-height:38px;padding:6px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;touch-action:manipulation;margin-bottom:5px';
+      btnPass.style!.cssText = 'width:100%;min-height:38px;padding:6px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;touch-action:manipulation;margin-bottom:5px';
       btnPass.textContent = '→ Pular vez';
       btnPass.addEventListener('touchend', e => { e.preventDefault(); batalhaPassarVez(); _atualizarZonaDireita(); });
       ctxEl.appendChild(btnPass);
     }
   } else if (!bs && isMestre && mapId) {
     const btnIni = document.createElement('button');
-    btnIni.style.cssText = 'width:100%;min-height:44px;padding:8px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px';
+    btnIni.style!.cssText = 'width:100%;min-height:44px;padding:8px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px';
     btnIni.textContent = '⚔ Iniciar Batalha';
     btnIni.addEventListener('touchend', e => { e.preventDefault(); abrirModalIniciarBatalha(); });
     ctxEl.appendChild(btnIni);
@@ -5056,7 +5056,7 @@ function _atualizarZonaDireita() {
 
   visiveis.forEach((b: any) => {
     const btn = document.createElement('button');
-    btn.style.cssText = [
+    btn.style!.cssText = [
       'width:100%;min-height:44px;padding:6px 8px',
       'background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3)',
       'border-radius:8px;color:#c8d8e8;font-family:var(--fonte-d)',
@@ -5072,7 +5072,7 @@ function _atualizarZonaDireita() {
 
   if (ocultos.length) {
     const maisBtn = document.createElement('button');
-    maisBtn.style.cssText = 'width:100%;min-height:44px;padding:6px 8px;background:rgba(30,45,66,0.5);border:1px dashed rgba(79,163,209,0.2);border-radius:8px;color:rgba(79,163,209,0.6);font-size:0.62rem;cursor:pointer;touch-action:manipulation';
+    maisBtn.style!.cssText = 'width:100%;min-height:44px;padding:6px 8px;background:rgba(30,45,66,0.5);border:1px dashed rgba(79,163,209,0.2);border-radius:8px;color:rgba(79,163,209,0.6);font-size:0.62rem;cursor:pointer;touch-action:manipulation';
     maisBtn.textContent = '+'+ocultos.length+' ações';
     maisBtn.addEventListener('touchend', e => { e.preventDefault(); ctxMostrarOcultos(ocultos); });
     ctxEl.appendChild(maisBtn);
@@ -5093,17 +5093,17 @@ function _atualizarZonaDireita() {
 
     if (itensDisp.length) {
       const sep = document.createElement('div');
-      sep.style.cssText = 'height:1px;background:rgba(255,255,255,0.06);margin:4px 0';
+      sep.style!.cssText = 'height:1px;background:rgba(255,255,255,0.06);margin:4px 0';
       ctxEl.appendChild(sep);
       const lbl = document.createElement('div');
-      lbl.style.cssText = 'font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px';
+      lbl.style!.cssText = 'font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px';
       lbl.textContent = '🧪 Itens';
       ctxEl.appendChild(lbl);
       itensDisp.slice(0, 6).forEach((invItem: any) => {
         const def = (INV?.itemDefs || []).find((d: any) => d.id === (invItem.item_catalog_id || invItem.item_def_id));
         if (!def) return;
         const btnItem = document.createElement('button');
-        btnItem.style.cssText = 'width:100%;min-height:40px;padding:5px 8px;background:rgba(39,174,96,0.08);border:1px solid rgba(39,174,96,0.25);border-radius:8px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-align:left;touch-action:manipulation;display:flex;align-items:center;gap:6px';
+        btnItem.style!.cssText = 'width:100%;min-height:40px;padding:5px 8px;background:rgba(39,174,96,0.08);border:1px solid rgba(39,174,96,0.25);border-radius:8px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-align:left;touch-action:manipulation;display:flex;align-items:center;gap:6px';
         btnItem.innerHTML = '<span style="font-size:1rem">'+(def.icone||'🧪')+'</span><span>'+def.nome+' ×'+invItem.quantidade+'</span>';
         btnItem.addEventListener('touchend', e => {
           e.preventDefault();
@@ -5163,7 +5163,7 @@ function _atualizarMovInfo() {
       let minDist: any = Infinity, minNome: any = null;
       (RPG_DATA?.characters || []).forEach(c => {
         if (c.nome === charNome) return;
-        const pos = c.map_positions?.[MAPA_STATE.mapaAtualId];
+        const pos = c.map_positions?.[MAPA_STATE.mapaAtualId!];
         if (!pos) return;
         const dx = (minhaPos.col ?? minhaPos.x ?? 0) - (pos.col ?? pos.x ?? 0);
         const dy = (minhaPos.row ?? minhaPos.y ?? 0) - (pos.row ?? pos.y ?? 0);
@@ -5200,7 +5200,7 @@ function tradeMostrarBadgeMobile(proposta: any) {
   if (!badge) {
     badge = document.createElement('div');
     badge.id = 'trade-badge-mobile';
-    badge.style.cssText = [
+    badge.style!.cssText = [
       'position:fixed;top:10px;left:50%;transform:translateX(-50%)',
       'z-index:9100;background:rgba(10,15,25,0.95)',
       'border:1px solid rgba(79,163,209,0.5);border-radius:10px',
@@ -5230,7 +5230,7 @@ function tradeMostrarBadgeMobile(proposta: any) {
 
   MOBILE_CTRL._tradeBadgeEl = badge;
   (MOBILE_CTRL as any)._tradeProposta = proposta;
-  badge.style.display = 'block';
+  badge.style!.display = 'block';
 
   // Countdown de 30s
   let seg = 30;
@@ -5264,7 +5264,7 @@ function tradeMostrarBadgeMobile(proposta: any) {
 
 window.tradeBadgeExpandir = function() {
   const exp = document.getElementById('trade-badge-expandido');
-  if (exp) exp.style.display = exp.style.display === 'none' ? 'block' : 'none';
+  if (exp) exp.style!.display = exp.style!.display === 'none' ? 'block' : 'none';
 };
 
 window.tradeAceitarBadge = async function() {
@@ -5368,7 +5368,7 @@ const _origWsCheckTrade = setInterval(()=>{
 async function _mostrarPropostaRecebida(p: any) {
   const wrap = document.getElementById('trade-proposta-recebida');
   if (!wrap) return;
-  document.getElementById('trade-proposta-titulo').textContent = `Proposta de ${p.de}`;
+  document.getElementById('trade-proposta-titulo')!.textContent = `Proposta de ${p.de}`;
   // Buscar itens da proposta
   const cardsEl = document.getElementById('trade-proposta-cards');
   let html = '';
@@ -5378,8 +5378,8 @@ async function _mostrarPropostaRecebida(p: any) {
       if (rows?.[0]) html += _renderItemCard(rows[0].item_catalog || rows[0], {});
     } catch(e) {}
   }
-  cardsEl.innerHTML = html || '<div style="color:var(--suave)">Itens não encontrados</div>';
-  wrap.style.display = 'block';
+  cardsEl!.innerHTML = html || '<div style="color:var(--suave)">Itens não encontrados</div>';
+  wrap.style!.display = 'block';
 }
 
 
@@ -5412,13 +5412,13 @@ async function abrirModalMercado(mercadoId: any, titulo: any) {
   MERCADO_STATE.titulo = titulo || 'Mercado';
   MERCADO_STATE.aba = 'comprar';
   MERCADO_STATE.modoGerenciar = false;
-  document.getElementById('modal-mercado-overlay').style.display = 'flex';
-  document.getElementById('mercado-titulo').textContent = `🏪 ${MERCADO_STATE.titulo}`;
+  document.getElementById('modal-mercado-overlay')!.style!.display = 'flex';
+  document.getElementById('mercado-titulo')!.textContent = `🏪 ${MERCADO_STATE.titulo}`;
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const btnModo = document.getElementById('mercado-btn-modo');
-  if (btnModo) btnModo.style.display = isMestre ? '' : 'none';
+  if (btnModo) btnModo.style!.display = isMestre ? '' : 'none';
   const abaHist = document.getElementById('merc-aba-historico');
-  if (abaHist) abaHist.style.display = isMestre ? '' : 'none';
+  if (abaHist) abaHist.style!.display = isMestre ? '' : 'none';
   _mercPreencherDenomSelect();
   _mercPreencherTaxaRevenda();
   await Promise.all([carregarMercadoItens(mercadoId), _mercAtualizarSaldo()]);
@@ -5426,7 +5426,7 @@ async function abrirModalMercado(mercadoId: any, titulo: any) {
 }
 
 window.fecharModalMercado = function() {
-  document.getElementById('modal-mercado-overlay').style.display = 'none';
+  document.getElementById('modal-mercado-overlay')!.style!.display = 'none';
   MERCADO_STATE.mercadoId = null;
 };
 
@@ -5469,11 +5469,11 @@ function mercadoToggleModo() {
   MERCADO_STATE.modoGerenciar = !MERCADO_STATE.modoGerenciar;
   const painel = document.getElementById('mercado-painel-gerenciar');
   const btn    = document.getElementById('mercado-btn-modo');
-  if (painel) painel.style.display = MERCADO_STATE.modoGerenciar ? 'block' : 'none';
+  if (painel) painel.style!.display = MERCADO_STATE.modoGerenciar ? 'block' : 'none';
   if (btn) {
     btn.textContent = MERCADO_STATE.modoGerenciar ? '✕ Fechar Gerenciar' : '⚙ Gerenciar';
-    btn.style.background   = MERCADO_STATE.modoGerenciar ? 'rgba(200,168,75,0.18)' : 'rgba(200,168,75,0.08)';
-    btn.style.borderColor  = MERCADO_STATE.modoGerenciar ? 'rgba(200,168,75,0.5)' : 'rgba(200,168,75,0.25)';
+    btn.style!.background   = MERCADO_STATE.modoGerenciar ? 'rgba(200,168,75,0.18)' : 'rgba(200,168,75,0.08)';
+    btn.style!.borderColor  = MERCADO_STATE.modoGerenciar ? 'rgba(200,168,75,0.5)' : 'rgba(200,168,75,0.25)';
   }
   if (MERCADO_STATE.modoGerenciar) { mercadoGerTabAtivar('adicionar'); _mercadoCarregarCatalogo(); }
 }
@@ -5486,8 +5486,8 @@ function mercadoGerTabAtivar(tab: any) {
     const btn   = document.getElementById(`gertab-${t}`);
     const panel = document.getElementById(`gerpanel-${t}`);
     const ativa = t === tab;
-    if (btn)   { btn.style.borderBottomColor = ativa ? '#c8a84b' : 'transparent'; btn.style.color = ativa ? '#c8a84b' : '#7a92aa'; }
-    if (panel) panel.style.display = ativa ? 'block' : 'none';
+    if (btn)   { btn.style!.borderBottomColor = ativa ? '#c8a84b' : 'transparent'; btn.style!.color = ativa ? '#c8a84b' : '#7a92aa'; }
+    if (panel) panel.style!.display = ativa ? 'block' : 'none';
   });
   if (tab === 'lista') _mercadoRenderListaGerenciar();
 }
@@ -5511,20 +5511,20 @@ function mercadoToggleItemCustom() {
   const btn     = document.getElementById('mercado-btn-custom');
   if (!fields) return;
   if (MERCADO_STATE.modoCustom) {
-    fields.style.display = 'flex';
-    if (selItem) selItem.style.opacity = '0.35';
-    if (btn) { btn.style.background='rgba(79,163,209,0.2)'; btn.style.borderColor='rgba(79,163,209,0.4)'; }
+    fields.style!.display = 'flex';
+    if (selItem) selItem.style!.opacity = '0.35';
+    if (btn) { btn.style!.background='rgba(79,163,209,0.2)'; btn.style!.borderColor='rgba(79,163,209,0.4)'; }
   } else {
-    fields.style.display = 'none';
-    if (selItem) selItem.style.opacity = '1';
-    if (btn) { btn.style.background='rgba(79,163,209,0.08)'; btn.style.borderColor='rgba(79,163,209,0.2)'; }
+    fields.style!.display = 'none';
+    if (selItem) selItem.style!.opacity = '1';
+    if (btn) { btn.style!.background='rgba(79,163,209,0.08)'; btn.style!.borderColor='rgba(79,163,209,0.2)'; }
   }
 }
 
 async function mercadoAdicionarItem() {
   const rpgId  = _mercRpgId();
   const mid    = MERCADO_STATE.mercadoId;
-  const preco  = parseFloat(document.getElementById('mercado-novo-preco')?.value) || 0;
+  const preco  = parseFloat(document.getElementById('mercado-novo-preco')?.value!) || 0;
   const denom  = document.getElementById('mercado-novo-denom')?.value || 'Ouro';
   const estoqueInput = document.getElementById('mercado-novo-estoque')?.value;
   const estoque = (estoqueInput === '' || estoqueInput == null) ? null : parseInt(estoqueInput);
@@ -5545,8 +5545,8 @@ async function mercadoAdicionarItem() {
     const selItem = document.getElementById('mercado-sel-item'); if (selItem) selItem.value = '';
     const nomeEl  = document.getElementById('mercado-custom-nome'); if (nomeEl) nomeEl.value = '';
     const descEl  = document.getElementById('mercado-custom-desc'); if (descEl) descEl.value = '';
-    document.getElementById('mercado-novo-preco').value   = '10';
-    document.getElementById('mercado-novo-estoque').value = '';
+    document.getElementById('mercado-novo-preco')!.value   = '10';
+    document.getElementById('mercado-novo-estoque')!.value = '';
     await carregarMercadoItens(mid);
     if (MERCADO_STATE.gerTab === 'lista') _mercadoRenderListaGerenciar();
   } catch (e: any) { mostrarToast('Erro ao adicionar: ' + (e.message||'falha'), 'erro'); }
@@ -5605,7 +5605,7 @@ async function mercadoRemoverItem(rowId: any) {
 }
 
 function mercadoSalvarConfig() {
-  const taxa = parseInt(document.getElementById('mercado-taxa-revenda')?.value) || 50;
+  const taxa = parseInt(document.getElementById('mercado-taxa-revenda')?.value!) || 50;
   MERCADO_STATE.config.taxaRevenda = taxa;
   mostrarToast(`✓ Taxa de revenda: ${taxa}%`, 'ok');
 }
@@ -5781,11 +5781,11 @@ async function _mercCarregarAbaVender() {
     const rows = await sb(
       `inventario?rpg_id=eq.${encodeURIComponent(rpgId)}&character_id=eq.${encodeURIComponent(charId)}&equipado=eq.false&select=*,item_catalog(*)`
     );
-    if (!rows?.length) { listaEl.innerHTML = '<div style="text-align:center;padding:30px;color:#7a92aa;font-style:italic">Nenhum item disponível para venda</div>'; return; }
+    if (!rows?.length) { listaEl!.innerHTML = '<div style="text-align:center;padding:30px;color:#7a92aa;font-style:italic">Nenhum item disponível para venda</div>'; return; }
     const taxa = MERCADO_STATE.config.taxaRevenda / 100;
     const precosMercado: Record<string, any> = {};
     MERCADO_STATE.todos.forEach(r => { if (r.item_catalog_id) precosMercado[r.item_catalog_id] = { preco:r.preco, denom:r.denominacao }; });
-    listaEl.innerHTML = rows.map((row: any) => {
+    listaEl!.innerHTML = rows.map((row: any) => {
       const it   = row.item_catalog || {};
       const nome = it.nome || 'Item';
       const desc = it.descricao || it.efeito || '';
@@ -5873,8 +5873,8 @@ function mercadoMudarAba(aba: any) {
     const btn    = document.getElementById(`merc-aba-${a}`);
     const painel = document.getElementById(paineis[a]);
     const ativa  = a === aba;
-    if (btn)   { btn.style.borderBottomColor = ativa ? '#c8a84b' : 'transparent'; btn.style.color = ativa ? '#f0cc6a' : '#7a92aa'; }
-    if (painel) painel.style.display = ativa ? 'flex' : 'none';
+    if (btn)   { btn.style!.borderBottomColor = ativa ? '#c8a84b' : 'transparent'; btn.style!.color = ativa ? '#f0cc6a' : '#7a92aa'; }
+    if (painel) painel.style!.display = ativa ? 'flex' : 'none';
   });
   if (aba === 'vender')    _mercCarregarAbaVender();
   if (aba === 'historico') mercadoCarregarHistorico();
@@ -5882,7 +5882,7 @@ function mercadoMudarAba(aba: any) {
     MERCADO_STATE.modoGerenciar = false;
     const pg  = document.getElementById('mercado-painel-gerenciar');
     const btn = document.getElementById('mercado-btn-modo');
-    if (pg)  pg.style.display = 'none';
+    if (pg)  pg.style!.display = 'none';
     if (btn) btn.textContent = '⚙ Gerenciar';
   }
 }
@@ -6003,14 +6003,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const a5Card = document.getElementById('cfg-status-inv-card');
   if (a5Card) {
     // Disparar imediatamente se o card já estiver visível (mestre já logado antes do DOMContentLoaded)
-    if (a5Card.style.display !== 'none' && !a5Card.dataset.carregado) {
-      a5Card.dataset.carregado = '1';
+    if (a5Card.style!.display !== 'none' && !a5Card.dataset!.carregado) {
+      a5Card.dataset!.carregado = '1';
       a5RecalcularPainel();
     }
     // Observar mudanças futuras de visibilidade
     const obs = new MutationObserver(() => {
-      if (a5Card.style.display !== 'none' && !a5Card.dataset.carregado) {
-        a5Card.dataset.carregado = '1';
+      if (a5Card.style!.display !== 'none' && !a5Card.dataset!.carregado) {
+        a5Card.dataset!.carregado = '1';
         a5RecalcularPainel();
       }
     });
@@ -6035,9 +6035,9 @@ if (typeof _origAbrirInventario === 'function') {
         const btn = document.createElement('button');
         btn.id = 'inv-btn-trade';
         btn.innerHTML = '🔄 PROPOR TRADE';
-        btn.style.cssText = 'width:100%;margin-top:6px;padding:10px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.25);border-radius:8px;color:var(--primario);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;letter-spacing:0.06em';
+        btn.style!.cssText = 'width:100%;margin-top:6px;padding:10px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.25);border-radius:8px;color:var(--primario);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;letter-spacing:0.06em';
         btn.onclick = () => abrirModalTrade(charNome, charId);
-        wrap.parentNode.insertBefore(btn, wrap.nextSibling);
+        wrap.parentNode!.insertBefore(btn, wrap.nextSibling);
         return true;
       }
       return false;
@@ -6135,8 +6135,8 @@ function _notificarNovoCreativoPendente() {
     if (!badge) {
       badge = document.createElement('span');
       badge.className = 'badge-notif-criativo';
-      badge.style.cssText = 'position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#e74c3c;border:2px solid var(--fundo,#1a1a2e);border-radius:50%;animation:pulseNotif 1.5s ease-in-out infinite;pointer-events:none;';
-      btnCriativos.style.position = 'relative';
+      badge.style!.cssText = 'position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#e74c3c;border:2px solid var(--fundo,#1a1a2e);border-radius:50%;animation:pulseNotif 1.5s ease-in-out infinite;pointer-events:none;';
+      btnCriativos.style!.position = 'relative';
       btnCriativos.appendChild(badge);
     }
   }
@@ -6222,7 +6222,7 @@ function _onReceberAnimacaoCriativo(data: any) {
     ['criativo-msg-fase1', 'criativo-msg-fase2'].forEach(id => {
       const el = document.getElementById(id);
       if (el && !el._preWrapPatched) {
-        el.style.whiteSpace = 'pre-wrap';
+        el.style!.whiteSpace = 'pre-wrap';
         el._preWrapPatched = true;
       }
     });
@@ -6640,12 +6640,12 @@ function _onReceberAnimacaoCriativo(data: any) {
   window.batalhaVerificarIniciativasCompletas = function(bid) {
     const bs = MAPA_STATE.batalhas[bid];
     if (!bs) return;
-    const todosRolaram = bs.participantes.every(p => bs.iniciativasRoladas[p.nome] != null);
+    const todosRolaram = bs.participantes.every(p => bs.iniciativasRoladas![p.nome] != null);
     if (!todosRolaram) return;
 
     const grupos: Record<string, any> = {};
     bs.participantes.forEach(p => {
-      const v = bs.iniciativasRoladas[p.nome];
+      const v = bs.iniciativasRoladas![p.nome];
       if (!grupos[v]) grupos[v] = [];
       grupos[v].push(p);
     });
@@ -6664,10 +6664,10 @@ function _onReceberAnimacaoCriativo(data: any) {
         mostrarToast('⚠ Empate persistente — desempate automático aplicado.', 'aviso');
         const sorted = [...empatados].sort();
         sorted.forEach((n, i) => {
-          const baseVal = bs.iniciativasRoladas[n] ?? 10;
-          bs.iniciativasRoladas[n] = baseVal + (sorted.length - i) * 0.01; // micro-diferença
+          const baseVal = bs.iniciativasRoladas![n] ?? 10;
+          bs.iniciativasRoladas![n] = baseVal + (sorted.length - i) * 0.01; // micro-diferença
           const p = bs.participantes.find(x => x.nome === n);
-          if (p) p.iniciativa = bs.iniciativasRoladas[n];
+          if (p) p.iniciativa = bs.iniciativasRoladas![n];
         });
         bs._rerollCount = 0;
         bs.empatados = [];
@@ -6675,15 +6675,15 @@ function _onReceberAnimacaoCriativo(data: any) {
       } else {
         bs.empatados = empatados;
         empatados.forEach((n: any) => {
-          delete bs.iniciativasRoladas[n];
+          delete bs.iniciativasRoladas![n];
           const p = bs.participantes.find(x => x.nome === n);
           if (p) p.iniciativa = null;
           // NPCs re-rolam automaticamente
           if (p && p.tipo === 'npc') {
             const roll = Math.floor(Math.random() * 20) + 1;
-            bs.iniciativasRoladas[n] = roll;
+            bs.iniciativasRoladas![n] = roll;
             p.iniciativa = roll;
-            bs.empatados = bs.empatados.filter(e => e !== n);
+            bs.empatados = bs.empatados!.filter(e => e !== n);
           }
         });
         bs.fase = 'empate';
@@ -6695,7 +6695,7 @@ function _onReceberAnimacaoCriativo(data: any) {
           empatados: bs.empatados, participantes: bs.participantes
         });
 
-        const pendentesHumanos = bs.empatados.length > 0;
+        const pendentesHumanos = bs.empatados!.length > 0;
         if (pendentesHumanos) {
           mostrarToast('⚠ Empate! Os participantes marcados devem re-rolar.', '');
         } else {
@@ -6708,8 +6708,8 @@ function _onReceberAnimacaoCriativo(data: any) {
     // Limpar contador ao resolver
     bs._rerollCount = 0;
 
-    bs.participantes.sort((a, b) => (bs.iniciativasRoladas[b.nome] || 0) - (bs.iniciativasRoladas[a.nome] || 0));
-    bs.participantes.forEach(p => { p.iniciativa = bs.iniciativasRoladas[p.nome]; });
+    bs.participantes.sort((a, b) => (bs.iniciativasRoladas![b.nome] || 0) - (bs.iniciativasRoladas![a.nome] || 0));
+    bs.participantes.forEach(p => { p.iniciativa = bs.iniciativasRoladas![p.nome]; });
     bs.fase = 'combate';
     bs.ordemAtual = 0;
     bs.empatados = [];
@@ -6777,7 +6777,7 @@ function _onReceberAnimacaoCriativo(data: any) {
       await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
         { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
     } else {
-      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
         { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
     }
   };
@@ -6895,7 +6895,7 @@ function _onReceberAnimacaoCriativo(data: any) {
         const factionSel = document.getElementById('nc-faction') || document.getElementById('fc-faction');
         const factionWrap = factionSel?.closest('.form-group');
         if (factionWrap) {
-          factionWrap.style.display = (val === 'npc' || val === 'criatura' || val === 'objeto') ? '' : 'none';
+          factionWrap.style!.display = (val === 'npc' || val === 'criatura' || val === 'objeto') ? '' : 'none';
         }
       });
     };
@@ -7090,7 +7090,7 @@ function _onReceberAnimacaoCriativo(data: any) {
     const el = document.getElementById('atk-pets-section');
     if (!el) return;
 
-    if (!pets.length) { el.style.display = 'none'; return; }
+    if (!pets.length) { el.style!.display = 'none'; return; }
 
     // BUG #4 FIX: Verificar se o dono está ativo com bloqueio total
     const donoAtivo = petDonoEstaAtivo(donoNome, contexto);
@@ -7130,7 +7130,7 @@ function _onReceberAnimacaoCriativo(data: any) {
     }).join('');
 
     el.innerHTML = rows;
-    el.style.display = rows ? 'block' : 'none';
+    el.style!.display = rows ? 'block' : 'none';
   };
 
   _fixLog('B04', 'Pet verifica bloqueio do dono por tipo de habilidade');
@@ -7187,7 +7187,7 @@ function _onReceberAnimacaoCriativo(data: any) {
     // Fallback caso original não exista
     try {
       await sb(
-        `characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(c.nome)}`,
+        `characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(c.nome)}`,
         { method: 'PATCH', body: JSON.stringify({ custom_attrs: ca, xp: ca.xp }) }
       );
     } catch(e) { mostrarToast('Erro ao salvar XP', 'erro'); }
@@ -7232,7 +7232,7 @@ function _onReceberAnimacaoCriativo(data: any) {
 
   // Patch em atkSelecionarAlvo para bloquear alvos fora de alcance
   const _atkSelecionarAlvo_original = window.atkSelecionarAlvo;
-  window.atkSelecionarAlvo = function(nomeAlvo) {
+  (window as any).atkSelecionarAlvo = function(nomeAlvo: any) {
     const h = COMBATE.habilidadeSel;
     if (h?.alcance_celulas != null && COMBATE.contexto === 'campanha') {
       const dist = _distanciaEntreTokens(COMBATE.atacanteNome, nomeAlvo);
@@ -7296,7 +7296,7 @@ function _onReceberAnimacaoCriativo(data: any) {
 
 // ── Grid dimensions from the modal form ─────────────────────────────────
 function _nmceGridDims() {
-  const cols = parseInt(document.getElementById('nm-grid')?.value) || 20;
+  const cols = parseInt(document.getElementById('nm-grid')?.value!) || 20;
   // Canvas is always 800×500 internally; rows derived proportionally from cols
   const rows = Math.round(cols * (500 / 800));
   return { cols, rows };
@@ -7344,9 +7344,9 @@ function _nmceShowSnapIndicator(snap: any, canvas: any) {
   // Position relative to wrap (which is position:relative)
   const offsetLeft = cRect.left - wRect.left;
   const offsetTop  = cRect.top  - wRect.top;
-  dot.style.display = 'block';
-  dot.style.left = (offsetLeft + snap.px * scaleX) + 'px';
-  dot.style.top  = (offsetTop  + snap.py * scaleY) + 'px';
+  dot.style!.display = 'block';
+  dot.style!.left = (offsetLeft + snap.px * scaleX) + 'px';
+  dot.style!.top  = (offsetTop  + snap.py * scaleY) + 'px';
 }
 
 // ── Generate wall segments between two snap points ───────────────────────
@@ -7405,10 +7405,10 @@ function _nmceSceneClick(xPx: any, yPx: any, canvas: any) {
     const p1 = nmCE.wallFirstSnap;
     nmCE.wallFirstSnap = null;
     const dot = document.getElementById('nmce-wall-snap');
-    if (dot) dot.style.display = 'none';
+    if (dot) dot.style!.display = 'none';
 
     const cor     = document.getElementById('nmce-parede-cor')?.value || document.getElementById('nmce-fs-parede-cor')?.value || '#7ec8f0';
-    const largura = parseInt(document.getElementById('nmce-parede-largura')?.value || document.getElementById('nmce-fs-parede-largura')?.value) || 3;
+    const largura = parseInt((document.getElementById('nmce-parede-largura')?.value as any) || document.getElementById('nmce-fs-parede-largura')?.value) || 3;
 
     const segs = _nmceGerarSegmentos(p1, snap);
     segs.forEach(s => {
@@ -7422,10 +7422,10 @@ function _nmceSceneClick(xPx: any, yPx: any, canvas: any) {
 
   } else if (nmCE.tool === 'porta') {
     const { col, row } = _nmceSnapCelula(xPx, yPx, canvas);
-    const nome         = document.getElementById('nmce-porta-nome')?.value.trim() || 'Porta';
-    const icone        = document.getElementById('nmce-porta-icone')?.value.trim() || '🚪';
+    const nome         = document.getElementById('nmce-porta-nome')?.value!.trim!()! || 'Porta';
+    const icone        = document.getElementById('nmce-porta-icone')?.value!.trim!()! || '🚪';
     const trancada     = document.getElementById('nmce-porta-trancada')?.checked || false;
-    const chave_palavra = trancada ? (document.getElementById('nmce-porta-chave')?.value.trim() || nome) : '';
+    const chave_palavra = trancada ? (document.getElementById('nmce-porta-chave')?.value!.trim!()! || nome) : '';
     nmCE.renderData.portas.push({
       id: 'door_' + Date.now(), col, row, nome, aberta: false,
       trancada, chave_palavra,
@@ -7436,8 +7436,8 @@ function _nmceSceneClick(xPx: any, yPx: any, canvas: any) {
 
   } else if (nmCE.tool === 'objeto') {
     const { col, row } = _nmceSnapCelula(xPx, yPx, canvas);
-    const nome  = document.getElementById('nmce-obj-nome')?.value.trim() || 'Obstáculo';
-    const icone = document.getElementById('nmce-obj-icone')?.value.trim() || '🪨';
+    const nome  = document.getElementById('nmce-obj-nome')?.value!.trim!()! || 'Obstáculo';
+    const icone = document.getElementById('nmce-obj-icone')?.value!.trim!()! || '🪨';
     nmCE.renderData.objetos.push({
       id: 'ob_' + Date.now(), tipo: 'obstaculo', col, row, nome, icone, aberto: false,
     });
@@ -7445,11 +7445,11 @@ function _nmceSceneClick(xPx: any, yPx: any, canvas: any) {
     _nmceAtualizarLista();
   } else if (nmCE.tool === 'bau') {
     const { col, row } = _nmceSnapCelula(xPx, yPx, canvas);
-    const nome         = document.getElementById('nmce-bau-nome')?.value.trim() || 'Baú';
+    const nome         = document.getElementById('nmce-bau-nome')?.value!.trim!()! || 'Baú';
     const trancado     = document.getElementById('nmce-bau-trancado')?.checked || false;
-    const chave_palavra = trancado ? (document.getElementById('nmce-bau-chave')?.value.trim() || '') : '';
+    const chave_palavra = trancado ? (document.getElementById('nmce-bau-chave')?.value!.trim!()! || '') : '';
     const lootTipo     = document.getElementById('nmce-bau-loot')?.value || 'nenhum';
-    const loot_ouro    = lootTipo === 'ouro' ? (parseInt(document.getElementById('nmce-bau-ouro')?.value) || 50) : null;
+    const loot_ouro    = lootTipo === 'ouro' ? (parseInt(document.getElementById('nmce-bau-ouro')?.value!) || 50) : null;
     nmCE.renderData.objetos.push({
       id: 'bau_' + Date.now(), tipo: 'bau', col, row, nome, icone: '📦',
       aberto: false, trancado, chave_palavra,
@@ -7486,7 +7486,7 @@ function _nmceRenderWalls(canvas: any) {
     line.setAttribute('stroke-width', p.largura || 3);
     line.setAttribute('stroke-linecap', 'round');
     // Click to remove
-    line.style.cursor = 'pointer'; line.style.pointerEvents = 'stroke';
+    line.style!.cursor = 'pointer'; line.style!.pointerEvents = 'stroke';
     line.addEventListener('click', (e) => { e.stopPropagation(); nmCE.renderData.paredes.splice(i, 1); _nmceRenderWalls(canvas); _nmceAtualizarLista(); });
     svg.appendChild(line);
     // Wider hit area
@@ -7508,7 +7508,7 @@ function _nmceRenderWalls(canvas: any) {
     txt.setAttribute('text-anchor', ('middle') as any); txt.setAttribute('font-size', (Math.round(r * 1.3) as any));
     txt.textContent = emoji;
     [circ, txt].forEach(el => { 
-      el.style.cursor = 'pointer'; 
+      el.style!.cursor = 'pointer'; 
       el.addEventListener('click', (e) => { 
         e.stopPropagation(); 
         onClick(e);
@@ -7573,7 +7573,7 @@ function nmceLimparParedes() {
   nmCE.renderData = { paredes: [], portas: [], objetos: [] };
   nmCE.wallFirstSnap = null;
   const dot = document.getElementById('nmce-wall-snap');
-  if (dot) dot.style.display = 'none';
+  if (dot) dot.style!.display = 'none';
   _nmceRenderWalls(document.getElementById('nmce-canvas'));
   _nmceAtualizarLista();
 }

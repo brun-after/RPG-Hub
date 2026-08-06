@@ -22,8 +22,8 @@ async function descansoExecutar(tipo: any, nomePersonagem: any) {
     if (bs?.cooldowns) {
       const skills = (RPG_DATA?.skills||[]).filter(s => s.personagem === nomePersonagem);
       skills.forEach(sk => {
-        if (sk.tipo_recarga === 'descanso_curto' && bs.cooldowns[sk.id]) {
-          delete bs.cooldowns[sk.id];
+        if (sk.tipo_recarga === 'descanso_curto' && bs.cooldowns![sk.id]) {
+          delete bs.cooldowns![sk.id];
         }
       });
     }
@@ -62,7 +62,7 @@ async function descansoExecutar(tipo: any, nomePersonagem: any) {
   }
 
   await sb(
-    'characters?rpg_id=eq.' + encodeURIComponent(RPG_DATA.rpgId) +
+    'characters?rpg_id=eq.' + encodeURIComponent(RPG_DATA!.rpgId) +
     '&nome=eq.' + encodeURIComponent(nomePersonagem),
     { method: 'PATCH', body: JSON.stringify({ hp_atual: c.hp_atual, custom_attrs: ca }) }
   );

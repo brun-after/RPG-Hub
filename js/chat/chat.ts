@@ -125,7 +125,7 @@ async function chatIniciar(rpgId: any, wsRef: any) {
     enviarPresenca();
     // Atualizar lista de online removendo inativos e atualizar badge
     const agora = Date.now();
-    CHAT.online = CHAT.online.filter(u => agora - u.ts < 35000);
+    CHAT.online = CHAT.online.filter(u => agora - u!.ts! < 35000);
     chatAtualizarOnline();
     _atualizarBadgeMesa();
     // Re-renderizar vez (pode ter mudado status offline) — usa a batalha do jogador
@@ -143,8 +143,8 @@ function chatPopularNPCSel() {
   const bar = document.getElementById('chat-identity-bar');
   const sel = document.getElementById('chat-npc-sel');
   if (!bar || !sel) return;
-  if (RPG_DATA?.myRole !== 'mestre') { bar.style.display = 'none'; return; }
-  bar.style.display = 'block';
+  if (RPG_DATA?.myRole !== 'mestre') { bar.style!.display = 'none'; return; }
+  bar.style!.display = 'block';
   const atual = sel.value;
   const npcs = (RPG_DATA?.characters || []).filter(c => c.custom_attrs?.tipo === 'npc');
   sel.innerHTML = '<option value="">— Falar como si mesmo —</option>' +
@@ -153,7 +153,7 @@ function chatPopularNPCSel() {
 
 function chatEnviar() {
   const input = document.getElementById('chat-input');
-  const texto = input?.value.trim();
+  const texto = input?.value!.trim!()!;
   if (!texto) return;
   const rpgId = AR.session?.rpg_id || CURRENT_RPG?.id;
   const ws    = AR.ws || realtimeWS;
@@ -186,8 +186,8 @@ function chatEnviar() {
     payload: { type: 'broadcast', event: 'chat_presence', payload: { nick: autor, cor, ts: Date.now() } },
     ref:     'presence_' + Date.now()
   }));
-  input.value = '';
-  input.focus();
+  input!.value = '';
+  input!.focus!();
 }
 
 function chatReceberMensagem(pkg: any) {
@@ -214,11 +214,11 @@ function chatRenderizar() {
   const empty = document.getElementById('chat-empty');
   if (!el) return;
   const meuNick = SESSION?.nickname || USER_ID;
-  if (!CHAT.msgs.length) { if (empty) empty.style.display = 'block'; el.innerHTML = ''; return; }
-  if (empty) empty.style.display = 'none';
+  if (!CHAT.msgs.length) { if (empty) empty.style!.display = 'block'; el.innerHTML = ''; return; }
+  if (empty) empty.style!.display = 'none';
   el.innerHTML = CHAT.msgs.slice(-80).map(m => {
     const eP  = m.autor === meuNick;
-    const hora = new Date(m.ts).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+    const hora = new Date(m.ts!).toLocaleTimeString('pt-BR', ({ hour:'2-digit', minute:'2-digit' }) as any);
     const isSys = m.tipo === 'sistema';
     if (isSys) return `<div style="text-align:center;font-size:0.68rem;color:#3a5270;font-style:italic;padding:4px 0">${chatEscapar(m.texto)}</div>`;
     return `<div class="chat-msg${eP?' chat-msg-proprio':''}" style="max-width:85%;align-self:${eP?'flex-end':'flex-start'}">
@@ -240,7 +240,7 @@ function chatReceberPresenca(pkg: any) {
   CHAT.online.push({ nick: pkg.nick, cor: pkg.cor || '#7ec8f0', ts: pkg.ts || Date.now() });
   // Limpar usuários inativos há mais de 30s
   const agora = Date.now();
-  CHAT.online = CHAT.online.filter(u => agora - u.ts < 30000);
+  CHAT.online = CHAT.online.filter(u => agora - u!.ts! < 30000);
   // Manter registro de último acesso com janela maior (2 min) para mecânica de combate
   if (!CHAT._lastSeenAll) CHAT._lastSeenAll = {};
   CHAT._lastSeenAll[pkg.nick] = Date.now();
@@ -251,9 +251,9 @@ function chatAtualizarOnline() {
   const el = document.getElementById('chat-online');
   if (!el) return;
   const agora = Date.now();
-  const ativos = CHAT.online.filter(u => agora - u.ts < 30000);
-  if (!ativos.length) { el.style.display = 'none'; return; }
-  el.style.display = 'flex';
+  const ativos = CHAT.online.filter(u => agora - u!.ts! < 30000);
+  if (!ativos.length) { el.style!.display = 'none'; return; }
+  el.style!.display = 'flex';
   el.innerHTML = ativos.map(u =>
     `<span title="${u.nick}" style="width:7px;height:7px;border-radius:50%;background:${u.cor};flex-shrink:0;box-shadow:0 0 4px ${u.cor}88"></span>`
   ).join('') + `<span style="font-size:0.58rem;color:#3a5270;margin-left:2px">${ativos.length} online</span>`;
@@ -262,16 +262,16 @@ function chatAtualizarOnline() {
 function chatMostrar(rpgId: any) {
   CHAT.rpgId = rpgId;
   const btn = document.getElementById('hdr-chat-btn');
-  if (btn) btn.style.display = 'inline-flex';
+  if (btn) btn.style!.display = 'inline-flex';
   const rbtn = document.getElementById('hdr-reflash-btn');
-  if (rbtn) rbtn.style.display = 'inline-flex';
+  if (rbtn) rbtn.style!.display = 'inline-flex';
   // Chat começa FECHADO — usuário abre clicando no ícone
   CHAT.aberto = false; CHAT.naoLidos = 0;
   chatAtualizarBadge();
 }
 
 function chatOcultar() {
-  document.getElementById('chat-container').classList.remove('visivel');
+  document.getElementById('chat-container')!.classList!.remove!('visivel')!;
   // NÃO esconde o botão — apenas fecha o painel
   CHAT.aberto = false;
 }
@@ -279,7 +279,7 @@ function chatOcultar() {
 async function reflashDados() {
   if (!CURRENT_RPG?.id) return;
   const btn = document.getElementById('hdr-reflash-btn');
-  if (btn) { btn.textContent = '⏳'; btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; }
+  if (btn) { btn.textContent = '⏳'; btn.style!.opacity = '0.5'; btn.style!.pointerEvents = 'none'; }
   try {
     RPG_DATA = await getRPGData(CURRENT_RPG.id);
     // Re-renderiza tudo sem sair da aba atual nem mostrar loading
@@ -298,7 +298,7 @@ async function reflashDados() {
   } catch(e) {
     mostrarToast('❌ Erro ao atualizar dados', 'erro');
   } finally {
-    if (btn) { btn.textContent = '🔄'; btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+    if (btn) { btn.textContent = '🔄'; btn.style!.opacity = ''; btn.style!.pointerEvents = ''; }
   }
 }
 
@@ -311,10 +311,10 @@ function chatToggle() {
 }
 
 function chatAbrir() {
-  document.getElementById('chat-container').classList.add('visivel');
+  document.getElementById('chat-container')!.classList!.add!('visivel')!;
   CHAT.aberto = true; CHAT.naoLidos = 0;
   chatAtualizarBadge(); chatRenderizar();
-  setTimeout(() => document.getElementById('chat-input')?.focus(), 50);
+  setTimeout(() => document.getElementById('chat-input')?.focus!(), 50);
 }
 
 function chatAtualizarBadge() {
@@ -322,13 +322,13 @@ function chatAtualizarBadge() {
   const n = CHAT.naoLidos;
   if (hdrBadge) {
     (hdrBadge as any).textContent = n > 9 ? '9+' : n;
-    hdrBadge.style.display = n > 0 ? 'flex' : 'none';
+    hdrBadge.style!.display = n > 0 ? 'flex' : 'none';
   }
   // Sincronizar badge da arena também
   const arBadge = document.getElementById('ar-chat-badge');
   if (arBadge) {
     (arBadge as any).textContent = n > 9 ? '9+' : n;
-    arBadge.style.display = n > 0 ? 'flex' : 'none';
+    arBadge.style!.display = n > 0 ? 'flex' : 'none';
   }
 }
 

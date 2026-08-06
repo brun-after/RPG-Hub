@@ -101,9 +101,9 @@ function iniciarRealtime(rpgId: any){
    // state: 'connected' | 'connecting' | 'disconnected'
    const dot=document.getElementById('realtime-dot');
    if(dot){
-     if(state==='connected'){ dot.style.display='inline-block'; dot.title='Tempo real conectado'; dot.classList.remove('reconectando'); }
-     else if(state==='connecting'){ dot.style.display='inline-block'; dot.title='Reconectando…'; dot.classList.add('reconectando'); }
-     else { dot.style.display='none'; dot.title='Desconectado'; dot.classList.remove('reconectando'); }
+     if(state==='connected'){ dot.style!.display='inline-block'; dot.title='Tempo real conectado'; dot.classList.remove('reconectando'); }
+     else if(state==='connecting'){ dot.style!.display='inline-block'; dot.title='Reconectando…'; dot.classList.add('reconectando'); }
+     else { dot.style!.display='none'; dot.title='Desconectado'; dot.classList.remove('reconectando'); }
    }
    const banner=document.getElementById('reconexao-banner');
    if(banner){
@@ -444,23 +444,23 @@ function iniciarRealtime(rpgId: any){
          if(ev==='DELETE'){
            const oldRec=msg.payload.old_record||{};
            const nome=oldRec.nome||rec.nome;
-           RPG_DATA.characters=RPG_DATA.characters.filter(c=>!(c.nome===nome&&c.rpg_id===rec.rpg_id));
+           RPG_DATA!.characters=RPG_DATA!.characters.filter(c=>!(c.nome===nome&&c.rpg_id===rec.rpg_id));
            renderCharButtons(); if(typeof renderFichasBtns==='function') renderFichasBtns();
            mostrarToast(`✕ ${nome} removido`,'');
            return;
          }
-         const idx=RPG_DATA.characters.findIndex(c=>c.nome===rec.nome&&c.rpg_id===rec.rpg_id);
+         const idx=RPG_DATA!.characters.findIndex(c=>c.nome===rec.nome&&c.rpg_id===rec.rpg_id);
          if(idx>=0){
-           RPG_DATA.characters[idx]=rec;
+           RPG_DATA!.characters[idx]=rec;
            if(FICHAS_VIEW===rec.nome&&typeof renderFichaView==='function')renderFichaView(rec.nome);
            else{if(CHAR_VIEW===rec.nome)renderCharView(rec.nome);if(ATTR_VIEW===rec.nome)renderAttrView(rec.nome);}
            mostrarToast(`↺ ${rec.nome} atualizado`,'');
          } else if(ev==='INSERT'){
-           RPG_DATA.characters.push(rec);
+           RPG_DATA!.characters.push(rec);
            mostrarToast(`✦ ${rec.nome} adicionado`,'sucesso');
          }
          renderCharButtons(); if(typeof renderFichasBtns==='function') renderFichasBtns();
-         if(MAPA_STATE.mapaAtualId){const mapas=RPG_DATA.mapas||[];const entry=mapas.find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);mapaRenderStatus();}
+         if(MAPA_STATE.mapaAtualId){const mapas=RPG_DATA!.mapas||[];const entry=mapas.find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);mapaRenderStatus();}
        }
 
        // ── SKILLS ──
@@ -468,22 +468,22 @@ function iniciarRealtime(rpgId: any){
          if(ev==='DELETE'){
            const oldRec=msg.payload.old_record||{};
            const skId=oldRec.id||rec.id;
-           RPG_DATA.skills=RPG_DATA.skills.filter(s=>s.id!==skId);
+           RPG_DATA!.skills=RPG_DATA!.skills.filter(s=>s.id!==skId);
          } else {
            if(typeof rec.animacao==='string'){try{rec.animacao=JSON.parse(rec.animacao);}catch(e){rec.animacao=null;}}
            if(typeof rec.efeitos_bonus==='string'){try{rec.efeitos_bonus=JSON.parse(rec.efeitos_bonus);}catch(e){rec.efeitos_bonus=[];}}
-           const idx=RPG_DATA.skills.findIndex(s=>s.id===rec.id);
+           const idx=RPG_DATA!.skills.findIndex(s=>s.id===rec.id);
            if(idx>=0){
-             const existente = RPG_DATA.skills[idx];
+             const existente = RPG_DATA!.skills[idx];
              if (rec.animacao == null &&
                  (existente?.animacao?.tipo === 'pixi_particles' || existente?.animacao?.tipo === 'pixi') &&
                  typeof window._pixiPatchPendente === 'object' &&
                  window._pixiPatchPendente[rec.id]) {
                rec.animacao = existente.animacao;
              }
-             RPG_DATA.skills[idx]=rec;
+             RPG_DATA!.skills[idx]=rec;
            }
-           else RPG_DATA.skills.push(rec);
+           else RPG_DATA!.skills.push(rec);
          }
          if(FICHAS_VIEW&&typeof renderFichaView==='function')renderFichaView(FICHAS_VIEW);
          else if(CHAR_VIEW)renderCharView(CHAR_VIEW);
@@ -499,11 +499,11 @@ function iniciarRealtime(rpgId: any){
          if(ev==='DELETE'){
            const oldRec=msg.payload.old_record||{};
            const lId=oldRec.id||rec.id;
-           RPG_DATA.lore=RPG_DATA.lore.filter(l=>l.id!==lId);
+           RPG_DATA!.lore=RPG_DATA!.lore.filter(l=>l.id!==lId);
          } else {
-           const idx=RPG_DATA.lore.findIndex(l=>l.id===rec.id);
-           if(idx>=0)RPG_DATA.lore[idx]=rec;
-           else RPG_DATA.lore.push(rec);
+           const idx=RPG_DATA!.lore.findIndex(l=>l.id===rec.id);
+           if(idx>=0)RPG_DATA!.lore[idx]=rec;
+           else RPG_DATA!.lore.push(rec);
          }
          if(typeof renderLore==='function'&&document.getElementById('lore-items'))renderLore();
        }
@@ -513,11 +513,11 @@ function iniciarRealtime(rpgId: any){
          if(ev==='DELETE'){
            const oldRec=msg.payload.old_record||{};
            const adId=oldRec.id||rec.id;
-           RPG_DATA.attrDefs=(RPG_DATA.attrDefs||[]).filter(a=>a.id!==adId);
+           RPG_DATA!.attrDefs=(RPG_DATA!.attrDefs||[]).filter(a=>a.id!==adId);
          } else {
-           const idx=(RPG_DATA.attrDefs||[]).findIndex(a=>a.id===rec.id);
-           if(idx>=0)RPG_DATA.attrDefs[idx]=rec;
-           else{if(!RPG_DATA.attrDefs)RPG_DATA.attrDefs=[];RPG_DATA.attrDefs.push(rec);}
+           const idx=(RPG_DATA!.attrDefs||[]).findIndex(a=>a.id===rec.id);
+           if(idx>=0)RPG_DATA!.attrDefs[idx]=rec;
+           else{if(!RPG_DATA!.attrDefs)RPG_DATA!.attrDefs=[];RPG_DATA!.attrDefs.push(rec);}
          }
          if(FICHAS_VIEW&&typeof renderFichaView==='function')renderFichaView(FICHAS_VIEW);
          else{if(CHAR_VIEW)renderCharView(CHAR_VIEW);if(ATTR_VIEW)renderAttrView(ATTR_VIEW);}
@@ -543,8 +543,8 @@ function iniciarRealtime(rpgId: any){
            try{
              const raw=rec.config;
              const cfg=typeof raw==='object'?raw:JSON.parse(raw||'{}');
-             if(cfg.permissoes&&RPG_DATA.myRole!=='mestre'){
-               RPG_DATA.myPermissoes=cfg.permissoes[RPG_DATA.userId]||{};
+             if(cfg.permissoes&&RPG_DATA!.myRole!=='mestre'){
+               RPG_DATA!.myPermissoes=cfg.permissoes[RPG_DATA!.userId!]||{};
              }
            }catch(e){}
          }
@@ -582,13 +582,13 @@ function iniciarRealtime(rpgId: any){
          if(ev==='DELETE'){
            const oldRec=msg.payload.old_record||{};
            const mapId=oldRec.map_id||rec.map_id;
-           RPG_DATA.mapas=(RPG_DATA.mapas||[]).filter(l=>l.mapa.map_id!==mapId);
+           RPG_DATA!.mapas=(RPG_DATA!.mapas||[]).filter(l=>l.mapa.map_id!==mapId);
            if(MAPA_STATE.mapaAtualId===mapId){MAPA_STATE.mapaAtualId=null;}
          } else {
            const entry=parseMapa(rec);
-           const idx=(RPG_DATA.mapas||[]).findIndex(l=>l.mapa.map_id===rec.map_id);
-           if(idx>=0) RPG_DATA.mapas[idx]=entry;
-           else {if(!RPG_DATA.mapas)RPG_DATA.mapas=[];RPG_DATA.mapas.push(entry);}
+           const idx=(RPG_DATA!.mapas||[]).findIndex(l=>l.mapa.map_id===rec.map_id);
+           if(idx>=0) RPG_DATA!.mapas[idx]=entry;
+           else {if(!RPG_DATA!.mapas)RPG_DATA!.mapas=[];RPG_DATA!.mapas.push(entry);}
            if(MAPA_STATE.mapaAtualId===rec.map_id){renderMapaViewer();}
          }
          if(document.getElementById('mapa-lista'))renderMapasTab();
@@ -659,7 +659,7 @@ function fecharRealtime(){
  } catch(_) {}
  if(realtimeWS){try{realtimeWS.close();}catch(e){}realtimeWS=null;}
  const dot=document.getElementById('realtime-dot');
- if(dot){ dot.style.display='none'; dot.classList.remove('reconectando'); }
+ if(dot){ dot.style!.display='none'; dot.classList.remove('reconectando'); }
  const banner=document.getElementById('reconexao-banner');
  if(banner) banner.classList.remove('visible');
  if(CHAT && CHAT._presenceInterval){clearInterval(CHAT._presenceInterval);CHAT._presenceInterval=null;}

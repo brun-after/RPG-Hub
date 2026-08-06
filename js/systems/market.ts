@@ -18,15 +18,15 @@ function mercadoSelecionarTipo(tipo: any) {
   if (!formItem || !formInfo) return;
 
   if (tipo === 'item') {
-    formItem.style.display = 'block';
-    formInfo.style.display = 'none';
-    if (btnItem) { btnItem.style.background = 'rgba(79,163,209,0.15)'; btnItem.style.borderColor = 'rgba(79,163,209,0.3)'; btnItem.style.color = '#4fa3d1'; }
-    if (btnInfo) { btnInfo.style.background = 'rgba(30,45,66,0.3)'; btnInfo.style.borderColor = 'rgba(30,45,66,0.5)'; btnInfo.style.color = '#7a92aa'; }
+    formItem.style!.display = 'block';
+    formInfo.style!.display = 'none';
+    if (btnItem) { btnItem.style!.background = 'rgba(79,163,209,0.15)'; btnItem.style!.borderColor = 'rgba(79,163,209,0.3)'; btnItem.style!.color = '#4fa3d1'; }
+    if (btnInfo) { btnInfo.style!.background = 'rgba(30,45,66,0.3)'; btnInfo.style!.borderColor = 'rgba(30,45,66,0.5)'; btnInfo.style!.color = '#7a92aa'; }
   } else {
-    formItem.style.display = 'none';
-    formInfo.style.display = 'block';
-    if (btnInfo) { btnInfo.style.background = 'rgba(200,168,75,0.15)'; btnInfo.style.borderColor = 'rgba(200,168,75,0.3)'; btnInfo.style.color = '#f0cc6a'; }
-    if (btnItem) { btnItem.style.background = 'rgba(30,45,66,0.3)'; btnItem.style.borderColor = 'rgba(30,45,66,0.5)'; btnItem.style.color = '#7a92aa'; }
+    formItem.style!.display = 'none';
+    formInfo.style!.display = 'block';
+    if (btnInfo) { btnInfo.style!.background = 'rgba(200,168,75,0.15)'; btnInfo.style!.borderColor = 'rgba(200,168,75,0.3)'; btnInfo.style!.color = '#f0cc6a'; }
+    if (btnItem) { btnItem.style!.background = 'rgba(30,45,66,0.3)'; btnItem.style!.borderColor = 'rgba(30,45,66,0.5)'; btnItem.style!.color = '#7a92aa'; }
     // Preencher select de moedas se vazio
     const select = document.getElementById('mercado-info-denom');
     if (select && select.options.length === 0 && typeof _mercDenoms === 'function') {
@@ -44,12 +44,12 @@ function mercadoSelecionarTipo(tipo: any) {
 async function mercadoCriarInformacao() {
   if (!_isMestre()) { mostrarToast('Apenas o mestre pode criar informações', 'erro'); return; }
 
-  const nome            = document.getElementById('mercado-info-nome')?.value.trim() || '';
-  const descPublica     = document.getElementById('mercado-info-desc-pub')?.value.trim() || '';
-  const conteudoSecreto = document.getElementById('mercado-info-conteudo')?.value.trim() || '';
-  const preco           = parseFloat(document.getElementById('mercado-info-preco')?.value) || 0;
+  const nome            = document.getElementById('mercado-info-nome')?.value!.trim!()! || '';
+  const descPublica     = document.getElementById('mercado-info-desc-pub')?.value!.trim!()! || '';
+  const conteudoSecreto = document.getElementById('mercado-info-conteudo')?.value!.trim!()! || '';
+  const preco           = parseFloat(document.getElementById('mercado-info-preco')?.value!) || 0;
   const denom           = document.getElementById('mercado-info-denom')?.value || 'Ouro';
-  const estoque         = parseInt(document.getElementById('mercado-info-estoque')?.value) || 1;
+  const estoque         = parseInt(document.getElementById('mercado-info-estoque')?.value!) || 1;
 
   if (!nome || !conteudoSecreto) { mostrarToast('Preencha nome e conteúdo secreto', 'aviso'); return; }
 
@@ -172,7 +172,7 @@ function mostrarInformacaoAdquirida(nome: any, conteudo: any) {
 
   const modal = document.createElement('div');
   modal.id = 'modal-info-adquirida';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   modal.innerHTML = `
     <div style="background:linear-gradient(135deg,rgba(15,21,32,0.98),rgba(10,14,22,0.98));border:2px solid rgba(200,168,75,0.4);border-radius:16px;padding:28px;max-width:500px;width:100%;box-shadow:0 8px 32px rgba(200,168,75,0.3)">
       <div style="font-family:'Cinzel',serif;font-size:1rem;color:#f0cc6a;text-align:center;margin-bottom:20px;letter-spacing:0.1em;text-transform:uppercase">📜 ${nome}</div>
@@ -200,7 +200,7 @@ async function verInformacoesCompradas() {
 
     const modal = document.createElement('div');
     modal.id = 'modal-infos-compradas';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
 
     const itensHtml = rows.map((r: any) => {
       const nome = r.mercado_item?.custom_nome || 'Informação';

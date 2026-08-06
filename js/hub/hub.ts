@@ -65,8 +65,8 @@ function _mesaInjetarColunas() {
 
   const mapaStatus = document.getElementById('mapa-status');
   if (mapaStatus) {
-    mapaStatus.style.marginTop = '0';
-    mapaStatus.style.padding = '0 8px 8px';
+    mapaStatus.style!.marginTop = '0';
+    mapaStatus.style!.padding = '0 8px 8px';
     colEsq.appendChild(mapaStatus);
   }
 
@@ -93,7 +93,7 @@ function _mesaInjetarColunas() {
 
   const barraAcoes = document.createElement('div');
   barraAcoes.id = 'mesa-barra-acoes';
-  barraAcoes.style.display = 'none';
+  barraAcoes.style!.display = 'none';
   barraAcoes.innerHTML = '<div id="mesa-barra-skills"></div>';
 
   // Mover breadcrumb, lista e mapa-wrap para o centro (toolbar vai para mapa-wrap depois)
@@ -112,7 +112,7 @@ function _mesaInjetarColunas() {
   idsParaDir.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-      el.style.marginTop = '0';
+      el.style!.marginTop = '0';
       const acaoPainel = colDir.querySelector('#mesa-acao-painel');
       if (acaoPainel) acaoPainel.appendChild(el);
     }
@@ -141,7 +141,7 @@ function _mesaInjetarColunas() {
       toolbar.insertBefore(btnEsq, toolbar.firstChild);
 
       const sep = document.createElement('div');
-      sep.style.cssText = 'width:1px;height:16px;background:rgba(255,255,255,0.1);flex-shrink:0';
+      sep.style!.cssText = 'width:1px;height:16px;background:rgba(255,255,255,0.1);flex-shrink:0';
       toolbar.insertBefore(sep, toolbar.children[1]);
     }
     if (!document.getElementById('mesa-toggle-dir')) {
@@ -197,11 +197,11 @@ function _mesaAjustarMapa() {
   let w = wW, h = wW / ratio;
   if (h > wH) { h = wH; w = h * ratio; }
 
-  mapaImg.style.width         = Math.floor(w) + 'px';
-  mapaImg.style.height        = Math.floor(h) + 'px';
-  mapaImg.style.paddingBottom = '0';
-  mapaImg.style.position      = 'relative';
-  mapaImg.style.inset         = 'auto';
+  mapaImg.style!.width         = Math.floor(w) + 'px';
+  mapaImg.style!.height        = Math.floor(h) + 'px';
+  mapaImg.style!.paddingBottom = '0';
+  mapaImg.style!.position      = 'relative';
+  mapaImg.style!.inset         = 'auto';
 }
 window._mesaAjustarMapa = _mesaAjustarMapa;
 
@@ -274,8 +274,8 @@ function mesaPinToggle(lado: any) {
   if (fixado) panel.classList.add('panel-aberto');
   const btn = document.getElementById(pinBtnId);
   if (btn) {
-    btn.style.opacity  = fixado ? '1' : '0.6';
-    btn.style.color    = fixado ? 'var(--destaque)' : 'var(--suave)';
+    btn.style!.opacity  = fixado ? '1' : '0.6';
+    btn.style!.color    = fixado ? 'var(--destaque)' : 'var(--suave)';
     btn.title = fixado ? 'Desafixar painel' : 'Fixar painel';
   }
 }
@@ -341,13 +341,13 @@ function _mesaHudAutoPositionar() {
   const lados = tokenAbsX < midX ? 'left:12px' : 'right:12px';
   const tops  = tokenAbsY < midY ? 'bottom:12px' : 'top:12px';
 
-  hud.style.cssText += ';' + lados + ';' + tops + ';left:auto;right:auto;bottom:auto;top:auto;transform:none';
+  hud.style!.cssText += ';' + lados + ';' + tops + ';left:auto;right:auto;bottom:auto;top:auto;transform:none';
   // Sobrescrever com o quadrante correto
-  hud.style.left   = tokenAbsX < midX ? '12px' : 'auto';
-  hud.style.right  = tokenAbsX < midX ? 'auto' : '12px';
-  hud.style.bottom = tokenAbsY < midY ? '12px' : 'auto';
-  hud.style.top    = tokenAbsY < midY ? 'auto' : '12px';
-  hud.style.transform = 'none';
+  hud.style!.left   = tokenAbsX < midX ? '12px' : 'auto';
+  hud.style!.right  = tokenAbsX < midX ? 'auto' : '12px';
+  hud.style!.bottom = tokenAbsY < midY ? '12px' : 'auto';
+  hud.style!.top    = tokenAbsY < midY ? 'auto' : '12px';
+  hud.style!.transform = 'none';
 }
 
 // ── Nav-peek: mostrar nav-tabs ao aproximar do topo ──────────────────────
@@ -386,12 +386,12 @@ function _mesaRenderCombatHud() {
   const meuChar  = RPG_DATA?.linked || null;
 
   if (!bs) {
-    hud.style.display = 'none';
+    hud.style!.display = 'none';
     hud.innerHTML = '';
     return;
   }
 
-  hud.style.display = 'flex';
+  hud.style!.display = 'flex';
 
   if (bs.fase === 'posicionamento') {
     hud.innerHTML =
@@ -587,7 +587,7 @@ function _mesaRenderAcoes() {
   let aprovacoesPendentes = false;
   if (isMestre) {
     const pendentes = (typeof CRIATIVOS_CAMP !== 'undefined' ? CRIATIVOS_CAMP : [])
-      .filter(c => ['pendente','dc_rolado_sucesso','aprovado_dc','aprovado_aguardando_rolagem'].includes(c.status));
+      .filter(c => ['pendente','dc_rolado_sucesso','aprovado_dc','aprovado_aguardando_rolagem'].includes(c.status!));
     aprovacoesPendentes = pendentes.length > 0;
     if (pendentes.length) {
       sections.push('<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(200,168,75,0.8);text-transform:uppercase;margin-bottom:4px">📋 Pendentes (' + pendentes.length + ')</div>' +
@@ -704,7 +704,7 @@ function barraContextoInicializar() {
   return; // barra suprimida — contexto exibido no HUD de combate
   const barra = document.createElement('div');
   barra.id = 'barra-contexto-mestre';
-  barra.style.cssText = 'display:none;position:fixed;top:0;left:0;right:0;z-index:7500;height:32px;padding:0 16px;background:rgba(5,8,16,0.95);border-bottom:1px solid var(--borda);align-items:center;justify-content:space-between;gap:12px;font-family:var(--fonte-d);font-size:0.65rem;backdrop-filter:blur(6px)';
+  barra.style!.cssText = 'display:none;position:fixed;top:0;left:0;right:0;z-index:7500;height:32px;padding:0 16px;background:rgba(5,8,16,0.95);border-bottom:1px solid var(--borda);align-items:center;justify-content:space-between;gap:12px;font-family:var(--fonte-d);font-size:0.65rem;backdrop-filter:blur(6px)';
   barra.innerHTML = '<span id="ctx-papel" style="color:var(--texto)">🎭 Modo Mestre</span><div style="display:flex;gap:8px"><button id="ctx-btn-avancar" onclick="_barraContextoAvancar()" style="padding:3px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#7ec8f0;font-size:0.58rem;cursor:pointer">→</button><button id="mapa-camera-btn" onclick="mapaToggleModoCamera()" style="padding:3px 10px;background:transparent;border:1px solid var(--borda);border-radius:5px;color:var(--suave);font-size:0.58rem;cursor:pointer">📷 Auto</button></div>';
   document.body.appendChild(barra);
 }
@@ -712,18 +712,18 @@ function barraContextoInicializar() {
 function barraContextoAtualizar(personagem: any) {
   const barra = document.getElementById('barra-contexto-mestre');
   if (!barra || RPG_DATA?.myRole !== 'mestre') return;
-  barra.style.display = 'flex';
+  barra.style!.display = 'flex';
   const papelEl = document.getElementById('ctx-papel');
   const btnAv   = document.getElementById('ctx-btn-avancar');
   if (!papelEl) return;
   const vinculado = RPG_DATA?.linked;
   const ehMeu = personagem && personagem === vinculado;
   papelEl.textContent = ehMeu ? '⚔ Atuando como '+personagem : personagem ? '🎭 Mestre — vez de '+personagem : '🎭 Modo Mestre';
-  papelEl.style.color = ehMeu ? (RPG_DATA?.characters?.find(c=>c.nome===personagem)?.custom_attrs?.cor||'var(--destaque)') : 'var(--suave)';
+  papelEl.style!.color = ehMeu ? (RPG_DATA?.characters?.find(c=>c.nome===personagem)?.custom_attrs?.cor||'var(--destaque)') : 'var(--suave)';
   if (btnAv) btnAv.textContent = ehMeu ? 'Passar NPC →' : (vinculado ? '← '+vinculado : '—');
   if (!document.body.classList.contains('mesa-ativa')) {
     const appEl = document.getElementById('app');
-    if (appEl) appEl.style.paddingTop = '32px';
+    if (appEl) appEl.style!.paddingTop = '32px';
   }
 }
 
@@ -750,7 +750,7 @@ function notifRenderizar() {
   if (!painel) {
     painel = document.createElement('div');
     painel.id = 'notif-painel';
-    painel.style.cssText = 'position:fixed;bottom:70px;right:12px;z-index:9200;display:flex;flex-direction:column;gap:6px;max-width:280px;pointer-events:auto';
+    painel.style!.cssText = 'position:fixed;bottom:70px;right:12px;z-index:9200;display:flex;flex-direction:column;gap:6px;max-width:280px;pointer-events:auto';
     document.body.appendChild(painel);
   }
   const visiveis = NOTIFICACOES.fila.filter(n => !n._adiada && !n._resolvida);
@@ -813,7 +813,7 @@ async function entrarRPG(rpgId: any){
      }catch(err){ console.error('[RPG] role:',err); RPG_DATA.myRole='jogador'; RPG_DATA.myPermissoes={}; }
    } else { RPG_DATA.myRole='mestre'; RPG_DATA.myPermissoes={}; }
    const isMestre=RPG_DATA.myRole==='mestre';
-   document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style.display=isMestre?'':'none');
+   document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style!.display=isMestre?'':'none');
    renderHeader(); renderLore(); renderCharButtons(); renderAttrButtons(); if(typeof renderFichasBtns==='function') renderFichasBtns();
    if (typeof renderDados === 'function') renderDados();
    renderConfig();
@@ -853,7 +853,7 @@ window.entrarRPG = async function(rpgId) {
 
 function aplicarTema(rpg: any){
  const t=rpg.theme||{}, root=document.documentElement;
- const s=(k: any,v: any,d: any)=>root.style.setProperty(k,t[v]||d);
+ const s=(k: any,v: any,d: any)=>root.style!.setProperty(k,t[v]||d);
  s('--preto','preto','#080c10');s('--escuro','escuro','#0f1520');s('--painel','painel','#141d2b');
  s('--borda','borda','#1e2d42');s('--cinza','cinza','#2a3a50');s('--texto','texto','#c8d8e8');
  s('--suave','suave','#7a92aa');s('--primario','primario','#4fa3d1');s('--primario-v','primario_v','#7ec8f0');
@@ -862,38 +862,38 @@ function aplicarTema(rpg: any){
  const fd = t.font_display || t.fontTitulo;
  const ft = t.font_text   || t.fontCorpo;
  const fu = t.font_url;
- if(fd) root.style.setProperty('--fonte-d',`'${fd}',serif`);
- if(ft) root.style.setProperty('--fonte-t',`'${ft}',serif`);
+ if(fd) root.style!.setProperty('--fonte-d',`'${fd}',serif`);
+ if(ft) root.style!.setProperty('--fonte-t',`'${ft}',serif`);
  if(fu){let l=document.getElementById('rpg-fonts');if(!l){l=document.createElement('link');l.id='rpg-fonts';l.rel='stylesheet';document.head.appendChild(l);}l.href=fu;}
- document.body.style.background='var(--preto)';
+ document.body.style!.background='var(--preto)';
 }
 
 let LOADING_START=0;
 
 function mostrarLoading(rpg: any){
  LOADING_START=Date.now();
- document.getElementById('hub').style.display='none';
+ document.getElementById('hub')!.style!.display='none';
  if (rpg.theme && rpg.theme.animation_css) injectCustomCSS(rpg.id, rpg.theme.animation_css);
  const customLoading = (rpg.theme && rpg.theme.animation_loading_svg) || '';
- document.getElementById('loading-anim').innerHTML = getLoadingAnimSVG(rpg.theme?.animation||rpg.animation||'flame', customLoading);
- document.getElementById('loading-title').textContent=rpg.name;
- document.getElementById('loading').classList.add('visible');
+ document.getElementById('loading-anim')!.innerHTML = getLoadingAnimSVG(rpg.theme?.animation||rpg.animation||'flame', customLoading);
+ document.getElementById('loading-title')!.textContent=rpg.name;
+ document.getElementById('loading')!.classList!.add!('visible')!;
  const el = document.getElementById('loading');
  let escBtn = document.getElementById('loading-esc-btn');
  if (!escBtn) {
    escBtn = document.createElement('button');
    escBtn.id = 'loading-esc-btn';
    escBtn.textContent = '← Voltar ao Hub';
-   escBtn.style.cssText = 'display:none;margin-top:8px;padding:8px 20px;background:transparent;border:1px solid rgba(200,168,75,0.3);border-radius:8px;color:rgba(200,168,75,0.6);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;transition:all 0.2s';
-   escBtn.onmouseenter = () => { escBtn.style.borderColor='rgba(200,168,75,0.7)'; escBtn.style.color='rgba(200,168,75,1)'; };
-   escBtn.onmouseleave = () => { escBtn.style.borderColor='rgba(200,168,75,0.3)'; escBtn.style.color='rgba(200,168,75,0.6)'; };
+   escBtn.style!.cssText = 'display:none;margin-top:8px;padding:8px 20px;background:transparent;border:1px solid rgba(200,168,75,0.3);border-radius:8px;color:rgba(200,168,75,0.6);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;transition:all 0.2s';
+   escBtn.onmouseenter = () => { escBtn!.style!.borderColor='rgba(200,168,75,0.7)'; escBtn!.style!.color='rgba(200,168,75,1)'; };
+   escBtn.onmouseleave = () => { escBtn!.style!.borderColor='rgba(200,168,75,0.3)'; escBtn!.style!.color='rgba(200,168,75,0.6)'; };
    escBtn.onclick = loadingEscapar;
-   el.appendChild(escBtn);
+   el!.appendChild(escBtn);
  }
- escBtn.style.display = 'none';
+ escBtn.style!.display = 'none';
  clearTimeout(window._loadingEscTimer);
  clearTimeout(window._loadingMaxTimer);
- window._loadingEscTimer = setTimeout(() => { if (escBtn) escBtn.style.display = 'block'; }, 3000);
+ window._loadingEscTimer = setTimeout(() => { if (escBtn) escBtn.style!.display = 'block'; }, 3000);
  window._loadingMaxTimer = setTimeout(() => {
    mostrarToast('Tempo limite excedido. Verifique sua conexão.', 'erro');
    loadingEscapar();
@@ -906,10 +906,10 @@ function loadingEscapar() {
  clearTimeout(window._loadingFadeTimer);
  clearTimeout(window._loadingHideTimer);
  const el = document.getElementById('loading');
- if (el) { el.classList.remove('visible'); el.style.opacity='1'; el.style.transition=''; }
+ if (el) { el.classList.remove('visible'); el.style!.opacity='1'; el.style!.transition=''; }
  const criar = document.getElementById('criar-screen');
  if (criar) criar.classList.remove('visible');
- document.getElementById('hub').style.display='';
+ document.getElementById('hub')!.style!.display='';
  document.getElementById('app')?.classList.remove('visible');
  typeof fecharRealtime === 'function' && fecharRealtime();
 }
@@ -924,23 +924,23 @@ function ocultarLoading(){
  window._loadingFadeTimer=setTimeout(()=>{
    const el=document.getElementById('loading');
    if(!el)return;
-   el.style.opacity='0';el.style.transition='opacity 0.5s';
+   el.style!.opacity='0';el.style!.transition='opacity 0.5s';
    window._loadingHideTimer=setTimeout(()=>{
-     el.classList.remove('visible');el.style.opacity='1';el.style.transition='';
+     el.classList.remove('visible');el.style!.opacity='1';el.style!.transition='';
      const app=document.getElementById('app');
      const criarAtivo = document.getElementById('criar-screen')?.classList.contains('visible');
-     const importAtivo = document.getElementById('import-screen')?.style.display==='block';
+     const importAtivo = document.getElementById('import-screen')?.style!.display==='block';
      if(app&&!app.classList.contains('visible')&&!importAtivo&&!criarAtivo){
-       document.getElementById('hub').style.display='';
+       document.getElementById('hub')!.style!.display='';
      }
    },500);
  },delay);
 }
 
 function mostrarApp(rpg: any){
- document.getElementById('app-logo').textContent=rpg.name;
- document.getElementById('app').classList.add('visible');
- document.getElementById('btn-delete-rpg').style.display=rpg.id==='dual'?'none':'block';
+ document.getElementById('app-logo')!.textContent=rpg.name;
+ document.getElementById('app')!.classList!.add!('visible')!;
+ document.getElementById('btn-delete-rpg')!.style!.display=rpg.id==='dual'?'none':'block';
  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
  document.querySelectorAll('.tab-content').forEach((c,i)=>c.classList.toggle('active',i===0));
  DADO_SEL=null;HISTORICO=[];
@@ -950,12 +950,12 @@ function voltarHub(){
  chatOcultar();
  localStorage.removeItem('rpghub_nav');
  fecharRealtime();
- document.getElementById('app').classList.remove('visible');
- document.getElementById('hub').style.display='';
- document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style.display='');
+ document.getElementById('app')!.classList!.remove!('visible')!;
+ document.getElementById('hub')!.style!.display='';
+ document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style!.display='');
  CURRENT_RPG=null;RPG_DATA=null;
  document.documentElement.removeAttribute('style');
- document.body.style.background='';
+ document.body.style!.background='';
 }
 
 window.selecionarAlvoLista = function(nomeEncodado: any) {
@@ -971,7 +971,7 @@ window.selecionarAlvoLista = function(nomeEncodado: any) {
 window._atualizarBadgeMesa = function() {
   // Implementação vazia — badge do chat na mesa
   const badge = document.getElementById('chat-badge-mesa');
-  if (badge) badge.style.display = 'none';
+  if (badge) badge.style!.display = 'none';
 };
 
 console.log('[Hub] Função selecionarAlvoLista registrada ✓');
@@ -1481,7 +1481,7 @@ window._mesaAtaqueInlineRolar = async function() {
   if (btn) {
     btn.textContent = '🎲 Rolando...';
     btn.disabled = true;
-    btn.style.opacity = '0.6';
+    btn.style!.opacity = '0.6';
   }
   
   // v2.6: Animação visual de dados rolando (se houver fórmula)
@@ -1909,7 +1909,7 @@ function _mesaShowRangeCircle(atacanteNome: any, alcance: any) {
   
   const circle = document.createElement('div');
   circle.id = 'mapa-range-circle';
-  circle.style.cssText = `
+  circle.style!.cssText = `
     position: absolute;
     left: ${centerX - radius}px;
     top: ${centerY - radius}px;
@@ -1960,7 +1960,7 @@ function mapaShowAoECircle(centerPos: any, radius: any) {
   
   const circle = document.createElement('div');
   circle.id = 'mapa-aoe-circle';
-  circle.style.cssText = `
+  circle.style!.cssText = `
     position: absolute;
     left: ${centerX - radiusPx}px;
     top: ${centerY - radiusPx}px;
@@ -2146,7 +2146,7 @@ function abrirModalAtaque(atacanteNome: any, contexto = 'arena') {
     _estadoAtk: COMBATE._estadoAtk || 'livre'
   };
 
-  document.getElementById('modal-atk-atacante').textContent = atacanteNome;
+  document.getElementById('modal-atk-atacante')!.textContent = atacanteNome;
 
   const habilidades = contexto === 'arena'
     ? atkGetHabilidadesArena(atacanteNome)
@@ -2158,7 +2158,7 @@ function abrirModalAtaque(atacanteNome: any, contexto = 'arena') {
     : getCooldownsBatalhaSeguro(BATALHA_ATUAL_ID);
 
   const lista = document.getElementById('atk-habilidades-lista');
-  lista.innerHTML = habilidades.map((h: any, i: any) => {
+  lista!.innerHTML = habilidades.map((h: any, i: any) => {
     const cdRestante = cooldownsAtivos[h.id] || 0;
     const emCooldown = cdRestante > 0;
     const bloqueio = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
@@ -2220,12 +2220,12 @@ function abrirModalAtaque(atacanteNome: any, contexto = 'arena') {
         font-size:0.75rem;text-align:center;border:1px solid rgba(232,96,76,0.25);
         border-radius:8px;background:rgba(232,96,76,0.06)">
         🚫 Ação criativa bloqueada — ${bloqAtk}</div>`;
-      criatWrap.style.display = 'block';
+      criatWrap.style!.display = 'block';
     } else {
-      criatWrap.style.display = 'block';
+      criatWrap.style!.display = 'block';
     }
   } else if (criatWrap) {
-    criatWrap.style.display = 'none';
+    criatWrap.style!.display = 'none';
   }
   
 const criatDesc = document.getElementById('atk-criativo-desc');
@@ -2242,7 +2242,7 @@ if (criatDesc) criatDesc.value = '';
   // Aviso fora de combate
   const avisoBanner = document.getElementById('atk-aviso-fora-combate');
   if (avisoBanner) {
-    avisoBanner.style.display = (COMBATE._estadoAtk === 'fora_combate') ? 'block' : 'none';
+    avisoBanner.style!.display = (COMBATE._estadoAtk === 'fora_combate') ? 'block' : 'none';
   }
 
   // Renderizar seção de pets
@@ -2256,15 +2256,15 @@ if (criatDesc) criatDesc.value = '';
   }
 
   const modal = document.getElementById('modal-ataque');
-  const inner = modal.querySelector('div');
+  const inner = modal!.querySelector('div');
 
-  modal._atkModo = null;
+  modal!._atkModo = null;
 
   function _setModalModo(modo: any) {
-    if (modal._atkModo === modo) return;
-    modal._atkModo = modo;
-    modal.dataset.atkModo = modo;
-    if (modal.parentElement !== document.body) document.body.appendChild(modal);
+    if (modal!._atkModo === modo) return;
+    modal!._atkModo = modo;
+    modal!.dataset!.atkModo = modo;
+    if (modal!.parentElement !== document.body) document.body.appendChild(modal!);
   }
 
   // Desktop 3-col → painel de ações direita; mobile sidebar → atk-sidebar-painel
@@ -2274,20 +2274,20 @@ if (criatDesc) criatDesc.value = '';
   
   if (_targetPanel && contexto === 'campanha') {
     _setModalModo('painel');
-    modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;width:100%;';
+    modal!.style!.cssText = 'display:block;position:static;background:none;z-index:auto;width:100%;';
     if (inner) {
-      inner.style.borderRadius = '10px';
-      inner.style.marginTop = '0';
-      inner.style.paddingBottom = '10px';
-      inner.style.maxHeight = 'none';
+      inner.style!.borderRadius = '10px';
+      inner.style!.marginTop = '0';
+      inner.style!.paddingBottom = '10px';
+      inner.style!.maxHeight = 'none';
     }
     if (_acaoDesktop) {
       _acaoDesktop.innerHTML = '';
-      _acaoDesktop.appendChild(modal);
+      _acaoDesktop.appendChild(modal!);
     } else {
-      _sidebarAtk.innerHTML = '';
-      _sidebarAtk.appendChild(modal);
-      _sidebarAtk.style.display = 'block';
+      _sidebarAtk!.innerHTML = '';
+      _sidebarAtk!.appendChild(modal!);
+      _sidebarAtk!.style!.display = 'block';
     }
     setTimeout(() => _targetPanel.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }), 60);
   } else if (contexto === 'campanha') {
@@ -2298,12 +2298,12 @@ if (criatDesc) criatDesc.value = '';
     const anchorVisivel = !emMesa && anchor && anchor.offsetParent !== null;
     if (anchorVisivel) {
       _setModalModo('inline');
-      modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;';
+      modal!.style!.cssText = 'display:block;position:static;background:none;z-index:auto;';
       if (inner) {
-        inner.style.borderRadius = '12px';
-        inner.style.marginTop = '0';
-        inner.style.paddingBottom = '16px';
-        inner.style.maxHeight = 'none';
+        inner.style!.borderRadius = '12px';
+        inner.style!.marginTop = '0';
+        inner.style!.paddingBottom = '16px';
+        inner.style!.maxHeight = 'none';
       }
       let placeholder = document.getElementById('atk-placeholder-campanha');
       if (!placeholder) {
@@ -2312,30 +2312,30 @@ if (criatDesc) criatDesc.value = '';
         anchor.appendChild(placeholder);
       }
       const rect = anchor.getBoundingClientRect();
-      modal.style.position = 'absolute';
-      modal.style.top = (rect.top + window.scrollY) + 'px';
-      modal.style.left = (rect.left + window.scrollX) + 'px';
-      modal.style.width = rect.width + 'px';
-      modal.style.zIndex = '8000';
-      setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+      modal!.style!.position = 'absolute';
+      modal!.style!.top = (rect.top + window.scrollY) + 'px';
+      modal!.style!.left = (rect.left + window.scrollX) + 'px';
+      modal!.style!.width = rect.width + 'px';
+      modal!.style!.zIndex = '8000';
+      setTimeout(() => modal!.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
     } else {
       _setModalModo('overlay');
-      modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
+      modal!.style!.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
       if (inner) {
-        inner.style.borderRadius = '16px 16px 0 0';
-        inner.style.marginTop = '';
-        inner.style.paddingBottom = '44px';
-        inner.style.maxHeight = '90vh';
+        inner.style!.borderRadius = '16px 16px 0 0';
+        inner.style!.marginTop = '';
+        inner.style!.paddingBottom = '44px';
+        inner.style!.maxHeight = '90vh';
       }
     }
   } else {
     _setModalModo('overlay');
-    modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
+    modal!.style!.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
     if (inner) {
-      inner.style.borderRadius = '16px 16px 0 0';
-      inner.style.marginTop = '';
-      inner.style.paddingBottom = '44px';
-      inner.style.maxHeight = '90vh';
+      inner.style!.borderRadius = '16px 16px 0 0';
+      inner.style!.marginTop = '';
+      inner.style!.paddingBottom = '44px';
+      inner.style!.maxHeight = '90vh';
     }
   }
 }
@@ -2344,22 +2344,22 @@ function fecharModalAtaque() {
   const modal = document.getElementById('modal-ataque');
   const foiCancelado = !COMBATE._jaAplicado && !COMBATE._pendingTrigger;
   
-  modal.style.display = 'none';
+  modal!.style!.display = 'none';
   
   // Devolver modal ao body
   const _acaoDesktop2 = document.getElementById('mesa-acao-painel');
   const sidebarAtk = document.getElementById('atk-sidebar-painel');
   
-  if (_acaoDesktop2 && modal.parentElement === _acaoDesktop2) {
-    document.body.appendChild(modal);
+  if (_acaoDesktop2 && modal!.parentElement === _acaoDesktop2) {
+    document.body.appendChild(modal!);
     setTimeout(() => _mesaRenderAcoes?.(), 50);
-  } else if (sidebarAtk && modal.parentElement === sidebarAtk) {
-    sidebarAtk.style.display = 'none';
-    document.body.appendChild(modal);
+  } else if (sidebarAtk && modal!.parentElement === sidebarAtk) {
+    sidebarAtk.style!.display = 'none';
+    document.body.appendChild(modal!);
   }
   
-  if (modal.parentElement?.id === 'atk-painel-campanha-anchor') {
-    document.body.appendChild(modal);
+  if (modal!.parentElement?.id === 'atk-painel-campanha-anchor') {
+    document.body.appendChild(modal!);
   }
   
   // Limpar visualizações
@@ -2372,7 +2372,7 @@ function fecharModalAtaque() {
   if (ATAQUE_MAPA_STATE.ativo) {
     ATAQUE_MAPA_STATE = { ativo: false, atacanteNome: null, fase: 'habilidades' };
     const floatPanel = document.getElementById('atk-mapa-float-panel');
-    if (floatPanel) floatPanel.style.display = 'none';
+    if (floatPanel) floatPanel.style!.display = 'none';
     document.querySelectorAll('.mapa-token').forEach(el => {
       el.classList.remove('atk-target-disponivel', 'atk-target-fora-alcance', 'atk-target-buff');
     });
@@ -2400,7 +2400,7 @@ function fecharModalAtaque() {
 function configurarAtalhosCombate() {
   document.addEventListener('keydown', function(e) {
     const modal = document.getElementById('modal-ataque');
-    if (!modal || modal.style.display === 'none') return;
+    if (!modal || modal.style!.display === 'none') return;
     
     // 1-9: Selecionar habilidade
     if (e.key >= '1' && e.key <= '9') {
@@ -2418,9 +2418,9 @@ function configurarAtalhosCombate() {
       const btnRolar = document.getElementById('atk-btn-rolar-inline');
       const btnConfirmar = document.getElementById('atk-btn-confirmar-inline');
       
-      if (btnRolar && !btnRolar.disabled && btnRolar.style.display !== 'none') {
+      if (btnRolar && !btnRolar.disabled && btnRolar.style!.display !== 'none') {
         _mesaAtaqueInlineRolar();
-      } else if (btnConfirmar && btnConfirmar.style.display !== 'none') {
+      } else if (btnConfirmar && btnConfirmar.style!.display !== 'none') {
         _mesaAtaqueInlineConfirmar();
       }
     }
@@ -2432,7 +2432,7 @@ function configurarAtalhosCombate() {
     // R: Rolar
     else if (e.key === 'r' || e.key === 'R') {
       const btnRolar = document.getElementById('atk-btn-rolar-inline');
-      if (btnRolar && !btnRolar.disabled && btnRolar.style.display !== 'none') {
+      if (btnRolar && !btnRolar.disabled && btnRolar.style!.display !== 'none') {
         e.preventDefault();
         _mesaAtaqueInlineRolar();
       }
@@ -2533,7 +2533,7 @@ function ativarModoAtaqueMapa(atacanteNome: any) {
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'atk-mapa-float-panel';
-    panel.style.cssText = `
+    panel.style!.cssText = `
       position: fixed;
       top: 80px;
       right: 20px;
@@ -2548,7 +2548,7 @@ function ativarModoAtaqueMapa(atacanteNome: any) {
     document.body.appendChild(panel);
   }
   
-  panel.style.display = 'block';
+  panel.style!.display = 'block';
   panel.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
       <span style="font-family: 'Cinzel', serif; font-size: 0.9rem; color: #7ec8f0;">Modo Ataque</span>
@@ -2570,7 +2570,7 @@ function desativarModoAtaqueMapa() {
   ATAQUE_MAPA_STATE = { ativo: false, atacanteNome: null, fase: 'habilidades' };
   
   const panel = document.getElementById('atk-mapa-float-panel');
-  if (panel) panel.style.display = 'none';
+  if (panel) panel.style!.display = 'none';
   
   // Remover destaque dos tokens
   document.querySelectorAll('.mapa-token').forEach(el => {

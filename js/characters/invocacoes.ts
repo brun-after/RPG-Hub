@@ -82,8 +82,8 @@ function renderSecaoInvocacoes(c: any, ca: any, isMestre: any, podEditar: any) {
 
     // Skills vinculadas
     const skillIds = Array.isArray(def.habilidades) ? def.habilidades.filter((h: any) => typeof h === 'string') : [];
-    const skills = typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA.skills)
-      ? RPG_DATA.skills.filter(s => skillIds.includes(s.id))
+    const skills = typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA!.skills)
+      ? RPG_DATA!.skills.filter(s => skillIds.includes(s.id))
       : (typeof AVT_STATE !== 'undefined' && Array.isArray(AVT_STATE.skills)
           ? AVT_STATE.skills.filter((s: any) => skillIds.includes(s.id)) : []);
     const skillsStr = skills.length ? skills.map((s: any) => s.habilidade).join(', ') : '';
@@ -141,7 +141,7 @@ async function _invFileUpload(input: any, targetId: any, isToken: any) {
 window._invFileUpload = _invFileUpload;
 
 function _invAtualizarTokenPreview() {
-  const url = document.getElementById('inv-img-token')?.value.trim() || '';
+  const url = document.getElementById('inv-img-token')?.value!.trim!()! || '';
   const prev = document.getElementById('inv-token-preview');
   if (!prev) return;
   if (url) {
@@ -153,7 +153,7 @@ function _invAtualizarTokenPreview() {
 window._invAtualizarTokenPreview = _invAtualizarTokenPreview;
 
 function _invAtualizarPerfilPreview() {
-  const url = document.getElementById('inv-img-perfil')?.value.trim() || '';
+  const url = document.getElementById('inv-img-perfil')?.value!.trim!()! || '';
   const prev = document.getElementById('inv-perfil-preview');
   if (!prev) return;
   if (url) {
@@ -170,9 +170,9 @@ function _invRenderSkillsChecklist(selectedIds: any) {
   if (!container) return;
 
   const selectedSet = new Set(Array.isArray(selectedIds) ? selectedIds.filter(h => typeof h === 'string') : []);
-  const allSkills = (typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA.skills) ? RPG_DATA.skills : [])
+  const allSkills = (typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA!.skills) ? RPG_DATA!.skills : [])
     .concat(typeof AVT_STATE !== 'undefined' && Array.isArray(AVT_STATE.skills) ? AVT_STATE.skills.filter((s: any) =>
-      !(typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA.skills) && RPG_DATA.skills.some(r => r.id === s.id))
+      !(typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA!.skills) && RPG_DATA!.skills.some(r => r.id === s.id))
     ) : []);
 
   if (!allSkills.length) {
@@ -206,87 +206,87 @@ function abrirModalInvocacao(invId: any, charNomeHint: any) {
   if (invId) {
     const inv = INV_OCACOES.catalogo.find(i => i.id === invId);
     if (!inv) return;
-    document.getElementById('modal-invocacao-titulo').textContent = 'Editar Invocação';
-    document.getElementById('inv-id').value = invId;
-    document.getElementById('inv-nome').value = inv.nome || '';
-    document.getElementById('inv-descricao').value = inv.descricao || '';
+    document.getElementById('modal-invocacao-titulo')!.textContent = 'Editar Invocação';
+    document.getElementById('inv-id')!.value = invId;
+    document.getElementById('inv-nome')!.value = inv.nome || '';
+    document.getElementById('inv-descricao')!.value = inv.descricao || '';
 
     // Imagens
     const imgToken = inv.visual_config?.img_url || '';
     const imgPerfil = inv.visual_config?.img_perfil || inv.img_perfil || '';
-    document.getElementById('inv-img-token').value = imgToken;
-    document.getElementById('inv-img-perfil').value = imgPerfil;
+    document.getElementById('inv-img-token')!.value = imgToken;
+    document.getElementById('inv-img-perfil')!.value = imgPerfil;
     _invAtualizarTokenPreview();
     _invAtualizarPerfilPreview();
 
     // Partículas
     const particleConfig = inv.visual_tipo === 'particles' && inv.visual_config
       ? JSON.stringify(inv.visual_config, null, 2) : '';
-    document.getElementById('inv-visual-config').value = particleConfig;
+    document.getElementById('inv-visual-config')!.value = particleConfig;
 
-    document.getElementById('inv-comportamento').value = inv.comportamento || 'agressivo';
+    document.getElementById('inv-comportamento')!.value = inv.comportamento || 'agressivo';
     _invComportamentoChange();
-    document.getElementById('inv-dummy-explosivo').checked = !!inv.dummy_explosivo;
-    document.getElementById('inv-dano-formula').value = inv.dano_formula || '';
-    document.getElementById('inv-dano-attr').value = inv.dano_atributo_scaling || '';
-    document.getElementById('inv-dano-pct').value = inv.dano_atributo_pct || 0;
-    document.getElementById('inv-resist-base').value = inv.resistencia_base || 0;
-    document.getElementById('inv-resist-attr').value = inv.resistencia_atributo_scaling || '';
-    document.getElementById('inv-resist-pct').value = inv.resistencia_atributo_pct || 0;
-    document.getElementById('inv-cura-formula').value = inv.cura_formula || '';
-    document.getElementById('inv-cura-attr').value = inv.cura_atributo_scaling || '';
-    document.getElementById('inv-cura-pct').value = inv.cura_atributo_pct || 0;
-    document.getElementById('inv-hp-base').value = inv.hp_base || 20;
-    document.getElementById('inv-hp-attr').value = inv.hp_atributo_scaling || '';
-    document.getElementById('inv-hp-pct').value = inv.hp_atributo_pct || 0;
-    document.getElementById('inv-duracao-base').value = inv.duracao_base_turnos || 3;
-    document.getElementById('inv-sab-mult').value = inv.duracao_sabedoria_mult || 0;
-    document.getElementById('inv-init-bonus').value = inv.iniciativa_bonus || 0;
+    document.getElementById('inv-dummy-explosivo')!.checked = !!inv.dummy_explosivo;
+    document.getElementById('inv-dano-formula')!.value = inv.dano_formula || '';
+    document.getElementById('inv-dano-attr')!.value = inv.dano_atributo_scaling || '';
+    document.getElementById('inv-dano-pct')!.value = inv.dano_atributo_pct || 0;
+    document.getElementById('inv-resist-base')!.value = inv.resistencia_base || 0;
+    document.getElementById('inv-resist-attr')!.value = inv.resistencia_atributo_scaling || '';
+    document.getElementById('inv-resist-pct')!.value = inv.resistencia_atributo_pct || 0;
+    document.getElementById('inv-cura-formula')!.value = inv.cura_formula || '';
+    document.getElementById('inv-cura-attr')!.value = inv.cura_atributo_scaling || '';
+    document.getElementById('inv-cura-pct')!.value = inv.cura_atributo_pct || 0;
+    document.getElementById('inv-hp-base')!.value = inv.hp_base || 20;
+    document.getElementById('inv-hp-attr')!.value = inv.hp_atributo_scaling || '';
+    document.getElementById('inv-hp-pct')!.value = inv.hp_atributo_pct || 0;
+    document.getElementById('inv-duracao-base')!.value = inv.duracao_base_turnos || 3;
+    document.getElementById('inv-sab-mult')!.value = inv.duracao_sabedoria_mult || 0;
+    document.getElementById('inv-init-bonus')!.value = inv.iniciativa_bonus || 0;
     { const _gEl = document.getElementById('inv-global'); if (_gEl) _gEl.checked = !!inv.global; }
 
     // Skills (carregar apenas UUIDs — ignora formato antigo de objetos)
     const skillIds = Array.isArray(inv.habilidades) ? inv.habilidades.filter((h: any) => typeof h === 'string') : [];
     _invRenderSkillsChecklist(skillIds);
   } else {
-    document.getElementById('modal-invocacao-titulo').textContent = 'Nova Invocação';
-    document.getElementById('inv-id').value = '';
-    document.getElementById('inv-nome').value = '';
-    document.getElementById('inv-descricao').value = '';
-    document.getElementById('inv-img-token').value = '';
-    document.getElementById('inv-img-perfil').value = '';
+    document.getElementById('modal-invocacao-titulo')!.textContent = 'Nova Invocação';
+    document.getElementById('inv-id')!.value = '';
+    document.getElementById('inv-nome')!.value = '';
+    document.getElementById('inv-descricao')!.value = '';
+    document.getElementById('inv-img-token')!.value = '';
+    document.getElementById('inv-img-perfil')!.value = '';
     _invAtualizarTokenPreview();
     _invAtualizarPerfilPreview();
-    document.getElementById('inv-visual-config').value = '';
-    document.getElementById('inv-comportamento').value = 'agressivo';
+    document.getElementById('inv-visual-config')!.value = '';
+    document.getElementById('inv-comportamento')!.value = 'agressivo';
     _invComportamentoChange();
-    document.getElementById('inv-dummy-explosivo').checked = false;
-    document.getElementById('inv-dano-formula').value = '1d6';
-    document.getElementById('inv-dano-attr').value = '';
-    document.getElementById('inv-dano-pct').value = (0) as any;
-    document.getElementById('inv-resist-base').value = (0) as any;
-    document.getElementById('inv-resist-attr').value = '';
-    document.getElementById('inv-resist-pct').value = (0) as any;
-    document.getElementById('inv-cura-formula').value = '';
-    document.getElementById('inv-cura-attr').value = '';
-    document.getElementById('inv-cura-pct').value = (0) as any;
-    document.getElementById('inv-hp-base').value = (20) as any;
-    document.getElementById('inv-hp-attr').value = '';
-    document.getElementById('inv-hp-pct').value = (0) as any;
-    document.getElementById('inv-duracao-base').value = (3) as any;
-    document.getElementById('inv-sab-mult').value = (0) as any;
-    document.getElementById('inv-init-bonus').value = (0) as any;
+    document.getElementById('inv-dummy-explosivo')!.checked = false;
+    document.getElementById('inv-dano-formula')!.value = '1d6';
+    document.getElementById('inv-dano-attr')!.value = '';
+    document.getElementById('inv-dano-pct')!.value = (0) as any;
+    document.getElementById('inv-resist-base')!.value = (0) as any;
+    document.getElementById('inv-resist-attr')!.value = '';
+    document.getElementById('inv-resist-pct')!.value = (0) as any;
+    document.getElementById('inv-cura-formula')!.value = '';
+    document.getElementById('inv-cura-attr')!.value = '';
+    document.getElementById('inv-cura-pct')!.value = (0) as any;
+    document.getElementById('inv-hp-base')!.value = (20) as any;
+    document.getElementById('inv-hp-attr')!.value = '';
+    document.getElementById('inv-hp-pct')!.value = (0) as any;
+    document.getElementById('inv-duracao-base')!.value = (3) as any;
+    document.getElementById('inv-sab-mult')!.value = (0) as any;
+    document.getElementById('inv-init-bonus')!.value = (0) as any;
     { const _gEl = document.getElementById('inv-global'); if (_gEl) _gEl.checked = false; }
     _invRenderSkillsChecklist([]);
   }
 
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalInvocacao(); };
 }
 window.abrirModalInvocacao = abrirModalInvocacao;
 
 function fecharModalInvocacao() {
   const overlay = document.getElementById('modal-invocacao-overlay');
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) overlay.style!.display = 'none';
   _invModalId = null;
 }
 window.fecharModalInvocacao = fecharModalInvocacao;
@@ -295,8 +295,8 @@ function _invComportamentoChange() {
   const comp = document.getElementById('inv-comportamento')?.value || 'agressivo';
   const dummyWrap = document.getElementById('inv-dummy-wrap');
   const curaWrap = document.getElementById('inv-cura-wrap');
-  if (dummyWrap) dummyWrap.style.display = comp === 'dummy' ? '' : 'none';
-  if (curaWrap) curaWrap.style.display = (comp === 'curador' || comp === 'protetor') ? 'grid' : 'none';
+  if (dummyWrap) dummyWrap.style!.display = comp === 'dummy' ? '' : 'none';
+  if (curaWrap) curaWrap.style!.display = (comp === 'curador' || comp === 'protetor') ? 'grid' : 'none';
 }
 window._invComportamentoChange = _invComportamentoChange;
 
@@ -312,12 +312,12 @@ function _invPopularAtributosSelects() {
 
 async function salvarInvocacao() {
   if (RPG_DATA?.myRole !== 'mestre') { mostrarToast('Apenas o mestre pode criar invocações', 'erro'); return; }
-  const nome = document.getElementById('inv-nome').value.trim();
+  const nome = document.getElementById('inv-nome')!.value!.trim!()!;
   if (!nome) { mostrarToast('Nome da invocação obrigatório', 'erro'); return; }
 
   // Imagens
-  const imgToken  = document.getElementById('inv-img-token')?.value.trim() || '';
-  const imgPerfil = document.getElementById('inv-img-perfil')?.value.trim() || '';
+  const imgToken  = document.getElementById('inv-img-token')?.value!.trim!()! || '';
+  const imgPerfil = document.getElementById('inv-img-perfil')?.value!.trim!()! || '';
 
   // Visual config
   const visualTipo = imgToken ? 'token' : 'particles';
@@ -325,7 +325,7 @@ async function salvarInvocacao() {
   if (imgToken) {
     visualConfig = { img_url: imgToken, img_perfil: imgPerfil || null };
   } else {
-    const particleRaw = document.getElementById('inv-visual-config')?.value.trim() || '';
+    const particleRaw = document.getElementById('inv-visual-config')?.value!.trim!()! || '';
     if (particleRaw) { try { visualConfig = JSON.parse(particleRaw); } catch(_) { visualConfig = {}; } }
   }
 
@@ -337,26 +337,26 @@ async function salvarInvocacao() {
   const body = {
     rpg_id: RPG_DATA.rpgId,
     nome,
-    descricao: document.getElementById('inv-descricao').value.trim() || null,
+    descricao: document.getElementById('inv-descricao')!.value!.trim!()! || null,
     visual_tipo: visualTipo,
     visual_config: visualConfig,
-    comportamento: document.getElementById('inv-comportamento').value || 'agressivo',
-    dummy_explosivo: document.getElementById('inv-dummy-explosivo').checked,
-    dano_formula: document.getElementById('inv-dano-formula').value.trim() || null,
-    dano_atributo_scaling: document.getElementById('inv-dano-attr').value || null,
-    dano_atributo_pct: parseFloat(document.getElementById('inv-dano-pct').value) || 0,
-    resistencia_base: parseInt(document.getElementById('inv-resist-base').value) || 0,
-    resistencia_atributo_scaling: document.getElementById('inv-resist-attr').value || null,
-    resistencia_atributo_pct: parseFloat(document.getElementById('inv-resist-pct').value) || 0,
-    cura_formula: document.getElementById('inv-cura-formula').value.trim() || null,
-    cura_atributo_scaling: document.getElementById('inv-cura-attr').value || null,
-    cura_atributo_pct: parseFloat(document.getElementById('inv-cura-pct').value) || 0,
-    hp_base: parseInt(document.getElementById('inv-hp-base').value) || 20,
-    hp_atributo_scaling: document.getElementById('inv-hp-attr').value || null,
-    hp_atributo_pct: parseFloat(document.getElementById('inv-hp-pct').value) || 0,
-    duracao_base_turnos: parseInt(document.getElementById('inv-duracao-base').value) || 3,
-    duracao_sabedoria_mult: parseFloat(document.getElementById('inv-sab-mult').value) || 0,
-    iniciativa_bonus: parseInt(document.getElementById('inv-init-bonus').value) || 0,
+    comportamento: document.getElementById('inv-comportamento')!.value! || 'agressivo',
+    dummy_explosivo: document.getElementById('inv-dummy-explosivo')!.checked!,
+    dano_formula: document.getElementById('inv-dano-formula')!.value!.trim!()! || null,
+    dano_atributo_scaling: document.getElementById('inv-dano-attr')!.value! || null,
+    dano_atributo_pct: parseFloat(document.getElementById('inv-dano-pct')!.value!) || 0,
+    resistencia_base: parseInt(document.getElementById('inv-resist-base')!.value!) || 0,
+    resistencia_atributo_scaling: document.getElementById('inv-resist-attr')!.value! || null,
+    resistencia_atributo_pct: parseFloat(document.getElementById('inv-resist-pct')!.value!) || 0,
+    cura_formula: document.getElementById('inv-cura-formula')!.value!.trim!()! || null,
+    cura_atributo_scaling: document.getElementById('inv-cura-attr')!.value! || null,
+    cura_atributo_pct: parseFloat(document.getElementById('inv-cura-pct')!.value!) || 0,
+    hp_base: parseInt(document.getElementById('inv-hp-base')!.value!) || 20,
+    hp_atributo_scaling: document.getElementById('inv-hp-attr')!.value! || null,
+    hp_atributo_pct: parseFloat(document.getElementById('inv-hp-pct')!.value!) || 0,
+    duracao_base_turnos: parseInt(document.getElementById('inv-duracao-base')!.value!) || 3,
+    duracao_sabedoria_mult: parseFloat(document.getElementById('inv-sab-mult')!.value!) || 0,
+    iniciativa_bonus: parseInt(document.getElementById('inv-init-bonus')!.value!) || 0,
     global: document.getElementById('inv-global')?.checked || false,
     habilidades,
   };
@@ -457,16 +457,16 @@ function abrirModalDarInvocacao(charNome: any) {
   const overlay = document.getElementById('modal-dar-invocacao-overlay');
   if (!overlay) return;
   _invDarCharNome = charNome;
-  document.getElementById('dar-inv-char-nome').textContent = charNome;
+  document.getElementById('dar-inv-char-nome')!.textContent = charNome;
   _invRenderListaDarInvocacao();
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalDarInvocacao(); };
 }
 window.abrirModalDarInvocacao = abrirModalDarInvocacao;
 
 function fecharModalDarInvocacao() {
   const overlay = document.getElementById('modal-dar-invocacao-overlay');
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) overlay.style!.display = 'none';
   _invDarCharNome = null;
 }
 window.fecharModalDarInvocacao = fecharModalDarInvocacao;

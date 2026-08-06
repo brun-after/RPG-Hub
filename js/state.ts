@@ -57,17 +57,17 @@ let MAPA_ZOOM = { zoom:1, panX:0, panY:0, _inited:false, _keyInited:false, _resi
 function mapaZoomApply() {
   const img = document.getElementById('mapa-img');
   if (!img) return;
-  img.style.transformOrigin = '0 0';
-  img.style.transform = `translate(${MAPA_ZOOM.panX}px,${MAPA_ZOOM.panY}px) scale(${MAPA_ZOOM.zoom})`;
-  img.style.willChange = 'transform';
-  img.style.backfaceVisibility = 'hidden';
+  img.style!.transformOrigin = '0 0';
+  img.style!.transform = `translate(${MAPA_ZOOM.panX}px,${MAPA_ZOOM.panY}px) scale(${MAPA_ZOOM.zoom})`;
+  img.style!.willChange = 'transform';
+  img.style!.backfaceVisibility = 'hidden';
   // Renderização nítida (vetorial/CSS) ao ampliar; suaviza apenas ao reduzir
-  img.style.imageRendering = MAPA_ZOOM.zoom > 1 ? 'crisp-edges' : 'high-quality';
+  img.style!.imageRendering = MAPA_ZOOM.zoom > 1 ? 'crisp-edges' : 'high-quality';
   // Garante visibilidade ao reaplica zoom após resize do browser
-  img.style.visibility = 'visible';
+  img.style!.visibility = 'visible';
   // Atualiza tokens para renderização nítida conforme o zoom
   const bgImg = img.querySelector('img.mapa-bg-img') as HTMLElement;
-  if (bgImg) bgImg.style.imageRendering = MAPA_ZOOM.zoom > 1 ? 'crisp-edges' : 'auto';
+  if (bgImg) bgImg.style!.imageRendering = MAPA_ZOOM.zoom > 1 ? 'crisp-edges' : 'auto';
   const lbl = document.getElementById('mapa-zoom-val');
   if (lbl) lbl.textContent = Math.round(MAPA_ZOOM.zoom * 100) + '%';
 }
@@ -106,13 +106,13 @@ function mapaToggleLock() {
   const btn = document.getElementById('mapa-lock-btn');
   if (btn) {
     btn.textContent = MAPA_ZOOM.locked ? '🔒' : '🔓';
-    btn.style.borderColor = MAPA_ZOOM.locked ? 'rgba(200,168,75,0.6)' : 'rgba(30,45,66,0.7)';
-    btn.style.color = MAPA_ZOOM.locked ? '#f0cc6a' : '#7a92aa';
-    btn.style.background = MAPA_ZOOM.locked ? 'rgba(200,168,75,0.12)' : 'rgba(5,8,16,0.85)';
+    btn.style!.borderColor = MAPA_ZOOM.locked ? 'rgba(200,168,75,0.6)' : 'rgba(30,45,66,0.7)';
+    btn.style!.color = MAPA_ZOOM.locked ? '#f0cc6a' : '#7a92aa';
+    btn.style!.background = MAPA_ZOOM.locked ? 'rgba(200,168,75,0.12)' : 'rgba(5,8,16,0.85)';
     btn.title = MAPA_ZOOM.locked ? 'Mapa travado — clique para destravar' : 'Travar posição do mapa';
   }
   const wrap = document.getElementById('mapa-wrap');
-  if (wrap) wrap.style.cursor = MAPA_ZOOM.locked ? 'default' : 'grab';
+  if (wrap) wrap.style!.cursor = MAPA_ZOOM.locked ? 'default' : 'grab';
   mostrarToast(MAPA_ZOOM.locked ? '🔒 Mapa travado' : '🔓 Mapa destravado', MAPA_ZOOM.locked ? '' : 'ok');
 }
 // ════════════════════════════════════════════════════════════════════════════
@@ -123,7 +123,7 @@ function mapaToggleModoCamera() {
   const btn = document.getElementById('mapa-camera-btn');
   if (btn) {
     btn.textContent = MAPA_ZOOM.modo === 'auto' ? '📷 Auto' : '🎮 Manual';
-    btn.style.borderColor = MAPA_ZOOM.modo === 'auto'
+    btn.style!.borderColor = MAPA_ZOOM.modo === 'auto'
       ? 'rgba(94,224,154,0.5)' : 'rgba(30,45,66,0.7)';
   }
   mostrarToast(MAPA_ZOOM.modo === 'auto'
@@ -177,7 +177,7 @@ function _cameraAutoTick() {
   // Zoom automático: mantém grupo visível com margem
   const mapa = _getMapaById(mapId);
   const chars = (RPG_DATA?.characters || []).filter(c =>
-    c.active_map_id === mapId && !['npc','criatura'].includes(c.custom_attrs?.tipo_personagem)
+    c.active_map_id === mapId && !['npc','criatura'].includes(c.custom_attrs?.tipo_personagem!)
   );
 
   let minX = centro.x, maxX = centro.x, minY = centro.y, maxY = centro.y;
@@ -254,7 +254,7 @@ function mapaCharSizeAtivar(nome: any) {
     }
   }
   
-  hud.style.display = 'flex';
+  hud.style!.display = 'flex';
 }
 function mapaCharSizeSlide(v: any) {
   const val = parseFloat(v);
@@ -275,8 +275,8 @@ function mapaCharSizeSlide(v: any) {
   // Atualizar o token visualmente via escala CSS direto — sem re-render completo
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`) as HTMLElement;
   if (tokenEl) {
-    const baseTamanho = parseFloat(tokenEl.dataset.baseTamanho || '1');
-    tokenEl.style.transform = `translate(-50%,-50%) scale(${(val / baseTamanho).toFixed(3)})`;
+    const baseTamanho = parseFloat(tokenEl.dataset!.baseTamanho || '1');
+    tokenEl.style!.transform = `translate(-50%,-50%) scale(${(val / baseTamanho).toFixed(3)})`;
   }
 }
 
@@ -310,7 +310,7 @@ async function mapaCharSizeConfirmar() {
     const entry = (RPG_DATA?.mapas || []).find(
       l => l.mapa.map_id === MAPA_STATE?.mapaAtualId
     );
-    if (entry && window.mapaRenderTokens) mapaRenderTokens(entry.mapa);
+    if (entry && (window as any).mapaRenderTokens) mapaRenderTokens(entry.mapa);
     return;
   }
   
@@ -321,7 +321,7 @@ async function mapaCharSizeConfirmar() {
   if (!c.custom_attrs.aparencia) c.custom_attrs.aparencia = {};
   c.custom_attrs.aparencia.tamanho = tam;
   try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
       method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs })
     });
     mostrarToast('✓ Tamanho salvo', 'ok');
@@ -335,7 +335,7 @@ async function mapaCharSizeConfirmar() {
 function mapaCharSizeFechar() {
   MAPA_ZOOM.activeChar = null;
   const hud = document.getElementById('mapa-char-size-hud');
-  if (hud) hud.style.display = 'none';
+  if (hud) hud.style!.display = 'none';
 }
 
 function mapaZoomSet(z: any, pivotX: any, pivotY: any) {
@@ -361,8 +361,8 @@ function mapaZoomInit() {
   MAPA_ZOOM._inited = true;
 
   // Permitir que o conteúdo extravase mas com clip nas bordas
-  wrap.style.overflow = 'visible';
-  wrap.style.clipPath = 'inset(0 round 10px)';
+  wrap.style!.overflow = 'visible';
+  wrap.style!.clipPath = 'inset(0 round 10px)';
 
   // ── Wheel zoom (centrado no cursor) ───────────────────────────
   wrap.addEventListener('wheel', (e) => {
@@ -423,7 +423,7 @@ function mapaZoomInit() {
     if (!_panThresholdMet) {
       if (Math.abs(dx) + Math.abs(dy) < _panDeadzone()) return;
       _panThresholdMet = true;
-      wrap.style.cursor = 'grabbing';
+      wrap.style!.cursor = 'grabbing';
     }
     MAPA_ZOOM.panX = _panOX + dx;
     MAPA_ZOOM.panY = _panOY + dy;
@@ -432,7 +432,7 @@ function mapaZoomInit() {
   const _endPan = (e: any) => {
     if (e.pointerId !== _panPointerId) return;
     _isPanning = false; _panPointerId = null;
-    wrap.style.cursor = MAPA_ZOOM.locked ? 'default' : 'grab';
+    wrap.style!.cursor = MAPA_ZOOM.locked ? 'default' : 'grab';
   };
   wrap.addEventListener('pointerup', _endPan);
   wrap.addEventListener('pointercancel', _endPan);
@@ -444,8 +444,8 @@ function mapaZoomInit() {
       const imgEl = document.getElementById('mapa-img');
       if (!imgEl) return;
       // Garante que a imagem de fundo continua visível após zoom do browser
-      imgEl.style.visibility = 'visible';
-      imgEl.style.opacity = '1';
+      imgEl.style!.visibility = 'visible';
+      imgEl.style!.opacity = '1';
       mapaZoomApply();
     };
     window.addEventListener('resize', _handleResize);

@@ -279,7 +279,7 @@ async function animGenFileToBase64(file: any) {
 async function animGenFileToDataUrl(file: any) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = e => resolve(e.target.result);
+    reader.onload = e => resolve(e.target!.result);
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -302,9 +302,9 @@ async function _animCropPartFromImage(imageFile: any, bbox: any, targetW: any, t
       canvas.width  = targetW * 2;
       canvas.height = targetH * 2;
       const ctx = canvas.getContext('2d');
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW * 2, targetH * 2);
+      ctx!.imageSmoothingEnabled = true;
+      ctx!.imageSmoothingQuality = 'high';
+      ctx!.drawImage(img, sx, sy, sw, sh, 0, 0, targetW * 2, targetH * 2);
       URL.revokeObjectURL(url);
       try { resolve(canvas.toDataURL('image/png')); }
       catch(e) { resolve(null); }
@@ -457,8 +457,8 @@ async function animGenHandleGenerate() {
     // Show preview sections
     const previewWrap = document.getElementById('animgen-preview-wrap');
     const equipWrap = document.getElementById('animgen-equip-wrap');
-    if (previewWrap) previewWrap.style.display = 'block';
-    if (equipWrap) equipWrap.style.display = 'block';
+    if (previewWrap) previewWrap.style!.display = 'block';
+    if (equipWrap) equipWrap.style!.display = 'block';
 
     // Show palette
     const paletteEl = document.getElementById('animgen-palette');
@@ -527,17 +527,17 @@ function animGenSetPreviewAnim(animName: any) {
 
   // Update button styles
   document.querySelectorAll('.animgen-anim-btn').forEach(b => {
-    b.style.background = 'rgba(20,29,43,0.6)';
-    b.style.borderColor = 'var(--borda)';
-    b.style.color = 'var(--suave)';
+    b.style!.background = 'rgba(20,29,43,0.6)';
+    b.style!.borderColor = 'var(--borda)';
+    b.style!.color = 'var(--suave)';
   });
   const labels: Record<string, any> = { idle: '⏸ Idle', walk: '🚶 Caminhar', attack: '⚔ Atacar' };
   const activeText = labels[animName];
   document.querySelectorAll('.animgen-anim-btn').forEach(b => {
     if (b.textContent.trim() === activeText) {
-      b.style.background = 'rgba(79,163,209,0.15)';
-      b.style.borderColor = 'var(--primario)';
-      b.style.color = 'var(--primario)';
+      b.style!.background = 'rgba(79,163,209,0.15)';
+      b.style!.borderColor = 'var(--primario)';
+      b.style!.color = 'var(--primario)';
     }
   });
 }
@@ -550,7 +550,7 @@ function animGenCopiarPromptPersonagem() {
   }).catch(() => {
     // Fallback: show in textarea for manual copy
     const ta = document.getElementById('animgen-import-json');
-    if (ta) { ta.value = ANIM_CHAR_PROMPT; ta.select(); }
+    if (ta) { ta.value = ANIM_CHAR_PROMPT; ta.select!(); }
     mostrarToast('Copie o texto da área abaixo (Ctrl+A, Ctrl+C)', '');
   });
 }
@@ -561,19 +561,19 @@ function animGenCopiarPromptEquip(slot: any) {
     mostrarToast('Prompt de equipamento copiado!', 'ok');
   }).catch(() => {
     const ta = document.getElementById(`animgen-import-equip-json-${slot}`);
-    if (ta) { ta.value = prompt; ta.select(); }
+    if (ta) { ta.value = prompt; ta.select!(); }
     mostrarToast('Copie o texto da área abaixo', '');
   });
 }
 
 async function animGenImportarJSON() {
   const ta = document.getElementById('animgen-import-json');
-  if (!ta || !ta.value.trim()) { mostrarToast('Cole o JSON gerado pela IA na área de texto', 'aviso'); return; }
+  if (!ta || !ta.value!.trim()) { mostrarToast('Cole o JSON gerado pela IA na área de texto', 'aviso'); return; }
 
   const btn = document.getElementById('animgen-btn-importar');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Processando...'; }
 
-  let raw = ta.value.trim();
+  let raw = ta.value!.trim();
   raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
   let parsed;
@@ -647,8 +647,8 @@ async function animGenImportarJSON() {
 
     const previewWrap = document.getElementById('animgen-preview-wrap');
     const equipWrap   = document.getElementById('animgen-equip-wrap');
-    if (previewWrap) previewWrap.style.display = 'block';
-    if (equipWrap)   equipWrap.style.display   = 'block';
+    if (previewWrap) previewWrap.style!.display = 'block';
+    if (equipWrap)   equipWrap.style!.display   = 'block';
 
     const paletteEl = document.getElementById('animgen-palette');
     if (paletteEl && animadoData.palette) {
@@ -675,8 +675,8 @@ async function animGenImportarJSON() {
 function animGenToggleImport() {
   const wrap = document.getElementById('animgen-import-wrap');
   if (!wrap) return;
-  const open = wrap.style.display !== 'none';
-  wrap.style.display = open ? 'none' : 'block';
+  const open = wrap.style!.display !== 'none';
+  wrap.style!.display = open ? 'none' : 'block';
   const btn = document.getElementById('animgen-toggle-import-btn');
   if (btn) btn.textContent = open ? '📥 Importar de IA Externa' : '▲ Fechar Importação';
 }
@@ -684,14 +684,14 @@ function animGenToggleImport() {
 function animGenToggleEquipImport(slot: any) {
   const wrap = document.getElementById(`animgen-equip-import-wrap-${slot}`);
   if (!wrap) return;
-  wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+  wrap.style!.display = wrap.style!.display === 'none' ? 'block' : 'none';
 }
 
 function animGenImportarEquipJSON(slot: any) {
   const ta = document.getElementById(`animgen-import-equip-json-${slot}`);
-  if (!ta || !ta.value.trim()) { mostrarToast('Cole o JSON do equipamento', 'aviso'); return; }
+  if (!ta || !ta.value!.trim()) { mostrarToast('Cole o JSON do equipamento', 'aviso'); return; }
 
-  let raw = ta.value.trim();
+  let raw = ta.value!.trim();
   raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
   let parsed;
@@ -721,7 +721,7 @@ function animGenImportarEquipJSON(slot: any) {
   if (window._apmodAnimTabCtrl) animRendererUpdateEquipment(window._apmodAnimTabCtrl, slot, equipData);
 
   ta.value = '';
-  document.getElementById(`animgen-equip-import-wrap-${slot}`)?.style && (document.getElementById(`animgen-equip-import-wrap-${slot}`).style.display = 'none');
+  document.getElementById(`animgen-equip-import-wrap-${slot}`)?.style && (document.getElementById(`animgen-equip-import-wrap-${slot}`)!.style!.display = 'none');
   mostrarToast(`Equipamento importado: ${slot}`, 'ok');
 }
 

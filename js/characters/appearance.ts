@@ -134,7 +134,7 @@ function abrirModalAparencia(nome: any) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'modal-aparencia-overlay';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9200;display:flex;flex-direction:column;align-items:stretch;overflow:hidden';
+    modal.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9200;display:flex;flex-direction:column;align-items:stretch;overflow:hidden';
     document.body.appendChild(modal);
   }
 
@@ -199,7 +199,7 @@ function abrirModalAparencia(nome: any) {
   <button onclick="apmodSalvar('${nome.replace(/'/g, "\\'")}')" style="width:100%;padding:13px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.78rem;letter-spacing:0.12em;cursor:pointer;text-transform:uppercase;font-weight:700">💾 Salvar Aparência</button>
 </div>`;
 
-  modal.style.display = 'flex';
+  modal.style!.display = 'flex';
   window._apmodNome = nome;
   window._apmodOriginal = JSON.parse(JSON.stringify(aparencia));
   window._apmodOriginalStale = false;
@@ -291,38 +291,38 @@ function apmodTogglePreviewPanel(){
   const wrap=document.getElementById('apmod-preview-wrap');
   if(!content)return;
   
-  const expanded=content.style.display!=='none'&&content.style.display!=='';
+  const expanded=content.style!.display!=='none'&&content.style!.display!=='';
   
   if (expanded) {
     // Fechar: animar para 0
-    wrap.style.maxHeight = wrap.scrollHeight + 'px'; // Definir altura atual primeiro
+    wrap!.style!.maxHeight = wrap!.scrollHeight + 'px'; // Definir altura atual primeiro
     setTimeout(() => {
-      wrap.style.maxHeight = '48px'; // Altura apenas da barra de toggle
+      wrap!.style!.maxHeight = '48px'; // Altura apenas da barra de toggle
     }, 10);
     setTimeout(() => {
-      content.style.display = 'none';
+      content.style!.display = 'none';
     }, 300); // Após transição
   } else {
     // Abrir: definir altura final para animação suave
-    content.style.display = 'flex';
-    const alturaFinal = wrap.scrollHeight + 'px';
-    wrap.style.maxHeight = alturaFinal;
+    content.style!.display = 'flex';
+    const alturaFinal = wrap!.scrollHeight + 'px';
+    wrap!.style!.maxHeight = alturaFinal;
     setTimeout(() => {
-      wrap.style.maxHeight = ''; // Remover após transição para permitir crescimento natural
+      wrap!.style!.maxHeight = ''; // Remover após transição para permitir crescimento natural
     }, 300);
   }
   
-  if(arrow)arrow.style.transform=expanded?'rotate(0deg)':'rotate(180deg)';
+  if(arrow)arrow.style!.transform=expanded?'rotate(0deg)':'rotate(180deg)';
 }
 function apmodSwitchTab(tab: any,btn: any){
   window._apmodLastTab = tab; // UX-08: Memorizar última aba
   if(tab==='tint'){setTimeout(()=>{apmodTintIniciar({tints:window._apmodTints||[]});apmodTintAtualizarPreview();},30);}
-  if(tab==='animado'){setTimeout(()=>{const animado=window._apmodAnimado;if(animado?.parts&&Object.keys(animado.parts).length&&typeof animRendererMount==='function'){const cw=document.getElementById('animgen-canvas-wrap');const pw=document.getElementById('animgen-preview-wrap');const ew=document.getElementById('animgen-equip-wrap');if(pw)pw.style.display='block';if(ew)ew.style.display='block';if(cw&&!cw.hasChildNodes()){if(window._apmodAnimTabCtrl){window._apmodAnimTabCtrl.destroy();window._apmodAnimTabCtrl=null;}window._apmodAnimTabCtrl=animRendererMount(cw,animado,{width:120,height:180,animName:'idle'});}}},50);}
-  document.querySelectorAll('.apmod-tab-content').forEach(el=>el.style.display='none');document.querySelectorAll('.apmod-tab-btn').forEach(b=>{b.style.color='var(--suave)';b.style.borderBottomColor='transparent';b.classList.remove('apmod-tab-ativo');});const el=document.getElementById(`apmod-tab-${tab}`);if(el)el.style.display='block';if(btn){btn.style.color='var(--destaque)';btn.style.borderBottomColor='var(--destaque)';btn.classList.add('apmod-tab-ativo');}
+  if(tab==='animado'){setTimeout(()=>{const animado=window._apmodAnimado;if(animado?.parts&&Object.keys(animado.parts).length&&typeof animRendererMount==='function'){const cw=document.getElementById('animgen-canvas-wrap');const pw=document.getElementById('animgen-preview-wrap');const ew=document.getElementById('animgen-equip-wrap');if(pw)pw.style!.display='block';if(ew)ew.style!.display='block';if(cw&&!cw.hasChildNodes()){if(window._apmodAnimTabCtrl){window._apmodAnimTabCtrl.destroy();window._apmodAnimTabCtrl=null;}window._apmodAnimTabCtrl=animRendererMount(cw,animado,{width:120,height:180,animName:'idle'});}}},50);}
+  document.querySelectorAll('.apmod-tab-content').forEach(el=>el.style!.display='none');document.querySelectorAll('.apmod-tab-btn').forEach(b=>{b.style!.color='var(--suave)';b.style!.borderBottomColor='transparent';b.classList.remove('apmod-tab-ativo');});const el=document.getElementById(`apmod-tab-${tab}`);if(el)el.style!.display='block';if(btn){btn.style.color='var(--destaque)';btn.style.borderBottomColor='var(--destaque)';btn.classList.add('apmod-tab-ativo');}
 }
-function apmodFiltrarEstilo(tipo: any,estilo: any,btn: any){const grid=document.getElementById(`apmod-grid-${tipo}`);if(!grid)return;grid.querySelectorAll('.apmod-part-btn').forEach(b=>{const parte=(APMOD_PARTS[tipo]||[]).find((p: any)=>p.id===b.dataset.id);b.style.display=!parte||parte.estilo===estilo?'':'none';});document.querySelectorAll(`[data-tipo="${tipo}"].apmod-estilo-btn`).forEach(b=>{b.style.borderColor='var(--borda)';b.style.color='var(--suave)';});if(btn){btn.style.borderColor='var(--primario)';btn.style.color='var(--primario-v)';}}
-function apmodSelecionarParte(tipo: any,id: any,btn: any){document.querySelectorAll(`[data-tipo="${tipo}"].apmod-part-btn`).forEach(b=>{b.style.background='rgba(20,29,43,0.6)';b.style.borderColor='var(--borda)';b.style.color='var(--suave)';b.classList.remove('ativo');});if(btn){btn.style.background='rgba(79,163,209,0.12)';btn.style.borderColor='var(--primario)';btn.style.color='var(--primario-v)';btn.classList.add('ativo');}window._apmodOriginalStale=true;window._apmodLastBaseTab='builder';apmodAtualizarPreview();}
-function apmodSelecionarCriatura(key: any,btn: any){document.querySelectorAll('.apmod-cria-btn').forEach(b=>b.style.borderColor='var(--borda)');if(btn)btn.style.borderColor='var(--destaque)';window._apmodCriaturaModelo=key;window._apmodOriginalStale=true;window._apmodLastBaseTab='criatura';apmodAtualizarPreview();}
+function apmodFiltrarEstilo(tipo: any,estilo: any,btn: any){const grid=document.getElementById(`apmod-grid-${tipo}`);if(!grid)return;grid.querySelectorAll('.apmod-part-btn').forEach(b=>{const parte=(APMOD_PARTS[tipo]||[]).find((p: any)=>p.id===b.dataset!.id);b.style!.display=!parte||parte.estilo===estilo?'':'none';});document.querySelectorAll(`[data-tipo="${tipo}"].apmod-estilo-btn`).forEach(b=>{b.style!.borderColor='var(--borda)';b.style!.color='var(--suave)';});if(btn){btn.style.borderColor='var(--primario)';btn.style.color='var(--primario-v)';}}
+function apmodSelecionarParte(tipo: any,id: any,btn: any){document.querySelectorAll(`[data-tipo="${tipo}"].apmod-part-btn`).forEach(b=>{b.style!.background='rgba(20,29,43,0.6)';b.style!.borderColor='var(--borda)';b.style!.color='var(--suave)';b.classList.remove('ativo');});if(btn){btn.style.background='rgba(79,163,209,0.12)';btn.style.borderColor='var(--primario)';btn.style.color='var(--primario-v)';btn.classList.add('ativo');}window._apmodOriginalStale=true;window._apmodLastBaseTab='builder';apmodAtualizarPreview();}
+function apmodSelecionarCriatura(key: any,btn: any){document.querySelectorAll('.apmod-cria-btn').forEach(b=>b.style!.borderColor='var(--borda)');if(btn)btn.style.borderColor='var(--destaque)';window._apmodCriaturaModelo=key;window._apmodOriginalStale=true;window._apmodLastBaseTab='criatura';apmodAtualizarPreview();}
 function apmodCarregarTemplate(id: any){
   const t=CHAR_JSON_TEMPLATES.find(x=>x.id===id);
   if(!t){mostrarToast('Template não encontrado','erro');return;}
@@ -357,7 +357,7 @@ function apmodGetBaseAparencia(tipoTab: any){
     const tipos=['cabelo','rosto','camisa','calca','sapato'];
     tipos.forEach(tipo=>{
       const sel=document.querySelector(`[data-tipo="${tipo}"].apmod-part-btn.ativo`);
-      if(sel) partes[tipo]=sel.dataset.id;
+      if(sel) partes[tipo]=sel.dataset!.id;
     });
     (partes as any).cor_pele=document.getElementById('apmod-cor-pele')?.value||'#d4a876';
     (partes as any).cor_cabelo=document.getElementById('apmod-cor-cabelo')?.value||'#4a2c0a';
@@ -418,7 +418,7 @@ function apmodGetCurrentAparencia(){
   const partes: Record<string, any> = {cor_pele:document.getElementById('apmod-cor-pele')?.value||'#d4a876'};
   tipos.forEach((tipo,i)=>{
     const btn=document.querySelector(`.apmod-part-btn.ativo[data-tipo="${tipo}"]`);
-    if(btn)partes[tipo]=btn.dataset.id;
+    if(btn)partes[tipo]=btn.dataset!.id;
     const corEl=document.getElementById(`apmod-cor-${tipo}`);
     if(corEl)partes[corKeys[i]]=corEl.value;
   });
@@ -439,14 +439,14 @@ function apmodFecharModal() {
   if (window._apmodAnimTabCtrl) { window._apmodAnimTabCtrl.destroy(); window._apmodAnimTabCtrl = null; }
   if (window._apmodHeadAnimCtrl) { window._apmodHeadAnimCtrl.destroy(); window._apmodHeadAnimCtrl = null; }
   if (window._apmodMiniAnimCtrl) { window._apmodMiniAnimCtrl.destroy(); window._apmodMiniAnimCtrl = null; }
-  document.getElementById('modal-aparencia-overlay').style.display = 'none';
+  document.getElementById('modal-aparencia-overlay')!.style!.display = 'none';
 }
 
 function apmodAtualizarPreview(){
   const ap=apmodGetCurrentAparencia();
   const tamanhoEl=document.getElementById('apmod-tamanho');
   const tamanhoVal=document.getElementById('apmod-tamanho-val');
-  const fator=tamanhoEl?parseFloat(tamanhoEl.value):1.0;
+  const fator=tamanhoEl?parseFloat(tamanhoEl.value!):1.0;
   if(tamanhoEl&&tamanhoVal)tamanhoVal.textContent='×'+fator.toFixed(2);
   // Sincronizar valor exibido na barra de toggle
   const toggleVal=document.getElementById('apmod-tamanho-val');
@@ -463,7 +463,7 @@ function apmodAtualizarPreview(){
     // Mount live canvas renderer in the ISO preview container
     if(prevIso&&ap.animado&&ap.animado.parts&&Object.keys(ap.animado.parts).length){
       if(window._apmodAnimCtrl){window._apmodAnimCtrl.destroy();window._apmodAnimCtrl=null;}
-      prevIso.innerHTML='';prevIso.style.display='flex';prevIso.style.alignItems='center';prevIso.style.justifyContent='center';
+      prevIso.innerHTML='';prevIso.style!.display='flex';prevIso.style!.alignItems='center';prevIso.style!.justifyContent='center';
       window._apmodAnimCtrl=animRendererMount(prevIso,ap.animado,{width:96,height:160,animName:'idle'});
     }
     // Head preview: use composed_img as circular avatar, or mount small canvas
@@ -474,7 +474,7 @@ function apmodAtualizarPreview(){
         prevHead.innerHTML=`<img src="${composedImg}" style="width:100%;height:100%;object-fit:cover;object-position:top center;border-radius:50%">`;
       } else if(ap.animado?.parts&&Object.keys(ap.animado.parts).length){
         prevHead.innerHTML='';
-        prevHead.style.display='flex';prevHead.style.alignItems='center';prevHead.style.justifyContent='center';
+        prevHead.style!.display='flex';prevHead.style!.alignItems='center';prevHead.style!.justifyContent='center';
         window._apmodHeadAnimCtrl=animRendererMount(prevHead,ap.animado,{width:44,height:44,animName:'idle'});
       }
     }
@@ -482,7 +482,7 @@ function apmodAtualizarPreview(){
     if(prevMini&&ap.animado?.parts&&Object.keys(ap.animado.parts).length){
       if(window._apmodMiniAnimCtrl){window._apmodMiniAnimCtrl.destroy();window._apmodMiniAnimCtrl=null;}
       const mW=Math.round(32*fator),mH=Math.round(56*fator);
-      prevMini.style.width=mW+'px';prevMini.style.height=mH+'px';
+      prevMini.style!.width=mW+'px';prevMini.style!.height=mH+'px';
       prevMini.innerHTML='';
       window._apmodMiniAnimCtrl=animRendererMount(prevMini,ap.animado,{width:mW,height:mH,animName:'idle'});
     }
@@ -532,7 +532,7 @@ function apmodAtualizarPreview(){
   const prevHeadMini=document.getElementById('apmod-prev-head-mini');
   if(prevHeadMini)prevHeadMini.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
   if(prevIso){
-    prevIso.style.position='relative';
+    prevIso.style!.position='relative';
     const _pvEquips=window._apmodEquipsVisuais||[];
     const _pvW=240,_pvH=362; // dimensões finais após resize HD
     const _pvEqOv=(camada: any)=>_pvEquips.filter((eq: any)=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map((eq: any)=>{
@@ -559,8 +559,8 @@ function apmodAtualizarPreview(){
   // Mini-preview: tamanho exato de como vai aparecer no mapa, com equipamentos
   if(prevMini){
     const mW=Math.round(32*fator), mH=Math.round(56*fator);
-    prevMini.style.width=mW+'px'; prevMini.style.height=mH+'px';
-    prevMini.style.position='relative';
+    prevMini.style!.width=mW+'px'; prevMini.style!.height=mH+'px';
+    prevMini.style!.position='relative';
     const _mnEquips=window._apmodEquipsVisuais||[];
     const _mnEqOv=(camada: any)=>_mnEquips.filter((eq: any)=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map((eq: any)=>{
       const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:40;
@@ -598,7 +598,7 @@ function apmodTogglePreviewGrande(triggerEl: any) {
 
   const lb = document.createElement('div');
   lb.id = 'apmod-lightbox';
-  lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:zoom-out';
+  lb.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:zoom-out';
   lb.onclick = () => lb.remove();
   lb.innerHTML = `
     <style>#apmod-lightbox svg { transform: none !important; margin-bottom: 0 !important; }</style>
@@ -681,7 +681,7 @@ Para uso no RPG Hub: cole a URL pública ou base64 do PNG no campo "Imagem ISO".
 function apmodParseSvgJson(){
   const ta=document.getElementById('apmod-svg-json-paste');
   if(!ta)return;
-  const val=ta.value.trim();
+  const val=ta.value!.trim();
   if(!val){mostrarToast('Cole o JSON primeiro','erro');return;}
   let obj;
   try{obj=JSON.parse(val);}catch (e: any){mostrarToast('JSON inválido: '+e.message,'erro');return;}
@@ -753,11 +753,11 @@ async function _aeqGenerateComposedImg(aparencia: any, equipVisuais: any, charNo
         const ax=(dx1*dv2-dx2*dv1)/det, bx=(du1*dx2-du2*dx1)/det;
         const ay=(dy1*dv2-dy2*dv1)/det, by=(du1*dy2-du2*dy1)/det;
         const cx=x0-ax*u0-bx*v0, cy=y0-ay*u0-by*v0;
-        ctx.save();
-        ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.closePath(); ctx.clip();
-        ctx.setTransform(ax,ay,bx,by,cx,cy);
-        ctx.drawImage(img,0,0,srcW,srcH);
-        ctx.restore();
+        ctx!.save();
+        ctx!.beginPath(); ctx!.moveTo(x0,y0); ctx!.lineTo(x1,y1); ctx!.lineTo(x2,y2); ctx!.closePath(); ctx!.clip();
+        ctx!.setTransform(ax,ay,bx,by,cx,cy);
+        ctx!.drawImage(img,0,0,srcW,srcH);
+        ctx!.restore();
       }
       for(let j=0;j<N;j++) for(let i=0;i<N;i++) {
         const u0=i/N,u1=(i+1)/N,v0=j/N,v1=(j+1)/N;
@@ -791,7 +791,7 @@ async function _aeqGenerateComposedImg(aparencia: any, equipVisuais: any, charNo
         const img: any = await loadImg(src, isSvg, eW, eH);
         if (!img || !img.complete) continue;
         
-        ctx.save();
+        ctx!.save();
         
         // CORREÇÃO CRÍTICA: Só usar warp se corners não for identidade
         const hasRealWarp = eq.warpCorners && !isIdentityWarp(eq.warpCorners);
@@ -808,28 +808,28 @@ async function _aeqGenerateComposedImg(aparencia: any, equipVisuais: any, charNo
           drawImageWarped(img, eW, eH, absCorners);
         } else {
           // CAMINHO NORMAL: Aplicar transformações padrão
-          ctx.translate(l + eW / 2, t + eH / 2);
+          ctx!.translate(l + eW / 2, t + eH / 2);
           
           if (eq.rotacaoH) {
-            ctx.transform(Math.cos(eq.rotacaoH * Math.PI / 180), 0, 0, 1, 0, 0);
+            ctx!.transform(Math.cos(eq.rotacaoH * Math.PI / 180), 0, 0, 1, 0, 0);
           }
           
           if (eq.rotacao) {
-            ctx.rotate(eq.rotacao * Math.PI / 180);
+            ctx!.rotate(eq.rotacao * Math.PI / 180);
           }
           
           if (eq.skewX) {
-            ctx.transform(1, 0, Math.tan(eq.skewX * Math.PI / 180), 1, 0, 0);
+            ctx!.transform(1, 0, Math.tan(eq.skewX * Math.PI / 180), 1, 0, 0);
           }
           
           if (eq.skewY) {
-            ctx.transform(1, Math.tan(eq.skewY * Math.PI / 180), 0, 1, 0, 0);
+            ctx!.transform(1, Math.tan(eq.skewY * Math.PI / 180), 0, 1, 0, 0);
           }
           
-          ctx.drawImage(img, -eW / 2, -eH / 2, eW, eH);
+          ctx!.drawImage(img, -eW / 2, -eH / 2, eW, eH);
         }
         
-        ctx.restore();
+        ctx!.restore();
       }
     }
 
@@ -861,7 +861,7 @@ async function _aeqGenerateComposedImg(aparencia: any, equipVisuais: any, charNo
     // 2. character
     if (charSrc) {
       const charImg: any = await loadImg(charSrc, charIsSvg, W, H);
-      if (charImg) ctx.drawImage(charImg, 0, 0, W, H);
+      if (charImg) ctx!.drawImage(charImg, 0, 0, W, H);
     }
     
     // 3. frente layer
@@ -891,7 +891,7 @@ async function apmodSalvar(nome: any){
   
   if (!mudou) {
     mostrarToast('Nenhuma alteração para salvar', 'info');
-    document.getElementById('modal-aparencia-overlay').style.display='none';
+    document.getElementById('modal-aparencia-overlay')!.style!.display='none';
     return;
   }
   
@@ -914,9 +914,9 @@ async function apmodSalvar(nome: any){
   if (ap.img_iso)    novoCa.img_full    = ap.img_iso;
   c.custom_attrs=novoCa;
   try{
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})});
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})});
     mostrarToast('Aparência salva!','ok');
-    document.getElementById('modal-aparencia-overlay').style.display='none';
+    document.getElementById('modal-aparencia-overlay')!.style!.display='none';
 
     // UX-02: Mostrar toast de geração de imagem se necessário
     const temEquipsOuTints=(ap.equipamentos_visuais||[]).length>0||(ap.tints||[]).length>0;
@@ -925,7 +925,7 @@ async function apmodSalvar(nome: any){
       setTimeout(()=>{
         const el=document.createElement('div');
         el.id='toast-gerando-composed';
-        el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a2a3a;border:1px solid rgba(79,163,209,0.4);border-radius:8px;padding:9px 16px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.7rem;z-index:9999;pointer-events:none;white-space:nowrap';
+        el.style!.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a2a3a;border:1px solid rgba(79,163,209,0.4);border-radius:8px;padding:9px 16px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.7rem;z-index:9999;pointer-events:none;white-space:nowrap';
         el.textContent='🎨 Gerando arte composta...';
         document.body.appendChild(el);
         _gerandoToastEl=el;
@@ -933,7 +933,7 @@ async function apmodSalvar(nome: any){
     }
 
     // Atualizar todas as views imediatamente (sem esperar composed_img)
-    if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
+    if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA!.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
     if(typeof FICHAS_VIEW!=='undefined'&&FICHAS_VIEW===nome&&typeof renderFichaView==='function')renderFichaView(nome);
     else if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);
     if(typeof renderInvVisual==='function'&&typeof INV!=='undefined'&&INV.charAtivo===nome)renderInvVisual();
@@ -951,7 +951,7 @@ async function apmodSalvar(nome: any){
         const blob=_dataUrlToBlob(dataUrl);
         if(blob){uploadToStorage(new File([blob],'animado_frame.png',{type:'image/png'}),'characters').then(url=>{
           novoCa.aparencia.composed_img=url;c.custom_attrs=novoCa;
-          sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})}).catch(()=>{});
+          sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})}).catch(()=>{});
         }).catch(()=>{});}
       }).catch(()=>{});
     }
@@ -965,10 +965,10 @@ async function apmodSalvar(nome: any){
       if (!composedUrl) return;
       ap.composed_img = composedUrl;
       c.custom_attrs = { ...c.custom_attrs, aparencia: ap };
-      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
+      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
         method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs })
       }).then(() => {
-        if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
+        if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA!.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
         if(typeof FICHAS_VIEW!=='undefined'&&FICHAS_VIEW===nome&&typeof renderFichaView==='function')renderFichaView(nome);
         else if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);
         if(typeof renderInvVisual==='function'&&typeof INV!=='undefined'&&INV.charAtivo===nome)renderInvVisual();
@@ -1077,7 +1077,7 @@ function apmodTintAtualizar(i: any, campo: any, valor: any) {
   // Atualizar swatch
   if (campo === 'cor') {
     const sw = document.getElementById(`apmod-tint-swatch-${i}`);
-    if (sw) { sw.style.background = valor; sw.style.borderColor = valor + '88'; }
+    if (sw) { sw.style!.background = valor; sw.style!.borderColor = valor + '88'; }
   }
   apmodTintAtualizarPreview();
 }
@@ -1101,7 +1101,7 @@ function apmodTintRefresh() {
 function apmodTintAtualizarPreview() {
   // Garantir que preview principal está expandido
   const previewContent = document.getElementById('apmod-preview-content');
-  if (previewContent && (previewContent.style.display === 'none' || previewContent.style.display === '')) {
+  if (previewContent && (previewContent.style!.display === 'none' || previewContent.style!.display === '')) {
     apmodTogglePreviewPanel();
   }
   const overlaysEl = document.getElementById('apmod-tint-prev-overlays');
@@ -1226,7 +1226,7 @@ function apmodAbrirAdicionarEquip(editIdx: any) {
 
   const ov = document.createElement('div');
   ov.id = 'aeq-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:9400;display:flex;flex-direction:column;overflow:hidden';
+  ov.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:9400;display:flex;flex-direction:column;overflow:hidden';
   ov.innerHTML = `
   <div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:9px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <span style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--primario)">${window._aeqEditIdx>=0?'✏ Editar':'＋ Novo'} Equipamento Visual</span>
@@ -1385,16 +1385,16 @@ function _aeqUpdateVisual() {
   // Só sobrescreve w.img/w.svg se os campos existirem no DOM (posicionador completo)
   // No posicionador simplificado do inventário, preserva os valores já definidos em w
   if (urlEl !== null || svgEl !== null) {
-    const svgShown = document.getElementById('aeq-visual-svg')?.style.display !== 'none';
-    w.img = svgShown ? '' : (urlEl?.value.trim() || '');
-    w.svg = svgShown ? (svgEl?.value.trim() || '') : '';
+    const svgShown = document.getElementById('aeq-visual-svg')?.style!.display !== 'none';
+    w.img = svgShown ? '' : (urlEl?.value!.trim!()! || '');
+    w.svg = svgShown ? (svgEl?.value!.trim!()! || '') : '';
   }
   const itemEl = document.getElementById('aeq-item-el'); if (!itemEl) return;
   const canvasW = 220, canvasH = 300;
   const baseW = canvasW * 0.35, baseH = canvasH * 0.45;
   const iW = Math.round(baseW * w.escala / 100);
   const iH = Math.round(baseH * w.escala / 100);
-  itemEl.style.width = iW + 'px'; itemEl.style.height = iH + 'px';
+  itemEl.style!.width = iW + 'px'; itemEl.style!.height = iH + 'px';
   if (w.img) {
     itemEl.innerHTML = `<img src="${w.img}" style="width:${iW}px;height:${iH}px;object-fit:contain;pointer-events:none">`;
   } else if (w.svg && w.svg.length > 5) {
@@ -1416,8 +1416,8 @@ function _aeqPositionDrag() {
   const iH = itemEl ? (itemEl.offsetHeight || 60) : 60;
   const px = (w.x / 100) * cw;
   const py = (w.y / 100) * ch;
-  drag.style.left = (px - iW / 2) + 'px';
-  drag.style.top  = (py - iH / 2) + 'px';
+  drag.style!.left = (px - iW / 2) + 'px';
+  drag.style!.top  = (py - iH / 2) + 'px';
   const inner = drag.querySelector('#aeq-item-el');
   if (inner) {
     if (w._warpMode && w.warpCorners) {
@@ -1425,15 +1425,15 @@ function _aeqPositionDrag() {
       const pxC = w.warpCorners.map((c: any) => ({x: c.x * iW2, y: c.y * iH2}));
       const m3d = _aeqComputeMatrix3d(iW2, iH2, pxC);
       if (m3d !== 'none') {
-        inner.style.transformOrigin = '0 0';
-        inner.style.transform = m3d;
+        inner.style!.transformOrigin = '0 0';
+        inner.style!.transform = m3d;
         // Só reconstrói o layer se não há gesture ativo (para não destruir pointer capture)
         if (!window._aeqWarpGesture) _aeqBuildWarpLayer(w.warpCorners, iW2, iH2);
       } else {
         // Corners inválidos — mostrar sem warp (resetar para identidade automaticamente)
         w.warpCorners = [{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
-        inner.style.transformOrigin = '0 0';
-        inner.style.transform = 'none';
+        inner.style!.transformOrigin = '0 0';
+        inner.style!.transform = 'none';
         if (!window._aeqWarpGesture) _aeqBuildWarpLayer(w.warpCorners, iW2, iH2);
       }
     } else {
@@ -1442,8 +1442,8 @@ function _aeqPositionDrag() {
       if (w.rotacao) tfParts.push(`rotate(${w.rotacao}deg)`);
       if (w.skewX) tfParts.push(`skewX(${w.skewX}deg)`);
       if (w.skewY) tfParts.push(`skewY(${w.skewY}deg)`);
-      inner.style.transformOrigin = 'center center';
-      inner.style.transform = tfParts.length ? tfParts.join(' ') : 'none';
+      inner.style!.transformOrigin = 'center center';
+      inner.style!.transform = tfParts.length ? tfParts.join(' ') : 'none';
     }
   }
   // Sync numeric inputs
@@ -1459,13 +1459,13 @@ function _aeqPositionDrag() {
 
 function _aeqFromInputs() {
   const w = window._aeqWorking; if (!w) return;
-  w.x        = parseFloat(document.getElementById('aeq-x')?.value) || 50;
-  w.y        = parseFloat(document.getElementById('aeq-y')?.value) || 45;
-  w.escala   = parseFloat(document.getElementById('aeq-escala')?.value) || 90;
-  w.rotacao  = parseFloat(document.getElementById('aeq-rot-num')?.value) || 0;
-  w.rotacaoH = parseFloat(document.getElementById('aeq-roth-num')?.value) || 0;
-  w.skewX    = parseFloat(document.getElementById('aeq-skewx-num')?.value) || 0;
-  w.skewY    = parseFloat(document.getElementById('aeq-skewy-num')?.value) || 0;
+  w.x        = parseFloat(document.getElementById('aeq-x')?.value!) || 50;
+  w.y        = parseFloat(document.getElementById('aeq-y')?.value!) || 45;
+  w.escala   = parseFloat(document.getElementById('aeq-escala')?.value!) || 90;
+  w.rotacao  = parseFloat(document.getElementById('aeq-rot-num')?.value!) || 0;
+  w.rotacaoH = parseFloat(document.getElementById('aeq-roth-num')?.value!) || 0;
+  w.skewX    = parseFloat(document.getElementById('aeq-skewx-num')?.value!) || 0;
+  w.skewY    = parseFloat(document.getElementById('aeq-skewy-num')?.value!) || 0;
   _aeqUpdateVisual();
 }
 
@@ -1474,15 +1474,15 @@ function _aeqSetCamada(c: any) {
   const bf = document.getElementById('aeq-btn-frente'), bb = document.getElementById('aeq-btn-atras');
   if (!bf || !bb) return;
   const isF = c === 'frente';
-  bf.style.background = isF ? 'rgba(79,163,209,0.18)' : 'rgba(20,29,43,0.5)';
-  bf.style.borderColor = isF ? 'rgba(79,163,209,0.5)' : 'var(--borda)';
-  bf.style.color = isF ? '#7ec8f0' : 'var(--suave)';
-  bb.style.background = !isF ? 'rgba(200,168,75,0.18)' : 'rgba(20,29,43,0.5)';
-  bb.style.borderColor = !isF ? 'rgba(200,168,75,0.5)' : 'var(--borda)';
-  bb.style.color = !isF ? '#f0cc6a' : 'var(--suave)';
+  bf.style!.background = isF ? 'rgba(79,163,209,0.18)' : 'rgba(20,29,43,0.5)';
+  bf.style!.borderColor = isF ? 'rgba(79,163,209,0.5)' : 'var(--borda)';
+  bf.style!.color = isF ? '#7ec8f0' : 'var(--suave)';
+  bb.style!.background = !isF ? 'rgba(200,168,75,0.18)' : 'rgba(20,29,43,0.5)';
+  bb.style!.borderColor = !isF ? 'rgba(200,168,75,0.5)' : 'var(--borda)';
+  bb.style!.color = !isF ? '#f0cc6a' : 'var(--suave)';
   // Atualizar z-index do item no preview para mostrar frente/atrás do personagem
   const drag = document.getElementById('aeq-drag');
-  if (drag) drag.style.zIndex = isF ? '2' : '0';
+  if (drag) drag.style!.zIndex = isF ? '2' : '0';
 }
 
 // Pointer-based drag/rotate/scale
@@ -1501,7 +1501,7 @@ function _aeqAttachHandlers() {
     const w = window._aeqWorking;
     const r = canvas.getBoundingClientRect();
     window._aeqGesture = { mode: 'move', ptr: e.pointerId, sx: e.clientX, sy: e.clientY, ox: w.x, oy: w.y, cw: r.width, ch: r.height };
-    drag.style.cursor = 'grabbing';
+    drag.style!.cursor = 'grabbing';
     drag.setPointerCapture(e.pointerId);
   });
 
@@ -1555,7 +1555,7 @@ function _aeqOnUp(e: any) {
   if (!window._aeqGesture || window._aeqGesture.ptr !== e.pointerId) return;
   window._aeqGesture = null;
   const drag = document.getElementById('aeq-drag');
-  if (drag) drag.style.cursor = 'grab';
+  if (drag) drag.style!.cursor = 'grab';
 }
 
 // ─── Warp por pontos de controle (homografia CSS matrix3d) ──────────────────
@@ -1580,8 +1580,8 @@ function _aeqRepaintWarpLayer(corners: any, iW: any, iH: any) {
   for (let i = 0; i < 4; i++) {
     const h = document.getElementById('aeq-wh-' + i);
     if (h) {
-      h.style.left = (corners[i].x * iW - hSize / 2) + 'px';
-      h.style.top  = (corners[i].y * iH - hSize / 2) + 'px';
+      h.style!.left = (corners[i].x * iW - hSize / 2) + 'px';
+      h.style!.top  = (corners[i].y * iH - hSize / 2) + 'px';
     }
   }
   // Atualizar SVG da grade
@@ -1612,14 +1612,14 @@ function _aeqBuildWarpLayer(corners: any, iW: any, iH: any) {
 
   const layer = document.createElement('div');
   layer.id = 'aeq-warp-layer';
-  layer.style.cssText = `position:absolute;left:0;top:0;width:${iW}px;height:${iH}px;pointer-events:none;z-index:10;overflow:visible`;
+  layer.style!.cssText = `position:absolute;left:0;top:0;width:${iW}px;height:${iH}px;pointer-events:none;z-index:10;overflow:visible`;
 
   // SVG da grade
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.id = 'aeq-warp-svg';
   svg.setAttribute('width', iW);
   svg.setAttribute('height', iH);
-  svg.style.cssText = 'position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:3';
+  svg.style!.cssText = 'position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:3';
   svg.innerHTML = _aeqWarpGridInner(corners, iW, iH);
   layer.appendChild(svg);
 
@@ -1629,8 +1629,8 @@ function _aeqBuildWarpLayer(corners: any, iW: any, iH: any) {
   corners.forEach((c: any, i: any) => {
     const h = document.createElement('div');
     h.id = 'aeq-wh-' + i;
-    h.dataset.wi = i;
-    h.style.cssText = `position:absolute;left:${c.x*iW - hSize/2}px;top:${c.y*iH - hSize/2}px;width:${hSize}px;height:${hSize}px;border-radius:4px;background:rgba(200,168,75,0.92);border:2px solid rgba(255,255,255,0.9);cursor:crosshair;pointer-events:all;z-index:11;display:flex;align-items:center;justify-content:center;font-size:0.38rem;color:rgba(0,0,0,0.8);font-weight:bold;font-family:monospace;box-shadow:0 1px 6px rgba(0,0,0,0.5);touch-action:none;user-select:none`;
+    h.dataset!.wi = i;
+    h.style!.cssText = `position:absolute;left:${c.x*iW - hSize/2}px;top:${c.y*iH - hSize/2}px;width:${hSize}px;height:${hSize}px;border-radius:4px;background:rgba(200,168,75,0.92);border:2px solid rgba(255,255,255,0.9);cursor:crosshair;pointer-events:all;z-index:11;display:flex;align-items:center;justify-content:center;font-size:0.38rem;color:rgba(0,0,0,0.8);font-weight:bold;font-family:monospace;box-shadow:0 1px 6px rgba(0,0,0,0.5);touch-action:none;user-select:none`;
     h.title = `Arraste para distorcer ${labels[i]}`;
     h.textContent = i + 1;
 
@@ -1674,8 +1674,8 @@ function _aeqWarpMoveDoc(e: any) {
   const iW = g.iW, iH = g.iH;
   const pxC = w.warpCorners.map((c: any) => ({x: c.x * iW, y: c.y * iH}));
   const m3d = _aeqComputeMatrix3d(iW, iH, pxC);
-  inner.style.transformOrigin = '0 0';
-  inner.style.transform = m3d !== 'none' ? m3d : 'none';
+  inner.style!.transformOrigin = '0 0';
+  inner.style!.transform = m3d !== 'none' ? m3d : 'none';
   // Atualizar visualmente os handles e grid SEM reconstruir DOM
   _aeqRepaintWarpLayer(w.warpCorners, iW, iH);
 }
@@ -1702,18 +1702,18 @@ function _aeqToggleWarpMode() {
 
   const btn = document.getElementById('aeq-warp-btn');
   if (btn) {
-    btn.style.background  = w._warpMode ? 'rgba(200,168,75,0.18)' : 'rgba(20,29,43,0.6)';
-    btn.style.borderColor = w._warpMode ? 'rgba(200,168,75,0.6)'  : 'var(--borda)';
-    btn.style.color       = w._warpMode ? '#f0cc6a'               : 'var(--suave)';
+    btn.style!.background  = w._warpMode ? 'rgba(200,168,75,0.18)' : 'rgba(20,29,43,0.6)';
+    btn.style!.borderColor = w._warpMode ? 'rgba(200,168,75,0.6)'  : 'var(--borda)';
+    btn.style!.color       = w._warpMode ? '#f0cc6a'               : 'var(--suave)';
     btn.textContent       = w._warpMode ? '🔲 Saindo de Warp'     : '🔲 Distorcer Forma';
   }
   const rst = document.getElementById('aeq-warp-reset');
-  if (rst) rst.style.display = w._warpMode ? 'inline-flex' : 'none';
+  if (rst) rst.style!.display = w._warpMode ? 'inline-flex' : 'none';
 
   const skewSection = document.getElementById('aeq-skew-section');
   if (skewSection) {
-    skewSection.style.opacity      = w._warpMode ? '0.35' : '1';
-    skewSection.style.pointerEvents = w._warpMode ? 'none' : '';
+    skewSection.style!.opacity      = w._warpMode ? '0.35' : '1';
+    skewSection.style!.pointerEvents = w._warpMode ? 'none' : '';
   }
 
   if (!w._warpMode) {
@@ -1743,22 +1743,22 @@ function _aeqClearWarp() {
   document.removeEventListener('pointerup',   _aeqWarpUpDoc);
   window._aeqWarpGesture = null;
   const btn = document.getElementById('aeq-warp-btn');
-  if (btn) { btn.style.background='rgba(20,29,43,0.6)'; btn.style.borderColor='var(--borda)'; btn.style.color='var(--suave)'; btn.textContent='🔲 Distorcer Forma'; }
-  const rst = document.getElementById('aeq-warp-reset'); if (rst) rst.style.display='none';
+  if (btn) { btn.style!.background='rgba(20,29,43,0.6)'; btn.style!.borderColor='var(--borda)'; btn.style!.color='var(--suave)'; btn.textContent='🔲 Distorcer Forma'; }
+  const rst = document.getElementById('aeq-warp-reset'); if (rst) rst.style!.display='none';
   const skewSection = document.getElementById('aeq-skew-section');
-  if (skewSection) { skewSection.style.opacity='1'; skewSection.style.pointerEvents=''; }
+  if (skewSection) { skewSection.style!.opacity='1'; skewSection.style!.pointerEvents=''; }
   _aeqPositionDrag();
 }
 // ─── Fim Warp ──────────────────────────────────────────────────────────────
 
 function aeqModoVisual(modo: any) {
   ['url','file','svg'].forEach(m => {
-    const el = document.getElementById('aeq-visual-' + m); if (el) el.style.display = m === modo ? 'block' : 'none';
+    const el = document.getElementById('aeq-visual-' + m); if (el) el.style!.display = m === modo ? 'block' : 'none';
     const b = document.getElementById('aeq-vbtn-' + m); if (!b) return;
     const a = m === modo;
-    b.style.background = a ? 'rgba(79,163,209,0.15)' : 'rgba(20,29,43,0.6)';
-    b.style.borderColor = a ? 'rgba(79,163,209,0.4)' : 'var(--borda)';
-    b.style.color = a ? '#7ec8f0' : 'var(--suave)';
+    b.style!.background = a ? 'rgba(79,163,209,0.15)' : 'rgba(20,29,43,0.6)';
+    b.style!.borderColor = a ? 'rgba(79,163,209,0.4)' : 'var(--borda)';
+    b.style!.color = a ? '#7ec8f0' : 'var(--suave)';
   });
   _aeqUpdateVisual();
 }
@@ -1782,40 +1782,40 @@ function aeqAdicionarBonusRow() {
   const ph = document.getElementById('aeq-bonus-empty'); if (ph) ph.remove();
   const row = document.createElement('div');
   row.className = 'aeq-bonus-row';
-  row.style.cssText = 'display:flex;gap:6px;margin-bottom:5px';
+  row.style!.cssText = 'display:flex;gap:6px;margin-bottom:5px';
   row.innerHTML = '<input class="aeq-bonus-attr" placeholder="Atributo (ex: Força)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem"><input type="number" class="aeq-bonus-val" value="0" style="width:68px;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem;text-align:center"><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1rem">✕</button>';
   lista.appendChild(row);
 }
 
 function apmodConfirmarEquip() {
   const nomeEl = document.getElementById('aeq-nome'); if (!nomeEl) return;
-  const nome = nomeEl.value.trim(); if (!nome) { mostrarToast('Nome é obrigatório','erro'); return; }
+  const nome = nomeEl.value!.trim(); if (!nome) { mostrarToast('Nome é obrigatório','erro'); return; }
   // Get working state (visual position set by drag, inputs already synced)
   const w = window._aeqWorking || {};
   // Refresh visual fields from inputs one last time
   const tipo     = document.getElementById('aeq-tipo')?.value || 'geral';
   const visivel  = document.getElementById('aeq-visivel')?.value !== '0';
-  const svgShown = document.getElementById('aeq-visual-svg')?.style.display !== 'none';
-  const imgUrl   = document.getElementById('aeq-img-url')?.value.trim() || '';
-  const svg      = svgShown ? (document.getElementById('aeq-svg')?.value.trim() || '') : '';
-  const x        = parseFloat(document.getElementById('aeq-x')?.value) || w.x || 50;
-  const y        = parseFloat(document.getElementById('aeq-y')?.value) || w.y || 45;
-  const escala   = parseFloat(document.getElementById('aeq-escala')?.value) || w.escala || 90;
-  const rotacao  = parseFloat(document.getElementById('aeq-rot-num')?.value) || w.rotacao || 0;
-  const rotacaoH = parseFloat(document.getElementById('aeq-roth-num')?.value) || w.rotacaoH || 0;
-  const skewX    = parseFloat(document.getElementById('aeq-skewx-num')?.value) || w.skewX || 0;
-  const skewY    = parseFloat(document.getElementById('aeq-skewy-num')?.value) || w.skewY || 0;
+  const svgShown = document.getElementById('aeq-visual-svg')?.style!.display !== 'none';
+  const imgUrl   = document.getElementById('aeq-img-url')?.value!.trim!()! || '';
+  const svg      = svgShown ? (document.getElementById('aeq-svg')?.value!.trim!()! || '') : '';
+  const x        = parseFloat(document.getElementById('aeq-x')?.value!) || w.x || 50;
+  const y        = parseFloat(document.getElementById('aeq-y')?.value!) || w.y || 45;
+  const escala   = parseFloat(document.getElementById('aeq-escala')?.value!) || w.escala || 90;
+  const rotacao  = parseFloat(document.getElementById('aeq-rot-num')?.value!) || w.rotacao || 0;
+  const rotacaoH = parseFloat(document.getElementById('aeq-roth-num')?.value!) || w.rotacaoH || 0;
+  const skewX    = parseFloat(document.getElementById('aeq-skewx-num')?.value!) || w.skewX || 0;
+  const skewY    = parseFloat(document.getElementById('aeq-skewy-num')?.value!) || w.skewY || 0;
   const camada   = w.camada || 'frente';
   const limite   = EQUIP_SLOT_LIMITS[tipo] || EQUIP_SLOT_LIMITS.geral;
   const bonus_attrs: Record<string, any> = {};
   document.querySelectorAll('#aeq-bonus-lista .aeq-bonus-row').forEach(row => {
-    const attr = row.querySelector('.aeq-bonus-attr')?.value.trim() || '';
-    const val  = parseFloat(row.querySelector('.aeq-bonus-val')?.value) || 0;
+    const attr = row.querySelector('.aeq-bonus-attr')?.value!.trim!()! || '';
+    const val  = parseFloat(row.querySelector('.aeq-bonus-val')?.value!) || 0;
     if (attr) bonus_attrs[attr] = val;
   });
   let unlock_efeitos = null;
-  const habsRaw    = document.getElementById('aeq-unlock-habs')?.value.trim() || '';
-  const efeitosRaw = document.getElementById('aeq-unlock-efeitos')?.value.trim() || '';
+  const habsRaw    = document.getElementById('aeq-unlock-habs')?.value!.trim!()! || '';
+  const efeitosRaw = document.getElementById('aeq-unlock-efeitos')?.value!.trim!()! || '';
   if (efeitosRaw) {
     let arr = []; try { arr = JSON.parse(efeitosRaw); } catch(e) { mostrarToast('JSON inválido nos efeitos','erro'); return; }
     if (arr.length) { unlock_efeitos = { habilidades: habsRaw ? habsRaw.split(',').map((h: any)=>h.trim()).filter(Boolean) : ['*'], efeitos: arr }; }
@@ -1921,15 +1921,15 @@ console.log('[APMOD] Sistema de Aparência carregado ✓ | Criaturas:',Object.ke
       // Preview grande — arte real do personagem (no mapa aparece ~4x menor)
       const prevIso = document.getElementById('apmod-prev-iso');
       if (prevIso) {
-        prevIso.style.overflow = 'hidden';
-        prevIso.style.width = '240px';
-        prevIso.style.height = '362px';
+        prevIso.style!.overflow = 'hidden';
+        prevIso.style!.width = '240px';
+        prevIso.style!.height = '362px';
       }
       const prevHead = document.getElementById('apmod-prev-head');
       if (prevHead) {
-        prevHead.style.overflow = 'hidden';
-        prevHead.style.width = '60px';
-        prevHead.style.height = '60px';
+        prevHead.style!.overflow = 'hidden';
+        prevHead.style!.width = '60px';
+        prevHead.style!.height = '60px';
       }
     }, 80);
   };

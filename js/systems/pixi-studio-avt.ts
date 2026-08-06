@@ -24,7 +24,7 @@ function _psAvtAcquireApp() {
   if (!canvas || typeof PIXI === 'undefined') return null;
   const overlayCanvas = document.createElement('canvas');
   overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
-  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
+  overlayCanvas.style!.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
   canvas.parentElement?.appendChild(overlayCanvas);
   let app;
   try {

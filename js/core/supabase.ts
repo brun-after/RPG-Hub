@@ -48,7 +48,7 @@ async function uploadToStorage(file: File, folder = 'misc'): Promise<string> {
     method: 'POST',
     headers: {
       'apikey':        SUPABASE_KEY,
-      'Authorization': `Bearer ${SESSION.access_token}`,
+      'Authorization': `Bearer ${SESSION!.access_token}`,
       'Content-Type':  file.type || 'image/png',
       'Cache-Control': '3600',
     },
@@ -78,7 +78,7 @@ async function _carregarProgressivo(rpgId: any) {
  const e=encodeURIComponent(rpgId);
  function _setStatus(txt: any) {
    const el=document.getElementById('rpg-load-status');
-   if(el){ el.textContent=txt; el.style.opacity='1'; el.style.display='flex'; }
+   if(el){ el.textContent=txt; el.style!.opacity='1'; el.style!.display='flex'; }
  }
 
  // Fase 0: attr_defs + batalhas + role (leve, necessário para UI)
@@ -91,10 +91,10 @@ async function _carregarProgressivo(rpgId: any) {
      sb<AtributosGrupoRow[]>(`atributos_grupos?rpg_id=eq.${e}&select=*&order=nome_customizado`).catch((): any[] => []),
      uid?sb<Pick<RpgMemberRow, 'linked'>[]>(`rpg_members?rpg_id=eq.${e}&player_id=eq.${encodeURIComponent(uid)}&select=linked`).catch((): any[] => []):[],
    ]);
-   RPG_DATA.attrDefs=attrDefs||[];
+   RPG_DATA!.attrDefs=attrDefs||[];
    if(atributosMapeados && typeof ATTR_MAPPING_CACHE !== 'undefined') ATTR_MAPPING_CACHE[rpgId]=atributosMapeados;
    const myLinked=memberRows?.[0]?.linked;
-   if(myLinked) RPG_DATA.linked=myLinked;
+   if(myLinked) RPG_DATA!.linked=myLinked;
    if(batalhasRows&&batalhasRows.length){
      const bd: Record<string, any> = {};
      batalhasRows.forEach(b=>{
@@ -110,7 +110,7 @@ async function _carregarProgressivo(rpgId: any) {
  _setStatus('⏳ Carregando mapas…');
  try {
    const mapasRaw=await sb<MapaRow[]>(`mapas?rpg_id=eq.${e}&select=id,rpg_id,map_id,nome,escala_val,escala_unit,grid,parent_map_id,tipo,zona_x,zona_y,zona_w_percent,zona_h_percent,largura_total,altura_total,largura_real,altura_real,representar_pct,locais,render_data&order=id`);
-   RPG_DATA.mapas=(mapasRaw||[]).map(m=>({
+   RPG_DATA!.mapas=(mapasRaw||[]).map(m=>({
      id:m.id,rpg_id:m.rpg_id,
      mapa:{map_id:m.map_id,nome:m.nome,img_url:'',escala_val:m.escala_val??1.5,escala_unit:m.escala_unit||'m',grid:m.grid??20,parent_map_id:m.parent_map_id||null,tipo:m.tipo||'geral',zona_x:m.zona_x,zona_y:m.zona_y,zona_w_percent:m.zona_w_percent,zona_h_percent:m.zona_h_percent,largura_total:m.largura_total||null,altura_total:m.altura_total||null,largura_real:m.largura_real||null,altura_real:m.altura_real||null,representar_pct:m.representar_pct??100,locais:Array.isArray(m.locais)?m.locais:(typeof m.locais==='string'?JSON.parse(m.locais||'[]'):[]),render_data:m.render_data||null,transform3d:m.render_data?.transform3d||null}
    }));
@@ -134,23 +134,23 @@ async function _carregarProgressivo(rpgId: any) {
      c.custom_attrs.xp          = c.xp           ?? c.custom_attrs.xp          ?? 0;
      c.custom_attrs.pontos_attr = c.pontos_attr  ?? c.custom_attrs.pontos_attr ?? 0;
    });
-   RPG_DATA.characters=chars||[];
+   RPG_DATA!.characters=chars||[];
    // Espelhar para AVT_STATE.chars — fix dessincronização entre clientes.
    try{
      if(typeof AVT_STATE!=='undefined' && AVT_STATE && AVT_STATE.rpgId === rpgId){
-       AVT_STATE.chars = RPG_DATA.characters;
+       AVT_STATE.chars = RPG_DATA!.characters;
        if(typeof _avtReconciliarEntidades === 'function') _avtReconciliarEntidades();
      }
    }catch(_){}
    // Vincular personagem do jogador
-   if(RPG_DATA.linked){
-     CHAR_VIEW=RPG_DATA.linked; ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW;
-   } else if(!CHAR_VIEW && RPG_DATA.characters[0]){
-     CHAR_VIEW=RPG_DATA.characters[0].nome; ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW;
+   if(RPG_DATA!.linked){
+     CHAR_VIEW=RPG_DATA!.linked; ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW;
+   } else if(!CHAR_VIEW && RPG_DATA!.characters[0]){
+     CHAR_VIEW=RPG_DATA!.characters[0].nome; ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW;
    }
    renderCharButtons(); renderAttrButtons(); renderHeader();
    if(CHAR_VIEW){renderCharView(CHAR_VIEW); renderAttrView(CHAR_VIEW);}
-   const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);
+   const entry=(RPG_DATA!.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);
    if(entry) mapaRenderTokens(entry.mapa);
    mapaRenderStatus();
    _setStatus('✓ Mapas · ✓ Personagens · ⏳ Habilidades…');
@@ -168,8 +168,8 @@ async function _carregarProgressivo(rpgId: any) {
      if(s.animacao&&typeof s.animacao!=='object')s.animacao=null;
      if(!Array.isArray(s.efeitos_bonus)){if(typeof s.efeitos_bonus==='string'){try{s.efeitos_bonus=JSON.parse(s.efeitos_bonus);}catch(ex){s.efeitos_bonus=[];}}else s.efeitos_bonus=[];}
    });
-   RPG_DATA.skills=skills||[];
-   RPG_DATA.lore=(lore||[]).filter(l=>l.secao!=='mapa');
+   RPG_DATA!.skills=skills||[];
+   RPG_DATA!.lore=(lore||[]).filter(l=>l.secao!=='mapa');
    if(criativos&&criativos.length){
      CRIATIVOS_CAMP=criativos.map(c=>{
        let anim=c.animacao||null;
@@ -188,14 +188,14 @@ async function _carregarProgressivo(rpgId: any) {
    try {
      const mapasImg=await sb(`mapas?rpg_id=eq.${e}&select=map_id,img_url&order=id`).catch((): any[] => []);
      (mapasImg||[]).forEach((m: any)=>{
-       const entry=RPG_DATA.mapas.find(l=>l.mapa.map_id===m.map_id);
+       const entry=RPG_DATA!.mapas.find(l=>l.mapa.map_id===m.map_id);
        if(entry && m.img_url) entry.mapa.img_url=m.img_url;
      });
-     const curEntry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);
+     const curEntry=(RPG_DATA!.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);
      if(curEntry && curEntry.mapa.img_url) (renderMapaViewer as any)(curEntry.mapa.map_id);
    } catch(err){ console.error('[RPG] imgs:',err); }
    const el=document.getElementById('rpg-load-status');
-   if(el){ el.style.transition='opacity 1s'; el.style.opacity='0'; setTimeout(()=>el.style.display='none',1100); }
+   if(el){ el.style!.transition='opacity 1s'; el.style!.opacity='0'; setTimeout(()=>el.style!.display='none',1100); }
  }, 300);
 }
 

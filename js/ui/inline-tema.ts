@@ -17,19 +17,19 @@
   function _aplicarVars() {
     var root = document.documentElement;
     Object.keys(VARS_CLARO).forEach(function(k) {
-      root.style.setProperty(k, VARS_CLARO[k]);
+      root.style!.setProperty(k, VARS_CLARO[k]);
     });
-    document.body.style.background = '#f2f4f7';
-    document.body.style.color = '#141820';
+    document.body.style!.background = '#f2f4f7';
+    document.body.style!.color = '#141820';
   }
 
   function _removerVars() {
     var root = document.documentElement;
     Object.keys(VARS_CLARO).forEach(function(k) {
-      root.style.removeProperty(k);
+      root.style!.removeProperty(k);
     });
-    document.body.style.background = '';
-    document.body.style.color = '';
+    document.body.style!.background = '';
+    document.body.style!.color = '';
   }
 
   /* ── Stylesheet dinâmico para sobrescrever inline styles ────── */
@@ -209,9 +209,9 @@
     if (!btn) return;
     btn.textContent = ativo ? '🌙' : '☀️';
     btn.title = ativo ? 'Tema claro ativo — clique para desligar' : 'Ativar tema claro';
-    btn.style.borderColor = ativo ? '#1a5fa8' : '';
-    btn.style.color       = ativo ? '#1a5fa8' : '';
-    btn.style.background  = ativo ? 'rgba(26,95,168,0.08)' : '';
+    btn.style!.borderColor = ativo ? '#1a5fa8' : '';
+    btn.style!.color       = ativo ? '#1a5fa8' : '';
+    btn.style!.background  = ativo ? 'rgba(26,95,168,0.08)' : '';
   }
 
   function _aplicar(ativo: any) {
@@ -265,10 +265,10 @@
       if (!reflash || !temaBtn) return;
       clearInterval(_visInterval);
       var obs = new MutationObserver(function() {
-        temaBtn.style.display = reflash.style.display !== 'none' ? 'inline-flex' : 'none';
+        temaBtn!.style!.display = reflash!.style!.display !== 'none' ? 'inline-flex' : 'none';
       });
       obs.observe(reflash, { attributes: true, attributeFilter: ['style'] });
-      temaBtn.style.display = reflash.style.display !== 'none' ? 'inline-flex' : 'none';
+      temaBtn.style!.display = reflash.style!.display !== 'none' ? 'inline-flex' : 'none';
     }, 300);
 
     var saved;

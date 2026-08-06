@@ -14,7 +14,7 @@ function mostrarPainelReacao(reacaoId: any, habilidade: any, gatilho: any, dono:
     ? `<div class="bs-notif-sub" style="color:rgba(200,168,75,0.8);margin-top:3px">📋 ${_escHtml(contexto)}</div>`
     : '';
 
-  panel.style.display = 'flex';
+  panel.style!.display = 'flex';
   panel.innerHTML = `
     <div class="bs-notif-card bs-notif-reacao">
       <div class="bs-notif-header">
@@ -55,7 +55,7 @@ function fecharPainelReacao() {
   const panel = document.getElementById('reacao-notif-panel');
   if (!panel) return;
   if (panel._timerInterval) clearInterval(panel._timerInterval);
-  panel.style.display = 'none';
+  panel.style!.display = 'none';
   panel.innerHTML = '';
 }
 
@@ -67,10 +67,10 @@ function mostrarPainelDefesaAtiva(defesaId: any, alvo: any, resultadoAtacante: a
 
   if (panel._timerInterval) clearInterval(panel._timerInterval);
 
-  panel.style.display = 'flex';
-  panel.dataset.defesaId  = defesaId;
-  panel.dataset.alvo      = alvo;
-  panel.dataset.penalidade = penalidade;
+  panel.style!.display = 'flex';
+  panel.dataset!.defesaId  = defesaId;
+  panel.dataset!.alvo      = alvo;
+  panel.dataset!.penalidade = penalidade;
 
   const penalidadeHtml = penalidade > 0
     ? `<div class="bs-notif-sub" style="color:#e8604c">Penalidade acumulada: -${penalidade}</div>`
@@ -103,9 +103,9 @@ function defesaRolar(tipoDefesa: any) {
   const panel = document.getElementById('defesa-ativa-panel');
   if (!panel) return;
 
-  const defesaId = panel.dataset.defesaId;
-  const alvo     = panel.dataset.alvo;
-  const penalidade = parseInt(panel.dataset.penalidade) || 0;
+  const defesaId = panel.dataset!.defesaId;
+  const alvo     = panel.dataset!.alvo;
+  const penalidade = parseInt(panel.dataset!.penalidade!) || 0;
 
   const char = (RPG_DATA?.characters || []).find(c => c.nome === alvo);
   const attrKey = tipoDefesa === 'aparar' ? 'forca' : 'destreza';
@@ -142,7 +142,7 @@ function defesaRolar(tipoDefesa: any) {
 function defesaRecusar() {
   const panel = document.getElementById('defesa-ativa-panel');
   if (!panel) return;
-  BATTLE_SYSTEM.confirmarDefesa(panel.dataset.defesaId, false, null);
+  BATTLE_SYSTEM.confirmarDefesa(panel.dataset!.defesaId, false, null);
   fecharPainelDefesaAtiva();
 }
 
@@ -150,7 +150,7 @@ function fecharPainelDefesaAtiva() {
   const panel = document.getElementById('defesa-ativa-panel');
   if (!panel) return;
   if (panel._timerInterval) clearInterval(panel._timerInterval);
-  panel.style.display = 'none';
+  panel.style!.display = 'none';
   panel.innerHTML = '';
 }
 
@@ -174,12 +174,12 @@ function abrirModalConfigBatalha() {
   _setVal('bcfg-max-defesas',       cfg.max_defesas_por_rodada === 'unlimited' ? '' : cfg.max_defesas_por_rodada);
   _setVal('bcfg-penalidade-extra',  cfg.penalidade_defesa_extra ?? '');
 
-  modal.style.display = 'flex';
+  modal.style!.display = 'flex';
 }
 
 function fecharModalConfigBatalha() {
   const el = document.getElementById('modal-config-batalha');
-  if (el) el.style.display = 'none';
+  if (el) el.style!.display = 'none';
 }
 
 async function salvarConfigBatalha() {

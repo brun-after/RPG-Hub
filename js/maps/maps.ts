@@ -29,7 +29,7 @@ function _animMedia(animacao: any, origem: any, alvo: any, resolve: any) {
 
   // Container overlay
   const wrap = document.createElement('div');
-  wrap.style.cssText = `position:fixed;inset:0;pointer-events:none;z-index:10100;overflow:hidden`;
+  wrap.style!.cssText = `position:fixed;inset:0;pointer-events:none;z-index:10100;overflow:hidden`;
 
   // Elemento de mídia
   let el: any;
@@ -135,26 +135,26 @@ function skAnimValidarDuracao() {
   const limLabel  = _isMestre ? '10s' : '3s';
 
   // Mídia
-  const durM   = parseInt(document.getElementById('sk-anim-duracao')?.value) || 0;
-  const repM   = parseInt(document.getElementById('sk-anim-repeticao')?.value) || 1;
+  const durM   = parseInt(document.getElementById('sk-anim-duracao')?.value!) || 0;
+  const repM   = parseInt(document.getElementById('sk-anim-repeticao')?.value!) || 1;
   const totalM = durM * repM;
   const avisoM = document.getElementById('sk-anim-dur-aviso');
   if (avisoM) {
     const over = totalM > maxTotal;
-    avisoM.style.display = totalM > 0 ? 'block' : 'none';
-    avisoM.style.color   = over ? '#e8604c' : totalM > maxTotal * 0.85 ? '#f39c12' : 'rgba(255,255,255,0.35)';
+    avisoM.style!.display = totalM > 0 ? 'block' : 'none';
+    avisoM.style!.color   = over ? '#e8604c' : totalM > maxTotal * 0.85 ? '#f39c12' : 'rgba(255,255,255,0.35)';
     avisoM.textContent   = over ? `⚠ Total: ${totalM}ms — limite: ${maxTotal}ms (${limLabel})` : `Total: ${totalM}ms de ${maxTotal}ms`;
   }
 
   // Canvas
-  const durC   = parseInt(document.getElementById('sk-anim-duracao-canvas')?.value) || 0;
-  const repC   = parseInt(document.getElementById('sk-anim-repeticao-canvas')?.value) || 1;
+  const durC   = parseInt(document.getElementById('sk-anim-duracao-canvas')?.value!) || 0;
+  const repC   = parseInt(document.getElementById('sk-anim-repeticao-canvas')?.value!) || 1;
   const totalC = durC * repC;
   const avisoC = document.getElementById('sk-anim-dur-aviso-canvas');
   if (avisoC) {
     const over = totalC > maxTotal;
-    avisoC.style.display = totalC > 0 ? 'block' : 'none';
-    avisoC.style.color   = over ? '#e8604c' : totalC > maxTotal * 0.85 ? '#f39c12' : 'rgba(255,255,255,0.35)';
+    avisoC.style!.display = totalC > 0 ? 'block' : 'none';
+    avisoC.style!.color   = over ? '#e8604c' : totalC > maxTotal * 0.85 ? '#f39c12' : 'rgba(255,255,255,0.35)';
     avisoC.textContent   = over ? `⚠ Total: ${totalC}ms — limite: ${maxTotal}ms (${limLabel})` : `Total: ${totalC}ms de ${maxTotal}ms`;
   }
 }
@@ -164,23 +164,23 @@ var _maps_skAnimPreviewRaf: any = null;
 
 // ── UI: mudar campos ao selecionar tipo de animação ──────────────────────
 function skAnimTipoChange() {
-  const tipo = document.getElementById('sk-anim-tipo').value;
+  const tipo = document.getElementById('sk-anim-tipo')!.value!;
   const camposCanvas = document.getElementById('sk-anim-campos-canvas');
   const camposMidia  = document.getElementById('sk-anim-campos-midia');
   const camposGSAP   = document.getElementById('sk-anim-campos-gsap');
   const camposSpine  = document.getElementById('sk-anim-campos-spine');
-  const isMidia  = ['gif','imagem','svg','iframe'].includes(tipo);
-  const isCanvas = ['projetil','onda','explosao','raio','aura'].includes(tipo);
+  const isMidia  = ['gif','imagem','svg','iframe'].includes(tipo!);
+  const isCanvas = ['projetil','onda','explosao','raio','aura'].includes(tipo!);
   const isGSAP   = tipo === 'gsap' || tipo === 'gsap_pixi_spine';
   const isSpine  = tipo === 'pixi_spine' || tipo === 'gsap_pixi_spine';
 
   const isPixiStudio = tipo === 'pixi_studio';
   const camposPixiStudio = document.getElementById('sk-anim-campos-pixi-studio');
-  if (camposPixiStudio) camposPixiStudio.style.display = isPixiStudio ? '' : 'none';
-  if (camposCanvas) camposCanvas.style.display = isCanvas ? '' : 'none';
-  if (camposMidia)  camposMidia.style.display  = isMidia  ? '' : 'none';
-  if (camposGSAP)   camposGSAP.style.display   = isGSAP   ? '' : 'none';
-  if (camposSpine)  camposSpine.style.display   = isSpine  ? '' : 'none';
+  if (camposPixiStudio) camposPixiStudio.style!.display = isPixiStudio ? '' : 'none';
+  if (camposCanvas) camposCanvas.style!.display = isCanvas ? '' : 'none';
+  if (camposMidia)  camposMidia.style!.display  = isMidia  ? '' : 'none';
+  if (camposGSAP)   camposGSAP.style!.display   = isGSAP   ? '' : 'none';
+  if (camposSpine)  camposSpine.style!.display   = isSpine  ? '' : 'none';
 
   if (isMidia) {
     // Ajustar label e mostrar campo correto
@@ -189,8 +189,8 @@ function skAnimTipoChange() {
     const svgInput  = document.getElementById('sk-anim-svg-code');
     const labels: Record<string, any> = { gif:'URL do GIF', imagem:'URL da Imagem', iframe:'URL do iFrame' };
     if (urlLabel) urlLabel.textContent = labels[tipo] || 'URL';
-    if (urlInput)  urlInput.style.display  = tipo !== 'svg' ? '' : 'none';
-    if (svgInput)  svgInput.style.display  = tipo === 'svg' ? '' : 'none';
+    if (urlInput)  urlInput.style!.display  = tipo !== 'svg' ? '' : 'none';
+    if (svgInput)  svgInput.style!.display  = tipo === 'svg' ? '' : 'none';
     skAnimMidiaPreview();
   } else if (isCanvas) {
     skAnimPreview();
@@ -198,24 +198,24 @@ function skAnimTipoChange() {
     // nenhuma / gsap / spine — esconder previews de canvas e mídia
     const pw = document.getElementById('sk-anim-preview-wrap');
     const mw = document.getElementById('sk-anim-midia-preview-wrap');
-    if (pw) pw.style.display = 'none';
-    if (mw) mw.style.display = 'none';
+    if (pw) pw.style!.display = 'none';
+    if (mw) mw.style!.display = 'none';
   }
   if (typeof _skAtualizarAutoSfx === 'function') _skAtualizarAutoSfx();
 }
 
 function skAnimMidiaPreview() {
-  const tipo   = document.getElementById('sk-anim-tipo').value;
-  const url    = document.getElementById('sk-anim-url')?.value.trim();
-  const svg    = document.getElementById('sk-anim-svg-code')?.value.trim();
-  const tam    = parseInt(document.getElementById('sk-anim-tamanho')?.value) || 120;
+  const tipo   = document.getElementById('sk-anim-tipo')!.value!;
+  const url    = document.getElementById('sk-anim-url')?.value!.trim!()!;
+  const svg    = document.getElementById('sk-anim-svg-code')?.value!.trim!()!;
+  const tam    = parseInt(document.getElementById('sk-anim-tamanho')?.value!) || 120;
   const wrap   = document.getElementById('sk-anim-midia-preview-wrap');
   const inner  = document.getElementById('sk-anim-midia-preview-inner');
   if (!wrap || !inner) return;
 
   const conteudo = tipo === 'svg' ? svg : url;
-  if (!conteudo) { wrap.style.display = 'none'; return; }
-  wrap.style.display = '';
+  if (!conteudo) { wrap.style!.display = 'none'; return; }
+  wrap.style!.display = '';
 
   const sz = Math.min(tam, 150);
   if (tipo === 'svg') {
@@ -235,16 +235,16 @@ function criativoAnimTipoChange() {
   const isCanvas = ['projetil','onda','explosao','raio','aura'].includes(tipo);
   const cc = document.getElementById('criativo-anim-campos-canvas');
   const cm = document.getElementById('criativo-anim-campos-midia');
-  if (cc) cc.style.display = isCanvas ? '' : 'none';
-  if (cm) cm.style.display = isMidia  ? '' : 'none';
+  if (cc) cc.style!.display = isCanvas ? '' : 'none';
+  if (cm) cm.style!.display = isMidia  ? '' : 'none';
   if (isMidia) {
     const labels: Record<string, any> = { gif:'URL do GIF', imagem:'URL da Imagem', iframe:'URL do iFrame' };
     const lbl = document.getElementById('criativo-anim-url-label');
     const url = document.getElementById('criativo-anim-url');
     const svg = document.getElementById('criativo-anim-svg-code');
     if (lbl) lbl.textContent = labels[tipo] || 'URL';
-    if (url) url.style.display = tipo !== 'svg' ? '' : 'none';
-    if (svg) svg.style.display = tipo === 'svg' ? '' : 'none';
+    if (url) url.style!.display = tipo !== 'svg' ? '' : 'none';
+    if (svg) svg.style!.display = tipo === 'svg' ? '' : 'none';
   }
 }
 
@@ -255,36 +255,36 @@ function arAnimDnTipoChange() {
   const isCanvas = ['projetil','onda','explosao','raio','aura'].includes(tipo);
   const cc = document.getElementById('ar-atk-dn-anim-canvas');
   const cm = document.getElementById('ar-atk-dn-anim-midia');
-  if (cc) cc.style.display = isCanvas ? '' : 'none';
-  if (cm) cm.style.display = isMidia  ? '' : 'none';
+  if (cc) cc.style!.display = isCanvas ? '' : 'none';
+  if (cm) cm.style!.display = isMidia  ? '' : 'none';
   if (isMidia) {
     const labels: Record<string, any> = { gif:'URL do GIF', imagem:'URL da Imagem', iframe:'URL do iFrame' };
     const lbl = document.getElementById('ar-atk-dn-anim-url-label');
     const url = document.getElementById('ar-atk-dn-anim-url');
     const svg = document.getElementById('ar-atk-dn-anim-svg');
     if (lbl) lbl.textContent = labels[tipo] || 'URL';
-    if (url) url.style.display = tipo !== 'svg' ? '' : 'none';
-    if (svg) svg.style.display = tipo === 'svg' ? '' : 'none';
+    if (url) url.style!.display = tipo !== 'svg' ? '' : 'none';
+    if (svg) svg.style!.display = tipo === 'svg' ? '' : 'none';
   }
 }
 
 function skAnimPreview() {
-  const tipo = document.getElementById('sk-anim-tipo').value;
+  const tipo = document.getElementById('sk-anim-tipo')!.value!;
   const wrap = document.getElementById('sk-anim-preview-wrap');
-  if (wrap) wrap.style.display = (tipo === 'nenhuma' || !['projetil','onda','explosao','raio','aura'].includes(tipo)) ? 'none' : 'block';
-  if (!['projetil','onda','explosao','raio','aura'].includes(tipo)) return;
+  if (wrap) wrap.style!.display = (tipo === 'nenhuma' || !['projetil','onda','explosao','raio','aura'].includes(tipo!)) ? 'none' : 'block';
+  if (!['projetil','onda','explosao','raio','aura'].includes(tipo!)) return;
   skAnimPreviewPlay();
 }
 
 function skAnimPreviewPlay() {
   if (_maps_skAnimPreviewRaf) cancelAnimationFrame(_maps_skAnimPreviewRaf);
-  const tipo   = document.getElementById('sk-anim-tipo').value;
-  const cor    = document.getElementById('sk-anim-cor').value   || '#e74c3c';
-  const icone  = document.getElementById('sk-anim-icone').value.trim();
-  const trilha = document.getElementById('sk-anim-trilha').checked;
+  const tipo   = document.getElementById('sk-anim-tipo')!.value!;
+  const cor    = document.getElementById('sk-anim-cor')!.value!   || '#e74c3c';
+  const icone  = document.getElementById('sk-anim-icone')!.value!.trim!()!;
+  const trilha = document.getElementById('sk-anim-trilha')!.checked!;
   const canvas = document.getElementById('sk-anim-preview-canvas');
   if (!canvas) return;
-  const ctx    = canvas.getContext('2d');
+  const ctx    = canvas.getContext!('2d');
   const rgb    = _animHexToRgb(cor);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const origem = { x: 20, y: 30 }, alvo = { x: 240, y: 30 };
@@ -294,7 +294,7 @@ function skAnimPreviewPlay() {
 
   function drawFrame(now: any) {
     const t = Math.min((now - start) / dur, 1);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas!.width, canvas!.height);
     // tokens
     ctx.beginPath(); ctx.arc(origem.x,origem.y,10,0,Math.PI*2);
     ctx.fillStyle='rgba(79,163,209,0.5)'; ctx.fill();
@@ -392,7 +392,7 @@ async function atkAplicarEfeitoComRecuperacao(nomeAlvo: any, ef: any, contexto: 
         if (emArena) {
           await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`, { method:'PATCH', body:JSON.stringify({ custom_attrs: c.custom_attrs }) });
         } else {
-          await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`, { method:'PATCH', body:JSON.stringify({ custom_attrs: c.custom_attrs }) });
+          await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`, { method:'PATCH', body:JSON.stringify({ custom_attrs: c.custom_attrs }) });
         }
       } catch(e) {}
     }
@@ -438,7 +438,7 @@ async function atkAplicarEfeito(nomeAlvo: any, efeitoConfig: any, contexto: any)
           if (!target.map_positions) target.map_positions = {};
           caster.map_positions[mapId] = posT;
           target.map_positions[mapId] = posC;
-          const rpgId = RPG_DATA.rpgId;
+          const rpgId = RPG_DATA!.rpgId;
           Promise.all([
             sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(casterNome)}`,
               { method: 'PATCH', body: JSON.stringify({ map_positions: caster.map_positions }) }),
@@ -475,7 +475,7 @@ async function atkAplicarEfeito(nomeAlvo: any, efeitoConfig: any, contexto: any)
       if (!c.custom_attrs) c.custom_attrs = {};
       c.custom_attrs.hp_temp = (parseInt(c.custom_attrs.hp_temp)||0) + efeitoConfig.hp_temp;
       const sbFn = contexto === 'arena' ? arSb : sb;
-      const rpgId = contexto === 'arena' ? AR.session.rpg_id : RPG_DATA.rpgId;
+      const rpgId = contexto === 'arena' ? AR.session.rpg_id : RPG_DATA!.rpgId;
       await sbFn(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
         { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
       const logFn = contexto === 'arena' ? (window as any).arLog : (window as any).logCombate;
@@ -494,7 +494,7 @@ async function atkAplicarEfeito(nomeAlvo: any, efeitoConfig: any, contexto: any)
         const removido = c.buffs[idx];
         c.buffs.splice(idx, 1);
         const sbFn = contexto === 'arena' ? arSb : sb;
-        const rpgId = contexto === 'arena' ? AR.session.rpg_id : RPG_DATA.rpgId;
+        const rpgId = contexto === 'arena' ? AR.session.rpg_id : RPG_DATA!.rpgId;
         await sbFn(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
           { method: 'PATCH', body: JSON.stringify({ buffs: c.buffs }) });
         const logFn = contexto === 'arena' ? (window as any).arLog : (window as any).logCombate;
@@ -583,7 +583,7 @@ async function atkAplicarEfeito(nomeAlvo: any, efeitoConfig: any, contexto: any)
     if (!c) return;
     if (!Array.isArray(c.buffs)) c.buffs = [];
     c.buffs.push(buff);
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
       { method: 'PATCH', body: JSON.stringify({ buffs: c.buffs }) });
   }
   // Toast informativo para DOT/debuff
@@ -609,9 +609,9 @@ function atkIniciarModoArea(h: any) {
   const raio = h.alcance_celulas ?? 2;
 
   // Mostrar instrução e botão confirmar no step 2, ocultar lista de alvos
-  document.getElementById('atk-alvos-lista').style.display = 'none';
-  document.getElementById('atk-aoe-instrucao').style.display = 'block';
-  document.getElementById('atk-aoe-confirmar-btn').style.display = 'block';
+  document.getElementById('atk-alvos-lista')!.style!.display = 'none';
+  document.getElementById('atk-aoe-instrucao')!.style!.display = 'block';
+  document.getElementById('atk-aoe-confirmar-btn')!.style!.display = 'block';
 
   // Posição inicial = posição do atacante no mapa
   const mapId = MAPA_STATE?.mapaAtualId || null;
@@ -642,7 +642,7 @@ function _aoeRenderCircle(cx: any, cy: any, raioCell: any) {
   if (!el) {
     el = document.createElement('div');
     el.id = 'atk-aoe-circle';
-    el.style.cssText = `position:absolute;border-radius:50%;cursor:grab;z-index:8;box-sizing:border-box;pointer-events:all`;
+    el.style!.cssText = `position:absolute;border-radius:50%;cursor:grab;z-index:8;box-sizing:border-box;pointer-events:all`;
     el.addEventListener('pointerdown', _aoeStartDrag);
     tokensEl.appendChild(el);
   }
@@ -651,15 +651,15 @@ function _aoeRenderCircle(cx: any, cy: any, raioCell: any) {
   const gridPx = entry?.mapa?.grid || 20;
   const raiopx = raioCell * gridPx;
 
-  el.style.left   = cx + '%';
-  el.style.top    = cy + '%';
-  el.style.width  = (raiopx * 2) + 'px';
-  el.style.height = (raiopx * 2) + 'px';
-  el.style.transform = 'translate(-50%,-50%)';
-  el.style.background = 'rgba(232,80,60,0.12)';
-  el.style.border = '3px solid rgba(232,80,60,0.85)';
-  el.style.boxShadow = '0 0 0 1px rgba(232,80,60,0.3), 0 0 24px rgba(232,80,60,0.4), inset 0 0 20px rgba(232,80,60,0.1)';
-  el.style.display = 'block';
+  el.style!.left   = cx + '%';
+  el.style!.top    = cy + '%';
+  el.style!.width  = (raiopx * 2) + 'px';
+  el.style!.height = (raiopx * 2) + 'px';
+  el.style!.transform = 'translate(-50%,-50%)';
+  el.style!.background = 'rgba(232,80,60,0.12)';
+  el.style!.border = '3px solid rgba(232,80,60,0.85)';
+  el.style!.boxShadow = '0 0 0 1px rgba(232,80,60,0.3), 0 0 24px rgba(232,80,60,0.4), inset 0 0 20px rgba(232,80,60,0.1)';
+  el.style!.display = 'block';
   el.innerHTML = `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:0.65rem;font-family:'Cinzel',serif;color:rgba(232,80,60,0.8);pointer-events:none;white-space:nowrap">💥 Área</div>`;
 }
 
@@ -670,11 +670,11 @@ function mapaHideAoECircle__sombreado_17() {
   _AOE_STATE = null;
   // Restaurar lista de alvos normal
   const listaEl = document.getElementById('atk-alvos-lista');
-  if (listaEl) listaEl.style.display = '';
+  if (listaEl) listaEl.style!.display = '';
   const instrEl = document.getElementById('atk-aoe-instrucao');
-  if (instrEl) instrEl.style.display = 'none';
+  if (instrEl) instrEl.style!.display = 'none';
   const btnEl = document.getElementById('atk-aoe-confirmar-btn');
-  if (btnEl) btnEl.style.display = 'none';
+  if (btnEl) btnEl.style!.display = 'none';
 }
 
 // ── Ativar AoE para ação criativa declarada (não vem do modal de ataque) ────
@@ -689,7 +689,7 @@ function atkAtivarAoECriativo(nomeChar: any) {
   // Mostrar banner de instrução no mapa
   const instrEl = document.getElementById('atk-aoe-instrucao');
   if (instrEl) {
-    instrEl.style.display = '';
+    instrEl.style!.display = '';
     instrEl.innerHTML = `
       <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#e8604c;margin-bottom:4px">💥 Posicione a Área no Mapa</div>
       <div style="font-size:0.75rem;color:#9a8888;line-height:1.5">Arraste o círculo para a posição desejada. Os alvos atingidos aparecerão abaixo.</div>
@@ -713,8 +713,8 @@ function atkConfirmarAoECriativo(nomeChar: any) {
   if (areaSup) areaSup.value = alvosStr;
   mapaHideAoECircle();
   // Voltar ao modal e mostrar desc
-  document.getElementById('acao-desc-section').style.display = '';
-  document.getElementById('acao-btn-enviar').style.display = 'flex';
+  document.getElementById('acao-desc-section')!.style!.display = '';
+  document.getElementById('acao-btn-enviar')!.style!.display = 'flex';
 }
 
 function _aoeStartDrag(e: any) {
@@ -723,9 +723,9 @@ function _aoeStartDrag(e: any) {
   e.stopPropagation();
   _AOE_STATE.dragging = true;
   const el = document.getElementById('atk-aoe-circle');
-  if (el) { el.style.cursor = 'grabbing'; el.setPointerCapture(e.pointerId); }
-  el.addEventListener('pointermove', _aoeDrag);
-  el.addEventListener('pointerup', _aoeEndDrag);
+  if (el) { el.style!.cursor = 'grabbing'; el.setPointerCapture(e.pointerId); }
+  el!.addEventListener('pointermove', _aoeDrag);
+  el!.addEventListener('pointerup', _aoeEndDrag);
 }
 
 function _aoeDrag(e: any) {
@@ -740,7 +740,7 @@ function _aoeDrag(e: any) {
   _AOE_STATE.centroX = cx;
   _AOE_STATE.centroY = cy;
   const el = document.getElementById('atk-aoe-circle');
-  if (el) { el.style.left = cx + '%'; el.style.top = cy + '%'; }
+  if (el) { el.style!.left = cx + '%'; el.style!.top = cy + '%'; }
   _aoeAtualizarAlvos();
 }
 
@@ -748,7 +748,7 @@ function _aoeEndDrag(e: any) {
   if (!_AOE_STATE) return;
   _AOE_STATE.dragging = false;
   const el = document.getElementById('atk-aoe-circle');
-  if (el) { el.style.cursor = 'grab'; el.removeEventListener('pointermove', _aoeDrag); el.removeEventListener('pointerup', _aoeEndDrag); }
+  if (el) { el.style!.cursor = 'grab'; el.removeEventListener('pointermove', _aoeDrag); el.removeEventListener('pointerup', _aoeEndDrag); }
 }
 
 function _aoeRemoverBadges() {
@@ -914,7 +914,7 @@ async function _atkInvocarPersonagem(skill: any, invocadorNome: any, contexto: a
       c.custom_attrs.invocado     = true;
       c.custom_attrs.turno_expira = turnoExpira;
       c.custom_attrs.hp_max       = hp;
-      await saveCharacterStats(RPG_DATA.rpgId, nomeInvocado, {
+      await saveCharacterStats(RPG_DATA!.rpgId, nomeInvocado, {
         hp_atual:     hp,
         custom_attrs: c.custom_attrs,
       });
@@ -1255,7 +1255,7 @@ async function atkAplicarDano(nomeAlvo: any, dano: any, contexto: any, tipoDano:
     }
     // ─────────────────────────────────────────────────────────────────────
 
-    await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, { hp_atual: novoHp });
+    await saveCharacterStats(RPG_DATA!.rpgId, nomeAlvo, { hp_atual: novoHp });
     renderCharView(nomeAlvo); renderAttrView(nomeAlvo); mapaRenderStatus();
     
     // ✅ REC-06: Adicionar ao log de combate
@@ -1281,26 +1281,26 @@ async function atkAplicarDano(nomeAlvo: any, dano: any, contexto: any, tipoDano:
         c.custom_attrs.salvaguardas = { sucessos: 0, falhas: 0 };
         mostrarToast(nomeAlvo + ' caiu! Salvaguardas de Morte ativas.', 'erro');
         combateBroadcast('personagem_caiu', { nome: nomeAlvo });
-        await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, {
+        await saveCharacterStats(RPG_DATA!.rpgId, nomeAlvo, {
           hp_atual: 0, custom_attrs: c.custom_attrs
         });
-        const entryMor = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+        const entryMor = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
         if (entryMor) mapaRenderTokens(entryMor.mapa);
         return;
       }
       // NPC ou já moribundo → morte direta
       c.custom_attrs.morto = true;
       try {
-        await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+        await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
           { method:'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
       } catch(e) {}
       combateBroadcast('personagem_morto', { nome: nomeAlvo });
       // I9: verificar drop automático se for NPC com tier
-      const cMorto = RPG_DATA.characters.find(x=>x.nome===nomeAlvo);
+      const cMorto = RPG_DATA!.characters.find(x=>x.nome===nomeAlvo);
       if(cMorto&&(cMorto.custom_attrs?.tipo==='inimigo'||cMorto.custom_attrs?.tipo==='npc')&&cMorto.custom_attrs?.tier){
-        _executarDropNPC(RPG_DATA.rpgId, nomeAlvo, cMorto).catch(()=>{});
+        _executarDropNPC(RPG_DATA!.rpgId, nomeAlvo, cMorto).catch(()=>{});
       }
-      const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+      const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
       if (entry) mapaRenderTokens(entry.mapa);
       mostrarToast(`💀 ${nomeAlvo} foi derrotado!`, 'erro');
 
@@ -1361,9 +1361,9 @@ async function atkEnviarAtaqueCriativo() {
     const divAguardando = document.getElementById('atk-pendente-aguardando');
     const divAprovado   = document.getElementById('atk-pendente-aprovado');
     const divRejeitado  = document.getElementById('atk-pendente-rejeitado');
-    if (divAguardando) divAguardando.style.display = '';
-    if (divAprovado)   divAprovado.style.display   = 'none';
-    if (divRejeitado)  divRejeitado.style.display  = 'none';
+    if (divAguardando) divAguardando.style!.display = '';
+    if (divAprovado)   divAprovado.style!.display   = 'none';
+    if (divRejeitado)  divRejeitado.style!.display  = 'none';
     criativoIniciarPolling(id);
   } else {
     // Campanha: salvar na tabela criativos
@@ -1383,9 +1383,9 @@ async function atkEnviarAtaqueCriativo() {
     const divAguardando = document.getElementById('atk-pendente-aguardando');
     const divAprovado   = document.getElementById('atk-pendente-aprovado');
     const divRejeitado  = document.getElementById('atk-pendente-rejeitado');
-    if (divAguardando) divAguardando.style.display = '';
-    if (divAprovado)   divAprovado.style.display   = 'none';
-    if (divRejeitado)  divRejeitado.style.display  = 'none';
+    if (divAguardando) divAguardando.style!.display = '';
+    if (divAprovado)   divAprovado.style!.display   = 'none';
+    if (divRejeitado)  divRejeitado.style!.display  = 'none';
     criativoIniciarPolling(id); // fallback: polling caso o realtime nao chegue
   }
 
@@ -1435,13 +1435,13 @@ async function atkEnviarSolicitacaoSkill() {
   const divAprovado   = document.getElementById('atk-pendente-aprovado');
   const divRejeitado  = document.getElementById('atk-pendente-rejeitado');
   if (divAguardando) {
-    divAguardando.style.display = '';
+    divAguardando.style!.display = '';
     divAguardando.querySelector
       && (divAguardando.querySelector('div:nth-child(2)') || divAguardando.lastElementChild || {}).textContent
-      && (divAguardando.lastElementChild.textContent = `Mestre irá revisar o uso de "${h.nome}" em ${alvoNome}.`);
+      && (divAguardando.lastElementChild!.textContent = `Mestre irá revisar o uso de "${h.nome}" em ${alvoNome}.`);
   }
-  if (divAprovado)   divAprovado.style.display   = 'none';
-  if (divRejeitado)  divRejeitado.style.display  = 'none';
+  if (divAprovado)   divAprovado.style!.display   = 'none';
+  if (divRejeitado)  divRejeitado.style!.display  = 'none';
 
   criativoIniciarPolling(id); // fallback: polling caso o realtime nao chegue
   atkIrParaStep('pendente');
@@ -1452,7 +1452,7 @@ function renderAtaquesPendentes() {
   const pendentes = ((AR.estado as any).ataques_pendentes || []).filter((a: any) => a.status === 'pendente');
   const el = document.getElementById('ar-ataques-pendentes');
   if (!el) return;
-  el.style.display = pendentes.length && RPG_DATA?.myRole === 'mestre' ? 'block' : 'none';
+  el.style!.display = pendentes.length && RPG_DATA?.myRole === 'mestre' ? 'block' : 'none';
   if (!pendentes.length) { el.innerHTML = ''; return; }
   el.innerHTML = `
     <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;margin-bottom:8px">⚔ Ações Criativas Pendentes</div>
@@ -1490,7 +1490,7 @@ function atkRolarParaPendente(apId: any) {
   const el = document.getElementById('resultado-ap-' + apId);
   if (el) {
     el.textContent = result.total;
-    el.dataset.total = result.total;
+    el.dataset!.total = result.total;
     el.title = `Dados: [${result.rolls.join(', ')}]`;
   }
 }
@@ -1499,7 +1499,7 @@ async function atkMestreAprovar(apId: any) {
   const pendente = (AR.estado as any).ataques_pendentes?.find((a: any) => a.id === apId);
   if (!pendente) return;
   const resultEl = document.getElementById('resultado-ap-' + apId);
-  const dano = parseInt(resultEl?.dataset.total || '0');
+  const dano = parseInt(resultEl?.dataset!.total! || '0');
   pendente.status = 'aprovado'; pendente.dano_aplicado = dano;
   await atkAplicarDano(pendente.alvo, dano, 'arena', pendente.tipo_dano || 'fisico');
   arAddLog(`⚔ [Criativo] ${pendente.atacante} → ${pendente.alvo} — ${dano} de dano (aprovado pelo Mestre)`);
@@ -1638,8 +1638,8 @@ function criativoReceberLinhaRemota(rec: any) {
     const ehSuporte = c.criativo_tipo === 'suporte';
     mostrarToast(`${ehSuporte ? '✨' : '⚔'} ${c.atacante} superou o desafio (${resultLabel})! ${ehSuporte ? 'Defina o buff/cura.' : 'Monte o dano.'}`, 'sucesso');
     // Auto-abrir modal de definir dano se não estiver aberto
-    const overlayAberto = document.getElementById('modal-aprovacao-completa')?.style.display !== 'none'
-      || document.getElementById('modal-criativo-mestre-overlay')?.style.display !== 'none';
+    const overlayAberto = document.getElementById('modal-aprovacao-completa')?.style!.display !== 'none'
+      || document.getElementById('modal-criativo-mestre-overlay')?.style!.display !== 'none';
     if (!overlayAberto) _abrirModalAprovacaoPorStatus(c.id);
   }
   if (c.status === 'dc_rolado_falha' && (RPG_DATA?.myRole === 'mestre' || AR?.myRole === 'mestre')) {
@@ -1668,8 +1668,8 @@ function criativoReceberLinhaRemota(rec: any) {
     const _wrapId = emArena ? 'ar-criativos-mestre-wrap' : 'criativos-mestre-wrap';
     const _wrapEl = document.getElementById(_wrapId);
     if (_wrapEl) {
-      _wrapEl.style.boxShadow = '0 0 0 2px rgba(200,168,75,0.8)';
-      setTimeout(() => { if (_wrapEl) _wrapEl.style.boxShadow = ''; }, 3000);
+      _wrapEl.style!.boxShadow = '0 0 0 2px rgba(200,168,75,0.8)';
+      setTimeout(() => { if (_wrapEl) _wrapEl.style!.boxShadow = ''; }, 3000);
     }
     if (!abaAtiva) {
       criativoNotifMostrar(
@@ -1691,13 +1691,13 @@ function criativoRenderMestre() {
   const roleAtivo = emArena ? AR.myRole : RPG_DATA?.myRole;
   const wrap = document.getElementById(emArena ? 'ar-criativos-mestre-wrap' : 'criativos-mestre-wrap');
   if (!wrap) return;
-  if (roleAtivo !== 'mestre') { wrap.style.display = 'none'; return; }
+  if (roleAtivo !== 'mestre') { wrap.style!.display = 'none'; return; }
   // UX-01: Incluir aprovado_dc e aprovado_aguardando_rolagem no painel do mestre
   // AC-10-B13: Incluir dc_rolado_narrativo de criativos de ataque (para reclassificação)
-  const pendentes = CRIATIVOS_CAMP.filter(c => ['pendente','dc_rolado_sucesso','aprovado_dc','aprovado_aguardando_rolagem'].includes(c.status) ||
+  const pendentes = CRIATIVOS_CAMP.filter(c => ['pendente','dc_rolado_sucesso','aprovado_dc','aprovado_aguardando_rolagem'].includes(c.status!) ||
     (c.status === 'dc_rolado_narrativo' && c.criativo_tipo !== 'narrativo'));
-  if (!pendentes.length) { wrap.style.display = 'none'; return; }
-  wrap.style.display = 'block';
+  if (!pendentes.length) { wrap.style!.display = 'none'; return; }
+  wrap.style!.display = 'block';
   const corAccent = emArena ? 'rgba(232,80,60,0.7)' : 'rgba(200,168,75,0.7)';
   const corBtn = emArena ? 'rgba(232,80,60,0.2)' : 'rgba(200,168,75,0.2)';
   const corBtnBorder = emArena ? 'rgba(232,80,60,0.35)' : 'rgba(200,168,75,0.35)';
@@ -1795,7 +1795,7 @@ function _adicionarBadgeCriticoModalFase2(c: any) {
 function abrirModalCriativoMestre(id: any) {
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
-  document.getElementById('criativo-mestre-id').value = id;
+  document.getElementById('criativo-mestre-id')!.value = id;
 
   const isSkill    = c.tipo === 'skill_request';
   const isFase2    = c.status === 'dc_rolado_sucesso';
@@ -1840,7 +1840,7 @@ function abrirModalCriativoMestre(id: any) {
     const descLimpa = (c.descricao||'').replace(/^\[SKILL:\{.*?\}\]\s*/,'').replace(/^\[USO DE ITEM\]\s*/,'').replace(/^\[COMBATE_PEDIDO\]\s*/,'');
     descDisplay = `<strong style="color:var(--destaque)">${c.atacante}</strong>${tipoBadge}${alvoBadge}<br><span style="color:#b8a8a8">${descLimpa}</span>`;
   }
-  document.getElementById('criativo-mestre-info').innerHTML = descDisplay;
+  document.getElementById('criativo-mestre-info')!.innerHTML = descDisplay;
 
   // Título contextualizado
   const tituloEl = document.getElementById('criativo-mestre-titulo');
@@ -1859,15 +1859,15 @@ function abrirModalCriativoMestre(id: any) {
   const f1 = document.getElementById('criativo-fase1');
   const f2 = document.getElementById('criativo-fase2');
   if (isFase2) {
-    if (f1 && f1.style.display !== 'none') {
+    if (f1 && f1.style!.display !== 'none') {
       f1.classList.add('fase-saindo');
-      setTimeout(() => { f1.style.display = 'none'; f1.classList.remove('fase-saindo'); f2.style.display = ''; f2.classList.add('fase-entrando'); requestAnimationFrame(() => f2.classList.remove('fase-entrando')); }, 200);
-    } else { if(f1) f1.style.display='none'; if(f2) f2.style.display=''; }
+      setTimeout(() => { f1.style!.display = 'none'; f1.classList.remove('fase-saindo'); f2!.style!.display = ''; f2!.classList.add('fase-entrando'); requestAnimationFrame(() => f2!.classList.remove('fase-entrando')); }, 200);
+    } else { if(f1) f1.style!.display='none'; if(f2) f2.style!.display=''; }
   } else {
-    if (f2 && f2.style.display !== 'none') {
+    if (f2 && f2.style!.display !== 'none') {
       f2.classList.add('fase-saindo');
-      setTimeout(() => { f2.style.display = 'none'; f2.classList.remove('fase-saindo'); f1.style.display = ''; f1.classList.add('fase-entrando'); requestAnimationFrame(() => f1.classList.remove('fase-entrando')); }, 200);
-    } else { if(f2) f2.style.display='none'; if(f1) f1.style.display=''; }
+      setTimeout(() => { f2.style!.display = 'none'; f2.classList.remove('fase-saindo'); f1!.style!.display = ''; f1!.classList.add('fase-entrando'); requestAnimationFrame(() => f1!.classList.remove('fase-entrando')); }, 200);
+    } else { if(f2) f2.style!.display='none'; if(f1) f1.style!.display=''; }
   }
 
   if (isFase2) {
@@ -1904,7 +1904,7 @@ function abrirModalCriativoMestre(id: any) {
     }
     const modPctEl = document.getElementById('criativo-mestre-mod-pct');
     if (modPctEl) modPctEl.value = (isSkill && c.skill_mod_pct) ? c.skill_mod_pct : '';
-    document.getElementById('criativo-mestre-attr-preview').textContent = '';
+    document.getElementById('criativo-mestre-attr-preview')!.textContent = '';
     criativoMestreAtributoMudou();
     
     // Mostrar resultado
@@ -1917,7 +1917,7 @@ function abrirModalCriativoMestre(id: any) {
       const corResult = dc.critico ? '#f0cc6a' : '#5ee09a';
       const bgColor = dc.critico ? 'rgba(240,204,106,0.12)' : 'rgba(39,174,96,0.06)';
       const borderColor = dc.critico ? 'rgba(240,204,106,0.4)' : 'rgba(39,174,96,0.2)';
-      resultEl.style.cssText = `padding:12px;border-radius:8px;margin-bottom:14px;text-align:center;background:${bgColor};border:1px solid ${borderColor};display:block`;
+      resultEl.style!.cssText = `padding:12px;border-radius:8px;margin-bottom:14px;text-align:center;background:${bgColor};border:1px solid ${borderColor};display:block`;
       resultEl.innerHTML = `<div style="font-size:0.65rem;color:var(--suave);font-family:'Cinzel',serif;text-transform:uppercase;margin-bottom:4px">Resultado do Desafio</div>
         <div style="font-family:'Cinzel',serif;font-size:1.8rem;color:${corResult};line-height:1">${dc.resultado}</div>
         <div style="font-size:0.75rem;color:var(--suave);margin-top:2px">d${dc.dado} • DC ${dc.dc}${criticoStr}</div>${criticoBadge}`;
@@ -1927,22 +1927,22 @@ function abrirModalCriativoMestre(id: any) {
     const animTipoEl = document.getElementById('criativo-anim-tipo');
     if (animTipoEl) { animTipoEl.value = 'nenhuma'; criativoAnimTipoChange(); }
     const _rId = (eid: any) => document.getElementById(eid);
-    if (_rId('criativo-anim-cor'))      _rId('criativo-anim-cor').value    = '#e74c3c';
-    if (_rId('criativo-anim-icone'))    _rId('criativo-anim-icone').value  = '';
-    if (_rId('criativo-anim-trilha'))   _rId('criativo-anim-trilha').checked = false;
-    if (_rId('criativo-anim-url'))      _rId('criativo-anim-url').value    = '';
-    if (_rId('criativo-anim-svg-code')) _rId('criativo-anim-svg-code').value = '';
-    if (_rId('criativo-anim-tamanho'))  _rId('criativo-anim-tamanho').value = (120) as any;
-    if (_rId('criativo-anim-duracao'))  _rId('criativo-anim-duracao').value = (1500) as any;
-    if (_rId('criativo-anim-posicao'))  _rId('criativo-anim-posicao').value = 'alvo';
-    if (_rId('criativo-msg-fase2'))     _rId('criativo-msg-fase2').value   = '';
+    if (_rId('criativo-anim-cor'))      _rId('criativo-anim-cor')!.value    = '#e74c3c';
+    if (_rId('criativo-anim-icone'))    _rId('criativo-anim-icone')!.value  = '';
+    if (_rId('criativo-anim-trilha'))   _rId('criativo-anim-trilha')!.checked = false;
+    if (_rId('criativo-anim-url'))      _rId('criativo-anim-url')!.value    = '';
+    if (_rId('criativo-anim-svg-code')) _rId('criativo-anim-svg-code')!.value = '';
+    if (_rId('criativo-anim-tamanho'))  _rId('criativo-anim-tamanho')!.value = (120) as any;
+    if (_rId('criativo-anim-duracao'))  _rId('criativo-anim-duracao')!.value = (1500) as any;
+    if (_rId('criativo-anim-posicao'))  _rId('criativo-anim-posicao')!.value = 'alvo';
+    if (_rId('criativo-msg-fase2'))     _rId('criativo-msg-fase2')!.value   = '';
 
     // ── Injetar painel de efeitos extras (buff/debuff/cura/HOT/DOT) ──────────
     _injetarCriativoExtrasPanel(c);
 
     // AC-08-B9: Mostrar aviso de cadastro de skill na Fase 2
     const skillWrapF2 = document.getElementById('criativo-fase2-skill-wrap');
-    if (skillWrapF2) skillWrapF2.style.display = c._cadastrar_skill ? '' : 'none';
+    if (skillWrapF2) skillWrapF2.style!.display = c._cadastrar_skill ? '' : 'none';
   } else {
     // --- FASE 1: DC declaration ---
     // Reset dado selecionado (default d20)
@@ -1970,7 +1970,7 @@ function abrirModalCriativoMestre(id: any) {
     const custoFields = document.getElementById('criativo-custo-fields');
     const custoPrev   = document.getElementById('criativo-custo-preview');
     if (cobrarCheck) cobrarCheck.checked = false;
-    if (custoFields) custoFields.style.display = 'none';
+    if (custoFields) custoFields.style!.display = 'none';
     if (custoPrev)   custoPrev.textContent = '';
     const custoSel = document.getElementById('criativo-custo-atributo');
     if (custoSel) {
@@ -1984,7 +1984,7 @@ function abrirModalCriativoMestre(id: any) {
     const cadastrarCheck = document.getElementById('criativo-cadastrar-skill');
     const cadastrarFields = document.getElementById('criativo-cadastrar-skill-fields');
     if (cadastrarCheck) cadastrarCheck.checked = false;
-    if (cadastrarFields) cadastrarFields.style.display = 'none';
+    if (cadastrarFields) cadastrarFields.style!.display = 'none';
     const skNomeEl = document.getElementById('criativo-skill-nome');
     const skEfeitoEl = document.getElementById('criativo-skill-efeito');
     if (skNomeEl) skNomeEl.value = c.skill_nome || '';
@@ -1995,7 +1995,7 @@ function abrirModalCriativoMestre(id: any) {
     }
   }
 
-  document.getElementById('modal-criativo-mestre-overlay').style.display = 'flex';
+  document.getElementById('modal-criativo-mestre-overlay')!.style!.display = 'flex';
 }
 
 // ── Helper: abre modal correto baseado no status do criativo ──────────────
@@ -2016,14 +2016,14 @@ function _abrirModalAprovacaoPorStatus(id: any) {
 }
 
 function criativoCobrarCustoToggle() {
-  const on = document.getElementById('criativo-cobrar-custo').checked;
+  const on = document.getElementById('criativo-cobrar-custo')!.checked!;
   const fields = document.getElementById('criativo-custo-fields');
-  if (fields) fields.style.display = on ? 'block' : 'none';
+  if (fields) fields.style!.display = on ? 'block' : 'none';
   if (on) criativoCustoAtributoMudou();
 }
 
 function criativoCustoAtributoMudou() {
-  const id = document.getElementById('criativo-mestre-id').value;
+  const id = document.getElementById('criativo-mestre-id')!.value!;
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   const atributo = document.getElementById('criativo-custo-atributo')?.value;
   const previewEl = document.getElementById('criativo-custo-preview');
@@ -2035,7 +2035,7 @@ function criativoCustoAtributoMudou() {
 }
 
 function fecharModalCriativoMestre() {
-  document.getElementById('modal-criativo-mestre-overlay').style.display = 'none';
+  document.getElementById('modal-criativo-mestre-overlay')!.style!.display = 'none';
 }
 
 // ── Painel de efeitos extras (buff/debuff/cura/HOT/DOT) na Fase 2 do criativo ─
@@ -2054,7 +2054,7 @@ function _injetarCriativoExtrasPanel(c: any) {
 
   const panel = document.createElement('div');
   panel.id = panelId;
-  panel.style.cssText = `margin-top:10px;margin-bottom:4px;padding:12px;background:rgba(${ehSuporte?'94,224,154':'232,80,60'},0.05);border:1px solid rgba(${ehSuporte?'94,224,154':'232,80,60'},0.18);border-radius:8px`;
+  panel.style!.cssText = `margin-top:10px;margin-bottom:4px;padding:12px;background:rgba(${ehSuporte?'94,224,154':'232,80,60'},0.05);border:1px solid rgba(${ehSuporte?'94,224,154':'232,80,60'},0.18);border-radius:8px`;
 
   const labelStyle = `display:flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--texto);cursor:pointer;margin-bottom:6px`;
   const inputStyle = `padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:'Cinzel',serif;font-size:0.8rem;text-align:center`;
@@ -2108,7 +2108,7 @@ function _injetarCriativoExtrasPanel(c: any) {
   if (msgBox?.parentElement?.parentElement === fase2) {
     fase2.insertBefore(panel, msgBox.parentElement);
   } else if (msgBox) {
-    msgBox.parentNode.insertBefore(panel, msgBox);
+    msgBox.parentNode!.insertBefore(panel, msgBox);
   } else {
     fase2.appendChild(panel);
   }
@@ -2117,46 +2117,46 @@ function _injetarCriativoExtrasPanel(c: any) {
   const extras = c?.custo_cobrado?._efeitos_extras || [];
   for (const ef of extras) {
     if (ef.tipo === 'cura_imediata') {
-      const el = document.getElementById('cx-cura-on'); if (el) { el.checked=true; document.getElementById('cx-cura-fields').style.display='flex'; }
+      const el = document.getElementById('cx-cura-on'); if (el) { el.checked=true; document.getElementById('cx-cura-fields')!.style!.display='flex'; }
       const q = document.getElementById('cx-cura-qtd'); if (q) q.value=ef.valor||10;
     }
     if (ef.hot_formula) {
-      const el = document.getElementById('cx-hot-on'); if (el) { el.checked=true; document.getElementById('cx-hot-fields').style.display='flex'; }
+      const el = document.getElementById('cx-hot-on'); if (el) { el.checked=true; document.getElementById('cx-hot-fields')!.style!.display='flex'; }
       const f = document.getElementById('cx-hot-formula'); if (f) f.value=ef.hot_formula;
       const t = document.getElementById('cx-hot-turnos'); if (t) t.value=ef.hot_turnos||3;
     }
     if (ef.boost_dano) {
-      const el = document.getElementById('cx-boost-on'); if (el) { el.checked=true; document.getElementById('cx-boost-fields').style.display='flex'; }
+      const el = document.getElementById('cx-boost-on'); if (el) { el.checked=true; document.getElementById('cx-boost-fields')!.style!.display='flex'; }
       const m = document.getElementById('cx-boost-mod'); if (m) m.value=ef.boost_dano;
       const t = document.getElementById('cx-boost-turnos'); if (t) t.value=ef.boost_dano_turnos||2;
     }
     if (ef.dot_formula) {
-      const el = document.getElementById('cx-dot-on'); if (el) { el.checked=true; document.getElementById('cx-dot-fields').style.display='flex'; }
+      const el = document.getElementById('cx-dot-on'); if (el) { el.checked=true; document.getElementById('cx-dot-fields')!.style!.display='flex'; }
       const f = document.getElementById('cx-dot-formula'); if (f) f.value=ef.dot_formula;
       const t = document.getElementById('cx-dot-turnos'); if (t) t.value=ef.dot_turnos||3;
     }
     if (ef.mod_dano) {
-      const el = document.getElementById('cx-debuff-on'); if (el) { el.checked=true; document.getElementById('cx-debuff-fields').style.display='flex'; }
+      const el = document.getElementById('cx-debuff-on'); if (el) { el.checked=true; document.getElementById('cx-debuff-fields')!.style!.display='flex'; }
       const m = document.getElementById('cx-debuff-mod'); if (m) m.value=ef.mod_dano;
       const t = document.getElementById('cx-debuff-turnos'); if (t) t.value=ef.mod_dano_turnos||2;
     }
     if (ef.sem_movimento) {
-      const el = document.getElementById('cx-imob-on'); if (el) { el.checked=true; document.getElementById('cx-imob-fields').style.display='flex'; }
+      const el = document.getElementById('cx-imob-on'); if (el) { el.checked=true; document.getElementById('cx-imob-fields')!.style!.display='flex'; }
       const t = document.getElementById('cx-imob-turnos'); if (t) t.value=ef.sem_movimento_turnos||1;
     }
     if (ef.sem_ataque) {
-      const el = document.getElementById('cx-stun-on'); if (el) { el.checked=true; document.getElementById('cx-stun-fields').style.display='flex'; }
+      const el = document.getElementById('cx-stun-on'); if (el) { el.checked=true; document.getElementById('cx-stun-fields')!.style!.display='flex'; }
       const tipo = document.getElementById('cx-stun-tipo'); if (tipo) tipo.value=ef.sem_ataque_tipo||'todos';
       const t = document.getElementById('cx-stun-turnos'); if (t) t.value=ef.sem_ataque_turnos||1;
     }
     // AC-05-G2: Re-hidratar efeitos defensivos
     if (ef.boost_defesa) {
-      const el = document.getElementById('cx-def-on'); if (el) { el.checked=true; document.getElementById('cx-def-fields').style.display='flex'; }
+      const el = document.getElementById('cx-def-on'); if (el) { el.checked=true; document.getElementById('cx-def-fields')!.style!.display='flex'; }
       const m = document.getElementById('cx-def-mod'); if (m) m.value=ef.boost_defesa;
       const t = document.getElementById('cx-def-turnos'); if (t) t.value=ef.boost_defesa_turnos||2;
     }
     if (ef.hp_temp) {
-      const el = document.getElementById('cx-hptemp-on'); if (el) { el.checked=true; document.getElementById('cx-hptemp-fields').style.display='flex'; }
+      const el = document.getElementById('cx-hptemp-on'); if (el) { el.checked=true; document.getElementById('cx-hptemp-fields')!.style!.display='flex'; }
       const q = document.getElementById('cx-hptemp-qtd'); if (q) q.value=ef.hp_temp;
     }
     if (ef.remover_debuff) {
@@ -2187,28 +2187,28 @@ function abrirModalAcao(nomePersonagem: any) {
   const btnJog    = document.getElementById('modal-acao-btn-combate-jog');
   const btnMestre = document.getElementById('modal-acao-btn-atacar-mestre');
   if (isMestre) {
-    if (btnJog)    btnJog.style.display    = 'none';
-    if (btnMestre) btnMestre.style.display = temSkills ? 'flex' : 'none';
+    if (btnJog)    btnJog.style!.display    = 'none';
+    if (btnMestre) btnMestre.style!.display = temSkills ? 'flex' : 'none';
   } else {
     const estaEmCombate = _estadoBatalhaJogador(nomePersonagem) !== 'fora_combate';
-    if (btnJog)    btnJog.style.display    = (estaEmCombate || !temSkills) ? 'none' : '';
-    if (btnMestre) btnMestre.style.display = 'none';
+    if (btnJog)    btnJog.style!.display    = (estaEmCombate || !temSkills) ? 'none' : '';
+    if (btnMestre) btnMestre.style!.display = 'none';
   }
 
-  document.getElementById('modal-acao-overlay').style.display = 'flex';
+  document.getElementById('modal-acao-overlay')!.style!.display = 'flex';
 }
 
 function fecharModalAcao() {
-  document.getElementById('modal-acao-overlay').style.display = 'none';
+  document.getElementById('modal-acao-overlay')!.style!.display = 'none';
 }
 
 function _acaoMostrarPainel(id: any) {
   ['modal-acao-raiz','modal-acao-criativa-panel','modal-acao-sub-combate','modal-acao-sub-itens'].forEach(function(p) {
     var el = document.getElementById(p);
-    if (el) el.style.display = 'none';
+    if (el) el.style!.display = 'none';
   });
   var target = document.getElementById(id === 'raiz' ? 'modal-acao-raiz' : id);
-  if (target) target.style.display = '';
+  if (target) target.style!.display = '';
 }
 
 function acaoVoltarRaiz() {
@@ -2220,15 +2220,15 @@ function acaoMostrarCriativa() {
   window._acaoTipoAtual    = null;
   window._acaoAlvoTipoAtual = null;
   document.querySelectorAll('.acao-tipo-btn').forEach(function(b) {
-    var c = b.dataset.tipo === 'ataque' ? '232,80,60' : b.dataset.tipo === 'suporte' ? '94,224,154' : '126,200,240';
-    b.style.background = 'rgba('+c+',0.08)'; b.style.borderColor = 'rgba('+c+',0.2)'; b.style.boxShadow = '';
+    var c = b.dataset!.tipo === 'ataque' ? '232,80,60' : b.dataset!.tipo === 'suporte' ? '94,224,154' : '126,200,240';
+    b.style!.background = 'rgba('+c+',0.08)'; b.style!.borderColor = 'rgba('+c+',0.2)'; b.style!.boxShadow = '';
   });
   var alvoSec = document.getElementById('acao-alvo-section');
-  if (alvoSec) alvoSec.style.display = 'none';
+  if (alvoSec) alvoSec.style!.display = 'none';
   var descSec = document.getElementById('acao-desc-section');
-  if (descSec) descSec.style.display = 'none';
+  if (descSec) descSec.style!.display = 'none';
   var envBtn = document.getElementById('acao-btn-enviar');
-  if (envBtn) envBtn.style.display = 'none';
+  if (envBtn) envBtn.style!.display = 'none';
   var desc = document.getElementById('modal-acao-criativa-desc');
   if (desc) desc.value = '';
 }
@@ -2239,10 +2239,10 @@ function acaoSelecionarTipo(tipo: any, btn: any) {
   // Visual seleção
   var cores: Record<string, any> = { ataque: '232,80,60', suporte: '94,224,154', narrativo: '126,200,240' };
   document.querySelectorAll('.acao-tipo-btn').forEach(function(b) {
-    var c = cores[b.dataset.tipo] || '200,168,75';
-    b.style.background  = 'rgba('+c+',0.07)';
-    b.style.borderColor = 'rgba('+c+',0.2)';
-    b.style.boxShadow   = '';
+    var c = cores[b.dataset!.tipo!] || '200,168,75';
+    b.style!.background  = 'rgba('+c+',0.07)';
+    b.style!.borderColor = 'rgba('+c+',0.2)';
+    b.style!.boxShadow   = '';
   });
   var c = cores[tipo] || '200,168,75';
   btn.style.background  = 'rgba('+c+',0.2)';
@@ -2250,24 +2250,24 @@ function acaoSelecionarTipo(tipo: any, btn: any) {
   btn.style.boxShadow   = '0 0 10px rgba('+c+',0.2)';
 
   // Mostrar painel de alvo correto
-  document.getElementById('acao-alvo-section').style.display = '';
-  document.getElementById('acao-alvos-ataque').style.display  = tipo === 'ataque'   ? '' : 'none';
-  document.getElementById('acao-alvos-suporte').style.display = tipo === 'suporte'  ? '' : 'none';
+  document.getElementById('acao-alvo-section')!.style!.display = '';
+  document.getElementById('acao-alvos-ataque')!.style!.display  = tipo === 'ataque'   ? '' : 'none';
+  document.getElementById('acao-alvos-suporte')!.style!.display = tipo === 'suporte'  ? '' : 'none';
 
   // Narrativo não precisa de alvo — mostrar desc direto
   if (tipo === 'narrativo') {
     window._acaoAlvoTipoAtual = 'narrativo';
-    document.getElementById('acao-alvo-section').style.display = 'none';
-    document.getElementById('acao-desc-section').style.display = '';
-    document.getElementById('acao-btn-enviar').style.display   = 'flex';
+    document.getElementById('acao-alvo-section')!.style!.display = 'none';
+    document.getElementById('acao-desc-section')!.style!.display = '';
+    document.getElementById('acao-btn-enviar')!.style!.display   = 'flex';
   } else {
-    document.getElementById('acao-desc-section').style.display = 'none';
-    document.getElementById('acao-btn-enviar').style.display   = 'none';
+    document.getElementById('acao-desc-section')!.style!.display = 'none';
+    document.getElementById('acao-btn-enviar')!.style!.display   = 'none';
   }
   // Reset alvo buttons
-  document.querySelectorAll('.acao-alvo-btn').forEach(function(b){ b.style.background=''; b.style.borderColor=''; });
+  document.querySelectorAll('.acao-alvo-btn').forEach(function(b){ b.style!.background=''; b.style!.borderColor=''; });
   // Ocultar inputs
-  ['acao-nome-alvo-ataque','acao-nome-alvos-area-atk','acao-nome-alvo-suporte','acao-nome-alvos-area-sup'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
+  ['acao-nome-alvo-ataque','acao-nome-alvos-area-atk','acao-nome-alvo-suporte','acao-nome-alvos-area-sup'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style!.display='none'; });
 }
 
 function acaoSelecionarAlvo(alvoTipo: any, btn: any) {
@@ -2277,7 +2277,7 @@ function acaoSelecionarAlvo(alvoTipo: any, btn: any) {
 
   // Visual seleção
   document.querySelectorAll('.acao-alvo-btn').forEach(function(b){
-    b.style.background=''; b.style.borderColor=''; b.style.boxShadow='';
+    b.style!.background=''; b.style!.borderColor=''; b.style!.boxShadow='';
   });
   var c = tipo === 'suporte' ? '94,224,154' : '232,80,60';
   btn.style.background  = 'rgba('+c+',0.18)';
@@ -2286,7 +2286,7 @@ function acaoSelecionarAlvo(alvoTipo: any, btn: any) {
 
   // Ocultar todos os inputs/selects
   ['acao-nome-alvo-ataque','acao-nome-alvos-area-atk','acao-nome-alvo-suporte','acao-nome-alvos-area-sup'].forEach(function(id){
-    var el = document.getElementById(id); if (el) el.style.display = 'none';
+    var el = document.getElementById(id); if (el) el.style!.display = 'none';
   });
 
   // Obter personagens disponíveis na batalha atual
@@ -2311,7 +2311,7 @@ function acaoSelecionarAlvo(alvoTipo: any, btn: any) {
     if (!sel) return;
     sel.innerHTML = '<option value="">'+placeholder+'</option>' +
       chars.map(function(p: any){ return '<option value="'+p.nome+'">'+p.nome+'</option>'; }).join('');
-    sel.style.display = '';
+    sel.style!.display = '';
   }
 
   if (tipo === 'ataque' && alvoTipo === 'unico') {
@@ -2320,7 +2320,7 @@ function acaoSelecionarAlvo(alvoTipo: any, btn: any) {
     var areaInput = document.getElementById('acao-nome-alvos-area-atk');
     if (areaInput) {
       areaInput.value = _getBattleChars('inimigo').map(function(p: any){ return p.nome; }).join(', ');
-      areaInput.style.display = '';
+      areaInput.style!.display = '';
     }
   } else if (tipo === 'suporte' && alvoTipo === 'aliado') {
     _popularSelect('acao-nome-alvo-suporte', _getBattleChars('aliado'), '— selecione o aliado —');
@@ -2328,20 +2328,20 @@ function acaoSelecionarAlvo(alvoTipo: any, btn: any) {
     var areaSupInput = document.getElementById('acao-nome-alvos-area-sup');
     if (areaSupInput) {
       areaSupInput.value = _getBattleChars('aliado').map(function(p: any){ return p.nome; }).join(', ');
-      areaSupInput.style.display = '';
+      areaSupInput.style!.display = '';
     }
   }
   // proprio: sem input
 
-  document.getElementById('acao-desc-section').style.display = '';
-  document.getElementById('acao-btn-enviar').style.display   = 'flex';
+  document.getElementById('acao-desc-section')!.style!.display = '';
+  document.getElementById('acao-btn-enviar')!.style!.display   = 'flex';
 }
 
 function modalAcaoCriativa() { acaoMostrarCriativa(); }
 
 function modalAcaoSolicitarCombate__sombreado_local() { // sombreada pela declaração posterior neste arquivo (comportamento clássico: última vence)
   _acaoMostrarPainel('modal-acao-sub-combate');
-  document.getElementById('modal-acao-combate-motivo').value = '';
+  document.getElementById('modal-acao-combate-motivo')!.value = '';
 }
 
 
@@ -2352,8 +2352,8 @@ function modalAcaoItem() {
 
   const char = RPG_DATA?.characters?.find(c => c.nome === nomeChar);
   if (!char) {
-    lista.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Personagem não encontrado</div>';
-    document.getElementById('modal-acao-sub-itens').style.display = '';
+    lista!.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Personagem não encontrado</div>';
+    document.getElementById('modal-acao-sub-itens')!.style!.display = '';
     return;
   }
 
@@ -2361,8 +2361,8 @@ function modalAcaoItem() {
 
   // Se o inventário ainda não foi carregado para este personagem, carregar agora
   if (INV && !INV.carregado?.[charId] && typeof carregarInventarioChar === 'function') {
-    lista.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Carregando...</div>';
-    document.getElementById('modal-acao-sub-itens').style.display = '';
+    lista!.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Carregando...</div>';
+    document.getElementById('modal-acao-sub-itens')!.style!.display = '';
     carregarInventarioChar(charId).then(() => modalAcaoItem());
     return;
   }
@@ -2379,9 +2379,9 @@ function modalAcaoItem() {
   });
 
   if (!itensInv.length) {
-    lista.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Nenhum item consumível no inventário</div>';
+    lista!.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Nenhum item consumível no inventário</div>';
   } else {
-    lista.innerHTML = itensInv.map((invItem: any) => {
+    lista!.innerHTML = itensInv.map((invItem: any) => {
       const def = invItem.item || INV?.itemDefs?.find((d: any) => d.id === (invItem.item_catalog_id || invItem.item_def_id));
       if (!def) return '';
       const efStr = Array.isArray(def.efeitos)
@@ -2399,7 +2399,7 @@ function modalAcaoItem() {
       </div>`;
     }).join('');
   }
-  document.getElementById('modal-acao-sub-itens').style.display = '';
+  document.getElementById('modal-acao-sub-itens')!.style!.display = '';
 }
 
 function usarItemConsumivel(nomeChar: any, idx: any) {
@@ -2436,13 +2436,13 @@ function usarItemConsumivel(nomeChar: any, idx: any) {
 }
 
 function modalAcaoSolicitarCombate() {
-  document.getElementById('modal-acao-opcoes-jogador').style.display = 'none';
-  document.getElementById('modal-acao-combate-motivo').value = '';
-  document.getElementById('modal-acao-sub-combate').style.display = '';
+  document.getElementById('modal-acao-opcoes-jogador')!.style!.display = 'none';
+  document.getElementById('modal-acao-combate-motivo')!.value = '';
+  document.getElementById('modal-acao-sub-combate')!.style!.display = '';
 }
 
 async function acaoEnviarCriativa() {
-  var desc     = document.getElementById('modal-acao-criativa-desc').value.trim();
+  var desc     = document.getElementById('modal-acao-criativa-desc')!.value!.trim!()!;
   if (!desc) { mostrarToast('Descreva sua ação primeiro', 'erro'); return; }
 
   var nomeChar  = window._acaoPersonagemAtual;
@@ -2498,7 +2498,7 @@ async function acaoEnviarCriativa() {
 }
 
 async function acaoEnviarPedidoCombate() {
-  const motivo = document.getElementById('modal-acao-combate-motivo').value.trim();
+  const motivo = document.getElementById('modal-acao-combate-motivo')!.value!.trim!()!;
   const nomeChar = window._acaoPersonagemAtual;
   const mapaId = RPG_DATA?.characters?.find(c => c.nome === nomeChar)?.active_map_id || MAPA_STATE?.mapaAtualId || '';
   fecharModalAcao();
@@ -2525,16 +2525,16 @@ async function acaoEnviarPedidoCombate() {
 function mestreAbrirModalCombatePedido(id: any) {
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
-  document.getElementById('combate-pedido-id').value = id;
-  document.getElementById('combate-pedido-solicitante').value = c.atacante;
+  document.getElementById('combate-pedido-id')!.value = id;
+  document.getElementById('combate-pedido-solicitante')!.value = c.atacante;
   // Extrair mapa_id do campo descricao
   const mapaMatch = (c.descricao || '').match(/mapa:([^\s|]+)/);
   const mapaId = mapaMatch ? mapaMatch[1] : (c.mapa_id_pedido || MAPA_STATE?.mapaAtualId || '');
-  document.getElementById('combate-pedido-mapa-id').value = mapaId;
+  document.getElementById('combate-pedido-mapa-id')!.value = mapaId;
   const motivo = (c.descricao || '').replace(/^\[COMBATE_PEDIDO\]\s*mapa:[^\s|]+\s*\|?\s*/, '').trim();
   const mapaEntry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapaId);
   const mapaNome = mapaEntry?.mapa?.nome || mapaId || '?';
-  document.getElementById('combate-pedido-info').innerHTML =
+  document.getElementById('combate-pedido-info')!.innerHTML =
     `<strong style="color:var(--destaque)">${c.atacante}</strong> solicita entrada em combate no mapa <strong style="color:#7ec8f0">${mapaNome}</strong>${motivo ? `<br><span style="color:var(--suave)">"${motivo}"</span>` : ''}`;
 
   // Listar personagens elegíveis (mesmo mapa, hp > 0, não em batalha)
@@ -2551,9 +2551,9 @@ function mestreAbrirModalCombatePedido(id: any) {
 
   const lista = document.getElementById('combate-pedido-participantes');
   if (!elegiveis.length) {
-    lista.innerHTML = `<div style="text-align:center;color:var(--suave);font-style:italic;padding:12px;font-size:0.85rem">Nenhum personagem elegível neste mapa</div>`;
+    lista!.innerHTML = `<div style="text-align:center;color:var(--suave);font-style:italic;padding:12px;font-size:0.85rem">Nenhum personagem elegível neste mapa</div>`;
   } else {
-    lista.innerHTML = elegiveis.map(ch => {
+    lista!.innerHTML = elegiveis.map(ch => {
       const ca = ch.custom_attrs || {};
       const tipo = (ca.tipo_personagem === 'npc' || ca.tipo === 'npc') ? 'npc' : 'jogador';
       const cor = ca.cor || (tipo==='npc' ? '#e8604c' : '#7ec8f0');
@@ -2567,19 +2567,19 @@ function mestreAbrirModalCombatePedido(id: any) {
       </label>`;
     }).join('');
   }
-  document.getElementById('modal-combate-pedido-overlay').style.display = 'flex';
+  document.getElementById('modal-combate-pedido-overlay')!.style!.display = 'flex';
 }
 
 function fecharModalCombatePedido() {
-  document.getElementById('modal-combate-pedido-overlay').style.display = 'none';
+  document.getElementById('modal-combate-pedido-overlay')!.style!.display = 'none';
 }
 
 async function mestreAprovarCombatePedido() {
-  const id     = document.getElementById('combate-pedido-id').value;
-  const mapaId = document.getElementById('combate-pedido-mapa-id').value;
+  const id     = document.getElementById('combate-pedido-id')!.value!;
+  const mapaId = document.getElementById('combate-pedido-mapa-id')!.value!;
   const checkboxes = document.querySelectorAll('#combate-pedido-participantes input[type=checkbox]:checked');
   const participantesBase = Array.from(checkboxes).map(cb => ({
-    nome: cb.dataset.nome, tipo: cb.dataset.tipo, cor: cb.dataset.cor, iniciativa: null as any
+    nome: cb.dataset!.nome, tipo: cb.dataset!.tipo, cor: cb.dataset!.cor, iniciativa: null as any
   })).filter(p => !(RPG_DATA?.characters||[]).find(x => x.nome === p.nome)?.custom_attrs?.eh_pet);
   if (participantesBase.length < 2) {
     mostrarToast('Selecione pelo menos 2 participantes para iniciar a batalha', 'erro');
@@ -2592,7 +2592,7 @@ async function mestreAprovarCombatePedido() {
   criativoRenderMestre();
   try {
     const rpgId = RPG_DATA?.rpgId;
-    if (rpgId) await sb(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method:'DELETE' });
+    if (rpgId) await sb(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id!)}`, { method:'DELETE' });
   } catch(e) {}
 
   // Iniciar batalha no mapa selecionado
@@ -2608,7 +2608,7 @@ async function mestreAprovarCombatePedido() {
     id: bid, mapa_id: mapaId, mapa_nome: mapaNome,
     ativa: true, pausada: false, turnoRound: 1,
     fase: 'iniciativa',
-    participantes: participantesBase,
+    participantes: participantesBase as any,
     ordemAtual: 0, iniciativasRoladas: {}, empatados: [], dadoSel: null
   };
   BATALHA_ATUAL_ID = bid;
@@ -2623,14 +2623,14 @@ async function mestreAprovarCombatePedido() {
 }
 
 async function mestreRejeitarCombatePedido() {
-  const id = document.getElementById('combate-pedido-id').value;
+  const id = document.getElementById('combate-pedido-id')!.value!;
   fecharModalCombatePedido();
   const idx = CRIATIVOS_CAMP.findIndex(c => c.id === id);
   if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
   criativoRenderMestre();
   try {
     const rpgId = RPG_DATA?.rpgId;
-    if (rpgId) await sb(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method:'DELETE' });
+    if (rpgId) await sb(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id!)}`, { method:'DELETE' });
   } catch(e) {}
   mostrarToast('Pedido de combate recusado.', '');
 }
@@ -2638,7 +2638,7 @@ async function mestreRejeitarCombatePedido() {
 function criativoCadastrarSkillToggle() {
   const checked = document.getElementById('criativo-cadastrar-skill')?.checked;
   const fields = document.getElementById('criativo-cadastrar-skill-fields');
-  if (fields) fields.style.display = checked ? 'block' : 'none';
+  if (fields) fields.style!.display = checked ? 'block' : 'none';
 }
 
 function criativoMestreBuilderAdd(faces: any) {
@@ -2668,7 +2668,7 @@ function criativoMestreBuilderAtualizar() {
   }).join('');
 }
 function criativoMestreAtributoMudou() {
-  const id  = document.getElementById('criativo-mestre-id').value;
+  const id  = document.getElementById('criativo-mestre-id')!.value!;
   const c   = CRIATIVOS_CAMP.find(x => x.id === id);
   const sel = document.getElementById('criativo-mestre-atributo');
   const previewEl = document.getElementById('criativo-mestre-attr-preview');
@@ -2700,7 +2700,7 @@ function criativoEhAtaqueChange() {
   if (!chk) return;
   const on = chk.checked;
   if (icon) icon.textContent = on ? '⚔' : '⬜';
-  if (icon) { icon.style.background = on ? 'rgba(192,57,43,0.2)' : 'rgba(255,255,255,0.05)'; icon.style.borderColor = on ? 'rgba(192,57,43,0.6)' : 'rgba(192,57,43,0.3)'; }
+  if (icon) { icon.style!.background = on ? 'rgba(192,57,43,0.2)' : 'rgba(255,255,255,0.05)'; icon.style!.borderColor = on ? 'rgba(192,57,43,0.6)' : 'rgba(192,57,43,0.3)'; }
   if (desc) desc.textContent = on
     ? 'Jogador rola DC; se passar, volta ao mestre para definir dano/buff (Fase 2).'
     : 'Resultado é narrativo. O mestre decide o efeito fora do sistema de dados.';
@@ -2708,8 +2708,8 @@ function criativoEhAtaqueChange() {
 
 function criativoDCPreview() {
   const dadoBtn = document.querySelector('.dc-dado-btn.dc-dado-sel');
-  const faces = dadoBtn ? parseInt(dadoBtn.dataset.faces) : 20;
-  const dc = parseInt(document.getElementById('criativo-dc-valor')?.value) || 0;
+  const faces = dadoBtn ? parseInt(dadoBtn.dataset!.faces!) : 20;
+  const dc = parseInt(document.getElementById('criativo-dc-valor')?.value!) || 0;
   const prevEl = document.getElementById('criativo-dc-preview');
   if (!prevEl) return;
   if (!dc) { prevEl.textContent = ''; return; }
@@ -2721,7 +2721,7 @@ function criativoDCPreview() {
 function _criativoAbrirModalOverlay(c: any) {
   // Esconder painel inline do mapa imediatamente para evitar duplicidade
   const painelMapa = document.getElementById('atk-criativo-aprovado-mapa');
-  if (painelMapa) painelMapa.style.display = 'none';
+  if (painelMapa) painelMapa.style!.display = 'none';
 
   const modal = document.getElementById('modal-ataque');
   if (!modal) { criativoAtualizarStepJogador(c); return; }
@@ -2733,12 +2733,12 @@ function _criativoAbrirModalOverlay(c: any) {
 
   // Restaurar CSS de overlay (sobrescreve qualquer cssText residual do modo inline)
   const inner = modal.querySelector('div');
-  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
+  modal.style!.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
   if (inner) {
-    inner.style.borderRadius = '16px 16px 0 0';
-    inner.style.marginTop = '';
-    inner.style.paddingBottom = '44px';
-    inner.style.maxHeight = '90vh';
+    inner.style!.borderRadius = '16px 16px 0 0';
+    inner.style!.marginTop = '';
+    inner.style!.paddingBottom = '44px';
+    inner.style!.maxHeight = '90vh';
   }
 
   criativoAtualizarStepJogador(c);
@@ -2747,22 +2747,22 @@ function _criativoAbrirModalOverlay(c: any) {
 
 // ─── FASE 1: Mestre define dado + DC e envia ao jogador ──────────────────────
 async function criativoMestreConcluirFase1() {
-  const id = document.getElementById('criativo-mestre-id').value;
+  const id = document.getElementById('criativo-mestre-id')!.value!;
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
 
   const dadoBtn = document.querySelector('.dc-dado-btn.dc-dado-sel');
-  const faces = dadoBtn ? parseInt(dadoBtn.dataset.faces) : 20;
-  const dc = parseInt(document.getElementById('criativo-dc-valor')?.value) || 0;
+  const faces = dadoBtn ? parseInt(dadoBtn.dataset!.faces!) : 20;
+  const dc = parseInt(document.getElementById('criativo-dc-valor')?.value!) || 0;
   if (!dc || dc < 1) { mostrarToast('⚠ Defina a dificuldade (DC) antes de enviar.', 'erro'); return; }
 
   const ehAtaque = document.getElementById('criativo-eh-ataque')?.checked || false;
-  const mensagem = document.getElementById('criativo-msg-fase1')?.value.trim() || '';
+  const mensagem = document.getElementById('criativo-msg-fase1')?.value!.trim!()! || '';
 
   // Custo de recurso (opcional)
   const cobrar = document.getElementById('criativo-cobrar-custo')?.checked;
   const custoAtrib = document.getElementById('criativo-custo-atributo')?.value?.trim() || null;
-  const custoQtd   = parseFloat(document.getElementById('criativo-custo-qtd')?.value) || 0;
+  const custoQtd   = parseFloat(document.getElementById('criativo-custo-qtd')?.value!) || 0;
   c.custo_cobrado = (cobrar && custoAtrib && custoQtd > 0) ? { atributo: custoAtrib, quantidade: custoQtd } : null;
 
   // Salvar os dados de DC como JSON no campo formula_aprovada com prefixo __DC__
@@ -2780,8 +2780,8 @@ async function criativoMestreConcluirFase1() {
   c._cadastrar_skill = document.getElementById('criativo-cadastrar-skill')?.checked || false;
   if (c._cadastrar_skill) {
     c._skill_meta = {
-      nome: document.getElementById('criativo-skill-nome')?.value.trim() || 'Ação Criativa',
-      efeito: document.getElementById('criativo-skill-efeito')?.value.trim() || '',
+      nome: document.getElementById('criativo-skill-nome')?.value!.trim!()! || 'Ação Criativa',
+      efeito: document.getElementById('criativo-skill-efeito')?.value!.trim!()! || '',
       tipo_dano: document.getElementById('criativo-skill-tipo-dano')?.value || 'fisico',
     };
   }
@@ -2806,7 +2806,7 @@ function crLabelAcao(tipo: any) {
 
 // ─── FASE 2: Mestre define dano (após jogador passar no DC) ──────────────────
 async function criativoMestreDefinirDano() {
-  const id = document.getElementById('criativo-mestre-id').value;
+  const id = document.getElementById('criativo-mestre-id')!.value!;
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
 
@@ -2817,10 +2817,10 @@ async function criativoMestreDefinirDano() {
   // AC-03-B4: Para suporte, validar que há pelo menos fórmula OU efeito extra
   // (validação completa de efeitos será feita após coletar efeitosExtras)
 
-  const atributo = document.getElementById('criativo-mestre-atributo')?.value.trim() || null;
+  const atributo = document.getElementById('criativo-mestre-atributo')?.value!.trim!()! || null;
   const modPct   = document.getElementById('criativo-mestre-mod-pct')?.value !== ''
-    ? parseFloat(document.getElementById('criativo-mestre-mod-pct').value) : null;
-  const mensagem = document.getElementById('criativo-msg-fase2')?.value.trim() || '';
+    ? parseFloat(document.getElementById('criativo-mestre-mod-pct')!.value!) : null;
+  const mensagem = document.getElementById('criativo-msg-fase2')?.value!.trim!()! || '';
 
   // Animação
   const animTipo = document.getElementById('criativo-anim-tipo')?.value || 'nenhuma';
@@ -2828,14 +2828,14 @@ async function criativoMestreDefinirDano() {
     const _isMidia = ['gif','imagem','svg','iframe'].includes(animTipo);
     c.animacao = { tipo: animTipo };
     if (_isMidia) {
-      c.animacao.url     = animTipo !== 'svg' ? (document.getElementById('criativo-anim-url')?.value.trim() || '') : '';
-      c.animacao.svg     = animTipo === 'svg' ? (document.getElementById('criativo-anim-svg-code')?.value.trim() || '') : '';
-      c.animacao.tamanho = parseInt(document.getElementById('criativo-anim-tamanho')?.value) || 120;
-      c.animacao.duracao = parseInt(document.getElementById('criativo-anim-duracao')?.value) || 1500;
+      c.animacao.url     = animTipo !== 'svg' ? (document.getElementById('criativo-anim-url')?.value!.trim!()! || '') : '';
+      c.animacao.svg     = animTipo === 'svg' ? (document.getElementById('criativo-anim-svg-code')?.value!.trim!()! || '') : '';
+      c.animacao.tamanho = parseInt(document.getElementById('criativo-anim-tamanho')?.value!) || 120;
+      c.animacao.duracao = parseInt(document.getElementById('criativo-anim-duracao')?.value!) || 1500;
       c.animacao.posicao = document.getElementById('criativo-anim-posicao')?.value || 'alvo';
     } else {
       c.animacao.cor    = document.getElementById('criativo-anim-cor')?.value   || '#e74c3c';
-      c.animacao.icone  = document.getElementById('criativo-anim-icone')?.value.trim() || '';
+      c.animacao.icone  = document.getElementById('criativo-anim-icone')?.value!.trim!()! || '';
       c.animacao.trilha = document.getElementById('criativo-anim-trilha')?.checked || false;
     }
   } else { c.animacao = null; }
@@ -2846,30 +2846,30 @@ async function criativoMestreDefinirDano() {
   if (ehSuporte) {
     // Cura imediata
     if (document.getElementById('cx-cura-on')?.checked) {
-      const qtd = parseInt(document.getElementById('cx-cura-qtd')?.value) || 0;
+      const qtd = parseInt(document.getElementById('cx-cura-qtd')?.value!) || 0;
       if (qtd > 0) efeitosExtras.push({ tipo:'cura_imediata', valor: qtd, nome:`Cura ${qtd}` });
     }
     // HOT
     if (document.getElementById('cx-hot-on')?.checked) {
       const form = document.getElementById('cx-hot-formula')?.value?.trim() || '1d6';
-      const turn = parseInt(document.getElementById('cx-hot-turnos')?.value) || 3;
+      const turn = parseInt(document.getElementById('cx-hot-turnos')?.value!) || 3;
       efeitosExtras.push({ hot_formula: form, hot_turnos: turn, nome:`HOT ${form}×${turn}t` });
     }
     // Boost de dano
     if (document.getElementById('cx-boost-on')?.checked) {
-      const mod = parseInt(document.getElementById('cx-boost-mod')?.value) || 3;
-      const turn = parseInt(document.getElementById('cx-boost-turnos')?.value) || 2;
+      const mod = parseInt(document.getElementById('cx-boost-mod')?.value!) || 3;
+      const turn = parseInt(document.getElementById('cx-boost-turnos')?.value!) || 2;
       efeitosExtras.push({ boost_dano: mod, boost_dano_turnos: turn, nome:`+${mod} Dano ×${turn}t` });
     }
     // AC-05-G2: Boost de defesa
     if (document.getElementById('cx-def-on')?.checked) {
-      const mod = parseInt(document.getElementById('cx-def-mod')?.value) || 3;
-      const turn = parseInt(document.getElementById('cx-def-turnos')?.value) || 2;
+      const mod = parseInt(document.getElementById('cx-def-mod')?.value!) || 3;
+      const turn = parseInt(document.getElementById('cx-def-turnos')?.value!) || 2;
       efeitosExtras.push({ boost_defesa: mod, boost_defesa_turnos: turn, nome:`+${mod} Defesa ×${turn}t` });
     }
     // AC-05-G2: HP temporário
     if (document.getElementById('cx-hptemp-on')?.checked) {
-      const qtd = parseInt(document.getElementById('cx-hptemp-qtd')?.value) || 10;
+      const qtd = parseInt(document.getElementById('cx-hptemp-qtd')?.value!) || 10;
       efeitosExtras.push({ hp_temp: qtd, nome:`+${qtd} HP temp` });
     }
     // AC-05-G2: Remover debuff
@@ -2880,18 +2880,18 @@ async function criativoMestreDefinirDano() {
     // DOT
     if (document.getElementById('cx-dot-on')?.checked) {
       const form = document.getElementById('cx-dot-formula')?.value?.trim() || '1d4';
-      const turn = parseInt(document.getElementById('cx-dot-turnos')?.value) || 3;
+      const turn = parseInt(document.getElementById('cx-dot-turnos')?.value!) || 3;
       efeitosExtras.push({ dot_formula: form, dot_turnos: turn, nome:`DOT ${form}×${turn}t` });
     }
     // Redução de dano (debuff mod_dano)
     if (document.getElementById('cx-debuff-on')?.checked) {
-      const mod = parseInt(document.getElementById('cx-debuff-mod')?.value) || -3;
-      const turn = parseInt(document.getElementById('cx-debuff-turnos')?.value) || 2;
+      const mod = parseInt(document.getElementById('cx-debuff-mod')?.value!) || -3;
+      const turn = parseInt(document.getElementById('cx-debuff-turnos')?.value!) || 2;
       efeitosExtras.push({ mod_dano: mod, mod_dano_turnos: turn, nome:`${mod} Dano ×${turn}t` });
     }
     // Imobilização
     if (document.getElementById('cx-imob-on')?.checked) {
-      const turn = parseInt(document.getElementById('cx-imob-turnos')?.value) || 1;
+      const turn = parseInt(document.getElementById('cx-imob-turnos')?.value!) || 1;
       efeitosExtras.push({
         sem_movimento: true,
         sem_movimento_turnos: turn,
@@ -2902,7 +2902,7 @@ async function criativoMestreDefinirDano() {
     // Atordoamento
     if (document.getElementById('cx-stun-on')?.checked) {
       const tipo = document.getElementById('cx-stun-tipo')?.value || 'todos';
-      const turn = parseInt(document.getElementById('cx-stun-turnos')?.value) || 1;
+      const turn = parseInt(document.getElementById('cx-stun-turnos')?.value!) || 1;
       efeitosExtras.push({
         sem_ataque: true,
         sem_ataque_tipo: tipo,
@@ -3011,7 +3011,7 @@ async function criativoMestreDefinirDano() {
 }
 
 async function criativoMestreRejeitar() {
-  const id = document.getElementById('criativo-mestre-id').value;
+  const id = document.getElementById('criativo-mestre-id')!.value!;
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
   
@@ -3037,7 +3037,7 @@ async function criativoMestreRejeitar() {
       try {
         const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
         const sbFn = AR.session ? arSb : sb;
-        await sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, {
+        await sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id!)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
           body: JSON.stringify({ status: 'concluido' })
@@ -3052,7 +3052,7 @@ async function criativoMestreRejeitar() {
         try {
           const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
           const sbFn = AR.session ? arSb : sb;
-          sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(()=>{});
+          sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id!)}`, { method: 'DELETE' }).catch(()=>{});
         } catch(e) {}
       }, 30000);
     }
@@ -3110,7 +3110,7 @@ async function criativoMestreRejeitarDireto(id: any) {
 async function criativoMestreLimparTodas() {
   // AC-09-B12: Não incluir 'dc_rolado_sucesso' - jogador já rolou e pagou custo
   const pendentes = CRIATIVOS_CAMP.filter(c =>
-    ['pendente','aprovado_dc'].includes(c.status)
+    ['pendente','aprovado_dc'].includes(c.status!)
   );
   if (!pendentes.length) return;
   const ids = pendentes.map(c => c.id);
@@ -3152,22 +3152,22 @@ function criativoNotifMostrar(tipo: any, titulo: any, msg: any, labelBotao: any)
   const bar = document.getElementById('criativo-notif-bar');
   if (!bar) return;
   bar.className = tipo === 'recusado' ? 'recusado' : tipo === 'nova-solicitacao' ? 'nova-solicitacao' : '';
-  document.getElementById('criativo-notif-titulo').textContent = titulo;
-  document.getElementById('criativo-notif-msg').textContent = msg;
-  document.getElementById('criativo-notif-btn-acao').textContent = labelBotao;
-  bar.style.display = 'block';
+  document.getElementById('criativo-notif-titulo')!.textContent = titulo;
+  document.getElementById('criativo-notif-msg')!.textContent = msg;
+  document.getElementById('criativo-notif-btn-acao')!.textContent = labelBotao;
+  bar.style!.display = 'block';
 
   // Se sidebar disponível, mover notif para dentro dela (sem cobrir mapa)
   const _cSb = document.getElementById('ficha-sidebar-painel') || document.getElementById('mapa-sidebar');
   if (_cSb && bar.parentElement !== _cSb) {
-    bar.style.position = 'static';
-    bar.style.transform = 'none';
-    bar.style.width = '100%';
-    bar.style.minWidth = '0';
-    bar.style.bottom = '';
-    bar.style.left = '';
-    bar.style.zIndex = '';
-    bar.style.borderRadius = '8px';
+    bar.style!.position = 'static';
+    bar.style!.transform = 'none';
+    bar.style!.width = '100%';
+    bar.style!.minWidth = '0';
+    bar.style!.bottom = '';
+    bar.style!.left = '';
+    bar.style!.zIndex = '';
+    bar.style!.borderRadius = '8px';
     _cSb.insertBefore(bar, _cSb.firstChild);
   }
 
@@ -3177,29 +3177,29 @@ function criativoNotifMostrar(tipo: any, titulo: any, msg: any, labelBotao: any)
     const borderColorMap = { 'recusado': 'rgba(192,57,43,0.5)', 'nova-solicitacao': 'rgba(79,163,209,0.5)', '': 'rgba(200,168,75,0.5)' };
     const titrColorMap  = { 'recusado': '#e74c3c', 'nova-solicitacao': 'var(--primario-v)', '': 'var(--destaque)' };
     const tipoKey = tipo === 'recusado' ? 'recusado' : tipo === 'nova-solicitacao' ? 'nova-solicitacao' : '';
-    mapaBar.style.borderColor = borderColorMap[tipoKey];
-    document.getElementById('criativo-mapa-titulo').style.color = titrColorMap[tipoKey];
-    document.getElementById('criativo-mapa-titulo').textContent = titulo;
-    document.getElementById('criativo-mapa-msg').textContent = msg;
-    document.getElementById('criativo-mapa-btn-acao').textContent = labelBotao;
+    mapaBar.style!.borderColor = borderColorMap[tipoKey];
+    document.getElementById('criativo-mapa-titulo')!.style!.color = titrColorMap[tipoKey];
+    document.getElementById('criativo-mapa-titulo')!.textContent = titulo;
+    document.getElementById('criativo-mapa-msg')!.textContent = msg;
+    document.getElementById('criativo-mapa-btn-acao')!.textContent = labelBotao;
     const btnAcaoMapa = document.getElementById('criativo-mapa-btn-acao');
     if (btnAcaoMapa) {
       const bgAcaoMap = { 'recusado': 'rgba(192,57,43,0.15)', 'nova-solicitacao': 'rgba(79,163,209,0.15)', '': 'linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1))' };
       const bdAcaoMap = { 'recusado': 'rgba(192,57,43,0.4)', 'nova-solicitacao': 'rgba(79,163,209,0.4)', '': 'rgba(200,168,75,0.4)' };
       const clAcaoMap = { 'recusado': '#e74c3c', 'nova-solicitacao': '#7ec8f0', '': 'var(--destaque)' };
-      btnAcaoMapa.style.background = bgAcaoMap[tipoKey];
-      btnAcaoMapa.style.borderColor = bdAcaoMap[tipoKey];
-      btnAcaoMapa.style.color = clAcaoMap[tipoKey];
+      btnAcaoMapa.style!.background = bgAcaoMap[tipoKey];
+      btnAcaoMapa.style!.borderColor = bdAcaoMap[tipoKey];
+      btnAcaoMapa.style!.color = clAcaoMap[tipoKey];
     }
-    mapaBar.style.display = 'block';
+    mapaBar.style!.display = 'block';
   }
 }
 
 function criativoNotifFechar() {
   const bar = document.getElementById('criativo-notif-bar');
-  if (bar) bar.style.display = 'none';
+  if (bar) bar.style!.display = 'none';
   const mapaBar = document.getElementById('criativo-mapa-bar');
-  if (mapaBar) mapaBar.style.display = 'none';
+  if (mapaBar) mapaBar.style!.display = 'none';
   _criativoNotifId = null;
 }
 
@@ -3224,7 +3224,7 @@ function criativoNotifAcao() {
     // Jogador: reabrir o modal de ataque no step pendente com estado atualizado
     const modal = document.getElementById('modal-ataque');
     if (modal) {
-      modal.style.display = 'flex';
+      modal.style!.display = 'flex';
       // Re-renderizar o estado aprovado antes de mostrar o step
       const cAtual = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
       if (cAtual) criativoAtualizarStepJogador(cAtual);
@@ -3236,15 +3236,15 @@ function criativoNotifAcao() {
 function _criativoHideAllPendente() {
   ['atk-pendente-aguardando','atk-pendente-dc-definida','atk-pendente-resultado-narrativo',
    'atk-pendente-aguardando-dano','atk-pendente-aprovado','atk-pendente-rejeitado']
-    .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    .forEach(id => { const el = document.getElementById(id); if (el) el.style!.display = 'none'; });
   // Esconder também o painel inline do mapa (evita duplicidade com o modal)
   const painelMapa = document.getElementById('atk-criativo-aprovado-mapa');
-  if (painelMapa) painelMapa.style.display = 'none';
+  if (painelMapa) painelMapa.style!.display = 'none';
 }
 
 function criativoAtualizarStepJogador(c: any) {
   const modalAtaque = document.getElementById('modal-ataque');
-  const modalAberto = modalAtaque && modalAtaque.style.display !== 'none';
+  const modalAberto = modalAtaque && modalAtaque.style!.display !== 'none';
 
   _criativoHideAllPendente(); // já esconde atk-criativo-aprovado-mapa também
 
@@ -3255,7 +3255,7 @@ function criativoAtualizarStepJogador(c: any) {
     const limiar = Math.round((dc.dado - dc.dc) / 2 + dc.dc);
     const divDC = document.getElementById('atk-pendente-dc-definida');
     if (divDC) {
-      divDC.style.display = '';
+      divDC.style!.display = '';
       const tipoLabel = document.getElementById('atk-dc-tipo-label');
       const valorEl   = document.getElementById('atk-dc-valor-label');
       const previewEl = document.getElementById('atk-dc-critico-preview');
@@ -3263,7 +3263,7 @@ function criativoAtualizarStepJogador(c: any) {
       if (tipoLabel) tipoLabel.textContent = `🎲 d${dc.dado}`;
       if (valorEl)   valorEl.textContent   = dc.dc;
       if (previewEl) previewEl.textContent = `Crítico se > ${limiar} · Natural ${dc.dado} = Crítico automático`;
-      if (msgEl)     { msgEl.textContent = dc.mensagem_fase1 || ''; msgEl.style.display = dc.mensagem_fase1 ? '' : 'none'; msgEl.style.whiteSpace = 'pre-wrap'; } // UX-05
+      if (msgEl)     { msgEl.textContent = dc.mensagem_fase1 || ''; msgEl.style!.display = dc.mensagem_fase1 ? '' : 'none'; msgEl.style!.whiteSpace = 'pre-wrap'; } // UX-05
     }
     if (modalAberto) {
       atkIrParaStep('pendente');
@@ -3277,7 +3277,7 @@ function criativoAtualizarStepJogador(c: any) {
         if (tituloEl) tituloEl.textContent = `🎲 Desafio: role o d${dc.dado}`;
         formulaEl.textContent = `DC ${dc.dc}${dc.mensagem_fase1 ? ' · ' + dc.mensagem_fase1 : ''}`;
         if (btnEl) btnEl.textContent = `🎲 Rolar d${dc.dado}`;
-        painelMapa.style.display = 'block';
+        painelMapa.style!.display = 'block';
         painelMapa.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } else {
         criativoNotifMostrar('aprovado', `🎲 Desafio Definido! d${dc.dado} vs DC ${dc.dc}`,
@@ -3291,13 +3291,13 @@ function criativoAtualizarStepJogador(c: any) {
   if (c.status === 'dc_rolado_sucesso') {
     const divWait = document.getElementById('atk-pendente-aguardando-dano');
     if (divWait) {
-      divWait.style.display = '';
+      divWait.style!.display = '';
       const dc = c._dc;
       const criticoStr = dc?.critico ? ` 🌟 Crítico!` : '';
       const ehSuporte = c.criativo_tipo === 'suporte';
-      document.getElementById('atk-aguardando-dano-icone').textContent = dc?.critico ? '🌟' : '✅';
-      document.getElementById('atk-aguardando-dano-titulo').textContent = `Tirou ${dc?.resultado||'?'} — Superou a DC!${criticoStr}`;
-      document.getElementById('atk-aguardando-dano-sub').textContent = ehSuporte
+      document.getElementById('atk-aguardando-dano-icone')!.textContent = dc?.critico ? '🌟' : '✅';
+      document.getElementById('atk-aguardando-dano-titulo')!.textContent = `Tirou ${dc?.resultado||'?'} — Superou a DC!${criticoStr}`;
+      document.getElementById('atk-aguardando-dano-sub')!.textContent = ehSuporte
         ? 'Aguardando o Mestre definir o efeito de suporte...'
         : 'Aguardando o Mestre montar os dados de dano...';
     }
@@ -3309,20 +3309,20 @@ function criativoAtualizarStepJogador(c: any) {
   if (c.status === 'dc_rolado_narrativo' || c.status === 'dc_rolado_falha') {
     const divNarr = document.getElementById('atk-pendente-resultado-narrativo');
     if (divNarr) {
-      divNarr.style.display = '';
+      divNarr.style!.display = '';
       const dc = c._dc;
       const sucesso = c.status === 'dc_rolado_narrativo';
       const criticoStr = dc?.critico ? ' 🌟' : '';
-      document.getElementById('atk-narrativo-icon').textContent = sucesso ? (dc?.critico ? '🌟' : '✅') : '❌';
-      document.getElementById('atk-narrativo-titulo').innerHTML = sucesso
+      document.getElementById('atk-narrativo-icon')!.textContent = sucesso ? (dc?.critico ? '🌟' : '✅') : '❌';
+      document.getElementById('atk-narrativo-titulo')!.innerHTML = sucesso
         ? `<span style="color:#5ee09a">Sucesso${criticoStr}!</span> Resultado: ${dc?.resultado||'?'} / DC ${dc?.dc||'?'}`
         : `<span style="color:#e74c3c">Falhou.</span> Resultado: ${dc?.resultado||'?'} / DC ${dc?.dc||'?'}`;
-      document.getElementById('atk-narrativo-detalhe').textContent = sucesso
+      document.getElementById('atk-narrativo-detalhe')!.textContent = sucesso
         ? 'A ação foi bem-sucedida! O efeito é narrativo.'
         : 'Não alcançou a dificuldade. O mestre decide o que acontece.';
       const msgMestre = dc?.mensagem_fase1 || '';
       const msgEl = document.getElementById('atk-narrativo-msg-mestre');
-      if (msgEl) { msgEl.textContent = msgMestre ? `"${msgMestre}"` : ''; msgEl.style.display = msgMestre ? '' : 'none'; }
+      if (msgEl) { msgEl.textContent = msgMestre ? `"${msgMestre}"` : ''; msgEl.style!.display = msgMestre ? '' : 'none'; }
     }
     if (modalAberto) atkIrParaStep('pendente');
     return;
@@ -3336,13 +3336,13 @@ function criativoAtualizarStepJogador(c: any) {
     const custo = c.custo_cobrado && !c.custo_cobrado?._dano_meta ? ` · Custo: ${c.custo_cobrado.quantidade} ${c.custo_cobrado.atributo}` : '';
     const divAprov = document.getElementById('atk-pendente-aprovado');
     if (divAprov) {
-      divAprov.style.display = '';
+      divAprov.style!.display = '';
       const labelEl = document.getElementById('atk-pendente-formula-label');
       if (labelEl) labelEl.textContent = `🎲 ${label}${custo}`;
       // Mensagem do mestre (fase 2)
       const dc = c._dc || (c.custo_cobrado?._dano_meta ? c.custo_cobrado.dc_data : null) || {};
       const msgEl = document.getElementById('atk-pendente-dano-msg');
-      if (msgEl) { msgEl.textContent = dc.mensagem_fase2 || ''; msgEl.style.display = dc.mensagem_fase2 ? '' : 'none'; msgEl.style.whiteSpace = 'pre-wrap'; } // UX-05
+      if (msgEl) { msgEl.textContent = dc.mensagem_fase2 || ''; msgEl.style!.display = dc.mensagem_fase2 ? '' : 'none'; msgEl.style!.whiteSpace = 'pre-wrap'; } // UX-05
     }
     if (modalAberto) {
       atkIrParaStep('pendente');
@@ -3365,7 +3365,7 @@ function criativoAtualizarStepJogador(c: any) {
             btnEl.textContent = '🎲 Rolar os Dados';
           }
         }
-        painelMapa.style.display = 'block';
+        painelMapa.style!.display = 'block';
         painelMapa.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } else {
         criativoNotifMostrar('aprovado', `${_lbl} definido pelo Mestre!`, `${_lbl}: ` + label + custo + '. Clique para rolar.', `🎲 Rolar`);
@@ -3377,7 +3377,7 @@ function criativoAtualizarStepJogador(c: any) {
   // ── STATUS: rejeitado ────────────────────────────────────────────────────────
   if (c.status === 'rejeitado') {
     const divRej = document.getElementById('atk-pendente-rejeitado');
-    if (divRej) divRej.style.display = '';
+    if (divRej) divRej.style!.display = '';
     if (modalAberto) mostrarToast('❌ Mestre recusou sua ação criativa.', '');
     else criativoNotifMostrar('recusado', '❌ Ação Recusada', c.motivo_rejeicao ? `Motivo: ${c.motivo_rejeicao}` : 'O mestre recusou esta ação.', '✕ Entendido');
     return;
@@ -3385,7 +3385,7 @@ function criativoAtualizarStepJogador(c: any) {
 
   // Fallback: aguardando
   const divAg = document.getElementById('atk-pendente-aguardando');
-  if (divAg) divAg.style.display = '';
+  if (divAg) divAg.style!.display = '';
 }
 
 // -- Polling de fallback: garante que o jogador receba a aprovacao
@@ -3408,10 +3408,10 @@ function criativoIniciarPolling(id: any) {
     if (tentativas > MAX || CRIATIVO_ID_ATUAL !== id) { criativoStopPolling(); return; }
     const local = CRIATIVOS_CAMP.find(x => x.id === id);
     // Parar se status final atingido
-    if (!local || STATUS_FINAIS.includes(local.status)) { criativoStopPolling(); return; }
+    if (!local || STATUS_FINAIS.includes(local.status!)) { criativoStopPolling(); return; }
     // Continuar polling se aguardando mudança
     const statusParaPollar = ['pendente','aprovado_dc','dc_rolado_sucesso','aprovado_aguardando_rolagem'];
-    if (!statusParaPollar.includes(local.status)) { criativoStopPolling(); return; }
+    if (!statusParaPollar.includes(local.status!)) { criativoStopPolling(); return; }
     try {
       const rows = await sbFn(
         `criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}&select=*&limit=1`
@@ -3500,7 +3500,7 @@ async function criativoJogadorRolarDC() {
       if (!modal) { setTimeout(resolve, 2000); return; }
       const btnCont = document.createElement('div');
       btnCont.id = 'dc-continuar-wrap';
-      btnCont.style.cssText = 'margin-top:24px;animation:slideUp 0.4s ease-out';
+      btnCont.style!.cssText = 'margin-top:24px;animation:slideUp 0.4s ease-out';
             btnCont.innerHTML = `<button id='dc-btn-continuar' style='padding:10px 28px;background:linear-gradient(135deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08));border:1px solid rgba(200,168,75,0.5);border-radius:8px;color:#f0cc6a;font-family:Cinzel,serif;font-size:0.8rem;cursor:pointer;letter-spacing:0.06em;text-transform:uppercase'>✓ Vi! Continuar</button>`;
       modal.querySelector('div')?.appendChild(btnCont);
       const cleanup = () => { btnCont.remove(); resolve(); };
@@ -3610,7 +3610,7 @@ async function criativoJogadorRolarDC() {
   criativoAtualizarStepJogador(c);
   // Garantir modal overlay aberto para mostrar resultado (ex: mestre testando)
   const _modalDC = document.getElementById('modal-ataque');
-  if (_modalDC && _modalDC.style.display === 'none') _criativoAbrirModalOverlay(c);
+  if (_modalDC && _modalDC.style!.display === 'none') _criativoAbrirModalOverlay(c);
   else atkIrParaStep('pendente');
   // AC-12-B14: Aplicar consequência mecânica de falha crítica
   if (falhaCritica && eh_ataque) {
@@ -3656,7 +3656,7 @@ function _dcMostrarModalRolagem(atacante: any, dado: any, dc: any) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'modal-dc-rolagem';
-    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;align-items:center;justify-content:center;';
+    modal.style!.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;align-items:center;justify-content:center;';
     modal.innerHTML = `
       <div style="text-align:center;animation:fadeIn 0.3s ease-out">
         <div style="font-family:'Cinzel',serif;font-size:1.1rem;color:#f0cc6a;margin-bottom:12px">
@@ -3694,10 +3694,10 @@ function _dcMostrarModalRolagem(atacante: any, dado: any, dc: any) {
   if (nomeEl) nomeEl.textContent = atacante;
   if (dcEl) dcEl.textContent = dc;
   if (facesEl) facesEl.textContent = `d${dado}`;
-  if (resultadoEl) resultadoEl.style.display = 'none';
+  if (resultadoEl) resultadoEl.style!.display = 'none';
   if (dadoValorEl) dadoValorEl.textContent = '?';
   
-  modal.style.display = 'flex';
+  modal.style!.display = 'flex';
 }
 
 function _dcMostrarResultado(resultado: any, dc: any, sucesso: any, critico: any, naturalMax: any, dado: any, falhaCritica: any) {
@@ -3712,59 +3712,59 @@ function _dcMostrarResultado(resultado: any, dc: any, sucesso: any, critico: any
   // Atualizar cor do dado baseado no resultado
   if (dadoContainer) {
     if (naturalMax) {
-      dadoContainer.style.borderColor = '#f0cc6a';
-      dadoContainer.style.background = 'rgba(240,204,106,0.2)';
-      dadoContainer.style.boxShadow = '0 8px 32px rgba(240,204,106,0.5)';
+      dadoContainer.style!.borderColor = '#f0cc6a';
+      dadoContainer.style!.background = 'rgba(240,204,106,0.2)';
+      dadoContainer.style!.boxShadow = '0 8px 32px rgba(240,204,106,0.5)';
     } else if (sucesso) {
-      dadoContainer.style.borderColor = '#5ee09a';
-      dadoContainer.style.background = 'rgba(94,224,154,0.15)';
-      dadoContainer.style.boxShadow = '0 8px 32px rgba(94,224,154,0.4)';
+      dadoContainer.style!.borderColor = '#5ee09a';
+      dadoContainer.style!.background = 'rgba(94,224,154,0.15)';
+      dadoContainer.style!.boxShadow = '0 8px 32px rgba(94,224,154,0.4)';
     } else {
-      dadoContainer.style.borderColor = '#e74c3c';
-      dadoContainer.style.background = 'rgba(231,76,60,0.15)';
-      dadoContainer.style.boxShadow = '0 8px 32px rgba(231,76,60,0.4)';
+      dadoContainer.style!.borderColor = '#e74c3c';
+      dadoContainer.style!.background = 'rgba(231,76,60,0.15)';
+      dadoContainer.style!.boxShadow = '0 8px 32px rgba(231,76,60,0.4)';
     }
   }
   
   // Configurar resultado
   if (naturalMax) {
-    iconeEl.textContent = '🌟';
-    textoEl.textContent = 'CRÍTICO PERFEITO!';
-    textoEl.style.color = '#f0cc6a';
-    subEl.textContent = `${resultado} natural em d${dado}!`;
+    iconeEl!.textContent = '🌟';
+    textoEl!.textContent = 'CRÍTICO PERFEITO!';
+    textoEl!.style!.color = '#f0cc6a';
+    subEl!.textContent = `${resultado} natural em d${dado}!`;
   } else if (critico) {
-    iconeEl.textContent = '✨';
-    textoEl.textContent = 'SUCESSO CRÍTICO!';
-    textoEl.style.color = '#f0cc6a';
-    subEl.textContent = `Rolou ${resultado} (DC ${dc})`;
+    iconeEl!.textContent = '✨';
+    textoEl!.textContent = 'SUCESSO CRÍTICO!';
+    textoEl!.style!.color = '#f0cc6a';
+    subEl!.textContent = `Rolou ${resultado} (DC ${dc})`;
   } else if (sucesso) {
-    iconeEl.textContent = '✓';
-    textoEl.textContent = 'SUCESSO!';
-    textoEl.style.color = '#5ee09a';
-    subEl.textContent = `Rolou ${resultado} (DC ${dc})`;
+    iconeEl!.textContent = '✓';
+    textoEl!.textContent = 'SUCESSO!';
+    textoEl!.style!.color = '#5ee09a';
+    subEl!.textContent = `Rolou ${resultado} (DC ${dc})`;
   } else if (falhaCritica) {
-    iconeEl.textContent = '💀';
-    textoEl.textContent = 'FALHA CRÍTICA!';
-    textoEl.style.color = '#c0392b';
-    subEl.textContent = `Rolou ${resultado} — muito abaixo do DC ${dc}`;
+    iconeEl!.textContent = '💀';
+    textoEl!.textContent = 'FALHA CRÍTICA!';
+    textoEl!.style!.color = '#c0392b';
+    subEl!.textContent = `Rolou ${resultado} — muito abaixo do DC ${dc}`;
     if (dadoContainer) {
-      dadoContainer.style.borderColor = '#c0392b';
-      dadoContainer.style.background = 'rgba(192,57,43,0.25)';
-      dadoContainer.style.boxShadow = '0 8px 32px rgba(192,57,43,0.6)';
+      dadoContainer.style!.borderColor = '#c0392b';
+      dadoContainer.style!.background = 'rgba(192,57,43,0.25)';
+      dadoContainer.style!.boxShadow = '0 8px 32px rgba(192,57,43,0.6)';
     }
   } else {
-    iconeEl.textContent = '✗';
-    textoEl.textContent = 'FALHOU';
-    textoEl.style.color = '#e74c3c';
-    subEl.textContent = `Rolou ${resultado} (precisava ${dc})`;
+    iconeEl!.textContent = '✗';
+    textoEl!.textContent = 'FALHOU';
+    textoEl!.style!.color = '#e74c3c';
+    subEl!.textContent = `Rolou ${resultado} (precisava ${dc})`;
   }
   
-  resultadoEl.style.display = 'block';
+  resultadoEl.style!.display = 'block';
 }
 
 function _dcFecharModalRolagem() {
   const modal = document.getElementById('modal-dc-rolagem');
-  if (modal) modal.style.display = 'none';
+  if (modal) modal.style!.display = 'none';
 }
 
 // ─── Jogador rola o dado de dano (Fase 2 — após mestre montar a fórmula) ─────
@@ -3832,7 +3832,7 @@ function criativoJogadorRolar() {
 
 function criativoJogadorRolarMapa() {
   const el = document.getElementById('atk-criativo-aprovado-mapa');
-  if (el) el.style.display = 'none';
+  if (el) el.style!.display = 'none';
   criativoJogadorRolar();
 }
 
@@ -3903,24 +3903,24 @@ function _atkMostrarTrigger() {
   if (criticoEl) {
     if (ehCritico) {
       criticoEl.textContent = ehPositivo ? `✨ CRÍTICO! ${criticoTexto || ''}` : `⚡ CRÍTICO! ${criticoTexto || ''}`;
-      criticoEl.style.display = 'block';
-      criticoEl.style.background = ehPositivo
+      criticoEl.style!.display = 'block';
+      criticoEl.style!.background = ehPositivo
         ? 'linear-gradient(135deg,rgba(94,224,154,0.35),rgba(20,180,100,0.35))'
         : 'linear-gradient(135deg,rgba(240,180,20,0.35),rgba(255,120,0,0.35))';
-      criticoEl.style.borderColor = ehPositivo ? 'rgba(94,224,154,0.6)' : 'rgba(240,180,20,0.6)';
+      criticoEl.style!.borderColor = ehPositivo ? 'rgba(94,224,154,0.6)' : 'rgba(240,180,20,0.6)';
     } else {
-      criticoEl.style.display = 'none';
+      criticoEl.style!.display = 'none';
     }
   }
 
-  document.getElementById('atk-anim-trigger-nome').textContent = nomeAtaque;
+  document.getElementById('atk-anim-trigger-nome')!.textContent = nomeAtaque;
   const danoEl = document.getElementById('atk-anim-trigger-dano');
-  danoEl.textContent = danoTotal != null ? (ehCura ? `${danoTotal} cura` : `${danoTotal} dano`) : '';
-  danoEl.style.display = danoTotal != null ? 'block' : 'none';
-  danoEl.style.color = ehCura ? '#5ee09a' : '#f0cc6a';
+  danoEl!.textContent = danoTotal != null ? (ehCura ? `${danoTotal} cura` : `${danoTotal} dano`) : '';
+  danoEl!.style!.display = danoTotal != null ? 'block' : 'none';
+  danoEl!.style!.color = ehCura ? '#5ee09a' : '#f0cc6a';
   const efEl = document.getElementById('atk-anim-trigger-efeitos');
-  efEl.textContent = efeitos;
-  efEl.style.display = efeitos ? 'block' : 'none';
+  efEl!.textContent = efeitos;
+  efEl!.style!.display = efeitos ? 'block' : 'none';
 
   // ── Cor de fundo (cor do personagem escurecida) ─────────────────
   const chars = COMBATE.contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
@@ -3928,9 +3928,9 @@ function _atkMostrarTrigger() {
   const cor   = char?.custom_attrs?.cor || char?.cor || '#4fa3d1';
   const bgEscuro = _atkDarkenColor(cor, 0.45);
   const box = document.getElementById('atk-anim-trigger-box');
-  if (box) box.style.background = bgEscuro;
+  if (box) box.style!.background = bgEscuro;
   const arrow = document.getElementById('atk-anim-trigger-arrow');
-  if (arrow) arrow.style.borderTopColor = bgEscuro;
+  if (arrow) arrow.style!.borderTopColor = bgEscuro;
 
   // ── Posicionar acima do token do atacante ───────────────────────
   const tokenEl = resolverTokenEl(COMBATE.atacanteNome, COMBATE.contexto);
@@ -3940,11 +3940,11 @@ function _atkMostrarTrigger() {
     const mapaRect  = mapaEl.getBoundingClientRect();
     const leftPct   = ((tokenRect.left + tokenRect.width / 2 - mapaRect.left) / mapaRect.width)  * 100;
     const topPct    = ((tokenRect.top                         - mapaRect.top)  / mapaRect.height) * 100;
-    el.style.left = `${Math.min(Math.max(leftPct, 15), 85)}%`;
-    el.style.top  = `${Math.max(topPct, 18)}%`;
+    el.style!.left = `${Math.min(Math.max(leftPct, 15), 85)}%`;
+    el.style!.top  = `${Math.max(topPct, 18)}%`;
   } else {
-    el.style.left = '50%';
-    el.style.top  = '38%';
+    el.style!.left = '50%';
+    el.style!.top  = '38%';
   }
 
   // ── Painel de ações (desktop ou sidebar) para confirmação ────────
@@ -3963,8 +3963,8 @@ function _atkMostrarTrigger() {
       '<div style="font-size:0.6rem;color:var(--suave);text-align:center;margin-bottom:8px">Auto em <span id="atk-sb-trig-seg">10</span>s</div>' +
       '<button onclick="_atkTriggerAnimacao()" style="width:100%;padding:10px;background:linear-gradient(135deg,#9b2020,#c0392b);border:none;border-radius:8px;color:#fff;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Confirmar ataque</button>' +
       '<button onclick="mapaAtaqueFechar();fecharModalAtaque()" style="width:100%;margin-top:5px;padding:7px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">Cancelar</button>';
-    _trigSidebar.style.display = 'block';
-    el.style.display = 'none'; // ocultar overlay do mapa
+    _trigSidebar.style!.display = 'block';
+    el.style!.display = 'none'; // ocultar overlay do mapa
   }
 
   // ── Contagem regressiva ─────────────────────────────────────────
@@ -3972,7 +3972,7 @@ function _atkMostrarTrigger() {
   const segEl = document.getElementById('atk-anim-trigger-seg');
   if (segEl) (segEl as any).textContent = _atkAnimTriggerSeg;
   // Só exibir overlay no mapa se sidebar indisponível
-  if (!_trigSidebar) el.style.display = 'block';
+  if (!_trigSidebar) el.style!.display = 'block';
   clearInterval(_atkAnimTriggerTimer);
 
   // ── Broadcast: todos veem o card instantaneamente ───────────────
@@ -4010,9 +4010,9 @@ function _atkOcultarTrigger() {
   clearInterval(_atkAnimTriggerTimer);
   window._atkTriggerSidebarAtivo = false; // libera _mesaRenderAcoes para atualizar painel
   const el = document.getElementById('atk-anim-trigger');
-  if (el) el.style.display = 'none';
+  if (el) el.style!.display = 'none';
   const sb = document.getElementById('atk-sidebar-trigger');
-  if (sb) sb.style.display = 'none';
+  if (sb) sb.style!.display = 'none';
   combateBroadcast('trigger_ocultar', {});
   window._CTRL_TRIGGER_ATIVO = null;
 }
@@ -4022,35 +4022,35 @@ function _atkMostrarTriggerRemoto(p: any) {
   const el = document.getElementById('atk-anim-trigger');
   if (!el) return;
 
-  document.getElementById('atk-anim-trigger-nome').textContent = p.nomeAtaque || '⚔ Ataque';
+  document.getElementById('atk-anim-trigger-nome')!.textContent = p.nomeAtaque || '⚔ Ataque';
   const danoEl = document.getElementById('atk-anim-trigger-dano');
-  danoEl.textContent = p.danoTotal != null ? (p.ehCura ? `${p.danoTotal} cura` : `${p.danoTotal} dano`) : '';
-  danoEl.style.display = p.danoTotal != null ? 'block' : 'none';
-  danoEl.style.color = p.ehCura ? '#5ee09a' : '#f0cc6a';
+  danoEl!.textContent = p.danoTotal != null ? (p.ehCura ? `${p.danoTotal} cura` : `${p.danoTotal} dano`) : '';
+  danoEl!.style!.display = p.danoTotal != null ? 'block' : 'none';
+  danoEl!.style!.color = p.ehCura ? '#5ee09a' : '#f0cc6a';
   const efEl = document.getElementById('atk-anim-trigger-efeitos');
-  efEl.textContent = p.efeitos || '';
-  efEl.style.display = p.efeitos ? 'block' : 'none';
+  efEl!.textContent = p.efeitos || '';
+  efEl!.style!.display = p.efeitos ? 'block' : 'none';
 
   // Badge de crítico para espectadores
   const criticoEl = document.getElementById('atk-anim-trigger-critico');
   if (criticoEl) {
     if (p.ehCritico) {
       criticoEl.textContent = p.ehPositivo ? `✨ CRÍTICO! ${p.criticoTexto || ''}` : `⚡ CRÍTICO! ${p.criticoTexto || ''}`;
-      criticoEl.style.display = 'block';
-      criticoEl.style.background = p.ehPositivo
+      criticoEl.style!.display = 'block';
+      criticoEl.style!.background = p.ehPositivo
         ? 'linear-gradient(135deg,rgba(94,224,154,0.35),rgba(20,180,100,0.35))'
         : 'linear-gradient(135deg,rgba(240,180,20,0.35),rgba(255,120,0,0.35))';
-      criticoEl.style.borderColor = p.ehPositivo ? 'rgba(94,224,154,0.6)' : 'rgba(240,180,20,0.6)';
+      criticoEl.style!.borderColor = p.ehPositivo ? 'rgba(94,224,154,0.6)' : 'rgba(240,180,20,0.6)';
     } else {
-      criticoEl.style.display = 'none';
+      criticoEl.style!.display = 'none';
     }
   }
 
   const bgEscuro = _atkDarkenColor(p.cor || '#4fa3d1', 0.45);
   const box = document.getElementById('atk-anim-trigger-box');
-  if (box) { box.style.background = bgEscuro; box.style.pointerEvents = 'none'; }
+  if (box) { box.style!.background = bgEscuro; box.style!.pointerEvents = 'none'; }
   const arrow = document.getElementById('atk-anim-trigger-arrow');
-  if (arrow) arrow.style.borderTopColor = bgEscuro;
+  if (arrow) arrow.style!.borderTopColor = bgEscuro;
 
   // Posicionar acima do token do atacante (posição local de cada tela)
   const tokenEl = resolverTokenEl(p.atacanteNome, p.contexto);
@@ -4060,13 +4060,13 @@ function _atkMostrarTriggerRemoto(p: any) {
     const mapaRect  = mapaEl.getBoundingClientRect();
     const leftPct   = ((tokenRect.left + tokenRect.width / 2 - mapaRect.left) / mapaRect.width)  * 100;
     const topPct    = ((tokenRect.top                         - mapaRect.top)  / mapaRect.height) * 100;
-    el.style.left = `${Math.min(Math.max(leftPct, 15), 85)}%`;
-    el.style.top  = `${Math.max(topPct, 18)}%`;
+    el.style!.left = `${Math.min(Math.max(leftPct, 15), 85)}%`;
+    el.style!.top  = `${Math.max(topPct, 18)}%`;
   } else {
-    el.style.left = '50%';
-    el.style.top  = '38%';
+    el.style!.left = '50%';
+    el.style!.top  = '38%';
   }
-  el.style.display = 'block';
+  el.style!.display = 'block';
 }
 
 function _atkMostrarCalcDano() {
@@ -4131,7 +4131,7 @@ function _atkMostrarCalcDano() {
 
     const overlay = document.createElement('div');
     overlay.id = 'atk-calc-dano-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10200;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10200;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
     overlay.innerHTML = `
       <div style="background:linear-gradient(160deg,#1a0d0d,#110808);border:1px solid rgba(192,57,43,0.4);border-radius:14px;padding:24px 20px;max-width:340px;width:100%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
         <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:var(--suave,#7a6060);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Cálculo de ${labelAcao}</div>
@@ -4158,7 +4158,7 @@ function _atkMostrarCalcDano() {
 
       if (btnRolar) btnRolar.onclick = () => {
         btnRolar.disabled = true;
-        chipWrap.style.display = 'flex';
+        chipWrap!.style!.display = 'flex';
         let elapsed = 0;
         const iv = setInterval(() => {
           (chip as any).textContent = Math.floor(Math.random() * 20) + 1;
@@ -4168,39 +4168,39 @@ function _atkMostrarCalcDano() {
             const rollBase = Math.floor(Math.random() * 20) + 1;
             const roll = rollBase + penalidade;
             (chip as any).textContent = (rollBase as any) + (penalidade !== 0 ? (penalidade > 0 ? '+' + penalidade : penalidade) : '');
-            chip.style.borderColor = roll >= DC ? 'rgba(94,224,154,0.6)' : 'rgba(232,80,60,0.5)';
-            chip.style.background  = roll >= DC ? 'rgba(94,224,154,0.12)' : 'rgba(232,80,60,0.08)';
-            chip.style.color       = roll >= DC ? '#5ee09a' : '#e8604c';
+            chip!.style!.borderColor = roll >= DC ? 'rgba(94,224,154,0.6)' : 'rgba(232,80,60,0.5)';
+            chip!.style!.background  = roll >= DC ? 'rgba(94,224,154,0.12)' : 'rgba(232,80,60,0.08)';
+            chip!.style!.color       = roll >= DC ? '#5ee09a' : '#e8604c';
 
             let totalFinal = total;
             if (_graus) {
               // Pathfinder 2e graus de sucesso
               if (rollBase === 20 || roll >= DC + 10) {
                 totalFinal = 0;
-                resultado.innerHTML = `<span style="color:#5ee09a">✦ Sucesso Crítico! (${roll}) — Dano negado</span>`;
+                resultado!.innerHTML = `<span style="color:#5ee09a">✦ Sucesso Crítico! (${roll}) — Dano negado</span>`;
               } else if (roll >= DC) {
                 totalFinal = Math.floor(total / 2);
-                resultado.innerHTML = `<span style="color:#5ee09a">✓ Sucesso (${roll} ≥ ${DC}) — Dano reduzido: <strong>${totalFinal}</strong></span>`;
+                resultado!.innerHTML = `<span style="color:#5ee09a">✓ Sucesso (${roll} ≥ ${DC}) — Dano reduzido: <strong>${totalFinal}</strong></span>`;
               } else if (rollBase === 1 || roll <= DC - 10) {
                 totalFinal = total * 2;
-                resultado.innerHTML = `<span style="color:#e8604c">✦ Falha Crítica! (${roll}) — Dano dobrado: <strong>${totalFinal}</strong></span>`;
+                resultado!.innerHTML = `<span style="color:#e8604c">✦ Falha Crítica! (${roll}) — Dano dobrado: <strong>${totalFinal}</strong></span>`;
               } else {
-                resultado.innerHTML = `<span style="color:#e8604c">✗ Falha (${roll} < ${DC}) — Dano completo: <strong>${total}</strong></span>`;
+                resultado!.innerHTML = `<span style="color:#e8604c">✗ Falha (${roll} < ${DC}) — Dano completo: <strong>${total}</strong></span>`;
               }
             } else {
               if (roll >= DC) {
                 totalFinal = Math.floor(total / 2);
-                resultado.innerHTML = `<span style="color:#5ee09a">✓ Reagiu! (${roll} ≥ ${DC}) — Dano reduzido à metade: <strong>${totalFinal}</strong></span>`;
+                resultado!.innerHTML = `<span style="color:#5ee09a">✓ Reagiu! (${roll} ≥ ${DC}) — Dano reduzido à metade: <strong>${totalFinal}</strong></span>`;
               } else {
-                resultado.innerHTML = `<span style="color:#e8604c">✗ Falhou! (${roll} < ${DC}) — Dano completo: <strong>${total}</strong></span>`;
+                resultado!.innerHTML = `<span style="color:#e8604c">✗ Falhou! (${roll} < ${DC}) — Dano completo: <strong>${total}</strong></span>`;
               }
             }
-            totalDisplay.textContent = totalFinal;
+            totalDisplay!.textContent = totalFinal;
             COMBATE.dadosRolados = { ...res, total: totalFinal };
-            resultado.style.display = 'block';
-            btnConfirmar.disabled = false;
-            btnConfirmar.style.opacity = '1';
-            btnConfirmar.style.cursor  = 'pointer';
+            resultado!.style!.display = 'block';
+            btnConfirmar!.disabled = false;
+            btnConfirmar!.style!.opacity = '1';
+            btnConfirmar!.style!.cursor  = 'pointer';
 
             // Consumir recursos de defesa/reação
             const bid = typeof BATALHA_ATUAL_ID !== 'undefined' ? BATALHA_ATUAL_ID : null;
@@ -4246,7 +4246,7 @@ function _atkMostrarCalcDano() {
       }
     }
 
-    btnConfirmar.onclick = () => {
+    btnConfirmar!.onclick = () => {
       overlay.remove();
       resolve();
     };
@@ -4299,8 +4299,8 @@ function atkAdicionarHabilidadeNPC() {
   let efeito_auto = null;
   if (efNome) {
     const tipo   = prompt('Tipo do efeito (buff/debuff/neutro):') || 'debuff';
-    const turnos = parseInt(prompt('Duração em turnos:')) || 3;
-    const mod    = parseInt(prompt('Modificador de dano (%):')) || 0;
+    const turnos = parseInt(prompt('Duração em turnos:')!) || 3;
+    const mod    = parseInt(prompt('Modificador de dano (%):')!) || 0;
     efeito_auto  = { nome: efNome, tipo, descricao: efeito, turnos, mod_dano: mod };
   }
   NPC_HABILIDADES_TEMP.push({ id: 'h_' + Date.now(), nome, formula_dano: formula || null, efeito, efeito_auto, tipo_dano: 'fisico' });
@@ -4320,15 +4320,15 @@ function atkRemoverHabilidadeNPC(idx: any) {
 
 // Retorna todos os mapas filhos diretos de um map_id
 function mapaFilhos(parentId: any) {
-  return (RPG_DATA.mapas||[]).filter(l => l.mapa.parent_map_id === parentId);
+  return (RPG_DATA!.mapas||[]).filter(l => l.mapa.parent_map_id === parentId);
 }
 
 // Retorna a zona de um mapa filho dentro do pai
 function mapaZonaNoParent(childMapId: any) {
-  const parent = (RPG_DATA.mapas||[]).find(l =>
+  const parent = (RPG_DATA!.mapas||[]).find(l =>
     (l.mapa.locais||[]).some(z => z.mapa_local_id === childMapId));
   if (!parent) return null;
-  return parent.mapa.locais.find(z => z.mapa_local_id === childMapId) || null;
+  return parent.mapa.locais!.find(z => z.mapa_local_id === childMapId) || null;
 }
 
 // Projeta a posição (x,y) de um mapa filho para as coordenadas do pai
@@ -4402,7 +4402,7 @@ function getPosicaoNoMapa(char: any, targetMapId: any) {
   function projetar(fromMapId: any) {
     const zona = mapaZonaNoParent(fromMapId);
     if (!zona) return null;
-    const parentEntry = (RPG_DATA.mapas||[]).find(l =>
+    const parentEntry = (RPG_DATA!.mapas||[]).find(l =>
       (l.mapa.locais||[]).some(z => z.mapa_local_id === fromMapId));
     if (!parentEntry) return null;
     const parentId = parentEntry.mapa.map_id;
@@ -4429,7 +4429,7 @@ function getPosicaoNoMapa(char: any, targetMapId: any) {
     if (!zona) return null;
     const posNoFrom = (char.map_positions || {})[fromId] || null;
     if (!posNoFrom) return null;
-    const parentEntry = (RPG_DATA.mapas||[]).find(l =>
+    const parentEntry = (RPG_DATA!.mapas||[]).find(l =>
       (l.mapa.locais||[]).some(z => z.mapa_local_id === fromId));
     if (!parentEntry) return null;
     const parentId = parentEntry.mapa.map_id;
@@ -4443,7 +4443,7 @@ function getPosicaoNoMapa(char: any, targetMapId: any) {
   function isDescendente(childId: any, ancestorId: any) {
     const zona = mapaZonaNoParent(childId);
     if (!zona) return false;
-    const parentEntry = (RPG_DATA.mapas||[]).find(l =>
+    const parentEntry = (RPG_DATA!.mapas||[]).find(l =>
       (l.mapa.locais||[]).some(z => z.mapa_local_id === childId));
     if (!parentEntry) return false;
     const pid = parentEntry.mapa.map_id;
@@ -4459,7 +4459,7 @@ function getPosicaoNoMapa(char: any, targetMapId: any) {
 
 // Setar posição ativa de um personagem (move para o mapa atual)
 async function setCharActiveMap(charNome: any, mapId: any, x: any, y: any) {
-  const c = RPG_DATA.characters.find(ch => ch.nome === charNome);
+  const c = RPG_DATA!.characters.find(ch => ch.nome === charNome);
   if (!c) return;
   if (!c.map_positions) c.map_positions = {};
   c.active_map_id = mapId;
@@ -4475,24 +4475,24 @@ async function setCharActiveMap(charNome: any, mapId: any, x: any, y: any) {
     : (y > 1 ? Math.round((y / 100) * altura) : Math.round(y));
   c.map_positions[mapId] = { col, row };
   try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(charNome)}`,
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(charNome)}`,
       { method:'PATCH', body: JSON.stringify({ active_map_id: mapId, map_positions: c.map_positions }) });
   } catch(e) {}
 }
 
 async function removeCharFromMap(charNome: any) {
-  const c = RPG_DATA.characters.find(ch => ch.nome === charNome);
+  const c = RPG_DATA!.characters.find(ch => ch.nome === charNome);
   if (!c) return;
   const mapaId = MAPA_STATE.mapaAtualId;
   // Remove posição do mapa atual
-  if (c.map_positions) delete c.map_positions[mapaId];
+  if (c.map_positions) delete c.map_positions[mapaId!];
   // Se active_map_id era este mapa, limpa
   if (c.active_map_id === mapaId) c.active_map_id = null;
   try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(charNome)}`,
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(charNome)}`,
       { method:'PATCH', body: JSON.stringify({ active_map_id: c.active_map_id, map_positions: c.map_positions }) });
   } catch(e) {}
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapaId);
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapaId);
   if (entry) mapaRenderTokens(entry.mapa);
   mapaRenderStatus();
 }
@@ -4506,18 +4506,18 @@ async function excluirPersonagemCompleto(nome: any, isGenerico: any) {
     const msg = `Excluir permanentemente "${nome}"? Esta ação não pode ser desfeita.`;
     if (!confirm(msg)) return;
   }
-  const rpgId = RPG_DATA.rpgId;
+  const rpgId = RPG_DATA!.rpgId;
   try {
     await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(nome)}`, { method: 'DELETE' });
   } catch(e) {}
-  RPG_DATA.characters = (RPG_DATA.characters || []).filter(c => c.nome !== nome);
+  RPG_DATA!.characters = (RPG_DATA!.characters || []).filter(c => c.nome !== nome);
   // Remove de batalhas ativas
   Object.values<any>(MAPA_STATE.batalhas || {}).forEach(b => {
     if (b.participantes) b.participantes = b.participantes.filter((p: any) => p.nome !== nome);
     if (b.iniciativasRoladas) delete b.iniciativasRoladas[nome];
   });
   // Re-render
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (entry) mapaRenderTokens(entry.mapa);
   mapaRenderStatus();
   if (typeof renderAttrButtons === 'function') renderAttrButtons();
@@ -4526,8 +4526,8 @@ async function excluirPersonagemCompleto(nome: any, isGenerico: any) {
   if (rowChar) rowChar.innerHTML = buildCharBtns('char') + `<button class="char-btn" onclick="abrirModalNovoChar()" style="border-style:dashed;color:var(--suave)" title="Criar personagem ou NPC">＋</button>`;
   mostrarToast(`${nome} excluído.`, '');
   // Fecha o painel se estava aberto
-  if (CHAR_VIEW === nome) { CHAR_VIEW = null; document.getElementById('char-view').innerHTML = ''; }
-  if (ATTR_VIEW === nome) { ATTR_VIEW = null; document.getElementById('attr-view').innerHTML = ''; }
+  if (CHAR_VIEW === nome) { CHAR_VIEW = null; document.getElementById('char-view')!.innerHTML = ''; }
+  if (ATTR_VIEW === nome) { ATTR_VIEW = null; document.getElementById('attr-view')!.innerHTML = ''; }
 }
 
 // Alias de conveniência usado no auto-delete por HP=0
@@ -4536,11 +4536,11 @@ async function excluirNpcGenerico(nome: any) {
 }
 
 async function resetarHpNpcGenerico(nome: any) {
-  const c = (RPG_DATA.characters||[]).find(ch => ch.nome === nome);
+  const c = (RPG_DATA!.characters||[]).find(ch => ch.nome === nome);
   if (!c) return;
   const hpMax = c.custom_attrs?.hp_max ?? 30;
   c.hp_atual = hpMax;
-  try { await saveCharacterStats(RPG_DATA.rpgId, nome, { hp_atual: hpMax }); } catch(e) {}
+  try { await saveCharacterStats(RPG_DATA!.rpgId, nome, { hp_atual: hpMax }); } catch(e) {}
   mapaRenderStatus();
   mostrarToast(`${nome}: HP restaurado (${hpMax})`, '');
 }
@@ -4548,16 +4548,16 @@ async function resetarHpNpcGenerico(nome: any) {
 function ativarModoPlacement(localMapId: any, localMapNome: any, zonaW: any, zonaH: any) {
   PLACEMENT_STATE = { localMapId, localMapNome, zonaW: zonaW||15, zonaH: zonaH||15 };
   const hint = document.getElementById('mapa-placement-hint');
-  if (hint) { hint.style.display = 'flex'; hint.querySelector('span').textContent = `Clique no mapa para posicionar "${localMapNome}"`; }
-  document.getElementById('mapa-wrap').classList.add('placement-ativo');
+  if (hint) { hint.style!.display = 'flex'; hint.querySelector('span')!.textContent = `Clique no mapa para posicionar "${localMapNome}"`; }
+  document.getElementById('mapa-wrap')!.classList!.add!('placement-ativo')!;
   mostrarToast(`Clique no mapa geral para posicionar "${localMapNome}"`, '');
 }
 
 function cancelarPlacement() {
   PLACEMENT_STATE = null;
   const hint = document.getElementById('mapa-placement-hint');
-  if (hint) hint.style.display = 'none';
-  document.getElementById('mapa-wrap').classList.remove('placement-ativo');
+  if (hint) hint.style!.display = 'none';
+  document.getElementById('mapa-wrap')!.classList!.remove!('placement-ativo')!;
 }
 
 async function confirmarPlacement(x: any, y: any) {
@@ -4566,7 +4566,7 @@ async function confirmarPlacement(x: any, y: any) {
   cancelarPlacement();
 
   // Atualizar mapa local com posição e dimensões
-  const localEntry = RPG_DATA.mapas.find(l => l.mapa.map_id === localMapId);
+  const localEntry = RPG_DATA!.mapas.find(l => l.mapa.map_id === localMapId);
   if (localEntry) {
     localEntry.mapa.zona_x = x;
     localEntry.mapa.zona_y = y;
@@ -4576,7 +4576,7 @@ async function confirmarPlacement(x: any, y: any) {
       // Preferir id numérico; se null (mapa recém-criado sem return=representation), usar map_id
       const patchUrl = localEntry.id
         ? `mapas?id=eq.${encodeURIComponent(localEntry.id)}`
-        : `mapas?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&map_id=eq.${encodeURIComponent(localMapId)}`;
+        : `mapas?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&map_id=eq.${encodeURIComponent(localMapId)}`;
       await sb(patchUrl,
         { method:'PATCH', body:JSON.stringify({
           zona_x:x, zona_y:y, zona_w_percent:zonaW, zona_h_percent:zonaH,
@@ -4588,7 +4588,7 @@ async function confirmarPlacement(x: any, y: any) {
   }
 
   // Criar/atualizar zona no mapa pai linkando para este local
-  const parentEntry = RPG_DATA.mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  const parentEntry = RPG_DATA!.mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (parentEntry) {
     if (!parentEntry.mapa.locais) parentEntry.mapa.locais = [];
     parentEntry.mapa.locais = parentEntry.mapa.locais.filter(l => l.mapa_local_id !== localMapId);
@@ -4632,9 +4632,9 @@ function toggleMapaTool(modo: any) {
   const hintMed = document.getElementById('mapa-tool-hint');
   const hintZon = document.getElementById('mapa-tool-zonas-hint');
   const hintPar = document.getElementById('mapa-tool-paredes-hint');
-  if (hintMed) hintMed.style.display = MAPA_STATE.toolMode === 'medicao' ? 'block' : 'none';
-  if (hintZon) hintZon.style.display = MAPA_STATE.toolMode === 'zonas' ? 'block' : 'none';
-  if (hintPar) hintPar.style.display = MAPA_STATE.toolMode === 'paredes' ? 'block' : 'none';
+  if (hintMed) hintMed.style!.display = MAPA_STATE.toolMode === 'medicao' ? 'block' : 'none';
+  if (hintZon) hintZon.style!.display = MAPA_STATE.toolMode === 'zonas' ? 'block' : 'none';
+  if (hintPar) hintPar.style!.display = MAPA_STATE.toolMode === 'paredes' ? 'block' : 'none';
   // Limpar medição ao sair do modo
   if (MAPA_STATE.toolMode !== 'medicao') {
     MAPA_STATE.medicaoAtiva = null;
@@ -4642,48 +4642,48 @@ function toggleMapaTool(modo: any) {
     if (svg) svg.innerHTML = '';
   }
   // Re-renderizar zonas com/sem handles de edição
-  const mapas = RPG_DATA.mapas || [];
+  const mapas = RPG_DATA!.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (entry) mapaRenderTokens(entry.mapa);
 }
 
 function abrirModalZona(localId: any, x: any, y: any) {
   const overlay = document.getElementById('modal-zona-overlay');
-  document.getElementById('zona-pos-x').value = x || 50;
-  document.getElementById('zona-pos-y').value = y || 50;
-  const mapas = RPG_DATA.mapas || [];
+  document.getElementById('zona-pos-x')!.value = x || 50;
+  document.getElementById('zona-pos-y')!.value = y || 50;
+  const mapas = RPG_DATA!.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (!entry) return;
   const local = localId ? (entry.mapa.locais || []).find(l => l.local_id === localId) : null;
-  document.getElementById('modal-zona-titulo').textContent = local ? 'Editar Zona' : 'Nova Zona de Transição';
-  document.getElementById('zona-local-id').value = localId || '';
-  document.getElementById('zona-id').value = local ? local.local_id : '';
-  document.getElementById('zona-nome').value = local ? local.nome : '';
-  document.getElementById('zona-destino').value = local ? (local.mapa_local_id || '') : '';
-  document.getElementById('zona-raio').value = local ? (local.raio || 20) : 20;
-  document.getElementById('btn-remover-zona').style.display = local ? '' : 'none';
-  overlay.style.display = 'flex';
-  overlay.onclick = e => { if (e.target === overlay) fecharModalZona(); };
+  document.getElementById('modal-zona-titulo')!.textContent = local ? 'Editar Zona' : 'Nova Zona de Transição';
+  document.getElementById('zona-local-id')!.value = localId || '';
+  document.getElementById('zona-id')!.value = local ? local.local_id : '';
+  document.getElementById('zona-nome')!.value = local ? local.nome : '';
+  document.getElementById('zona-destino')!.value = local ? (local.mapa_local_id || '') : '';
+  document.getElementById('zona-raio')!.value = local ? (local.raio || 20) : 20;
+  document.getElementById('btn-remover-zona')!.style!.display = local ? '' : 'none';
+  overlay!.style!.display = 'flex';
+  overlay!.onclick = e => { if (e.target === overlay) fecharModalZona(); };
 }
 function fecharModalZona() {
-  document.getElementById('modal-zona-overlay').style.display = 'none';
+  document.getElementById('modal-zona-overlay')!.style!.display = 'none';
 }
 async function salvarZona() {
-  const localIdOrig = document.getElementById('zona-local-id').value;
-  const local_id = document.getElementById('zona-id').value.trim().replace(/\s+/g,'_');
-  const nome = document.getElementById('zona-nome').value.trim();
+  const localIdOrig = document.getElementById('zona-local-id')!.value!;
+  const local_id = document.getElementById('zona-id')!.value!.trim!()!.replace!(/\s+/g,'_')!;
+  const nome = document.getElementById('zona-nome')!.value!.trim!()!;
   if (!local_id || !nome) { mostrarToast('ID e nome obrigatórios', 'erro'); return; }
-  const mapas = RPG_DATA.mapas || [];
+  const mapas = RPG_DATA!.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (!entry) return;
   if (!entry.mapa.locais) entry.mapa.locais = [];
   const novaZona = {
     local_id,
     nome,
-    x: parseFloat(document.getElementById('zona-pos-x').value) || 50,
-    y: parseFloat(document.getElementById('zona-pos-y').value) || 50,
-    raio: parseInt(document.getElementById('zona-raio').value) || 20,
-    mapa_local_id: document.getElementById('zona-destino').value.trim() || null
+    x: parseFloat(document.getElementById('zona-pos-x')!.value!) || 50,
+    y: parseFloat(document.getElementById('zona-pos-y')!.value!) || 50,
+    raio: parseInt(document.getElementById('zona-raio')!.value!) || 20,
+    mapa_local_id: document.getElementById('zona-destino')!.value!.trim!()! || null
   };
   if (localIdOrig) {
     const idx = entry.mapa.locais.findIndex(l => l.local_id === localIdOrig);
@@ -4701,9 +4701,9 @@ async function salvarZona() {
   } catch(e) { mostrarToast('Erro ao salvar zona', 'erro'); }
 }
 async function removerZona() {
-  const localId = document.getElementById('zona-local-id').value;
+  const localId = document.getElementById('zona-local-id')!.value!;
   if (!localId || !confirm('Remover esta zona?')) return;
-  const mapas = RPG_DATA.mapas || [];
+  const mapas = RPG_DATA!.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (!entry) return;
   entry.mapa.locais = (entry.mapa.locais || []).filter(l => l.local_id !== localId);
@@ -4719,11 +4719,11 @@ async function removerZona() {
 
 // ── DADOS ─────────────────────────────────────────────────────
 function renderDados(){
-  const ativos = getDiceConfig(RPG_DATA.rpgId);
-  document.getElementById('dado-grid').innerHTML=ativos.map((d: any)=>`<button class="dado-btn" onclick="selecionarDado(${d},this)"><svg class="dado-icone" viewBox="0 0 40 40" fill="none">${svgDado(d)}</svg><span class="dado-label">d${d}</span></button>`).join('');
+  const ativos = getDiceConfig(RPG_DATA!.rpgId);
+  document.getElementById('dado-grid')!.innerHTML=ativos.map((d: any)=>`<button class="dado-btn" onclick="selecionarDado(${d},this)"><svg class="dado-icone" viewBox="0 0 40 40" fill="none">${svgDado(d)}</svg><span class="dado-label">d${d}</span></button>`).join('');
 }
 function renderDiceConfig(){
-  const rpgId=RPG_DATA.rpgId;
+  const rpgId=RPG_DATA!.rpgId;
   const ativos=getDiceConfig(rpgId);
   const el=document.getElementById('cfg-dice-grid');
   if(!el) return;
@@ -4736,7 +4736,7 @@ function renderDiceConfig(){
   }).join('');
 }
 function toggleDadoCampanha(d: any){
-  const rpgId=RPG_DATA.rpgId;
+  const rpgId=RPG_DATA!.rpgId;
   let ativos=getDiceConfig(rpgId);
   if(ativos.includes(d)){
     if(ativos.length<=1){mostrarToast('Mínimo 1 dado ativo','erro');return;}
@@ -4749,17 +4749,17 @@ function toggleDadoCampanha(d: any){
   renderDados();
 }
 function svgDado(d: any){const s=`stroke="var(--primario)" stroke-width="1.5"`,t=`fill="var(--primario)" font-size="10" font-family="Cinzel,serif"`;if(d===4)return`<polygon points="20,4 36,34 4,34" fill="none" ${s}/><text x="20" y="28" text-anchor="middle" ${t}>4</text>`;if(d===6)return`<rect x="6" y="6" width="28" height="28" rx="4" fill="none" ${s}/><text x="20" y="26" text-anchor="middle" ${t}>6</text>`;if(d===8)return`<polygon points="20,3 37,20 20,37 3,20" fill="none" ${s}/><text x="20" y="26" text-anchor="middle" ${t}>8</text>`;if(d===10)return`<polygon points="20,3 35,15 30,35 10,35 5,15" fill="none" ${s}/><text x="20" y="27" text-anchor="middle" ${t}>10</text>`;if(d===20)return`<polygon points="20,2 38,12 38,28 20,38 2,28 2,12" fill="none" ${s}/><text x="20" y="26" text-anchor="middle" ${t}>20</text>`;return`<circle cx="20" cy="20" r="17" fill="none" ${s}/><text x="20" y="25" text-anchor="middle" font-size="9" font-family="Cinzel,serif" fill="var(--primario)">100</text>`;}
-function selecionarDado(d: any,btn: any){DADO_SEL=d;document.querySelectorAll('.dado-btn').forEach(b=>b.classList.remove('selecionado'));btn.classList.add('selecionado');document.getElementById('resultado-tipo').textContent=`d${d} selecionado`;document.getElementById('resultado-critico').style.display='none';}
+function selecionarDado(d: any,btn: any){DADO_SEL=d;document.querySelectorAll('.dado-btn').forEach(b=>b.classList.remove('selecionado'));btn.classList.add('selecionado');document.getElementById('resultado-tipo')!.textContent=`d${d} selecionado`;document.getElementById('resultado-critico')!.style!.display='none';}
 function rolarDado(){
  if(!DADO_SEL){mostrarToast('Selecione um dado','erro');return;}
  const r=Math.floor(Math.random()*DADO_SEL)+1,nEl=document.getElementById('resultado-num'),cEl=document.getElementById('resultado-critico');
- nEl.classList.remove('girar');void nEl.offsetWidth;nEl.classList.add('girar');(nEl as any).textContent=r;
- document.getElementById('resultado-tipo').textContent=`d${DADO_SEL}`;
- cEl.style.display='none';cEl.className='resultado-critico';
- if(DADO_SEL===20&&r===20){cEl.style.display='inline-block';cEl.classList.add('critico-pos');cEl.textContent='Crítico Perfeito!';}
- else if(DADO_SEL===20&&r===1){cEl.style.display='inline-block';cEl.classList.add('critico-neg');cEl.textContent='Falha Crítica!';}
+ nEl!.classList.remove('girar');void nEl!.offsetWidth;nEl!.classList.add('girar');(nEl as any).textContent=r;
+ document.getElementById('resultado-tipo')!.textContent=`d${DADO_SEL}`;
+ cEl!.style!.display='none';cEl!.className='resultado-critico';
+ if(DADO_SEL===20&&r===20){cEl!.style!.display='inline-block';cEl!.classList.add('critico-pos');cEl!.textContent='Crítico Perfeito!';}
+ else if(DADO_SEL===20&&r===1){cEl!.style!.display='inline-block';cEl!.classList.add('critico-neg');cEl!.textContent='Falha Crítica!';}
  HISTORICO.unshift({dado:DADO_SEL,num:r});if(HISTORICO.length>20)HISTORICO.pop();
- document.getElementById('historico-lista').innerHTML=HISTORICO.map(h=>{let tag='';if(h.dado===20&&h.num===20)tag=`<span class="hist-tag critico-pos">Crítico</span>`;if(h.dado===20&&h.num===1)tag=`<span class="hist-tag critico-neg">Falha</span>`;return`<div class="historico-item"><span class="hist-dado">d${h.dado}</span><span class="hist-num">${h.num}</span>${tag}</div>`;}).join('');
+ document.getElementById('historico-lista')!.innerHTML=HISTORICO.map(h=>{let tag='';if(h.dado===20&&h.num===20)tag=`<span class="hist-tag critico-pos">Crítico</span>`;if(h.dado===20&&h.num===1)tag=`<span class="hist-tag critico-neg">Falha</span>`;return`<div class="historico-item"><span class="hist-dado">d${h.dado}</span><span class="hist-num">${h.num}</span>${tag}</div>`;}).join('');
 }
 
 
@@ -4767,14 +4767,14 @@ function rolarDado(){
 
 // ── MAPAS ─────────────────────────────────────────────────────
 function renderMapasTab() {
-  const mapas = RPG_DATA.mapas || [];
+  const mapas = RPG_DATA!.mapas || [];
   const lista = document.getElementById('mapa-lista');
   if (!lista) return;
 
   if (!mapas.length) {
     lista.innerHTML = `<div style="color:var(--suave);font-style:italic;font-size:0.85rem;padding:8px 0">Nenhum mapa disponível</div>`;
-    document.getElementById('mapa-tokens').innerHTML = '';
-    document.getElementById('mapa-dist-svg').innerHTML = '';
+    document.getElementById('mapa-tokens')!.innerHTML = '';
+    document.getElementById('mapa-dist-svg')!.innerHTML = '';
     return;
   }
 
@@ -4822,7 +4822,7 @@ function renderMapasTab() {
     // 2. Sem histórico: para jogador, abrir o mapa mais local do personagem vinculado
     const charNome = RPG_DATA?.linked;
     if (charNome) {
-      const char = (RPG_DATA.characters || []).find(c => c.nome === charNome);
+      const char = (RPG_DATA!.characters || []).find(c => c.nome === charNome);
       const activeMapId = char?.active_map_id;
       if (activeMapId && mapas.find(l => l.mapa.map_id === activeMapId)) {
         const geral = mapas.find(l => l.mapa.tipo === 'geral');
@@ -4842,7 +4842,7 @@ function renderMapasTab() {
 }
 
 function selecionarMapa(mapId: any) {
-  const mapas = RPG_DATA.mapas || [];
+  const mapas = RPG_DATA!.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === mapId);
   if (!entry) return;
   MAPA_STATE.mapaAtualId = mapId;
@@ -4871,20 +4871,20 @@ function selecionarMapa(mapId: any) {
 
   // Atualizar seleção visual
   document.querySelectorAll('.mapa-card').forEach(el => {
-    el.classList.toggle('ativo', el.dataset.mapId === m.map_id);
+    el.classList.toggle('ativo', el.dataset!.mapId === m.map_id);
   });
 
   // Breadcrumb
   const bc = document.getElementById('mapa-breadcrumb');
   const bcLocal = document.getElementById('mapa-bc-local');
   if (mapaIsTatico(m)) {
-    bc.style.display = 'flex';
+    bc!.style!.display = 'flex';
     if (bcLocal) bcLocal.textContent = m.nome;
   } else if (mapaIsFase(m)) {
-    bc.style.display = 'flex';
+    bc!.style!.display = 'flex';
     if (bcLocal) bcLocal.textContent = '🎮 ' + m.nome;
   } else {
-    bc.style.display = 'none';
+    bc!.style!.display = 'none';
   }
 
   renderMapaViewer();
@@ -4898,24 +4898,24 @@ function _faseAtivarViewerMode() {
   if (!imgDiv) return;
   // Remover imagem de fundo padrão (será gerenciada pelo PixiJS)
   const oldImg = imgDiv.querySelector('img.mapa-bg-img');
-  if (oldImg) { oldImg.src = ''; oldImg.style.display = 'none'; }
+  if (oldImg) { oldImg.src = ''; oldImg.style!.display = 'none'; }
   // Garantir que o container preencha a tela
-  imgDiv.style.aspectRatio = 'unset';
-  imgDiv.style.paddingBottom = '0';
-  imgDiv.style.height = '100%';
-  imgDiv.style.position = 'relative';
+  imgDiv.style!.aspectRatio = 'unset';
+  imgDiv.style!.paddingBottom = '0';
+  imgDiv.style!.height = '100%';
+  imgDiv.style!.position = 'relative';
   // Ocultar canvas de grade/tokens (PixiJS gerencia tudo)
   const svgOv = document.getElementById('mapa-svg-overlay');
-  if (svgOv) svgOv.style.display = 'none';
+  if (svgOv) svgOv.style!.display = 'none';
   const canvas = document.getElementById('mapa-canvas');
-  if (canvas) canvas.style.display = 'none';
+  if (canvas) canvas.style!.display = 'none';
 }
 
 function _faseDesativarViewerMode() {
   const imgDiv = document.getElementById('mapa-img');
   if (!imgDiv) return;
-  imgDiv.style.height = '';
-  imgDiv.style.paddingBottom = '75%';
+  imgDiv.style!.height = '';
+  imgDiv.style!.paddingBottom = '75%';
   // Remover canvas PixiJS se existir
   imgDiv.querySelectorAll('canvas').forEach(cv => {
     // Preservar canvas de mapa tático (mapa-canvas)
@@ -4926,16 +4926,16 @@ function _faseDesativarViewerMode() {
   document.getElementById('fase-combate-hud')?.remove();
   // Restaurar overlays
   const svgOv = document.getElementById('mapa-svg-overlay');
-  if (svgOv) svgOv.style.display = '';
+  if (svgOv) svgOv.style!.display = '';
   const canvas = document.getElementById('mapa-canvas');
-  if (canvas) canvas.style.display = '';
+  if (canvas) canvas.style!.display = '';
   // Restaurar imagem
   const oldImg = imgDiv.querySelector('img.mapa-bg-img');
-  if (oldImg) oldImg.style.display = '';
+  if (oldImg) oldImg.style!.display = '';
 }
 
 function renderMapaViewer() {
-  const mapas = RPG_DATA.mapas || [];
+  const mapas = RPG_DATA!.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (!entry) return;
   const m = entry.mapa;
@@ -4958,24 +4958,24 @@ function renderMapaViewer() {
   const imgDiv = document.getElementById('mapa-img');
 
   // Remover isoWrap legado se existir
-  const _legacyWrap = imgDiv.querySelector('.mapa-iso-wrap');
+  const _legacyWrap = imgDiv!.querySelector('.mapa-iso-wrap');
   if (_legacyWrap) _legacyWrap.remove();
 
-  let existingImg = imgDiv.querySelector('img.mapa-bg-img');
+  let existingImg = imgDiv!.querySelector('img.mapa-bg-img');
   if (!existingImg) {
     existingImg = document.createElement('img');
     existingImg.className = 'mapa-bg-img';
-    imgDiv.insertBefore(existingImg, imgDiv.firstChild);
+    imgDiv!.insertBefore(existingImg, imgDiv!.firstChild);
   }
 
   if (m.img_url) {
     existingImg.src = normalizeImgUrl(m.img_url);
-    existingImg.style.cssText = 'display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:-webkit-optimize-contrast;';
+    existingImg.style!.cssText = 'display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:-webkit-optimize-contrast;';
     // Ajusta a proporção do container ao carregar a imagem (modo fullscreen sem corte)
     const _aplicarAspecto = function(this: any) {
       const mi = document.getElementById('mapa-img');
       if (mi && this.naturalWidth && this.naturalHeight) {
-        mi.style.aspectRatio = `${this.naturalWidth}/${this.naturalHeight}`;
+        mi.style!.aspectRatio = `${this.naturalWidth}/${this.naturalHeight}`;
         mi._aspectRatio = this.naturalWidth / this.naturalHeight;
         if (typeof window._mesaAjustarMapa === 'function') window._mesaAjustarMapa();
       }
@@ -4987,7 +4987,7 @@ function renderMapaViewer() {
     }
   } else {
     existingImg.src = '';
-    existingImg.style.cssText = 'display:none';
+    existingImg.style!.cssText = 'display:none';
     // Render procedural via canvas quando não há imagem mas há render_data
     if (m.render_data) {
       setTimeout(() => mapaRenderCanvas(m), 50);
@@ -5022,11 +5022,11 @@ function renderMapaViewer() {
 
   // Click no fundo para medição / limpar / criar zona
   const wrap = document.getElementById('mapa-wrap');
-  wrap.onclick = (e) => {
+  wrap!.onclick = (e) => {
     if ((e.target as any) === wrap || (e.target as any).id === 'mapa-img' || (e.target as any).id === 'mapa-canvas') {
       // Modo placement de mapa local
       if (PLACEMENT_STATE) {
-        const _bgR = document.getElementById('mapa-img').getBoundingClientRect();
+        const _bgR = document.getElementById('mapa-img')!.getBoundingClientRect!()!;
         const x = Math.max(2, Math.min(98, (e.clientX - _bgR.left) / _bgR.width  * 100));
         const y = Math.max(2, Math.min(98, (e.clientY - _bgR.top)  / _bgR.height * 100));
         confirmarPlacement(x, y);
@@ -5035,7 +5035,7 @@ function renderMapaViewer() {
       if (MAPA_STATE.toolMode === 'medicao' && MAPA_STATE.medicaoAtiva) { limparMedicaoMapa(); }
       else if (MAPA_STATE.toolMode === 'zonas') {
         // Criar nova zona no ponto clicado
-        const _bgR2 = document.getElementById('mapa-img').getBoundingClientRect();
+        const _bgR2 = document.getElementById('mapa-img')!.getBoundingClientRect!()!;
         const x = Math.max(2, Math.min(98, (e.clientX - _bgR2.left) / _bgR2.width  * 100));
         const y = Math.max(2, Math.min(98, (e.clientY - _bgR2.top)  / _bgR2.height * 100));
         abrirModalZona(null, x.toFixed(1), y.toFixed(1));
@@ -5045,7 +5045,7 @@ function renderMapaViewer() {
       } else if (MAPA_STATE.toolMode === 'paredes') {
         // Clique cria parede (snap de borda) ou porta (shift=porta)
         const canvas2 = document.getElementById('mapa-canvas');
-        const rect2   = canvas2 ? canvas2.getBoundingClientRect() : wrap.getBoundingClientRect();
+        const rect2   = canvas2 ? canvas2.getBoundingClientRect() : wrap!.getBoundingClientRect();
         const xPx = e.clientX - rect2.left;
         const yPx = e.clientY - rect2.top;
         if (e.shiftKey) {
@@ -5091,21 +5091,21 @@ function mp3dAtualizar() {
   const persp = _get('mp3d-persp'), ox = _get('mp3d-ox'), oy = _get('mp3d-oy'), sc = _get('mp3d-sc');
 
   // Atualizar labels
-  document.getElementById('mp3d-rx-val').textContent    = rx + '°';
-  document.getElementById('mp3d-ry-val').textContent    = ry + '°';
-  document.getElementById('mp3d-rz-val').textContent    = rz + '°';
-  document.getElementById('mp3d-persp-val').textContent = persp >= 4000 ? '∞' : persp + 'px';
-  document.getElementById('mp3d-ox-val').textContent    = ox + '%';
-  document.getElementById('mp3d-oy-val').textContent    = oy + '%';
-  document.getElementById('mp3d-sc-val').textContent    = (sc/100).toFixed(2) + '×';
+  document.getElementById('mp3d-rx-val')!.textContent    = rx + '°';
+  document.getElementById('mp3d-ry-val')!.textContent    = ry + '°';
+  document.getElementById('mp3d-rz-val')!.textContent    = rz + '°';
+  document.getElementById('mp3d-persp-val')!.textContent = persp >= 4000 ? '∞' : persp + 'px';
+  document.getElementById('mp3d-ox-val')!.textContent    = ox + '%';
+  document.getElementById('mp3d-oy-val')!.textContent    = oy + '%';
+  document.getElementById('mp3d-sc-val')!.textContent    = (sc/100).toFixed(2) + '×';
 
   // Aplicar no preview
   const plane = document.getElementById('mp3d-preview-plane');
   if (plane) {
     const wrap = plane.parentElement;
-    wrap.style.perspective = persp >= 4000 ? '' : `${persp}px`;
-    wrap.style.perspectiveOrigin = '50% 50%';
-    plane.style.transform = [
+    wrap!.style!.perspective = persp >= 4000 ? '' : `${persp}px`;
+    wrap!.style!.perspectiveOrigin = '50% 50%';
+    plane.style!.transform = [
       `translateX(${ox}%)`,
       `translateY(${oy}%)`,
       `scale(${sc/100})`,
@@ -5135,9 +5135,9 @@ function mp3dAtualizar() {
     // Profundidade nos tokens
     if (document.getElementById('mp3d-depth')?.checked) {
       document.querySelectorAll('.mapa-token').forEach(el => {
-        const posY = parseFloat(el.style.top) || 50;
+        const posY = parseFloat(el.style!.top) || 50;
         const ds = (0.72 + (posY / 100) * 0.50).toFixed(3);
-        el.style.transform = `translate(-50%,-50%) scale(${ds})`;
+        el.style!.transform = `translate(-50%,-50%) scale(${ds})`;
       });
     }
   }
@@ -5164,7 +5164,7 @@ function mapaPreset3D(preset: any) {
 function mapaDesenharGrade(m: any) {
   const canvas = document.getElementById('mapa-canvas');
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext!('2d');
   const w = canvas.offsetWidth || canvas.parentElement?.offsetWidth || 0;
   const h = canvas.offsetHeight || canvas.parentElement?.offsetHeight || 0;
   if (!w || !h) return; // canvas ainda não renderizado — skip silencioso
@@ -5202,7 +5202,7 @@ function mapaRenderTokens(m: any) {
   // Remover aviso iso-legado se ainda existir no DOM
   const _oldAviso = document.getElementById('aviso-iso-legado');
   if (_oldAviso) _oldAviso.remove();
-  const chars = RPG_DATA.characters || [];
+  const chars = RPG_DATA!.characters || [];
   const mapId = MAPA_STATE.mapaAtualId;
   tokensEl.innerHTML = '';
 
@@ -5217,27 +5217,27 @@ function mapaRenderTokens(m: any) {
     const isLocalMap = !!mapaLocalId;
     if (isLocalMap) {
       const w = wPct || 10, h = hPct || (w * 0.75);
-      zona.style.cssText = `left:${posX}%;top:${posY}%;width:${w}%;height:${h}%;transform:translate(-50%,-50%);position:absolute`;
+      zona.style!.cssText = `left:${posX}%;top:${posY}%;width:${w}%;height:${h}%;transform:translate(-50%,-50%);position:absolute`;
     } else {
-      zona.style.cssText = `left:${posX}%;top:${posY}%;width:${raiopx*2}px;height:${raiopx*2}px;transform:translate(-50%,-50%);position:absolute`;
+      zona.style!.cssText = `left:${posX}%;top:${posY}%;width:${raiopx*2}px;height:${raiopx*2}px;transform:translate(-50%,-50%);position:absolute`;
     }
     if (isTool) {
-      zona.style.outline = '2px dashed var(--destaque)';
-      zona.style.cursor = 'pointer';
+      zona.style!.outline = '2px dashed var(--destaque)';
+      zona.style!.cursor = 'pointer';
       zona.innerHTML = `<span class="mapa-zona-label" style="color:var(--destaque)">${nome}</span>`;
       zona.onclick = (e) => { e.stopPropagation(); abrirModalZona(localId || '', posX, posY); };
     } else if (isLocalMap) {
-      zona.style.cssText += `;background:rgba(200,168,75,0.08);border:1.5px solid rgba(200,168,75,0.4);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;backdrop-filter:blur(1px)`;
+      zona.style!.cssText += `;background:rgba(200,168,75,0.08);border:1.5px solid rgba(200,168,75,0.4);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;backdrop-filter:blur(1px)`;
       zona.innerHTML = `<span style="font-size:0.9rem">🏰</span><span style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--destaque);text-align:center;line-height:1.2;padding:0 4px;text-shadow:0 1px 3px rgba(0,0,0,0.8)">${nome}</span>`;
       zona.title = `Entrar em ${nome}`;
       zona.onclick = (e) => { e.stopPropagation(); entrarMapaLocal(mapaLocalId); };
-      zona.addEventListener('mouseenter', () => { zona.style.background = 'rgba(200,168,75,0.18)'; zona.style.borderColor = 'var(--destaque)'; });
-      zona.addEventListener('mouseleave', () => { zona.style.background = 'rgba(200,168,75,0.08)'; zona.style.borderColor = 'rgba(200,168,75,0.4)'; });
+      zona.addEventListener('mouseenter', () => { zona.style!.background = 'rgba(200,168,75,0.18)'; zona.style!.borderColor = 'var(--destaque)'; });
+      zona.addEventListener('mouseleave', () => { zona.style!.background = 'rgba(200,168,75,0.08)'; zona.style!.borderColor = 'rgba(200,168,75,0.4)'; });
     } else {
       zona.innerHTML = `<span class="mapa-zona-label">${nome}</span>`;
       zona.onclick = () => entrarMapaLocal(mapaLocalId);
     }
-    tokensEl.appendChild(zona);
+    tokensEl!.appendChild(zona);
   }
 
   // ── 1. Zonas definidas em m.locais (criadas manualmente ou pelo schema) ─
@@ -5258,7 +5258,7 @@ function mapaRenderTokens(m: any) {
   // Permite clicar numa cidade desenhada no canvas mesmo sem zona manual
   const rd = m.render_data;
   if (rd && MAPA_STATE.toolMode !== 'zonas') {
-    const mapas = RPG_DATA.mapas || [];
+    const mapas = RPG_DATA!.mapas || [];
     (rd.pontos_de_interesse || []).forEach((poi: any) => {
       // Descobrir map_id destino: campo direto ou buscar por nome
       const mapaLocalId = poi.mapa_local_id
@@ -5278,7 +5278,7 @@ function mapaRenderTokens(m: any) {
   }
 
   // Renderizar tokens de personagens — delegado ao sistema centralizado em token.js
-  const _mapaObj = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===mapId)?.mapa;
+  const _mapaObj = (RPG_DATA!.mapas||[]).find(l=>l.mapa.map_id===mapId)?.mapa;
   tokenRenderizarNoMapa(tokensEl, chars, mapId, _mapaObj);
   // Adicionar badges de buff/debuff ativos sobre os tokens
   _mapaAdicionarBadgesBuffTokens();
@@ -5314,21 +5314,21 @@ function _mapaAdicionarBadgesBuffTokens() {
     if (temDot) {
       const b = document.createElement('div');
       b.className='buff-dot-badge';
-      b.style.cssText='position:absolute;bottom:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#c0392b;border:1px solid #050810;font-size:0.5rem;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10';
+      b.style!.cssText='position:absolute;bottom:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#c0392b;border:1px solid #050810;font-size:0.5rem;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10';
       b.textContent='🩸'; b.title='DOT ativo';
       tokenEl.appendChild(b);
     }
     if (temHot) {
       const b = document.createElement('div');
       b.className='buff-hot-badge';
-      b.style.cssText='position:absolute;bottom:-4px;left:-4px;width:14px;height:14px;border-radius:50%;background:#27ae60;border:1px solid #050810;font-size:0.5rem;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10';
+      b.style!.cssText='position:absolute;bottom:-4px;left:-4px;width:14px;height:14px;border-radius:50%;background:#27ae60;border:1px solid #050810;font-size:0.5rem;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10';
       b.textContent='💚'; b.title='HOT ativo';
       tokenEl.appendChild(b);
     }
     if (temDebuff && !temDot) {
       const b = document.createElement('div');
       b.className='buff-dot-badge';
-      b.style.cssText='position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#8e44ad;border:1px solid #050810;font-size:0.5rem;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10';
+      b.style!.cssText='position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#8e44ad;border:1px solid #050810;font-size:0.5rem;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10';
       b.textContent='☠'; b.title='Debuff ativo';
       tokenEl.appendChild(b);
     }
@@ -5337,7 +5337,7 @@ function _mapaAdicionarBadgesBuffTokens() {
     if (ehMoribundo) {
       const bm = document.createElement('div');
       bm.className = 'buff-moribundo-badge';
-      bm.style.cssText = [
+      bm.style!.cssText = [
         'position:absolute', 'top:-4px', 'left:50%',
         'transform:translateX(-50%)',
         'background:#8e44ad', 'border:1px solid #050810',
@@ -5358,10 +5358,10 @@ function _mapaAdicionarBadgesBuffTokens() {
 function mapaRenderStatus() {
   const el = document.getElementById('mapa-status');
   if (!el) return;
-  const chars = RPG_DATA.characters || [];
+  const chars = RPG_DATA!.characters || [];
   const mapId = MAPA_STATE.mapaAtualId;
 
-  const mapaAtual = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const mapaAtual = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
   const tipoMapa = mapaAtual ? mapaAtual.mapa.tipo : 'geral';
 
   const pcs  = chars.filter(c => (c.custom_attrs||{}).tipo_personagem !== 'npc');
@@ -5390,7 +5390,7 @@ function mapaRenderStatus() {
     const xpPct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 0;
 
     // Recursos de status (Mana, Stamina, Ki…) — apenas categoria 'status'
-    const adEspeciais = (RPG_DATA.attrDefs || []).filter(a => a.categoria === 'status' && a.tipo === 'number');
+    const adEspeciais = (RPG_DATA!.attrDefs || []).filter(a => a.categoria === 'status' && a.tipo === 'number');
     const atribs = ca.atributos || {};
 
     // ── Barras ───────────────────────────────────────────────────
@@ -5417,7 +5417,7 @@ function mapaRenderStatus() {
     const recursosBars = adEspeciais.map(a => {
       const val = parseFloat(atribs[a.nome]) || 0;
       const nomeMax = a.nome.replace(/atual|current/i,'').trim();
-      const aMax = (RPG_DATA.attrDefs||[]).find(d => d.nome.toLowerCase().includes(nomeMax.toLowerCase()) && d.nome !== a.nome && d.tipo==='number');
+      const aMax = (RPG_DATA!.attrDefs||[]).find(d => d.nome.toLowerCase().includes(nomeMax.toLowerCase()) && d.nome !== a.nome && d.tipo==='number');
       const maxVal = aMax ? (parseFloat(atribs[aMax.nome])||0) : null;
       const pct = maxVal && maxVal > 0 ? Math.min(100, Math.round(val/maxVal*100)) : null;
       return `<div style="margin-top:3px">
@@ -5473,7 +5473,7 @@ function mapaRenderStatus() {
 
 // ── CONFIGURAÇÕES DO MAPA — título, grid, escala e metadados visuais ──────
 function abrirModalMapaConfig() {
-  const mapas = RPG_DATA.mapas || [];
+  const mapas = RPG_DATA!.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (!entry) { mostrarToast('Selecione um mapa primeiro', 'erro'); return; }
   // Atualizar lista de paredes/portas ao abrir
@@ -5481,19 +5481,19 @@ function abrirModalMapaConfig() {
   const m = entry.mapa;
 
   // Ocultar confirmação de exclusão
-  document.getElementById('mapa-config-confirm-del').style.display = 'none';
+  document.getElementById('mapa-config-confirm-del')!.style!.display = 'none';
 
-  document.getElementById('modal-mapa-config-titulo').textContent = `✏️ ${m.nome || 'Configurar Mapa'}`;
-  document.getElementById('modal-mapa-config-id').value = entry.id;
-  document.getElementById('modal-mapa-config-map-id-original').value = m.map_id;
+  document.getElementById('modal-mapa-config-titulo')!.textContent = `✏️ ${m.nome || 'Configurar Mapa'}`;
+  document.getElementById('modal-mapa-config-id')!.value = entry.id;
+  document.getElementById('modal-mapa-config-map-id-original')!.value = m.map_id;
 
   // Campos básicos
-  document.getElementById('modal-mapa-nome').value = m.nome || '';
-  document.getElementById('modal-mapa-map-id').value = m.map_id || '';
-  document.getElementById('modal-mapa-img-url').value = m.img_url || '';
-  document.getElementById('modal-mapa-escala-val').value = (m.escala_val || '') as any;
-  document.getElementById('modal-mapa-escala-unit').value = m.escala_unit || 'm';
-  document.getElementById('modal-mapa-grid').value = (m.grid || '') as any;
+  document.getElementById('modal-mapa-nome')!.value = m.nome || '';
+  document.getElementById('modal-mapa-map-id')!.value = m.map_id || '';
+  document.getElementById('modal-mapa-img-url')!.value = m.img_url || '';
+  document.getElementById('modal-mapa-escala-val')!.value = (m.escala_val || '') as any;
+  document.getElementById('modal-mapa-escala-unit')!.value = m.escala_unit || 'm';
+  document.getElementById('modal-mapa-grid')!.value = (m.grid || '') as any;
 
   // Unidades nos labels
   const unit = m.escala_unit || 'm';
@@ -5503,36 +5503,36 @@ function abrirModalMapaConfig() {
   });
 
   // Dimensões totais
-  document.getElementById('modal-mapa-larg-total').value = (m.largura_total || '') as any;
-  document.getElementById('modal-mapa-alt-total').value = (m.altura_total || '') as any;
+  document.getElementById('modal-mapa-larg-total')!.value = (m.largura_total || '') as any;
+  document.getElementById('modal-mapa-alt-total')!.value = (m.altura_total || '') as any;
 
   modalMapaPreviewImg(m.img_url || '');
 
   // Seção de mapa local
   const localSecao = document.getElementById('modal-mapa-local-secao');
   if (m.tipo === 'local') {
-    localSecao.style.display = 'block';
+    localSecao!.style!.display = 'block';
 
     // Popular seletor de pai (todos os mapas exceto o próprio)
     const selPai = document.getElementById('modal-mapa-parent');
-    selPai.innerHTML = mapas
+    selPai!.innerHTML = mapas
       .filter(l => l.mapa.map_id !== m.map_id)
       .map(l => `<option value="${l.mapa.map_id}">${l.mapa.tipo==='geral'?'🌍':'🏰'} ${l.mapa.nome}</option>`)
       .join('');
 
     // Encontrar mapa pai atual
     const paiEntry = mapas.find(l => (l.mapa.locais||[]).some(z => z.mapa_local_id === m.map_id));
-    if (paiEntry) selPai.value = paiEntry.mapa.map_id;
+    if (paiEntry) selPai!.value = paiEntry.mapa.map_id;
 
     // Tamanho real (guardados no local ou no mapa)
-    document.getElementById('modal-mapa-local-larg').value = (m.largura_real || '') as any;
-    document.getElementById('modal-mapa-local-alt').value  = (m.altura_real  || '') as any;
-    document.getElementById('modal-mapa-repr-pct').value  = (m.representar_pct != null ? m.representar_pct : 100) as any;
+    document.getElementById('modal-mapa-local-larg')!.value = (m.largura_real || '') as any;
+    document.getElementById('modal-mapa-local-alt')!.value  = (m.altura_real  || '') as any;
+    document.getElementById('modal-mapa-repr-pct')!.value  = (m.representar_pct != null ? m.representar_pct : 100) as any;
 
-    document.getElementById('modal-mapa-preview-calc').style.display = 'none';
+    document.getElementById('modal-mapa-preview-calc')!.style!.display = 'none';
     mapaConfigAtualizarPreview();
   } else {
-    localSecao.style.display = 'none';
+    localSecao!.style!.display = 'none';
   }
 
   const overlay = document.getElementById('modal-mapa-config-overlay');
@@ -5554,9 +5554,9 @@ function abrirModalMapaConfig() {
   if (previewImg) previewImg.src = normalizeImgUrl(m.img_url || '');
   mp3dAtualizar();
 
-  overlay.style.display = 'flex';
-  overlay.addEventListener('pointerdown', function handler(e) {
-    if (e.target === overlay) { fecharModalMapaConfig(); overlay.removeEventListener('pointerdown', handler); }
+  overlay!.style!.display = 'flex';
+  overlay!.addEventListener('pointerdown', function handler(e) {
+    if (e.target === overlay) { fecharModalMapaConfig(); overlay!.removeEventListener('pointerdown', handler); }
   });
 }
 
@@ -5565,23 +5565,23 @@ function modalMapaPreviewImg(url: any) {
   const prev = document.getElementById('modal-mapa-img-preview');
   const ph = document.getElementById('modal-mapa-img-placeholder');
   if (normalized) {
-    prev.src = normalized;
-    prev.style.display = 'block';
-    if (ph) ph.style.display = 'none';
+    prev!.src = normalized;
+    prev!.style!.display = 'block';
+    if (ph) ph.style!.display = 'none';
   } else {
-    prev.style.display = 'none';
-    if (ph) ph.style.display = 'flex';
+    prev!.style!.display = 'none';
+    if (ph) ph.style!.display = 'flex';
   }
 }
 
 function fecharModalMapaConfig() {
-  document.getElementById('modal-mapa-config-overlay').style.display = 'none';
+  document.getElementById('modal-mapa-config-overlay')!.style!.display = 'none';
 }
 
 // Mostrar confirmação de exclusão inline no modal
 function pedirConfirmacaoExcluirMapa() {
-  document.getElementById('mapa-config-confirm-del').style.display = 'block';
-  document.getElementById('mapa-config-confirm-del').scrollIntoView({ behavior:'smooth', block:'center' });
+  document.getElementById('mapa-config-confirm-del')!.style!.display = 'block';
+  document.getElementById('mapa-config-confirm-del')!.scrollIntoView!({ behavior:'smooth', block:'center' })!;
 }
 
 // Excluir mapa a partir do modal (com confirmação já feita)
@@ -5617,7 +5617,7 @@ async function deletarMapaDoModal() {
 
 // Reposicionar mapa local (a partir do modal de config)
 function reposicionarMapaLocal() {
-  const mapas = RPG_DATA.mapas || [];
+  const mapas = RPG_DATA!.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (!entry || entry.mapa.tipo !== 'local') return;
   const m = entry.mapa;
@@ -5626,9 +5626,9 @@ function reposicionarMapaLocal() {
   // Recalcular zona com valores do modal (pode ter sido editado)
   let zonaW = m.zona_w_percent || 15;
   let zonaH = m.zona_h_percent || 15;
-  const largReal = parseFloat(document.getElementById('modal-mapa-local-larg')?.value) || m.largura_real;
-  const altReal  = parseFloat(document.getElementById('modal-mapa-local-alt')?.value)  || m.altura_real;
-  const reprPct  = parseFloat(document.getElementById('modal-mapa-repr-pct')?.value)   || m.representar_pct || 100;
+  const largReal = parseFloat(document.getElementById('modal-mapa-local-larg')?.value!) || m.largura_real;
+  const altReal  = parseFloat(document.getElementById('modal-mapa-local-alt')?.value!)  || m.altura_real;
+  const reprPct  = parseFloat(document.getElementById('modal-mapa-repr-pct')?.value!)   || m.representar_pct || 100;
   const paiEntry = novoPaiId ? mapas.find(l => l.mapa.map_id === novoPaiId) : null;
   if (paiEntry && largReal && paiEntry.mapa.largura_total) {
     zonaW = parseFloat(((largReal * reprPct / 100) / paiEntry.mapa.largura_total * 100).toFixed(2));
@@ -5653,10 +5653,10 @@ function reposicionarMapaLocal() {
 
 // Atualizar preview de cálculo no modal de config
 function mapaConfigAtualizarPreview() {
-  const mapas = RPG_DATA.mapas || [];
-  const largReal = parseFloat(document.getElementById('modal-mapa-local-larg')?.value);
-  const altReal  = parseFloat(document.getElementById('modal-mapa-local-alt')?.value);
-  const reprPct  = parseFloat(document.getElementById('modal-mapa-repr-pct')?.value) || 100;
+  const mapas = RPG_DATA!.mapas || [];
+  const largReal = parseFloat(document.getElementById('modal-mapa-local-larg')?.value!);
+  const altReal  = parseFloat(document.getElementById('modal-mapa-local-alt')?.value!);
+  const reprPct  = parseFloat(document.getElementById('modal-mapa-repr-pct')?.value!) || 100;
   const paiId    = document.getElementById('modal-mapa-parent')?.value;
   const paiEntry = paiId ? mapas.find(l=>l.mapa.map_id===paiId) : null;
   const paiLarg  = paiEntry?.mapa?.largura_total;
@@ -5669,31 +5669,31 @@ function mapaConfigAtualizarPreview() {
     const pctW  = ((dispW as any) / paiLarg * 100).toFixed(1);
     const dispH = altReal ? (altReal * reprPct / 100).toFixed(1) : '—';
     const pctH  = (altReal && paiAlt) ? ((dispH as any) / paiAlt * 100).toFixed(1) + '%' : '—';
-    preview.style.display = 'block';
+    preview.style!.display = 'block';
     preview.innerHTML = `📐 Exibido como <strong>${dispW}${unit} × ${dispH}${unit}</strong> no mapa pai — ocupa ~<strong>${pctW}%</strong> × ${pctH} da área.`;
   } else if (largReal && reprPct !== 100) {
     const dispW = (largReal * reprPct / 100).toFixed(1);
-    preview.style.display = 'block';
+    preview.style!.display = 'block';
     preview.innerHTML = `📐 Exibido como <strong>${dispW}${unit}</strong> de largura. Defina as dimensões totais do mapa pai para cálculo automático de %.`;
   } else {
-    preview.style.display = 'none';
+    preview.style!.display = 'none';
   }
 }
 
 async function salvarConfigMapa() {
-  const mapas = RPG_DATA.mapas || [];
+  const mapas = RPG_DATA!.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (!entry) return;
   const m = entry.mapa;
 
-  const novoNome    = document.getElementById('modal-mapa-nome').value.trim() || m.nome;
-  const novoMapId   = (document.getElementById('modal-mapa-map-id').value.trim().replace(/\s+/g,'_')) || m.map_id;
-  const imgUrl      = document.getElementById('modal-mapa-img-url').value.trim();
-  const escalaVal   = parseFloat(document.getElementById('modal-mapa-escala-val').value) || 1;
-  const escalaUnit  = document.getElementById('modal-mapa-escala-unit').value.trim() || 'm';
-  const grid        = parseInt(document.getElementById('modal-mapa-grid').value) || 20;
-  const largTotal   = parseFloat(document.getElementById('modal-mapa-larg-total').value) || null;
-  const altTotal    = parseFloat(document.getElementById('modal-mapa-alt-total').value)  || null;
+  const novoNome    = document.getElementById('modal-mapa-nome')!.value!.trim!()! || m.nome;
+  const novoMapId   = (document.getElementById('modal-mapa-map-id')!.value!.trim!()!.replace!(/\s+/g,'_')!) || m.map_id;
+  const imgUrl      = document.getElementById('modal-mapa-img-url')!.value!.trim!()!;
+  const escalaVal   = parseFloat(document.getElementById('modal-mapa-escala-val')!.value!) || 1;
+  const escalaUnit  = document.getElementById('modal-mapa-escala-unit')!.value!.trim!()! || 'm';
+  const grid        = parseInt(document.getElementById('modal-mapa-grid')!.value!) || 20;
+  const largTotal   = parseFloat(document.getElementById('modal-mapa-larg-total')!.value!) || null;
+  const altTotal    = parseFloat(document.getElementById('modal-mapa-alt-total')!.value!)  || null;
 
   const oldMapId = m.map_id;
   m.nome        = novoNome;
@@ -5722,10 +5722,10 @@ async function salvarConfigMapa() {
   let zonaH = m.zona_h_percent || 15;
 
   if (m.tipo === 'local') {
-    const largReal  = parseFloat(document.getElementById('modal-mapa-local-larg').value) || null;
-    const altReal   = parseFloat(document.getElementById('modal-mapa-local-alt').value)  || null;
-    const reprPct   = parseFloat(document.getElementById('modal-mapa-repr-pct').value)   || 100;
-    const novoPaiId = document.getElementById('modal-mapa-parent').value;
+    const largReal  = parseFloat(document.getElementById('modal-mapa-local-larg')!.value!) || null;
+    const altReal   = parseFloat(document.getElementById('modal-mapa-local-alt')!.value!)  || null;
+    const reprPct   = parseFloat(document.getElementById('modal-mapa-repr-pct')!.value!)   || 100;
+    const novoPaiId = document.getElementById('modal-mapa-parent')!.value!;
 
     m.largura_real    = largReal;
     m.altura_real     = altReal;
@@ -5769,7 +5769,7 @@ async function salvarConfigMapa() {
 
   try {
     // Ler configuração 3D do modal
-    const _gv = (id: any) => { const el = document.getElementById(id); return el ? +el.value : null; };
+    const _gv = (id: any) => { const el = document.getElementById(id); return el ? +el.value! : null; };
     const t3d = {
       rx:    _gv('mp3d-rx')    ?? 0,
       ry:    _gv('mp3d-ry')    ?? 0,
@@ -5803,13 +5803,13 @@ async function salvarConfigMapa() {
     if (_btnSalvar) {
       const _txtOrig = _btnSalvar.textContent;
       _btnSalvar.textContent = '✓ Salvo!';
-      _btnSalvar.style.background = '#27ae60';
-      _btnSalvar.style.color = '#fff';
+      _btnSalvar.style!.background = '#27ae60';
+      _btnSalvar.style!.color = '#fff';
       _btnSalvar.disabled = true;
       setTimeout(() => {
         _btnSalvar.textContent = _txtOrig;
-        _btnSalvar.style.background = '';
-        _btnSalvar.style.color = '';
+        _btnSalvar.style!.background = '';
+        _btnSalvar.style!.color = '';
         _btnSalvar.disabled = false;
         fecharModalMapaConfig();
       }, 1200);
@@ -5819,7 +5819,7 @@ async function salvarConfigMapa() {
     mostrarToast('Mapa atualizado!', 'sucesso');
     renderMapasTab();
     // Reaplicar visual imediatamente — transform3d já está em m.transform3d
-    const upEntry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);
+    const upEntry = (RPG_DATA!.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);
     if (upEntry) {
       renderMapaViewer();
     }
@@ -5864,9 +5864,9 @@ function tokenMoveReceber(payload: any) {
     const _recvMapa = (RPG_DATA?.mapas||[]).find(l=>l.mapa.map_id===mapId)?.mapa;
     const _recvW = _recvMapa?.largura_total||20, _recvH = _recvMapa?.altura_total||20;
     const _recvPos = pctParaCelula(x, y, mapId);
-    el.style.left = ((_recvPos.col+0.5)/_recvW*100).toFixed(2)+'%';
-    el.style.top  = ((_recvPos.row+0.5)/_recvH*100).toFixed(2)+'%';
-    el.style.transform = 'translate(-50%,-50%)'; // 2.4 top-down
+    el.style!.left = ((_recvPos.col+0.5)/_recvW*100).toFixed(2)+'%';
+    el.style!.top  = ((_recvPos.row+0.5)/_recvH*100).toFixed(2)+'%';
+    el.style!.transform = 'translate(-50%,-50%)'; // 2.4 top-down
   } else if (contexto === 'arena') {
     const c = AR?.chars?.find((ch: any) => ch.nome === nome);
     if (c) {
@@ -5875,10 +5875,10 @@ function tokenMoveReceber(payload: any) {
     }
     const el = document.querySelector(`.ar-mesa-token[data-nome="${CSS.escape(nome)}"]`);
     if (!el) return;
-    el.style.left = x + '%';
-    el.style.top  = y + '%';
+    el.style!.left = x + '%';
+    el.style!.top  = y + '%';
     const ds = (0.72 + (y / 100) * 0.50).toFixed(3);
-    el.style.transform = `translate(-50%,-50%) scale(${ds})`;
+    el.style!.transform = `translate(-50%,-50%) scale(${ds})`;
   }
 }
 
@@ -5970,20 +5970,20 @@ function fogRenderizar(mapId: any) {
 
   const bg = document.getElementById('mapa-img');
   if (!bg) return;
-  const W = bg.offsetWidth  || bg.naturalWidth  || 800;
-  const H = bg.offsetHeight || bg.naturalHeight || 600;
+  const W = bg!.offsetWidth  || bg!.naturalWidth  || 800;
+  const H = bg!.offsetHeight || bg!.naturalHeight || 600;
 
   let canvas = document.getElementById('fog-canvas');
   if (!canvas) {
     canvas = document.createElement('canvas');
-    canvas.id = 'fog-canvas';
-    canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4';
-    bg.parentNode?.insertBefore(canvas, bg.nextSibling);
+    canvas!.id = 'fog-canvas';
+    canvas!.style!.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4';
+    bg!.parentNode?.insertBefore(canvas!, bg!.nextSibling);
   }
-  canvas.width  = W;
-  canvas.height = H;
+  canvas!.width  = W;
+  canvas!.height = H;
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas!.getContext!('2d');
   const largura = mapa.largura_total || 20;
   const altura  = mapa.altura_total  || 20;
   const cW = W / largura;
@@ -6093,8 +6093,8 @@ function cameraBloqueioFeedback(nome: any) {
   // Animação de resistência no token
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
   if (tokenEl) {
-    tokenEl.style.animation = 'tokenResistencia 0.3s ease';
-    setTimeout(() => { tokenEl.style.animation = ''; }, 350);
+    tokenEl.style!.animation = 'tokenResistencia 0.3s ease';
+    setTimeout(() => { tokenEl.style!.animation = ''; }, 350);
   }
 }
 
@@ -6154,17 +6154,17 @@ function mapaOnDrag(e: any) {
   if (!MAPA_STATE.dragging) return;
   MAPA_STATE.tokenMoveu = true;
   const bg = document.getElementById('mapa-img');
-  const rect = bg.getBoundingClientRect();
+  const rect = bg!.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
   // rect já incorpora centering offset + pan + zoom; divisão direta dá %
   const x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width  * 100));
   const y = Math.max(2, Math.min(98, (e.clientY - rect.top)  / rect.height * 100));
-  const c = RPG_DATA.characters.find(ch => ch.nome === MAPA_STATE.dragging);
+  const c = RPG_DATA!.characters.find(ch => ch.nome === MAPA_STATE.dragging);
   if (!c) return;
   if (!c.map_positions) c.map_positions = {};
   c.active_map_id = MAPA_STATE.mapaAtualId;
   const _dragSnapped = pctParaCelula(x, y, MAPA_STATE.mapaAtualId);
-  c.map_positions[MAPA_STATE.mapaAtualId] = _dragSnapped;
+  c.map_positions[MAPA_STATE.mapaAtualId!] = _dragSnapped;
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(MAPA_STATE.dragging)}"]`);
   if (tokenEl) {
     // Snap visual para centro da célula durante o drag
@@ -6172,9 +6172,9 @@ function mapaOnDrag(e: any) {
     const _gW = _dragMapa?.largura_total || 20, _gH = _dragMapa?.altura_total || 20;
     const _snapX = (_dragSnapped.col + 0.5) / _gW * 100;
     const _snapY = (_dragSnapped.row + 0.5) / _gH * 100;
-    tokenEl.style.left = _snapX.toFixed(2)+'%';
-    tokenEl.style.top  = _snapY.toFixed(2)+'%';
-    tokenEl.style.transform = 'translate(-50%,-50%)';
+    tokenEl.style!.left = _snapX.toFixed(2)+'%';
+    tokenEl.style!.top  = _snapY.toFixed(2)+'%';
+    tokenEl.style!.transform = 'translate(-50%,-50%)';
   }
   // Broadcast em tempo real para outros clientes (throttle 50ms ≈ 20fps)
   const _now = Date.now();
@@ -6185,9 +6185,9 @@ function mapaOnDrag(e: any) {
   // Atualizar círculo de alcance se for o atacante atual a se mover
   if (MAPA_STATE._rangeCircle && MAPA_STATE._rangeCircle.atacanteNome === MAPA_STATE.dragging) {
     const circleEl = document.getElementById('atk-range-circle');
-    if (circleEl && circleEl.style.display !== 'none') {
-      circleEl.style.left = x + '%';
-      circleEl.style.top  = y + '%';
+    if (circleEl && circleEl.style!.display !== 'none') {
+      circleEl.style!.left = x + '%';
+      circleEl.style!.top  = y + '%';
     }
     // Throttle: atualizar destaques de alvos durante movimento (a cada 300ms)
     if (ATAQUE_MAPA_STATE.ativo && ATAQUE_MAPA_STATE.fase === 'alvos') {
@@ -6206,7 +6206,7 @@ function mapaOnDrag(e: any) {
   const mapIdSnap = c.active_map_id;
   MAPA_STATE.dragTimer = setTimeout(async () => {
     try {
-      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeSnap)}`, {
+      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nomeSnap)}`, {
         method:'PATCH', body: JSON.stringify({ active_map_id: mapIdSnap, map_positions: posSnap })
       });
     } catch(err) {}
@@ -6220,16 +6220,16 @@ async function mapaFimDrag(e: any) {
   const _moveu = MAPA_STATE.tokenMoveu;
   if (_moveu) {
     const _c = RPG_DATA?.characters?.find(ch => ch.nome === nome);
-    const _pos = _c ? (_c.map_positions || {})[MAPA_STATE.mapaAtualId] : null;
+    const _pos = _c ? (_c.map_positions || {})[MAPA_STATE.mapaAtualId!] : null;
     if (_pos) HUB_EVENTS.emit('token_moveu', { nome, paraCelula: _pos });
   }
   // Reseta apos o evento click ter chance de checar a flag
   setTimeout(() => { MAPA_STATE.tokenMoveu = false; }, 300);
   clearTimeout(MAPA_STATE.dragTimer);
-  const c = RPG_DATA.characters.find(ch => ch.nome === nome);
+  const c = RPG_DATA!.characters.find(ch => ch.nome === nome);
   if (c) {
     try {
-      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
+      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
         method:'PATCH', body: JSON.stringify({ active_map_id: c.active_map_id, map_positions: c.map_positions })
       });
     } catch(err) {}
@@ -6237,7 +6237,7 @@ async function mapaFimDrag(e: any) {
   }
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
   if (tokenEl) {
-    tokenEl.style.cursor = 'grab';
+    tokenEl.style!.cursor = 'grab';
     tokenEl.removeEventListener('pointermove', mapaOnDrag);
     tokenEl.removeEventListener('pointerup', mapaFimDrag);
   }
@@ -6250,18 +6250,18 @@ function mapaPosicionarChar(nome: any) {
   const wrap = document.getElementById('mapa-wrap');
   mostrarToast(`Toque no mapa para posicionar ${nome}`, '');
   const onceClick = (e: any) => {
-    const _bgR = document.getElementById('mapa-img').getBoundingClientRect();
+    const _bgR = document.getElementById('mapa-img')!.getBoundingClientRect!()!;
     const x = Math.max(2, Math.min(98, (e.clientX - _bgR.left) / _bgR.width  * 100));
     const y = Math.max(2, Math.min(98, (e.clientY - _bgR.top)  / _bgR.height * 100));
     setCharActiveMap(nome, MAPA_STATE.mapaAtualId, x, y).then(() => {
-      const mapas = RPG_DATA.mapas || [];
+      const mapas = RPG_DATA!.mapas || [];
       const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
       if (entry) mapaRenderTokens(entry.mapa);
       mapaRenderStatus();
     });
-    wrap.removeEventListener('click', onceClick);
+    wrap!.removeEventListener('click', onceClick);
   };
-  wrap.addEventListener('click', onceClick);
+  wrap!.addEventListener('click', onceClick);
 }
 
 // ── TELEPORTAR PERSONAGEM (com raio máximo) ───────────────────
@@ -6284,7 +6284,7 @@ function mapaTeleportarPersonagem(nome: any, maxCelulas: any) {
     const destRow = Math.round((yPct / 100) * altura);
     if (maxCelulas) {
       const c = RPG_DATA?.characters?.find(ch => ch.nome === nome);
-      const posAtual = c?.map_positions?.[mapId];
+      const posAtual = c?.map_positions?.[mapId!];
       if (posAtual) {
         const dist = Math.abs(destCol - posAtual.col) + Math.abs(destRow - posAtual.row);
         if (dist > maxCelulas) {
@@ -6309,8 +6309,8 @@ async function mapaAdjacenteAlvo(atacanteNome: any, alvoNome: any) {
   const atk  = RPG_DATA?.characters?.find(c => c.nome === atacanteNome);
   const alvo = RPG_DATA?.characters?.find(c => c.nome === alvoNome);
   if (!atk || !alvo) return;
-  const posAlvo = alvo.map_positions?.[mapId];
-  const posAtk  = atk.map_positions?.[mapId];
+  const posAlvo = alvo.map_positions?.[mapId!];
+  const posAtk  = atk.map_positions?.[mapId!];
   if (!posAlvo) return;
   const mapaObj = _getMapaById(mapId);
   const largura = mapaObj?.largura_total || 20;
@@ -6324,7 +6324,7 @@ async function mapaAdjacenteAlvo(atacanteNome: any, alvoNome: any) {
   const ocupadas = new Set(
     (RPG_DATA?.characters || [])
       .filter(c => c.nome !== atacanteNome)
-      .map(c => { const p = c.map_positions?.[mapId]; return p ? `${p.col},${p.row}` : null; })
+      .map(c => { const p = c.map_positions?.[mapId!]; return p ? `${p.col},${p.row}` : null; })
       .filter(Boolean)
   );
   let melhor = null, melhorDist = Infinity;
@@ -6338,9 +6338,9 @@ async function mapaAdjacenteAlvo(atacanteNome: any, alvoNome: any) {
   }
   if (!melhor) { mostrarToast(`Não há célula adjacente livre para ${atacanteNome}`, 'aviso'); return; }
   if (!atk.map_positions) atk.map_positions = {};
-  atk.map_positions[mapId] = melhor;
+  atk.map_positions[mapId!] = melhor;
   try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(atacanteNome)}`,
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(atacanteNome)}`,
       { method: 'PATCH', body: JSON.stringify({ map_positions: atk.map_positions }) });
   } catch(e) {}
   const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapId);
@@ -6355,8 +6355,8 @@ async function mapaForcedMovement(movingNome: any, referenciaNome: any, direcao:
   const moving = RPG_DATA?.characters?.find(c => c.nome === movingNome);
   const ref    = RPG_DATA?.characters?.find(c => c.nome === referenciaNome);
   if (!moving || !ref) return;
-  const posM = moving.map_positions?.[mapId];
-  const posR = ref.map_positions?.[mapId];
+  const posM = moving.map_positions?.[mapId!];
+  const posR = ref.map_positions?.[mapId!];
   if (!posM || !posR) return;
   // Direção: longe = do ref para moving; perto = de moving para ref
   const dxRaw = posM.col - posR.col, dyRaw = posM.row - posR.row;
@@ -6375,9 +6375,9 @@ async function mapaForcedMovement(movingNome: any, referenciaNome: any, direcao:
     col = nc; row = nr;
   }
   if (!moving.map_positions) moving.map_positions = {};
-  moving.map_positions[mapId] = { col, row };
+  moving.map_positions[mapId!] = { col, row };
   try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(movingNome)}`,
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(movingNome)}`,
       { method: 'PATCH', body: JSON.stringify({ map_positions: moving.map_positions }) });
   } catch(e) {}
   combateBroadcast?.('empurrao_executado', { atacante: referenciaNome, alvo: movingNome, col, row, mapId });
@@ -6441,7 +6441,7 @@ function batalhaBuscaMinhaAtiva() {
 function jogadorEstaOnline(nomePersonagem: any) {
   // Verifica se o jogador com esse personagem vinculado está online (visto nos últimos 30s)
   const agora = Date.now();
-  return CHAT.online.some(u => u.nick === nomePersonagem && (agora - u.ts) < 35000);
+  return CHAT.online.some(u => u.nick === nomePersonagem && (agora - u.ts!) < 35000);
 }
 
 function personagemTemJogador(nomePersonagem: any) {
@@ -6465,7 +6465,7 @@ function batalhaParticipantesDoMapa(mapaId: any) {
   // Apenas personagens com active_map_id EXATO neste mapa.
   // Tokens projetados de submapas filhos NÃO participam da batalha deste mapa —
   // eles só aparecem visualmente. A batalha deles é no mapa onde estão de fato.
-  const chars = RPG_DATA.characters || [];
+  const chars = RPG_DATA!.characters || [];
   return chars.filter(c => c.active_map_id === mapaId);
 }
 
@@ -6497,7 +6497,7 @@ function getCooldownsBatalha(bid: any) {
 // ── PERSISTÊNCIA ─────────────────────────────────────────────
 async function salvarEstadoBatalha(bid: any) {
   const ids = bid ? [bid] : Object.keys(MAPA_STATE.batalhas);
-  const rpgId = RPG_DATA.rpgId;
+  const rpgId = RPG_DATA!.rpgId;
   try {
     await Promise.all(ids.map(id => {
       const bs = MAPA_STATE.batalhas[id];
@@ -6521,7 +6521,7 @@ async function salvarEstadoBatalha(bid: any) {
 async function criarBatalhaRemota(bid: any) {
   const bs = MAPA_STATE.batalhas[bid];
   if (!bs) return;
-  const rpgId = RPG_DATA.rpgId;
+  const rpgId = RPG_DATA!.rpgId;
   console.log('[BATALHA] criarBatalhaRemota: bid=', bid, '| cooldowns=', JSON.stringify(bs.cooldowns));
   try {
     await sb('batalhas', {
@@ -6594,8 +6594,8 @@ function batalhaReceberEstadoRemoto(raw: any) {
           _notificarVez(bs, bid);
         }
         if ((bs.fase === 'iniciativa' || bs.fase === 'empate') && bs.empatados?.includes(meuNome)) {
-          document.getElementById('ini-modal-aviso').textContent = '⚠ Empate! Role novamente.';
-          document.getElementById('ini-modal-aviso').style.display = 'block';
+          document.getElementById('ini-modal-aviso')!.textContent = '⚠ Empate! Role novamente.';
+          document.getElementById('ini-modal-aviso')!.style!.display = 'block';
           BATALHA_ATUAL_ID = bid;
           abrirModalIniciativa();
         }
@@ -6680,7 +6680,7 @@ function _atualizarBadgeMesa() {
     return participo && !jaRolei;
   }).length;
   const total = count + pendIniciativa;
-  badge.style.display = total > 0 ? 'flex' : 'none';
+  badge.style!.display = total > 0 ? 'flex' : 'none';
   (badge as any).textContent = total > 1 ? total : '⚔';
 }
 
@@ -6693,14 +6693,14 @@ function _atualizarSeletorBatalhas() {
 
   if (!isMestre) {
     // Jogador: ocultar o seletor — eles não navegam entre batalhas
-    wrap.style.display = 'none';
+    wrap.style!.display = 'none';
     return;
   }
 
   // Mestre: mostrar seletor quando há 2+ batalhas simultâneas
-  if (batalhasAtivas.length <= 1) { wrap.style.display = 'none'; return; }
+  if (batalhasAtivas.length <= 1) { wrap.style!.display = 'none'; return; }
 
-  wrap.style.display = 'flex';
+  wrap.style!.display = 'flex';
   wrap.innerHTML = batalhasAtivas.map(([bid, b]) => {
     const isAtual = bid === BATALHA_ATUAL_ID;
     const atual = b.participantes?.[b.ordemAtual];
@@ -6872,7 +6872,7 @@ async function pacoteAplicar(resultado: any) {
         break;
       case 'fog':
         if (a.modo === 'revelar_rect') fogRevealRect(mapId, a.rect.c1, a.rect.r1, a.rect.c2, a.rect.r2);
-        else if (a.modo === 'desativar') { (FOG_STATE.mapas as any)[mapId] = {}; fogRenderizar(mapId); }
+        else if (a.modo === 'desativar') { (FOG_STATE.mapas as any)[mapId!] = {}; fogRenderizar(mapId); }
         else if (a.modo === 'gradual')   { fogInicializar(mapId, _getMapaById(mapId)); fogRenderizar(mapId); }
         break;
       case 'zona': {
@@ -6903,18 +6903,18 @@ function pacoteMostrarConfirmacao(resultado: any) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'modal-pacote-confirmacao';
-    modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);align-items:flex-end;justify-content:center';
+    modal.style!.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);align-items:flex-end;justify-content:center';
     modal.innerHTML = `<div style="background:var(--painel,#141d2b);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px;max-height:80vh;display:flex;flex-direction:column;gap:12px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-family:var(--fonte-d);font-size:0.85rem;color:var(--texto)">Pacote de Sessão</div><button onclick="document.getElementById('modal-pacote-confirmacao').style.display='none'" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:1.1rem">✕</button></div><div id="pacote-resumo" style="font-size:0.78rem;color:var(--suave)"></div><div id="pacote-linhas" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:4px"></div><div style="display:flex;gap:8px"><button onclick="pacoteAplicar(window._pacoteResultado).then(()=>{ document.getElementById('modal-pacote-confirmacao').style.display='none'; mostrarToast('✓ Pacote aplicado','ok'); })" style="flex:1;padding:11px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.4);border-radius:8px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">✓ Confirmar e aplicar</button><button onclick="document.getElementById('modal-pacote-confirmacao').style.display='none'" style="padding:11px 18px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">Revisar</button></div></div>`;
     document.body.appendChild(modal);
   }
   window._pacoteResultado = resultado;
-  document.getElementById('pacote-resumo').innerHTML = '<span style="color:#5ee09a">✓ '+ok+' aplicadas</span> · <span style="color:#f0cc6a">⚠ '+av+' corrigidas</span> · <span style="color:#e74c3c">✗ '+er+' ignoradas</span>';
-  document.getElementById('pacote-linhas').innerHTML = resultado.map((r: any) => {
+  document.getElementById('pacote-resumo')!.innerHTML = '<span style="color:#5ee09a">✓ '+ok+' aplicadas</span> · <span style="color:#f0cc6a">⚠ '+av+' corrigidas</span> · <span style="color:#e74c3c">✗ '+er+' ignoradas</span>';
+  document.getElementById('pacote-linhas')!.innerHTML = resultado.map((r: any) => {
     const cor  = r.status==='ok' ? '#5ee09a' : r.status==='aviso' ? '#f0cc6a' : '#e74c3c';
     const icon = r.status==='ok' ? '✓' : r.status==='aviso' ? '⚠' : '✗';
     return '<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:5px;border-left:2px solid '+cor+'"><span style="color:'+cor+';flex-shrink:0;font-size:0.75rem;margin-top:1px">'+icon+'</span><div style="flex:1;min-width:0"><div style="font-size:0.7rem;color:var(--texto);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.linha+'</div>'+(r.msg?'<div style="font-size:0.65rem;color:'+cor+';margin-top:1px">'+r.msg+'</div>':'')+'</div></div>';
   }).join('');
-  modal.style.display = 'flex';
+  modal.style!.display = 'flex';
 }
 
 window.processarPacoteSessao = function(texto: any) {
@@ -6997,19 +6997,19 @@ window.abrirModalGeracaoCena = function() {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'modal-gerar-cena';
-    modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);align-items:flex-end;justify-content:center';
+    modal.style!.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);align-items:flex-end;justify-content:center';
     modal.innerHTML = `<div style="background:var(--painel,#141d2b);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:580px;max-height:80vh;overflow-y:auto"><div style="font-family:var(--fonte-d);font-size:0.85rem;color:var(--texto);margin-bottom:14px">⚄ Gerar Cena Aleatória</div>'+Object.entries<any>(BIBLIOTECA_CENA).map(([cat, itens]) => '<div style="margin-bottom:10px"><div style="font-size:0.6rem;color:var(--destaque);font-family:var(--fonte-d);text-transform:uppercase;margin-bottom:5px">'+cat+'</div><div style="display:flex;flex-wrap:wrap;gap:5px">'+itens.map(item => '<label style="display:flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid var(--borda);border-radius:12px;cursor:pointer;font-size:0.65rem;color:var(--suave)"><input type="checkbox" value="'+item+'" data-cat="'+cat+'" style="accent-color:var(--destaque)"> '+item+'</label>').join('')+'</div></div>').join('')+'<button onclick="_confirmarGeracaoCena()" style="width:100%;margin-top:12px;padding:11px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.35);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">⚄ Gerar</button><button onclick="document.getElementById('modal-gerar-cena').style.display='none'" style="width:100%;margin-top:6px;padding:8px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">Cancelar</button></div>`;
 
     document.body.appendChild(modal);
   }
-  modal.style.display = 'flex';
+  modal.style!.display = 'flex';
 };
 window._confirmarGeracaoCena = function() {
   const checks = document.querySelectorAll('#modal-gerar-cena input[type=checkbox]:checked');
   const sel: Record<string, any> = {};
-  checks.forEach(cb => { const cat = cb.dataset.cat; if (!sel[cat]) sel[cat] = []; sel[cat].push(cb.value); });
+  checks.forEach(cb => { const cat = cb.dataset!.cat; if (!sel[cat!]) sel[cat!] = []; sel[cat!].push(cb.value); });
   const cena = gerarCenaAleatoria(sel);
-  document.getElementById('modal-gerar-cena').style.display = 'none';
+  document.getElementById('modal-gerar-cena')!.style!.display = 'none';
   mostrarToast('✓ Cena gerada: ' + cena.gerada.estrutural + ' com ' + cena.gerada.passagens.join(', '), 'ok');
 };
 
@@ -7058,7 +7058,7 @@ function npcTogglePiloto(nomeNpc: any) {
   if (tokenEl) {
     let badge = tokenEl.querySelector('.piloto-badge');
     if (NPC_PILOTO[nomeNpc]) {
-      if (!badge) { badge=document.createElement('div'); badge.className='piloto-badge'; badge.style.cssText='position:absolute;top:-5px;left:-5px;width:11px;height:11px;border-radius:50%;background:#b07ef0;border:1px solid rgba(0,0,0,0.8);font-size:6px;display:flex;align-items:center;justify-content:center;color:#fff;z-index:15;pointer-events:none'; badge.textContent='🤖'; tokenEl.appendChild(badge); }
+      if (!badge) { badge=document.createElement('div'); badge.className='piloto-badge'; badge.style!.cssText='position:absolute;top:-5px;left:-5px;width:11px;height:11px;border-radius:50%;background:#b07ef0;border:1px solid rgba(0,0,0,0.8);font-size:6px;display:flex;align-items:center;justify-content:center;color:#fff;z-index:15;pointer-events:none'; badge.textContent='🤖'; tokenEl.appendChild(badge); }
     } else { badge?.remove(); }
   }
 }
@@ -7115,7 +7115,7 @@ window.confirmarUsarItem = async function() {
   if (!usuarioChar) { mostrarToast('Personagem não encontrado', 'erro'); return; }
   if (precisaAprovacao) {
     try {
-      const [row] = await sb('item_usos', { method:'POST', headers:{'Prefer':'return=representation'}, body:JSON.stringify({ rpg_id:RPG_DATA.rpgId, inventario_id:invItem.id, item_def_id:def.id, usado_por_id:usuarioChar.id, alvo_id:alvoId||null, status:'pendente', efeitos_snap:def.efeitos }) });
+      const [row] = await sb('item_usos', { method:'POST', headers:{'Prefer':'return=representation'}, body:JSON.stringify({ rpg_id:RPG_DATA!.rpgId, inventario_id:invItem.id, item_def_id:def.id, usado_por_id:usuarioChar.id, alvo_id:alvoId||null, status:'pendente', efeitos_snap:def.efeitos }) });
       if (row) INV.usosPendentes.push(row);
       renderItensPendentes6();
       mostrarToast('⏳ Aguardando aprovação do Mestre', 'aviso');
@@ -7137,8 +7137,8 @@ function renderItensPendentes6() {
   const wrap = document.getElementById('itens-aprovacoes-wrap');
   const lista = document.getElementById('itens-aprovacoes-lista');
   if (!wrap||!lista) return;
-  if (RPG_DATA?.myRole !== 'mestre' || !INV.usosPendentes?.length) { wrap.style.display='none'; return; }
-  wrap.style.display = 'block';
+  if (RPG_DATA?.myRole !== 'mestre' || !INV.usosPendentes?.length) { wrap.style!.display='none'; return; }
+  wrap.style!.display = 'block';
   const bloqueantes = INV.usosPendentes.filter((u: any) => { const def=INV.itemDefs?.find((d: any)=>d.id===(u.item_def_id||u.item_catalog_id)); const ef=u.efeitos_snap||def?.efeitos||[]; return ef.some((e: any)=>e.tipo==='dano'||e.tipo==='debuff'||e.tipo==='dot'); });
   const aguardando  = INV.usosPendentes.filter((u: any) => !bloqueantes.includes(u));
   const _renderRaia = (label: any, cor: any, items: any) => {
@@ -7176,7 +7176,7 @@ function lootMostrarJanela(lootId: any, nomeItem: any, raridade: any) {
   const corRar = ({comum:'#9aa8b8',incomum:'#5ee09a',raro:'#7ec8f0',epico:'#b07ef0',lendario:'#f0cc6a'} as any)[raridade]||'#9aa8b8';
   LOOT_RECLAMOS[lootId] = LOOT_RECLAMOS[lootId]||[];
   let card = document.getElementById('loot-janela-'+lootId);
-  if (!card) { card=document.createElement('div'); card.id='loot-janela-'+lootId; card.style.cssText='position:fixed;top:80px;right:12px;z-index:9150;border:2px solid '+corRar+';border-radius:10px;background:rgba(10,15,25,0.96);padding:10px 12px;min-width:170px;box-shadow:0 8px 24px rgba(0,0,0,0.6)'; document.body.appendChild(card); }
+  if (!card) { card=document.createElement('div'); card.id='loot-janela-'+lootId; card.style!.cssText='position:fixed;top:80px;right:12px;z-index:9150;border:2px solid '+corRar+';border-radius:10px;background:rgba(10,15,25,0.96);padding:10px 12px;min-width:170px;box-shadow:0 8px 24px rgba(0,0,0,0.6)'; document.body.appendChild(card); }
   let seg = 15;
   card.innerHTML = '<div style="font-size:0.65rem;color:'+corRar+';font-family:var(--fonte-d);margin-bottom:4px">'+nomeItem+'</div><div style="font-size:0.58rem;color:var(--suave);margin-bottom:8px">Interesse em <span id="loot-timer-'+lootId+'" style="color:'+corRar+'">'+seg+'s</span></div><button onclick="lootReclamar(\'' + lootId + '\')" style="width:100%;padding:7px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:7px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;min-height:40px">✋ Tenho interesse</button><div id="loot-reclamos-'+lootId+'" style="margin-top:5px;font-size:0.58rem;color:var(--suave)"></div>';
   const countdown = setInterval(() => { seg--; const t=document.getElementById('loot-timer-'+lootId); if(t) t.textContent=seg+'s'; if(seg<=0){clearInterval(countdown);lootResolverReclamo(lootId,nomeItem);} }, 1000);
@@ -7204,7 +7204,7 @@ window._mapaAdicionarBadgesBuffTokens = function() {
     const tokenEl = document.querySelector('.mapa-token[data-nome="'+CSS.escape(c.nome)+'"]'); if (!tokenEl) return;
     tokenEl.querySelectorAll('.buff-status-badge').forEach(b=>b.remove());
     const ativos = buffs.filter(b => { const t=b.turnos_restantes??b.dot_turnos_restantes??b.hot_turnos_restantes??0; return t>0||(b.sem_movimento&&(b.sem_movimento_turnos_restantes??0)>0)||(b.sem_ataque&&(b.sem_ataque_turnos_restantes??0)>0)||(b.esquiva_ativa&&(b.esquiva_turnos_restantes??0)>0)||(b.imune_dano&&(b.imune_dano_turnos_restantes??0)>0); });
-    if (!ativos.length) { const c0=tokenEl.querySelector('.mapa-token-circle'); if(c0){c0.style.boxShadow=''; c0.style.animation='';} tokenEl.querySelectorAll('.buff-status-badge,.token-anim-persistente').forEach(b=>b.remove()); return; }
+    if (!ativos.length) { const c0=tokenEl.querySelector('.mapa-token-circle'); if(c0){c0.style!.boxShadow=''; c0.style!.animation='';} tokenEl.querySelectorAll('.buff-status-badge,.token-anim-persistente').forEach(b=>b.remove()); return; }
     const temDebSev = ativos.some(b=>b.tipo==='debuff'&&(b.sem_movimento||b.sem_ataque||(b.dot_formula&&(b.dot_turnos_restantes??0)>0)));
     const temBuff   = ativos.some(b=>b.tipo==='buff');
     const temImune  = ativos.some(b=>b.imune_dano&&(b.imune_dano_turnos_restantes??0)>0);
@@ -7216,13 +7216,13 @@ window._mapaAdicionarBadgesBuffTokens = function() {
       const aura = document.createElement('div');
       aura.className = 'token-anim-persistente';
       const corAura = temImune ? '#f0cc6a' : temBuff ? '#5ee09a' : '#e74c3c';
-      aura.style.cssText = `position:absolute;inset:-6px;border-radius:50%;border:2px solid ${corAura};opacity:0.7;pointer-events:none;z-index:2;animation:tokenAuraPulse 1.6s ease-in-out infinite;`;
-      tokenEl.style.position = 'relative';
+      aura.style!.cssText = `position:absolute;inset:-6px;border-radius:50%;border:2px solid ${corAura};opacity:0.7;pointer-events:none;z-index:2;animation:tokenAuraPulse 1.6s ease-in-out infinite;`;
+      tokenEl.style!.position = 'relative';
       tokenEl.appendChild(aura);
     }
     if (circle) {
       const shadowGlow = temImune ? '0 0 0 2px rgba(240,204,106,0.9),0 0 10px rgba(240,204,106,0.5)' : temDebSev ? '0 0 0 2px rgba(231,76,60,0.9),0 0 8px rgba(231,76,60,0.4)' : temBuff ? '0 0 0 2px rgba(94,224,154,0.8),0 0 6px rgba(94,224,154,0.3)' : '0 0 0 2px rgba(240,204,106,0.6)';
-      circle.style.boxShadow = shadowGlow;
+      circle.style!.boxShadow = shadowGlow;
     }
     const iconMap = { dot:{emoji:'🩸',cor:'#c0392b'}, hot:{emoji:'💚',cor:'#27ae60'}, sem_mov:{emoji:'🦶',cor:'#e74c3c'}, sem_atk:{emoji:'⚔',cor:'#e74c3c'}, esquiva:{emoji:'🔵',cor:'#2980b9'}, imune:{emoji:'🛡',cor:'#f0cc6a'}, buff:{emoji:'✨',cor:'#b07ef0'}, debuff:{emoji:'☠',cor:'#8e44ad'} };
     const icones = [];
@@ -7235,9 +7235,9 @@ window._mapaAdicionarBadgesBuffTokens = function() {
     if(ativos.some(b=>b.tipo==='buff'&&!b.dot_formula&&!b.hot_formula)) icones.push(iconMap.buff);
     else if(ativos.some(b=>b.tipo==='debuff'&&!b.dot_formula&&!b.sem_movimento&&!b.sem_ataque)) icones.push(iconMap.debuff);
     const iconesWrap = document.createElement('div');
-    iconesWrap.style.cssText = 'position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);display:flex;gap:2px;z-index:12;pointer-events:none';
-    icones.slice(0,3).forEach(ico => { const s=document.createElement('div'); s.className='buff-status-badge'; s.style.cssText='width:14px;height:14px;border-radius:50%;background:'+ico.cor+';border:1px solid rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;font-size:7px'; s.textContent=ico.emoji; iconesWrap.appendChild(s); });
-    if (icones.length>3) { const ex=document.createElement('div'); ex.className='buff-status-badge'; ex.style.cssText='width:14px;height:14px;border-radius:50%;background:rgba(122,146,170,0.8);border:1px solid rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;font-size:7px;color:#fff'; ex.textContent='+'+(icones.length-3); iconesWrap.appendChild(ex); }
+    iconesWrap.style!.cssText = 'position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);display:flex;gap:2px;z-index:12;pointer-events:none';
+    icones.slice(0,3).forEach(ico => { const s=document.createElement('div'); s.className='buff-status-badge'; s.style!.cssText='width:14px;height:14px;border-radius:50%;background:'+ico.cor+';border:1px solid rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;font-size:7px'; s.textContent=ico.emoji; iconesWrap.appendChild(s); });
+    if (icones.length>3) { const ex=document.createElement('div'); ex.className='buff-status-badge'; ex.style!.cssText='width:14px;height:14px;border-radius:50%;background:rgba(122,146,170,0.8);border:1px solid rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;font-size:7px;color:#fff'; ex.textContent='+'+(icones.length-3); iconesWrap.appendChild(ex); }
     const buffStr = ativos.map(b=>(b.nome||'buff')+' ('+(b.turnos_restantes??b.dot_turnos_restantes??b.hot_turnos_restantes??'?')+'t)').join(' | ');
     tokenEl.title = (c.nome || '') + (buffStr ? '\n' + buffStr : '');
     tokenEl.appendChild(iconesWrap);
@@ -7279,7 +7279,7 @@ window._invEquipar = async function(nomeChar, invItem, def) {
 function bloqueadoPorNivel(charNome: any, itemDef: any) {
   const c = (RPG_DATA?.characters||[]).find(ch=>ch.nome===charNome); if (!c) return false;
   const nivel = c.nivel??c.custom_attrs?.nivel??c.custom_attrs?.atributos?.Nível??1;
-  return parseInt(nivel) < parseInt(itemDef?.nivel_minimo_uso??itemDef?.nivel??1);
+  return parseInt(nivel as any) < parseInt((itemDef?.nivel_minimo_uso??itemDef?.nivel??1) as any);
 }
 var _origRenderInvCompleto6 = window.renderInvCompleto;
 window.renderInvCompleto = function() {
@@ -7377,7 +7377,7 @@ function abrirModalIniciarBatalha() {
 
   const lista = document.getElementById('ini-batalha-participantes');
   const charsFiltrados = chars.filter(c => !c.custom_attrs?.eh_pet && !c.custom_attrs?.morto);
-  lista.innerHTML = charsFiltrados.map(c => {
+  lista!.innerHTML = charsFiltrados.map(c => {
     const ca = c.custom_attrs || {};
     const tipo = (ca.tipo_personagem === 'npc' || ca.tipo === 'npc') ? 'npc' : 'jogador';
     const cor = ca.cor || (tipo==='npc'?'#e8604c':'#7ec8f0');
@@ -7388,19 +7388,19 @@ function abrirModalIniciarBatalha() {
     </label>`;
   }).join('');
 
-  document.getElementById('modal-iniciar-batalha-overlay').style.display = 'flex';
+  document.getElementById('modal-iniciar-batalha-overlay')!.style!.display = 'flex';
 }
 
 function fecharModalIniciarBatalha() {
-  document.getElementById('modal-iniciar-batalha-overlay').style.display = 'none';
+  document.getElementById('modal-iniciar-batalha-overlay')!.style!.display = 'none';
 }
 
 async function confirmarIniciarBatalha() {
   fecharModalIniciarBatalha();
   const checkboxes = document.querySelectorAll('#ini-batalha-participantes input[type=checkbox]:checked');
   const participantesBase = Array.from(checkboxes).map(cb => ({
-    nome: cb.dataset.nome, tipo: cb.dataset.tipo,
-    cor: cb.dataset.cor, iniciativa: null as any
+    nome: cb.dataset!.nome, tipo: cb.dataset!.tipo,
+    cor: cb.dataset!.cor, iniciativa: null as any
   })).filter(p => {
     // Pets não participam da fila de iniciativa — agem no turno do dono
     const c = (RPG_DATA?.characters||[]).find(x => x.nome === p.nome);
@@ -7418,7 +7418,7 @@ async function confirmarIniciarBatalha() {
   }
 
   const mapaId = MAPA_STATE.mapaAtualId;
-  const mapaEntry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapaId);
+  const mapaEntry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapaId);
   const mapaNome = mapaEntry?.mapa?.nome || mapaId;
   const bid = batalhaNovaId(mapaId);
 
@@ -7430,7 +7430,7 @@ async function confirmarIniciarBatalha() {
       const bonus = parseInt(ca.bonus_iniciativa) || 0;
       const roll = Math.floor(Math.random() * 20) + 1 + bonus;
       p.iniciativa = roll;
-      iniciativasRoladas[p.nome] = roll;
+      iniciativasRoladas[p.nome!] = roll;
     }
     // Personagens sem jogador vinculado: mestre rola manualmente
     // Jogadores vinculados: cada um rola no seu cliente
@@ -7440,17 +7440,17 @@ async function confirmarIniciarBatalha() {
   const _maxDef = cfg.max_defesas_por_rodada === 'unlimited' ? 999 : (cfg.max_defesas_por_rodada || 1);
   const recursos_participantes: Record<string, any> = {};
   participantesBase.forEach(p => {
-    recursos_participantes[p.nome] = {
+    recursos_participantes[p.nome!] = {
       reacao_disponivel: cfg.usa_reacoes,
       slots_defesa_restantes: _maxDef,
       penalidade_defesa_atual: 0,
     };
   });
   MAPA_STATE.batalhas[bid] = {
-    id: bid, mapa_id: mapaId, mapa_nome: mapaNome,
+    id: bid, mapa_id: mapaId as any, mapa_nome: mapaNome as any,
     ativa: true, pausada: false, turnoRound: 1,
     fase: 'iniciativa',
-    participantes: participantesBase,
+    participantes: participantesBase as any,
     ordemAtual: 0, iniciativasRoladas, empatados: [], dadoSel: null,
     cooldowns: {},
     recursos_participantes,
@@ -7477,9 +7477,9 @@ function batalhaRenderFaseIniciativa() {
   const isMestre = RPG_DATA?.myRole === 'mestre';
 
   lista.innerHTML = bs.participantes.map((p: any) => {
-    const rolou = bs.iniciativasRoladas[p.nome] != null;
+    const rolou = bs.iniciativasRoladas![p.nome] != null;
     const emEmpate = bs.empatados?.includes(p.nome);
-    const valor = bs.iniciativasRoladas[p.nome];
+    const valor = bs.iniciativasRoladas![p.nome];
     const statusIcon = emEmpate ? '⚠' : (rolou ? '✓' : '⏳');
     const statusCor = emEmpate ? '#c8a84b' : (rolou ? '#5ee09a' : '#7a6060');
     const offline = personagemTemJogador(p.nome) && !mestreDeveJogarPor(p) && !jogadorEstaOnline(p.nome);
@@ -7508,10 +7508,10 @@ function batalhaRenderFaseIniciativa() {
   const btnRolar = document.getElementById('batalha-btn-rolar-iniciativa');
   if (btnRolar && bs) {
     const euParticipo = bs.participantes.find((p: any) => p.nome === meuNome);
-    const jaRolei = euParticipo && bs.iniciativasRoladas[meuNome] != null && !bs.empatados?.includes(meuNome);
+    const jaRolei = euParticipo && bs.iniciativasRoladas![meuNome!] != null && !bs.empatados?.includes(meuNome!);
     // Mostrar botão global apenas para jogadores (não mestre): o mestre usa os botões inline
-    btnRolar.style.display = (!isMestre && euParticipo && !jaRolei) ? '' : 'none';
-    btnRolar.textContent = bs.empatados?.includes(meuNome) ? '⚠ Empate — Rolar Novamente' : '🎲 Rolar Iniciativa (d20)';
+    btnRolar.style!.display = (!isMestre && euParticipo && !jaRolei) ? '' : 'none';
+    btnRolar.textContent = bs.empatados?.includes(meuNome!) ? '⚠ Empate — Rolar Novamente' : '🎲 Rolar Iniciativa (d20)';
     btnRolar.onclick = () => abrirModalIniciativa();
   }
 }
@@ -7523,21 +7523,21 @@ function abrirModalIniciativa(nomePersonagem?: any) {
   if (!nome) { mostrarToast('Sem personagem vinculado', 'erro'); return; }
   INI_VALOR_ATUAL = null;
   INI_NOME_ATUAL = nome; // guarda para usar no confirmar
-  document.getElementById('ini-modal-nome').textContent = nome;
-  document.getElementById('ini-dado-display').textContent = '—';
-  document.getElementById('ini-dado-display').style.color = 'var(--primario-v)';
+  document.getElementById('ini-modal-nome')!.textContent = nome;
+  document.getElementById('ini-dado-display')!.textContent = '—';
+  document.getElementById('ini-dado-display')!.style!.color = 'var(--primario-v)';
   const btnConf = document.getElementById('ini-btn-confirmar');
-  btnConf.disabled = true; btnConf.style.opacity = '0.4'; btnConf.style.display = '';
+  btnConf!.disabled = true; btnConf!.style!.opacity = '0.4'; btnConf!.style!.display = '';
   const btnRolar = document.getElementById('ini-btn-rolar');
-  if (btnRolar) btnRolar.style.display = '';
+  if (btnRolar) btnRolar.style!.display = '';
   const btnFechar = document.getElementById('ini-btn-fechar');
-  if (btnFechar) btnFechar.style.display = 'none';
-  document.getElementById('ini-modal-aviso').style.display = 'none';
-  document.getElementById('modal-iniciativa-overlay').style.display = 'flex';
+  if (btnFechar) btnFechar.style!.display = 'none';
+  document.getElementById('ini-modal-aviso')!.style!.display = 'none';
+  document.getElementById('modal-iniciativa-overlay')!.style!.display = 'flex';
 }
 
 function fecharModalIniciativa() {
-  document.getElementById('modal-iniciativa-overlay').style.display = 'none';
+  document.getElementById('modal-iniciativa-overlay')!.style!.display = 'none';
   if (typeof _atualizarZonaDireita === 'function' && typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo) {
     _atualizarZonaDireita();
   }
@@ -7554,18 +7554,18 @@ function iniciativaRolarDado() {
   const _desMod = Math.floor(_destr / 4);
   INI_VALOR_ATUAL = d20 + _desMod;
   const el = document.getElementById('ini-dado-display');
-  el.textContent = INI_VALOR_ATUAL + (_desMod !== 0 ? ' (' + d20 + (_desMod > 0 ? '+' : '') + _desMod + ')' : '');
-  el.style.color = INI_VALOR_ATUAL === 20 ? '#f0cc6a' : INI_VALOR_ATUAL === 1 ? '#e74c3c' : 'var(--primario-v)';
-  el.style.transform = 'scale(1.3)';
-  setTimeout(() => { el.style.transform = ''; }, 200);
+  el!.textContent = INI_VALOR_ATUAL + (_desMod !== 0 ? ' (' + d20 + (_desMod > 0 ? '+' : '') + _desMod + ')' : '');
+  el!.style!.color = INI_VALOR_ATUAL === 20 ? '#f0cc6a' : INI_VALOR_ATUAL === 1 ? '#e74c3c' : 'var(--primario-v)';
+  el!.style!.transform = 'scale(1.3)';
+  setTimeout(() => { el!.style!.transform = ''; }, 200);
 
   // Ocultar botão de rolar e confirmar; mostrar apenas fechar
   const btnRolar = document.getElementById('ini-btn-rolar');
-  if (btnRolar) btnRolar.style.display = 'none';
+  if (btnRolar) btnRolar.style!.display = 'none';
   const btnConf = document.getElementById('ini-btn-confirmar');
-  if (btnConf) btnConf.style.display = 'none';
+  if (btnConf) btnConf.style!.display = 'none';
   const btnFechar = document.getElementById('ini-btn-fechar');
-  if (btnFechar) btnFechar.style.display = '';
+  if (btnFechar) btnFechar.style!.display = '';
 
   // Aplicar automaticamente
   iniciativaConfirmar();
@@ -7574,8 +7574,8 @@ function iniciativaRolarDado() {
   const aviso = document.getElementById('ini-modal-aviso');
   if (aviso) {
     aviso.textContent = '✓ Iniciativa registrada!';
-    aviso.style.color = '#5ee09a';
-    aviso.style.display = '';
+    aviso.style!.color = '#5ee09a';
+    aviso.style!.display = '';
   }
 
   // No modo controle mobile, fechar automaticamente após exibir resultado
@@ -7597,10 +7597,10 @@ async function iniciativaConfirmar() {
   const bs = MAPA_STATE.batalhas[bid];
   if (!bs) return;
 
-  bs.iniciativasRoladas[nomeAlvo] = INI_VALOR_ATUAL;
+  bs.iniciativasRoladas![nomeAlvo] = INI_VALOR_ATUAL;
   const p = bs.participantes.find((x: any) => x.nome === nomeAlvo);
   if (p) p.iniciativa = INI_VALOR_ATUAL;
-  bs.empatados = bs.empatados.filter((n: any) => n !== nomeAlvo);
+  bs.empatados = bs.empatados!.filter((n: any) => n !== nomeAlvo);
 
   batalhaRenderFaseIniciativa();
   // Broadcast instantâneo para todos os clientes verem a iniciativa em tempo real
@@ -7613,12 +7613,12 @@ async function iniciativaConfirmar() {
 function batalhaVerificarIniciativasCompletas(bid: any) {
   const bs = MAPA_STATE.batalhas[bid];
   if (!bs) return;
-  const todosRolaram = bs.participantes.every(p => bs.iniciativasRoladas[p.nome] != null);
+  const todosRolaram = bs.participantes.every(p => bs.iniciativasRoladas![p.nome] != null);
   if (!todosRolaram) return;
 
   const grupos: Record<string, any> = {};
   bs.participantes.forEach(p => {
-    const v = bs.iniciativasRoladas[p.nome];
+    const v = bs.iniciativasRoladas![p.nome];
     if (!grupos[v]) grupos[v] = [];
     grupos[v].push(p);
   });
@@ -7628,15 +7628,15 @@ function batalhaVerificarIniciativasCompletas(bid: any) {
   if (empatados.length) {
     bs.empatados = empatados;
     empatados.forEach((n: any) => {
-      delete bs.iniciativasRoladas[n];
+      delete bs.iniciativasRoladas![n];
       const p = bs.participantes.find(x => x.nome === n);
       if (p) p.iniciativa = null;
       // Apenas NPCs re-rolam automaticamente
       if (p && p.tipo === 'npc') {
         const roll = Math.floor(Math.random() * 20) + 1;
-        bs.iniciativasRoladas[n] = roll;
+        bs.iniciativasRoladas![n] = roll;
         p.iniciativa = roll;
-        bs.empatados = bs.empatados.filter(e => e !== n);
+        bs.empatados = bs.empatados!.filter(e => e !== n);
       }
       // Personagens sem jogador vinculado e jogadores ficam em bs.empatados aguardando rolagem manual
     });
@@ -7647,7 +7647,7 @@ function batalhaVerificarIniciativasCompletas(bid: any) {
     combateBroadcast('batalha_estado', { batalhaId: bid, fase: bs.fase, iniciativasRoladas: bs.iniciativasRoladas, empatados: bs.empatados, participantes: bs.participantes });
 
     // Verificar se ainda há alguém esperando rolar manualmente
-    const pendentesHumanos = bs.empatados.length > 0;
+    const pendentesHumanos = bs.empatados!.length > 0;
     if (pendentesHumanos) {
       mostrarToast('⚠ Empate! Os participantes marcados devem re-rolar.', '');
       // NPCs já re-rolaram; pode ter criado novo empate entre eles — re-verificar só NPCs pendentes
@@ -7659,8 +7659,8 @@ function batalhaVerificarIniciativasCompletas(bid: any) {
     return;
   }
 
-  bs.participantes.sort((a, b) => (bs.iniciativasRoladas[b.nome]||0) - (bs.iniciativasRoladas[a.nome]||0));
-  bs.participantes.forEach(p => { p.iniciativa = bs.iniciativasRoladas[p.nome]; });
+  bs.participantes.sort((a, b) => (bs.iniciativasRoladas![b.nome]||0) - (bs.iniciativasRoladas![a.nome]||0));
+  bs.participantes.forEach(p => { p.iniciativa = bs.iniciativasRoladas![p.nome]; });
   bs.fase = 'combate';
   bs.ordemAtual = 0;
   bs.empatados = [];
@@ -7726,7 +7726,7 @@ function batalhaRenderVezLabel() {
   if (!movEl) {
     movEl = document.createElement('div');
     movEl.id = 'batalha-mov-restante';
-    movEl.style.cssText = 'font-family:var(--fonte-d);font-size:0.6rem;color:rgba(200,168,75,0.7);margin-top:3px';
+    movEl.style!.cssText = 'font-family:var(--fonte-d);font-size:0.6rem;color:rgba(200,168,75,0.7);margin-top:3px';
     label.after(movEl);
   }
   if (BATALHA_ATUAL_ID) {
@@ -7738,10 +7738,10 @@ function batalhaRenderVezLabel() {
   // Aviso offline
   if (avisoOffline) {
     if (isOffline) {
-      avisoOffline.style.display = '';
+      avisoOffline.style!.display = '';
       avisoOffline.textContent = `📴 ${atual.nome} está offline. Aguardando ou o mestre pode jogar por ele.`;
     } else {
-      avisoOffline.style.display = 'none';
+      avisoOffline.style!.display = 'none';
     }
   }
 
@@ -7752,16 +7752,16 @@ function batalhaRenderVezLabel() {
 
   if (btnAtacar) {
     const podeAtacar = (ehMinhaVez || podeMestreAtacar) && !pausada && !isOffline;
-    btnAtacar.style.display = podeAtacar ? '' : 'none';
+    btnAtacar.style!.display = podeAtacar ? '' : 'none';
     btnAtacar.disabled = pausada;
   }
   // Botão "jogar por offline": só mestre, só quando o personagem TEM jogador mas está offline
   if (btnJogarPor) {
-    btnJogarPor.style.display = (isMestre && isOffline) ? '' : 'none';
+    btnJogarPor.style!.display = (isMestre && isOffline) ? '' : 'none';
   }
-  if (btnPular) btnPular.style.display = isMestre ? '' : 'none';
+  if (btnPular) btnPular.style!.display = isMestre ? '' : 'none';
   if (wrapReorder) {
-    wrapReorder.style.display = isMestre ? '' : 'none';
+    wrapReorder.style!.display = isMestre ? '' : 'none';
     batalhaRenderReordenarLista();
   }
 }
@@ -7840,7 +7840,7 @@ async function batalhaPassarVez() {
 
   const novoRound = next === 0;
   if (novoRound) {
-    bs.turnoRound++;
+    bs.turnoRound!++;
     const elTurnoPass = document.getElementById('mapa-batalha-turno');
     if (elTurnoPass) (elTurnoPass as any).textContent = bs.turnoRound;
     mostrarToast(`🔄 Round ${bs.turnoRound}`, '');
@@ -7852,9 +7852,9 @@ async function batalhaPassarVez() {
     const _maxDef = _cfg.max_defesas_por_rodada === 'unlimited' ? 999 : (_cfg.max_defesas_por_rodada || 1);
     if (bs.recursos_participantes && typeof bs.recursos_participantes === 'object') {
       Object.keys(bs.recursos_participantes).forEach(nome => {
-        bs.recursos_participantes[nome].reacao_disponivel = _cfg.usa_reacoes;
-        bs.recursos_participantes[nome].slots_defesa_restantes = _maxDef;
-        bs.recursos_participantes[nome].penalidade_defesa_atual = 0;
+        bs.recursos_participantes![nome].reacao_disponivel = _cfg.usa_reacoes;
+        bs.recursos_participantes![nome].slots_defesa_restantes = _maxDef;
+        bs.recursos_participantes![nome].penalidade_defesa_atual = 0;
       });
     }
     // ── Vol II v2.1: Salvaguardas de Morte ──────────────────────────
@@ -7894,7 +7894,7 @@ async function batalhaPassarVez() {
           combateBroadcast('personagem_morto', { nome: cSalv.nome });
         }
       }
-      await saveCharacterStats(RPG_DATA.rpgId, cSalv.nome, {
+      await saveCharacterStats(RPG_DATA!.rpgId, cSalv.nome, {
         hp_atual: cSalv.hp_atual, custom_attrs: cSalv.custom_attrs
       });
     }
@@ -8027,7 +8027,7 @@ function _mostrarDialogReacao(reativa: any, ctx: any, tipo: any) {
 
     const hab = reativa.habilidade;
     const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10300;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10300;display:flex;align-items:center;justify-content:center;padding:20px';
     overlay.innerHTML = `
       <div style="background:linear-gradient(160deg,#0d1a1a,#081110);border:1px solid rgba(93,173,226,0.4);border-radius:14px;padding:24px 20px;max-width:320px;width:100%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
         <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#9a8888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">⚡ ${tipo === 'interrupt' ? 'Interrupção' : 'Reação'}</div>
@@ -8042,7 +8042,7 @@ function _mostrarDialogReacao(reativa: any, ctx: any, tipo: any) {
 
     let autoTimer = setTimeout(() => { overlay.remove(); resolve(undefined); }, 15000);
 
-    overlay.querySelector('#dialog-reacao-usar').onclick = () => {
+    overlay.querySelector('#dialog-reacao-usar')!.onclick = () => {
       clearTimeout(autoTimer);
       overlay.remove();
       if (rec) {
@@ -8053,7 +8053,7 @@ function _mostrarDialogReacao(reativa: any, ctx: any, tipo: any) {
       mostrarToast(`${msgTipo}: ${reativa.personagem} usou ${hab.habilidade}!`, tipo === 'interrupt' ? 'sucesso' : '');
       resolve(tipo === 'interrupt' ? { cancelar: true, movimento_bonus: hab.movimento_bonus_cancelar ?? 0 } : { cancelar: false });
     };
-    overlay.querySelector('#dialog-reacao-ignorar').onclick = () => {
+    overlay.querySelector('#dialog-reacao-ignorar')!.onclick = () => {
       clearTimeout(autoTimer);
       overlay.remove();
       resolve(undefined);
@@ -8264,7 +8264,7 @@ function batalhaAtacarVez() {
   if (!atual) return;
   // Esconder botão enquanto modo de ataque está ativo
   const btnAtacar = document.getElementById('batalha-btn-atacar');
-  if (btnAtacar) btnAtacar.style.display = 'none';
+  if (btnAtacar) btnAtacar.style!.display = 'none';
   abrirModalAtaque(atual.nome, 'campanha');
 }
 
@@ -8291,7 +8291,7 @@ async function batalhaJogarPorOffline(nomeParticipante: any) {
   }
   mostrarToast(`🎮 Jogando por ${atual.nome}...`, '');
   const btnAtacar = document.getElementById('batalha-btn-atacar');
-  if (btnAtacar) btnAtacar.style.display = 'none';
+  if (btnAtacar) btnAtacar.style!.display = 'none';
   abrirModalAtaque(atual.nome, 'campanha');
 }
 
@@ -8459,7 +8459,7 @@ function _mostrarTelaVitoria(bs: any) {
 
   const overlay = document.createElement('div');
   overlay.id = 'batalha-vitoria-overlay';
-  overlay.style.cssText = `position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);animation:fadeIn 0.4s ease`;
+  overlay.style!.cssText = `position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);animation:fadeIn 0.4s ease`;
 
   overlay.innerHTML = `
     <style>
@@ -8530,7 +8530,7 @@ async function _encerrarBatalhaAposVitoria() {
         }
         c.buffs = [];
         try {
-          await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(p.nome)}`,
+          await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(p.nome)}`,
             { method: 'PATCH', body: JSON.stringify({ buffs: [], custom_attrs: c.custom_attrs }) });
         } catch(e) {}
       }
@@ -8546,7 +8546,7 @@ async function _encerrarBatalhaAposVitoria() {
   _atualizarSeletorBatalhas();
 
   try {
-    await sb(`batalhas?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&id=eq.${encodeURIComponent(bid)}`, { method: 'DELETE' });
+    await sb(`batalhas?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&id=eq.${encodeURIComponent(bid)}`, { method: 'DELETE' });
   } catch(e) {}
 
   mostrarToast('⚔ Batalha encerrada com vitória!', 'sucesso');
@@ -8612,29 +8612,29 @@ function _aplicarEstadoBatalhaUI() {
       const outrasBatalhas = Object.values<any>(MAPA_STATE.batalhas).filter(b => b.ativa && b.mapa_id !== mapaId);
       if (outrasBatalhas.length) {
         const nomes = outrasBatalhas.map(b => b.mapa_nome || b.mapa_id).join(', ');
-        btnOutro.style.display = '';
+        btnOutro.style!.display = '';
         btnOutro.textContent = `⚔ Batalha em andamento: ${nomes} — toque para navegar`;
       } else {
-        btnOutro.style.display = 'none';
+        btnOutro.style!.display = 'none';
       }
     } else {
-      btnOutro.style.display = 'none';
+      btnOutro.style!.display = 'none';
     }
   }
 
   if (!bs || !bs.ativa || !batalhaEDoMapaAtual) {
-    if (bar) bar.style.display = 'none';
-    if (btnEntrar) btnEntrar.style.display = isMestre ? '' : 'none';
+    if (bar) bar.style!.display = 'none';
+    if (btnEntrar) btnEntrar.style!.display = isMestre ? '' : 'none';
     if (wrap) wrap.classList.remove('batalha-ativa');
     return;
   }
 
-  if (bar) bar.style.display = 'flex';
-  if (btnEntrar) btnEntrar.style.display = 'none';
+  if (bar) bar.style!.display = 'flex';
+  if (btnEntrar) btnEntrar.style!.display = 'none';
   if (wrap) wrap.classList.add('batalha-ativa');
 
   const ctrlMestre = document.getElementById('batalha-ctrl-mestre');
-  if (ctrlMestre) ctrlMestre.style.display = isMestre ? 'flex' : 'none';
+  if (ctrlMestre) ctrlMestre.style!.display = isMestre ? 'flex' : 'none';
 
   const btnPausar = document.getElementById('batalha-btn-pausar');
   if (btnPausar) btnPausar.textContent = bs.pausada ? '▶ Retomar' : '⏸ Pausar';
@@ -8647,21 +8647,21 @@ function _aplicarEstadoBatalhaUI() {
   const faseLabel = document.getElementById('batalha-fase-label');
 
   if (bs.fase === 'iniciativa' || bs.fase === 'empate') {
-    if (faseIni) faseIni.style.display = '';
-    if (faseCom) faseCom.style.display = 'none';
+    if (faseIni) faseIni.style!.display = '';
+    if (faseCom) faseCom.style!.display = 'none';
     if (faseLabel) faseLabel.textContent = bs.fase === 'empate' ? '⚠ Empate — re-rolar' : '🎲 Rolando iniciativas…';
     batalhaRenderFaseIniciativa();
     if (isMestre) batalhaVerificarIniciativasCompletas(BATALHA_ATUAL_ID);
   } else if (bs.fase === 'combate') {
-    if (faseIni) faseIni.style.display = 'none';
-    if (faseCom) faseCom.style.display = '';
+    if (faseIni) faseIni.style!.display = 'none';
+    if (faseCom) faseCom.style!.display = '';
     if (faseLabel) faseLabel.textContent = bs.pausada ? '⏸ Pausada' : `⚔ ${bs.mapa_nome || 'Batalha'} ${isMestre ? '' : '— seu mapa'}`;
     batalhaRenderOrdemStrip();
     batalhaRenderVezLabel();
     batalhaRenderDados();
   }
   const btnPosc = document.getElementById('btn-confirmar-posicionamento-wrap');
-  if (btnPosc) btnPosc.style.display = (isMestre && bs.fase === 'posicionamento') ? '' : 'none';
+  if (btnPosc) btnPosc.style!.display = (isMestre && bs.fase === 'posicionamento') ? '' : 'none';
   // Sincronizar painel da mesa (coluna direita no layout 3-col)
   // _mesaRenderAcoes re-renderiza o estado de batalha diretamente no painel
   // evitando dependência de elementos que podem ter sido destruídos por innerHTML anterior
@@ -8674,7 +8674,7 @@ function _aplicarEstadoBatalhaUI() {
 function batalhaRenderDados() {
   const el = document.getElementById('mapa-batalha-dados');
   if (!el) return;
-  const ativos = getDiceConfig(RPG_DATA.rpgId);
+  const ativos = getDiceConfig(RPG_DATA!.rpgId);
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
   el.innerHTML = ativos.map((d: any) => {
     const sel = bs?.dadoSel === d;
@@ -8700,12 +8700,12 @@ function batalhaRolarDado() {
   const num = document.getElementById('mapa-batalha-res-num');
   const lbl = document.getElementById('mapa-batalha-res-label');
   if (!res || !num || !lbl) return;
-  res.style.display = 'block';
+  res.style!.display = 'block';
   (num as any).textContent = r;
-  num.style.color = (d===20&&r===20)?'#f0cc6a':(d===20&&r===1)?'#e74c3c':'var(--primario-v)';
+  num.style!.color = (d===20&&r===20)?'#f0cc6a':(d===20&&r===1)?'#e74c3c':'var(--primario-v)';
   lbl.textContent = (d===20&&r===20)?'✦ Crítico!':(d===20&&r===1)?'✦ Falha!':`d${d}`;
-  num.style.transform = 'scale(1.3)';
-  setTimeout(() => { num.style.transform = ''; }, 200);
+  num.style!.transform = 'scale(1.3)';
+  setTimeout(() => { num.style!.transform = ''; }, 200);
 }
 
 document.addEventListener('keydown', (e) => {
@@ -8726,18 +8726,18 @@ async function deletarMapaAtual() {
 
 // ── TOGGLE VISIBILIDADE NPC NO MAPA GERAL ────────────────────
 async function toggleNpcVisivelGeral(nome: any) {
-  const c = RPG_DATA.characters.find(ch => ch.nome === nome);
+  const c = RPG_DATA!.characters.find(ch => ch.nome === nome);
   if (!c) return;
   const ca = c.custom_attrs || {};
   ca.visivel_geral = ca.visivel_geral === false ? true : false; // toggle (padrão true)
   c.custom_attrs = ca;
   try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
       method:'PATCH', body: JSON.stringify({custom_attrs: ca})
     });
     mostrarToast(`${nome}: ${ca.visivel_geral ? 'visível no mapa geral' : 'oculto no mapa geral'}`, '');
   } catch(e) {}
-  const mapas = RPG_DATA.mapas || [];
+  const mapas = RPG_DATA!.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (entry) mapaRenderTokens(entry.mapa);
   mapaRenderStatus();
@@ -8778,7 +8778,7 @@ function _processarSetinhaMapa(e: any) {
 
   // Não capturar seta quando foco está em input/textarea
   const tag = document.activeElement?.tagName?.toLowerCase();
-  if (['input','textarea','select'].includes(tag)) return;
+  if (['input','textarea','select'].includes(tag!)) return;
 
   e.preventDefault();
 
@@ -8826,11 +8826,11 @@ async function _moverTokenPorSeta(nome: any, dc: any, dr: any) {
     pos = { col, row };
     // Salvar no banco
     try {
-      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
         { method:'PATCH', body: JSON.stringify({ active_map_id: mapId, map_positions: c.map_positions }) });
     } catch(e) {}
     // Re-renderizar para mostrar o token
-    const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+    const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
     if (entry) mapaRenderTokens(entry.mapa);
   }
 
@@ -8887,10 +8887,10 @@ async function _moverTokenPorSeta(nome: any, dc: any, dr: any) {
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
   if (tokenEl) {
     const W = mapa.largura_total || 20, H = mapa.altura_total || 20;
-    tokenEl.style.left = ((colDest + 0.5) / W * 100).toFixed(2) + '%';
-    tokenEl.style.top  = ((rowDest + 0.5) / H * 100).toFixed(2) + '%';
+    tokenEl.style!.left = ((colDest + 0.5) / W * 100).toFixed(2) + '%';
+    tokenEl.style!.top  = ((rowDest + 0.5) / H * 100).toFixed(2) + '%';
   } else {
-    const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+    const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
     if (entry) mapaRenderTokens(entry.mapa);
   }
   const _animCtrl = window._animCtrlMap?.[nome];
@@ -8915,7 +8915,7 @@ async function _moverTokenPorSeta(nome: any, dc: any, dr: any) {
   const posSnap = JSON.parse(JSON.stringify(c.map_positions));
   MAPA_STATE.dragTimer = setTimeout(async () => {
     try {
-      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
         { method:'PATCH', body: JSON.stringify({ active_map_id: mapId, map_positions: posSnap }) });
     } catch(e) {}
   }, 400);
@@ -8947,7 +8947,7 @@ function _tokenCliqueSimples(nome: any) {
   // Se modal de ataque está aberto, clicar em token seleciona como alvo
   // ═══════════════════════════════════════════════════════════════
   const modalAtk = document.getElementById('modal-atk');
-  if (modalAtk && modalAtk.style.display !== 'none') {
+  if (modalAtk && modalAtk.style!.display !== 'none') {
     // Verificar se há habilidade selecionada
     if (typeof COMBATE !== 'undefined' && COMBATE.habilidadeSel && COMBATE._alvos) {
       // Procurar índice do alvo na lista
@@ -8970,7 +8970,7 @@ function _tokenCliqueSimples(nome: any) {
   document.querySelectorAll('.mapa-token').forEach(el => {
     const circle = el.querySelector('.mapa-token-circle');
     if (circle) {
-      circle.style.boxShadow = el.dataset.nome === nome
+      circle.style!.boxShadow = el.dataset!.nome === nome
         ? '0 0 0 3px rgba(200,168,75,0.8)' : '';
     }
   });
@@ -9015,21 +9015,21 @@ function _ctxAtualizarPainelDesktop(nome: any) {
   const { visiveis, ocultos } = ctxPriorizar(botoes);
 
   if (sidebarLista && sidebarWrap) {
-    if (!visiveis.length) { sidebarWrap.style.display = 'none'; return; }
-    sidebarWrap.style.display = 'block';
+    if (!visiveis.length) { sidebarWrap.style!.display = 'none'; return; }
+    sidebarWrap.style!.display = 'block';
     sidebarLista.innerHTML = '';
     visiveis.forEach((b: any) => {
       const btn = document.createElement('button');
-      btn.style.cssText = 'width:100%;padding:7px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:8px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left;transition:background .15s;line-height:1.3';
+      btn.style!.cssText = 'width:100%;padding:7px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:8px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left;transition:background .15s;line-height:1.3';
       btn.innerHTML = '<span style="display:block">'+b.label+'</span>'+(b.sublabel?'<span style="color:rgba(200,168,75,0.7);font-size:0.55rem">'+b.sublabel+'</span>':'');
-      btn.addEventListener('mouseenter', () => btn.style.background = 'rgba(79,163,209,0.18)');
-      btn.addEventListener('mouseleave', () => btn.style.background = 'rgba(79,163,209,0.08)');
+      btn.addEventListener('mouseenter', () => btn.style!.background = 'rgba(79,163,209,0.18)');
+      btn.addEventListener('mouseleave', () => btn.style!.background = 'rgba(79,163,209,0.08)');
       btn.addEventListener('click', () => { ctxExecutarAcao(b); _ctxSidebarLimpar(); });
       sidebarLista.appendChild(btn);
     });
     if (ocultos.length) {
       const mais = document.createElement('button');
-      mais.style.cssText = 'width:100%;padding:5px;background:none;border:1px dashed rgba(79,163,209,0.2);border-radius:8px;color:rgba(79,163,209,0.5);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer';
+      mais.style!.cssText = 'width:100%;padding:5px;background:none;border:1px dashed rgba(79,163,209,0.2);border-radius:8px;color:rgba(79,163,209,0.5);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer';
       mais.textContent = '+ ' + ocultos.length + ' mais';
       mais.addEventListener('click', () => ctxMostrarOcultos(ocultos));
       sidebarLista.appendChild(mais);
@@ -9044,8 +9044,8 @@ function _tokenDuploClique(nome: any) {
     mostrarToast(`🎮 Controlando ${nome}`, '');
     // Feedback visual: destaque especial no token controlado
     document.querySelectorAll('.mapa-token').forEach(el => {
-      el.querySelector('.mapa-token-circle')?.style.setProperty('outline',
-        el.dataset.nome === nome ? '2px dashed rgba(94,224,154,0.8)' : 'none'
+      el.querySelector('.mapa-token-circle')?.style!.setProperty!('outline',
+        el.dataset!.nome === nome ? '2px dashed rgba(94,224,154,0.8)' : 'none'
       );
     });
   }
@@ -9064,7 +9064,7 @@ document.addEventListener('keydown', (e) => {
   const mapaAtivo = document.getElementById('tab-mapas')?.classList.contains('active');
   if (!mapaAtivo) return;
   const tag = document.activeElement?.tagName?.toLowerCase();
-  if (['input','textarea','select'].includes(tag)) return;
+  if (['input','textarea','select'].includes(tag!)) return;
   const vinculado = RPG_DATA?.linked;
   if (!vinculado) return;
   e.preventDefault();
@@ -9309,7 +9309,7 @@ function ctxGerarBotoes(charNome: any, mapId: any) {
   for (const zona of locais) {
     if (!zona.local_id && !zona.mapa_local_id) continue;
     // Calcular distância do token à zona
-    const zW = mapa.largura_total || 20, zH = mapa.altura_total || 20;
+    const zW = mapa!.largura_total || 20, zH = mapa!.altura_total || 20;
     const zCol = Math.round(((zona.x ?? zona.x_percent ?? 0) / 100) * zW);
     const zRow = Math.round(((zona.y ?? zona.y_percent ?? 0) / 100) * zH);
     const distZ = Math.max(Math.abs((pos.col ?? 0) - zCol), Math.abs((pos.row ?? 0) - zRow));
@@ -9450,18 +9450,18 @@ function ctxMostrarOcultos(ocultos: any) {
     grade = document.createElement('div');
     grade.id = 'ctx-grade-ocultos';
     // ✅ Estilos individuais para o painel
-    grade.style.position = 'fixed';
-    grade.style.bottom = '120px';
-    grade.style.right = '10px';
-    grade.style.zIndex = '9998';
-    grade.style.background = getComputedStyle(document.documentElement).getPropertyValue('--escuro').trim() || '#0a0f16';
-    grade.style.border = '1px solid ' + (getComputedStyle(document.documentElement).getPropertyValue('--borda').trim() || 'rgba(30,45,66,0.8)');
-    grade.style.borderRadius = '10px';
-    grade.style.padding = '8px';
-    grade.style.display = 'grid';
-    grade.style.gridTemplateColumns = '1fr 1fr';
-    grade.style.gap = '6px';
-    grade.style.maxWidth = '280px';
+    grade.style!.position = 'fixed';
+    grade.style!.bottom = '120px';
+    grade.style!.right = '10px';
+    grade.style!.zIndex = '9998';
+    grade.style!.background = getComputedStyle(document.documentElement).getPropertyValue('--escuro').trim() || '#0a0f16';
+    grade.style!.border = '1px solid ' + (getComputedStyle(document.documentElement).getPropertyValue('--borda').trim() || 'rgba(30,45,66,0.8)');
+    grade.style!.borderRadius = '10px';
+    grade.style!.padding = '8px';
+    grade.style!.display = 'grid';
+    grade.style!.gridTemplateColumns = '1fr 1fr';
+    grade.style!.gap = '6px';
+    grade.style!.maxWidth = '280px';
     document.body.appendChild(grade);
   }
   
@@ -9470,15 +9470,15 @@ function ctxMostrarOcultos(ocultos: any) {
   ocultos.forEach((b: any) => {
     const btn = document.createElement('button');
     // ✅ Estilos individuais para cada botão
-    btn.style.padding = '8px 10px';
-    btn.style.background = 'rgba(79,163,209,0.1)';
-    btn.style.border = '1px solid rgba(79,163,209,0.3)';
-    btn.style.borderRadius = '8px';
-    btn.style.color = getComputedStyle(document.documentElement).getPropertyValue('--texto').trim() || '#c8d8e8';
-    btn.style.fontSize = '0.72rem';
-    btn.style.cursor = 'pointer';
-    btn.style.textAlign = 'left';
-    btn.style.minHeight = '44px';
+    btn.style!.padding = '8px 10px';
+    btn.style!.background = 'rgba(79,163,209,0.1)';
+    btn.style!.border = '1px solid rgba(79,163,209,0.3)';
+    btn.style!.borderRadius = '8px';
+    btn.style!.color = getComputedStyle(document.documentElement).getPropertyValue('--texto').trim() || '#c8d8e8';
+    btn.style!.fontSize = '0.72rem';
+    btn.style!.cursor = 'pointer';
+    btn.style!.textAlign = 'left';
+    btn.style!.minHeight = '44px';
     
     btn.textContent = b.label;
     btn.onclick = () => { 
@@ -9501,9 +9501,9 @@ function ctxMostrarOcultos(ocultos: any) {
 function mapaClicarToken(nome: any) {
   // Modo medição: selecionar pontos
   if (MAPA_STATE.toolMode === 'medicao') {
-    const c = RPG_DATA.characters.find(ch => ch.nome === nome);
+    const c = RPG_DATA!.characters.find(ch => ch.nome === nome);
     if (!c) return;
-    const pos = (c.map_positions||{})[MAPA_STATE.mapaAtualId];
+    const pos = (c.map_positions||{})[MAPA_STATE.mapaAtualId!];
     if (!pos) return;
     if (!MAPA_STATE.medicaoAtiva) {
       MAPA_STATE.medicaoAtiva = { pA: { nome, ...pos }, pB: null };
@@ -9512,7 +9512,7 @@ function mapaClicarToken(nome: any) {
       mapaDesenharDistancia();
     } else {
       MAPA_STATE.medicaoAtiva = { pA: { nome, ...pos }, pB: null };
-      document.getElementById('mapa-dist-svg').innerHTML = '';
+      document.getElementById('mapa-dist-svg')!.innerHTML = '';
     }
     return;
   }
@@ -9537,13 +9537,13 @@ function mapaClicarToken(nome: any) {
 function fecharFichaNoMapa() {
   // Suporte legado: esconder overlay caso ainda exista
   const ov = document.getElementById('modal-ficha-mapa-overlay');
-  if (ov) ov.style.display = 'none';
+  if (ov) ov.style!.display = 'none';
   // Limpar painel da sidebar
   const sp = document.getElementById('ficha-sidebar-painel');
-  if (sp) sp.style.display = 'none';
+  if (sp) sp.style!.display = 'none';
 }
 function abrirFichaNoMapa(nome: any) {
-  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  const c = RPG_DATA!.characters.find(x => x.nome === nome);
   if (!c) return;
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const ca = c.custom_attrs || {};
@@ -9555,7 +9555,7 @@ function abrirFichaNoMapa(nome: any) {
   const hpPct = Math.max(0, Math.min(100, Math.round(hp / hp_max * 100)));
   const hpColor = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
   const atribs = ca.atributos || {};
-  const attrDefs = RPG_DATA.attrDefs || [];
+  const attrDefs = RPG_DATA!.attrDefs || [];
   const nivel = ca.nivel || 1;
   const lc = (CURRENT_RPG?.theme?.level_config) || {};
   const nivel_max = lc.nivel_maximo || 20;
@@ -9564,7 +9564,7 @@ function abrirFichaNoMapa(nome: any) {
   const xpPct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 0;
 
   // Skills
-  const skills = _skFiltrarPorChar(RPG_DATA.skills || [], nome);
+  const skills = _skFiltrarPorChar(RPG_DATA!.skills || [], nome);
   const skHtml = skills.map((s: any) => {
     const custoLabel = s.custo_tipo === 'movimento' ? '🏃 mov' : s.custo_tipo === 'nenhum' ? '—' : null;
     const metaRow = [
@@ -9633,7 +9633,7 @@ function abrirFichaNoMapa(nome: any) {
     </div>` : '';
 
   const imgUrl = normalizeImgUrl(ca.img_retrato || ca.img || ca.img_url || '');
-  document.getElementById('modal-ficha-mapa-content').innerHTML = `
+  document.getElementById('modal-ficha-mapa-content')!.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:12px">
         ${imgUrl
@@ -9753,7 +9753,7 @@ function abrirFichaNoMapa(nome: any) {
     })()}
   `;
   // Preferir sidebar se disponível; senão overlay legado
-  const _fichaConteudo = document.getElementById('modal-ficha-mapa-content').innerHTML;
+  const _fichaConteudo = document.getElementById('modal-ficha-mapa-content')!.innerHTML!;
   const _sidebarFicha = document.getElementById('ficha-sidebar-painel');
   if (_sidebarFicha) {
     _sidebarFicha.innerHTML =
@@ -9761,19 +9761,19 @@ function abrirFichaNoMapa(nome: any) {
       '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em">👤 Ficha</div>' +
       '<button onclick="fecharFichaNoMapa()" style="background:none;border:none;color:var(--suave);font-size:1rem;cursor:pointer;line-height:1">✕</button>' +
       '</div>' + _fichaConteudo;
-    _sidebarFicha.style.display = 'block';
+    _sidebarFicha.style!.display = 'block';
   } else {
-    document.getElementById('modal-ficha-mapa-overlay').style.display = 'flex';
+    document.getElementById('modal-ficha-mapa-overlay')!.style!.display = 'flex';
   }
 }
 
 async function fichaToggleOcultarAtribs(nome: any) {
-  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  const c = RPG_DATA!.characters.find(x => x.nome === nome);
   if (!c || !c.custom_attrs) return;
   const novoEstado = document.getElementById('ficha-toggle-ocultar')?.checked ?? false;
   c.custom_attrs.ocultar_atributos = novoEstado;
   try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
       { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
     mostrarToast(novoEstado ? '🔒 Atributos ocultos para jogadores' : '🔓 Atributos visíveis', '');
   } catch(e) { mostrarToast('Erro ao salvar', 'erro'); }
@@ -9805,14 +9805,14 @@ function abrirModalAdicionarAoMapa() {
   }).join('');
 
   const modal = document.getElementById('modal-addchar-overlay');
-  document.getElementById('modal-addchar-lista').innerHTML = lista || '<div style="color:var(--suave);font-style:italic;font-size:0.85rem">Nenhum personagem</div>';
-  modal.style.display = 'flex';
+  document.getElementById('modal-addchar-lista')!.innerHTML = lista || '<div style="color:var(--suave);font-style:italic;font-size:0.85rem">Nenhum personagem</div>';
+  modal!.style!.display = 'flex';
 }
 
 function mapaDesenharDistancia() {
   const med = MAPA_STATE.medicaoAtiva;
   if (!med || !med.pA || !med.pB) return;
-  const mapas = RPG_DATA.mapas || [];
+  const mapas = RPG_DATA!.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   const m: any = entry ? entry.mapa : {};
   const escala = m.escala_val || 1.5;
@@ -9821,14 +9821,14 @@ function mapaDesenharDistancia() {
 
   const svg = document.getElementById('mapa-dist-svg');
   const wrap = document.getElementById('mapa-img');
-  const W = wrap.offsetWidth, H = wrap.offsetHeight;
+  const W = wrap!.offsetWidth, H = wrap!.offsetHeight;
   const x1 = med.pA.x/100*W, y1 = med.pA.y/100*H;
   const x2 = med.pB.x/100*W, y2 = med.pB.y/100*H;
   const dist = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
   const celulas = dist / grid;
   const metros = (celulas * escala).toFixed(1);
 
-  svg.innerHTML = `
+  svg!.innerHTML = `
     <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--primario)" stroke-width="2" stroke-dasharray="6 3" opacity="0.8"/>
     <circle cx="${x1}" cy="${y1}" r="4" fill="var(--primario)" opacity="0.8"/>
     <circle cx="${x2}" cy="${y2}" r="4" fill="var(--primario)" opacity="0.8"/>
@@ -9839,13 +9839,13 @@ function mapaDesenharDistancia() {
 
 function limparMedicaoMapa() {
   MAPA_STATE.medicaoAtiva = null;
-  document.getElementById('mapa-dist-svg').innerHTML = '';
+  document.getElementById('mapa-dist-svg')!.innerHTML = '';
 }
 
 // ── NAVEGAÇÃO ENTRE MAPAS ─────────────────────────────────────
 function entrarMapaLocal(mapaLocalId: any) {
   // Encontrar a zona que liga o pai a este mapa local
-  const parentEntry = (RPG_DATA.mapas||[]).find(l =>
+  const parentEntry = (RPG_DATA!.mapas||[]).find(l =>
     (l.mapa.locais||[]).some(z => z.mapa_local_id === mapaLocalId));
   const zona = parentEntry?.mapa?.locais?.find(z => z.mapa_local_id === mapaLocalId);
 
@@ -9855,7 +9855,7 @@ function entrarMapaLocal(mapaLocalId: any) {
     const h = zona.zona_h_percent || (w * 0.75);
 
     // Auto-mover personagens que estão ativos no pai e dentro da zona
-    (RPG_DATA.characters || []).forEach(async c => {
+    (RPG_DATA!.characters || []).forEach(async c => {
       if (c.active_map_id !== parentId) return;
       const pos = (c.map_positions || {})[parentId];
       if (!pos) return;
@@ -9881,7 +9881,7 @@ function voltarMapaGeral() {
 // ── CONFIG ────────────────────────────────────────────────────
 function renderConfig(){
  // Opções de personagem para vínculo
- document.getElementById('cfg-opcoes').innerHTML=RPG_DATA.characters.map(c=>{
+ document.getElementById('cfg-opcoes')!.innerHTML=RPG_DATA!.characters.map(c=>{
    const ca=c.custom_attrs||{};
    const cor=ca.cor||'var(--primario)';
    const imgC=normalizeImgUrl(ca.img||'');
@@ -9898,22 +9898,22 @@ function renderConfig(){
  }).join('');
  renderDiceConfig();
  // Painel de membros e atributos (só para mestre)
- const isMestre = RPG_DATA.myRole === 'mestre';
+ const isMestre = RPG_DATA!.myRole === 'mestre';
  const membrosCard = document.getElementById('cfg-membros-card');
- if (membrosCard) membrosCard.style.display = isMestre ? '' : 'none';
+ if (membrosCard) membrosCard.style!.display = isMestre ? '' : 'none';
  const attrdefCard = document.getElementById('cfg-attrdef-card');
- if (attrdefCard) attrdefCard.style.display = isMestre ? '' : 'none';
+ if (attrdefCard) attrdefCard.style!.display = isMestre ? '' : 'none';
  if (isMestre) { renderCfgMembros(); renderCfgAttrDefs(); }
  // PvP card
  const pvpCard = document.getElementById('cfg-pvp-card');
- if (pvpCard) pvpCard.style.display = isMestre ? '' : 'none';
+ if (pvpCard) pvpCard.style!.display = isMestre ? '' : 'none';
  const pvpToggle = document.getElementById('cfg-pvp-toggle');
  if (pvpToggle) pvpToggle.checked = !!(CURRENT_RPG?.theme?.pvp_ativo);
  const ffToggle = document.getElementById('cfg-ff-toggle');
  if (ffToggle) ffToggle.checked = !!(CURRENT_RPG?.theme?.fogo_amigo_ativo);
  // Moedas card — só mestre
  const moedasCard = document.getElementById('cfg-moedas-card');
- if (moedasCard) moedasCard.style.display = isMestre ? '' : 'none';
+ if (moedasCard) moedasCard.style!.display = isMestre ? '' : 'none';
  if (isMestre && typeof cfgMoedasInit === 'function') cfgMoedasInit();
  // Battle config card
  if (typeof cfgBattleInit === 'function') cfgBattleInit();
@@ -9942,7 +9942,7 @@ function cfgBattleInit() {
   const card = document.getElementById('cfg-battle-card');
   if (!card) return;
   const isMestre = RPG_DATA?.myRole === 'mestre';
-  card.style.display = isMestre ? '' : 'none';
+  card.style!.display = isMestre ? '' : 'none';
   if (!isMestre) return;
   const cfg = getBattleConfig();
   const sistemaEl = document.getElementById('cfg-battle-sistema');
@@ -9958,7 +9958,7 @@ function cfgBattleInit() {
 function cfgBattleSistemaChange() {
   const sistema = document.getElementById('cfg-battle-sistema')?.value || 'dnd5e';
   const campos = document.getElementById('cfg-battle-campos');
-  if (campos) campos.style.display = sistema === 'custom' ? '' : 'none';
+  if (campos) campos.style!.display = sistema === 'custom' ? '' : 'none';
   if (sistema !== 'custom') {
     const preset = BATTLE_CONFIG_DEFAULTS[sistema] || BATTLE_CONFIG_DEFAULTS.dnd5e;
     _cfgBattlePopularCampos(preset);
@@ -9987,15 +9987,15 @@ async function cfgBattleSalvar() {
     cfg = {
       sistema_reacao:            sistema,
       usa_reacoes:               g('cfg-battle-usa-reacoes')?.checked ?? true,
-      max_reacoes_por_rodada:    parseInt(g('cfg-battle-max-reacoes')?.value) || 1,
+      max_reacoes_por_rodada:    parseInt(g('cfg-battle-max-reacoes')?.value!) || 1,
       reacoes_podem_interromper: g('cfg-battle-podem-interromper')?.checked ?? true,
       passivas_automaticas:      g('cfg-battle-passivas')?.checked ?? true,
       notificar_passivas:        g('cfg-battle-notif-passivas')?.checked ?? false,
       tipo_defesa:               g('cfg-battle-tipo-defesa')?.value || 'passiva',
       defesa_consome_reacao:     g('cfg-battle-defesa-reacao')?.checked ?? false,
       graus_de_sucesso:          g('cfg-battle-graus')?.checked ?? false,
-      max_defesas_por_rodada:    parseInt(g('cfg-battle-max-defesas')?.value) || 1,
-      penalidade_defesa_extra:   g('cfg-battle-pen-defesa')?.value !== '' ? parseFloat(g('cfg-battle-pen-defesa').value) : null,
+      max_defesas_por_rodada:    parseInt(g('cfg-battle-max-defesas')?.value!) || 1,
+      penalidade_defesa_extra:   g('cfg-battle-pen-defesa')?.value !== '' ? parseFloat(g('cfg-battle-pen-defesa')!.value!) : null,
     };
   } else {
     cfg = { ...BATTLE_CONFIG_DEFAULTS[sistema] || BATTLE_CONFIG_DEFAULTS.dnd5e };
@@ -10009,9 +10009,9 @@ async function renderCfgMembros() {
  const el = document.getElementById('cfg-membros-lista');
  if (!el) return;
  try {
-   const membros = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&select=player_id,nickname,role,linked,permissoes&order=role.asc,nickname.asc`);
+   const membros = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&select=player_id,nickname,role,linked,permissoes&order=role.asc,nickname.asc`);
    const myId = SESSION?.user?.id;
-   const isMestreLocal = RPG_DATA.myRole === 'mestre';
+   const isMestreLocal = RPG_DATA!.myRole === 'mestre';
    el.innerHTML = (membros||[]).map((m: any) => {
      const isSelf = m.player_id === myId;
      const isMestrem = m.role === 'mestre';
@@ -10041,13 +10041,13 @@ async function renderCfgMembros() {
 
 // ── MESTRE: Atribuir personagem a jogador ────────────────────
 function abrirModalAtribuirPersonagem(playerId: any, nickname: any) {
-  const pcs = (RPG_DATA.characters||[]).filter(c => {
+  const pcs = (RPG_DATA!.characters||[]).filter(c => {
     const tipo = (c.custom_attrs||{}).tipo || 'jogador';
     return tipo === 'jogador';
   });
   const overlay = document.createElement('div');
   overlay.id = 'modal-atribuir-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.innerHTML = `
     <div style="background:var(--painel);border:1px solid var(--borda);border-radius:12px;padding:24px;width:100%;max-width:360px;max-height:80vh;overflow-y:auto">
       <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;margin-bottom:4px">⚔ Atribuir Personagem</div>
@@ -10085,7 +10085,7 @@ function abrirModalAtribuirPersonagem(playerId: any, nickname: any) {
 async function atribuirPersonagemAMembro(playerId: any, nomePersonagem: any) {
   try {
     await sb(
-      `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`,
+      `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`,
       { method: 'PATCH', body: JSON.stringify({ linked: nomePersonagem }) }
     );
     document.getElementById('modal-atribuir-overlay')?.remove();
@@ -10095,7 +10095,7 @@ async function atribuirPersonagemAMembro(playerId: any, nomePersonagem: any) {
 }
 
 async function cfgAdicionarMembro() {
-  const input = document.getElementById('cfg-novo-nickname').value.trim().toLowerCase();
+  const input = document.getElementById('cfg-novo-nickname')!.value!.trim!()!.toLowerCase!()!;
   if (!input) return;
   try {
     let jogador = null;
@@ -10107,13 +10107,13 @@ async function cfgAdicionarMembro() {
       jogador = resultado?.[0] || null;
     }
     if (!jogador) { mostrarToast(`Jogador "${input}" não encontrado`, 'erro'); return; }
-    const jaExiste = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${jogador.id}`);
+    const jaExiste = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&player_id=eq.${jogador.id}`);
     if (jaExiste?.length) { mostrarToast(`${jogador.nickname} já é membro`, 'erro'); return; }
     await sb('rpg_members', {
       method: 'POST',
-      body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, player_id: jogador.id, nickname: jogador.nickname, role: 'jogador', permissoes: {} })
+      body: JSON.stringify({ rpg_id: RPG_DATA!.rpgId, player_id: jogador.id, nickname: jogador.nickname, role: 'jogador', permissoes: {} })
     });
-    document.getElementById('cfg-novo-nickname').value = '';
+    document.getElementById('cfg-novo-nickname')!.value = '';
     mostrarToast(`${jogador.nickname} adicionado!`, 'sucesso');
     renderCfgMembros();
   } catch(e) { mostrarToast('Erro ao adicionar membro', 'erro'); }
@@ -10131,12 +10131,12 @@ var PERMISSOES_CONFIG = [
 
 async function abrirModalPermissoes(playerId: any, nickname: any) {
   const membro = (await sb(
-    `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}&select=permissoes`
+    `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}&select=permissoes`
   ))?.[0];
   const perm = membro?.permissoes || {};
   const overlay = document.createElement('div');
   overlay.id = 'modal-permissoes-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.innerHTML = `
     <div style="background:var(--painel);border:1px solid var(--borda);border-radius:12px;padding:24px;width:100%;max-width:380px">
       <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;margin-bottom:4px">⚙ Permissões</div>
@@ -10164,7 +10164,7 @@ async function salvarPermissoes(playerId: any) {
     novas[p.key] = document.getElementById('perm-' + p.key)?.checked ?? p.padrao;
   });
   await sb(
-    `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`,
+    `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`,
     { method: 'PATCH', body: JSON.stringify({ permissoes: novas }) }
   );
   document.getElementById('modal-permissoes-overlay')?.remove();
@@ -10174,20 +10174,20 @@ async function salvarPermissoes(playerId: any) {
 
 async function cfgRemoverMembro(playerId: any, nickname: any) {
  if (!confirm(`Remover ${nickname} da campanha?`)) return;
- await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`, { method: 'DELETE' });
+ await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`, { method: 'DELETE' });
  mostrarToast(`${nickname} removido`, 'sucesso');
  renderCfgMembros();
 }
 
 // ── 16H: Modal vínculo jogador ↔ personagem ──────────────────
 function abrirModalVincularPersonagem() {
-  const pcs = (RPG_DATA.characters||[]).filter(c => {
+  const pcs = (RPG_DATA!.characters||[]).filter(c => {
     const tipo = (c.custom_attrs||{}).tipo_personagem || 'jogador';
     return tipo !== 'npc';
   });
   const overlay = document.createElement('div');
   overlay.id = 'modal-vincular-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.innerHTML = `
     <div style="background:var(--painel);border:1px solid var(--borda);border-radius:12px;padding:24px;width:100%;max-width:360px;max-height:80vh;overflow-y:auto">
       <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;margin-bottom:16px">⚔ Vincular Personagem</div>
@@ -10228,10 +10228,10 @@ async function vincularPersonagem(nomePersonagem: any) {
   if (!SESSION?.user?.id) return;
   try {
     await sb(
-      `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(SESSION.user.id)}`,
+      `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&player_id=eq.${encodeURIComponent(SESSION.user.id)}`,
       { method: 'PATCH', body: JSON.stringify({ linked: nomePersonagem }) }
     );
-    RPG_DATA.linked = nomePersonagem;
+    RPG_DATA!.linked = nomePersonagem;
     document.getElementById('modal-vincular-overlay')?.remove();
     mostrarToast(nomePersonagem ? `Vinculado a ${nomePersonagem}!` : 'Vínculo removido', 'sucesso');
     if (nomePersonagem) {
@@ -10249,7 +10249,7 @@ async function vincularPersonagem(nomePersonagem: any) {
 function renderCfgAttrDefs() {
  const el = document.getElementById('cfg-attrdef-lista');
  if (!el) return;
- const defs = RPG_DATA.attrDefs || [];
+ const defs = RPG_DATA!.attrDefs || [];
  if (!defs.length) {
    el.innerHTML = '<div style="color:var(--suave);font-size:0.8rem;font-style:italic;padding:8px">Nenhum atributo definido.</div>';
    return;
@@ -10276,61 +10276,61 @@ function abrirModalAttrDef(id: any) {
  const tituloEl = document.getElementById('modal-attrdef-titulo');
  const btnRemover = document.getElementById('ad-btn-remover');
  if (id) {
-   const def = (RPG_DATA.attrDefs || []).find(a => a.id === id);
+   const def = (RPG_DATA!.attrDefs || []).find(a => a.id === id);
    if (!def) return;
-   document.getElementById('ad-id').value = id;
-   document.getElementById('ad-nome').value = def.nome;
-   document.getElementById('ad-tipo').value = def.tipo;
-   document.getElementById('ad-categoria').value = def.categoria || 'basico';
-   document.getElementById('ad-ordem').value = (def.ordem || 1) as any;
+   document.getElementById('ad-id')!.value = id;
+   document.getElementById('ad-nome')!.value = def.nome;
+   document.getElementById('ad-tipo')!.value = def.tipo;
+   document.getElementById('ad-categoria')!.value = def.categoria || 'basico';
+   document.getElementById('ad-ordem')!.value = (def.ordem || 1) as any;
    // Restore category-specific opcoes fields
    const cat = def.categoria || 'basico';
    if (cat === 'resistencia') {
-     document.getElementById('ad-resistencia-json').value = def.opcoes || '';
-     document.getElementById('ad-opcoes').value = '';
+     document.getElementById('ad-resistencia-json')!.value = def.opcoes || '';
+     document.getElementById('ad-opcoes')!.value = '';
      _adStatusJsonToForm('');
    } else if (cat === 'status') {
      _adStatusJsonToForm(def.opcoes || '');
-     document.getElementById('ad-opcoes').value = '';
-     document.getElementById('ad-resistencia-json').value = '';
+     document.getElementById('ad-opcoes')!.value = '';
+     document.getElementById('ad-resistencia-json')!.value = '';
    } else {
-     document.getElementById('ad-opcoes').value = def.opcoes || '';
-     document.getElementById('ad-resistencia-json').value = '';
+     document.getElementById('ad-opcoes')!.value = def.opcoes || '';
+     document.getElementById('ad-resistencia-json')!.value = '';
      _adStatusJsonToForm('');
    }
-   tituloEl.textContent = 'Editar Atributo';
-   btnRemover.style.display = '';
+   tituloEl!.textContent = 'Editar Atributo';
+   btnRemover!.style!.display = '';
  } else {
-   document.getElementById('ad-id').value = '';
-   document.getElementById('ad-nome').value = '';
-   document.getElementById('ad-tipo').value = 'number';
-   document.getElementById('ad-categoria').value = 'basico';
-   document.getElementById('ad-opcoes').value = '';
-   document.getElementById('ad-ordem').value = ((RPG_DATA.attrDefs || []).length + 1) as any;
-   tituloEl.textContent = 'Novo Atributo';
-   btnRemover.style.display = 'none';
+   document.getElementById('ad-id')!.value = '';
+   document.getElementById('ad-nome')!.value = '';
+   document.getElementById('ad-tipo')!.value = 'number';
+   document.getElementById('ad-categoria')!.value = 'basico';
+   document.getElementById('ad-opcoes')!.value = '';
+   document.getElementById('ad-ordem')!.value = ((RPG_DATA!.attrDefs || []).length + 1) as any;
+   tituloEl!.textContent = 'Novo Atributo';
+   btnRemover!.style!.display = 'none';
  }
  attrDefTipoChange();
- overlay.style.display = 'flex';
+ overlay!.style!.display = 'flex';
 }
 
 function fecharModalAttrDef() {
- document.getElementById('modal-attrdef-overlay').style.display = 'none';
+ document.getElementById('modal-attrdef-overlay')!.style!.display = 'none';
 }
 
 function attrDefTipoChange() {
- const tipo = document.getElementById('ad-tipo').value;
- const cat = document.getElementById('ad-categoria').value;
- document.getElementById('ad-opcoes-group').style.display = (tipo === 'select' && cat !== 'resistencia' && cat !== 'status') ? '' : 'none';
+ const tipo = document.getElementById('ad-tipo')!.value!;
+ const cat = document.getElementById('ad-categoria')!.value!;
+ document.getElementById('ad-opcoes-group')!.style!.display = (tipo === 'select' && cat !== 'resistencia' && cat !== 'status') ? '' : 'none';
  attrDefCategoriaChange();
 }
 
 function attrDefCategoriaChange() {
- const cat = document.getElementById('ad-categoria').value;
- const tipo = document.getElementById('ad-tipo').value;
- document.getElementById('ad-resistencia-group').style.display = cat === 'resistencia' ? '' : 'none';
- document.getElementById('ad-status-group').style.display = cat === 'status' ? '' : 'none';
- document.getElementById('ad-opcoes-group').style.display = (tipo === 'select' && cat !== 'resistencia' && cat !== 'status') ? '' : 'none';
+ const cat = document.getElementById('ad-categoria')!.value!;
+ const tipo = document.getElementById('ad-tipo')!.value!;
+ document.getElementById('ad-resistencia-group')!.style!.display = cat === 'resistencia' ? '' : 'none';
+ document.getElementById('ad-status-group')!.style!.display = cat === 'status' ? '' : 'none';
+ document.getElementById('ad-opcoes-group')!.style!.display = (tipo === 'select' && cat !== 'resistencia' && cat !== 'status') ? '' : 'none';
  // Populate the status attribute dropdown
  if (cat === 'status') {
    const sel = document.getElementById('ad-status-attr');
@@ -10369,8 +10369,8 @@ function _adStatusJsonToForm(jsonStr: any) {
 }
 
 function _adStatusFormToJson() {
-  const base = parseFloat(document.getElementById('ad-status-base')?.value) || 0;
-  const mult = parseFloat(document.getElementById('ad-status-mult')?.value) || 0;
+  const base = parseFloat(document.getElementById('ad-status-base')?.value!) || 0;
+  const mult = parseFloat(document.getElementById('ad-status-mult')?.value!) || 0;
   const attr = (document.getElementById('ad-status-attr')?.value || '').trim();
   const obj: any = { max_base: base };
   if (attr) { obj.max_attr = attr; obj.max_mult = mult; }
@@ -10380,20 +10380,20 @@ function _adStatusFormToJson() {
 }
 
 async function salvarAttrDef() {
- const id = document.getElementById('ad-id').value;
- const nome = (document.getElementById('ad-nome').value || '').trim();
- const tipo = document.getElementById('ad-tipo').value;
- const categoria = document.getElementById('ad-categoria').value || 'basico';
- const ordem = parseInt(document.getElementById('ad-ordem').value) || 1;
+ const id = document.getElementById('ad-id')!.value!;
+ const nome = (document.getElementById('ad-nome')!.value! || '').trim();
+ const tipo = document.getElementById('ad-tipo')!.value!;
+ const categoria = document.getElementById('ad-categoria')!.value! || 'basico';
+ const ordem = parseInt(document.getElementById('ad-ordem')!.value!) || 1;
  // Collect opcoes from the right field based on categoria
  let opcoes;
  if (categoria === 'resistencia') {
-   opcoes = (document.getElementById('ad-resistencia-json').value || '').trim() || null;
+   opcoes = (document.getElementById('ad-resistencia-json')!.value! || '').trim() || null;
    if (opcoes) { try { JSON.parse(opcoes); } catch(e) { mostrarToast('JSON de resistência inválido', 'erro'); return; } }
  } else if (categoria === 'status') {
    opcoes = _adStatusFormToJson();
  } else {
-   opcoes = (document.getElementById('ad-opcoes').value || '').trim() || null;
+   opcoes = (document.getElementById('ad-opcoes')!.value! || '').trim() || null;
  }
  if (!nome) { mostrarToast('Nome do atributo é obrigatório', 'erro'); return; }
  try {
@@ -10403,17 +10403,17 @@ async function salvarAttrDef() {
        method: 'PATCH',
        body: JSON.stringify({ nome, tipo, opcoes, ordem, categoria })
      });
-     const idx = (RPG_DATA.attrDefs || []).findIndex(a => a.id === id);
-     if (idx >= 0) RPG_DATA.attrDefs[idx] = { ...RPG_DATA.attrDefs[idx], nome, tipo, opcoes, ordem, categoria };
+     const idx = (RPG_DATA!.attrDefs || []).findIndex(a => a.id === id);
+     if (idx >= 0) RPG_DATA!.attrDefs[idx] = { ...RPG_DATA!.attrDefs[idx], nome, tipo: tipo as any, opcoes, ordem, categoria };
      mostrarToast('Atributo atualizado!', 'sucesso');
    } else {
      // Criar
      const res = await sb('attr_defs', {
        method: 'POST',
-       body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, nome, tipo, opcoes, ordem, categoria })
+       body: JSON.stringify({ rpg_id: RPG_DATA!.rpgId, nome, tipo, opcoes, ordem, categoria })
      });
-     if (res && res[0]) RPG_DATA.attrDefs.push(res[0]);
-     else RPG_DATA.attrDefs.push({ id: null, rpg_id: RPG_DATA.rpgId, nome, tipo, opcoes, ordem, categoria });
+     if (res && res[0]) RPG_DATA!.attrDefs.push(res[0]);
+     else RPG_DATA!.attrDefs.push({ id: null as any, rpg_id: RPG_DATA!.rpgId, nome, tipo: tipo as any, opcoes, ordem, categoria });
      mostrarToast('Atributo criado!', 'sucesso');
    }
    fecharModalAttrDef();
@@ -10425,8 +10425,8 @@ async function salvarAttrDef() {
 }
 
 function removerAttrDefModal() {
- const id = document.getElementById('ad-id').value;
- const nome = (document.getElementById('ad-nome').value || '').trim();
+ const id = document.getElementById('ad-id')!.value!;
+ const nome = (document.getElementById('ad-nome')!.value! || '').trim();
  if (!id) return;
  if (!confirm(`Remover o atributo "${nome}"?\nEle será apagado da definição da campanha. Os valores já salvos nos personagens NÃO são deletados automaticamente.`)) return;
  removerAttrDef(id, nome);
@@ -10435,7 +10435,7 @@ function removerAttrDefModal() {
 async function removerAttrDef(id: any, nome: any) {
  try {
    await sb(`attr_defs?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
-   RPG_DATA.attrDefs = (RPG_DATA.attrDefs || []).filter(a => a.id !== id);
+   RPG_DATA!.attrDefs = (RPG_DATA!.attrDefs || []).filter(a => a.id !== id);
    mostrarToast(`"${nome}" removido`, 'sucesso');
    fecharModalAttrDef();
    renderCfgAttrDefs();
@@ -10444,7 +10444,7 @@ async function removerAttrDef(id: any, nome: any) {
  } catch(e) { mostrarToast('Erro ao remover atributo', 'erro'); }
 }
 function selecionarOpcaoConfig(nome: any,el: any){CFG_CHAR=nome;document.querySelectorAll('.char-opcao').forEach(o=>o.classList.remove('selecionado'));el.classList.add('selecionado');}
-async function salvarConfig(){if(!CFG_CHAR){mostrarToast('Selecione um personagem','erro');return;}try{await saveMemberLinked(RPG_DATA.rpgId,CFG_CHAR);RPG_DATA.linked=CFG_CHAR;renderHeader();mostrarToast('Vínculo salvo!','sucesso');}catch(e){mostrarToast('Erro ao salvar','erro');}}
+async function salvarConfig(){if(!CFG_CHAR){mostrarToast('Selecione um personagem','erro');return;}try{await saveMemberLinked(RPG_DATA!.rpgId,CFG_CHAR);RPG_DATA!.linked=CFG_CHAR;renderHeader();mostrarToast('Vínculo salvo!','sucesso');}catch(e){mostrarToast('Erro ao salvar','erro');}}
 async function confirmarDeleteRPG(){if(!CURRENT_RPG||CURRENT_RPG.id==='dual'){mostrarToast('DUAL não pode ser deletado','erro');return;}if(!confirm(`Deletar "${CURRENT_RPG.name}"?`))return;try{await deleteRPGData(CURRENT_RPG.id);mostrarToast('RPG deletado','sucesso');HUB_DATA.rpgs=HUB_DATA.rpgs.filter(r=>r.rpg_id!==CURRENT_RPG.id);setTimeout(voltarHub,800);}catch (e: any){mostrarToast(e.message||'Erro','erro');}}
 
 
@@ -10461,18 +10461,18 @@ HUB_EVENTS.on('turno_avancou', ({ personagem, rodada, batalhaId }) => {
   const ehMinha  = personagem === RPG_DATA?.linked;
   const ehMestre = RPG_DATA?.myRole === 'mestre';
   if (ehMinha || ehMestre) {
-    hud.style.display = 'block';
+    hud.style!.display = 'block';
     if (nomeEl) nomeEl.textContent = ehMinha
       ? 'Sua vez — ' + personagem
       : 'Vez de ' + personagem + ' — Round ' + rodada;
     const btn = document.getElementById('hud-turno-btn');
-    if (btn) btn.style.display = (ehMinha || ehMestre) ? '' : 'none';
+    if (btn) btn.style!.display = (ehMinha || ehMestre) ? '' : 'none';
   } else {
-    hud.style.display = 'none';
+    hud.style!.display = 'none';
   }
   document.querySelectorAll('.mapa-token').forEach(el => {
-    el.style.outline = el.dataset.nome === personagem ? '3px solid var(--destaque)' : '';
-    el.style.outlineOffset = '3px';
+    el.style!.outline = el.dataset!.nome === personagem ? '3px solid var(--destaque)' : '';
+    el.style!.outlineOffset = '3px';
   });
   ctxHighlightLimpar();
 });
@@ -10485,9 +10485,9 @@ function ctxHighlightToggle() {
   _highlightModoAtivo = !_highlightModoAtivo;
   const btn = document.getElementById('btn-highlight-toggle');
   if (btn) {
-    btn.style.background = _highlightModoAtivo ? 'rgba(79,163,209,0.25)' : 'rgba(79,163,209,0.08)';
-    btn.style.borderColor = _highlightModoAtivo ? 'rgba(79,163,209,0.7)' : 'rgba(79,163,209,0.3)';
-    btn.style.color = _highlightModoAtivo ? '#7ec8f0' : 'rgba(126,200,240,0.5)';
+    btn.style!.background = _highlightModoAtivo ? 'rgba(79,163,209,0.25)' : 'rgba(79,163,209,0.08)';
+    btn.style!.borderColor = _highlightModoAtivo ? 'rgba(79,163,209,0.7)' : 'rgba(79,163,209,0.3)';
+    btn.style!.color = _highlightModoAtivo ? '#7ec8f0' : 'rgba(126,200,240,0.5)';
     btn.title = _highlightModoAtivo ? 'Grade ativa — clique para ocultar' : 'Grade oculta — clique para mostrar';
   }
   if (!_highlightModoAtivo) {
@@ -10522,7 +10522,7 @@ function ctxHighlightTurno(charNome: any) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.id = 'highlight-layer';
   svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3';
+  svg.style!.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3';
   celsMov.forEach(({c: col, r: row}) => {
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.setAttribute('x', col as any); rect.setAttribute('y', row as any);
@@ -10557,7 +10557,7 @@ function _bfsCelulas(col: any, row: any, movMax: any, mapId: any, W: any, H: any
   const result  = [];
   visited.add(col + '_' + row);
   while (queue.length) {
-    const { c, r, dist } = queue.shift();
+    const { c, r, dist } = queue.shift()!;
     if (dist > 0) result.push({ c, r });
     if (dist >= movMax) continue;
     for (const [dc, dr] of [[0,-1],[0,1],[-1,0],[1,0]]) {
@@ -10625,7 +10625,7 @@ function superficieRenderizar(mapa: any, tokensEl: any) {
   sups.forEach((obj: any) => {
     const cel = document.createElement('div');
     cel.className = 'mapa-objeto-superficie';
-    cel.style.cssText = [
+    cel.style!.cssText = [
       'position:absolute',
       'left:' + (obj.col / W * 100) + '%',
       'top:'  + (obj.row / H * 100) + '%',
@@ -10762,18 +10762,18 @@ function aoePreviewAtualizar(centroCol: any, centroRow: any, raio: any) {
 // ── CRIAÇÃO DE MAPAS — (movido de characters/skills.js) ─────────
 // ── 14F: MAPAS — Criar novo ───────────────────────────────────
 function abrirModalNovoMapa() {
-  document.getElementById('nm-id').value = '';
-  document.getElementById('nm-nome').value = '';
-  document.getElementById('nm-img').value = '';
-  document.getElementById('nm-img-preview').style.display = 'none';
-  document.getElementById('nm-escala-val').value = (1) as any;
-  document.getElementById('nm-escala-unit').value = 'm';
-  document.getElementById('nm-grid').value = (20) as any;
-  document.getElementById('nm-larg-real').value = '';
-  document.getElementById('nm-alt-real').value = '';
-  document.getElementById('nm-repr-pct').value = (100) as any;
-  document.getElementById('nm-preview-calc').style.display = 'none';
-  document.getElementById('nm-fallback-pct').style.display = 'none';
+  document.getElementById('nm-id')!.value = '';
+  document.getElementById('nm-nome')!.value = '';
+  document.getElementById('nm-img')!.value = '';
+  document.getElementById('nm-img-preview')!.style!.display = 'none';
+  document.getElementById('nm-escala-val')!.value = (1) as any;
+  document.getElementById('nm-escala-unit')!.value = 'm';
+  document.getElementById('nm-grid')!.value = (20) as any;
+  document.getElementById('nm-larg-real')!.value = '';
+  document.getElementById('nm-alt-real')!.value = '';
+  document.getElementById('nm-repr-pct')!.value = (100) as any;
+  document.getElementById('nm-preview-calc')!.style!.display = 'none';
+  document.getElementById('nm-fallback-pct')!.style!.display = 'none';
   // Resetar aba de fundo
   nmBgTab('url');
   nmBgClearUpload();
@@ -10782,17 +10782,17 @@ function abrirModalNovoMapa() {
   const svgCtxInput = document.getElementById('nm-svg-ctx-input');
   if (svgCtxInput) svgCtxInput.value = '';
   const svgPrev = document.getElementById('nm-svg-preview-wrap');
-  if (svgPrev) svgPrev.style.display = 'none';
+  if (svgPrev) svgPrev.style!.display = 'none';
   const svgWarn = document.getElementById('nm-svg-warn');
-  if (svgWarn) svgWarn.style.display = 'none';
+  if (svgWarn) svgWarn.style!.display = 'none';
   // Canvas: limpar
   nmCE._uploadDataUrl = null;
-  setTimeout(() => { const c = document.getElementById('nmce-canvas'); if(c) { const ctx = c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); nmCE.history=[]; nmCE.drawing=false; nmceBgRender(); } }, 50);
+  setTimeout(() => { const c = document.getElementById('nmce-canvas'); if(c) { const ctx = c.getContext!('2d'); ctx.clearRect(0,0,c.width,c.height); nmCE.history=[]; nmCE.drawing=false; nmceBgRender(); } }, 50);
 
   // Se já estamos dentro de um mapa, pré-selecionar tipo tático
-  const mapaAtualEntry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  const mapaAtualEntry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   const tipoDefault = mapaAtualEntry ? 'tatico' : 'geral';
-  document.getElementById('nm-tipo').value = tipoDefault;
+  document.getElementById('nm-tipo')!.value = tipoDefault;
 
   // Atualizar labels de unidade
   const unit = mapaAtualEntry?.mapa?.escala_unit || 'm';
@@ -10814,11 +10814,11 @@ function abrirModalNovoMapa() {
   }
 
   const overlay = document.getElementById('modal-novo-mapa-overlay');
-  overlay.style.display = 'flex';
-  overlay.onclick = e => { if (e.target === overlay) fecharModalNovoMapa(); };
+  overlay!.style!.display = 'flex';
+  overlay!.onclick = e => { if (e.target === overlay) fecharModalNovoMapa(); };
   // Fechar com Escape
-  overlay._escHandler = (e: any) => { if (e.key === 'Escape') { fecharModalNovoMapa(); document.removeEventListener('keydown', overlay._escHandler); } };
-  document.addEventListener('keydown', overlay._escHandler);
+  overlay!._escHandler = (e: any) => { if (e.key === 'Escape') { fecharModalNovoMapa(); document.removeEventListener('keydown', overlay!._escHandler); } };
+  document.addEventListener('keydown', overlay!._escHandler);
 }
 
 function nmTipoChange(tipo: any) {
@@ -10841,20 +10841,20 @@ function nmTipoChange(tipo: any) {
   }
   // Exibir seção pai se houver mapas válidos para o tipo selecionado
   const parentEl = document.getElementById('nm-local-opts');
-  if (parentEl) parentEl.style.display = (parentOpts.length && tipo !== 'fase') ? 'block' : 'none';
+  if (parentEl) parentEl.style!.display = (parentOpts.length && tipo !== 'fase') ? 'block' : 'none';
   if (parentOpts.length && sel?.value) nmParentChange(sel.value);
   // Nota extra para fases
   const faseNota = document.getElementById('nm-fase-nota');
-  if (faseNota) faseNota.style.display = tipo === 'fase' ? 'block' : 'none';
+  if (faseNota) faseNota.style!.display = tipo === 'fase' ? 'block' : 'none';
   // Atualiza grade guia ISO e nota no canvas editor
   nmceUpdateIsoGuide?.();
 }
 
 // Chamado quando o usuário muda o mapa pai no modal de criação
 function nmParentChange(paiId: any) {
-  const paiEntry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===paiId);
+  const paiEntry = (RPG_DATA!.mapas||[]).find(l=>l.mapa.map_id===paiId);
   const temDims  = paiEntry?.mapa?.largura_total && paiEntry?.mapa?.altura_total;
-  document.getElementById('nm-fallback-pct').style.display = temDims ? 'none' : 'block';
+  document.getElementById('nm-fallback-pct')!.style!.display = temDims ? 'none' : 'block';
   // Atualizar unidade no label
   const unit = paiEntry?.mapa?.escala_unit || 'm';
   const lbl1 = document.getElementById('nm-unit-lbl1');
@@ -10866,11 +10866,11 @@ function nmParentChange(paiId: any) {
 
 // Preview de cálculo no modal de criação
 function nmAtualizarPreview() {
-  const largReal = parseFloat(document.getElementById('nm-larg-real')?.value);
-  const altReal  = parseFloat(document.getElementById('nm-alt-real')?.value);
-  const reprPct  = parseFloat(document.getElementById('nm-repr-pct')?.value) || 100;
+  const largReal = parseFloat(document.getElementById('nm-larg-real')?.value!);
+  const altReal  = parseFloat(document.getElementById('nm-alt-real')?.value!);
+  const reprPct  = parseFloat(document.getElementById('nm-repr-pct')?.value!) || 100;
   const paiId    = document.getElementById('nm-parent')?.value;
-  const paiEntry = paiId ? (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===paiId) : null;
+  const paiEntry = paiId ? (RPG_DATA!.mapas||[]).find(l=>l.mapa.map_id===paiId) : null;
   const paiLarg  = paiEntry?.mapa?.largura_total;
   const paiAlt   = paiEntry?.mapa?.altura_total;
   const unit     = paiEntry?.mapa?.escala_unit || 'm';
@@ -10881,20 +10881,20 @@ function nmAtualizarPreview() {
     const pctW  = ((dispW as any) / paiLarg * 100).toFixed(1);
     const dispH = altReal ? (altReal * reprPct / 100).toFixed(1) : '—';
     const pctH  = (altReal && paiAlt) ? ((dispH as any) / paiAlt * 100).toFixed(1) + '%' : '—';
-    preview.style.display = 'block';
+    preview.style!.display = 'block';
     preview.innerHTML = `📐 Exibido como <strong>${dispW}${unit} × ${dispH}${unit}</strong> — ocupa ~<strong>${pctW}%</strong> × ${pctH} do mapa pai.`;
   } else if (largReal) {
     const dispW = (largReal * reprPct / 100).toFixed(1);
-    preview.style.display = 'block';
+    preview.style!.display = 'block';
     preview.innerHTML = `📐 Exibido como <strong>${dispW}${unit}</strong> de largura. Defina as dimensões do mapa pai para calcular % automaticamente.`;
   } else {
-    preview.style.display = 'none';
+    preview.style!.display = 'none';
   }
 }
 function fecharModalNovoMapa() {
-  document.getElementById('modal-novo-mapa-overlay').style.display = 'none';
+  document.getElementById('modal-novo-mapa-overlay')!.style!.display = 'none';
   const overlay = document.getElementById('modal-novo-mapa-overlay');
-  if (overlay._escHandler) { document.removeEventListener('keydown', overlay._escHandler); overlay._escHandler = null; }
+  if (overlay!._escHandler) { document.removeEventListener('keydown', overlay!._escHandler); overlay!._escHandler = null; }
 }
 async function criarNovoMapa() {
   if (!RPG_DATA?.rpgId) { mostrarToast('Nenhuma campanha ativa', 'erro'); return; }
@@ -10905,28 +10905,28 @@ async function criarNovoMapa() {
   if (!map_id || !nome) { mostrarToast('ID e nome são obrigatórios', 'erro'); return; }
   if ((RPG_DATA.mapas||[]).find(l => l.mapa.map_id === map_id)) { mostrarToast('Já existe um mapa com esse ID', 'erro'); return; }
 
-  const _parentOptsVisible = document.getElementById('nm-local-opts')?.style.display !== 'none';
+  const _parentOptsVisible = document.getElementById('nm-local-opts')?.style!.display !== 'none';
   const parentId = _parentOptsVisible ? (document.getElementById('nm-parent')?.value || null) : null;
 
   let zonaW = 15, zonaH = 15;
   let largReal = null, altReal = null, reprPct = 100;
 
   if (parentId) {
-    largReal = parseFloat(document.getElementById('nm-larg-real')?.value) || null;
-    altReal  = parseFloat(document.getElementById('nm-alt-real')?.value)  || null;
-    reprPct  = parseFloat(document.getElementById('nm-repr-pct')?.value)  || 100;
+    largReal = parseFloat(document.getElementById('nm-larg-real')?.value!) || null;
+    altReal  = parseFloat(document.getElementById('nm-alt-real')?.value!)  || null;
+    reprPct  = parseFloat(document.getElementById('nm-repr-pct')?.value!)  || 100;
     const paiEntry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===parentId);
     const paiLarg  = paiEntry?.mapa?.largura_total;
     const paiAlt   = paiEntry?.mapa?.altura_total;
     if (largReal && paiLarg) {
       zonaW = parseFloat(((largReal * reprPct / 100) / paiLarg * 100).toFixed(2));
     } else {
-      zonaW = parseFloat(document.getElementById('nm-zona-w')?.value) || 15;
+      zonaW = parseFloat(document.getElementById('nm-zona-w')?.value!) || 15;
     }
     if (altReal && paiAlt) {
       zonaH = parseFloat(((altReal * reprPct / 100) / paiAlt * 100).toFixed(2));
     } else {
-      zonaH = parseFloat(document.getElementById('nm-zona-h')?.value) || zonaW * 0.75;
+      zonaH = parseFloat(document.getElementById('nm-zona-h')?.value!) || zonaW * 0.75;
     }
   }
 
@@ -10934,9 +10934,9 @@ async function criarNovoMapa() {
   let img_url = '';
   try { img_url = nmBgGetFinal() || ''; } catch(e) { img_url = ''; }
 
-  const escala_val  = parseFloat(document.getElementById('nm-escala-val')?.value) || 1;
+  const escala_val  = parseFloat(document.getElementById('nm-escala-val')?.value!) || 1;
   const escala_unit = (document.getElementById('nm-escala-unit')?.value || 'm').trim();
-  const grid        = parseInt(document.getElementById('nm-grid')?.value) || 20;
+  const grid        = parseInt(document.getElementById('nm-grid')?.value!) || 20;
 
   const mapaObj = {
     map_id, nome, tipo, img_url, escala_val, escala_unit, grid,
@@ -11178,20 +11178,20 @@ let PLACEMENT_STATE: any = null;
     while (heap.length) {
       heap.sort((a,b) => a.g - b.g);
       const cur = heap.shift();
-      out.push({ col: cur.col, row: cur.row, custo: cur.g });
+      out.push({ col: cur!.col, row: cur!.row, custo: cur!.g });
       for (const d of dirs) {
-        const nc = cur.col + d.dc, nr = cur.row + d.dr;
+        const nc = cur!.col + d.dc, nr = cur!.row + d.dr;
         if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
         if (d.dc !== 0 && d.dr !== 0) {
-          const lateral1 = _arestaBloqueada(m, {col:cur.col,row:cur.row}, {col:nc,row:cur.row});
-          const lateral2 = _arestaBloqueada(m, {col:cur.col,row:cur.row}, {col:cur.col,row:nr});
+          const lateral1 = _arestaBloqueada(m, {col:cur!.col,row:cur!.row}, {col:nc,row:cur!.row});
+          const lateral2 = _arestaBloqueada(m, {col:cur!.col,row:cur!.row}, {col:cur!.col,row:nr});
           if (lateral1 && lateral2) continue;
         } else {
-          if (_arestaBloqueada(m, {col:cur.col,row:cur.row}, {col:nc,row:nr})) continue;
+          if (_arestaBloqueada(m, {col:cur!.col,row:cur!.row}, {col:nc,row:nr})) continue;
         }
         const c = _custoEntrar(m, nc, nr);
         if (!isFinite(c)) continue;
-        const ng = cur.g + c;
+        const ng = cur!.g + c;
         if (ng > velocidade) continue;
         const k = key(nc, nr);
         if (visit.has(k) && visit.get(k) <= ng) continue;
@@ -11223,13 +11223,13 @@ let PLACEMENT_STATE: any = null;
     let svg = wrap.querySelector('svg.grid-tactical-svg');
     if (!svg) {
       svg = (document.createElementNS('http://www.w3.org/2000/svg', 'svg')) as any;
-      svg.setAttribute('class', 'grid-tactical-svg');
-      svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;';
+      svg!.setAttribute('class', 'grid-tactical-svg');
+      svg!.style!.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;';
       const tokensEl = document.getElementById('mapa-tokens');
       if (tokensEl && tokensEl.parentElement === wrap) {
-        wrap.insertBefore(svg, tokensEl);
+        wrap.insertBefore(svg!, tokensEl);
       } else {
-        wrap.appendChild(svg);
+        wrap.appendChild(svg!);
       }
     }
     return svg;
@@ -11375,7 +11375,7 @@ let PLACEMENT_STATE: any = null;
       if (!layer) {
         layer = document.createElement('div');
         layer.className = 'gt-portas-layer';
-        layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:6;';
+        layer.style!.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:6;';
         wrap.appendChild(layer);
       }
       const w = wrap.clientWidth, h = wrap.clientHeight;
@@ -11627,11 +11627,11 @@ let PLACEMENT_STATE: any = null;
                   if (pos && typeof pos.col === 'number') {
                     const cx = (pos.col + 0.5) * cW;
                     const cy = (pos.row + 0.5) * cH;
-                    el.style.left = (cx / w * 100) + '%';
-                    el.style.top  = (cy / h * 100) + '%';
+                    el.style!.left = (cx / w * 100) + '%';
+                    el.style!.top  = (cy / h * 100) + '%';
                     const tCells = parseFloat(el.getAttribute('data-tamanho-cells') || '1') || 1;
-                    el.style.width  = (cW * tCells * 0.86) + 'px';
-                    el.style.height = (cH * tCells * 0.86) + 'px';
+                    el.style!.width  = (cW * tCells * 0.86) + 'px';
+                    el.style!.height = (cH * tCells * 0.86) + 'px';
                   }
                   if (!el.__gtClick) {
                     el.__gtClick = true;

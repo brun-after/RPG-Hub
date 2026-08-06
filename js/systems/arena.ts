@@ -36,7 +36,7 @@ window.addEventListener('load', ()=>{
     if (!hubBody) return;
     const sep = document.createElement('div');
     sep.className = 'hub-arena-sep';
-    sep.style.marginTop = '28px';
+    sep.style!.marginTop = '28px';
     sep.innerHTML = `
       <div class="hub-section-title" style="color:rgba(232,80,60,0.6)">Modo Arena</div>
       <button class="hub-arena-btn" onclick="abrirArenaHub()">
@@ -51,30 +51,30 @@ window.addEventListener('load', ()=>{
 // NAVEGAÇÃO
 // ═══════════════════════════════════════════════════════════════
 async function abrirArenaHub() {
-  document.getElementById('hub').style.display = 'none';
-  document.getElementById('arena-hub').style.display = 'block';
+  document.getElementById('hub')!.style!.display = 'none';
+  document.getElementById('arena-hub')!.style!.display = 'block';
   await carregarArenaList();
 }
 
 function fecharArenaHub() {
   salvarNav('hub');
-  document.getElementById('arena-hub').style.display = 'none';
-  document.getElementById('hub').style.display = '';
+  document.getElementById('arena-hub')!.style!.display = 'none';
+  document.getElementById('hub')!.style!.display = '';
 }
 
 function sairArenaSession() {
   chatOcultar();
   salvarNav('hub');
   arFecharRealtime();
-  document.getElementById('arena-session').style.display = 'none';
-  document.getElementById('arena-hub').style.display = 'block';
+  document.getElementById('arena-session')!.style!.display = 'none';
+  document.getElementById('arena-hub')!.style!.display = 'block';
   carregarArenaList();
 }
 
 function arTab(nome: any, btn: any) {
   document.querySelectorAll('.ar-tab-content').forEach(el => el.classList.remove('ativo'));
   document.querySelectorAll('.ar-tab').forEach(b => b.classList.remove('ativo'));
-  document.getElementById('ar-tab-' + nome).classList.add('ativo');
+  document.getElementById('ar-tab-' + nome)!.classList!.add!('ativo')!;
   btn.classList.add('ativo');
   if (nome === 'config') { renderArenaConfig(); renderArenaDiceConfig(); }
   if (nome === 'd100') renderArenaDados();
@@ -118,8 +118,8 @@ async function carregarArenaList() {
       } catch(e){}
     }
     const arenas = (all||[]).filter((r: any) => r.owner_id === userId || membrosIds.includes(r.rpg_id));
-    if (!arenas.length) { el.innerHTML = '<div class="ar-empty">Nenhuma arena ainda<br><small style="font-size:0.78rem">Crie uma ou entre com um código</small></div>'; return; }
-    el.innerHTML = arenas.map((a: any) => {
+    if (!arenas.length) { el!.innerHTML = '<div class="ar-empty">Nenhuma arena ainda<br><small style="font-size:0.78rem">Crie uma ou entre com um código</small></div>'; return; }
+    el!.innerHTML = arenas.map((a: any) => {
       const t = a.theme_json || {};
       const bn = t.batalha_num || 1;
       const ehDono = a.owner_id === userId;
@@ -133,11 +133,11 @@ async function carregarArenaList() {
         <span style="color:rgba(232,80,60,0.3);font-size:1.1rem">›</span>
       </div>`;
     }).join('');
-  } catch(e) { el.innerHTML = '<div class="ar-empty" style="color:#e74c3c">Erro ao carregar</div>'; }
+  } catch(e) { el!.innerHTML = '<div class="ar-empty" style="color:#e74c3c">Erro ao carregar</div>'; }
 }
 
 async function criarArenaSession() {
-  const nome = document.getElementById('ar-nova-nome').value.trim();
+  const nome = document.getElementById('ar-nova-nome')!.value!.trim!()!;
   if (!nome) { arToast('Informe o nome da arena','erro'); return; }
   const id = 'arena_' + Date.now();
   // Gerar código de acesso curto (4-6 chars, maiúsculas)
@@ -148,8 +148,8 @@ async function criarArenaSession() {
   const penalidadesRows = document.querySelectorAll('#ar-nova-penalidades .ar-penal-row');
   const penalidades: any = [];
   penalidadesRows.forEach(row => {
-    const hp = parseInt(row.querySelector('.ar-penal-hp')?.value);
-    const val = parseInt(row.querySelector('.ar-penal-val')?.value);
+    const hp = parseInt(row.querySelector('.ar-penal-hp')?.value!);
+    const val = parseInt(row.querySelector('.ar-penal-val')?.value!);
     if (!isNaN(hp) && !isNaN(val) && hp > 0 && val > 0) penalidades.push({ hp, penalidade: val });
   });
   penalidades.sort((a: any,b: any) => b.hp - a.hp); // ordem decrescente de HP
@@ -163,9 +163,9 @@ async function criarArenaSession() {
     }
     AR.arenaIdCriada = id;
     // Mostrar código na tela
-    document.getElementById('ar-criada-codigo').textContent = codigo;
-    document.getElementById('ar-criada-form-wrap').style.display = 'none';
-    document.getElementById('ar-criada-codigo-wrap').style.display = 'block';
+    document.getElementById('ar-criada-codigo')!.textContent = codigo;
+    document.getElementById('ar-criada-form-wrap')!.style!.display = 'none';
+    document.getElementById('ar-criada-codigo-wrap')!.style!.display = 'block';
     arToast('Arena criada! Compartilhe o código com os jogadores.','sucesso');
     await carregarArenaList();
   } catch(e) { arToast('Erro ao criar arena','erro'); console.error(e); }
@@ -173,15 +173,15 @@ async function criarArenaSession() {
 
 function arEntrarArenaAposCriacao() {
   fecharModal('ar-modal-criar-arena');
-  document.getElementById('ar-criada-form-wrap').style.display = 'block';
-  document.getElementById('ar-criada-codigo-wrap').style.display = 'none';
+  document.getElementById('ar-criada-form-wrap')!.style!.display = 'block';
+  document.getElementById('ar-criada-codigo-wrap')!.style!.display = 'none';
   if (AR.arenaIdCriada) entrarArena(AR.arenaIdCriada);
 }
 
 function abrirModalCriarArena() {
-  document.getElementById('ar-nova-nome').value='';
-  document.getElementById('ar-criada-form-wrap').style.display = 'block';
-  document.getElementById('ar-criada-codigo-wrap').style.display = 'none';
+  document.getElementById('ar-nova-nome')!.value='';
+  document.getElementById('ar-criada-form-wrap')!.style!.display = 'block';
+  document.getElementById('ar-criada-codigo-wrap')!.style!.display = 'none';
   // Reset dado efetividade
   const sel = document.getElementById('ar-nova-dado-efetiv');
   if (sel) sel.value = '20';
@@ -213,7 +213,7 @@ function arAdicionarPenalidadeRow() {
   if (!div) return;
   const row = document.createElement('div');
   row.className = 'ar-penal-row';
-  row.style.cssText = 'display:flex;gap:6px;align-items:center';
+  row.style!.cssText = 'display:flex;gap:6px;align-items:center';
   row.innerHTML = `<span style="font-size:0.78rem;color:#9a8888;white-space:nowrap">HP &lt;</span>
     <input type="number" placeholder="50" min="1" max="99" class="ar-input ar-penal-hp" style="width:60px;padding:6px 8px;text-align:center">
     <span style="font-size:0.78rem;color:#9a8888">→ −</span>
@@ -224,12 +224,12 @@ function arAdicionarPenalidadeRow() {
 }
 
 function arCopiarCodigo() {
-  const codigo = document.getElementById('ar-criada-codigo').textContent;
+  const codigo = document.getElementById('ar-criada-codigo')!.textContent!;
   navigator.clipboard?.writeText(codigo).then(()=>arToast('Código copiado!','sucesso')).catch(()=>arToast('Código: '+codigo,''));
 }
 
 async function arEntrarPorCodigo() {
-  const codigo = document.getElementById('ar-hub-codigo').value.trim().toUpperCase();
+  const codigo = document.getElementById('ar-hub-codigo')!.value!.trim!()!.toUpperCase!()!;
   if (!codigo || codigo.length < 3) { arToast('Informe o código da arena','erro'); return; }
   try {
     // Busca direto pela coluna codigo_acesso (filtro no banco)
@@ -244,15 +244,15 @@ async function arEntrarPorCodigo() {
         try { await arSb('rpg_members', {method:'POST', body:JSON.stringify({rpg_id:arena.rpg_id, player_id:SESSION.user.id, nickname:nick, role:'jogador'})}); } catch(e) {}
       }
     }
-    document.getElementById('ar-hub-codigo').value = '';
+    document.getElementById('ar-hub-codigo')!.value = '';
     await entrarArena(arena.rpg_id);
   } catch(e) { arToast('Erro ao entrar por código','erro'); console.error(e); }
 }
 
 async function entrarArena(rpgId: any) {
   salvarNav('arena', rpgId);
-  document.getElementById('arena-hub').style.display = 'none';
-  document.getElementById('arena-session').style.display = 'block';
+  document.getElementById('arena-hub')!.style!.display = 'none';
+  document.getElementById('arena-session')!.style!.display = 'block';
   // Reset tabs
   document.querySelectorAll('.ar-tab').forEach((b,i)=>b.classList.toggle('ativo',i===0));
   document.querySelectorAll('.ar-tab-content').forEach((c,i)=>c.classList.toggle('ativo',i===0));
@@ -291,8 +291,8 @@ async function entrarArena(rpgId: any) {
       ? '<span class="ar-role-mestre">⚜ Mestre</span>'
       : '<span class="ar-role-jogador">⚔ Jogador</span>';
 
-    document.getElementById('ar-session-nome').textContent = m.name;
-    document.getElementById('ar-batalha-badge').textContent = `Batalha #${t.batalha_num||1}`;
+    document.getElementById('ar-session-nome')!.textContent = m.name;
+    document.getElementById('ar-batalha-badge')!.textContent = `Batalha #${t.batalha_num||1}`;
 
     await arCarregarTudo();
     renderArenaDados();
@@ -318,34 +318,34 @@ function arAtualizarUIpeloPapel() {
   const cMestreCriar = document.getElementById('ar-cenario-mestre-criar');
   const cJogador = document.getElementById('ar-cenario-jogador-btns');
   const cPropostas = document.getElementById('ar-cenario-propostas-wrap');
-  if (cMestre) cMestre.style.display = isMestre ? 'block' : 'none';
-  if (cMestreCriar) cMestreCriar.style.display = isMestre ? 'block' : 'none';
-  if (cJogador) cJogador.style.display = isMestre ? 'none' : 'block';
-  if (cPropostas) cPropostas.style.display = isMestre ? 'block' : 'none';
+  if (cMestre) cMestre.style!.display = isMestre ? 'block' : 'none';
+  if (cMestreCriar) cMestreCriar.style!.display = isMestre ? 'block' : 'none';
+  if (cJogador) cJogador.style!.display = isMestre ? 'none' : 'block';
+  if (cPropostas) cPropostas.style!.display = isMestre ? 'block' : 'none';
   // Personagens
   const btnMestre = document.getElementById('ar-btn-novo-jogador-mestre');
   const btnPlayer = document.getElementById('ar-btn-novo-jogador-player');
-  if (btnMestre) btnMestre.style.display = isMestre ? 'block' : 'none';
+  if (btnMestre) btnMestre.style!.display = isMestre ? 'block' : 'none';
   if (btnPlayer) {
     const jaTemChar = AR.myCharNome || AR.chars.some((c: any) => (c.custom_attrs?.owner_nickname||'') === AR.myNickname && (c.custom_attrs?.tipo||'jogador') === 'jogador');
-    btnPlayer.style.display = (!isMestre && !jaTemChar) ? 'block' : 'none';
+    btnPlayer.style!.display = (!isMestre && !jaTemChar) ? 'block' : 'none';
   }
   // Entidades
   const eMestre = document.getElementById('ar-entidades-btns-mestre');
   const ePlayer = document.getElementById('ar-entidades-btns-player');
   const eSolic = document.getElementById('ar-entidades-solicitacoes-wrap');
-  if (eMestre) eMestre.style.display = isMestre ? 'block' : 'none';
-  if (ePlayer) ePlayer.style.display = isMestre ? 'none' : 'block';
-  if (eSolic) eSolic.style.display = isMestre ? 'block' : 'none';
+  if (eMestre) eMestre.style!.display = isMestre ? 'block' : 'none';
+  if (ePlayer) ePlayer.style!.display = isMestre ? 'none' : 'block';
+  if (eSolic) eSolic.style!.display = isMestre ? 'block' : 'none';
   // Efeitos
   const efBtnsMestre = document.getElementById('ar-efeitos-btns-mestre');
-  if (efBtnsMestre) efBtnsMestre.style.display = isMestre ? 'block' : 'none';
+  if (efBtnsMestre) efBtnsMestre.style!.display = isMestre ? 'block' : 'none';
   // Mesa — botões de mapa (mestre only)
   const mesaBtnsMestre = document.getElementById('ar-mesa-btns-mestre');
-  if (mesaBtnsMestre) mesaBtnsMestre.style.display = isMestre ? 'flex' : 'none';
+  if (mesaBtnsMestre) mesaBtnsMestre.style!.display = isMestre ? 'flex' : 'none';
   // Botão avançar turno (mestre controla turnos normais)
   const btnAvancar = document.getElementById('ar-btn-avancar-turno');
-  if (btnAvancar) btnAvancar.style.display = isMestre ? 'block' : 'none';
+  if (btnAvancar) btnAvancar.style!.display = isMestre ? 'block' : 'none';
   // Iniciativa
   renderArenaIniciativaUI();
   // Propostas de cenário e solicitações de entidade
@@ -420,21 +420,21 @@ async function arCarregarTudo() {
 function renderArenaPersonagens() {
   const jogadores = AR.chars.filter((c: any) => (c.custom_attrs.tipo||'jogador') === 'jogador');
   const el = document.getElementById('ar-chars-list');
-  if (!jogadores.length) { el.innerHTML = '<div class="ar-empty">Nenhum jogador ainda<br><small>Adicione ou aguarde outros jogadores criarem seus personagens</small></div>'; return; }
-  el.innerHTML = jogadores.map((c: any) => arCharCardHTML(c)).join('');
+  if (!jogadores.length) { el!.innerHTML = '<div class="ar-empty">Nenhum jogador ainda<br><small>Adicione ou aguarde outros jogadores criarem seus personagens</small></div>'; return; }
+  el!.innerHTML = jogadores.map((c: any) => arCharCardHTML(c)).join('');
   // Atualizar botão de criação de personagem do player
   const btnPlayer = document.getElementById('ar-btn-novo-jogador-player');
   if (btnPlayer && AR.myRole !== 'mestre') {
     const jaTemChar = AR.myNickname && AR.chars.some((c: any) => (c.custom_attrs?.owner_nickname||'') === AR.myNickname && (c.custom_attrs?.tipo||'jogador') === 'jogador');
-    btnPlayer.style.display = jaTemChar ? 'none' : 'block';
+    btnPlayer.style!.display = jaTemChar ? 'none' : 'block';
   }
 }
 
 function renderArenaEntidades() {
   const ents = AR.chars.filter((c: any) => ['criatura','objeto'].includes(c.custom_attrs.tipo||''));
   const el = document.getElementById('ar-entidades-list');
-  if (!ents.length) { el.innerHTML = '<div class="ar-empty">Nenhuma entidade declarada</div>'; return; }
-  el.innerHTML = ents.map((c: any) => arCharCardHTML(c)).join('');
+  if (!ents.length) { el!.innerHTML = '<div class="ar-empty">Nenhuma entidade declarada</div>'; return; }
+  el!.innerHTML = ents.map((c: any) => arCharCardHTML(c)).join('');
 }
 
 function arCharCardHTML(c: any) {
@@ -504,23 +504,23 @@ function arCharCardHTML(c: any) {
 // RENDER: CENÁRIO
 // ═══════════════════════════════════════════════════════════════
 function renderArenaCenario() {
-  document.getElementById('ar-turno-num').textContent = AR.estado.turno || 0;
+  document.getElementById('ar-turno-num')!.textContent = AR.estado.turno || 0;
   const ct = document.getElementById('ar-cenario-texto');
   if (AR.estado.cenario) {
-    ct.textContent = AR.estado.cenario;
-    ct.style.color = '#c8b8b8';
-    ct.style.fontStyle = 'normal';
+    ct!.textContent = AR.estado.cenario;
+    ct!.style!.color = '#c8b8b8';
+    ct!.style!.fontStyle = 'normal';
   } else {
-    ct.textContent = 'Nenhum cenário declarado';
-    ct.style.color = '#9a8888';
-    ct.style.fontStyle = 'italic';
+    ct!.textContent = 'Nenhum cenário declarado';
+    ct!.style!.color = '#9a8888';
+    ct!.style!.fontStyle = 'italic';
   }
   try { renderAtaquesPendentes(); } catch(e) {}
 }
 
 async function salvarCenario() {
-  const texto = document.getElementById('ar-cenario-input').value.trim();
-  const img = document.getElementById('ar-cenario-img').value.trim();
+  const texto = document.getElementById('ar-cenario-input')!.value!.trim!()!;
+  const img = document.getElementById('ar-cenario-img')!.value!.trim!()!;
   if (!texto) return;
   AR.estado.cenario = texto;
   (AR.estado as any).cenario_img = img;
@@ -591,8 +591,8 @@ function renderArenaEfeitos() {
 function renderArenaLog() {
   const el = document.getElementById('ar-log-list');
   const logs = (AR.estado.log||[]).slice().reverse();
-  if (!logs.length) { el.innerHTML = '<div class="ar-empty">Sem eventos registrados</div>'; return; }
-  el.innerHTML = logs.map((l: any) => `<div class="ar-log-item"><span class="ar-log-turno">T${l.turno||0}</span><span class="ar-log-texto">${l.texto}</span></div>`).join('');
+  if (!logs.length) { el!.innerHTML = '<div class="ar-empty">Sem eventos registrados</div>'; return; }
+  el!.innerHTML = logs.map((l: any) => `<div class="ar-log-item"><span class="ar-log-turno">T${l.turno||0}</span><span class="ar-log-texto">${l.texto}</span></div>`).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -600,8 +600,8 @@ function renderArenaLog() {
 // ═══════════════════════════════════════════════════════════════
 function renderArenaD100Hist() {
   const el = document.getElementById('ar-d100-hist');
-  if (!AR.d100Hist.length) { el.innerHTML = '<div style="padding:14px;text-align:center;color:#7a6060;font-style:italic;font-size:0.85rem">Nenhuma rolagem</div>'; return; }
-  el.innerHTML = AR.d100Hist.map((h: any) => {
+  if (!AR.d100Hist.length) { el!.innerHTML = '<div style="padding:14px;text-align:center;color:#7a6060;font-style:italic;font-size:0.85rem">Nenhuma rolagem</div>'; return; }
+  el!.innerHTML = AR.d100Hist.map((h: any) => {
     let cor = '#c8d8e8', tag = '';
     if (h.num >= 95) { cor='#5ee09a'; tag=' ✦ Prodígio!'; }
     else if (h.num <= 5) { cor='#e74c3c'; tag=' ✦ Catástrofe!'; }
@@ -624,18 +624,18 @@ function renderArenaConfig() {
   const cfgCodigoWrap = document.getElementById('ar-cfg-codigo-wrap');
   if (cfgCodigoWrap) {
     if (AR.myRole === 'mestre') {
-      cfgCodigoWrap.style.display = 'block';
+      cfgCodigoWrap.style!.display = 'block';
       const codigo = AR.session?.codigo_acesso || '—';
       const el = document.getElementById('ar-cfg-codigo-val');
       if (el) el.textContent = codigo;
     } else {
-      cfgCodigoWrap.style.display = 'none';
+      cfgCodigoWrap.style!.display = 'none';
     }
   }
   // Histórico
   const el = document.getElementById('ar-historico-list');
-  if (!AR.histList.length) { el.innerHTML = '<div class="ar-empty">Nenhuma batalha salva</div>'; return; }
-  el.innerHTML = AR.histList.map((h: any) => {
+  if (!AR.histList.length) { el!.innerHTML = '<div class="ar-empty">Nenhuma batalha salva</div>'; return; }
+  el!.innerHTML = AR.histList.map((h: any) => {
     let hd: any = {}; try { hd = JSON.parse(h.conteudo||'{}'); } catch(e) {}
     return `<div class="ar-hist-item" onclick="verHistorico(${h.id})">
       <div class="ar-hist-nome">${h.titulo}</div>
@@ -660,42 +660,42 @@ function abrirModalHP(nome: any) {
   if (!c) return;
   const hpMax = c.custom_attrs?.hp_max ?? 100;
   const hp = c.hp_atual ?? hpMax;
-  document.getElementById('ar-hp-char-nome').textContent = nome;
-  document.getElementById('ar-hp-val').textContent = hp + ' / ' + hpMax;
-  document.getElementById('ar-hp-slider').max = hpMax;
-  document.getElementById('ar-hp-slider').value = hp;
+  document.getElementById('ar-hp-char-nome')!.textContent = nome;
+  document.getElementById('ar-hp-val')!.textContent = hp + ' / ' + hpMax;
+  document.getElementById('ar-hp-slider')!.max = hpMax;
+  document.getElementById('ar-hp-slider')!.value = hp;
   arAtualizarBarraHP(hp, hpMax);
   abrirModal('ar-modal-hp');
 }
 
 function arHpSliderChange() {
   const sl = document.getElementById('ar-hp-slider');
-  const v = parseInt(sl.value);
-  const hpMax = parseInt((sl.max as any))||100;
-  document.getElementById('ar-hp-val').textContent = v + ' / ' + hpMax;
+  const v = parseInt(sl!.value!);
+  const hpMax = parseInt((sl!.max as any))||100;
+  document.getElementById('ar-hp-val')!.textContent = v + ' / ' + hpMax;
   arAtualizarBarraHP(v, hpMax);
 }
 
 function arHpDelta(delta: any) {
   const sl = document.getElementById('ar-hp-slider');
-  const hpMax = parseInt((sl.max as any))||100;
-  const novo = Math.max(0, Math.min(hpMax, parseInt(sl.value) + delta));
-  sl.value = (novo) as any;
+  const hpMax = parseInt((sl!.max as any))||100;
+  const novo = Math.max(0, Math.min(hpMax, parseInt(sl!.value!) + delta));
+  sl!.value = (novo) as any;
   arHpSliderChange();
 }
 
 function arAtualizarBarraHP(hp: any, hpMax: any) {
-  hpMax = hpMax || parseInt((document.getElementById('ar-hp-slider').max as any))||100;
+  hpMax = hpMax || parseInt((document.getElementById('ar-hp-slider')!.max! as any))||100;
   const pct = Math.round((hp/hpMax)*100);
   const fill = document.getElementById('ar-hp-bar-fill');
   const cls = pct >= 60 ? 'ar-hp-high' : pct >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
-  fill.className = `ar-hp-fill ${cls}`;
-  fill.style.width = Math.min(pct,100) + '%';
+  fill!.className = `ar-hp-fill ${cls}`;
+  fill!.style!.width = Math.min(pct,100) + '%';
 }
 
 async function confirmarHP() {
   const nome = AR.hpEditNome;
-  const novo = parseInt(document.getElementById('ar-hp-slider').value);
+  const novo = parseInt(document.getElementById('ar-hp-slider')!.value!);
   const c = AR.chars.find((x: any) => x.nome === nome);
   if (!c) return;
   const old = c.hp_atual;
@@ -720,19 +720,19 @@ async function confirmarHP() {
 // ═══════════════════════════════════════════════════════════════
 function abrirModalCriarChar(tipo: any) {
   AR.charTipoModal = tipo;
-  document.getElementById('ar-char-edit-nome').value = '';
-  document.getElementById('ar-char-nome').value = '';
-  document.getElementById('ar-char-desc').value = '';
-  document.getElementById('ar-char-img').value = '';
-  document.getElementById('ar-char-img-thumb').style.display = 'none';
+  document.getElementById('ar-char-edit-nome')!.value = '';
+  document.getElementById('ar-char-nome')!.value = '';
+  document.getElementById('ar-char-desc')!.value = '';
+  document.getElementById('ar-char-img')!.value = '';
+  document.getElementById('ar-char-img-thumb')!.style!.display = 'none';
   const hpDefault = AR.session?.level_config?.hp_base || 100;
-  document.getElementById('ar-char-hp').value = hpDefault;
-  document.getElementById('ar-char-hp').max = hpDefault;
-  document.getElementById('ar-char-hp-val').textContent = hpDefault + ' / ' + hpDefault;
-  document.getElementById('ar-char-tipo').value = tipo;
-  document.getElementById('ar-char-del-wrap').style.display = 'none';
+  document.getElementById('ar-char-hp')!.value = hpDefault;
+  document.getElementById('ar-char-hp')!.max = hpDefault;
+  document.getElementById('ar-char-hp-val')!.textContent = hpDefault + ' / ' + hpDefault;
+  document.getElementById('ar-char-tipo')!.value = tipo;
+  document.getElementById('ar-char-del-wrap')!.style!.display = 'none';
   const tipoLabel = tipo === 'criatura' ? 'Nova Criatura' : tipo === 'objeto' ? 'Novo Objeto' : 'Novo Jogador';
-  document.getElementById('ar-modal-char-titulo').textContent = tipoLabel;
+  document.getElementById('ar-modal-char-titulo')!.textContent = tipoLabel;
   renderCoresSwatch(AR_CORES[Math.floor(Math.random()*AR_CORES.length)]);
   abrirModal('ar-modal-char');
 }
@@ -741,32 +741,32 @@ function abrirModalEditarChar(nome: any) {
   const c = AR.chars.find((x: any) => x.nome === nome);
   if (!c) return;
   const ca = c.custom_attrs || {};
-  document.getElementById('ar-char-edit-nome').value = nome;
-  document.getElementById('ar-char-nome').value = nome;
-  document.getElementById('ar-char-desc').value = ca.descricao || '';
+  document.getElementById('ar-char-edit-nome')!.value = nome;
+  document.getElementById('ar-char-nome')!.value = nome;
+  document.getElementById('ar-char-desc')!.value = ca.descricao || '';
   const imgUrl = normalizeImgUrl(ca.img_url || ca.img || '');
-  document.getElementById('ar-char-img').value = imgUrl;
+  document.getElementById('ar-char-img')!.value = imgUrl;
   const thumb = document.getElementById('ar-char-img-thumb');
-  if (imgUrl) { thumb.src = imgUrl; thumb.style.display = 'block'; } else { thumb.style.display = 'none'; }
-  document.getElementById('ar-char-hp').value = c.hp_atual ?? (ca.hp_max ?? 100);
-  document.getElementById('ar-char-hp').max = ca.hp_max || 100;
-  document.getElementById('ar-char-hp-val').textContent = (c.hp_atual ?? (ca.hp_max ?? 100)) + ' / ' + (ca.hp_max || 100);
-  document.getElementById('ar-char-tipo').value = ca.tipo || 'jogador';
-  document.getElementById('ar-char-del-wrap').style.display = 'block';
+  if (imgUrl) { thumb!.src = imgUrl; thumb!.style!.display = 'block'; } else { thumb!.style!.display = 'none'; }
+  document.getElementById('ar-char-hp')!.value = c.hp_atual ?? (ca.hp_max ?? 100);
+  document.getElementById('ar-char-hp')!.max = ca.hp_max || 100;
+  document.getElementById('ar-char-hp-val')!.textContent = (c.hp_atual ?? (ca.hp_max ?? 100)) + ' / ' + (ca.hp_max || 100);
+  document.getElementById('ar-char-tipo')!.value = ca.tipo || 'jogador';
+  document.getElementById('ar-char-del-wrap')!.style!.display = 'block';
   const tipo = ca.tipo || 'jogador';
   const tipoLabel = tipo === 'criatura' ? 'Editar Criatura' : tipo === 'objeto' ? 'Editar Objeto' : 'Editar Jogador';
-  document.getElementById('ar-modal-char-titulo').textContent = tipoLabel;
+  document.getElementById('ar-modal-char-titulo')!.textContent = tipoLabel;
   renderCoresSwatch(ca.cor || AR_CORES[0]);
   // Habilidades NPC
   const habilidadesWrap = document.getElementById('ar-habilidades-npc-wrap');
-  if (habilidadesWrap) habilidadesWrap.style.display = tipo === 'criatura' ? 'block' : 'none';
+  if (habilidadesWrap) habilidadesWrap.style!.display = tipo === 'criatura' ? 'block' : 'none';
   NPC_HABILIDADES_TEMP = JSON.parse(JSON.stringify(ca.habilidades || []));
   atkRenderHabilidadesNPC(NPC_HABILIDADES_TEMP);
   abrirModal('ar-modal-char');
 }
 
 function renderCoresSwatch(corSel: any) {
-  document.getElementById('ar-char-cores').innerHTML = AR_CORES.map(c =>
+  document.getElementById('ar-char-cores')!.innerHTML = AR_CORES.map(c =>
     `<div class="ar-cor${c===corSel?' sel':''}" style="background:${c}" data-cor="${c}" onclick="selecionarCor(this,'${c}')"></div>`
   ).join('');
 }
@@ -778,18 +778,18 @@ function selecionarCor(el: any, cor: any) {
 
 function getCorSelecionada() {
   const sel = document.querySelector('#ar-char-cores .ar-cor.sel');
-  return sel ? sel.dataset.cor : AR_CORES[0];
+  return sel ? sel.dataset!.cor : AR_CORES[0];
 }
 
 async function salvarChar() {
-  const nomeOld = document.getElementById('ar-char-edit-nome').value;
-  const nome = document.getElementById('ar-char-nome').value.trim();
-  const desc = document.getElementById('ar-char-desc').value.trim();
-  const hp = parseInt(document.getElementById('ar-char-hp').value);
-  const hpMax = parseInt((document.getElementById('ar-char-hp').max as any)) || hp || 100;
-  const tipo = document.getElementById('ar-char-tipo').value;
+  const nomeOld = document.getElementById('ar-char-edit-nome')!.value!;
+  const nome = document.getElementById('ar-char-nome')!.value!.trim!()!;
+  const desc = document.getElementById('ar-char-desc')!.value!.trim!()!;
+  const hp = parseInt(document.getElementById('ar-char-hp')!.value!);
+  const hpMax = parseInt((document.getElementById('ar-char-hp')!.max! as any)) || hp || 100;
+  const tipo = document.getElementById('ar-char-tipo')!.value!;
   const cor = getCorSelecionada();
-  const img = document.getElementById('ar-char-img').value.trim();
+  const img = document.getElementById('ar-char-img')!.value!.trim!()!;
   if (!nome) { arToast('Informe o nome','erro'); return; }
 
   const isEdit = !!nomeOld;
@@ -863,7 +863,7 @@ async function salvarChar() {
 }
 
 async function deletarChar() {
-  const nome = document.getElementById('ar-char-edit-nome').value;
+  const nome = document.getElementById('ar-char-edit-nome')!.value!;
   if (!nome) return;
   if (!confirm(`Remover "${nome}" da batalha?`)) return;
   try {
@@ -887,13 +887,13 @@ function arEfToggle(key: any) {
     mov:'ar-ef-mov-fields', atk:'ar-ef-atk-fields', def:'ar-ef-def-fields' };
   const el = document.getElementById(map[key]);
   const chk = document.getElementById(`ar-ef-${key}-on`);
-  if (el && chk) el.style.display = chk.checked ? 'block' : 'none';
+  if (el && chk) el.style!.display = chk.checked ? 'block' : 'none';
 }
 
 function arEfSelectGroup(grupo: any) {
   const items = [...document.querySelectorAll('#ar-ef-targets .ar-check-item')];
   items.forEach(el => {
-    const tipo = el.dataset.tipo || 'jogador';
+    const tipo = el.dataset!.tipo || 'jogador';
     const ehNpc = tipo === 'npc' || tipo === 'criatura' || tipo === 'objeto';
     let sel = false;
     if (grupo === 'todos') sel = true;
@@ -907,17 +907,17 @@ function arEfSelectGroup(grupo: any) {
 }
 
 function arEfTipoChange() {
-  const tipo = document.getElementById('ar-ef-tipo').value;
+  const tipo = document.getElementById('ar-ef-tipo')!.value!;
   const pos = document.getElementById('ar-ef-sec-positivos');
   const neg = document.getElementById('ar-ef-sec-negativos');
-  if (pos) pos.style.opacity = tipo === 'debuff' ? '0.4' : '1';
-  if (neg) neg.style.opacity = tipo === 'buff'   ? '0.4' : '1';
+  if (pos) pos.style!.opacity = tipo === 'debuff' ? '0.4' : '1';
+  if (neg) neg.style!.opacity = tipo === 'buff'   ? '0.4' : '1';
 }
 
 function abrirModalCriarEfeito() {
-  document.getElementById('ar-ef-nome').value   = '';
-  document.getElementById('ar-ef-tipo').value   = 'buff';
-  document.getElementById('ar-ef-turnos').value = '3';
+  document.getElementById('ar-ef-nome')!.value   = '';
+  document.getElementById('ar-ef-tipo')!.value   = 'buff';
+  document.getElementById('ar-ef-turnos')!.value = '3';
   // Desmarcar todos os checkboxes e esconder campos
   ['heal','hot','boost','rec','dot','deb','mov','atk','def'].forEach(k => {
     const chk = document.getElementById(`ar-ef-${k}-on`);
@@ -927,7 +927,7 @@ function abrirModalCriarEfeito() {
   arEfTipoChange();
   // Targets
   const targets = document.getElementById('ar-ef-targets');
-  targets.innerHTML = AR.chars.map((c: any) => {
+  targets!.innerHTML = AR.chars.map((c: any) => {
     const tipo = c.custom_attrs?.tipo || 'jogador';
     const cor = tipo === 'jogador' ? '#7ec8f0' : '#e8604c';
     return `<div class="ar-check-item" data-nome="${c.nome}" data-tipo="${tipo}" onclick="this.classList.toggle('sel');this.querySelector('.ar-chk').textContent=this.classList.contains('sel')?'✓':''">
@@ -941,11 +941,11 @@ function abrirModalCriarEfeito() {
 }
 
 async function salvarEfeito() {
-  const nome = document.getElementById('ar-ef-nome').value.trim();
+  const nome = document.getElementById('ar-ef-nome')!.value!.trim!()!;
   if (!nome) { arToast('Informe o nome do efeito','erro'); return; }
-  const tipo   = document.getElementById('ar-ef-tipo').value;
-  const turnos = parseInt(document.getElementById('ar-ef-turnos').value)||3;
-  const selecionados = [...document.querySelectorAll('#ar-ef-targets .ar-check-item.sel')].map(el=>el.dataset.nome);
+  const tipo   = document.getElementById('ar-ef-tipo')!.value!;
+  const turnos = parseInt(document.getElementById('ar-ef-turnos')!.value!)||3;
+  const selecionados = [...document.querySelectorAll('#ar-ef-targets .ar-check-item.sel')].map(el=>el.dataset!.nome);
   if (!selecionados.length) { arToast('Selecione ao menos um alvo','erro'); return; }
 
   const efBase: any = {
@@ -955,51 +955,51 @@ async function salvarEfeito() {
     turnos_restantes: turnos,
   };
   // Positivos
-  if (document.getElementById('ar-ef-heal-on').checked) {
-    (efBase as any).heal_formula = document.getElementById('ar-ef-heal-formula').value.trim() || '20';
+  if (document.getElementById('ar-ef-heal-on')!.checked!) {
+    (efBase as any).heal_formula = document.getElementById('ar-ef-heal-formula')!.value!.trim!()! || '20';
   }
-  if (document.getElementById('ar-ef-hot-on').checked) {
-    (efBase as any).hot_formula = document.getElementById('ar-ef-hot-formula').value.trim() || '1d6';
-    (efBase as any).hot_turnos  = parseInt(document.getElementById('ar-ef-hot-turnos').value)||3;
+  if (document.getElementById('ar-ef-hot-on')!.checked!) {
+    (efBase as any).hot_formula = document.getElementById('ar-ef-hot-formula')!.value!.trim!()! || '1d6';
+    (efBase as any).hot_turnos  = parseInt(document.getElementById('ar-ef-hot-turnos')!.value!)||3;
     efBase.hot_turnos_restantes = (efBase as any).hot_turnos;
   }
-  if (document.getElementById('ar-ef-boost-on').checked) {
-    (efBase as any).boost_dano        = parseInt(document.getElementById('ar-ef-boost-mod').value)||5;
-    (efBase as any).boost_dano_turnos = parseInt(document.getElementById('ar-ef-boost-turnos').value)||2;
+  if (document.getElementById('ar-ef-boost-on')!.checked!) {
+    (efBase as any).boost_dano        = parseInt(document.getElementById('ar-ef-boost-mod')!.value!)||5;
+    (efBase as any).boost_dano_turnos = parseInt(document.getElementById('ar-ef-boost-turnos')!.value!)||2;
     efBase.boost_dano_turnos_restantes = (efBase as any).boost_dano_turnos;
   }
-  if (document.getElementById('ar-ef-rec-on').checked) {
-    (efBase as any).rec_atributo    = document.getElementById('ar-ef-rec-atributo').value.trim();
-    (efBase as any).rec_formula     = document.getElementById('ar-ef-rec-formula').value.trim() || '10';
-    (efBase as any).rec_modo        = document.getElementById('ar-ef-rec-modo').value;
-    (efBase as any).rec_turnos      = parseInt(document.getElementById('ar-ef-rec-turnos').value)||3;
+  if (document.getElementById('ar-ef-rec-on')!.checked!) {
+    (efBase as any).rec_atributo    = document.getElementById('ar-ef-rec-atributo')!.value!.trim!()!;
+    (efBase as any).rec_formula     = document.getElementById('ar-ef-rec-formula')!.value!.trim!()! || '10';
+    (efBase as any).rec_modo        = document.getElementById('ar-ef-rec-modo')!.value!;
+    (efBase as any).rec_turnos      = parseInt(document.getElementById('ar-ef-rec-turnos')!.value!)||3;
     efBase.rec_turnos_restantes = efBase.rec_modo === 'turno' ? (efBase as any).rec_turnos : 0;
   }
   // Negativos
-  if (document.getElementById('ar-ef-dot-on').checked) {
-    (efBase as any).dot_formula = document.getElementById('ar-ef-dot-formula').value.trim() || '1d6';
-    (efBase as any).dot_turnos  = parseInt(document.getElementById('ar-ef-dot-turnos').value)||3;
+  if (document.getElementById('ar-ef-dot-on')!.checked!) {
+    (efBase as any).dot_formula = document.getElementById('ar-ef-dot-formula')!.value!.trim!()! || '1d6';
+    (efBase as any).dot_turnos  = parseInt(document.getElementById('ar-ef-dot-turnos')!.value!)||3;
     efBase.dot_turnos_restantes = (efBase as any).dot_turnos;
   }
-  if (document.getElementById('ar-ef-deb-on').checked) {
-    (efBase as any).mod_dano        = parseInt(document.getElementById('ar-ef-deb-mod').value)||-4;
-    (efBase as any).mod_dano_turnos = parseInt(document.getElementById('ar-ef-deb-turnos').value)||2;
+  if (document.getElementById('ar-ef-deb-on')!.checked!) {
+    (efBase as any).mod_dano        = parseInt(document.getElementById('ar-ef-deb-mod')!.value!)||-4;
+    (efBase as any).mod_dano_turnos = parseInt(document.getElementById('ar-ef-deb-turnos')!.value!)||2;
     efBase.mod_dano_turnos_restantes = (efBase as any).mod_dano_turnos;
   }
-  if (document.getElementById('ar-ef-mov-on').checked) {
+  if (document.getElementById('ar-ef-mov-on')!.checked!) {
     (efBase as any).sem_movimento = true;
-    (efBase as any).sem_movimento_turnos = parseInt(document.getElementById('ar-ef-mov-turnos').value)||1;
+    (efBase as any).sem_movimento_turnos = parseInt(document.getElementById('ar-ef-mov-turnos')!.value!)||1;
     efBase.sem_movimento_turnos_restantes = (efBase as any).sem_movimento_turnos;
   }
-  if (document.getElementById('ar-ef-atk-on').checked) {
+  if (document.getElementById('ar-ef-atk-on')!.checked!) {
     (efBase as any).sem_ataque      = true;
-    (efBase as any).sem_ataque_tipo = document.getElementById('ar-ef-atk-tipo').value || 'todos';
-    (efBase as any).sem_ataque_turnos = parseInt(document.getElementById('ar-ef-atk-turnos').value)||1;
+    (efBase as any).sem_ataque_tipo = document.getElementById('ar-ef-atk-tipo')!.value! || 'todos';
+    (efBase as any).sem_ataque_turnos = parseInt(document.getElementById('ar-ef-atk-turnos')!.value!)||1;
     efBase.sem_ataque_turnos_restantes = (efBase as any).sem_ataque_turnos;
   }
   if (document.getElementById('ar-ef-def-on')?.checked) {
-    (efBase as any).mod_defesa        = parseInt(document.getElementById('ar-ef-def-mod').value) || 3;
-    (efBase as any).mod_defesa_turnos = parseInt(document.getElementById('ar-ef-def-turnos').value) || 2;
+    (efBase as any).mod_defesa        = parseInt(document.getElementById('ar-ef-def-mod')!.value!) || 3;
+    (efBase as any).mod_defesa_turnos = parseInt(document.getElementById('ar-ef-def-turnos')!.value!) || 2;
     efBase.mod_defesa_turnos_restantes = (efBase as any).mod_defesa_turnos;
   }
 
@@ -1013,7 +1013,7 @@ async function salvarEfeito() {
       const r = grupos ? rolarGrupos(grupos) : { total: parseInt((efBase as any).heal_formula)||0 };
       c.hp_atual = Math.min(c.custom_attrs?.hp_max ?? 100, (c.hp_atual ?? (c.custom_attrs?.hp_max ?? 100)) + r.total);
       try {
-        await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(charNome)}`,
+        await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(charNome!)}`,
           { method:'PATCH', body:JSON.stringify({hp_atual:c.hp_atual}) });
       } catch(e) {}
     }
@@ -1025,10 +1025,10 @@ async function salvarEfeito() {
       c.custom_attrs.atributos[(efBase as any).rec_atributo] = (parseFloat(c.custom_attrs.atributos[efBase.rec_atributo])||0) + r.total;
     }
     // Buff persistente (HOT, boost, DOT, debuff, etc.)
-    const efId = efBase.id + '_' + charNome.slice(0,4);
+    const efId = efBase.id + '_' + charNome!.slice(0,4);
     c.buffs = [...(c.buffs||[]), { ...efBase, id: efId }];
     try {
-      await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(charNome)}`,
+      await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(charNome!)}`,
         { method:'PATCH', body:JSON.stringify({ buffs: c.buffs, custom_attrs: c.custom_attrs }) });
     } catch(e) {}
   }
@@ -1212,12 +1212,12 @@ async function avancarTurno() {
 // AÇÕES: LOG MANUAL
 // ═══════════════════════════════════════════════════════════════
 function abrirModalLog() {
-  document.getElementById('ar-log-input').value = '';
+  document.getElementById('ar-log-input')!.value = '';
   abrirModal('ar-modal-log');
 }
 
 async function adicionarLogManual() {
-  const texto = document.getElementById('ar-log-input').value.trim();
+  const texto = document.getElementById('ar-log-input')!.value!.trim!()!;
   if (!texto) return;
   arAddLog(`📝 ${texto}`);
   await arSalvarEstado();
@@ -1295,16 +1295,16 @@ function svgDadoArena(d: any){
 function arRolarD100() {
   const r = Math.floor(Math.random()*100)+1;
   const numEl = document.getElementById('ar-d100-num');
-  numEl.classList.remove('girar'); void numEl.offsetWidth; numEl.classList.add('girar');
+  numEl!.classList.remove('girar'); void numEl!.offsetWidth; numEl!.classList.add('girar');
   (numEl as any).textContent = r;
   let sub = 'd100';
-  if (r >= 95) { sub = '✦ PRODÍGIO ABSOLUTO!'; numEl.style.color='#5ee09a'; }
-  else if (r >= 80) { sub = '✦ Sucesso poderoso'; numEl.style.color='#f0cc6a'; }
-  else if (r >= 50) { sub = 'Sucesso'; numEl.style.color='#c8d8e8'; }
-  else if (r >= 20) { sub = 'Sucesso parcial'; numEl.style.color='#e8604c'; }
-  else if (r > 5)  { sub = 'Falha significativa'; numEl.style.color='#e74c3c'; }
-  else { sub = '✦ CATÁSTROFE TOTAL!'; numEl.style.color='#e74c3c'; }
-  document.getElementById('ar-d100-sub').textContent = sub;
+  if (r >= 95) { sub = '✦ PRODÍGIO ABSOLUTO!'; numEl!.style!.color='#5ee09a'; }
+  else if (r >= 80) { sub = '✦ Sucesso poderoso'; numEl!.style!.color='#f0cc6a'; }
+  else if (r >= 50) { sub = 'Sucesso'; numEl!.style!.color='#c8d8e8'; }
+  else if (r >= 20) { sub = 'Sucesso parcial'; numEl!.style!.color='#e8604c'; }
+  else if (r > 5)  { sub = 'Falha significativa'; numEl!.style!.color='#e74c3c'; }
+  else { sub = '✦ CATÁSTROFE TOTAL!'; numEl!.style!.color='#e74c3c'; }
+  document.getElementById('ar-d100-sub')!.textContent = sub;
   AR.d100Hist.unshift({num:r, ts:Date.now()});
   if (AR.d100Hist.length > 30) AR.d100Hist.pop();
   renderArenaD100Hist();
@@ -1341,8 +1341,8 @@ async function salvarHistoricoArena() {
 }
 
 async function resetarBatalha() {
-  const nomeNovaBatalha = document.getElementById('ar-reset-nome').value.trim();
-  const opcaoChars = document.getElementById('ar-reset-opcao-chars').value || 'manter';
+  const nomeNovaBatalha = document.getElementById('ar-reset-nome')!.value!.trim!()!;
+  const opcaoChars = document.getElementById('ar-reset-opcao-chars')!.value! || 'manter';
   // Incrementar batalha_num no theme_json
   const t = AR.session.theme;
   const novaBatalhaNum = (t.batalha_num||1) + 1;
@@ -1393,7 +1393,7 @@ async function resetarBatalha() {
     AR.iniciativa = null;
     await arSalvarEstado();
     fecharModal('ar-modal-reset');
-    document.getElementById('ar-batalha-badge').textContent = `Batalha #${novaBatalhaNum}`;
+    document.getElementById('ar-batalha-badge')!.textContent = `Batalha #${novaBatalhaNum}`;
     renderArenaPersonagens();
     renderArenaEntidades();
     renderArenaEfeitos();
@@ -1409,21 +1409,21 @@ async function resetarBatalha() {
 function arResetToggleOpcao(el: any, opcao: any) {
   document.querySelectorAll('#ar-modal-reset .ar-check-item').forEach(item => {
     item.classList.remove('sel');
-    item.querySelector('.ar-chk').textContent = '';
+    item.querySelector('.ar-chk')!.textContent = '';
   });
   el.classList.add('sel');
   el.querySelector('.ar-chk').textContent = '✓';
-  document.getElementById('ar-reset-opcao-chars').value = opcao;
+  document.getElementById('ar-reset-opcao-chars')!.value = opcao;
 }
 
 async function verHistorico(loreId: any) {
   const h = AR.histList.find((x: any) => x.id === loreId);
   if (!h) return;
   let hd: any = {}; try { hd = JSON.parse(h.conteudo||'{}'); } catch(e) {}
-  document.getElementById('ar-hist-view-titulo').textContent = h.titulo;
+  document.getElementById('ar-hist-view-titulo')!.textContent = h.titulo;
   const chars = ((hd as any).chars_snapshot||[]).map((c: any) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><div style="width:8px;height:8px;border-radius:50%;background:${c.cor||'#e8604c'}"></div><span style="font-family:'Cinzel',serif;font-size:0.85rem">${c.nome}</span><span style="margin-left:auto;color:${c.hp<=0?'#e74c3c':c.hp<(c.hpMax||100)*0.3?'#f39c12':'#5ee09a'};font-family:'Cinzel',serif;font-size:0.82rem">${c.hp}/${c.hpMax||100}</span></div>`).join('');
   const logs = ((hd as any).log||[]).slice(-20).map((l: any) => `<div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.85rem;color:#9a8888"><span style="font-family:'Cinzel',serif;font-size:0.6rem;color:rgba(232,80,60,0.4);margin-right:8px">T${l.turno||0}</span>${l.texto}</div>`).join('');
-  document.getElementById('ar-hist-view-conteudo').innerHTML = `
+  document.getElementById('ar-hist-view-conteudo')!.innerHTML = `
     <div style="margin-bottom:12px"><span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">DATA:</span> ${hd.data||'—'} · <span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">TURNOS:</span> ${(hd as any).turno_final||0}</div>
     ${hd.cenario_final?`<div style="background:rgba(20,12,12,0.7);border-left:2px solid rgba(232,80,60,0.3);padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:0.9rem;color:#b8a0a0">${hd.cenario_final}</div>`:''}
     <div style="margin-bottom:8px;font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">PERSONAGENS</div>${chars||'<div style="color:#7a6060">Sem registros</div>'}
@@ -1440,7 +1440,7 @@ async function confirmarDeletarArena() {
     await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {method:'DELETE'});
     arFecharRealtime();
     arToast('Arena deletada','sucesso');
-    setTimeout(()=>{ AR.session=null; document.getElementById('arena-session').style.display='none'; document.getElementById('arena-hub').style.display='block'; carregarArenaList(); },800);
+    setTimeout(()=>{ AR.session=null; document.getElementById('arena-session')!.style!.display='none'; document.getElementById('arena-hub')!.style!.display='block'; carregarArenaList(); },800);
   } catch(e) { arToast('Erro ao deletar','erro'); }
 }
 
@@ -1491,7 +1491,7 @@ function arIniciarRealtime(rpgId: any) {
       join(`realtime:public:batalhas:rpg_id=eq.${rpgId}`);
       join(`realtime:public:criativos:rpg_id=eq.${rpgId}`);
       const dot=document.getElementById('ar-rdot');
-      if(dot){dot.style.display='inline-block';dot.title='Arena conectada';}
+      if(dot){dot.style!.display='inline-block';dot.title='Arena conectada';}
       chatIniciar(rpgId, ws);
     };
 
@@ -1575,7 +1575,7 @@ function arIniciarRealtime(rpgId: any) {
     ws.onerror = () => {};
     ws.onclose = () => {
       const dot=document.getElementById('ar-rdot');
-      if(dot){dot.style.display='none';dot.title='Desconectado';}
+      if(dot){dot.style!.display='none';dot.title='Desconectado';}
       if(!_arReconectando){
         _arReconectando=true;
         const delay=Math.min(1000*Math.pow(2,_arTentativas),30000);
@@ -1592,55 +1592,55 @@ function arIniciarRealtime(rpgId: any) {
 function arFecharRealtime() {
   if (AR.ws) { try { AR.ws.close(); } catch(e) {} AR.ws = null; }
   const dot = document.getElementById('ar-rdot');
-  if (dot) dot.style.display = 'none';
+  if (dot) dot.style!.display = 'none';
 }
 
 // ═══════════════════════════════════════════════════════════════
 // UTILS: MODAIS / TOAST / SLIDER
 // ═══════════════════════════════════════════════════════════════
-function abrirModal(id: any) { document.getElementById(id).style.display='flex'; }
-function fecharModal(id: any) { document.getElementById(id).style.display='none'; }
+function abrirModal(id: any) { document.getElementById(id)!.style!.display='flex'; }
+function fecharModal(id: any) { document.getElementById(id)!.style!.display='none'; }
 function abrirModalCenario() {
   if (AR.myRole !== 'mestre') { arToast('Apenas o Mestre pode alterar o cenário diretamente','erro'); return; }
-  document.getElementById('ar-cenario-input').value=AR.estado.cenario||'';
-  document.getElementById('ar-cenario-img').value=(AR.estado as any).cenario_img||'';
-  if (document.getElementById('ar-cenario-json')) document.getElementById('ar-cenario-json').value='';
+  document.getElementById('ar-cenario-input')!.value=AR.estado.cenario||'';
+  document.getElementById('ar-cenario-img')!.value=(AR.estado as any).cenario_img||'';
+  if (document.getElementById('ar-cenario-json')) document.getElementById('ar-cenario-json')!.value='';
   const prev = document.getElementById('ar-cenario-img-preview');
   const prevEl = document.getElementById('ar-cenario-img-preview-el');
-  if (AR.estado.cenario_img && prevEl) { prevEl.src=(AR.estado as any).cenario_img; if(prev)prev.style.display='block'; }
-  else if(prev) prev.style.display='none';
+  if (AR.estado.cenario_img && prevEl) { prevEl.src=(AR.estado as any).cenario_img; if(prev)prev.style!.display='block'; }
+  else if(prev) prev.style!.display='none';
   abrirModal('ar-modal-cenario');
 }
-function abrirModalResetBatalha() { document.getElementById('ar-reset-nome').value=''; abrirModal('ar-modal-reset'); }
+function abrirModalResetBatalha() { document.getElementById('ar-reset-nome')!.value=''; abrirModal('ar-modal-reset'); }
 function abrirModalProporCenario() {
-  document.getElementById('ar-proposta-cenario-texto').value='';
-  document.getElementById('ar-proposta-cenario-img').value='';
-  document.getElementById('ar-proposta-cenario-json').value='';
+  document.getElementById('ar-proposta-cenario-texto')!.value='';
+  document.getElementById('ar-proposta-cenario-img')!.value='';
+  document.getElementById('ar-proposta-cenario-json')!.value='';
   abrirModal('ar-modal-propor-cenario');
 }
 function abrirModalSolicitarEntidade() {
-  document.getElementById('ar-sol-ent-nome').value='';
-  document.getElementById('ar-sol-ent-desc').value='';
-  document.getElementById('ar-sol-ent-hp').value='50';
-  document.getElementById('ar-sol-ent-img').value='';
+  document.getElementById('ar-sol-ent-nome')!.value='';
+  document.getElementById('ar-sol-ent-desc')!.value='';
+  document.getElementById('ar-sol-ent-hp')!.value='50';
+  document.getElementById('ar-sol-ent-img')!.value='';
   abrirModal('ar-modal-solicitar-entidade');
 }
 function abrirModalVincular(nomeEntidade: any) {
   AR.vincularCriaturaNome = nomeEntidade;
-  document.getElementById('ar-vincular-nome-criatura').textContent = nomeEntidade;
+  document.getElementById('ar-vincular-nome-criatura')!.textContent = nomeEntidade;
   // Listar jogadores
   const jogadores = AR.chars.filter((c: any) => (c.custom_attrs?.tipo||'jogador') === 'jogador');
   const criatura = AR.chars.find((c: any) => c.nome === nomeEntidade);
   const vinculoAtual = criatura?.custom_attrs?.vinculado_a || null;
   const list = document.getElementById('ar-vincular-jogadores-list');
-  list.innerHTML = [
+  list!.innerHTML = [
     `<div class="ar-check-item${!vinculoAtual?' sel':''}" onclick="arVincularSel(this,null)"><div class="ar-chk">${!vinculoAtual?'✓':''}</div><div><div style="font-family:'Cinzel',serif;font-size:0.78rem">Sem vínculo — turno próprio</div></div></div>`,
     ...jogadores.map((j: any) => `<div class="ar-check-item${vinculoAtual===j.nome?' sel':''}" onclick="arVincularSel(this,'${j.nome}')"><div class="ar-chk">${vinculoAtual===j.nome?'✓':''}</div><div><div style="font-family:'Cinzel',serif;font-size:0.78rem">${j.nome}</div><div style="font-size:0.7rem;color:#7a6060">${j.custom_attrs?.owner_nickname||''}</div></div></div>`)
   ].join('');
   abrirModal('ar-modal-vincular');
 }
 function arVincularSel(el: any, jogNome: any) {
-  document.querySelectorAll('#ar-vincular-jogadores-list .ar-check-item').forEach(i=>{ i.classList.remove('sel'); i.querySelector('.ar-chk').textContent=''; });
+  document.querySelectorAll('#ar-vincular-jogadores-list .ar-check-item').forEach(i=>{ i.classList.remove('sel'); i.querySelector('.ar-chk')!.textContent=''; });
   el.classList.add('sel');
   el.querySelector('.ar-chk').textContent='✓';
   el._vinculo = jogNome;
@@ -1650,7 +1650,7 @@ async function arConfirmarVinculo() {
   if (!nome) return;
   const selecionado = document.querySelector('#ar-vincular-jogadores-list .ar-check-item.sel');
   const jogNome = selecionado?._vinculo !== undefined ? selecionado._vinculo : null;
-  const posicao = document.getElementById('ar-vincular-posicao').value;
+  const posicao = document.getElementById('ar-vincular-posicao')!.value!;
   const c = AR.chars.find((x: any) => x.nome === nome);
   if (!c) return;
   c.custom_attrs.vinculado_a = jogNome;
@@ -1676,16 +1676,16 @@ function arPreviewCenarioImg(url: any) {
   const prevEl = document.getElementById('ar-cenario-img-preview-el');
   if (!prev || !prevEl) return;
   const norm = normalizeImgUrl(url||'');
-  if (norm) { prevEl.src = norm; prev.style.display = 'block'; }
-  else { prev.style.display = 'none'; }
+  if (norm) { prevEl.src = norm; prev.style!.display = 'block'; }
+  else { prev.style!.display = 'none'; }
 }
 function arImportarCenarioJSON() {
   const txt = ((document.getElementById('ar-cenario-json')||{}) as any).value||'';
   if (!txt.trim()) return;
   try {
     const obj = JSON.parse(txt);
-    if (obj.cenario) document.getElementById('ar-cenario-input').value = obj.cenario;
-    if (obj.cenario_img) { document.getElementById('ar-cenario-img').value = obj.cenario_img; arPreviewCenarioImg(obj.cenario_img); }
+    if (obj.cenario) document.getElementById('ar-cenario-input')!.value = obj.cenario;
+    if (obj.cenario_img) { document.getElementById('ar-cenario-img')!.value = obj.cenario_img; arPreviewCenarioImg(obj.cenario_img); }
     arToast('JSON importado!','sucesso');
   } catch(e) { arToast('JSON inválido','erro'); }
 }
@@ -1696,8 +1696,8 @@ function arImportarCenarioArquivo(input: any) {
   reader.onload = ev => {
     try {
       const obj = JSON.parse((ev.target as any).result);
-      if (obj.cenario) document.getElementById('ar-cenario-input').value = obj.cenario;
-      if (obj.cenario_img) { document.getElementById('ar-cenario-img').value = obj.cenario_img; arPreviewCenarioImg(obj.cenario_img); }
+      if (obj.cenario) document.getElementById('ar-cenario-input')!.value = obj.cenario;
+      if (obj.cenario_img) { document.getElementById('ar-cenario-img')!.value = obj.cenario_img; arPreviewCenarioImg(obj.cenario_img); }
       arToast('Arquivo importado!','sucesso');
     } catch(err) { arToast('Arquivo JSON inválido','erro'); }
   };
@@ -1708,8 +1708,8 @@ function arImportarPropostaCenarioJSON() {
   if (!txt.trim()) return;
   try {
     const obj = JSON.parse(txt);
-    if (obj.cenario) document.getElementById('ar-proposta-cenario-texto').value = obj.cenario;
-    if (obj.cenario_img) document.getElementById('ar-proposta-cenario-img').value = obj.cenario_img;
+    if (obj.cenario) document.getElementById('ar-proposta-cenario-texto')!.value = obj.cenario;
+    if (obj.cenario_img) document.getElementById('ar-proposta-cenario-img')!.value = obj.cenario_img;
     arToast('JSON importado!','sucesso');
   } catch(e) { arToast('JSON inválido','erro'); }
 }
@@ -1734,17 +1734,17 @@ function arSincronizarChatBadge() {
   if (!badge) return;
   const n = CHAT?.naoLidos || 0;
   (badge as any).textContent = n > 9 ? '9+' : n;
-  badge.style.display = n > 0 ? 'flex' : 'none';
+  badge.style!.display = n > 0 ? 'flex' : 'none';
   // Tint do botão quando chat aberto
   const btn = document.getElementById('ar-chat-btn');
-  if (btn) btn.style.background = CHAT?.aberto ? 'rgba(79,163,209,0.15)' : 'none';
+  if (btn) btn.style!.background = CHAT?.aberto ? 'rgba(79,163,209,0.15)' : 'none';
 }
 
 
 
 function arSliderUpdate(sliderId: any, valId: any, suffix: any) {
-  const v = document.getElementById(sliderId).value;
-  document.getElementById(valId).textContent = v + (suffix||'');
+  const v = document.getElementById(sliderId)!.value!;
+  document.getElementById(valId)!.textContent = v + (suffix||'');
 }
 
 // Fechar modal ao clicar fora
@@ -1757,7 +1757,7 @@ document.addEventListener('input', (e) => {
   if ((e.target as any).id === 'ar-char-img') {
     const thumb = document.getElementById('ar-char-img-thumb');
     const url = (e.target as any).value.trim();
-    if (url) { thumb.src = url; thumb.style.display = 'block'; } else { thumb.style.display = 'none'; }
+    if (url) { thumb!.src = url; thumb!.style!.display = 'block'; } else { thumb!.style!.display = 'none'; }
   }
 });
 
@@ -1774,12 +1774,12 @@ function arAbrirAparencia(nome: any) {
   const c = AR.chars.find((x: any) => x.nome === nome);
   if (!c) return;
   if (!window.RPG_DATA) window.RPG_DATA = {} as any;   // stub mínimo da arena, preenchido em seguida
-  if (!RPG_DATA.characters) RPG_DATA.characters = [];
-  const existeIdx = RPG_DATA.characters.findIndex(x => x.nome === nome);
+  if (!RPG_DATA!.characters) RPG_DATA!.characters = [];
+  const existeIdx = RPG_DATA!.characters.findIndex(x => x.nome === nome);
   const fakeChar = { ...c, custom_attrs: { ...(c.custom_attrs||{}) } };
-  if (existeIdx >= 0) RPG_DATA.characters[existeIdx] = fakeChar;
-  else RPG_DATA.characters.push(fakeChar);
-  RPG_DATA.myRole = AR.myRole;
+  if (existeIdx >= 0) RPG_DATA!.characters[existeIdx] = fakeChar;
+  else RPG_DATA!.characters.push(fakeChar);
+  RPG_DATA!.myRole = AR.myRole;
   window._arAparenciaHook = true;
   window._arAparenciaNome = nome;
   abrirModalAparencia(nome);
@@ -1802,8 +1802,8 @@ document.addEventListener('arAparenciaSalva', function(e) {
 // PROPOSTAS DE CENÁRIO (jogadores propõem, mestre aprova)
 // ═══════════════════════════════════════════════════════════════
 async function arEnviarPropostaCenario() {
-  const texto = document.getElementById('ar-proposta-cenario-texto').value.trim();
-  const img = document.getElementById('ar-proposta-cenario-img').value.trim();
+  const texto = document.getElementById('ar-proposta-cenario-texto')!.value!.trim!()!;
+  const img = document.getElementById('ar-proposta-cenario-img')!.value!.trim!()!;
   if (!texto) { arToast('Descreva o cenário proposto','erro'); return; }
   if (!AR.estado.propostas_cenario) (AR.estado as any).propostas_cenario = [];
   (AR.estado as any).propostas_cenario.push({
@@ -1821,7 +1821,7 @@ function renderPropostasCenario() {
   if (!wrap || !list) return;
   const propostas = (AR.estado as any).propostas_cenario || [];
   if (AR.myRole !== 'mestre') return;
-  wrap.style.display = propostas.length ? 'block' : 'none';
+  wrap.style!.display = propostas.length ? 'block' : 'none';
   list.innerHTML = propostas.map((p: any) => `
     <div class="ar-proposta-card pendente">
       <div class="ar-proposta-titulo">💡 Proposta de <strong>${p.autor||'jogador'}</strong></div>
@@ -1859,11 +1859,11 @@ async function arRejeitarPropostaCenario(id: any) {
 // SOLICITAÇÕES DE ENTIDADE (jogadores solicitam, mestre aprova)
 // ═══════════════════════════════════════════════════════════════
 async function arEnviarSolicitacaoEntidade() {
-  const nome = document.getElementById('ar-sol-ent-nome').value.trim();
-  const tipo = document.getElementById('ar-sol-ent-tipo').value;
-  const desc = document.getElementById('ar-sol-ent-desc').value.trim();
-  const hp = parseInt(document.getElementById('ar-sol-ent-hp').value)||50;
-  const img = document.getElementById('ar-sol-ent-img').value.trim();
+  const nome = document.getElementById('ar-sol-ent-nome')!.value!.trim!()!;
+  const tipo = document.getElementById('ar-sol-ent-tipo')!.value!;
+  const desc = document.getElementById('ar-sol-ent-desc')!.value!.trim!()!;
+  const hp = parseInt(document.getElementById('ar-sol-ent-hp')!.value!)||50;
+  const img = document.getElementById('ar-sol-ent-img')!.value!.trim!()!;
   if (!nome) { arToast('Informe o nome','erro'); return; }
   if (!AR.estado.solicitacoes_entidade) (AR.estado as any).solicitacoes_entidade = [];
   (AR.estado as any).solicitacoes_entidade.push({
@@ -1881,7 +1881,7 @@ function renderSolicitacoesEntidade() {
   if (!wrap || !list) return;
   const sols = (AR.estado as any).solicitacoes_entidade || [];
   if (AR.myRole !== 'mestre') return;
-  wrap.style.display = sols.length ? 'block' : 'none';
+  wrap.style!.display = sols.length ? 'block' : 'none';
   list.innerHTML = sols.map((s: any) => `
     <div class="ar-proposta-card pendente">
       <div class="ar-proposta-titulo">${s.tipo==='criatura'?'👹':'🗡'} <strong>${s.nome}</strong> — solicitado por ${s.autor}</div>
@@ -1971,7 +1971,7 @@ function arBulkRemoveCriatura(i: any) {
 async function arBulkCriarCriaturas() {
   const criaturas = AR.bulkCriaturas.map((_: any, i: any) => ({
     nome: (document.getElementById(`ar-bulk-nome-${i}`)?.value||'').trim(),
-    hp: parseInt(document.getElementById(`ar-bulk-hp-${i}`)?.value)||100,
+    hp: parseInt(document.getElementById(`ar-bulk-hp-${i}`)?.value!)||100,
     desc: (document.getElementById(`ar-bulk-desc-${i}`)?.value||'').trim(),
     img: (document.getElementById(`ar-bulk-img-${i}`)?.value||'').trim(),
   })).filter((c: any) => c.nome);
@@ -2023,40 +2023,40 @@ function renderArenaIniciativaUI() {
   const nenhumaEl  = document.getElementById('ar-ini-nenhuma');
 
   if (!ini || !ini.ativa) {
-    pre.style.display = 'block';
-    if (startMestre) startMestre.style.display = isMestre ? 'block' : 'none';
-    if (startPlayer) startPlayer.style.display = (!isMestre) ? 'block' : 'none';
-    if (nenhumaEl) nenhumaEl.style.display = 'none'; // ocultado quando há botões
-    if (rolando) rolando.style.display = 'none';
-    if (combate) combate.style.display = 'none';
+    pre.style!.display = 'block';
+    if (startMestre) startMestre.style!.display = isMestre ? 'block' : 'none';
+    if (startPlayer) startPlayer.style!.display = (!isMestre) ? 'block' : 'none';
+    if (nenhumaEl) nenhumaEl.style!.display = 'none'; // ocultado quando há botões
+    if (rolando) rolando.style!.display = 'none';
+    if (combate) combate.style!.display = 'none';
     // Ocultar botões mestre da batalha
     const btnsMestre = document.getElementById('ar-ini-combate-btns-mestre');
-    if (btnsMestre) btnsMestre.style.display = 'none';
+    if (btnsMestre) btnsMestre.style!.display = 'none';
     return;
   }
-  pre.style.display = 'none';
+  pre.style!.display = 'none';
 
   if (ini.fase === 'iniciativa') {
-    if (rolando) rolando.style.display = 'block';
-    if (combate) combate.style.display = 'none';
+    if (rolando) rolando.style!.display = 'block';
+    if (combate) combate.style!.display = 'none';
     renderListaRolagem();
     const meuChar = arMeuChar();
     const jaRolei = meuChar && ini.iniciativas && ini.iniciativas[meuChar] != null;
     const btnRolar = document.getElementById('ar-ini-btn-rolar-meu');
-    if (btnRolar) btnRolar.style.display = (!isMestre && meuChar && !jaRolei) ? 'block' : 'none';
+    if (btnRolar) btnRolar.style!.display = (!isMestre && meuChar && !jaRolei) ? 'block' : 'none';
     const btnCalc = document.getElementById('ar-ini-btn-calcular-mestre');
-    if (btnCalc) btnCalc.style.display = isMestre ? 'block' : 'none';
+    if (btnCalc) btnCalc.style!.display = isMestre ? 'block' : 'none';
     const btnsMestre = document.getElementById('ar-ini-combate-btns-mestre');
-    if (btnsMestre) btnsMestre.style.display = 'none';
+    if (btnsMestre) btnsMestre.style!.display = 'none';
   } else {
     // Fase combate
-    if (rolando) rolando.style.display = 'none';
-    if (combate) combate.style.display = 'block';
+    if (rolando) rolando.style!.display = 'none';
+    if (combate) combate.style!.display = 'block';
     renderOrdemCombate();
     const roundEl = document.getElementById('ar-ini-round');
     if (roundEl) roundEl.textContent = ini.round || 1;
     const btnsMestre = document.getElementById('ar-ini-combate-btns-mestre');
-    if (btnsMestre) btnsMestre.style.display = isMestre ? 'flex' : 'none';
+    if (btnsMestre) btnsMestre.style!.display = isMestre ? 'flex' : 'none';
   }
 }
 
@@ -2109,7 +2109,7 @@ function renderOrdemCombate() {
   const meuChar = arMeuChar();
   const isMestre = AR.myRole === 'mestre';
   const ehMeuTurno = atual && meuChar && atual.nome === meuChar;
-  if (acoesEl) acoesEl.style.display = (ehMeuTurno || isMestre) ? 'block' : 'none';
+  if (acoesEl) acoesEl.style!.display = (ehMeuTurno || isMestre) ? 'block' : 'none';
 
   // Criaturas vinculadas
   const minhasCriaturas = AR.chars.filter((c: any) => {
@@ -2119,7 +2119,7 @@ function renderOrdemCombate() {
   const criatWrap = document.getElementById('ar-ini-criaturas-vinculadas');
   const criatList = document.getElementById('ar-ini-criaturas-list');
   if (criatWrap && criatList) {
-    criatWrap.style.display = minhasCriaturas.length ? 'block' : 'none';
+    criatWrap.style!.display = minhasCriaturas.length ? 'block' : 'none';
     criatList.innerHTML = minhasCriaturas.map((c: any) => `
       <button onclick="abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="width:100%;margin-bottom:4px;padding:7px 10px;background:rgba(232,80,60,0.08);border:1px solid rgba(232,80,60,0.25);border-radius:6px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer;text-align:left">
         ⚔ ${c.nome} <span style="color:#7a6060;font-size:0.65rem">(${c.hp_atual??'?'}/${c.custom_attrs?.hp_max??'?'} HP)</span>
@@ -2183,22 +2183,22 @@ async function arIniciarIniciativa() {
 
 function abrirModalArenaIniciativa() {
   AR.iniValorAtual = null;
-  document.getElementById('ar-ini-modal-dado').textContent = '—';
-  document.getElementById('ar-ini-modal-confirmar').disabled = true;
-  document.getElementById('ar-ini-modal-confirmar').style.opacity = '0.4';
+  document.getElementById('ar-ini-modal-dado')!.textContent = '—';
+  document.getElementById('ar-ini-modal-confirmar')!.disabled = true;
+  document.getElementById('ar-ini-modal-confirmar')!.style!.opacity = '0.4';
   abrirModal('ar-modal-arena-iniciativa');
 }
 
 function arRolarIniciativaModal() {
   AR.iniValorAtual = Math.floor(Math.random()*20)+1;
   const el = document.getElementById('ar-ini-modal-dado');
-  el.style.transform='scale(0.6)';el.style.opacity='0.3';
+  el!.style!.transform='scale(0.6)';el!.style!.opacity='0.3';
   setTimeout(()=>{
-    el.textContent = AR.iniValorAtual;
-    el.style.color = AR.iniValorAtual===20?'#5ee09a':AR.iniValorAtual===1?'#e74c3c':'#e8604c';
-    el.style.transform='scale(1)';el.style.opacity='1';
+    el!.textContent = AR.iniValorAtual;
+    el!.style!.color = AR.iniValorAtual===20?'#5ee09a':AR.iniValorAtual===1?'#e74c3c':'#e8604c';
+    el!.style!.transform='scale(1)';el!.style!.opacity='1';
     const btn = document.getElementById('ar-ini-modal-confirmar');
-    btn.disabled=false; btn.style.opacity='1';
+    btn!.disabled=false; btn!.style!.opacity='1';
   },100);
 }
 
@@ -2395,14 +2395,14 @@ function arMesaRolarDado() {
   const r = Math.floor(Math.random() * d) + 1;
   const el = document.getElementById('ar-mesa-dado-resultado');
   if (!el) return;
-  el.style.transform = 'scale(0.6)'; el.style.opacity = '0.3';
+  el.style!.transform = 'scale(0.6)'; el.style!.opacity = '0.3';
   setTimeout(() => {
     let cor = '#7ec8f0', txt = String(r);
     if (d === 20 && r === 20)       { cor = '#5ee09a'; txt = r + ' ✦'; }
     else if (d === 20 && r === 1)   { cor = '#e74c3c'; txt = r + ' ✕'; }
     else if (d === 100 && r === 100){ cor = '#5ee09a'; txt = r + ' ✦'; }
-    el.textContent = txt; el.style.color = cor;
-    el.style.transform = 'scale(1)'; el.style.opacity = '1';
+    el.textContent = txt; el.style!.color = cor;
+    el.style!.transform = 'scale(1)'; el.style!.opacity = '1';
   }, 70);
 }
 
@@ -2427,8 +2427,8 @@ let MESA: any = {
 function mesaZoomApply() {
   const bg = document.getElementById('ar-mesa-bg');
   if (!bg) return;
-  bg.style.transformOrigin = '0 0';
-  bg.style.transform = `translate(${MESA.panX}px,${MESA.panY}px) scale(${MESA.zoom})`;
+  bg.style!.transformOrigin = '0 0';
+  bg.style!.transform = `translate(${MESA.panX}px,${MESA.panY}px) scale(${MESA.zoom})`;
   const lbl = document.getElementById('ar-mesa-zoom-val');
   if (lbl) lbl.textContent = Math.round(MESA.zoom * 100) + '%';
 }
@@ -2461,9 +2461,9 @@ function mesaZoomInit() {
   if (!wrap || MESA._zoomInited) return;
   MESA._zoomInited = true;
 
-  wrap.style.overflow = 'visible';
-  wrap.style.borderRadius = '10px';
-  wrap.style.clipPath = 'inset(0 round 10px)';
+  wrap.style!.overflow = 'visible';
+  wrap.style!.borderRadius = '10px';
+  wrap.style!.clipPath = 'inset(0 round 10px)';
 
   // ── Wheel zoom (centrado no cursor) ───────────────────────────
   wrap.addEventListener('wheel', (e) => {
@@ -2502,7 +2502,7 @@ function mesaZoomInit() {
     _panSX = e.clientX; _panSY = e.clientY;
     _panOX = MESA.panX; _panOY = MESA.panY;
     wrap.setPointerCapture(e.pointerId);
-    wrap.style.cursor = 'grabbing';
+    wrap.style!.cursor = 'grabbing';
     e.preventDefault();
   });
   wrap.addEventListener('pointermove', (e) => {
@@ -2514,7 +2514,7 @@ function mesaZoomInit() {
   const _endPan = (e: any) => {
     if (e.pointerId !== _panPointerId) return;
     _isPanning = false; _panPointerId = null;
-    wrap.style.cursor = 'grab';
+    wrap.style!.cursor = 'grab';
   };
   wrap.addEventListener('pointerup', _endPan);
   wrap.addEventListener('pointercancel', _endPan);
@@ -2549,10 +2549,10 @@ function renderMesa() {
   if (pill) {
     if (AR.estado.cenario) {
       pill.textContent = AR.estado.cenario.length > 45 ? AR.estado.cenario.slice(0,45) + '…' : AR.estado.cenario;
-      pill.style.color = '#b8a8a8';
+      pill.style!.color = '#b8a8a8';
     } else {
       pill.textContent = 'Toque para definir cenário…';
-      pill.style.color = '#7a6060';
+      pill.style!.color = '#7a6060';
     }
   }
 
@@ -2584,8 +2584,8 @@ function renderMesa() {
 function mesaAtualizarBackground() {
   const bg = document.getElementById('ar-mesa-bg');
   if (!bg) return;
-  bg.style.background = 'radial-gradient(ellipse at center,#1a0e0e 0%,#050208 100%)';
-  bg.style.perspective = '';
+  bg.style!.background = 'radial-gradient(ellipse at center,#1a0e0e 0%,#050208 100%)';
+  bg.style!.perspective = '';
 
   const imgUrl = normalizeImgUrl(AR.estado?.cenario_img || '');
 
@@ -2597,20 +2597,20 @@ function mesaAtualizarBackground() {
   if (!arBgImg) {
     arBgImg = document.createElement('img');
     arBgImg.className = 'ar-bg-img';
-    arBgImg.onerror = () => { arBgImg.style.display = 'none'; };
-    arBgImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;z-index:0;';
+    arBgImg.onerror = () => { arBgImg!.style!.display = 'none'; };
+    arBgImg.style!.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;z-index:0;';
     bg.insertBefore(arBgImg, bg.firstChild);
   }
 
   if (imgUrl) {
     arBgImg.src = imgUrl;
-    arBgImg.style.display = 'block';
+    arBgImg.style!.display = 'block';
   } else {
-    arBgImg.style.display = 'none';
+    arBgImg.style!.display = 'none';
   }
   // Garantir que o img original do HTML não duplique
   const oldImgEl = document.getElementById('ar-mesa-img');
-  if (oldImgEl) oldImgEl.style.display = 'none';
+  if (oldImgEl) oldImgEl.style!.display = 'none';
 
   // Reaplicar zoom/pan atual após atualizar o background
   mesaZoomApply();
@@ -2620,11 +2620,11 @@ function mesaDesenharGrade() {
   const canvas = document.getElementById('ar-mesa-canvas');
   if (!canvas) return;
   const wrap = document.getElementById('ar-mesa-bg');
-  const w = wrap.offsetWidth || 300;
-  const h = wrap.offsetHeight || 225;
+  const w = wrap!.offsetWidth || 300;
+  const h = wrap!.offsetHeight || 225;
   canvas.width = w;
   canvas.height = h;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext!('2d');
   ctx.clearRect(0, 0, w, h);
   const g = MESA.escala.grid;
   if (!g) return;
@@ -2679,8 +2679,8 @@ function mesaCriarToken(c: any, layer: any) {
   const arIsoDepth = arDepthOn ? (0.72 + (pos.y / 100) * 0.50).toFixed(3) : '1';
   const token = document.createElement('div');
   token.className = 'ar-mesa-token';
-  token.dataset.nome = c.nome;
-  token.style.cssText = `
+  token.dataset!.nome = c.nome;
+  token.style!.cssText = `
     position:absolute;
     left:${pos.x}%;top:${pos.y}%;
     transform:translate(-50%,-50%) scale(${arIsoDepth});
@@ -2707,11 +2707,11 @@ function mesaCriarToken(c: any, layer: any) {
     const tw = Math.round((ca.tipo==='objeto'?28:32)*tamanhoFator);
     const th = Math.round((ca.tipo==='objeto'?36:52)*tamanhoFator);
     const elev = Math.round(8*tamanhoFator);
-    token.style.cssText = `position:absolute;left:${pos.x}%;top:${pos.y}%;transform:translate(-50%,-50%);width:${tw}px;height:${th}px;cursor:${MESA.toolMode?'crosshair':'grab'};z-index:10;touch-action:none;opacity:${incapacitado?0.45:1};overflow:visible;display:flex;align-items:flex-end;justify-content:center;`;
+    token.style!.cssText = `position:absolute;left:${pos.x}%;top:${pos.y}%;transform:translate(-50%,-50%);width:${tw}px;height:${th}px;cursor:${MESA.toolMode?'crosshair':'grab'};z-index:10;touch-action:none;opacity:${incapacitado?0.45:1};overflow:visible;display:flex;align-items:flex-end;justify-content:center;`;
     const inner = document.createElement('div');
     // CSS filter cria compositing group que quebra WebGL — omitir para tokens animados
     const _arFilter = isAnimadoAr ? '' : `filter:drop-shadow(0 ${elev}px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))${(window as any).selecionado?' drop-shadow(0 0 6px rgba(126,200,240,0.7))':''}`;
-    inner.style.cssText = `width:${tw}px;height:${th}px;border:1px solid ${(window as any).selecionado?'#7ec8f0':cor+'44'};border-radius:4px;background:transparent;position:relative;${_arFilter};transform:translateY(-${elev}px);display:flex;align-items:center;justify-content:center;overflow:visible;`;
+    inner.style!.cssText = `width:${tw}px;height:${th}px;border:1px solid ${(window as any).selecionado?'#7ec8f0':cor+'44'};border-radius:4px;background:transparent;position:relative;${_arFilter};transform:translateY(-${elev}px);display:flex;align-items:center;justify-content:center;overflow:visible;`;
     const _arEquips = ca.aparencia?.equipamentos_visuais || [];
     const composedImgAr = ca.aparencia?.composed_img;
     if (composedImgAr && !isAnimadoAr) {
@@ -2731,20 +2731,20 @@ function mesaCriarToken(c: any, layer: any) {
 
   // Badge HP
   const hpBadge = document.createElement('div');
-  hpBadge.style.cssText = `position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);background:#050208;border:1px solid ${cor}55;border-radius:8px;padding:1px 5px;font-family:'Cinzel',serif;font-size:0.55rem;color:${hpPct>=60?'#5ee09a':hpPct>=25?'#f0cc6a':'#e74c3c'};white-space:nowrap;pointer-events:none;`;
+  hpBadge.style!.cssText = `position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);background:#050208;border:1px solid ${cor}55;border-radius:8px;padding:1px 5px;font-family:'Cinzel',serif;font-size:0.55rem;color:${hpPct>=60?'#5ee09a':hpPct>=25?'#f0cc6a':'#e74c3c'};white-space:nowrap;pointer-events:none;`;
   hpBadge.textContent = hp + '/' + hpMax;
   token.appendChild(hpBadge);
 
   // Badge nome
   const nomeBadge = document.createElement('div');
-  nomeBadge.style.cssText = `position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:rgba(5,2,8,0.85);border-radius:4px;padding:1px 6px;font-family:'Cinzel',serif;font-size:0.55rem;color:${cor};white-space:nowrap;pointer-events:none;max-width:80px;overflow:hidden;text-overflow:ellipsis;`;
+  nomeBadge.style!.cssText = `position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:rgba(5,2,8,0.85);border-radius:4px;padding:1px 6px;font-family:'Cinzel',serif;font-size:0.55rem;color:${cor};white-space:nowrap;pointer-events:none;max-width:80px;overflow:hidden;text-overflow:ellipsis;`;
   nomeBadge.textContent = c.nome;
   token.appendChild(nomeBadge);
 
   // Badge buffs
   if (buffsCount > 0) {
     const buffBadge = document.createElement('div');
-    buffBadge.style.cssText = `position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#e8604c;border:1px solid #050208;font-family:'Cinzel',serif;font-size:0.5rem;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;`;
+    buffBadge.style!.cssText = `position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#e8604c;border:1px solid #050208;font-family:'Cinzel',serif;font-size:0.5rem;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;`;
     buffBadge.textContent = buffsCount;
     token.appendChild(buffBadge);
   }
@@ -2752,7 +2752,7 @@ function mesaCriarToken(c: any, layer: any) {
   // Incapacitado overlay
   if (incapacitado) {
     const over = document.createElement('div');
-    over.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:1rem;border-radius:inherit;pointer-events:none;';
+    over.style!.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:1rem;border-radius:inherit;pointer-events:none;';
     over.textContent = '💀';
     token.appendChild(over);
   }
@@ -2802,13 +2802,13 @@ function mesaOnDrag(e: any) {
   (MESA as any).tokenMoveu = true;
   const wrap = document.getElementById('ar-mesa-wrap');
   const bg   = document.getElementById('ar-mesa-bg');
-  const wrapRect = wrap.getBoundingClientRect();
+  const wrapRect = wrap!.getBoundingClientRect();
   // Compensar zoom e pan: converter coordenada de tela para posição % dentro do elemento não-escalado
   const zoom = MESA.zoom || 1;
   const localX = (e.clientX - wrapRect.left - MESA.panX) / zoom;
   const localY = (e.clientY - wrapRect.top  - MESA.panY) / zoom;
-  const layoutW = bg.offsetWidth  || wrapRect.width;
-  const layoutH = bg.offsetHeight || wrapRect.height;
+  const layoutW = bg!.offsetWidth  || wrapRect.width;
+  const layoutH = bg!.offsetHeight || wrapRect.height;
   const x = Math.max(2, Math.min(98, localX / layoutW * 100));
   const y = Math.max(2, Math.min(98, localY / layoutH * 100));
   const c = AR.chars.find((ch: any) => ch.nome === MESA.dragging);
@@ -2817,12 +2817,12 @@ function mesaOnDrag(e: any) {
   // Mover token visualmente sem re-render completo
   const tokenEl = document.querySelector(`.ar-mesa-token[data-nome="${CSS.escape(MESA.dragging)}"]`);
   if (tokenEl) {
-    tokenEl.style.left = x+'%';
-    tokenEl.style.top  = y+'%';
+    tokenEl.style!.left = x+'%';
+    tokenEl.style!.top  = y+'%';
     // Atualiza escala de profundidade iso em tempo real durante o arrasto
     const ds = (0.72 + (y / 100) * 0.50).toFixed(3);
-    const existingTransform = tokenEl.style.transform || '';
-    tokenEl.style.transform = `translate(-50%,-50%) scale(${ds})`;
+    const existingTransform = tokenEl.style!.transform || '';
+    tokenEl.style!.transform = `translate(-50%,-50%) scale(${ds})`;
   }
   // Broadcast em tempo real para outros clientes (throttle 50ms ≈ 20fps)
   const _nowM = Date.now();
@@ -2860,7 +2860,7 @@ async function mesaFimDrag(e: any) {
   }
   const tokenEl = document.querySelector(`.ar-mesa-token[data-nome="${CSS.escape(nome)}"]`);
   if (tokenEl) {
-    tokenEl.style.cursor = 'grab';
+    tokenEl.style!.cursor = 'grab';
     tokenEl.removeEventListener('pointermove', mesaOnDrag);
     tokenEl.removeEventListener('pointerup', mesaFimDrag);
   }
@@ -2875,11 +2875,11 @@ function toggleMesaTool() {
   const hint = document.getElementById('ar-mesa-tool-hint');
   if (btn) {
     btn.textContent = MESA.toolMode ? '✕' : '📏';
-    btn.style.background = MESA.toolMode ? 'rgba(79,163,209,0.15)' : '';
-    btn.style.borderColor = MESA.toolMode ? 'rgba(79,163,209,0.4)' : '';
-    btn.style.color = MESA.toolMode ? '#7ec8f0' : '';
+    btn.style!.background = MESA.toolMode ? 'rgba(79,163,209,0.15)' : '';
+    btn.style!.borderColor = MESA.toolMode ? 'rgba(79,163,209,0.4)' : '';
+    btn.style!.color = MESA.toolMode ? '#7ec8f0' : '';
   }
-  if (hint) hint.style.display = MESA.toolMode ? 'block' : 'none';
+  if (hint) hint.style!.display = MESA.toolMode ? 'block' : 'none';
   mesaRenderDistLine(); // limpa linha
   mesaRenderTokens();   // atualiza cursors
 }
@@ -2909,7 +2909,7 @@ function mesaCalcularDistancia() {
   const pA = cA.custom_attrs.pos || {x:50,y:50};
   const pB = cB.custom_attrs.pos || {x:50,y:50};
   const bg = document.getElementById('ar-mesa-bg');
-  const w = bg.offsetWidth, h = bg.offsetHeight;
+  const w = bg!.offsetWidth, h = bg!.offsetHeight;
   const g = MESA.escala.grid || 20;
   const dxPct = (pB.x - pA.x), dyPct = (pB.y - pA.y);
   const dxCells = dxPct / 100 * g;
@@ -2930,7 +2930,7 @@ function mesaRenderDistLine(pA?: any, pB?: any, label?: any) {
   if (!svg) return;
   if (!pA) { svg.innerHTML = ''; return; }
   const bg = document.getElementById('ar-mesa-bg');
-  const w = bg.offsetWidth, h = bg.offsetHeight;
+  const w = bg!.offsetWidth, h = bg!.offsetHeight;
   const x1 = pA.x/100*w, y1 = pA.y/100*h;
   const x2 = pB.x/100*w, y2 = pB.y/100*h;
   const mx = (x1+x2)/2, my = (y1+y2)/2;
@@ -3014,16 +3014,16 @@ function mesaRenderStatus() {
 
 // ── ESCALA ───────────────────────────────────────────────────
 function abrirModalEscala() {
-  document.getElementById('ar-escala-val').value = MESA.escala.val;
-  document.getElementById('ar-escala-unit').value = MESA.escala.unit;
-  document.getElementById('ar-grid-size').value = MESA.escala.grid;
+  document.getElementById('ar-escala-val')!.value = MESA.escala.val;
+  document.getElementById('ar-escala-unit')!.value = MESA.escala.unit;
+  document.getElementById('ar-grid-size')!.value = MESA.escala.grid;
   abrirModal('ar-modal-escala');
 }
 
 function salvarEscala() {
-  MESA.escala.val = parseFloat(document.getElementById('ar-escala-val').value) || 1.5;
-  MESA.escala.unit = document.getElementById('ar-escala-unit').value;
-  MESA.escala.grid = parseInt(document.getElementById('ar-grid-size').value) || 0;
+  MESA.escala.val = parseFloat(document.getElementById('ar-escala-val')!.value!) || 1.5;
+  MESA.escala.unit = document.getElementById('ar-escala-unit')!.value!;
+  MESA.escala.grid = parseInt(document.getElementById('ar-grid-size')!.value!) || 0;
   fecharModal('ar-modal-escala');
   mesaDesenharGrade();
   arToast('Escala atualizada!','sucesso');
@@ -3050,9 +3050,9 @@ function arMp3dAtualizar() {
   const plane = document.getElementById('ar-mp3d-preview-plane');
   if (plane) {
     const wrap = plane.parentElement;
-    wrap.style.perspective = persp >= 4000 ? '' : `${persp}px`;
-    wrap.style.perspectiveOrigin = '50% 50%';
-    plane.style.transform = [
+    wrap!.style!.perspective = persp >= 4000 ? '' : `${persp}px`;
+    wrap!.style!.perspectiveOrigin = '50% 50%';
+    plane.style!.transform = [
       `translateX(${ox}%)`, `translateY(${oy}%)`, `scale(${sc/100})`,
       `rotateZ(${rz}deg)`,  `rotateX(${rx}deg)`,  `rotateY(${ry}deg)`,
     ].join(' ');
@@ -3074,9 +3074,9 @@ function arMp3dAtualizar() {
   // Profundidade nos tokens da arena
   if (document.getElementById('ar-mp3d-depth')?.checked) {
     document.querySelectorAll('.ar-mesa-token').forEach(el => {
-      const posY = parseFloat(el.style.top) || 50;
+      const posY = parseFloat(el.style!.top) || 50;
       const ds = (0.72 + (posY / 100) * 0.50).toFixed(3);
-      el.style.transform = `translate(-50%,-50%) scale(${ds})`;
+      el.style!.transform = `translate(-50%,-50%) scale(${ds})`;
     });
   }
 }
@@ -3098,17 +3098,17 @@ function arPreset3D(preset: any) {
 
 function abrirModalArMapa() {
   const img = (AR.estado as any).cenario_img || '';
-  document.getElementById('ar-mapa-img').value = img;
+  document.getElementById('ar-mapa-img')!.value = img;
   const prev = document.getElementById('ar-mapa-img-preview');
   const prevWrap = document.getElementById('ar-mapa-img-preview-wrap');
-  if (img && prev) { prev.src = img; prevWrap.style.display = 'block'; }
-  else if (prevWrap) prevWrap.style.display = 'none';
+  if (img && prev) { prev.src = img; prevWrap!.style!.display = 'block'; }
+  else if (prevWrap) prevWrap.style!.display = 'none';
   const input = document.getElementById('ar-mapa-img');
   if (input) {
     input.oninput = () => {
-      const v = input.value.trim();
-      if (v && prev) { prev.src = v; prevWrap.style.display = 'block'; }
-      else if (prevWrap) prevWrap.style.display = 'none';
+      const v = input.value!.trim();
+      if (v && prev) { prev.src = v; prevWrap!.style!.display = 'block'; }
+      else if (prevWrap) prevWrap.style!.display = 'none';
       // Atualizar preview 3D com nova imagem
       const pi = document.getElementById('ar-mp3d-preview-img');
       if (pi) pi.src = v;
@@ -3136,7 +3136,7 @@ async function salvarArMapa() {
   const img = (document.getElementById('ar-mapa-img')?.value || '').trim();
   (AR.estado as any).cenario_img = img;
   // Salvar configuração 3D no estado da arena
-  const _gv = (id: any) => { const el = document.getElementById(id); return el ? +el.value : null; };
+  const _gv = (id: any) => { const el = document.getElementById(id); return el ? +el.value! : null; };
   const arT3d = {
     rx:    _gv('ar-mp3d-rx')    ?? 0,
     ry:    _gv('ar-mp3d-ry')    ?? 0,
@@ -3156,9 +3156,9 @@ async function salvarArMapa() {
 
 // ── MAPA DA ARENA: importar JSON ──────────────────────────────
 function abrirModalArImportarMapa() {
-  document.getElementById('ar-importar-mapa-json').value = '';
+  document.getElementById('ar-importar-mapa-json')!.value = '';
   const st = document.getElementById('ar-importar-mapa-status');
-  if (st) st.style.display = 'none';
+  if (st) st.style!.display = 'none';
   abrirModal('ar-modal-importar-mapa');
 }
 
@@ -3167,18 +3167,18 @@ async function executarArImportarMapa() {
   const st  = document.getElementById('ar-importar-mapa-status');
   const showErr = (msg: any) => {
     if (!st) return;
-    st.style.display = 'block';
-    st.style.background = 'rgba(192,57,43,0.1)';
-    st.style.color = '#e74c3c';
-    st.style.border = '1px solid rgba(192,57,43,0.2)';
+    st.style!.display = 'block';
+    st.style!.background = 'rgba(192,57,43,0.1)';
+    st.style!.color = '#e74c3c';
+    st.style!.border = '1px solid rgba(192,57,43,0.2)';
     st.textContent = msg;
   };
   const showOk = (msg: any) => {
     if (!st) return;
-    st.style.display = 'block';
-    st.style.background = 'rgba(46,204,113,0.1)';
-    st.style.color = '#2ecc71';
-    st.style.border = '1px solid rgba(46,204,113,0.2)';
+    st.style!.display = 'block';
+    st.style!.background = 'rgba(46,204,113,0.1)';
+    st.style!.color = '#2ecc71';
+    st.style!.border = '1px solid rgba(46,204,113,0.2)';
     st.textContent = msg;
   };
   if (!raw) { showErr('Cole o JSON antes de importar.'); return; }
@@ -3246,7 +3246,7 @@ window.addEventListener('resize', () => {
 
 // ── MODAL: IMAGEM DE PERSONAGEM ──────────────────────────────
 function abrirModalImg(nome: any) {
-  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  const c = RPG_DATA!.characters.find(x => x.nome === nome);
   if (!c) return;
   const ca = c.custom_attrs || {};
   const cor = ca.cor || 'var(--primario)';
@@ -3256,7 +3256,7 @@ function abrirModalImg(nome: any) {
   if (!m) {
     m = document.createElement('div');
     m.id = 'modal-img-personagem';
-    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;display:flex;align-items:flex-end;justify-content:center';
+    m.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;display:flex;align-items:flex-end;justify-content:center';
     m.innerHTML = `
       <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
@@ -3277,10 +3277,10 @@ function abrirModalImg(nome: any) {
       </div>`;
     document.body.appendChild(m);
   }
-  document.getElementById('modal-img-url').value = img;
-  document.getElementById('modal-img-nome').value = nome;
+  document.getElementById('modal-img-url')!.value = img;
+  document.getElementById('modal-img-nome')!.value = nome;
   modalImgPreview(img);
-  m.style.display = 'flex';
+  m.style!.display = 'flex';
 }
 
 function modalImgPreview(url: any) {
@@ -3288,12 +3288,12 @@ function modalImgPreview(url: any) {
   const prev = document.getElementById('modal-img-preview');
   const ph = document.getElementById('modal-img-placeholder');
   if (normalized) {
-    prev.src = normalized;
-    prev.style.display = 'block';
-    if (ph) ph.style.display = 'none';
+    prev!.src = normalized;
+    prev!.style!.display = 'block';
+    if (ph) ph.style!.display = 'none';
   } else {
-    prev.style.display = 'none';
-    if (ph) ph.style.display = 'flex';
+    prev!.style!.display = 'none';
+    if (ph) ph.style!.display = 'flex';
   }
 }
 
@@ -3301,31 +3301,31 @@ function attrImgPreview(url: any, cor: any, targetId: any) {
   const normalized = normalizeImgUrl(url);
   const prev = document.getElementById(targetId || 'f-img-preview');
   if (!prev) return;
-  if (normalized) { prev.src = normalized; prev.style.display = ''; }
-  else prev.style.display = 'none';
+  if (normalized) { prev.src = normalized; prev.style!.display = ''; }
+  else prev.style!.display = 'none';
 }
 
 async function salvarImgPersonagem() {
-  const nome = document.getElementById('modal-img-nome').value;
-  const url = (document.getElementById('modal-img-url').value || '').trim();
-  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  const nome = document.getElementById('modal-img-nome')!.value!;
+  const url = (document.getElementById('modal-img-url')!.value! || '').trim();
+  const c = RPG_DATA!.characters.find(x => x.nome === nome);
   if (!c) return;
   const ca = { ...(c.custom_attrs || {}) };
   ca.img = url;
   c.custom_attrs = ca;
   try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome!)}`, {
       method: 'PATCH', body: JSON.stringify({ custom_attrs: ca })
     });
     mostrarToast('Imagem salva!', 'sucesso');
-    document.getElementById('modal-img-personagem').style.display = 'none';
+    document.getElementById('modal-img-personagem')!.style!.display = 'none';
     // Re-renderizar onde o personagem está visível
     if (CHAR_VIEW === nome) renderCharView(nome);
     if (ATTR_VIEW === nome) renderAttrView(nome);
     renderConfig();
     // Atualizar token no mapa se visível
     if (MAPA_STATE.mapaAtualId) {
-      const mapas = RPG_DATA.mapas || [];
+      const mapas = RPG_DATA!.mapas || [];
       const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
       if (entry) mapaRenderTokens(entry.mapa);
     }
@@ -3339,13 +3339,13 @@ async function salvarImgPersonagem() {
 function abrirModalCriarBatalhaIA() {
   const isMestre = RPG_DATA?.myRole === 'mestre';
   if (!isMestre) { mostrarToast('Apenas o Mestre pode criar batalhas', 'erro'); return; }
-  document.getElementById('batalha-ia-status').style.display = 'none';
-  document.getElementById('batalha-ia-input').value = '';
-  document.getElementById('modal-criar-batalha-overlay').style.display = 'flex';
+  document.getElementById('batalha-ia-status')!.style!.display = 'none';
+  document.getElementById('batalha-ia-input')!.value = '';
+  document.getElementById('modal-criar-batalha-overlay')!.style!.display = 'flex';
 }
 
 function fecharModalCriarBatalha() {
-  document.getElementById('modal-criar-batalha-overlay').style.display = 'none';
+  document.getElementById('modal-criar-batalha-overlay')!.style!.display = 'none';
 }
 
 function copiarPromptBatalha() {
@@ -3445,8 +3445,8 @@ x e y: SEMPRE número entre 0 e 100 (sem %).`;
   navigator.clipboard.writeText(prompt).then(() => {
     const label = document.getElementById('label-copiar-prompt-batalha');
     const ok    = document.getElementById('ok-copiar-prompt-batalha');
-    label.style.display = 'none'; ok.style.display = 'inline';
-    setTimeout(() => { label.style.display = 'inline'; ok.style.display = 'none'; }, 2500);
+    label!.style!.display = 'none'; ok!.style!.display = 'inline';
+    setTimeout(() => { label!.style!.display = 'inline'; ok!.style!.display = 'none'; }, 2500);
   }).catch(() => mostrarToast('Não foi possível copiar', 'erro'));
 }
 
@@ -3481,15 +3481,15 @@ function _parseBatalhaCSV(csv: any) {
 }
 
 async function importarBatalhaIA() {
-  const raw = document.getElementById('batalha-ia-input').value.trim();
+  const raw = document.getElementById('batalha-ia-input')!.value!.trim!()!;
   const statusEl = document.getElementById('batalha-ia-status');
 
   const mostrarErro = (msg: any) => {
-    statusEl.style.display = 'block';
-    statusEl.style.background = 'rgba(192,57,43,0.1)';
-    statusEl.style.color = '#e74c3c';
-    statusEl.style.border = '1px solid rgba(192,57,43,0.25)';
-    statusEl.textContent = '✕ ' + msg;
+    statusEl!.style!.display = 'block';
+    statusEl!.style!.background = 'rgba(192,57,43,0.1)';
+    statusEl!.style!.color = '#e74c3c';
+    statusEl!.style!.border = '1px solid rgba(192,57,43,0.25)';
+    statusEl!.textContent = '✕ ' + msg;
   };
 
   if (!raw) { mostrarErro('Cole o JSON ou CSV antes de importar.'); return; }
@@ -3509,18 +3509,18 @@ async function importarBatalhaIA() {
     mostrarErro('Nenhuma entidade encontrada.'); return;
   }
 
-  statusEl.style.display = 'block';
-  statusEl.style.background = 'rgba(176,126,240,0.08)';
-  statusEl.style.color = '#b07ef0';
-  statusEl.style.border = '1px solid rgba(176,126,240,0.2)';
-  statusEl.textContent = '⏳ Processando…';
+  statusEl!.style!.display = 'block';
+  statusEl!.style!.background = 'rgba(176,126,240,0.08)';
+  statusEl!.style!.color = '#b07ef0';
+  statusEl!.style!.border = '1px solid rgba(176,126,240,0.2)';
+  statusEl!.textContent = '⏳ Processando…';
 
   const rpgId     = RPG_DATA?.rpgId;
   const mapaAtualId = MAPA_STATE?.mapaAtualId || null;
 
   // ── 1. Criar ou sobrescrever submapa ────────────────────────────────────
   const mapId    = 'batalha_' + nomeSubmapa.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,30) + '_' + Date.now().toString(36).slice(-4);
-  const existente = (RPG_DATA.mapas || []).find(l => l.mapa.nome === nomeSubmapa && l.mapa.tipo === 'local');
+  const existente = (RPG_DATA!.mapas || []).find(l => l.mapa.nome === nomeSubmapa && l.mapa.tipo === 'local');
 
   let subMapId;
   if (existente) {
@@ -3564,7 +3564,7 @@ async function importarBatalhaIA() {
         parent_map_id: mapaAtualId, locais: [] as any[],
         ...(render_data ? { render_data } : {}),
       };
-      RPG_DATA.mapas.push({ id: row?.id, rpg_id: rpgId, mapa: mapaObj });
+      RPG_DATA!.mapas.push({ id: row?.id, rpg_id: rpgId as any, mapa: mapaObj });
     } catch (e: any) {
       mostrarErro('Erro ao criar submapa: ' + e.message);
       return;
@@ -3575,7 +3575,7 @@ async function importarBatalhaIA() {
 
   // ── 2. Posicionar personagens dos players ────────────────────────────────
   for (const p of personagens) {
-    const char = (RPG_DATA.characters || []).find(c => c.nome === p.nome);
+    const char = (RPG_DATA!.characters || []).find(c => c.nome === p.nome);
     if (!char) { erros.push(p.nome + ' (não encontrado)'); continue; }
     const ca = char.custom_attrs || {};
     if (!ca.map_positions) ca.map_positions = {};
@@ -3592,7 +3592,7 @@ async function importarBatalhaIA() {
 
   // ── 3. Criar/posicionar inimigos como NPCs genéricos ────────────────────
   for (const ini of inimigos) {
-    let char = (RPG_DATA.characters || []).find(c => c.nome === ini.nome && c.custom_attrs?.npc_generico);
+    let char = (RPG_DATA!.characters || []).find(c => c.nome === ini.nome && c.custom_attrs?.npc_generico);
     if (!char) {
       const hpMax = ini.hp_max || ini.hp || 30;
       const novoCa = {
@@ -3621,7 +3621,7 @@ async function importarBatalhaIA() {
           })
         });
         if (row) {
-          RPG_DATA.characters.push({   // pseudo-personagem sintético da arena (parcial por design)
+          RPG_DATA!.characters.push({   // pseudo-personagem sintético da arena (parcial por design)
             id: row.id, nome: ini.nome, hp_atual: ini.hp || hpMax,
             active_map_id: subMapId, map_positions: novoCa.map_positions,
             custom_attrs: novoCa
@@ -3648,7 +3648,7 @@ async function importarBatalhaIA() {
 
   // ── 4. Criar/posicionar NPCs especiais ──────────────────────────────────
   for (const npc of npcs_especiais) {
-    let char = (RPG_DATA.characters || []).find(c => c.nome === npc.nome);
+    let char = (RPG_DATA!.characters || []).find(c => c.nome === npc.nome);
     if (!char) {
       const hpMax = npc.hp_max || npc.hp || 20;
       const novoCa = {
@@ -3677,7 +3677,7 @@ async function importarBatalhaIA() {
           })
         });
         if (row) {
-          RPG_DATA.characters.push({   // pseudo-personagem sintético da arena (parcial por design)
+          RPG_DATA!.characters.push({   // pseudo-personagem sintético da arena (parcial por design)
             id: row.id, nome: npc.nome, hp_atual: npc.hp || hpMax,
             active_map_id: subMapId, map_positions: novoCa.map_positions,
             custom_attrs: novoCa
@@ -3706,12 +3706,12 @@ async function importarBatalhaIA() {
   if (typeof selecionarMapa    === 'function') selecionarMapa(subMapId);
   if (typeof renderMapasTab    === 'function') renderMapasTab();
   if (typeof mapaRenderTokens  === 'function') {
-    const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === subMapId);
+    const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === subMapId);
     if (entry) mapaRenderTokens(entry.mapa);
   }
   if (typeof mapaRenderStatus  === 'function') mapaRenderStatus();
   if (typeof mapaRenderCanvas  === 'function') {
-    const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === subMapId);
+    const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === subMapId);
     if (entry?.mapa?.render_data) setTimeout(() => mapaRenderCanvas(entry.mapa), 100);
   }
 

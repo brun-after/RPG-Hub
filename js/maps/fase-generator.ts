@@ -179,7 +179,7 @@ function abrirModalFaseConfig(mapId: any) {
 
   const el = document.getElementById('modal-fase-config-overlay');
   if (!el) return;
-  el.style.display = 'flex';
+  el.style!.display = 'flex';
 
   // Preencher chave API salva
   const apiKeyEl = document.getElementById('fase-api-key');
@@ -194,7 +194,7 @@ function abrirModalFaseConfig(mapId: any) {
   const tiltSlider = document.getElementById('fase-tilt-slider');
   if (tiltSlider) {
     tiltSlider.value = (Math.round((_faseGenModalData.perspective.tilt_y || 0.72) * 100)) as any;
-    document.getElementById('fase-tilt-val').textContent = tiltSlider.value + '%';
+    document.getElementById('fase-tilt-val')!.textContent = tiltSlider.value + '%';
   }
   // Renderizar editor JSON
   _faseGenRenderEditorJSON();
@@ -202,7 +202,7 @@ function abrirModalFaseConfig(mapId: any) {
 
 function fecharModalFaseConfig() {
   const el = document.getElementById('modal-fase-config-overlay');
-  if (el) el.style.display = 'none';
+  if (el) el.style!.display = 'none';
   _faseGenImgFile = null;
 }
 
@@ -213,11 +213,11 @@ function _faseGenAtualizarPreview(url: any) {
   if (!prev || !placeholder) return;
   if (url) {
     prev.src = normalizeImgUrl(url);
-    prev.style.display = 'block';
-    placeholder.style.display = 'none';
+    prev.style!.display = 'block';
+    placeholder.style!.display = 'none';
   } else {
-    prev.style.display = 'none';
-    placeholder.style.display = 'flex';
+    prev.style!.display = 'none';
+    placeholder.style!.display = 'flex';
   }
 }
 
@@ -389,18 +389,18 @@ function faseGenCopiarPromptExterno() {
 function faseGenToggleImportExterno() {
   const wrap = document.getElementById('fase-import-externo-wrap');
   if (!wrap) return;
-  wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+  wrap.style!.display = wrap.style!.display === 'none' ? 'block' : 'none';
 }
 
 // ── Importar JSON externo ─────────────────────────────────────────────────
 function faseGenImportarJSONExterno() {
   const ta = document.getElementById('fase-import-externo-json');
-  if (!ta?.value.trim()) { mostrarToast('Cole o JSON no campo', 'aviso'); return; }
+  if (!ta?.value!.trim!()!) { mostrarToast('Cole o JSON no campo', 'aviso'); return; }
   try {
-    _faseGenModalData = faseGenValidarJSON(ta.value);
+    _faseGenModalData = faseGenValidarJSON(ta!.value);
     _faseGenRenderEditorJSON();
-    ta.value = '';
-    document.getElementById('fase-import-externo-wrap').style.display = 'none';
+    ta!.value = '';
+    document.getElementById('fase-import-externo-wrap')!.style!.display = 'none';
     mostrarToast('✓ JSON importado', 'ok');
   } catch (e: any) {
     mostrarToast('JSON inválido: ' + e.message, 'err');
@@ -417,9 +417,9 @@ function _faseGenRenderEditorJSON() {
 function faseGenJSONEditado(val: any) {
   try {
     _faseGenModalData = JSON.parse(val);
-    document.getElementById('fase-json-err').textContent = '';
+    document.getElementById('fase-json-err')!.textContent = '';
   } catch (e: any) {
-    document.getElementById('fase-json-err').textContent = '⚠ JSON inválido: ' + e.message;
+    document.getElementById('fase-json-err')!.textContent = '⚠ JSON inválido: ' + e.message;
   }
 }
 
@@ -431,7 +431,7 @@ async function faseGenSalvar() {
   // Validar JSON do editor antes de salvar
   const ta = document.getElementById('fase-json-editor');
   if (ta) {
-    try { _faseGenModalData = JSON.parse(ta.value); } catch(e) {
+    try { _faseGenModalData = JSON.parse(ta.value!); } catch(e) {
       mostrarToast('JSON inválido — corrija antes de salvar', 'err'); return;
     }
   }
@@ -447,7 +447,7 @@ async function faseGenSalvar() {
     let imgUrl = entry.mapa.img_url || '';
     if (_faseGenImgFile) {
       try {
-        const uploaded = await uploadToStorage(_faseGenImgFile, `mapas/${RPG_DATA.rpgId}`);
+        const uploaded = await uploadToStorage(_faseGenImgFile, `mapas/${RPG_DATA!.rpgId}`);
         if (uploaded) imgUrl = uploaded;
       } catch(uploadErr) {
         console.warn('[fase-generator] image upload failed, continuing without image:', uploadErr);
@@ -526,7 +526,7 @@ async function faseExportarCombate(batalhaId: any) {
       jogadores: (b.participantes || [])
         .map((nome: any) => (RPG_DATA?.characters || []).find(c => c.nome === nome))
         .filter(Boolean)
-        .map(c => ({ nome: c.nome, nivel: c.custom_attrs?.nivel, hp_max: c.hp_max }))
+        .map(c => ({ nome: c!.nome, nivel: c!.custom_attrs?.nivel, hp_max: c!.hp_max }))
     },
     historico_acoes: b._historico_acoes || [],
     ia_decisoes: b._ia_decisoes || [],

@@ -35,9 +35,9 @@ function nmBgTab(tab: any) {
     const panel = document.getElementById('nm-panel-' + t);
     if (!btn || !panel) return;
     const active = t === tab;
-    btn.style.background = active ? 'var(--primario)' : 'transparent';
-    btn.style.color      = active ? '#fff' : 'var(--suave)';
-    panel.style.display  = active ? 'block' : 'none';
+    btn.style!.background = active ? 'var(--primario)' : 'transparent';
+    btn.style!.color      = active ? '#fff' : 'var(--suave)';
+    panel.style!.display  = active ? 'block' : 'none';
   });
   // Inicializar canvas ao entrar na aba — abre fullscreen
   if (tab === 'canvas') setTimeout(() => {
@@ -71,9 +71,9 @@ function nmceFullscreenAbrir() {
   // Mover canvas para dentro do wrap fullscreen
   wrap.appendChild(canvas);
   // Canvas ocupa todo o espaço visual via CSS (dimensões internas mantidas)
-  canvas.style.width  = '100%';
-  canvas.style.height = '100%';
-  canvas.style.display = 'block';
+  canvas.style!.width  = '100%';
+  canvas.style!.height = '100%';
+  canvas.style!.display = 'block';
 
   // Sincronizar valores dos controles
   const cor  = document.getElementById('nmce-cor');
@@ -83,20 +83,20 @@ function nmceFullscreenAbrir() {
   const szFs = document.getElementById('nmce-size-fs');
   if (sz && szFs) szFs.value = sz.value;
 
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
   nmceUpdateIsoGuide();
 
   // Move SVG wall overlay to fullscreen wrap
   const wallsSvg = document.getElementById('nmce-walls-svg');
   const snapDot  = document.getElementById('nmce-wall-snap');
-  if (wallsSvg) { wallsSvg.style.zIndex = '10'; wrap.appendChild(wallsSvg); }
-  if (snapDot)  { snapDot.style.zIndex  = '11'; wrap.appendChild(snapDot);  }
+  if (wallsSvg) { wallsSvg.style!.zIndex = '10'; wrap.appendChild(wallsSvg); }
+  if (snapDot)  { snapDot.style!.zIndex  = '11'; wrap.appendChild(snapDot);  }
 }
 
 function nmceFullscreenFechar() {
   // Devolver canvas ao painel normal sem salvar nada
   _nmceRestaurarCanvas();
-  document.getElementById('nmce-fullscreen-overlay').style.display = 'none';
+  document.getElementById('nmce-fullscreen-overlay')!.style!.display = 'none';
   if (typeof _nmceContext !== 'undefined') _nmceContext = 'nm';
 }
 
@@ -108,9 +108,9 @@ function nmceFullscreenConcluir() {
     const prev = document.getElementById('ar-cen-canvas-preview');
     const wrap = document.getElementById('ar-cen-canvas-preview-wrap');
     if (prev) prev.src = dataUrl;
-    if (wrap) wrap.style.display = 'block';
+    if (wrap) wrap.style!.display = 'block';
     _nmceRestaurarCanvas();
-    document.getElementById('nmce-fullscreen-overlay').style.display = 'none';
+    document.getElementById('nmce-fullscreen-overlay')!.style!.display = 'none';
     _nmceContext = 'nm';
     return;
   }
@@ -127,7 +127,7 @@ function nmceFullscreenConcluir() {
   _nmceSalvarRenderData();
 
   _nmceRestaurarCanvas();
-  document.getElementById('nmce-fullscreen-overlay').style.display = 'none';
+  document.getElementById('nmce-fullscreen-overlay')!.style!.display = 'none';
 }
 
 function _nmceRestaurarCanvas() {
@@ -138,10 +138,10 @@ function _nmceRestaurarCanvas() {
   const panelWrap = document.getElementById('nmce-canvas-wrap');
   if (!panelWrap || !canvas) return;
   panelWrap.appendChild(canvas);
-  if (wallsSvg) { wallsSvg.style.zIndex = ''; panelWrap.appendChild(wallsSvg); }
-  if (snapDot)  { snapDot.style.zIndex  = ''; panelWrap.appendChild(snapDot);  }
-  canvas.style.width  = '100%';
-  canvas.style.height = '';
+  if (wallsSvg) { wallsSvg.style!.zIndex = ''; panelWrap.appendChild(wallsSvg); }
+  if (snapDot)  { snapDot.style!.zIndex  = ''; panelWrap.appendChild(snapDot);  }
+  canvas.style!.width  = '100%';
+  canvas.style!.height = '';
 }
 
 
@@ -152,7 +152,7 @@ function nmBgUrlPreview(val: any) {
   if (!img) return;
   const url = normalizeImgUrl(val);
   img.src = url || '';
-  img.style.display = url ? 'block' : 'none';
+  img.style!.display = url ? 'block' : 'none';
 }
 
 // — Upload —
@@ -165,8 +165,8 @@ async function nmBgUpload(input: any) {
     const wrap = document.getElementById('nm-upload-preview-wrap');
     const warn = document.getElementById('nm-upload-size-warn');
     if (prev) prev.src = _nmUploadDataUrl;
-    if (wrap) wrap.style.display = 'block';
-    if (warn) warn.style.display = 'none'; // sem aviso de tamanho com Storage
+    if (wrap) wrap.style!.display = 'block';
+    if (warn) warn.style!.display = 'none'; // sem aviso de tamanho com Storage
     const lbl = document.getElementById('nm-upload-label');
     if (lbl) { const span = lbl.querySelector('div div:first-child'); if(span) span.textContent = file.name; }
   } catch(e) {
@@ -177,7 +177,7 @@ async function nmBgUpload(input: any) {
 function nmBgClearUpload() {
   _nmUploadDataUrl = null;
   const prev = document.getElementById('nm-upload-preview-wrap');
-  if (prev) prev.style.display = 'none';
+  if (prev) prev.style!.display = 'none';
   const input = document.getElementById('nm-upload-input');
   if (input) input.value = '';
   const lbl = document.getElementById('nm-upload-label');
@@ -249,37 +249,37 @@ function nmBgSvgPreview(val: any) {
   const prev = document.getElementById('nm-svg-preview');
   _nmSvgDataUrl = null;
   if (!val || !val.trim()) {
-    if (warn) warn.style.display = 'none';
-    if (prevWrap) prevWrap.style.display = 'none';
+    if (warn) warn.style!.display = 'none';
+    if (prevWrap) prevWrap.style!.display = 'none';
     return;
   }
   const trimmed = val.trim();
   if (!trimmed.startsWith('<svg') && !trimmed.includes('<svg')) {
-    if (warn) { warn.style.display = 'block'; warn.style.background = 'rgba(192,57,43,0.1)'; warn.style.border = '1px solid rgba(192,57,43,0.3)'; warn.style.color = '#e74c3c'; warn.textContent = '⚠️ Não parece ser um SVG válido. Certifique-se que começa com <svg…'; }
-    if (prevWrap) prevWrap.style.display = 'none';
+    if (warn) { warn.style!.display = 'block'; warn.style!.background = 'rgba(192,57,43,0.1)'; warn.style!.border = '1px solid rgba(192,57,43,0.3)'; warn.style!.color = '#e74c3c'; warn.textContent = '⚠️ Não parece ser um SVG válido. Certifique-se que começa com <svg…'; }
+    if (prevWrap) prevWrap.style!.display = 'none';
     return;
   }
   // Verificar tamanho
   const kb = Math.round(new Blob([trimmed]).size / 1024);
   if (warn) {
     if (kb > 300) {
-      warn.style.display = 'block';
-      warn.style.background = 'rgba(200,168,75,0.08)';
-      warn.style.border = '1px solid rgba(200,168,75,0.3)';
-      warn.style.color = 'var(--destaque-v)';
+      warn.style!.display = 'block';
+      warn.style!.background = 'rgba(200,168,75,0.08)';
+      warn.style!.border = '1px solid rgba(200,168,75,0.3)';
+      warn.style!.color = 'var(--destaque-v)';
       warn.textContent = `⚠️ SVG grande (${kb}KB) — pode demorar ao carregar. Se a IA gerou muita repetição, peça uma versão mais enxuta.`;
     } else {
-      warn.style.display = 'block';
-      warn.style.background = 'rgba(39,174,96,0.08)';
-      warn.style.border = '1px solid rgba(39,174,96,0.2)';
-      warn.style.color = '#5ee09a';
+      warn.style!.display = 'block';
+      warn.style!.background = 'rgba(39,174,96,0.08)';
+      warn.style!.border = '1px solid rgba(39,174,96,0.2)';
+      warn.style!.color = '#5ee09a';
       warn.textContent = `✓ SVG válido · ${kb}KB`;
     }
   }
   // Preview inline (seguro: sem scripts externos)
   const safe = trimmed.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/on\w+="[^"]*"/gi,'');
   if (prev) prev.innerHTML = safe;
-  if (prevWrap) prevWrap.style.display = 'block';
+  if (prevWrap) prevWrap.style!.display = 'block';
   // Converter para data URL para salvar
   const b64 = btoa(unescape(encodeURIComponent(safe)));
   _nmSvgDataUrl = 'data:image/svg+xml;base64,' + b64;
@@ -290,8 +290,8 @@ function nmCopiarPromptSVG() {
   const lbl = document.getElementById('nm-svg-copy-lbl');
   const done = () => {
     if (lbl) lbl.textContent = '✓ Copiado!';
-    if (btn) btn.style.color = '#5ee09a';
-    setTimeout(() => { if(lbl) lbl.textContent='Copiar prompt SVG (genérico)'; if(btn) btn.style.color='var(--destaque-v)'; }, 2500);
+    if (btn) btn.style!.color = '#5ee09a';
+    setTimeout(() => { if(lbl) lbl.textContent='Copiar prompt SVG (genérico)'; if(btn) btn.style!.color='var(--destaque-v)'; }, 2500);
   };
   if (navigator.clipboard) navigator.clipboard.writeText(_NM_SVG_PROMPT).then(done).catch(() => { const t=document.createElement('textarea'); t.value=_NM_SVG_PROMPT; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); });
   else { const t=document.createElement('textarea'); t.value=_NM_SVG_PROMPT; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); }
@@ -359,8 +359,8 @@ sem markdown, sem explicação, sem texto antes ou depois.`;
   const lbl = document.getElementById('nm-svg-ctx-lbl');
   const done = () => {
     if (lbl) lbl.textContent = '✓ Copiado!';
-    if (btn) btn.style.color = '#5ee09a';
-    setTimeout(() => { if(lbl) lbl.textContent='Copiar prompt com contexto da campanha'; if(btn) btn.style.color='var(--primario-v)'; }, 2500);
+    if (btn) btn.style!.color = '#5ee09a';
+    setTimeout(() => { if(lbl) lbl.textContent='Copiar prompt com contexto da campanha'; if(btn) btn.style!.color='var(--primario-v)'; }, 2500);
   };
   if (navigator.clipboard) navigator.clipboard.writeText(prompt).then(done).catch(() => { const t=document.createElement('textarea'); t.value=prompt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); });
   else { const t=document.createElement('textarea'); t.value=prompt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); }
@@ -393,7 +393,7 @@ function nmceInit() {
 function nmceBgRender() {
   const c = document.getElementById('nmce-canvas');
   if (!c) return;
-  const ctx = c.getContext('2d', { willReadFrequently: true });
+  const ctx = c.getContext!('2d', { willReadFrequently: true });
   // Salvar desenho atual
   const snap = ctx.getImageData(0, 0, c.width, c.height);
   ctx.clearRect(0, 0, c.width, c.height);
@@ -414,10 +414,10 @@ function nmceBgLoad(input: any) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    nmCE._uploadDataUrl = e.target.result;
+    nmCE._uploadDataUrl = e.target!.result;
     const c = document.getElementById('nmce-canvas');
     if (!c) return;
-    const ctx = c.getContext('2d', { willReadFrequently: true });
+    const ctx = c.getContext!('2d', { willReadFrequently: true });
     // Preservar desenho atual, renderizar sobre novo fundo
     const snap = ctx.getImageData(0, 0, c.width, c.height);
     const img = new Image();
@@ -447,35 +447,35 @@ function nmceSetTool(t: any) {
     const activeCl = isScene ? (name==='parede'?'#7ec8f0':name==='porta'?'#c8a84b':name==='bau'?'#c8a84b':'#b07ef0') : '#fff';
     [btn, btnFs].forEach(b => {
       if (!b) return;
-      b.style.background = isActive ? activeBg : 'transparent';
-      b.style.color = isActive ? activeCl : (isScene ? (name==='parede'?'#7ec8f088':name==='porta'?'#c8a84b88':'#b07ef088') : 'var(--texto)');
+      b.style!.background = isActive ? activeBg : 'transparent';
+      b.style!.color = isActive ? activeCl : (isScene ? (name==='parede'?'#7ec8f088':name==='porta'?'#c8a84b88':'#b07ef088') : 'var(--texto)');
     });
   });
 
   const c = document.getElementById('nmce-canvas');
-  if (c) c.style.cursor = t === 'fill' ? 'cell' : t === 'parede' ? 'crosshair' : 'pointer';
+  if (c) c.style!.cursor = t === 'fill' ? 'cell' : t === 'parede' ? 'crosshair' : 'pointer';
 
   // Show/hide scenario panel
   const panel = document.getElementById('nmce-cenario-panel');
   const fsBar = document.getElementById('nmce-fs-cenario-bar');
   const isScene = sceneTools.includes(t);
-  if (panel) panel.style.display = isScene ? 'block' : 'none';
+  if (panel) panel.style!.display = isScene ? 'block' : 'none';
   ['parede','porta','objeto','bau'].forEach(name => {
     const el = document.getElementById('nmce-cenario-panel-' + name);
-    if (el) el.style.display = name === t ? 'block' : 'none';
+    if (el) el.style!.display = name === t ? 'block' : 'none';
   });
 
   // Fullscreen hint
   const hints: Record<string, any> = { parede: '🧱 Parede — clique em 2 bordas do grid', porta: '🚪 Porta — clique numa célula', objeto: '🪨 Obstáculo — clique numa célula', bau: '📦 Baú — clique numa célula' };
   if (fsBar) {
-    fsBar.style.display = isScene ? 'flex' : 'none';
+    fsBar.style!.display = isScene ? 'flex' : 'none';
     const hintEl = document.getElementById('nmce-fs-cenario-hint');
     if (hintEl) hintEl.textContent = hints[t] || '';
   }
 
   // Show snap indicator only in wall mode
   const snap = document.getElementById('nmce-wall-snap');
-  if (snap) snap.style.display = 'none';
+  if (snap) snap.style!.display = 'none';
 }
 
 function nmcePickColor(hex: any) {
@@ -488,7 +488,7 @@ function nmcePickColor(hex: any) {
 function nmcePushHistory() {
   const c = document.getElementById('nmce-canvas');
   if (!c) return;
-  const snap = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height);
+  const snap = c.getContext!('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height);
   nmCE.history.push(snap);
   if (nmCE.history.length > 20) nmCE.history.shift();
 }
@@ -497,14 +497,14 @@ function nmceUndo() {
   if (!nmCE.history.length) return;
   const c = document.getElementById('nmce-canvas');
   if (!c) return;
-  c.getContext('2d', { willReadFrequently: true }).putImageData(nmCE.history.pop(), 0, 0);
+  c.getContext!('2d', { willReadFrequently: true }).putImageData(nmCE.history.pop(), 0, 0);
 }
 
 function nmceClear() {
   const c = document.getElementById('nmce-canvas');
   if (!c) return;
   nmcePushHistory();
-  const ctx = c.getContext('2d', { willReadFrequently: true });
+  const ctx = c.getContext!('2d', { willReadFrequently: true });
   ctx.clearRect(0, 0, c.width, c.height);
   nmceBgRender();
 }
@@ -512,7 +512,7 @@ function nmceClear() {
 function nmceExport() {
   const c = document.getElementById('nmce-canvas');
   if (!c) return '';
-  return c.toDataURL('image/png');
+  return c.toDataURL!('image/png');
 }
 
 // Coordenadas relativas ao canvas
@@ -538,9 +538,9 @@ function nmceDown(e: any) {
   nmCE.drawing = true;
   nmCE.startX = x; nmCE.startY = y;
   nmCE.lastX  = x; nmCE.lastY  = y;
-  const ctx = c.getContext('2d', { willReadFrequently: true });
+  const ctx = c.getContext!('2d', { willReadFrequently: true });
   const cor   = document.getElementById('nmce-cor')?.value  || '#4fa3d1';
-  const size  = parseInt(document.getElementById('nmce-size')?.value) || 8;
+  const size  = parseInt(document.getElementById('nmce-size')?.value!) || 8;
   if (nmCE.tool === 'fill') {
     nmcePushHistory();
     nmceFill(ctx, Math.round(x), Math.round(y), cor);
@@ -576,9 +576,9 @@ function nmceMove(e: any) {
   const c = document.getElementById('nmce-canvas');
   if (!c) return;
   const { x, y } = nmceCoords(e, c);
-  const ctx = c.getContext('2d', { willReadFrequently: true });
+  const ctx = c.getContext!('2d', { willReadFrequently: true });
   const cor   = document.getElementById('nmce-cor')?.value  || '#4fa3d1';
-  const size  = parseInt(document.getElementById('nmce-size')?.value) || 8;
+  const size  = parseInt(document.getElementById('nmce-size')?.value!) || 8;
   if (nmCE.tool === 'pincel' || nmCE.tool === 'borracha') {
     ctx.beginPath();
     ctx.moveTo(nmCE.lastX, nmCE.lastY);
@@ -624,9 +624,9 @@ function nmceUp(e: any) {
   // Commit do shape
   nmcePushHistory();
   const { x, y } = nmceCoords(e.changedTouches ? { clientX:e.changedTouches[0]?.clientX||nmCE.lastX, clientY:e.changedTouches[0]?.clientY||nmCE.lastY } : e, c);
-  const ctx = c.getContext('2d', { willReadFrequently: true });
+  const ctx = c.getContext!('2d', { willReadFrequently: true });
   const cor  = document.getElementById('nmce-cor')?.value || '#4fa3d1';
-  const size = parseInt(document.getElementById('nmce-size')?.value) || 8;
+  const size = parseInt(document.getElementById('nmce-size')?.value!) || 8;
   ctx.putImageData(nmCE._snapshot, 0, 0);
   ctx.beginPath();
   ctx.strokeStyle = cor; ctx.fillStyle = cor + '44';
@@ -662,7 +662,7 @@ function nmceFill(ctx: any, startX: any, startY: any, hexColor: any) {
   const set = (i: any) => { data[i]=fill[0]; data[i+1]=fill[1]; data[i+2]=fill[2]; data[i+3]=255; };
   let iter = 0;
   while (queue.length && iter++ < 200000) {
-    const [cx, cy] = queue.pop();
+    const [cx, cy] = queue.pop()!;
     if (cx<0||cy<0||cx>=c.width||cy>=c.height) continue;
     const pi = cy*c.width+cx;
     if (visited[pi]) continue;

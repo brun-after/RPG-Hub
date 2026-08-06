@@ -107,7 +107,7 @@ function combateReceberBroadcast(payload: any) {
     const { batalhaId, nome, valor } = payload;
     const bs = MAPA_STATE.batalhas[batalhaId];
     if (bs) {
-      bs.iniciativasRoladas[nome] = valor;
+      bs.iniciativasRoladas![nome] = valor;
       const p = bs.participantes.find(x => x.nome === nome);
       if (p) p.iniciativa = valor;
       bs.empatados = (bs.empatados || []).filter(n => n !== nome);
@@ -185,9 +185,9 @@ function combateReceberBroadcast(payload: any) {
   }
   if (tipo === 'trigger_ocultar') {
     const el = document.getElementById('atk-anim-trigger');
-    if (el) el.style.display = 'none';
+    if (el) el.style!.display = 'none';
     const box = document.getElementById('atk-anim-trigger-box');
-    if (box) box.style.pointerEvents = ''; // restaurar clicabilidade para próximo uso
+    if (box) box.style!.pointerEvents = ''; // restaurar clicabilidade para próximo uso
   }
 
   // ── PERSONAGEM MORTO (marcador X no mapa) ────────────────────────────────
@@ -365,7 +365,7 @@ function resolverTokenEl(nome: any, contexto: any) {
 
 function _animCriarCanvas() {
   const c = document.createElement('canvas');
-  c.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:10100';
+  c.style!.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:10100';
   c.width  = window.innerWidth;
   c.height = window.innerHeight;
   document.body.appendChild(c);

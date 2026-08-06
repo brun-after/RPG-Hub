@@ -140,7 +140,7 @@ async function invCarregarTodosInventarios() {
 function renderMestreBtnsTabelas() {
   const el = document.getElementById('tabelas-mestre-btns');
   if (!el) return;
-  el.style.display = RPG_DATA?.myRole === 'mestre' ? 'flex' : 'none';
+  el.style!.display = RPG_DATA?.myRole === 'mestre' ? 'flex' : 'none';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -255,8 +255,8 @@ function renderItensPendentes() {
   const wrap = document.getElementById('itens-aprovacoes-wrap');
   const lista = document.getElementById('itens-aprovacoes-lista');
   if (!wrap || !lista) return;
-  if (RPG_DATA?.myRole !== 'mestre' || !INV.usosPendentes.length) { wrap.style.display = 'none'; return; }
-  wrap.style.display = 'block';
+  if (RPG_DATA?.myRole !== 'mestre' || !INV.usosPendentes.length) { wrap.style!.display = 'none'; return; }
+  wrap.style!.display = 'block';
   lista.innerHTML = INV.usosPendentes.map((u: any) => {
     const def = INV.itemDefs.find((d: any) => d.id === u.item_def_id || d.id === u.item_catalog_id);
     const usadoPor = RPG_DATA?.characters?.find(c => c.id === u.usado_por_id);
@@ -459,7 +459,7 @@ async function _invEquipar(nomeChar: any, invItem: any, def: any) {
   // BUG FIX #2: calcular snapshot do delta real (suporte a % e absoluto)
   const snapshot: Record<string, any> = {};
   Object.entries<any>(bonus).forEach(([attr, val]) => {
-    const atual = parseFloat(ca.atributos[attr]) || 0;
+    const atual = parseFloat(ca.atributos![attr]) || 0;
     let delta;
     if (typeof val === 'object' && val.modo === 'pct') {
       delta = Math.round(atual * Math.abs(val.valor) / 100) * Math.sign(val.valor);
@@ -467,7 +467,7 @@ async function _invEquipar(nomeChar: any, invItem: any, def: any) {
       delta = typeof val === 'object' ? val.valor : parseFloat(val) || 0;
     }
     snapshot[attr] = delta;
-    ca.atributos[attr] = atual + delta;
+    ca.atributos![attr] = atual + delta;
   });
 
   invItem.equipado = true;
@@ -491,7 +491,7 @@ async function _invEquipar(nomeChar: any, invItem: any, def: any) {
   try {
     await Promise.all([
       sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ equipado:true, slot_equipado:slotDef, bonus_snapshot: snapshot }) }),
-      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeChar)}`, { method:'PATCH', body: JSON.stringify({ custom_attrs: ca }) }),
+      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nomeChar)}`, { method:'PATCH', body: JSON.stringify({ custom_attrs: ca }) }),
     ]);
     mostrarToast(`⚔ ${def.nome} equipado!`, 'sucesso');
     if (typeof fichasRefreshAtributos === 'function') fichasRefreshAtributos(nomeChar);
@@ -509,14 +509,14 @@ async function _invDesequipar(nomeChar: any, invItem: any, def: any) {
   const snapshot = invItem.bonus_snapshot;
   if (snapshot && Object.keys(snapshot).length) {
     Object.entries<any>(snapshot).forEach(([attr, delta]) => {
-      ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) - delta;
+      ca.atributos![attr] = (parseFloat(ca.atributos![attr]) || 0) - delta;
     });
   } else {
     // Fallback: reverter pelo valor bruto do item
     const bonus = def?.atributos_bonus || def?.bonus_attrs || {};
     Object.entries<any>(bonus).forEach(([attr, val]) => {
       const n = typeof val === 'object' ? val.valor : val;
-      ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) - n;
+      ca.atributos![attr] = (parseFloat(ca.atributos![attr]) || 0) - n;
     });
   }
 
@@ -540,7 +540,7 @@ async function _invDesequipar(nomeChar: any, invItem: any, def: any) {
   try {
     await Promise.all([
       sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ equipado:false, slot_equipado:null, bonus_snapshot:null }) }),
-      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeChar)}`, { method:'PATCH', body: JSON.stringify({ custom_attrs: ca }) }),
+      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nomeChar)}`, { method:'PATCH', body: JSON.stringify({ custom_attrs: ca }) }),
     ]);
     mostrarToast(`🔓 ${def?.nome || 'Item'} desequipado`, '');
     if (typeof fichasRefreshAtributos === 'function') fichasRefreshAtributos(nomeChar);
@@ -571,18 +571,18 @@ async function abrirModalUsarItem(invId: any, nomeUsuario: any) {
 
   _usarItemCtx = { invItem, def, nomeUsuario };
 
-  document.getElementById('usar-item-nome').textContent = `${def.icone||'📦'} ${def.nome}`;
-  document.getElementById('usar-item-desc').textContent = def.descricao || '';
-  document.getElementById('usar-item-inv-id').value = invId;
-  document.getElementById('usar-item-alvo-sel').value = '';
+  document.getElementById('usar-item-nome')!.textContent = `${def.icone||'📦'} ${def.nome}`;
+  document.getElementById('usar-item-desc')!.textContent = def.descricao || '';
+  document.getElementById('usar-item-inv-id')!.value = invId;
+  document.getElementById('usar-item-alvo-sel')!.value = '';
 
   const efeitos = Array.isArray(def.efeitos) ? def.efeitos : [];
-  document.getElementById('usar-item-efeitos').innerHTML = efeitos.length
+  document.getElementById('usar-item-efeitos')!.innerHTML = efeitos.length
     ? efeitos.map((ef: any) => `<div>• ${_efeitoLabel(ef)}</div>`).join('')
     : '<span style="color:var(--suave);font-style:italic">Nenhum efeito definido</span>';
 
   const precisaAprovacao = !def.alvo || def.requer_aprovacao;
-  document.getElementById('usar-item-aprovacao-msg').style.display = (precisaAprovacao && RPG_DATA?.myRole !== 'mestre') ? 'block' : 'none';
+  document.getElementById('usar-item-aprovacao-msg')!.style!.display = (precisaAprovacao && RPG_DATA?.myRole !== 'mestre') ? 'block' : 'none';
 
   // Montar lista de alvos
   const alvoWrap = document.getElementById('usar-item-alvo-wrap');
@@ -590,10 +590,10 @@ async function abrirModalUsarItem(invId: any, nomeUsuario: any) {
   const usuarioChar = RPG_DATA?.characters?.find(c => c.nome === nomeUsuario);
 
   if (def.alvo === 'self') {
-    alvoWrap.style.display = 'none';
-    document.getElementById('usar-item-alvo-sel').value = usuarioChar?.id || '';
+    alvoWrap!.style!.display = 'none';
+    document.getElementById('usar-item-alvo-sel')!.value = usuarioChar?.id || '';
   } else {
-    alvoWrap.style.display = 'block';
+    alvoWrap!.style!.display = 'block';
     const chars = RPG_DATA?.characters || [];
     const candidatos = chars.filter(c => {
   if (!c.id) return false;
@@ -609,11 +609,11 @@ async function abrirModalUsarItem(invId: any, nomeUsuario: any) {
 
     if (!candidatos.length) {
       const tipoAlvo = def.alvo === 'aliado' ? 'aliados' : def.alvo === 'inimigo' ? 'inimigos' : 'alvos';
-      alvoLista.innerHTML = `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:10px">
+      alvoLista!.innerHTML = `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:10px">
         Nenhum ${tipoAlvo} disponível no momento.${def.alvo === 'aliado' ? '<br><span style="font-size:0.72rem">Verifique se os aliados têm tipo "jogador" na ficha.</span>' : ''}
       </div>`;
     }
-    alvoLista.innerHTML = candidatos.length ? candidatos.map(alvo => {
+    alvoLista!.innerHTML = candidatos.length ? candidatos.map(alvo => {
       // Verificar alcance (se ambos têm posição no mapa)
       let alcanceOk = true;
       let alcanceInfo = '';
@@ -641,28 +641,28 @@ async function abrirModalUsarItem(invId: any, nomeUsuario: any) {
     }).join('') : `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:10px">Nenhum alvo disponível</div>`;
   }
 
-  document.getElementById('modal-usar-item-overlay').style.display = 'flex';
+  document.getElementById('modal-usar-item-overlay')!.style!.display = 'flex';
 }
 
 function selecionarAlvoItem(alvoId: any, alvoNome: any, btn: any) {
-  document.getElementById('usar-item-alvo-sel').value = alvoId;
+  document.getElementById('usar-item-alvo-sel')!.value = alvoId;
   document.querySelectorAll('#usar-item-alvos-lista button').forEach(b => {
-    b.style.background = 'rgba(30,45,66,0.6)';
-    b.style.borderColor = 'var(--borda)';
+    b.style!.background = 'rgba(30,45,66,0.6)';
+    b.style!.borderColor = 'var(--borda)';
   });
   btn.style.background = 'rgba(79,163,209,0.12)';
   btn.style.borderColor = 'rgba(79,163,209,0.4)';
 }
 
 function fecharModalUsarItem() {
-  document.getElementById('modal-usar-item-overlay').style.display = 'none';
+  document.getElementById('modal-usar-item-overlay')!.style!.display = 'none';
   _usarItemCtx = null;
 }
 
 async function confirmarUsarItem() {
   if (!_usarItemCtx) return;
   const { invItem, def, nomeUsuario } = _usarItemCtx;
-  const alvoId = document.getElementById('usar-item-alvo-sel').value;
+  const alvoId = document.getElementById('usar-item-alvo-sel')!.value!;
   const precisaAlvo = def.alvo && def.alvo !== 'self';
 
   if (precisaAlvo && !alvoId) { mostrarToast('Selecione um alvo', 'aviso'); return; }
@@ -683,7 +683,7 @@ async function confirmarUsarItem() {
         method: 'POST',
         headers: { 'Prefer': 'return=representation' },
         body: JSON.stringify({
-          rpg_id: RPG_DATA.rpgId,
+          rpg_id: RPG_DATA!.rpgId,
           inventario_id: invItem.id,
           item_def_id: def.id,       // coluna original em item_usos (não renomeada)
           usado_por_id: usuarioChar.id,
@@ -728,7 +728,7 @@ async function _aplicarEfeitosItem(efeitos: any, alvoNome: any, usuarioNome: any
         if (emArena) {
           await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(alvoNome)}`, { method:'PATCH', body:JSON.stringify({ hp_atual: novoHp }) });
         } else {
-          await saveCharacterStats(RPG_DATA.rpgId, alvoNome, { hp_atual: novoHp });
+          await saveCharacterStats(RPG_DATA!.rpgId, alvoNome, { hp_atual: novoHp });
         }
         toastMsgs.push(`❤ HP ${ef.valor > 0 ? '+' : ''}${ef.valor}`);
       if (ef.valor > 0) HUB_EVENTS.emit('cura_aplicada', { origem: usuarioNome || '?', alvo: alvoNome, valor: ef.valor });
@@ -786,7 +786,7 @@ async function _aplicarEfeitosItem(efeitos: any, alvoNome: any, usuarioNome: any
         if (emArena) {
           await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(alvoNome)}`, { method:'PATCH', body:JSON.stringify({ hp_atual: novoHpDano }) });
         } else {
-          await saveCharacterStats(RPG_DATA.rpgId, alvoNome, { hp_atual: novoHpDano });
+          await saveCharacterStats(RPG_DATA!.rpgId, alvoNome, { hp_atual: novoHpDano });
         }
         toastMsgs.push(`💥 ${alvoNome} sofreu ${dano} de dano`);
       HUB_EVENTS.emit('dano_aplicado', { atacante: usuarioNome || '?', alvo: alvoNome, valor: dano, tipo: 'item' });
@@ -862,7 +862,7 @@ async function _aplicarEfeitosItem(efeitos: any, alvoNome: any, usuarioNome: any
         ca.invocacoes.push({ invocacao_id: ef.invocacao_id, origem: 'item', item_id: ef._item_id || null });
         alvo.custom_attrs = ca;
         if (!emArena) {
-          await saveCharacterStats(RPG_DATA.rpgId, alvoNome, { custom_attrs: ca }).catch(() => {});
+          await saveCharacterStats(RPG_DATA!.rpgId, alvoNome, { custom_attrs: ca }).catch(() => {});
         }
         toastMsgs.push(`🔮 Invocação concedida a ${alvoNome}!`);
         if (typeof renderFichaView === 'function' && typeof FICHAS_VIEW !== 'undefined' && FICHAS_VIEW === alvoNome) {
@@ -879,7 +879,7 @@ async function _aplicarEfeitosItem(efeitos: any, alvoNome: any, usuarioNome: any
   if (emArena) {
     await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(alvoNome)}`, { method:'PATCH', body: JSON.stringify(patchBody) });
   } else {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(alvoNome)}`, { method:'PATCH', body: JSON.stringify(patchBody) });
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(alvoNome)}`, { method:'PATCH', body: JSON.stringify(patchBody) });
   }
 
   if (toastMsgs.length) mostrarToast(`${toastMsgs.join(' · ')}`, 'sucesso');
@@ -955,23 +955,23 @@ let _addInvCharNome: any = null;
 function abrirModalAddInv(nome: any, charId: any) {
   _addInvCharId = charId;
   _addInvCharNome = nome;
-  document.getElementById('add-inv-char-nome').textContent = nome;
-  document.getElementById('add-inv-char-id').value = charId;
-  document.getElementById('add-inv-busca').value = '';
+  document.getElementById('add-inv-char-nome')!.textContent = nome;
+  document.getElementById('add-inv-char-id')!.value = charId;
+  document.getElementById('add-inv-busca')!.value = '';
   renderAddInvLista();
-  document.getElementById('modal-add-inv-overlay').style.display = 'flex';
+  document.getElementById('modal-add-inv-overlay')!.style!.display = 'flex';
 }
 
 function fecharModalAddInv() {
-  document.getElementById('modal-add-inv-overlay').style.display = 'none';
+  document.getElementById('modal-add-inv-overlay')!.style!.display = 'none';
 }
 
 function renderAddInvLista() {
-  const busca = document.getElementById('add-inv-busca').value.toLowerCase();
+  const busca = document.getElementById('add-inv-busca')!.value!.toLowerCase!()!;
   const lista = document.getElementById('add-inv-lista');
   const defs = INV.itemDefs.filter((d: any) => !busca || d.nome.toLowerCase().includes(busca) || (d.descricao||'').toLowerCase().includes(busca));
-  if (!defs.length) { lista.innerHTML = `<div style="color:var(--suave);font-style:italic;text-align:center;padding:10px">Nenhum item encontrado</div>`; return; }
-  lista.innerHTML = defs.map((d: any) => {
+  if (!defs.length) { lista!.innerHTML = `<div style="color:var(--suave);font-style:italic;text-align:center;padding:10px">Nenhum item encontrado</div>`; return; }
+  lista!.innerHTML = defs.map((d: any) => {
     const rarCor = ({comum:'var(--suave)',incomum:'#5ee09a',raro:'#7ec8f0',épico:'#b07ef0',lendário:'#f0cc6a'} as any)[d.raridade]||'var(--suave)';
     return `<div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--escuro);border:1px solid var(--borda);border-radius:8px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor='rgba(200,168,75,0.3)'" onmouseleave="this.style.borderColor='var(--borda)'" onclick="adicionarAoInventario(${d.id})">
       <span style="font-size:1.4rem">${d.icone||'📦'}</span>
@@ -998,7 +998,7 @@ async function adicionarAoInventario(itemDefId: any) {
       const [row] = await sb('inventario', {
         method:'POST', headers:{'Prefer':'return=representation'},
         body: JSON.stringify({
-          rpg_id: RPG_DATA.rpgId,
+          rpg_id: RPG_DATA!.rpgId,
           character_id: _addInvCharId,
           item_catalog_id: itemDefId,  // nome novo da coluna após migração
           quantidade: 1,
@@ -1024,31 +1024,31 @@ let _itemDefBonus: Record<string, any> = {};
 function abrirModalItemDef(id: any) {
   _itemDefEfeitos = [];
   _itemDefBonus = {};
-  document.getElementById('idef-id-edit').value = id || '';
-  document.getElementById('idef-efeitos-lista').innerHTML = '';
-  document.getElementById('idef-bonus-lista').innerHTML = '';
+  document.getElementById('idef-id-edit')!.value = id || '';
+  document.getElementById('idef-efeitos-lista')!.innerHTML = '';
+  document.getElementById('idef-bonus-lista')!.innerHTML = '';
   // Image field: only masters can configure
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const imgGroup = document.getElementById('idef-img-group');
-  if (imgGroup) imgGroup.style.display = isMestre ? '' : 'none';
+  if (imgGroup) imgGroup.style!.display = isMestre ? '' : 'none';
 
   if (id) {
     const def = INV.itemDefs.find((d: any) => d.id === id);
     if (!def) return;
-    document.getElementById('modal-itemdef-titulo').textContent = '⚗ Editar Item';
-    document.getElementById('idef-nome').value = def.nome || '';
-    document.getElementById('idef-icone').value = def.icone || '';
-    document.getElementById('idef-tipo').value = def.tipo || 'consumivel';
-    document.getElementById('idef-desc').value = def.descricao || '';
-    document.getElementById('idef-raridade').value = def.raridade || 'comum';
-    document.getElementById('idef-valor').value = def.valor_base || '';
-    document.getElementById('idef-alvo').value = def.alvo || '';
-    document.getElementById('idef-alcance').value = def.alcance_m || '';
-    document.getElementById('idef-requer-aprov').checked = !!def.requer_aprovacao;
-    document.getElementById('idef-slot').value = def.slot_padrao || def.slot || 'corpo';
+    document.getElementById('modal-itemdef-titulo')!.textContent = '⚗ Editar Item';
+    document.getElementById('idef-nome')!.value = def.nome || '';
+    document.getElementById('idef-icone')!.value = def.icone || '';
+    document.getElementById('idef-tipo')!.value = def.tipo || 'consumivel';
+    document.getElementById('idef-desc')!.value = def.descricao || '';
+    document.getElementById('idef-raridade')!.value = def.raridade || 'comum';
+    document.getElementById('idef-valor')!.value = def.valor_base || '';
+    document.getElementById('idef-alvo')!.value = def.alvo || '';
+    document.getElementById('idef-alcance')!.value = def.alcance_m || '';
+    document.getElementById('idef-requer-aprov')!.checked = !!def.requer_aprovacao;
+    document.getElementById('idef-slot')!.value = def.slot_padrao || def.slot || 'corpo';
     const imgUrl = def.img_url || def.icone_img || '';
     if (document.getElementById('idef-img-url')) {
-      document.getElementById('idef-img-url').value = imgUrl;
+      document.getElementById('idef-img-url')!.value = imgUrl;
       _idefUpdateImgPreview(imgUrl);
     }
     _itemDefEfeitos = Array.isArray(def.efeitos) ? JSON.parse(JSON.stringify(def.efeitos)) : [];
@@ -1057,19 +1057,19 @@ function abrirModalItemDef(id: any) {
     _renderItemDefEfeitos();
     _renderItemDefBonus();
   } else {
-    document.getElementById('modal-itemdef-titulo').textContent = '⚗ Novo Item';
-    document.getElementById('idef-nome').value = '';
-    document.getElementById('idef-icone').value = '📦';
-    document.getElementById('idef-tipo').value = 'consumivel';
-    document.getElementById('idef-desc').value = '';
-    document.getElementById('idef-raridade').value = 'comum';
-    document.getElementById('idef-valor').value = '';
-    document.getElementById('idef-alvo').value = '';
-    document.getElementById('idef-alcance').value = '';
-    document.getElementById('idef-requer-aprov').checked = false;
-    document.getElementById('idef-slot').value = 'corpo';
+    document.getElementById('modal-itemdef-titulo')!.textContent = '⚗ Novo Item';
+    document.getElementById('idef-nome')!.value = '';
+    document.getElementById('idef-icone')!.value = '📦';
+    document.getElementById('idef-tipo')!.value = 'consumivel';
+    document.getElementById('idef-desc')!.value = '';
+    document.getElementById('idef-raridade')!.value = 'comum';
+    document.getElementById('idef-valor')!.value = '';
+    document.getElementById('idef-alvo')!.value = '';
+    document.getElementById('idef-alcance')!.value = '';
+    document.getElementById('idef-requer-aprov')!.checked = false;
+    document.getElementById('idef-slot')!.value = 'corpo';
     if (document.getElementById('idef-img-url')) {
-      document.getElementById('idef-img-url').value = '';
+      document.getElementById('idef-img-url')!.value = '';
       _idefUpdateImgPreview('');
     }
   }
@@ -1088,27 +1088,27 @@ function abrirModalItemDef(id: any) {
           else if (primeiro.tipo === 'remover_debuff') cat = 'antidoto';
           else if (primeiro.tipo === 'dano' || primeiro.tipo === 'debuff') cat = 'debuff_inimigo';
         }
-        document.getElementById('idef-cat-efeito').value = cat;
+        document.getElementById('idef-cat-efeito')!.value = cat;
         // Preencher campos simples
         if (cat === 'cura' && primeiro.tipo === 'hp') {
-          if (document.getElementById('idef-cura-valor')) document.getElementById('idef-cura-valor').value = primeiro.valor || '';
-          if (document.getElementById('idef-cura-hot')) document.getElementById('idef-cura-hot').checked = !!primeiro.hot;
-          if (document.getElementById('idef-cura-turnos')) document.getElementById('idef-cura-turnos').value = primeiro.duracao_turnos || 3;
+          if (document.getElementById('idef-cura-valor')) document.getElementById('idef-cura-valor')!.value = primeiro.valor || '';
+          if (document.getElementById('idef-cura-hot')) document.getElementById('idef-cura-hot')!.checked = !!primeiro.hot;
+          if (document.getElementById('idef-cura-turnos')) document.getElementById('idef-cura-turnos')!.value = primeiro.duracao_turnos || 3;
         } else if (cat === 'recurso') {
-          if (document.getElementById('idef-rec-nome')) document.getElementById('idef-rec-nome').value = primeiro.recurso || '';
-          if (document.getElementById('idef-rec-valor')) document.getElementById('idef-rec-valor').value = primeiro.valor || '';
+          if (document.getElementById('idef-rec-nome')) document.getElementById('idef-rec-nome')!.value = primeiro.recurso || '';
+          if (document.getElementById('idef-rec-valor')) document.getElementById('idef-rec-valor')!.value = primeiro.valor || '';
         } else if (cat === 'buff') {
-          if (document.getElementById('idef-buff-attr')) document.getElementById('idef-buff-attr').value = primeiro.attr || '';
-          if (document.getElementById('idef-buff-valor')) document.getElementById('idef-buff-valor').value = primeiro.valor || '';
-          if (document.getElementById('idef-buff-turnos')) document.getElementById('idef-buff-turnos').value = primeiro.duracao_turnos || 3;
+          if (document.getElementById('idef-buff-attr')) document.getElementById('idef-buff-attr')!.value = primeiro.attr || '';
+          if (document.getElementById('idef-buff-valor')) document.getElementById('idef-buff-valor')!.value = primeiro.valor || '';
+          if (document.getElementById('idef-buff-turnos')) document.getElementById('idef-buff-turnos')!.value = primeiro.duracao_turnos || 3;
         } else if (cat === 'antidoto') {
-          if (document.getElementById('idef-anti-debuff')) document.getElementById('idef-anti-debuff').value = primeiro.debuff || '';
+          if (document.getElementById('idef-anti-debuff')) document.getElementById('idef-anti-debuff')!.value = primeiro.debuff || '';
         }
       }
       itemDefCatChange();
     }
   }, 50);
-  document.getElementById('modal-itemdef-overlay').style.display = 'flex';
+  document.getElementById('modal-itemdef-overlay')!.style!.display = 'flex';
 }
 
 function _idefUpdateImgPreview(src: any) {
@@ -1123,7 +1123,7 @@ async function idefUploadImg(input: any) {
     mostrarToast('Enviando imagem…', 'info');
     const url = await uploadToStorage(file, 'items');
     if (document.getElementById('idef-img-url')) {
-      document.getElementById('idef-img-url').value = url;
+      document.getElementById('idef-img-url')!.value = url;
       _idefUpdateImgPreview(url);
     }
   } catch(e) {
@@ -1132,12 +1132,12 @@ async function idefUploadImg(input: any) {
   }
 }
 
-function fecharModalItemDef() { document.getElementById('modal-itemdef-overlay').style.display = 'none'; }
+function fecharModalItemDef() { document.getElementById('modal-itemdef-overlay')!.style!.display = 'none'; }
 
 function itemDefTipoChange() {
-  const t = document.getElementById('idef-tipo').value;
-  document.getElementById('idef-sec-consumivel').style.display = t === 'consumivel' ? 'block' : 'none';
-  document.getElementById('idef-sec-equipamento').style.display = t === 'equipamento' ? 'block' : 'none';
+  const t = document.getElementById('idef-tipo')!.value!;
+  document.getElementById('idef-sec-consumivel')!.style!.display = t === 'consumivel' ? 'block' : 'none';
+  document.getElementById('idef-sec-equipamento')!.style!.display = t === 'equipamento' ? 'block' : 'none';
 }
 
 function itemDefCatChange() {
@@ -1145,14 +1145,14 @@ function itemDefCatChange() {
   const cats = ['cura','recurso','buff','debuff_inimigo','antidoto','multiplo'];
   cats.forEach(c => {
     const el = document.getElementById('idef-cat-' + c);
-    if (el) el.style.display = c === cat ? 'block' : 'none';
+    if (el) el.style!.display = c === cat ? 'block' : 'none';
   });
   // HOT toggle
   const hotEl = document.getElementById('idef-cura-hot');
   if (hotEl) {
     const wrap = document.getElementById('idef-cura-hot-wrap');
-    if (wrap) wrap.style.display = hotEl.checked ? 'block' : 'none';
-    hotEl.onchange = () => { if(wrap) wrap.style.display = hotEl.checked ? 'block' : 'none'; };
+    if (wrap) wrap.style!.display = hotEl.checked ? 'block' : 'none';
+    hotEl.onchange = () => { if(wrap) wrap.style!.display = hotEl.checked ? 'block' : 'none'; };
   }
 }
 
@@ -1165,9 +1165,9 @@ function _idefColetarEfeitosSimples() {
   let requerAprov = false;
 
   if (cat === 'cura') {
-    const val = parseInt(document.getElementById('idef-cura-valor')?.value) || 0;
+    const val = parseInt(document.getElementById('idef-cura-valor')?.value!) || 0;
     const hot = document.getElementById('idef-cura-hot')?.checked;
-    const turnos = parseInt(document.getElementById('idef-cura-turnos')?.value) || 3;
+    const turnos = parseInt(document.getElementById('idef-cura-turnos')?.value!) || 3;
     alvo = document.getElementById('idef-cura-alvo')?.value || 'self';
     if (alvo === 'todos_aliados') alvo = 'aliado'; // compatibilidade
     efeitos.push({ tipo: 'hp', valor: val, duracao_turnos: hot ? turnos : 0, hot: !!hot });
@@ -1176,26 +1176,26 @@ function _idefColetarEfeitosSimples() {
     }
   } else if (cat === 'recurso') {
     const nome = document.getElementById('idef-rec-nome')?.value?.trim() || 'Mana';
-    const val = parseInt(document.getElementById('idef-rec-valor')?.value) || 0;
+    const val = parseInt(document.getElementById('idef-rec-valor')?.value!) || 0;
     alvo = document.getElementById('idef-rec-alvo')?.value || 'self';
     efeitos.push({ tipo: 'recurso', recurso: nome, valor: val });
   } else if (cat === 'buff') {
     const attr = document.getElementById('idef-buff-attr')?.value?.trim() || '';
-    const val = parseInt(document.getElementById('idef-buff-valor')?.value) || 0;
-    const turnos = parseInt(document.getElementById('idef-buff-turnos')?.value) || 3;
+    const val = parseInt(document.getElementById('idef-buff-valor')?.value!) || 0;
+    const turnos = parseInt(document.getElementById('idef-buff-turnos')?.value!) || 3;
     alvo = document.getElementById('idef-buff-alvo')?.value || 'self';
     efeitos.push({ tipo: 'atributo', attr, valor: val, duracao_turnos: turnos });
   } else if (cat === 'debuff_inimigo') {
     alvo = 'inimigo';
-    alcance = parseInt(document.getElementById('idef-dbi-alcance')?.value) || null;
+    alcance = parseInt(document.getElementById('idef-dbi-alcance')?.value!) || null;
     requerAprov = document.getElementById('idef-dbi-aprovacao')?.checked || false;
     if (document.getElementById('idef-dbi-tem-dano')?.checked) {
-      const dano = parseInt(document.getElementById('idef-dbi-dano')?.value) || 0;
+      const dano = parseInt(document.getElementById('idef-dbi-dano')?.value!) || 0;
       efeitos.push({ tipo: 'dano', valor: dano });
     }
     if (document.getElementById('idef-dbi-tem-debuff')?.checked) {
       const nome = document.getElementById('idef-dbi-debuff-nome')?.value?.trim() || 'Debuff';
-      const turnos = parseInt(document.getElementById('idef-dbi-debuff-turnos')?.value) || 2;
+      const turnos = parseInt(document.getElementById('idef-dbi-debuff-turnos')?.value!) || 2;
       efeitos.push({ tipo: 'debuff', debuff: nome, duracao_turnos: turnos });
     }
   } else if (cat === 'antidoto') {
@@ -1207,7 +1207,7 @@ function _idefColetarEfeitosSimples() {
     return {
       efeitos: _itemDefEfeitos,
       alvo: document.getElementById('idef-alvo')?.value || '',
-      alcance_m: parseInt(document.getElementById('idef-alcance')?.value) || null,
+      alcance_m: parseInt(document.getElementById('idef-alcance')?.value!) || null,
       requer_aprovacao: document.getElementById('idef-requer-aprov')?.checked || false,
     };
   }
@@ -1220,7 +1220,7 @@ function itemDefAddEfeito() {
 }
 
 function _renderItemDefEfeitos() {
-  document.getElementById('idef-efeitos-lista').innerHTML = _itemDefEfeitos.map((ef: any, i: any) => `
+  document.getElementById('idef-efeitos-lista')!.innerHTML = _itemDefEfeitos.map((ef: any, i: any) => `
     <div style="display:flex;gap:5px;align-items:center;background:rgba(123,47,190,0.06);border:1px solid rgba(123,47,190,0.15);border-radius:6px;padding:6px 8px">
       <select onchange="_itemDefEfeitoChange(${i},'tipo',this.value)" style="background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem;padding:3px 5px">
         <option value="hp"${ef.tipo==='hp'?' selected':''}>❤ HP</option>
@@ -1255,7 +1255,7 @@ function itemDefAddBonus() {
 
 function _renderItemDefBonus() {
   const entries = Object.entries<any>(_itemDefBonus);
-  document.getElementById('idef-bonus-lista').innerHTML = entries.map(([k, v], i) => `
+  document.getElementById('idef-bonus-lista')!.innerHTML = entries.map(([k, v], i) => `
     <div style="display:flex;gap:5px;align-items:center">
       <input type="text" value="${k.replace(/_\d+$/,'')}" placeholder="Nome do atributo" onchange="_itemDefBonusChaveChange(${i},this.value)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem;padding:5px 7px">
       <input type="number" value="${v}" onchange="_itemDefBonusValChange(${i},+this.value)" style="width:60px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem;padding:5px 7px;text-align:center">
@@ -1281,9 +1281,9 @@ function _itemDefBonusRemover(idx: any) {
 }
 
 async function salvarItemDef() {
-  const nome = document.getElementById('idef-nome').value.trim();
+  const nome = document.getElementById('idef-nome')!.value!.trim!()!;
   if (!nome) { mostrarToast('Dê um nome ao item', 'aviso'); return; }
-  const tipo = document.getElementById('idef-tipo').value;
+  const tipo = document.getElementById('idef-tipo')!.value!;
 
   // Coletar efeitos do formulário inteligente (consumíveis)
   if (tipo === 'consumivel') {
@@ -1304,31 +1304,31 @@ async function salvarItemDef() {
     if (chave) bonusClean[chave] = v;
   });
   const body = {
-    rpg_id: RPG_DATA.rpgId,
+    rpg_id: RPG_DATA!.rpgId,
     nome,
     tipo,
-    descricao: document.getElementById('idef-desc').value.trim() || null,
-    icone: document.getElementById('idef-icone').value.trim() || '📦',
+    descricao: document.getElementById('idef-desc')!.value!.trim!()! || null,
+    icone: document.getElementById('idef-icone')!.value!.trim!()! || '📦',
     img_url: (document.getElementById('idef-img-url')?.value || '').trim() || null,
-    raridade: document.getElementById('idef-raridade').value,
+    raridade: document.getElementById('idef-raridade')!.value!,
     visual_config: (function() {
-      const r = document.getElementById('idef-raridade').value;
+      const r = document.getElementById('idef-raridade')!.value!;
       const map: Record<string, any> = { comum:{cor:'#7a92aa',brilho:false}, incomum:{cor:'#5ee09a',brilho:false}, raro:{cor:'#7ec8f0',brilho:true}, épico:{cor:'#b07ef0',brilho:true}, lendário:{cor:'#f0cc6a',brilho:true} };
       return map[r] ? map[r] : {cor:'#7a92aa',brilho:false};
     })(),
-    valor_base: parseFloat(document.getElementById('idef-valor').value) || null,
+    valor_base: parseFloat(document.getElementById('idef-valor')!.value!) || null,
     efeitos: tipo === 'consumivel' ? _itemDefEfeitos : null,
-    alvo: tipo === 'consumivel' ? (document.getElementById('idef-alvo').value || null) : null,
-    alcance_m: tipo === 'consumivel' ? (parseFloat(document.getElementById('idef-alcance').value) || null) : null,
-    requer_aprovacao: tipo === 'consumivel' ? document.getElementById('idef-requer-aprov').checked : false,
-    slot_padrao: tipo === 'equipamento' ? document.getElementById('idef-slot').value : null,
+    alvo: tipo === 'consumivel' ? (document.getElementById('idef-alvo')!.value! || null) : null,
+    alcance_m: tipo === 'consumivel' ? (parseFloat(document.getElementById('idef-alcance')!.value!) || null) : null,
+    requer_aprovacao: tipo === 'consumivel' ? document.getElementById('idef-requer-aprov')!.checked! : false,
+    slot_padrao: tipo === 'equipamento' ? document.getElementById('idef-slot')!.value! : null,
     atributos_bonus: tipo === 'equipamento' && Object.keys(bonusClean).length ? bonusClean : null,
     // BUG FIX #7: derivar tipo_canonico para suporte a amuleto aninhado
     tipo_canonico: tipo === 'equipamento'
-      ? (document.getElementById('idef-slot').value || null)
+      ? (document.getElementById('idef-slot')!.value! || null)
       : tipo,
   };
-  const id = document.getElementById('idef-id-edit').value;
+  const id = document.getElementById('idef-id-edit')!.value!;
   try {
     if (id) {
       await sb(`item_catalog?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(body) });
@@ -1365,32 +1365,32 @@ let _tabelaLinhasEdit: any  = [];
 function abrirModalTabela(id: any) {
   _tabelaColunasEdit = [];
   _tabelaLinhasEdit  = [];
-  document.getElementById('tab-id-edit').value = id || '';
+  document.getElementById('tab-id-edit')!.value = id || '';
 
   if (id) {
     const t = INV.tabelas.find((x: any) => x.id === id);
     if (!t) return;
-    document.getElementById('modal-tabela-titulo').textContent = '📋 Editar Tabela';
-    document.getElementById('tab-nome').value = t.nome || '';
-    document.getElementById('tab-desc').value = t.descricao || '';
-    document.getElementById('tab-visivel').checked = t.visivel !== false;
+    document.getElementById('modal-tabela-titulo')!.textContent = '📋 Editar Tabela';
+    document.getElementById('tab-nome')!.value = t.nome || '';
+    document.getElementById('tab-desc')!.value = t.descricao || '';
+    document.getElementById('tab-visivel')!.checked = t.visivel !== false;
     _tabelaColunasEdit = Array.isArray(t.colunas) ? JSON.parse(JSON.stringify(t.colunas)) : [];
     _tabelaLinhasEdit  = Array.isArray(t.linhas)  ? JSON.parse(JSON.stringify(t.linhas))  : [];
     // MELHORIA: garantir que arrays não estão congelados
     if (Object.isFrozen(_tabelaColunasEdit)) _tabelaColunasEdit = [..._tabelaColunasEdit];
     if (Object.isFrozen(_tabelaLinhasEdit))  _tabelaLinhasEdit  = [..._tabelaLinhasEdit];
   } else {
-    document.getElementById('modal-tabela-titulo').textContent = '📋 Nova Tabela';
-    document.getElementById('tab-nome').value = '';
-    document.getElementById('tab-desc').value = '';
-    document.getElementById('tab-visivel').checked = true;
+    document.getElementById('modal-tabela-titulo')!.textContent = '📋 Nova Tabela';
+    document.getElementById('tab-nome')!.value = '';
+    document.getElementById('tab-desc')!.value = '';
+    document.getElementById('tab-visivel')!.checked = true;
   }
   _renderTabelaColunas();
   _renderTabelaLinhas();
-  document.getElementById('modal-tabela-overlay').style.display = 'flex';
+  document.getElementById('modal-tabela-overlay')!.style!.display = 'flex';
 }
 
-function fecharModalTabela() { document.getElementById('modal-tabela-overlay').style.display = 'none'; }
+function fecharModalTabela() { document.getElementById('modal-tabela-overlay')!.style!.display = 'none'; }
 
 function tabelaAdicionarColuna() {
   _tabelaColunasEdit.push({ key: 'col' + (_tabelaColunasEdit.length+1), label: 'Coluna ' + (_tabelaColunasEdit.length+1) });
@@ -1399,7 +1399,7 @@ function tabelaAdicionarColuna() {
 }
 
 function _renderTabelaColunas() {
-  document.getElementById('tab-colunas-lista').innerHTML = _tabelaColunasEdit.map((c: any, i: any) => `
+  document.getElementById('tab-colunas-lista')!.innerHTML = _tabelaColunasEdit.map((c: any, i: any) => `
     <div style="display:flex;gap:5px;align-items:center">
       <input type="text" value="${c.label}" placeholder="Nome da coluna" onchange="_tabelaColunaLabel(${i},this.value)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;padding:5px 7px">
       <button onclick="_tabelaRemoverColuna(${i})" style="background:none;border:none;color:rgba(192,57,43,0.5);cursor:pointer;font-size:0.9rem">✕</button>
@@ -1420,7 +1420,7 @@ function tabelaAdicionarLinha() {
 }
 
 function _renderTabelaLinhas() {
-  document.getElementById('tab-linhas-lista').innerHTML = _tabelaLinhasEdit.length
+  document.getElementById('tab-linhas-lista')!.innerHTML = _tabelaLinhasEdit.length
     ? _tabelaLinhasEdit.map((l: any, li: any) => `
       <div style="display:flex;gap:4px;align-items:center;padding:5px 0;border-bottom:1px solid rgba(30,45,66,0.4)">
         ${_tabelaColunasEdit.map((c: any) => `<input type="text" value="${(l[c.key]||'').replace(/"/g,'&quot;')}" placeholder="${c.label}" onchange="_tabelaLinhaVal(${li},'${c.key}',this.value)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.75rem;padding:4px 6px;min-width:40px">`).join('')}
@@ -1433,18 +1433,18 @@ function _tabelaLinhaVal(li: any, key: any, val: any) { _tabelaLinhasEdit[li][ke
 function _tabelaRemoverLinha(li: any)       { _tabelaLinhasEdit.splice(li,1); _renderTabelaLinhas(); }
 
 async function salvarTabela() {
-  const nome = document.getElementById('tab-nome').value.trim();
+  const nome = document.getElementById('tab-nome')!.value!.trim!()!;
   if (!nome) { mostrarToast('Dê um nome à tabela', 'aviso'); return; }
   const body = {
-    rpg_id: RPG_DATA.rpgId,
+    rpg_id: RPG_DATA!.rpgId,
     nome,
-    descricao: document.getElementById('tab-desc').value.trim() || null,
+    descricao: document.getElementById('tab-desc')!.value!.trim!()! || null,
     colunas: _tabelaColunasEdit,
     linhas:  _tabelaLinhasEdit,
-    visivel: document.getElementById('tab-visivel').checked,
+    visivel: document.getElementById('tab-visivel')!.checked!,
     atualizado_em: new Date().toISOString(),
   };
-  const id = document.getElementById('tab-id-edit').value;
+  const id = document.getElementById('tab-id-edit')!.value!;
   try {
     if (id) {
       await sb(`tabelas?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(body) });
@@ -1567,14 +1567,14 @@ function abrirCriarCampanha() {
     nivel: null, etapaIdx: 0, etapas: ['nivel'],
     dados: { nome:'', rpg_id:'', descricao:'', cor:'#c8a84b', cor2:'#4fa3d1', icone:'flame', attrDefs:[], personagens:[], habilidades:[], lore:[] }
   };
-  document.getElementById('hub').style.display = 'none';
-  document.getElementById('criar-screen').classList.add('visible');
+  document.getElementById('hub')!.style!.display = 'none';
+  document.getElementById('criar-screen')!.classList!.add!('visible')!;
   criarRenderEtapa();
 }
 
 function fecharCriarCampanha() {
-  document.getElementById('criar-screen').classList.remove('visible');
-  document.getElementById('hub').style.display = '';
+  document.getElementById('criar-screen')!.classList!.remove!('visible')!;
+  document.getElementById('hub')!.style!.display = '';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1640,17 +1640,17 @@ function criarRenderEtapa() {
   const atual = CRIAR_STATE.etapaIdx;
 
   // Dots
-  document.getElementById('criar-steps-dots').innerHTML = CRIAR_STATE.etapas.map((e,i) =>
+  document.getElementById('criar-steps-dots')!.innerHTML = CRIAR_STATE.etapas.map((e,i) =>
     `<div class="criar-step-dot ${i===atual?'ativo':i<atual?'feito':''}"></div>`
   ).join('');
 
   // Botões nav
   const btnPrev = document.getElementById('criar-btn-prev');
   const btnNext = document.getElementById('criar-btn-next');
-  btnPrev.style.display = atual > 0 ? '' : 'none';
+  btnPrev!.style!.display = atual > 0 ? '' : 'none';
   const isLast = etapa === 'revisar';
-  btnNext.textContent  = isLast ? '✦ Criar Campanha!' : 'Próximo →';
-  btnNext.onclick = isLast ? criarSubmit : () => criarNavegar(1);
+  btnNext!.textContent  = isLast ? '✦ Criar Campanha!' : 'Próximo →';
+  btnNext!.onclick = isLast ? criarSubmit : () => criarNavegar(1);
 
   // Render por etapa
   const fns: Record<string, any> = {
@@ -1663,13 +1663,13 @@ function criarRenderEtapa() {
     mecanicas: criarRenderMecanicas,
     revisar: criarRenderRevisar,
   };
-  body.scrollTop = 0;
-  (fns[etapa] || (() => body.innerHTML = ''))(body);
+  body!.scrollTop = 0;
+  (fns[etapa] || (() => body!.innerHTML = ''))(body);
 }
 
 // ── ETAPA: NÍVEL ──────────────────────────────────────────────
 function criarRenderNivel(body: any) {
-  document.getElementById('criar-titulo-header').textContent = 'Nova Campanha';
+  document.getElementById('criar-titulo-header')!.textContent = 'Nova Campanha';
   body.innerHTML = `
     <div class="etapa-titulo">Escolha o nível de criação</div>
     <div class="etapa-desc">O nível define a complexidade da campanha. Você pode expandir depois adicionando mais elementos.</div>
@@ -1721,7 +1721,7 @@ function criarSelecionarNivel(nivel: any) {
 
 // ── ETAPA: IDENTIDADE ─────────────────────────────────────────
 function criarRenderIdentidade(body: any) {
-  document.getElementById('criar-titulo-header').textContent = 'Identidade';
+  document.getElementById('criar-titulo-header')!.textContent = 'Identidade';
   const d: any = CRIAR_STATE.dados;
   body.innerHTML = `
     <div class="etapa-titulo">Identidade da Campanha</div>
@@ -1772,9 +1772,9 @@ function criarAutoId(nome: any) {
 
 function criarSetCor(cor: any) {
   CRIAR_STATE.dados.cor = cor;
-  document.getElementById('criar-cor').value = cor;
+  document.getElementById('criar-cor')!.value = cor;
   document.querySelectorAll('.cor-preset').forEach(el => {
-    el.classList.toggle('ativo', el.style.background === cor || el.title === cor);
+    el.classList.toggle('ativo', el.style!.background === cor || el.title === cor);
   });
 }
 
@@ -1786,7 +1786,7 @@ function criarSetIcone(key: any, el: any) {
 
 // ── ETAPA: ATRIBUTOS ──────────────────────────────────────────
 function criarRenderAtributos(body: any) {
-  document.getElementById('criar-titulo-header').textContent = 'Atributos';
+  document.getElementById('criar-titulo-header')!.textContent = 'Atributos';
   const nivel = CRIAR_STATE.nivel;
   const d: any = CRIAR_STATE.dados;
 
@@ -1860,7 +1860,7 @@ function criarAddAttr(cat: any) {
   // Focar último input adicionado
   setTimeout(() => {
     const inputs = document.querySelectorAll(`#criar-attrs-${cat} input`);
-    if (inputs.length) inputs[inputs.length-1].focus();
+    if (inputs.length) (inputs[inputs.length-1] as any).focus();
   }, 50);
 }
 
@@ -1883,7 +1883,7 @@ function criarSalvarAtributos() {
 
 // ── ETAPA: PERSONAGENS ────────────────────────────────────────
 function criarRenderPersonagens(body: any) {
-  document.getElementById('criar-titulo-header').textContent = 'Personagens';
+  document.getElementById('criar-titulo-header')!.textContent = 'Personagens';
   const d: any = CRIAR_STATE.dados;
   const attrs = d.attrDefs.filter((a: any) => a.categoria === 'basico' || a.categoria === 'status');
 
@@ -1946,7 +1946,7 @@ function criarAddPersonagem() {
     const cards = document.querySelectorAll('[data-char-idx]');
     if (cards.length) { cards[cards.length-1].scrollIntoView({behavior:'smooth',block:'start'}); }
     const inputs = document.querySelectorAll('[data-char-idx] input[type=text]');
-    if (inputs.length) inputs[inputs.length - 1].focus();
+    if (inputs.length) (inputs[inputs.length-1] as any).focus();
   }, 80);
 }
 
@@ -1961,7 +1961,7 @@ function criarSalvarPersonagens() {
 
 // ── ETAPA: HABILIDADES ────────────────────────────────────────
 function criarRenderHabilidades(body: any) {
-  document.getElementById('criar-titulo-header').textContent = 'Habilidades';
+  document.getElementById('criar-titulo-header')!.textContent = 'Habilidades';
   const nivel = CRIAR_STATE.nivel;
   const d: any = CRIAR_STATE.dados;
   const chars = d.personagens.filter((p: any) => p.nome);
@@ -2056,7 +2056,7 @@ function criarSalvarHabilidades() { /* atualizado via onchange */ }
 
 // ── ETAPA: LORE ───────────────────────────────────────────────
 function criarRenderLore(body: any) {
-  document.getElementById('criar-titulo-header').textContent = 'Lore';
+  document.getElementById('criar-titulo-header')!.textContent = 'Lore';
   const d: any = CRIAR_STATE.dados;
   const loreCategs = ['mundo','magia','sociedade','história','facções','regras'];
   body.innerHTML = `
@@ -2104,7 +2104,7 @@ function criarSalvarLore() { /* atualizado via onchange */ }
 
 // ── ETAPA: MECÂNICAS ──────────────────────────────────────────
 function criarRenderMecanicas(body: any) {
-  document.getElementById('criar-titulo-header').textContent = 'Mecânicas';
+  document.getElementById('criar-titulo-header')!.textContent = 'Mecânicas';
   const d: any = CRIAR_STATE.dados;
   const m = (d as any).mecanicas || {};
   const attrDefs = d.attrDefs || [];
@@ -2203,8 +2203,8 @@ function criarRenderMecanicas(body: any) {
 function criarSalvarMecanicas() {
   if (!(CRIAR_STATE.dados as any).mecanicas) (CRIAR_STATE.dados as any).mecanicas = {};
   const m = (CRIAR_STATE.dados as any).mecanicas;
-  const _n = (id: any, def: any) => { const v = parseInt(document.getElementById(id)?.value); return isNaN(v) ? def : v; };
-  const _f = (id: any, def: any) => { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? def : v; };
+  const _n = (id: any, def: any) => { const v = parseInt(document.getElementById(id)?.value!); return isNaN(v) ? def : v; };
+  const _f = (id: any, def: any) => { const v = parseFloat(document.getElementById(id)?.value!); return isNaN(v) ? def : v; };
   m.velocidade_base       = _n('mec-vel-base', 4);
   m.velocidade_fator      = _n('mec-vel-fator', 4);
   m.hp_base               = _n('mec-hp-base', 100);
@@ -2219,7 +2219,7 @@ function criarSalvarMecanicas() {
 
 // ── ETAPA: REVISAR ────────────────────────────────────────────
 function criarRenderRevisar(body: any) {
-  document.getElementById('criar-titulo-header').textContent = 'Revisar';
+  document.getElementById('criar-titulo-header')!.textContent = 'Revisar';
   const d: any = CRIAR_STATE.dados;
   const nivel = CRIAR_STATE.nivel;
   const nivelLabel = ({ basico:'📘 Básico', intermediario:'📗 Intermediário', detalhado:'📕 Detalhado' } as any)[nivel];
@@ -2274,10 +2274,10 @@ async function criarSubmit() {
   if (!d.personagens.filter((p: any)=>p.nome).length) { mostrarToast('Adicione ao menos 1 personagem', 'aviso'); return; }
 
   const btn = document.getElementById('criar-btn-next');
-  btn.disabled = true; btn.textContent = '⏳ Criando…';
+  btn!.disabled = true; btn!.textContent = '⏳ Criando…';
 
   const st = document.getElementById('criar-status-final');
-  if (st) { st.style.display='block'; st.className='import-status ok'; st.textContent='Criando campanha…'; }
+  if (st) { st.style!.display='block'; st.className='import-status ok'; st.textContent='Criando campanha…'; }
 
   try {
     const rpgId = d.rpg_id || gerarRpgId(d.nome);
@@ -2357,7 +2357,7 @@ async function criarSubmit() {
     }, 1200);
 
   } catch (e: any) {
-    btn.disabled = false; btn.textContent = '✦ Criar Campanha!';
+    btn!.disabled = false; btn!.textContent = '✦ Criar Campanha!';
     const msg = e.message || 'Erro desconhecido';
     if (st) { st.className='import-status err'; st.textContent = '✗ ' + msg; }
     mostrarToast('Erro: ' + msg, 'erro');

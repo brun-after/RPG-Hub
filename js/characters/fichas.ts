@@ -15,17 +15,17 @@ function fichasFiltrar(input: any) {
   const row = document.getElementById('fichas-select-row');
   if (!row) return;
   const clr = document.getElementById('fichas-search-clear');
-  if (clr) clr.style.display = q ? 'block' : 'none';
+  if (clr) clr.style!.display = q ? 'block' : 'none';
   row.querySelectorAll('.char-btn').forEach(btn => {
-    btn.style.display = (!q || btn.textContent.toLowerCase().includes(q)) ? '' : 'none';
+    btn.style!.display = (!q || btn.textContent.toLowerCase().includes(q)) ? '' : 'none';
   });
 }
 
 function fichasFiltrarLimpar() {
   const inp = document.getElementById('fichas-search-input');
-  if (inp) { inp.value = ''; fichasFiltrar(inp); inp.focus(); }
+  if (inp) { inp.value = ''; fichasFiltrar(inp); inp.focus!(); }
   const clr = document.getElementById('fichas-search-clear');
-  if (clr) clr.style.display = 'none';
+  if (clr) clr.style!.display = 'none';
 }
 
 // ── Construção dos botões de personagem ──────────────────────
@@ -193,7 +193,7 @@ async function fichasHpStep(nome: any, delta: any) {
   const novoHp = Math.max(0, Math.min(hp_max, (c.hp_atual ?? hp_max) + delta));
   c.hp_atual = novoHp;
   try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
       { method: 'PATCH', body: JSON.stringify({ hp_atual: novoHp }) });
     renderFichaView(nome);
     mapaRenderTokens?.(MAPA_STATE?.mapaAtivo);
@@ -251,7 +251,7 @@ function _fichasSecPersonagem(c: any, ca: any, cor: any, podEditar: any, isMestr
   const xp_proximo = nivel < nivel_maximo ? nivel * 100 : null;
   const xp_pct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 100;
   const hpPct = Math.min(100, Math.round((hp / hp_max) * 100));
-  const sk = typeof _skFiltrarPorChar === 'function' ? _skFiltrarPorChar(RPG_DATA.skills, c.nome) : [];
+  const sk = typeof _skFiltrarPorChar === 'function' ? _skFiltrarPorChar(RPG_DATA!.skills, c.nome) : [];
 
   const levelUpHtml = isMestre && nivel < nivel_maximo
     ? `<button onclick="abrirModalLevelUp('${nomeSafe}')" style="width:100%;padding:10px;background:linear-gradient(135deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08));border:1px solid rgba(200,168,75,0.5);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">⬆ Level Up — Nível ${nivel} → ${nivel + 1}</button>`

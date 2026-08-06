@@ -568,7 +568,7 @@ function _faseTriggerCombate(ent: any, enDef: any) {
 function _faseMostrarCombateTimer(ent: any, enDef: any, timerS: any) {
   const hud = document.getElementById('fase-combate-hud');
   if (!hud) return;
-  hud.style.display = 'flex';
+  hud.style!.display = 'flex';
   const nomEl = document.getElementById('fase-combate-nome');
   const cntEl = document.getElementById('fase-combate-countdown');
   if (nomEl) nomEl.textContent = ent.nome;
@@ -579,7 +579,7 @@ function _faseMostrarCombateTimer(ent: any, enDef: any, timerS: any) {
     if (cntEl) cntEl.textContent = remaining + 's';
     if (remaining <= 0) {
       clearInterval(iv);
-      hud.style.display = 'none';
+      hud.style!.display = 'none';
       delete _faseCombateTimerAtivo[ent.id];
       // Timeout: iniciar combate automaticamente
       if (ent.estado === 'timer_tatico') {
@@ -598,7 +598,7 @@ function _faseAceitarCombate(entId: any) {
   if (!ent || !enDef) return;
   if (ent._combateTimer) { clearInterval(ent._combateTimer); ent._combateTimer = null; }
   delete _faseCombateTimerAtivo[entId];
-  document.getElementById('fase-combate-hud').style.display = 'none';
+  document.getElementById('fase-combate-hud')!.style!.display = 'none';
   ent.estado = 'combate_tatico';
   _faseIniciarCombateTatico(ent, enDef);
 }
@@ -608,7 +608,7 @@ function _faseRecusarCombate(entId: any) {
   if (!ent) return;
   if (ent._combateTimer) { clearInterval(ent._combateTimer); ent._combateTimer = null; }
   delete _faseCombateTimerAtivo[entId];
-  document.getElementById('fase-combate-hud').style.display = 'none';
+  document.getElementById('fase-combate-hud')!.style!.display = 'none';
   ent.estado = 'patrulhando';
   mostrarToast('Recuou! Mantenha distância do inimigo.', '');
 }
@@ -666,7 +666,7 @@ function _faseChunksUpdate(bgLayer: any, elemLayer: any, world: any, mapaW: any,
 function _faseInicializarJogadores(rd: any, mapaW: any, mapaH: any) {
   const chars = (RPG_DATA?.characters || []).filter(c => {
     const ca = c.custom_attrs || {};
-    return !['npc', 'criatura'].includes(ca.tipo_personagem) &&
+    return !['npc', 'criatura'].includes(ca.tipo_personagem!) &&
            c.active_map_id === FASE_STATE.faseAtualId;
   });
 
@@ -813,7 +813,7 @@ function _faseMontarHUD(container: any, rd: any) {
 
   const hud = document.createElement('div');
   hud.id = 'fase-hud';
-  hud.style.cssText = `position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:6px;z-index:100;pointer-events:none`;
+  hud.style!.cssText = `position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:6px;z-index:100;pointer-events:none`;
 
   if (isMestre) {
     hud.innerHTML = `
@@ -839,7 +839,7 @@ function _faseMontarHUD(container: any, rd: any) {
   document.getElementById('fase-combate-hud')?.remove();
   const combateHud = document.createElement('div');
   combateHud.id = 'fase-combate-hud';
-  combateHud.style.cssText = `display:none;position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(5,8,16,0.95);border:2px solid #e05050;border-radius:12px;padding:16px 24px;text-align:center;z-index:200;flex-direction:column;gap:10px;min-width:240px;backdrop-filter:blur(6px)`;
+  combateHud.style!.cssText = `display:none;position:absolute;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(5,8,16,0.95);border:2px solid #e05050;border-radius:12px;padding:16px 24px;text-align:center;z-index:200;flex-direction:column;gap:10px;min-width:240px;backdrop-filter:blur(6px)`;
   combateHud.innerHTML = `
     <div style="font-family:var(--fonte-d,monospace);color:#e05050;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em">⚔ Combate Iminente</div>
     <div id="fase-combate-nome" style="font-family:var(--fonte-d,monospace);color:#fff;font-size:0.9rem;font-weight:bold"></div>
@@ -857,8 +857,8 @@ function faseModoMestreToggle() {
   const btn = document.getElementById('fase-btn-modo');
   if (btn) {
     btn.textContent = FASE_STATE.modoMestre ? '📍 Seguir Jogadores' : '🗺 Visão Completa';
-    btn.style.borderColor = FASE_STATE.modoMestre ? 'rgba(94,224,154,0.5)' : 'rgba(200,168,75,0.4)';
-    btn.style.color = FASE_STATE.modoMestre ? '#5ee09a' : '#c8a84b';
+    btn.style!.borderColor = FASE_STATE.modoMestre ? 'rgba(94,224,154,0.5)' : 'rgba(200,168,75,0.4)';
+    btn.style!.color = FASE_STATE.modoMestre ? '#5ee09a' : '#c8a84b';
   }
   mostrarToast(FASE_STATE.modoMestre ? '🗺 Visão completa (pan manual)' : '📍 Câmera segue jogadores', '');
 }
@@ -868,8 +868,8 @@ function faseIAToggle() {
   const btn = document.getElementById('fase-btn-ia');
   if (btn) {
     btn.textContent = FASE_STATE.iaAtiva ? '🤖 IA Ativa' : '🎮 IA Desligada';
-    btn.style.borderColor = FASE_STATE.iaAtiva ? 'rgba(79,163,209,0.4)' : 'rgba(200,168,75,0.3)';
-    btn.style.color = FASE_STATE.iaAtiva ? '#4fa3d1' : '#c8a84b';
+    btn.style!.borderColor = FASE_STATE.iaAtiva ? 'rgba(79,163,209,0.4)' : 'rgba(200,168,75,0.3)';
+    btn.style!.color = FASE_STATE.iaAtiva ? '#4fa3d1' : '#c8a84b';
   }
   mostrarToast(FASE_STATE.iaAtiva ? '🤖 IA das entidades ativada' : '🎮 IA desligada — controle manual', '');
 }

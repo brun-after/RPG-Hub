@@ -9,26 +9,26 @@ const PLABELS: Record<string, any> = {novo:{completo:'Gerar arquivo completo com
 
 function setImportMode(mode: any){
  IMPORT_MODE=mode;const isAt=mode==='atualizar';
- document.getElementById('import-title').textContent=isAt?'Atualizar RPG':'Importar Novo RPG';
- document.getElementById('rpg-update-selector').style.display=isAt?'block':'none';
- document.getElementById('modo-novo-btn').style.cssText=`flex:1;padding:10px;background:${isAt?'none':'rgba(200,168,75,0.15)'};border:none;color:${isAt?'#7a92aa':'#f0cc6a'};font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer;text-transform:uppercase`;
- document.getElementById('modo-atualizar-btn').style.cssText=`flex:1;padding:10px;background:${isAt?'rgba(79,163,209,0.15)':'none'};border:none;color:${isAt?'#7ec8f0':'#7a92aa'};font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer;text-transform:uppercase`;
- document.getElementById('btn-import-submit').textContent=isAt?'Atualizar RPG':'Importar RPG';
- document.getElementById('req-config').textContent=isAt?'Opcional — atualiza tema e nome':'Obrigatório — define ID, nome, tema visual';
- document.getElementById('asterisco-config').style.display=isAt?'none':'inline';
+ document.getElementById('import-title')!.textContent=isAt?'Atualizar RPG':'Importar Novo RPG';
+ document.getElementById('rpg-update-selector')!.style!.display=isAt?'block':'none';
+ document.getElementById('modo-novo-btn')!.style!.cssText=`flex:1;padding:10px;background:${isAt?'none':'rgba(200,168,75,0.15)'};border:none;color:${isAt?'#7a92aa':'#f0cc6a'};font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer;text-transform:uppercase`;
+ document.getElementById('modo-atualizar-btn')!.style!.cssText=`flex:1;padding:10px;background:${isAt?'rgba(79,163,209,0.15)':'none'};border:none;color:${isAt?'#7ec8f0':'#7a92aa'};font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer;text-transform:uppercase`;
+ document.getElementById('btn-import-submit')!.textContent=isAt?'Atualizar RPG':'Importar RPG';
+ document.getElementById('req-config')!.textContent=isAt?'Opcional — atualiza tema e nome':'Obrigatório — define ID, nome, tema visual';
+ document.getElementById('asterisco-config')!.style!.display=isAt?'none':'inline';
  Object.keys(PLABELS[mode]).forEach(s=>{const el=document.getElementById('label-'+s);if(el)el.textContent=PLABELS[mode][s];});
 }
 
 
-function preencherSeletorRPGs(){const sel=document.getElementById('rpg-update-select');sel.innerHTML='<option value="">Selecione...</option>';(HUB_DATA.rpgs||[]).forEach(r=>{const o=document.createElement('option');o.value=r.rpg_id;o.textContent=r.name;sel.appendChild(o);});}
+function preencherSeletorRPGs(){const sel=document.getElementById('rpg-update-select');sel!.innerHTML='<option value="">Selecione...</option>';(HUB_DATA.rpgs||[]).forEach(r=>{const o=document.createElement('option');o.value=r.rpg_id;o.textContent=r.name;sel!.appendChild(o);});}
 function abrirImport(){
   // Cancelar loading pendente caso ainda esteja animando
   const lel=document.getElementById('loading');
-  if(lel){lel.classList.remove('visible');lel.style.opacity='1';lel.style.transition='';}
+  if(lel){lel.classList.remove('visible');lel.style!.opacity='1';lel.style!.transition='';}
   Object.keys(IMPORT_CSVS).forEach(k=>delete IMPORT_CSVS[k]);
   setImportMode('novo');
   preencherSeletorRPGs();
-  document.querySelectorAll('.import-status').forEach(el=>el.style.display='none');
+  document.querySelectorAll('.import-status').forEach(el=>el.style!.display='none');
   document.querySelectorAll('input[type=file]').forEach(el=>el.value='');
   document.querySelectorAll('textarea[id^="paste-"]').forEach(el=>el.value='');
   // Popular select de RPGs para importação avulsa de mapas
@@ -37,65 +37,65 @@ function abrirImport(){
     sel.innerHTML = '<option value="">Selecione o RPG...</option>' +
       HUB_DATA.rpgs.map(r => `<option value="${r.rpg_id}">${r.nome||r.rpg_id}</option>`).join('');
   }
-  document.getElementById('hub').style.display='none';
-  document.getElementById('app').classList.remove('visible');
-  document.getElementById('import-screen').style.display='block';
+  document.getElementById('hub')!.style!.display='none';
+  document.getElementById('app')!.classList!.remove!('visible')!;
+  document.getElementById('import-screen')!.style!.display='block';
 }
 function fecharImport(){
-  document.getElementById('import-screen').style.display='none';
-  document.getElementById('app').classList.remove('visible');
-  document.getElementById('hub').style.display='';
+  document.getElementById('import-screen')!.style!.display='none';
+  document.getElementById('app')!.classList!.remove!('visible')!;
+  document.getElementById('hub')!.style!.display='';
 }
 function abrirPixiStudio(){
-  document.getElementById('hub').style.display='none';
+  document.getElementById('hub')!.style!.display='none';
   const scr=document.getElementById('pixi-studio-screen');
-  if(scr) scr.style.display='flex';
+  if(scr) scr.style!.display='flex';
   if(typeof pixiStudioInit==='function') pixiStudioInit();
 }
 function fecharPixiStudio(){
   const scr=document.getElementById('pixi-studio-screen');
-  if(scr) scr.style.display='none';
+  if(scr) scr.style!.display='none';
   if(typeof PIXI_STUDIO_STATE!=='undefined' && PIXI_STUDIO_STATE._origin==='aventura'){
     PIXI_STUDIO_STATE._origin=null;
     const menu=document.getElementById('avt-menu-screen');
-    if(menu) menu.style.display='flex';
+    if(menu) menu.style!.display='flex';
   } else {
-    document.getElementById('hub').style.display='';
+    document.getElementById('hub')!.style!.display='';
   }
 }
 
 
-function lerCSV(tipo: any,input: any){const f=input.files[0];if(!f)return;const st=document.getElementById('status-'+tipo),rd=new FileReader();rd.onload=e=>{try{const p=parseCSV(e.target.result);p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));IMPORT_CSVS[tipo]=p;st.textContent=`✓ ${p.length} linha(s)`;st.className='import-status ok';st.style.display='block';}catch (err: any){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
+function lerCSV(tipo: any,input: any){const f=input.files[0];if(!f)return;const st=document.getElementById('status-'+tipo),rd=new FileReader();rd.onload=e=>{try{const p=parseCSV(e.target!.result);p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));IMPORT_CSVS[tipo]=p;st!.textContent=`✓ ${p.length} linha(s)`;st!.className='import-status ok';st!.style!.display='block';}catch (err: any){st!.textContent=`✗ ${err.message}`;st!.className='import-status err';st!.style!.display='block';}};rd.readAsText(f,'UTF-8');}
 
 // Lê CSV colado como texto
 function lerCSVPaste(tipo: any, texto: any) {
   const st = document.getElementById('status-' + tipo);
-  if (!texto || !texto.trim()) { IMPORT_CSVS[tipo] = null; if(st){st.style.display='none';} return; }
+  if (!texto || !texto.trim()) { IMPORT_CSVS[tipo] = null; if(st){st.style!.display='none';} return; }
   try {
     const p = parseCSV(texto);
     p.forEach(r => Object.keys(r).forEach(k => { if(typeof r[k]==='string') r[k]=r[k].replace(/\\n/g,'\n'); }));
     IMPORT_CSVS[tipo] = p;
-    if (st) { st.textContent = `✓ ${p.length} linha(s) (texto colado)`; st.className='import-status ok'; st.style.display='block'; }
+    if (st) { st.textContent = `✓ ${p.length} linha(s) (texto colado)`; st.className='import-status ok'; st.style!.display='block'; }
   } catch (err: any) {
-    if (st) { st.textContent = `✗ ${err.message}`; st.className='import-status err'; st.style.display='block'; }
+    if (st) { st.textContent = `✗ ${err.message}`; st.className='import-status err'; st.style!.display='block'; }
     IMPORT_CSVS[tipo] = null;
   }
 }
 
-function lerAllInOne(input: any){const f=input.files[0];if(!f)return;const st=document.getElementById('status-allinone'),rd=new FileReader();rd.onload=e=>{try{const secs=parseMultiSection(e.target.result);const ns=Object.keys(secs);if(!ns.length)throw new Error('Nenhuma seção encontrada.');ns.forEach(s=>IMPORT_CSVS[s]=secs[s]);st.textContent=`✓ ${ns.length} seção(ões): ${ns.join(', ')}`;st.className='import-status ok';st.style.display='block';}catch (err: any){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
+function lerAllInOne(input: any){const f=input.files[0];if(!f)return;const st=document.getElementById('status-allinone'),rd=new FileReader();rd.onload=e=>{try{const secs=parseMultiSection(e.target!.result);const ns=Object.keys(secs);if(!ns.length)throw new Error('Nenhuma seção encontrada.');ns.forEach(s=>IMPORT_CSVS[s]=secs[s]);st!.textContent=`✓ ${ns.length} seção(ões): ${ns.join(', ')}`;st!.className='import-status ok';st!.style!.display='block';}catch (err: any){st!.textContent=`✗ ${err.message}`;st!.className='import-status err';st!.style!.display='block';}};rd.readAsText(f,'UTF-8');}
 
 // Lê CSV all-in-one colado como texto
 function lerAllInOnePaste(texto: any) {
   const st = document.getElementById('status-allinone');
-  if (!texto || !texto.trim()) { if(st) st.style.display='none'; return; }
+  if (!texto || !texto.trim()) { if(st) st.style!.display='none'; return; }
   try {
     const secs = parseMultiSection(texto);
     const ns = Object.keys(secs);
     if (!ns.length) throw new Error('Nenhuma seção encontrada. Use #SECTION:config, #SECTION:characters…');
     ns.forEach(s => IMPORT_CSVS[s] = secs[s]);
-    if (st) { st.textContent = `✓ ${ns.length} seção(ões): ${ns.join(', ')} (texto colado)`; st.className='import-status ok'; st.style.display='block'; }
+    if (st) { st.textContent = `✓ ${ns.length} seção(ões): ${ns.join(', ')} (texto colado)`; st.className='import-status ok'; st.style!.display='block'; }
   } catch (err: any) {
-    if (st) { st.textContent = `✗ ${err.message}`; st.className='import-status err'; st.style.display='block'; }
+    if (st) { st.textContent = `✗ ${err.message}`; st.className='import-status err'; st.style!.display='block'; }
   }
 }
 
@@ -106,7 +106,7 @@ function lerMapasJSONFile(input: any) {
   const st = document.getElementById('status-mapas');
   const reader = new FileReader();
   reader.onload = e => {
-    _processarMapasJSONTexto(e.target.result, st);
+    _processarMapasJSONTexto(e.target!.result, st);
   };
   reader.readAsText(file);
 }
@@ -114,7 +114,7 @@ function lerMapasJSONFile(input: any) {
 // Lê JSON de mapas via texto colado
 function lerMapasJSONPaste(texto: any) {
   const st = document.getElementById('status-mapas');
-  if (!texto || !texto.trim()) { _mapasImportJSON = null; if(st) st.style.display='none'; return; }
+  if (!texto || !texto.trim()) { _mapasImportJSON = null; if(st) st.style!.display='none'; return; }
   _processarMapasJSONTexto(texto, st);
 }
 
@@ -151,10 +151,10 @@ function _processarMapasJSONTexto(texto: any, st: any) {
 
 // Importa APENAS os mapas num RPG já existente (sem precisar de CSV)
 async function importarSoMapas() {
-  const rpgId = document.getElementById('mapas-rpg-select').value;
+  const rpgId = document.getElementById('mapas-rpg-select')!.value!;
   const st = document.getElementById('status-mapas');
   const mostrarSt = (msg: any, tipo: any) => {
-    if (st) { st.innerHTML = `<span style="color:var(--${tipo==='ok'?'sucesso':'perigo'})">${msg}</span>`; st.style.display='block'; }
+    if (st) { st.innerHTML = `<span style="color:var(--${tipo==='ok'?'sucesso':'perigo'})">${msg}</span>`; st.style!.display='block'; }
   };
   if (!rpgId) { mostrarSt('✗ Selecione um RPG antes de importar', 'err'); return; }
   if (!_mapasImportJSON || !_mapasImportJSON.length) { mostrarSt('✗ Nenhum JSON de mapas carregado. Use o arquivo ou cole o texto acima.', 'err'); return; }
@@ -175,8 +175,8 @@ async function importarSoMapas() {
     }
     mostrarSt(`✓ ${count} mapa(s) importado(s)! Abra a campanha na aba Mapas e adicione as imagens de fundo via ⚙ de cada mapa.`, 'ok');
     _mapasImportJSON = null;
-    document.getElementById('paste-mapas').value = '';
-    document.getElementById('file-mapas').value = '';
+    document.getElementById('paste-mapas')!.value = '';
+    document.getElementById('file-mapas')!.value = '';
   } catch (e: any) {
     mostrarSt(`✗ Erro: ${e.message}`, 'err');
   }
@@ -221,26 +221,26 @@ function parseCSVLine(line: any){
 async function enviarImport(){
  const btn=document.getElementById('btn-import-submit');
  if(IMPORT_MODE==='atualizar'){
-   const rpgId=document.getElementById('rpg-update-select').value;
+   const rpgId=document.getElementById('rpg-update-select')!.value!;
    if(!rpgId){showSt('status-import','Selecione qual RPG atualizar','err');return;}
    const secs=Object.keys(IMPORT_CSVS).filter(k=>IMPORT_CSVS[k]&&IMPORT_CSVS[k].length);
    if(!secs.length){showSt('status-import','Nenhum arquivo carregado','err');return;}
-   btn.disabled=true;btn.textContent='Atualizando...';
+   btn!.disabled=true;btn!.textContent='Atualizando...';
    try{const upd=await updateRPG(rpgId,IMPORT_CSVS);showSt('status-import',`✓ Atualizado: ${upd.join(', ')}`,'ok');HUB_DATA.rpgs=await getAllRPGs()||[];setTimeout(fecharImport,2000);}
    catch (e: any){showSt('status-import',`✗ ${e.message}`,'err');}
-   finally{btn.disabled=false;btn.textContent='Atualizar RPG';}
+   finally{btn!.disabled=false;btn!.textContent='Atualizar RPG';}
    return;
  }
  if(!IMPORT_CSVS.config||!(IMPORT_CSVS as any).config.length){showSt('status-import','#SECTION:config é obrigatório','err');return;}
  if(IMPORT_CSVS.characters&&IMPORT_CSVS.characters.length&&(!IMPORT_CSVS.attr_defs||!(IMPORT_CSVS as any).attr_defs.length)){showSt('status-import','⚠ #SECTION:characters requer #SECTION:attr_defs para definir os atributos. Adicione a seção attr_defs ao arquivo.','err');return;}
- btn.disabled=true;btn.textContent='Importando...';
+ btn!.disabled=true;btn!.textContent='Importando...';
  try{const rpgId=await importRPG(IMPORT_CSVS, _mapasImportJSON);showSt('status-import',`✓ "${(IMPORT_CSVS as any).config[0].name}" importado!`,'ok');HUB_DATA.rpgs=await getAllRPGs()||[];renderRPGList(HUB_DATA.rpgs);setTimeout(fecharImport,2000);}
  catch (e: any){showSt('status-import',`✗ ${e.message}`,'err');}
- finally{btn.disabled=false;btn.textContent='Importar RPG';}
+ finally{btn!.disabled=false;btn!.textContent='Importar RPG';}
 }
 
 
-function showSt(id: any,msg: any,tipo: any){const el=document.getElementById(id);el.textContent=msg;el.className='import-status '+tipo;el.style.display='block';}
+function showSt(id: any,msg: any,tipo: any){const el=document.getElementById(id);el!.textContent=msg;el!.className='import-status '+tipo;el!.style!.display='block';}
 
 
 
@@ -1609,15 +1609,15 @@ async function importarMapasJSON(rpgId: any, mapas: any) {
 
 // ── Abre modal de geração de mapa (via cópia de prompt) ────────
 function abrirModalGerarMapaIA() {
-  document.getElementById('ia-mapa-mesa-contexto').value = '';
-  document.getElementById('ok-copiar-mapa-mesa').style.display = 'none';
-  document.getElementById('label-copiar-mapa-mesa').textContent = 'Copiar prompt';
+  document.getElementById('ia-mapa-mesa-contexto')!.value = '';
+  document.getElementById('ok-copiar-mapa-mesa')!.style!.display = 'none';
+  document.getElementById('label-copiar-mapa-mesa')!.textContent = 'Copiar prompt';
 
   // Limpar campo de importação
   const pasteEl = document.getElementById('ia-mapa-mesa-paste');
   if (pasteEl) pasteEl.value = '';
   const stEl = document.getElementById('ia-mapa-mesa-status');
-  if (stEl) stEl.style.display = 'none';
+  if (stEl) stEl.style!.display = 'none';
 
   // Mostrar mapas já existentes como referência
   const mapasExistentes = RPG_DATA?.mapas || [];
@@ -1627,18 +1627,18 @@ function abrirModalGerarMapaIA() {
       const tipo = l.mapa.tipo === 'geral' ? '🌍' : '🏰';
       return `${tipo} ${l.mapa.nome} [${l.mapa.map_id}]`;
     }).join('\n');
-    aviso.style.display = 'block';
-    aviso.innerHTML = `<b style="color:var(--destaque)">Mapas existentes (incluídos no prompt):</b><br><span style="white-space:pre-line;font-size:0.72rem">${lista}</span>`;
+    aviso!.style!.display = 'block';
+    aviso!.innerHTML = `<b style="color:var(--destaque)">Mapas existentes (incluídos no prompt):</b><br><span style="white-space:pre-line;font-size:0.72rem">${lista}</span>`;
   } else {
-    aviso.style.display = 'none';
+    aviso!.style!.display = 'none';
   }
 
-  document.getElementById('modal-gerar-mapa-ia-overlay').style.display = 'flex';
+  document.getElementById('modal-gerar-mapa-ia-overlay')!.style!.display = 'flex';
 }
 
 // ── Gera e copia o prompt de CONFIG para a IA ─────────────
 function copiarPromptMapaMesa() {
-  const desc = document.getElementById('ia-mapa-mesa-contexto').value.trim();
+  const desc = document.getElementById('ia-mapa-mesa-contexto')!.value!.trim!()!;
   if (!desc) { mostrarToast('Descreva o que gerar antes de copiar', 'erro'); return; }
 
   const mapasExistentes = RPG_DATA?.mapas || [];
@@ -1647,9 +1647,9 @@ function copiarPromptMapaMesa() {
   const label = document.getElementById('label-copiar-mapa-mesa');
   const ok    = document.getElementById('ok-copiar-mapa-mesa');
   const done  = () => {
-    label.style.display = 'none';
-    ok.style.display = 'inline';
-    setTimeout(() => { label.style.display = 'inline'; ok.style.display = 'none'; }, 2500);
+    label!.style!.display = 'none';
+    ok!.style!.display = 'inline';
+    setTimeout(() => { label!.style!.display = 'inline'; ok!.style!.display = 'none'; }, 2500);
   };
   if (navigator.clipboard) navigator.clipboard.writeText(prompt).then(done).catch(() => fbCopy(prompt, done));
   else fbCopy(prompt, done);
@@ -1657,7 +1657,7 @@ function copiarPromptMapaMesa() {
 
 // ── Gera e copia o prompt de SVG+JSON para a IA ─────────────
 function copiarPromptMapaMesaSVG() {
-  const desc = document.getElementById('ia-mapa-mesa-contexto').value.trim();
+  const desc = document.getElementById('ia-mapa-mesa-contexto')!.value!.trim!()!;
   if (!desc) { mostrarToast('Descreva o que gerar antes de copiar', 'erro'); return; }
   const mapasExistentes = RPG_DATA?.mapas || [];
   const prompt = gerarPromptMapasSVGAtualizacao(desc, mapasExistentes);
@@ -1672,8 +1672,8 @@ async function importarMapasMesaPaste() {
   const st = document.getElementById('ia-mapa-mesa-status');
   const showSt = (msg: any, tipo: any) => {
     if (!st) return;
-    st.style.display = 'block';
-    st.style.color = tipo === 'ok' ? 'var(--sucesso)' : 'var(--perigo)';
+    st.style!.display = 'block';
+    st.style!.color = tipo === 'ok' ? 'var(--sucesso)' : 'var(--perigo)';
     st.textContent = msg;
   };
   if (!paste) { showSt('Cole o JSON de configuração antes de importar.', 'err'); return; }
@@ -1698,7 +1698,7 @@ async function importarMapasMesaPaste() {
     }));
     showSt(`✓ ${arr.length} mapa(s) importado(s)! Adicione a imagem depois via edição do mapa.`, 'ok');
     renderMapasTab();
-    document.getElementById('modal-gerar-mapa-ia-overlay').style.display = 'none';
+    document.getElementById('modal-gerar-mapa-ia-overlay')!.style!.display = 'none';
     mostrarToast(`✓ ${arr.length} mapa(s) criado(s)!`, 'ok');
   } catch (e: any) {
     showSt('Erro: ' + (e.message || e), 'err');
@@ -1745,10 +1745,10 @@ function mapaRenderCanvas(m: any) {
   const canvas = document.getElementById('mapa-canvas');
   if (!canvas) return false;
   const wrap = document.getElementById('mapa-img');
-  const W = wrap.offsetWidth || 400;
-  const H = wrap.offsetHeight || 300;
+  const W = wrap!.offsetWidth || 400;
+  const H = wrap!.offsetHeight || 300;
   canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext!('2d');
   ctx.clearRect(0, 0, W, H);
 
   const estilo = rd.estilo || 'area_aberta';
@@ -2511,13 +2511,13 @@ function copiarPromptSecao(secao: any){
  } else if (secao === 'mapas') {
    // Prompt de configuração de mapas (sem SVG — imagem adicionada depois)
    const contextoEl = document.getElementById('ia-mapa-contexto');
-   const contexto = contextoEl?.value.trim() || '[Descreva o contexto da campanha aqui antes de copiar o prompt]';
+   const contexto = contextoEl?.value!.trim!()! || '[Descreva o contexto da campanha aqui antes de copiar o prompt]';
    const mapasExistentes = RPG_DATA?.mapas || [];
    texto = gerarPromptMapasConfig(contexto, mapasExistentes);
  } else if (secao === 'mapas-svg') {
    // Prompt SVG+JSON completo (para quem quer gerar o visual também)
    const contextoEl = document.getElementById('ia-mapa-contexto');
-   const contexto = contextoEl?.value.trim() || '[Descreva o contexto da campanha aqui antes de copiar o prompt]';
+   const contexto = contextoEl?.value!.trim!()! || '[Descreva o contexto da campanha aqui antes de copiar o prompt]';
    const mapasExistentes = RPG_DATA?.mapas || [];
    texto = isAt
      ? gerarPromptMapasSVGAtualizacao(contexto, mapasExistentes)
@@ -2532,13 +2532,13 @@ function copiarPromptSecao(secao: any){
  const copiar = () => {
    const btn = okEl?.closest('.prompt-copy-btn');
    if (btn) btn.classList.add('copied');
-   if (okEl) okEl.style.display = 'inline';
-   setTimeout(() => { if (btn) btn.classList.remove('copied'); if (okEl) okEl.style.display = 'none'; }, 2500);
+   if (okEl) okEl.style!.display = 'inline';
+   setTimeout(() => { if (btn) btn.classList.remove('copied'); if (okEl) okEl.style!.display = 'none'; }, 2500);
  };
  if (navigator.clipboard) navigator.clipboard.writeText(texto).then(copiar).catch(() => fbCopy(texto, copiar));
  else fbCopy(texto, copiar);
 }
-function fbCopy(t: any,cb: any){const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);if(cb)cb();}
+function fbCopy(t: any,cb: any){const ta=document.createElement('textarea');ta.value=t;ta.style!.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);if(cb)cb();}
 
 
 // ── UTILS ─────────────────────────────────────────────────────
@@ -2558,18 +2558,18 @@ function _mapaInicializarLayout() {
   const sidebar = document.getElementById('mapa-sidebar');
   if (sidebar) {
     if (_isTinyPortrait) {
-      sidebar.style.width = '100%';
-      sidebar.style.maxHeight = '38vh';
-      sidebar.style.borderLeft = 'none';
-      sidebar.style.borderTop = '1px solid var(--borda)';
+      sidebar.style!.width = '100%';
+      sidebar.style!.maxHeight = '38vh';
+      sidebar.style!.borderLeft = 'none';
+      sidebar.style!.borderTop = '1px solid var(--borda)';
     } else {
-      sidebar.style.width = window.innerWidth < 600 ? '185px' : '240px';
-      sidebar.style.maxHeight = '';
-      sidebar.style.borderLeft = '1px solid var(--borda)';
-      sidebar.style.borderTop = 'none';
+      sidebar.style!.width = window.innerWidth < 600 ? '185px' : '240px';
+      sidebar.style!.maxHeight = '';
+      sidebar.style!.borderLeft = '1px solid var(--borda)';
+      sidebar.style!.borderTop = 'none';
     }
     // forçar flex-direction no tab-mapas conforme orientação
-    tabMapas.style.flexDirection = _isTinyPortrait ? 'column' : 'row';
+    tabMapas.style!.flexDirection = _isTinyPortrait ? 'column' : 'row';
   }
 
   // Só reestrutura o DOM uma vez
@@ -2581,7 +2581,7 @@ function _mapaInicializarLayout() {
     // Seção de botões contextuais (preenchida por _ctxAtualizarPainelDesktop)
     const ctxBox = document.createElement('div');
     ctxBox.id = 'ctx-sidebar-botoes';
-    ctxBox.style.display = 'none';
+    ctxBox.style!.display = 'none';
     ctxBox.innerHTML =
       '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);' +
       'text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">⚡ Ações</div>' +
@@ -2591,19 +2591,19 @@ function _mapaInicializarLayout() {
     // Painel de ataque inline (seleção de habilidade + alvo — substitui o float panel)
     const atkBox = document.createElement('div');
     atkBox.id = 'atk-sidebar-painel';
-    atkBox.style.cssText = 'display:none;border-top:1px solid rgba(192,57,43,0.3);padding-top:8px;margin-top:4px';
+    atkBox.style!.cssText = 'display:none;border-top:1px solid rgba(192,57,43,0.3);padding-top:8px;margin-top:4px';
     sidebar.appendChild(atkBox);
 
     // Trigger de confirmação inline (substitui overlay no mapa)
     const trigBox = document.createElement('div');
     trigBox.id = 'atk-sidebar-trigger';
-    trigBox.style.cssText = 'display:none;border-top:1px solid rgba(200,168,75,0.25);padding-top:8px;margin-top:4px';
+    trigBox.style!.cssText = 'display:none;border-top:1px solid rgba(200,168,75,0.25);padding-top:8px;margin-top:4px';
     sidebar.appendChild(trigBox);
 
     // Ficha do personagem inline (substitui modal fixo)
     const fichaBox = document.createElement('div');
     fichaBox.id = 'ficha-sidebar-painel';
-    fichaBox.style.cssText = 'display:none;border-top:1px solid var(--borda);padding-top:8px;margin-top:4px';
+    fichaBox.style!.cssText = 'display:none;border-top:1px solid var(--borda);padding-top:8px;margin-top:4px';
     sidebar.appendChild(fichaBox);
 
     // Mover conteúdo que ficava embaixo do mapa para a sidebar
@@ -2615,7 +2615,7 @@ function _mapaInicializarLayout() {
     ];
     idsParaSidebar.forEach(id => {
       const el = document.getElementById(id);
-      if (el) { el.style.marginTop = '0'; sidebar.appendChild(el); }
+      if (el) { el.style!.marginTop = '0'; sidebar.appendChild(el); }
     });
     tabMapas.appendChild(sidebar);
 
@@ -2656,20 +2656,20 @@ function _mapaAjustarAlturaLayout() {
   const header = document.querySelector('header');
   const navH    = nav    ? nav.offsetHeight    : 0;
   const headerH = header ? header.offsetHeight : 0;
-  tabMapas.style.height = `calc(100dvh - ${headerH + navH}px)`;
+  tabMapas.style!.height = `calc(100dvh - ${headerH + navH!}px)`;
 
   // Portrait tiny: mapa-area-esq deve ter altura mínima de 55vh
   const _isTinyPortrait = window.innerWidth < 480 && window.innerHeight > window.innerWidth;
   const leftArea = document.getElementById('mapa-area-esq');
   if (leftArea) {
-    leftArea.style.minHeight = _isTinyPortrait ? '55vh' : '0';
-    leftArea.style.flex = _isTinyPortrait ? '0 0 auto' : '1';
+    leftArea.style!.minHeight = _isTinyPortrait ? '55vh' : '0';
+    leftArea.style!.flex = _isTinyPortrait ? '0 0 auto' : '1';
   }
 }
 
 function _ctxSidebarLimpar() {
   const sb = document.getElementById('ctx-sidebar-botoes');
-  if (sb) sb.style.display = 'none';
+  if (sb) sb.style!.display = 'none';
   const p = document.getElementById('ctx-botoes-painel');
   if (p) p.innerHTML = '';
 }
@@ -2698,7 +2698,7 @@ function abrirAba(id: any,btn: any){
   }
   if(RPG_DATA?.rpgId) salvarAba(RPG_DATA.rpgId, id);
 }
-function mostrarToast(msg: any,tipo?: any,_dur?: any){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(tipo||'');t.classList.add('visivel');setTimeout(()=>t.classList.remove('visivel'),2400);}
+function mostrarToast(msg: any,tipo?: any,_dur?: any){const t=document.getElementById('toast');t!.textContent=msg;t!.className='toast '+(tipo||'');t!.classList.add('visivel');setTimeout(()=>t!.classList.remove('visivel'),2400);}
 
 if ('serviceWorker' in navigator) {
    window.addEventListener('load', () => {

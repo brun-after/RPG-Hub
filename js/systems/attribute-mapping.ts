@@ -99,10 +99,10 @@ const GRUPO_INFO: Record<string, any> = {
 async function renderAttrMappingUI() {
   const card = document.getElementById('cfg-atrmapping-card');
   if (!card || RPG_DATA?.myRole !== 'mestre') return;
-  card.style.display = '';
+  card.style!.display = '';
   const rpgId = CURRENT_RPG?.id;
   const grid = document.getElementById('cfg-atrmapping-grid');
-  if (!rpgId) { grid.innerHTML='<div style="color:var(--suave);font-size:0.8rem;text-align:center">Nenhuma campanha carregada.</div>'; return; }
+  if (!rpgId) { grid!.innerHTML='<div style="color:var(--suave);font-size:0.8rem;text-align:center">Nenhuma campanha carregada.</div>'; return; }
 
   const attrDefs = RPG_DATA?.attrDefs || [];
   const attrNumericos = attrDefs.filter(a => a.tipo === 'number' || a.tipo === 'status' || !a.tipo);
@@ -114,12 +114,12 @@ async function renderAttrMappingUI() {
   }
 
   // Caso contrário (primeiro acesso antes da Fase 0 terminar), buscar e renderizar
-  grid.innerHTML = '<div style="text-align:center;padding:20px;color:var(--suave);font-style:italic;font-size:0.8rem">Carregando...</div>';
+  grid!.innerHTML = '<div style="text-align:center;padding:20px;color:var(--suave);font-style:italic;font-size:0.8rem">Carregando...</div>';
   try {
     await carregarMapeamento(rpgId);
     _renderMappingGrid(rpgId, attrNumericos);
   } catch (e: any) {
-    grid.innerHTML = `<div style="color:var(--perigo);font-size:0.8rem">${e.message}</div>`;
+    grid!.innerHTML = `<div style="color:var(--perigo);font-size:0.8rem">${e.message}</div>`;
   }
 }
 
@@ -154,7 +154,7 @@ function _renderMappingGrid(rpgId: any, attrDefs: any) {
       </div>
     </div>`;
   }
-  grid.innerHTML = html || '<div style="color:var(--suave);font-size:0.8rem;text-align:center;padding:10px">Configure os atributos da campanha primeiro (seção acima).</div>';
+  grid!.innerHTML = html || '<div style="color:var(--suave);font-size:0.8rem;text-align:center;padding:10px">Configure os atributos da campanha primeiro (seção acima).</div>';
 }
 
 async function atrMappingAdicionar(rpgId: any, grupo: any) {

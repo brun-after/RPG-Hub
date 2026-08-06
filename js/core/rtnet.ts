@@ -621,7 +621,7 @@ window.RTNet = (() => {
     _stopStateTick();
     _updateHostIndicator();
     const banner = document.getElementById('avt-host-dead-banner');
-    if (banner) banner.style.display = 'flex';
+    if (banner) banner.style!.display = 'flex';
     try { window.dispatchEvent(new CustomEvent('rtnet:hostlost')); } catch(_) {}
   }
 
@@ -833,7 +833,7 @@ window.RTNet = (() => {
     el.title = degradado
       ? title + ' — sem conexão direta com algum jogador (latência maior). Um servidor TURN resolve NAT restrito; veja docs/setup.md.'
       : title;
-    el.style.display = 'inline';
+    el.style!.display = 'inline';
   }
 
   function _updateHostIndicator() {
@@ -841,21 +841,21 @@ window.RTNet = (() => {
     if (el) {
       if (_s._isHost) {
         el.textContent = '⚡ Host';
-        el.style.color = '#c8a84b';
-        el.style.cursor = 'pointer';
+        el.style!.color = '#c8a84b';
+        el.style!.cursor = 'pointer';
         el.title = 'Clique para transferir o host';
       } else if (_s.hostId) {
         el.textContent = '◉ Online';
-        el.style.color = '#4fa3d1';
-        el.style.cursor = 'default';
+        el.style!.color = '#4fa3d1';
+        el.style!.cursor = 'default';
         el.title = 'Host: ' + _s.hostId.slice(0, 8) + '…';
       } else {
         el.textContent = '◯';
-        el.style.color = '#7a92aa';
-        el.style.cursor = 'default';
+        el.style!.color = '#7a92aa';
+        el.style!.cursor = 'default';
         el.title = 'Sem host eleito';
       }
-      el.style.display = 'inline-block';
+      el.style!.display = 'inline-block';
     }
     // Re-render topbar button if presente
     try { if (typeof window._avtRenderTopbar === 'function') window._avtRenderTopbar(); } catch(_) {}
@@ -972,11 +972,11 @@ window.RTNet = (() => {
       _s._peerLeaveCallbacks = [];
 
       const banner = document.getElementById('avt-host-dead-banner');
-      if (banner) banner.style.display = 'none';
+      if (banner) banner.style!.display = 'none';
       const hi = document.getElementById('avt-host-indicator');
-      if (hi) hi.style.display = 'none';
+      if (hi) hi.style!.display = 'none';
       const pi = document.getElementById('avt-p2p-indicator');
-      if (pi) pi.style.display = 'none';
+      if (pi) pi.style!.display = 'none';
     },
 
     broadcast<K extends AvtEventName>(tipo: K, payload?: AvtPayloadMap[K], opts?: any) {
@@ -1005,7 +1005,7 @@ window.RTNet = (() => {
 
     on(tipo: any, handler: any) {
       if (!_s.handlers.has(tipo)) _s.handlers.set(tipo, new Set());
-      _s.handlers.get(tipo).add(handler);
+      _s.handlers.get(tipo)!.add!(handler)!;
     },
 
     off(tipo: any, handler: any) { _s.handlers.get(tipo)?.delete(handler); },
@@ -1092,7 +1092,7 @@ window.RTNet = (() => {
       _s.paused = false;
       _electSelf();
       const banner = document.getElementById('avt-host-dead-banner');
-      if (banner) banner.style.display = 'none';
+      if (banner) banner.style!.display = 'none';
     },
 
     registrarSnapshotProvider(fn: any) { _s.snapshotProvider = fn; },

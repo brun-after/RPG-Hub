@@ -176,7 +176,7 @@ async function avtInvEquipar(charNome: any, invId: any) {
 
     if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender();
     const modal = document.getElementById('avt-inventario-modal');
-    if (modal && modal.style.display !== 'none') avtInvRenderPanel(charNome, 'avt-inv-body');
+    if (modal && modal.style!.display !== 'none') avtInvRenderPanel(charNome, 'avt-inv-body');
   } finally {
     _avtInvEquipando = false;
   }
@@ -341,7 +341,7 @@ async function avtInvUsarConsumivel(charNome: any, invId: any) {
   avtInvBroadcastUpdate(char.id);
   if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender();
   const modal = document.getElementById('avt-inventario-modal');
-  if (modal && modal.style.display !== 'none') avtInvRenderPanel(charNome, 'avt-inv-body');
+  if (modal && modal.style!.display !== 'none') avtInvRenderPanel(charNome, 'avt-inv-body');
 }
 
 async function avtInvAplicarEfeitos(efeitos: any, charNome: any) {
@@ -556,14 +556,14 @@ async function avtAbrirInventario() {
 
   const modal = document.getElementById('avt-inventario-modal');
   if (modal) {
-    modal.style.display = 'flex';
+    modal.style!.display = 'flex';
     avtInvRenderPanel(jogador.nome, 'avt-inv-body');
   }
 }
 
 function avtFecharInventario() {
   const modal = document.getElementById('avt-inventario-modal');
-  if (modal) modal.style.display = 'none';
+  if (modal) modal.style!.display = 'none';
 }
 
 function avtInvRenderPanel(charNome: any, containerId: any) {

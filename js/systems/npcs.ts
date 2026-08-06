@@ -9,18 +9,18 @@ function abrirModalNpcGenerico() {
     mostrarToast('Abra um mapa na Mesa antes de criar NPCs', 'erro');
     return;
   }
-  document.getElementById('ng-nome').value = '';
-  document.getElementById('ng-qtd').value = (1) as any;
-  document.getElementById('ng-hp').value = (100) as any;
-  document.getElementById('ng-cor').value = '#e8604c';
-  document.getElementById('ng-img').value = '';
-  document.getElementById('ng-posicionar').checked = true;
+  document.getElementById('ng-nome')!.value = '';
+  document.getElementById('ng-qtd')!.value = (1) as any;
+  document.getElementById('ng-hp')!.value = (100) as any;
+  document.getElementById('ng-cor')!.value = '#e8604c';
+  document.getElementById('ng-img')!.value = '';
+  document.getElementById('ng-posicionar')!.checked = true;
 
   // Renderizar campos de atributos básicos
-  const basicos = (RPG_DATA.attrDefs || []).filter(a => (a.categoria || 'basico') === 'basico');
+  const basicos = (RPG_DATA!.attrDefs || []).filter(a => (a.categoria || 'basico') === 'basico');
   const el = document.getElementById('ng-attrs-basicos');
   if (basicos.length) {
-    el.innerHTML = '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">🔷 Atributos Básicos</div>'
+    el!.innerHTML = '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">🔷 Atributos Básicos</div>'
       + '<div class="form-grid" style="grid-template-columns:repeat(3,1fr);gap:8px">'
       + basicos.map(a => {
           const key = a.nome.replace(/[^a-z0-9]/gi,'_');
@@ -35,43 +35,43 @@ function abrirModalNpcGenerico() {
         }).join('')
       + '</div>';
   } else {
-    el.innerHTML = '';
+    el!.innerHTML = '';
   }
 
   const overlay = document.getElementById('modal-npc-gen-overlay');
-  overlay.style.display = 'flex';
-  overlay.onclick = e => { if (e.target === overlay) fecharModalNpcGenerico(); };
-  setTimeout(() => document.getElementById('ng-nome').focus(), 100);
+  overlay!.style!.display = 'flex';
+  overlay!.onclick = e => { if (e.target === overlay) fecharModalNpcGenerico(); };
+  setTimeout(() => document.getElementById('ng-nome')!.focus!()!, 100);
 }
 
 function fecharModalNpcGenerico() {
-  document.getElementById('modal-npc-gen-overlay').style.display = 'none';
+  document.getElementById('modal-npc-gen-overlay')!.style!.display = 'none';
 }
 
 async function criarNpcGenerico() {
-  const nomeBase = document.getElementById('ng-nome').value.trim();
+  const nomeBase = document.getElementById('ng-nome')!.value!.trim!()!;
   if (!nomeBase) { mostrarToast('Nome é obrigatório', 'erro'); return; }
-  const qtd  = Math.max(1, Math.min(20, parseInt(document.getElementById('ng-qtd').value) || 1));
-  const hp   = parseInt(document.getElementById('ng-hp').value) || 100;
-  const cor  = document.getElementById('ng-cor').value;
-  const img  = document.getElementById('ng-img').value.trim();
-  const posicionar = document.getElementById('ng-posicionar').checked;
+  const qtd  = Math.max(1, Math.min(20, parseInt(document.getElementById('ng-qtd')!.value!) || 1));
+  const hp   = parseInt(document.getElementById('ng-hp')!.value!) || 100;
+  const cor  = document.getElementById('ng-cor')!.value!;
+  const img  = document.getElementById('ng-img')!.value!.trim!()!;
+  const posicionar = document.getElementById('ng-posicionar')!.checked!;
 
   // Coletar atributos básicos preenchidos
-  const basicos = (RPG_DATA.attrDefs || []).filter(a => (a.categoria || 'basico') === 'basico');
+  const basicos = (RPG_DATA!.attrDefs || []).filter(a => (a.categoria || 'basico') === 'basico');
   const atributosBase: Record<string, any> = {};
   basicos.forEach(a => {
     const key = a.nome.replace(/[^a-z0-9]/gi,'_');
     const el  = document.getElementById('ng-attr-' + key);
     if (!el) return;
-    atributosBase[a.nome] = a.tipo === 'number' ? (parseFloat(el.value) || 0)
+    atributosBase[a.nome] = a.tipo === 'number' ? (parseFloat(el.value!) || 0)
                            : a.tipo === 'boolean' ? (el.value === 'true')
                            : el.value;
   });
 
   // Descobrir números já usados com este nome base
   const reEscape = nomeBase.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  const existentes = (RPG_DATA.characters || [])
+  const existentes = (RPG_DATA!.characters || [])
     .map(c => c.nome)
     .filter(n => n === nomeBase || n.match(new RegExp(`^${reEscape} (\\d+)$`)))
     .map(n => { const m = n.match(/ (\d+)$/); return m ? parseInt(m[1]) : 0; });
@@ -106,10 +106,10 @@ async function criarNpcGenerico() {
       const [row] = await sb('characters', {
         method: 'POST',
         headers: { 'Prefer': 'return=representation' },
-        body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, nome, hp_atual: hp, custom_attrs })
+        body: JSON.stringify({ rpg_id: RPG_DATA!.rpgId, nome, hp_atual: hp, custom_attrs })
       });
       const char = row || { nome, hp_atual: hp, custom_attrs };
-      RPG_DATA.characters.push(char);
+      RPG_DATA!.characters.push(char);
       criados.push(nome);
     } catch(e) { mostrarToast('Erro ao criar ' + nome, 'erro'); }
   }
@@ -117,7 +117,7 @@ async function criarNpcGenerico() {
   fecharModalNpcGenerico();
   // Recarregar seletores de personagens
   if (typeof renderAttrButtons === 'function') renderAttrButtons();
-  document.getElementById('char-select-row').innerHTML = buildCharBtns('char')
+  document.getElementById('char-select-row')!.innerHTML = buildCharBtns('char')
     + `<button class="char-btn" onclick="abrirModalNovoChar()" style="border-style:dashed;color:var(--suave)" title="Criar personagem ou NPC">＋</button>`;
 
   mostrarToast(criados.length + ' NPC(s) criado(s)!', 'sucesso');
@@ -125,7 +125,7 @@ async function criarNpcGenerico() {
   if (posicionar && criados.length > 0) {
     npcGenericoIniciarPlacement(criados);
   } else {
-    const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+    const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
     if (entry) mapaRenderTokens(entry.mapa);
     mapaRenderStatus();
   }
@@ -141,7 +141,7 @@ function npcGenericoIniciarPlacement(nomes: any) {
 
 function npcGenericoProximoPlacement() {
   if (!NPC_PLACEMENT_QUEUE.length) {
-    const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+    const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
     if (entry) mapaRenderTokens(entry.mapa);
     mapaRenderStatus();
     mostrarToast('Todos os NPCs posicionados!', 'sucesso');
@@ -151,14 +151,14 @@ function npcGenericoProximoPlacement() {
   const restante = NPC_PLACEMENT_QUEUE.length;
   mostrarToast('Clique no mapa: ' + nome + ' (' + restante + ' restante' + (restante>1?'s':'') + ')', '');
   const wrap = document.getElementById('mapa-wrap');
-  wrap.classList.add('placement-ativo');
+  wrap!.classList.add('placement-ativo');
   const handler = (e: any) => {
     if (e.target.closest('.mapa-token') || e.target.closest('.mapa-zona')) return;
-    const rect = wrap.getBoundingClientRect();
+    const rect = wrap!.getBoundingClientRect();
     let x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width  * 100));
     let y = Math.max(2, Math.min(98, (e.clientY - rect.top)  / rect.height * 100)); // let: o snap abaixo reatribui (com const era TypeError em runtime)
-    wrap.classList.remove('placement-ativo');
-    wrap.removeEventListener('click', handler);
+    wrap!.classList.remove('placement-ativo');
+    wrap!.removeEventListener('click', handler);
     // Snap para centro da célula: converter %→célula→% exato
     const _snapMapa = _getMapaById(MAPA_STATE.mapaAtualId);
     if (_snapMapa) {
@@ -171,8 +171,8 @@ function npcGenericoProximoPlacement() {
       npcGenericoProximoPlacement();
     });
   };
-  wrap.addEventListener('click', handler);
-  wrap._npcPlacementHandler = handler;
+  wrap!.addEventListener('click', handler);
+  wrap!._npcPlacementHandler = handler;
 }
 
 /* [migração-esm] accessors globais */

@@ -138,7 +138,7 @@ declare global {
   interface ParticipanteBatalha {
     nome: string;
     tipo?: string;
-    iniciativa?: number;
+    iniciativa?: number | null;   // batalhaLimparIniciativas escreve null
     x?: number;
     y?: number;
     isBoss?: boolean;
@@ -281,7 +281,7 @@ declare global {
   // ── Sessão de auth (localStorage rpghub_session) ───────────────
   interface SessaoAuth {
     access_token: string;
-    refresh_token?: string;
+    refresh_token?: string | null;
     nickname?: string;
     user: {
       id: string;

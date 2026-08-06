@@ -73,7 +73,7 @@ async function usarPorta(mapId: any, portaId: any, charNome?: any) {
   porta.aberta = !porta.aberta;
   mostrarToast(porta.aberta ? `🚪 ${porta.nome||'Porta'} aberta` : `🔒 ${porta.nome||'Porta'} fechada`, 'ok');
 
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (entry) {
     entry.mapa.render_data = mapa.render_data;
     await salvarRenderData(entry.id, mapa.render_data);
@@ -93,7 +93,7 @@ async function _portaTransportarChar(charNome: any, porta: any) {
   char.map_positions[porta.mapa_destino] = { col: porta.destino_col || 0, row: porta.destino_row || 0 };
   char.active_map_id = porta.mapa_destino;
 
-  const cEntry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === porta.mapa_destino);
+  const cEntry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === porta.mapa_destino);
   if (cEntry) {
     await sb('characters?id=eq.' + char.id, {
       method: 'PATCH', prefer: 'return=minimal',
@@ -177,8 +177,8 @@ function paredePorRenderizar(m: any) {
     line.classList.add('mapa-parede');
     // Em modo edição: clique remove
     if (MAPA_STATE.toolMode === 'paredes') {
-      line.style.cursor = 'pointer';
-      line.style.strokeOpacity = '0.8';
+      line.style!.cursor = 'pointer';
+      line.style!.strokeOpacity = '0.8';
       line.addEventListener('click', (e) => {
         e.stopPropagation();
         paredRemover(m.map_id, p.id);
@@ -212,13 +212,13 @@ function paredePorRenderizar(m: any) {
     text.classList.add('mapa-porta');
 
     if (MAPA_STATE.toolMode === 'paredes') {
-      circle.style.cursor = 'pointer';
+      circle.style!.cursor = 'pointer';
       circle.addEventListener('click', (e) => {
         e.stopPropagation();
         portaEditar(m.map_id, porta.id);
       });
     } else {
-      circle.style.cursor = 'pointer';
+      circle.style!.cursor = 'pointer';
       circle.addEventListener('click', (e) => {
         e.stopPropagation();
         usarPorta(m.map_id, porta.id);
@@ -290,7 +290,7 @@ function paredAdicionarPonto(xPx: any, yPx: any) {
   if (!mapa.render_data.paredes) mapa.render_data.paredes = [];
 
   const segmentos = _gerarSegmentos(p1, snap);
-  segmentos.forEach(s => mapa.render_data.paredes.push({
+  segmentos.forEach(s => mapa.render_data!.paredes!.push({
     id:      'w_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
     tipo:    s.tipo,
     col:     s.col,
@@ -299,7 +299,7 @@ function paredAdicionarPonto(xPx: any, yPx: any) {
     largura: WALLS_STATE.configAtual?.largura || 3,
   }));
 
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (entry) entry.mapa.render_data = mapa.render_data;
   paredePorRenderizar(mapa);
   salvarRenderData(entry?.id, mapa.render_data);
@@ -309,7 +309,7 @@ function paredRemover(mapId: any, paredId: any) {
   const mapa = _getMapaById(mapId);
   if (!mapa?.render_data?.paredes) return;
   mapa.render_data.paredes = mapa.render_data.paredes.filter(p => p.id !== paredId);
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (entry) entry.mapa.render_data = mapa.render_data;
   paredePorRenderizar(mapa);
   salvarRenderData(entry?.id, mapa.render_data);
@@ -339,7 +339,7 @@ function portaAdicionar(col: any, row: any) {
     cor, icone,
   });
 
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (entry) entry.mapa.render_data = mapa.render_data;
   paredePorRenderizar(mapa);
   salvarRenderData(entry?.id, mapa.render_data);
@@ -352,14 +352,14 @@ function portaEditar(mapId: any, portaId: any) {
   const opcao = prompt('Porta: ' + porta.nome + '\nDigite novo nome ou deixe vazio para deletar:', porta.nome);
   if (opcao === null) return;
   if (opcao === '') {
-    mapa.render_data.portas = mapa.render_data.portas.filter(p => p.id !== portaId);
+    mapa!.render_data!.portas = mapa!.render_data!.portas!.filter(p => p.id !== portaId);
   } else {
     porta.nome = opcao;
   }
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
-  if (entry) entry.mapa.render_data = mapa.render_data;
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (entry) entry.mapa.render_data = mapa!.render_data;
   paredePorRenderizar(mapa);
-  salvarRenderData(entry?.id, mapa.render_data);
+  salvarRenderData(entry?.id, mapa!.render_data);
 }
 
 async function salvarRenderData(entryId: any, renderData: any) {
@@ -425,11 +425,11 @@ function abrirPainelCenario() {
   }
   cenarioRenderObjetos();
   const modalOverlay = document.getElementById('modal-cenario-overlay');
-  if (modalOverlay) modalOverlay.style.display = 'flex';
+  if (modalOverlay) modalOverlay.style!.display = 'flex';
 }
 function fecharPainelCenario() {
   const modalOverlay = document.getElementById('modal-cenario-overlay');
-  if (modalOverlay) modalOverlay.style.display = 'none';
+  if (modalOverlay) modalOverlay.style!.display = 'none';
   CENARIO_STATE.placement = null;
   MAPA_STATE.toolMode = null;
   document.querySelectorAll('.mapa-tool-btn').forEach(b => b.classList.remove('ativo'));
@@ -441,31 +441,31 @@ function fecharPainelCenario() {
 
 function cenarioTab(tipo: any, btn: any) {
   CENARIO_STATE.tabAtiva = tipo;
-  document.querySelectorAll('.cenario-tab').forEach(t => t.style.display = 'none');
+  document.querySelectorAll('.cenario-tab').forEach(t => t.style!.display = 'none');
   document.querySelectorAll('.cenario-tab-btn').forEach(b => {
-    b.style.background = 'none';
-    b.style.borderColor = 'var(--borda)';
-    b.style.color = 'var(--suave)';
+    b.style!.background = 'none';
+    b.style!.borderColor = 'var(--borda)';
+    b.style!.color = 'var(--suave)';
   });
-  document.getElementById('cenario-tab-' + tipo).style.display = '';
+  document.getElementById('cenario-tab-' + tipo)!.style!.display = '';
   btn.style.background = 'rgba(176,126,240,0.15)';
   btn.style.borderColor = 'rgba(176,126,240,0.4)';
   btn.style.color = '#b07ef0';
 }
 
 function cenarioBauLootChange() {
-  const tipo = document.getElementById('cen-bau-loot-tipo').value;
-  document.getElementById('cen-bau-aleatorio-wrap').style.display = tipo === 'aleatorio' ? 'block' : 'none';
-  document.getElementById('cen-bau-item-wrap').style.display = tipo === 'item_catalog' ? 'block' : 'none';
-  document.getElementById('cen-bau-ouro-wrap').style.display = tipo === 'ouro' ? 'block' : 'none';
+  const tipo = document.getElementById('cen-bau-loot-tipo')!.value!;
+  document.getElementById('cen-bau-aleatorio-wrap')!.style!.display = tipo === 'aleatorio' ? 'block' : 'none';
+  document.getElementById('cen-bau-item-wrap')!.style!.display = tipo === 'item_catalog' ? 'block' : 'none';
+  document.getElementById('cen-bau-ouro-wrap')!.style!.display = tipo === 'ouro' ? 'block' : 'none';
 }
 
 async function cenarioBuscarItem() {
-  const q = document.getElementById('cen-bau-item-busca').value.trim().toLowerCase();
+  const q = document.getElementById('cen-bau-item-busca')!.value!.trim!()!.toLowerCase!()!;
   const lista = document.getElementById('cen-bau-item-lista');
-  if (!q) { lista.innerHTML = ''; return; }
+  if (!q) { lista!.innerHTML = ''; return; }
   const defs = (INV?.itemDefs || []).filter((d: any) => d.nome.toLowerCase().includes(q)).slice(0, 8);
-  lista.innerHTML = defs.map((d: any) =>
+  lista!.innerHTML = defs.map((d: any) =>
     `<div onclick="cenarioSelecionarItem('${d.id.toString().replace(/'/g,"\'")}','${d.nome.replace(/'/g,"\'")}','${d.icone||'📦'}')"
       style="padding:6px 10px;background:rgba(20,29,43,0.8);border:1px solid var(--borda);border-radius:6px;cursor:pointer;font-size:0.75rem;display:flex;align-items:center;gap:8px"
       onmouseover="this.style.borderColor='rgba(176,126,240,0.4)'" onmouseout="this.style.borderColor='var(--borda)'">
@@ -476,10 +476,10 @@ async function cenarioBuscarItem() {
 }
 
 function cenarioSelecionarItem(id: any, nome: any, icone: any) {
-  document.getElementById('cen-bau-item-id').value = id;
-  document.getElementById('cen-bau-item-sel').textContent = icone + ' ' + nome + ' selecionado';
-  document.getElementById('cen-bau-item-lista').innerHTML = '';
-  document.getElementById('cen-bau-item-busca').value = '';
+  document.getElementById('cen-bau-item-id')!.value = id;
+  document.getElementById('cen-bau-item-sel')!.textContent = icone + ' ' + nome + ' selecionado';
+  document.getElementById('cen-bau-item-lista')!.innerHTML = '';
+  document.getElementById('cen-bau-item-busca')!.value = '';
 }
 
 // ── Ativar modo placement: aguarda clique no mapa ─────────────────────────
@@ -487,51 +487,51 @@ function cenarioAtivarPlacement(tipo: any) {
   // Coletar config do formulário
   let config: any = { tipo };
   if (tipo === 'porta') {
-    (config as any).nome = document.getElementById('cen-porta-nome').value.trim() || 'Porta';
-    (config as any).trancada = document.getElementById('cen-porta-trancada').checked;
-    config.chave_palavra = (config as any).trancada ? (document.getElementById('cen-porta-chave').value.trim() || '') : '';
+    (config as any).nome = document.getElementById('cen-porta-nome')!.value!.trim!()! || 'Porta';
+    (config as any).trancada = document.getElementById('cen-porta-trancada')!.checked!;
+    config.chave_palavra = (config as any).trancada ? (document.getElementById('cen-porta-chave')!.value!.trim!()! || '') : '';
     (config as any).aberta = false;
     // Campos novos: transição de mapa e aparência
     const transicao = document.getElementById('cen-porta-transicao')?.checked;
     (config as any).mapa_destino  = transicao ? (document.getElementById('cen-porta-mapa-destino')?.value || null) : null;
-    (config as any).destino_col   = transicao ? (parseInt(document.getElementById('cen-porta-dest-col')?.value) || 0) : 0;
-    (config as any).destino_row   = transicao ? (parseInt(document.getElementById('cen-porta-dest-row')?.value) || 0) : 0;
+    (config as any).destino_col   = transicao ? (parseInt(document.getElementById('cen-porta-dest-col')?.value!) || 0) : 0;
+    (config as any).destino_row   = transicao ? (parseInt(document.getElementById('cen-porta-dest-row')?.value!) || 0) : 0;
     (config as any).cor           = document.getElementById('cen-porta-cor')?.value   || '#c8a84b';
     (config as any).icone         = document.getElementById('cen-porta-icone')?.value || '🚪';
   } else if (tipo === 'chave') {
-    (config as any).nome = document.getElementById('cen-chave-nome').value.trim() || 'Chave';
-    (config as any).chave_palavra = document.getElementById('cen-chave-palavra').value.trim() || '';
-    (config as any).icone = document.getElementById('cen-chave-icone').value.trim() || '🗝';
+    (config as any).nome = document.getElementById('cen-chave-nome')!.value!.trim!()! || 'Chave';
+    (config as any).chave_palavra = document.getElementById('cen-chave-palavra')!.value!.trim!()! || '';
+    (config as any).icone = document.getElementById('cen-chave-icone')!.value!.trim!()! || '🗝';
     (config as any).coletada = false;
   } else if (tipo === 'bau') {
-    (config as any).nome = document.getElementById('cen-bau-nome').value.trim() || 'Baú';
+    (config as any).nome = document.getElementById('cen-bau-nome')!.value!.trim!()! || 'Baú';
     (config as any).aberto = false;
-    (config as any).trancado = document.getElementById('cen-bau-trancado').checked;
-    config.chave_palavra = (config as any).trancado ? (document.getElementById('cen-bau-chave').value.trim() || '') : '';
-    const lootTipo = document.getElementById('cen-bau-loot-tipo').value;
+    (config as any).trancado = document.getElementById('cen-bau-trancado')!.checked!;
+    config.chave_palavra = (config as any).trancado ? (document.getElementById('cen-bau-chave')!.value!.trim!()! || '') : '';
+    const lootTipo = document.getElementById('cen-bau-loot-tipo')!.value!;
     if (lootTipo === 'aleatorio') {
       (config as any).loot_tipo = 'aleatorio';
-      (config as any).loot_tier = parseInt(document.getElementById('cen-bau-tier').value) || 1;
+      (config as any).loot_tier = parseInt(document.getElementById('cen-bau-tier')!.value!) || 1;
     } else if (lootTipo === 'item_catalog') {
       (config as any).loot_tipo = 'item';
-      (config as any).loot_item_id = document.getElementById('cen-bau-item-id').value;
-      (config as any).loot_qtd = parseInt(document.getElementById('cen-bau-item-qtd').value) || 1;
+      (config as any).loot_item_id = document.getElementById('cen-bau-item-id')!.value!;
+      (config as any).loot_qtd = parseInt(document.getElementById('cen-bau-item-qtd')!.value!) || 1;
     } else if (lootTipo === 'ouro') {
       (config as any).loot_tipo = 'ouro';
-      (config as any).loot_ouro = parseInt(document.getElementById('cen-bau-ouro-qtd').value) || 10;
+      (config as any).loot_ouro = parseInt(document.getElementById('cen-bau-ouro-qtd')!.value!) || 10;
     } else {
       (config as any).loot_tipo = 'nenhum';
     }
   } else if (tipo === 'obstaculo') {
-    (config as any).nome = document.getElementById('cen-obs-nome').value.trim() || 'Obstáculo';
-    (config as any).icone = document.getElementById('cen-obs-icone').value.trim() || '🪨';
-    config.tamanho = parseInt(document.getElementById('cen-obs-tamanho').value) || 1;
+    (config as any).nome = document.getElementById('cen-obs-nome')!.value!.trim!()! || 'Obstáculo';
+    (config as any).icone = document.getElementById('cen-obs-icone')!.value!.trim!()! || '🪨';
+    config.tamanho = parseInt(document.getElementById('cen-obs-tamanho')!.value!) || 1;
   }
 
   CENARIO_STATE.placement = config;
   MAPA_STATE.toolMode = 'cenario_placement';
   const modalOverlay = document.getElementById('modal-cenario-overlay');
-  if (modalOverlay) modalOverlay.style.display = 'none';
+  if (modalOverlay) modalOverlay.style!.display = 'none';
   mostrarToast('📍 Clique no mapa para posicionar: ' + config.nome, '');
 }
 
@@ -560,7 +560,7 @@ function cenarioHandleMapaClick(e: any, wrap: any) {
   const novoObj = { ...cfg, id: cfg.tipo + '_' + Date.now(), col, row };
   mapa.render_data.objetos.push(novoObj);
 
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (entry) entry.mapa.render_data = mapa.render_data;
 
   mapaRenderTokens(mapa);
@@ -610,7 +610,7 @@ function cenarioRemoverObjeto(id: any) {
   const mapa = _getMapaById(mapId);
   if (!mapa?.render_data?.objetos) return;
   mapa.render_data.objetos = mapa.render_data.objetos.filter(o => o.id !== id);
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (entry) entry.mapa.render_data = mapa.render_data;
   mapaRenderTokens(mapa);
   salvarRenderData(entry?.id, mapa.render_data);
@@ -628,9 +628,9 @@ function cenarioAbrirBauEditor(bauId: any) {
   if (!def) { mostrarToast('Item não encontrado no catálogo', 'erro'); return; }
   if (!bau.loot_itens) bau.loot_itens = [];
   bau.loot_itens.push({ item_id: def.id, nome: def.nome, icone: def.icone||'📦', qtd: 1 });
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE?.mapaAtualId);
-  if (entry) entry.mapa.render_data = mapa.render_data;
-  salvarRenderData(entry?.id, mapa.render_data);
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE?.mapaAtualId);
+  if (entry) entry.mapa.render_data = mapa!.render_data;
+  salvarRenderData(entry?.id, mapa!.render_data);
   mostrarToast('✓ ' + def.nome + ' adicionado ao ' + bau.nome, 'ok');
   cenarioRenderObjetos();
 }
@@ -655,10 +655,10 @@ function cenarioRenderObjetos_mapa(m: any) {
     if (o.coletada || o.aberto) return; // sumir após interação
     const el = document.createElement('div');
     el.className = 'cenario-obj mapa-token';
-    el.dataset.objId = o.id;
+    el.dataset!.objId = o.id;
     const leftPct = ((o.col + 0.5) / cols * 100).toFixed(2);
     const topPct  = ((o.row + 0.5) / rows * 100).toFixed(2);
-    el.style.cssText = `left:${leftPct}%;top:${topPct}%;transform:translate(-50%,-50%);position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:auto;cursor:pointer;z-index:12`;
+    el.style!.cssText = `left:${leftPct}%;top:${topPct}%;transform:translate(-50%,-50%);position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:auto;cursor:pointer;z-index:12`;
 
     const size = Math.min(cW, cH) * 0.7;
     const icon = o.tipo==='porta'?(o.trancada&&!o.aberta?'🔒':'🚪'):
@@ -708,7 +708,7 @@ function _cenarioSalvarObj(mapa: any, entry: any) {
 }
 
 function cenarioAbrirPorta(porta: any, mapId: any, charNome: any, mapa: any) {
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (porta.trancada && !porta.aberta) {
     // Verificar se o personagem tem a chave
     const char = RPG_DATA?.characters?.find(c => c.nome === charNome);
@@ -738,7 +738,7 @@ function cenarioPegarChave(chave: any, mapId: any, charNome: any, mapa: any) {
   chave.coletada = true;
   mostrarToast('🗝 ' + charNome + ' pegou ' + chave.nome + '!', 'ok');
   // Salvar no personagem
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
   _cenarioSalvarObj(mapa, entry);
   // Salvar custom_attrs do char
   if (RPG_DATA?.rpgId) {
@@ -750,7 +750,7 @@ function cenarioPegarChave(chave: any, mapId: any, charNome: any, mapa: any) {
 }
 
 async function cenarioAbrirBau(bau: any, mapId: any, charNome: any, mapa: any) {
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const entry = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (bau.aberto) { mostrarToast('📭 ' + bau.nome + ' já foi aberto', ''); return; }
   if (bau.trancado) {
     const char = RPG_DATA?.characters?.find(c => c.nome === charNome);
@@ -891,13 +891,13 @@ function abrirEditorCena() {
   CENA_ED.ferramenta = null;
   CENA_ED.primeroPonto = null;
   CENA_ED.undoStack = [];
-  document.getElementById('modal-cena-overlay').style.display = 'flex';
+  document.getElementById('modal-cena-overlay')!.style!.display = 'flex';
   setTimeout(() => { cenaRenderizarCanvas(); cenaRenderizarObjetos(); }, 80);
   _cenaBotoesAtualizar();
 }
 
 function fecharEditorCena() {
-  document.getElementById('modal-cena-overlay').style.display = 'none';
+  document.getElementById('modal-cena-overlay')!.style!.display = 'none';
 }
 
 function cenaSetFerramenta(f: any) {
@@ -913,7 +913,7 @@ function cenaSetFerramenta(f: any) {
     bau: '📦 Clique em uma célula para posicionar um baú',
     remover: '🗑 Clique em qualquer objeto/parede para remover',
   };
-  document.getElementById('cena-ed-instrucao').textContent = instrucoes[f] || '';
+  document.getElementById('cena-ed-instrucao')!.textContent = instrucoes[f] || '';
 }
 
 function _cenaBotoesAtualizar() {
@@ -931,9 +931,9 @@ function cenaRenderizarCanvas() {
   const canvas = document.getElementById('cena-canvas');
   if (!canvas) return;
   const area = document.getElementById('cena-mapa-area');
-  canvas.width  = area.offsetWidth;
-  canvas.height = area.offsetHeight;
-  const ctx = canvas.getContext('2d');
+  canvas.width  = area!.offsetWidth;
+  canvas.height = area!.offsetHeight;
+  const ctx = canvas.getContext!('2d');
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   // Imagem de fundo
@@ -964,10 +964,10 @@ function cenaRenderizarSVG() {
   if (!svg || !m) return;
   svg.innerHTML = '';
   const canvas = document.getElementById('cena-canvas');
-  const W = canvas.width, H = canvas.height;
+  const W = canvas!.width, H = canvas!.height;
   const cols = m.largura_total || 20;
   const rows = m.altura_total  || 20;
-  const cW = W/cols, cH = H/rows;
+  const cW = W!/cols, cH = H!/rows;
   const rd = m.render_data || {};
 
   // Paredes
@@ -1076,43 +1076,43 @@ function _cenaHandleClick(e: any) {
     }
   } else if (f === 'porta' || f === 'porta_trancada') {
     // Abrir modal de configuração
-    document.getElementById('cfg-porta-col').value = (col) as any;
-    document.getElementById('cfg-porta-row').value = (row) as any;
-    document.getElementById('cfg-porta-tipo').value = f;
-    document.getElementById('cfg-porta-nome').value = '';
-    document.getElementById('cfg-porta-chave').value = '';
-    document.getElementById('cfg-porta-titulo').textContent = f==='porta_trancada' ? '🔒 Porta Trancada' : '🚪 Configurar Porta';
-    document.getElementById('cfg-porta-chave-wrap').style.display = f==='porta_trancada' ? 'block' : 'none';
-    document.getElementById('modal-cfg-porta').style.display = 'flex';
+    document.getElementById('cfg-porta-col')!.value = (col) as any;
+    document.getElementById('cfg-porta-row')!.value = (row) as any;
+    document.getElementById('cfg-porta-tipo')!.value = f;
+    document.getElementById('cfg-porta-nome')!.value = '';
+    document.getElementById('cfg-porta-chave')!.value = '';
+    document.getElementById('cfg-porta-titulo')!.textContent = f==='porta_trancada' ? '🔒 Porta Trancada' : '🚪 Configurar Porta';
+    document.getElementById('cfg-porta-chave-wrap')!.style!.display = f==='porta_trancada' ? 'block' : 'none';
+    document.getElementById('modal-cfg-porta')!.style!.display = 'flex';
   } else if (f === 'chave') {
-    document.getElementById('cfg-chave-col').value = (col) as any;
-    document.getElementById('cfg-chave-row').value = (row) as any;
-    document.getElementById('cfg-chave-nome').value = '';
-    document.getElementById('cfg-chave-palavra').value = '';
-    document.getElementById('modal-cfg-chave').style.display = 'flex';
+    document.getElementById('cfg-chave-col')!.value = (col) as any;
+    document.getElementById('cfg-chave-row')!.value = (row) as any;
+    document.getElementById('cfg-chave-nome')!.value = '';
+    document.getElementById('cfg-chave-palavra')!.value = '';
+    document.getElementById('modal-cfg-chave')!.style!.display = 'flex';
   } else if (f === 'objeto') {
     const id = 'ob_'+Date.now();
     rd.objetos.push({id,col,row,tipo:'blocker',nome:'Obstáculo'});
     CENA_ED.undoStack.push({tipo:'add_obj',id});
     cenaRenderizarSVG();
   } else if (f === 'bau') {
-    document.getElementById('cfg-bau-col').value = (col) as any;
-    document.getElementById('cfg-bau-row').value = (row) as any;
-    document.getElementById('cfg-bau-id').value = '';
-    document.getElementById('cfg-bau-nome').value = 'Baú';
+    document.getElementById('cfg-bau-col')!.value = (col) as any;
+    document.getElementById('cfg-bau-row')!.value = (row) as any;
+    document.getElementById('cfg-bau-id')!.value = '';
+    document.getElementById('cfg-bau-nome')!.value = 'Baú';
     CENA_ED.cfgBauItens = [];
     cfgBauTab('itens');
     cfgBauRenderLista();
     cfgBauRenderSelecionados();
-    document.getElementById('modal-cfg-bau').style.display = 'flex';
+    document.getElementById('modal-cfg-bau')!.style!.display = 'flex';
   }
 }
 
 function _cenaCoordsFromEvent(e: any) {
   const area = document.getElementById('cena-mapa-area');
   const canvas = document.getElementById('cena-canvas');
-  const rect = area.getBoundingClientRect();
-  const W = canvas.width, H = canvas.height;
+  const rect = area!.getBoundingClientRect();
+  const W = canvas!.width, H = canvas!.height;
   const m = CENA_ED.mapa;
   const cols = m.largura_total||20, rows = m.altura_total||20;
   const col = Math.floor(((e.clientX-rect.left)/rect.width)*cols);
@@ -1137,43 +1137,43 @@ function cenaRemoverObj(id: any, tipo: any) {
 
 // ── Configurar Porta ──────────────────────────────────────────────────────
 function cfgPortaConfirmar() {
-  const col = +document.getElementById('cfg-porta-col').value;
-  const row = +document.getElementById('cfg-porta-row').value;
-  const tipo = document.getElementById('cfg-porta-tipo').value;
-  const nome = document.getElementById('cfg-porta-nome').value.trim() || 'Porta';
-  const chave_palavra = document.getElementById('cfg-porta-chave').value.trim();
+  const col = +document.getElementById('cfg-porta-col')!.value!;
+  const row = +document.getElementById('cfg-porta-row')!.value!;
+  const tipo = document.getElementById('cfg-porta-tipo')!.value!;
+  const nome = document.getElementById('cfg-porta-nome')!.value!.trim!()! || 'Porta';
+  const chave_palavra = document.getElementById('cfg-porta-chave')!.value!.trim!()!;
   const id = 'door_'+Date.now();
   CENA_ED.mapa.render_data.portas.push({id,col,row,nome,aberta:false,trancada:tipo==='porta_trancada',chave_palavra:chave_palavra||null});
   CENA_ED.undoStack.push({tipo:'add_porta',id});
-  document.getElementById('modal-cfg-porta').style.display = 'none';
+  document.getElementById('modal-cfg-porta')!.style!.display = 'none';
   cenaRenderizarSVG();
 }
 
 // ── Configurar Chave ──────────────────────────────────────────────────────
 function cfgChaveConfirmar() {
-  const col = +document.getElementById('cfg-chave-col').value;
-  const row = +document.getElementById('cfg-chave-row').value;
-  const nome = document.getElementById('cfg-chave-nome').value.trim() || 'Chave';
-  const chave_palavra = document.getElementById('cfg-chave-palavra').value.trim();
+  const col = +document.getElementById('cfg-chave-col')!.value!;
+  const row = +document.getElementById('cfg-chave-row')!.value!;
+  const nome = document.getElementById('cfg-chave-nome')!.value!.trim!()! || 'Chave';
+  const chave_palavra = document.getElementById('cfg-chave-palavra')!.value!.trim!()!;
   const id = 'key_'+Date.now();
   CENA_ED.mapa.render_data.objetos.push({id,col,row,tipo:'chave',nome,chave_palavra:chave_palavra||null});
   CENA_ED.undoStack.push({tipo:'add_obj',id});
-  document.getElementById('modal-cfg-chave').style.display = 'none';
+  document.getElementById('modal-cfg-chave')!.style!.display = 'none';
   cenaRenderizarSVG();
 }
 
 // ── Configurar Baú ────────────────────────────────────────────────────────
 function cfgBauTab(tab: any) {
-  document.getElementById('cfg-bau-sec-itens').style.display = tab==='itens'?'block':'none';
-  document.getElementById('cfg-bau-sec-loot').style.display  = tab==='loot' ?'block':'none';
-  document.getElementById('cfg-bau-tab-itens').style.background = tab==='itens'?'rgba(200,168,75,0.15)':'transparent';
-  document.getElementById('cfg-bau-tab-loot').style.background  = tab==='loot' ?'rgba(200,168,75,0.15)':'transparent';
-  document.getElementById('cfg-bau-tab-itens').style.color = tab==='itens'?'var(--destaque)':'var(--suave)';
-  document.getElementById('cfg-bau-tab-loot').style.color  = tab==='loot' ?'var(--destaque)':'var(--suave)';
+  document.getElementById('cfg-bau-sec-itens')!.style!.display = tab==='itens'?'block':'none';
+  document.getElementById('cfg-bau-sec-loot')!.style!.display  = tab==='loot' ?'block':'none';
+  document.getElementById('cfg-bau-tab-itens')!.style!.background = tab==='itens'?'rgba(200,168,75,0.15)':'transparent';
+  document.getElementById('cfg-bau-tab-loot')!.style!.background  = tab==='loot' ?'rgba(200,168,75,0.15)':'transparent';
+  document.getElementById('cfg-bau-tab-itens')!.style!.color = tab==='itens'?'var(--destaque)':'var(--suave)';
+  document.getElementById('cfg-bau-tab-loot')!.style!.color  = tab==='loot' ?'var(--destaque)':'var(--suave)';
 }
 
 function cfgBauRenderLista() {
-  const busca = document.getElementById('cfg-bau-busca')?.value.toLowerCase()||'';
+  const busca = document.getElementById('cfg-bau-busca')?.value!.toLowerCase!()!||'';
   const lista = document.getElementById('cfg-bau-lista-itens');
   if (!lista) return;
   const defs = (INV?.itemDefs||[]).filter((d: any) => (d.tipo==='consumivel'||d.tipo==='misc'||d.tipo==='equipamento') &&
@@ -1210,11 +1210,11 @@ function cfgBauRenderSelecionados() {
 }
 
 function cfgBauConfirmar() {
-  const col = +document.getElementById('cfg-bau-col').value;
-  const row = +document.getElementById('cfg-bau-row').value;
-  const nome = document.getElementById('cfg-bau-nome').value.trim()||'Baú';
-  const isLoot = document.getElementById('cfg-bau-sec-loot').style.display==='block';
-  const id = document.getElementById('cfg-bau-id').value || 'bau_'+Date.now();
+  const col = +document.getElementById('cfg-bau-col')!.value!;
+  const row = +document.getElementById('cfg-bau-row')!.value!;
+  const nome = document.getElementById('cfg-bau-nome')!.value!.trim!()!||'Baú';
+  const isLoot = document.getElementById('cfg-bau-sec-loot')!.style!.display==='block';
+  const id = document.getElementById('cfg-bau-id')!.value! || 'bau_'+Date.now();
   const rd = CENA_ED.mapa.render_data;
   const existing = rd.objetos.findIndex((o: any)=>o.id===id);
   const obj = {
@@ -1222,11 +1222,11 @@ function cfgBauConfirmar() {
     itens: isLoot ? null : JSON.parse(JSON.stringify(CENA_ED.cfgBauItens)),
     loot_aleatorio: isLoot,
     raridade: isLoot ? (document.getElementById('cfg-bau-raridade')?.value||'comum') : null,
-    loot_qtd: isLoot ? (+document.getElementById('cfg-bau-qtd')?.value||2) : null,
+    loot_qtd: isLoot ? (+document.getElementById('cfg-bau-qtd')?.value!||2) : null,
   };
   if (existing>=0) rd.objetos[existing]=obj;
   else { rd.objetos.push(obj); CENA_ED.undoStack.push({tipo:'add_obj',id}); }
-  document.getElementById('modal-cfg-bau').style.display='none';
+  document.getElementById('modal-cfg-bau')!.style!.display='none';
   cenaRenderizarSVG();
 }
 
@@ -1251,7 +1251,7 @@ async function cenaSalvar() {
 
 // Ctrl+Z desfaz no editor
 document.addEventListener('keydown', e => {
-  if (!document.getElementById('modal-cena-overlay')?.style.display||document.getElementById('modal-cena-overlay').style.display==='none') return;
+  if (!document.getElementById('modal-cena-overlay')?.style!.display!||document.getElementById('modal-cena-overlay')!.style!.display==='none') return;
   if ((e.ctrlKey||e.metaKey) && e.key==='z') {
     e.preventDefault();
     const last = CENA_ED.undoStack.pop();
@@ -1301,7 +1301,7 @@ function _renderizarObjetosNoMapa(m: any) {
     txt.setAttribute('text-anchor', ('middle') as any); txt.setAttribute('font-size', (Math.round(r*1.3) as any));
     txt.textContent = emap[o.tipo]||'❓';
     if (o.tipo!=='blocker') {
-      g.style.cursor='pointer';
+      g.style!.cursor='pointer';
       g.addEventListener('click',e=>{e.stopPropagation();_objetoClicar(m.map_id,o.id);});
     }
     g.appendChild(circ); g.appendChild(txt);
@@ -1335,12 +1335,12 @@ function _coletarChave(mapId: any, keyId: any, charNome: any) {
   if (!char.custom_attrs.chaves) char.custom_attrs.chaves=[];
   char.custom_attrs.chaves.push({id:key.id,nome:key.nome,chave_palavra:key.chave_palavra});
   // Remover chave do mapa
-  mapa.render_data.objetos = mapa.render_data.objetos.filter(o=>o.id!==keyId);
+  mapa!.render_data!.objetos = mapa!.render_data!.objetos!.filter(o=>o.id!==keyId);
   const entry=(RPG_DATA?.mapas||[]).find(l=>l.mapa.map_id===mapId);
-  if(entry){entry.mapa.render_data=mapa.render_data;}
+  if(entry){entry.mapa.render_data=mapa!.render_data;}
   mostrarToast('🗝 '+charNome+' coletou '+key.nome,'ok');
   paredePorRenderizar(mapa);
-  salvarRenderData(entry?.id,mapa.render_data);
+  salvarRenderData(entry?.id,mapa!.render_data);
   // Atualizar contextuais (agora tem chave)
   _mesaRenderAcoes?.();
 }
@@ -1369,9 +1369,9 @@ usarPorta = async function(mapId, portaId, charNome) {
   porta.aberta = !porta.aberta;
   mostrarToast(porta.aberta?'🚪 '+porta.nome+' aberta':'🔒 '+porta.nome+' fechada','ok');
   const entry=(RPG_DATA?.mapas||[]).find(l=>l.mapa.map_id===mapId);
-  if(entry)entry.mapa.render_data=mapa.render_data;
+  if(entry)entry.mapa.render_data=mapa!.render_data;
   paredePorRenderizar(mapa);
-  await salvarRenderData(entry?.id,mapa.render_data);
+  await salvarRenderData(entry?.id,mapa!.render_data);
 };
 
 // Porta trancada bloqueia movimento mesmo sem parede
@@ -1462,9 +1462,9 @@ function _abrirBauModal(mapId: any, bauId: any, charNome: any) {
   const mapa=_getMapaById(mapId);
   const bau=mapa?.render_data?.objetos?.find(o=>o.id===bauId);
   if(!bau||bau.tipo!=='bau') return;
-  document.getElementById('abrir-bau-id').value=bauId;
-  document.getElementById('abrir-bau-char').value=charNome||'';
-  document.getElementById('abrir-bau-nome').textContent=bau.nome||'Baú';
+  document.getElementById('abrir-bau-id')!.value=bauId;
+  document.getElementById('abrir-bau-char')!.value=charNome||'';
+  document.getElementById('abrir-bau-nome')!.textContent=bau.nome||'Baú';
 
   let descHtml='';
   if(bau.aberto){descHtml='<div style="color:var(--suave);font-style:italic">Este baú já foi aberto.</div>';}
@@ -1476,14 +1476,14 @@ function _abrirBauModal(mapId: any, bauId: any, charNome: any) {
       ?itens.map((it: any)=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:5px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,.2)"><span style="font-size:1rem">${it.icone||'📦'}</span><span style="font-family:var(--fonte-d);font-size:.7rem;flex:1">${it.nome}</span><span style="color:var(--suave)">×${it.quantidade}</span></div>`).join('')
       :'<div style="color:var(--suave);font-style:italic;font-size:.78rem">Baú vazio</div>';
   }
-  document.getElementById('abrir-bau-conteudo').innerHTML=descHtml;
-  document.getElementById('abrir-bau-btn').style.display=bau.aberto?'none':'block';
-  document.getElementById('modal-abrir-bau').style.display='flex';
+  document.getElementById('abrir-bau-conteudo')!.innerHTML=descHtml;
+  document.getElementById('abrir-bau-btn')!.style!.display=bau.aberto?'none':'block';
+  document.getElementById('modal-abrir-bau')!.style!.display='flex';
 }
 
 async function abrirBauConfirmar() {
-  const bauId=document.getElementById('abrir-bau-id').value;
-  const charNome=document.getElementById('abrir-bau-char').value;
+  const bauId=document.getElementById('abrir-bau-id')!.value!;
+  const charNome=document.getElementById('abrir-bau-char')!.value!;
   const mapId=MAPA_STATE?.mapaAtualId;
   const mapa=_getMapaById(mapId);
   const bau=mapa?.render_data?.objetos?.find(o=>o.id===bauId);
@@ -1512,10 +1512,10 @@ async function abrirBauConfirmar() {
   }
 
   const entry=(RPG_DATA?.mapas||[]).find(l=>l.mapa.map_id===mapId);
-  if(entry){entry.mapa.render_data=mapa.render_data;}
-  await salvarRenderData(entry?.id,mapa.render_data);
+  if(entry){entry.mapa.render_data=mapa!.render_data;}
+  await salvarRenderData(entry?.id,mapa!.render_data);
   paredePorRenderizar(mapa);
-  document.getElementById('modal-abrir-bau').style.display='none';
+  document.getElementById('modal-abrir-bau')!.style!.display='none';
 }
 
 function _rarPeso(r: any){return ({comum:1,incomum:2,raro:3,épico:4,lendário:5} as any)[r]||1;}
@@ -1539,7 +1539,7 @@ function _abrirModalAtacarPorta(mapId: any, portaId: any, charNome: any) {
   
   const modal = document.createElement('div');
   modal.id = 'modal-atacar-porta-temp';
-  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:950;align-items:flex-end;justify-content:center';
+  modal.style!.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:950;align-items:flex-end;justify-content:center';
   modal.innerHTML = `
     <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid #e74c3c;border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -1587,8 +1587,8 @@ async function _aplicarDanoPorta(mapId: any, portaId: any, charNome: any, habili
   
   // Salvar
   const entry=(RPG_DATA?.mapas||[]).find(l=>l.mapa.map_id===mapId);
-  if(entry){entry.mapa.render_data=mapa.render_data;}
-  await salvarRenderData(entry?.id,mapa.render_data);
+  if(entry){entry.mapa.render_data=mapa!.render_data;}
+  await salvarRenderData(entry?.id,mapa!.render_data);
   paredePorRenderizar(mapa);
   
   // Fechar modal
@@ -1617,7 +1617,7 @@ function _abrirModalAtacarObstaculo(mapId: any, obstaculoId: any, charNome: any)
   
   const modal = document.createElement('div');
   modal.id = 'modal-atacar-obstaculo-temp';
-  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:950;align-items:flex-end;justify-content:center';
+  modal.style!.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:950;align-items:flex-end;justify-content:center';
   modal.innerHTML = `
     <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid #e74c3c;border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -1657,8 +1657,8 @@ async function _aplicarDanoObstaculo(mapId: any, obstaculoId: any, charNome: any
   if(obs.hp_atual <= 0) {
     obs.hp_atual = 0;
     // Remover obstáculo do mapa
-    const idx = mapa.render_data.objetos.findIndex(o => o.id === obstaculoId);
-    if(idx !== -1) mapa.render_data.objetos.splice(idx, 1);
+    const idx = mapa!.render_data!.objetos!.findIndex(o => o.id === obstaculoId);
+    if(idx !== -1) mapa!.render_data!.objetos!.splice(idx, 1);
     mostrarToast(`💥 ${obs.nome} foi destruído! (${dano} de dano)`, 'sucesso');
   } else {
     mostrarToast(`⚔ ${dano} de dano aplicado. HP restante: ${obs.hp_atual}/${obs.hp_max}`, 'ok');
@@ -1666,8 +1666,8 @@ async function _aplicarDanoObstaculo(mapId: any, obstaculoId: any, charNome: any
   
   // Salvar
   const entry=(RPG_DATA?.mapas||[]).find(l=>l.mapa.map_id===mapId);
-  if(entry){entry.mapa.render_data=mapa.render_data;}
-  await salvarRenderData(entry?.id,mapa.render_data);
+  if(entry){entry.mapa.render_data=mapa!.render_data;}
+  await salvarRenderData(entry?.id,mapa!.render_data);
   paredePorRenderizar(mapa);
   
   // Fechar modal
@@ -1745,7 +1745,7 @@ window.abrirBauConfirmar=abrirBauConfirmar;
 
 function nmAtivarModoParede() {
   const cor     = document.getElementById('nm-parede-cor')?.value     || '#7ec8f0';
-  const largura = parseInt(document.getElementById('nm-parede-largura')?.value) || 3;
+  const largura = parseInt(document.getElementById('nm-parede-largura')?.value!) || 3;
   WALLS_STATE.configAtual = { cor, largura };
   MAPA_STATE.toolMode = 'paredes';
   fecharModalNovoMapa();
@@ -1808,14 +1808,14 @@ window.cenarioPortaPopularMapas = cenarioPortaPopularMapas;
 // ── Trocar aba do modal de cenário ────────────────────────────────
 function trocarAbaCenario(aba: any) {
   // Ocultar todas as abas
-  document.querySelectorAll('.cenario-tab').forEach(tab => tab.style.display = 'none');
+  document.querySelectorAll('.cenario-tab').forEach(tab => tab.style!.display = 'none');
   // Mostrar aba selecionada
   const tabEl = document.getElementById(`cenario-tab-${aba}`);
-  if (tabEl) tabEl.style.display = 'block';
+  if (tabEl) tabEl.style!.display = 'block';
   
   // Atualizar botões de navegação
   document.querySelectorAll('.cenario-nav-btn').forEach(btn => {
-    if (btn.dataset.tab === aba) {
+    if (btn.dataset!.tab === aba) {
       const cores: Record<string, any> = {
         porta: { bg: 'rgba(176,126,240,0.12)', border: 'rgba(176,126,240,0.35)', color: '#b07ef0' },
         chave: { bg: 'rgba(200,168,75,0.12)', border: 'rgba(200,168,75,0.35)', color: '#c8a84b' },
@@ -1823,13 +1823,13 @@ function trocarAbaCenario(aba: any) {
         obstaculo: { bg: 'rgba(231,76,60,0.1)', border: 'rgba(231,76,60,0.3)', color: '#e74c3c' }
       };
       const cor = cores[aba] || cores.porta;
-      btn.style.background = cor.bg;
-      btn.style.borderColor = cor.border;
-      btn.style.color = cor.color;
+      btn.style!.background = cor.bg;
+      btn.style!.borderColor = cor.border;
+      btn.style!.color = cor.color;
     } else {
-      btn.style.background = 'transparent';
-      btn.style.borderColor = 'var(--borda)';
-      btn.style.color = 'var(--suave)';
+      btn.style!.background = 'transparent';
+      btn.style!.borderColor = 'var(--borda)';
+      btn.style!.color = 'var(--suave)';
     }
   });
 }
@@ -1875,7 +1875,7 @@ function abrirModalCenarioNoCanvas(tipo: any) {
   
   // Abrir modal
   const modalOverlay = document.getElementById('modal-cenario-overlay');
-  if (modalOverlay) modalOverlay.style.display = 'flex';
+  if (modalOverlay) modalOverlay.style!.display = 'flex';
   
   // Mapear tipo para aba correta
   const mapa: Record<string, any> = {
@@ -1908,7 +1908,7 @@ window.cenarioAtivarPlacement = function(tipo) {
     
     // Fechar modal
     const modalOverlay = document.getElementById('modal-cenario-overlay');
-    if (modalOverlay) modalOverlay.style.display = 'none';
+    if (modalOverlay) modalOverlay.style!.display = 'none';
     
     mostrarToast('📍 Clique no canvas para posicionar', '');
     
@@ -1981,7 +1981,7 @@ window.cenarioAtivarPlacement = function(tipo) {
     
     // Fechar modal
     const modalOverlay = document.getElementById('modal-cenario-overlay');
-    if (modalOverlay) modalOverlay.style.display = 'none';
+    if (modalOverlay) modalOverlay.style!.display = 'none';
     
     // Re-renderizar
     const canvas = document.getElementById('nmce-canvas');
@@ -2021,49 +2021,49 @@ function coletarDadosFormularioCenario(tipo: any) {
   const dados: any = {};
   
   if (tipo === 'porta') {
-    (dados as any).nome = document.getElementById('cen-porta-nome')?.value.trim() || 'Porta';
-    (dados as any).icone = document.getElementById('cen-porta-icone')?.value.trim() || '🚪';
+    (dados as any).nome = document.getElementById('cen-porta-nome')?.value!.trim!()! || 'Porta';
+    (dados as any).icone = document.getElementById('cen-porta-icone')?.value!.trim!()! || '🚪';
     (dados as any).cor = document.getElementById('cen-porta-cor')?.value || '#c8a84b';
     (dados as any).trancada = document.getElementById('cen-porta-trancada')?.checked || false;
-    dados.chave_palavra = (dados as any).trancada ? (document.getElementById('cen-porta-chave')?.value.trim() || '') : '';
+    dados.chave_palavra = (dados as any).trancada ? (document.getElementById('cen-porta-chave')?.value!.trim!()! || '') : '';
     (dados as any).transicao = document.getElementById('cen-porta-transicao')?.checked || false;
     (dados as any).destrutivel = document.getElementById('cen-porta-destrutivel')?.checked || false;
-    dados.hp_max = (dados as any).destrutivel ? (parseInt(document.getElementById('cen-porta-hp')?.value) || 20) : null;
+    dados.hp_max = (dados as any).destrutivel ? (parseInt(document.getElementById('cen-porta-hp')?.value!) || 20) : null;
     dados.hp_atual = (dados as any).hp_max;
     if ((dados as any).transicao) {
       (dados as any).mapa_destino = document.getElementById('cen-porta-mapa-destino')?.value || null;
-      (dados as any).destino_col = parseInt(document.getElementById('cen-porta-dest-col')?.value) || 0;
-      (dados as any).destino_row = parseInt(document.getElementById('cen-porta-dest-row')?.value) || 0;
+      (dados as any).destino_col = parseInt(document.getElementById('cen-porta-dest-col')?.value!) || 0;
+      (dados as any).destino_row = parseInt(document.getElementById('cen-porta-dest-row')?.value!) || 0;
     }
   }
   
   else if (tipo === 'chave') {
-    (dados as any).nome = document.getElementById('cen-chave-nome')?.value.trim() || 'Chave';
-    (dados as any).palavra = document.getElementById('cen-chave-palavra')?.value.trim() || '';
-    (dados as any).icone = document.getElementById('cen-chave-icone')?.value.trim() || '🗝';
+    (dados as any).nome = document.getElementById('cen-chave-nome')?.value!.trim!()! || 'Chave';
+    (dados as any).palavra = document.getElementById('cen-chave-palavra')?.value!.trim!()! || '';
+    (dados as any).icone = document.getElementById('cen-chave-icone')?.value!.trim!()! || '🗝';
   }
   
   else if (tipo === 'bau') {
-    (dados as any).nome = document.getElementById('cen-bau-nome')?.value.trim() || 'Baú';
+    (dados as any).nome = document.getElementById('cen-bau-nome')?.value!.trim!()! || 'Baú';
     (dados as any).trancado = document.getElementById('cen-bau-trancado')?.checked || false;
-    dados.chave_palavra = (dados as any).trancado ? (document.getElementById('cen-bau-chave')?.value.trim() || '') : '';
+    dados.chave_palavra = (dados as any).trancado ? (document.getElementById('cen-bau-chave')?.value!.trim!()! || '') : '';
     (dados as any).loot_tipo = document.getElementById('cen-bau-loot-tipo')?.value || 'nenhum';
     if ((dados as any).loot_tipo === 'ouro') {
-      (dados as any).loot_ouro = parseInt(document.getElementById('cen-bau-ouro-qtd')?.value) || 50;
+      (dados as any).loot_ouro = parseInt(document.getElementById('cen-bau-ouro-qtd')?.value!) || 50;
     } else if ((dados as any).loot_tipo === 'item_catalog') {
       (dados as any).item_id = document.getElementById('cen-bau-item-id')?.value || null;
-      (dados as any).item_qtd = parseInt(document.getElementById('cen-bau-item-qtd')?.value) || 1;
+      (dados as any).item_qtd = parseInt(document.getElementById('cen-bau-item-qtd')?.value!) || 1;
     } else if ((dados as any).loot_tipo === 'aleatorio') {
-      (dados as any).tier = parseInt(document.getElementById('cen-bau-tier')?.value) || 1;
+      (dados as any).tier = parseInt(document.getElementById('cen-bau-tier')?.value!) || 1;
     }
   }
   
   else if (tipo === 'obstaculo') {
-    (dados as any).nome = document.getElementById('cen-obs-nome')?.value.trim() || 'Obstáculo';
-    (dados as any).icone = document.getElementById('cen-obs-icone')?.value.trim() || '🪨';
-    (dados as any).tamanho = parseInt(document.getElementById('cen-obs-tamanho')?.value) || 1;
+    (dados as any).nome = document.getElementById('cen-obs-nome')?.value!.trim!()! || 'Obstáculo';
+    (dados as any).icone = document.getElementById('cen-obs-icone')?.value!.trim!()! || '🪨';
+    (dados as any).tamanho = parseInt(document.getElementById('cen-obs-tamanho')?.value!) || 1;
     (dados as any).destrutivel = document.getElementById('cen-obs-destrutivel')?.checked || false;
-    (dados as any).hp_max = dados.destrutivel ? (parseInt(document.getElementById('cen-obs-hp')?.value) || 50) : null;
+    (dados as any).hp_max = dados.destrutivel ? (parseInt(document.getElementById('cen-obs-hp')?.value!) || 50) : null;
     dados.hp_atual = dados.hp_max;
   }
   
@@ -2175,44 +2175,44 @@ function editarObjetoCanvas(tipo: any, index: any) {
   // Abrir modal
   CANVAS_CONTEXT = 'canvas_editing';
   const modalOverlay = document.getElementById('modal-cenario-overlay');
-  if (modalOverlay) modalOverlay.style.display = 'flex';
+  if (modalOverlay) modalOverlay.style!.display = 'flex';
   trocarAbaCenario(tipoModal);
   
   // Preencher campos com dados do objeto
   if (tipo === 'porta') {
-    document.getElementById('cen-porta-nome').value = obj.nome || '';
-    document.getElementById('cen-porta-icone').value = obj.icone || '🚪';
-    document.getElementById('cen-porta-cor').value = obj.cor || '#c8a84b';
-    document.getElementById('cen-porta-trancada').checked = obj.trancada || false;
-    document.getElementById('cen-porta-chave-wrap').style.display = obj.trancada ? 'block' : 'none';
-    document.getElementById('cen-porta-chave').value = obj.chave_palavra || '';
-    document.getElementById('cen-porta-destrutivel').checked = obj.destrutivel || false;
-    document.getElementById('cen-porta-hp-wrap').style.display = obj.destrutivel ? 'block' : 'none';
-    document.getElementById('cen-porta-hp').value = obj.hp_max || 20;
+    document.getElementById('cen-porta-nome')!.value = obj.nome || '';
+    document.getElementById('cen-porta-icone')!.value = obj.icone || '🚪';
+    document.getElementById('cen-porta-cor')!.value = obj.cor || '#c8a84b';
+    document.getElementById('cen-porta-trancada')!.checked = obj.trancada || false;
+    document.getElementById('cen-porta-chave-wrap')!.style!.display = obj.trancada ? 'block' : 'none';
+    document.getElementById('cen-porta-chave')!.value = obj.chave_palavra || '';
+    document.getElementById('cen-porta-destrutivel')!.checked = obj.destrutivel || false;
+    document.getElementById('cen-porta-hp-wrap')!.style!.display = obj.destrutivel ? 'block' : 'none';
+    document.getElementById('cen-porta-hp')!.value = obj.hp_max || 20;
   }
   else if (tipoModal === 'chave') {
-    document.getElementById('cen-chave-nome').value = obj.nome || '';
-    document.getElementById('cen-chave-palavra').value = obj.chave_palavra || '';
-    document.getElementById('cen-chave-icone').value = obj.icone || '🗝';
+    document.getElementById('cen-chave-nome')!.value = obj.nome || '';
+    document.getElementById('cen-chave-palavra')!.value = obj.chave_palavra || '';
+    document.getElementById('cen-chave-icone')!.value = obj.icone || '🗝';
   }
   else if (tipoModal === 'bau') {
-    document.getElementById('cen-bau-nome').value = obj.nome || '';
-    document.getElementById('cen-bau-trancado').checked = obj.trancado || false;
-    document.getElementById('cen-bau-chave-wrap').style.display = obj.trancado ? 'block' : 'none';
-    document.getElementById('cen-bau-chave').value = obj.chave_palavra || '';
-    document.getElementById('cen-bau-loot-tipo').value = obj.loot_tipo || 'nenhum';
+    document.getElementById('cen-bau-nome')!.value = obj.nome || '';
+    document.getElementById('cen-bau-trancado')!.checked = obj.trancado || false;
+    document.getElementById('cen-bau-chave-wrap')!.style!.display = obj.trancado ? 'block' : 'none';
+    document.getElementById('cen-bau-chave')!.value = obj.chave_palavra || '';
+    document.getElementById('cen-bau-loot-tipo')!.value = obj.loot_tipo || 'nenhum';
     if (typeof cenarioBauLootChange === 'function') cenarioBauLootChange();
     if (obj.loot_tipo === 'ouro') {
-      document.getElementById('cen-bau-ouro-qtd').value = obj.loot_ouro || 50;
+      document.getElementById('cen-bau-ouro-qtd')!.value = obj.loot_ouro || 50;
     }
   }
   else if (tipoModal === 'obstaculo') {
-    document.getElementById('cen-obs-nome').value = obj.nome || '';
-    document.getElementById('cen-obs-icone').value = obj.icone || '🪨';
-    document.getElementById('cen-obs-tamanho').value = obj.tamanho || 1;
-    document.getElementById('cen-obs-destrutivel').checked = obj.destrutivel || false;
-    document.getElementById('cen-obs-hp-wrap').style.display = obj.destrutivel ? 'block' : 'none';
-    document.getElementById('cen-obs-hp').value = obj.hp_max || 50;
+    document.getElementById('cen-obs-nome')!.value = obj.nome || '';
+    document.getElementById('cen-obs-icone')!.value = obj.icone || '🪨';
+    document.getElementById('cen-obs-tamanho')!.value = obj.tamanho || 1;
+    document.getElementById('cen-obs-destrutivel')!.checked = obj.destrutivel || false;
+    document.getElementById('cen-obs-hp-wrap')!.style!.display = obj.destrutivel ? 'block' : 'none';
+    document.getElementById('cen-obs-hp')!.value = obj.hp_max || 50;
   }
   
   // Mudar texto do botão para "Atualizar"

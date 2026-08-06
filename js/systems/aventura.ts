@@ -251,7 +251,7 @@ function _avtSalaEspera(rpgNome: any, callback: any) {
 
   // Mostra overlay de sala de espera
   const seEl = document.getElementById('avt-sala-espera');
-  if (seEl) seEl.style.display = 'flex';
+  if (seEl) seEl.style!.display = 'flex';
   const statusEl = document.getElementById('avt-sala-status');
   if (statusEl) statusEl.textContent = '';
 
@@ -280,7 +280,7 @@ function _avtSalaEspera(rpgNome: any, callback: any) {
   // Botão "Aguardar Host" apenas desativa ele mesmo e exibe status
   window._avtAguardarSemHost = function() {
     const btn = document.getElementById('avt-btn-aguardar-host');
-    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+    if (btn) { btn.disabled = true; btn.style!.opacity = '0.5'; }
     if (statusEl) statusEl.textContent = '⏳ Aguardando host iniciar a sessão…';
   };
 
@@ -291,8 +291,8 @@ function _avtSalaEspera(rpgNome: any, callback: any) {
     // Re-enable buttons
     const btnHost = document.getElementById('avt-btn-ser-host');
     const btnAguardar = document.getElementById('avt-btn-aguardar-host');
-    if (btnHost) { btnHost.disabled = false; btnHost.style.opacity = ''; }
-    if (btnAguardar) { btnAguardar.disabled = false; btnAguardar.style.opacity = ''; }
+    if (btnHost) { btnHost.disabled = false; btnHost.style!.opacity = ''; }
+    if (btnAguardar) { btnAguardar.disabled = false; btnAguardar.style!.opacity = ''; }
     if (!RTNet.isHost()) RTNet.requisitarSnapshot().catch(() => {});
     callback();
   }
@@ -897,7 +897,7 @@ window.avtReceberInvUpdate = async function(p: any) {
     try { if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender(); } catch(_) {}
     try {
       const modal = document.getElementById('avt-inventario-modal');
-      if (modal && modal.style.display !== 'none' && charNome && typeof avtInvRenderPanel === 'function') {
+      if (modal && modal.style!.display !== 'none' && charNome && typeof avtInvRenderPanel === 'function') {
         avtInvRenderPanel(charNome, 'avt-inv-body');
       }
     } catch(_) {}
@@ -1513,7 +1513,7 @@ window._avtBackfillLinhagem = _avtBackfillLinhagem;
 // innerHTML — evita quebra de layout/injeção de markup por `<`, `"`, etc.
 function _avtEsc(s: any) {
   return String(s ?? '').replace(/[&<>"']/g, c =>
-    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    (({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' } as any)[c]));
 }
 window._avtEsc = _avtEsc;
 
@@ -1567,14 +1567,14 @@ function abrirCriarAventura() {
     _tilesetConfig: null, _tilesetImgFile: null, _tilesetImgUrl: null,
     _habilidadesGeradasIA: null, _extCampanhaJSON: null
   };
-  document.getElementById('hub').style.display = 'none';
-  document.getElementById('aventura-criar-screen').style.display = 'flex';
+  document.getElementById('hub')!.style!.display = 'none';
+  document.getElementById('aventura-criar-screen')!.style!.display = 'flex';
   _avtCriarRenderEtapa();
 }
 
 function fecharCriarAventura() {
-  document.getElementById('aventura-criar-screen').style.display = 'none';
-  document.getElementById('hub').style.display = 'block';
+  document.getElementById('aventura-criar-screen')!.style!.display = 'none';
+  document.getElementById('hub')!.style!.display = 'block';
 }
 
 function _avtCriarRenderEtapa() {
@@ -1591,7 +1591,7 @@ function _avtCriarRenderEtapa() {
 
   const btnPrev = document.getElementById('avt-criar-btn-prev');
   const btnNext = document.getElementById('avt-criar-btn-next');
-  if (btnPrev) btnPrev.style.display = c.etapa > 0 ? '' : 'none';
+  if (btnPrev) btnPrev.style!.display = c.etapa > 0 ? '' : 'none';
   if (btnNext) {
     const isLast = c.etapa === TOTAL - 1;
     btnNext.textContent = isLast ? '▶ Iniciar Dungeon!' : 'Próximo →';
@@ -1900,8 +1900,8 @@ function _avtAbrirConfigPersonagem(idx: any) {
     { nome: 'Inteligência', valor: 10 },
     { nome: 'Sabedoria', valor: 10 },
   ];
-  const attrDefs = (typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA.attrDefs) && RPG_DATA.attrDefs.length)
-    ? RPG_DATA.attrDefs.filter(a => a.tipo === 'number')
+  const attrDefs = (typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA!.attrDefs) && RPG_DATA!.attrDefs.length)
+    ? RPG_DATA!.attrDefs.filter(a => a.tipo === 'number')
     : _defaultAttrs.map(a => ({ nome: a.nome, tipo: 'number' }));
 
   const atributos = p._atributos || {};
@@ -1929,7 +1929,7 @@ function _avtAbrirConfigPersonagem(idx: any) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'avt-config-char-overlay';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:flex;align-items:flex-end;justify-content:center';
+    modal.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:flex;align-items:flex-end;justify-content:center';
     document.body.appendChild(modal);
   }
 
@@ -2046,19 +2046,19 @@ function _avtAbrirConfigPersonagem(idx: any) {
       </div>
     </div>`;
 
-  modal.style.display = 'flex';
-  modal.onclick = e => { if (e.target === modal) modal.style.display = 'none'; };
+  modal.style!.display = 'flex';
+  modal.onclick = e => { if (e.target === modal) modal.style!.display = 'none'; };
 }
 window._avtAbrirConfigPersonagem = _avtAbrirConfigPersonagem;
 
 function _avtCfgSwitchTab(tab: any, btn: any) {
   ['atributos','recursos','aparencia'].forEach(t => {
     const el = document.getElementById('avt-cfg-tab-' + t);
-    if (el) el.style.display = t === tab ? 'block' : 'none';
+    if (el) el.style!.display = t === tab ? 'block' : 'none';
   });
   document.querySelectorAll('.avt-cfg-tab').forEach(b => {
-    b.style.borderBottomColor = 'transparent';
-    b.style.color = '#7a92aa';
+    b.style!.borderBottomColor = 'transparent';
+    b.style!.color = '#7a92aa';
   });
   if (btn) { btn.style.borderBottomColor = '#4fa3d1'; btn.style.color = '#4fa3d1'; }
 }
@@ -2521,7 +2521,7 @@ function _avtProcHandleTilesetImg(input: any) {
   const url = URL.createObjectURL(file);
   (AVT_STATE._criando as any)._procTilesetImgUrl = url;
   const prev = document.getElementById('avt-proc-ts-preview');
-  if (prev) { prev.src = url; prev.style.display = 'block'; }
+  if (prev) { prev.src = url; prev.style!.display = 'block'; }
   const nome = document.getElementById('avt-proc-ts-nome');
   if (nome) nome.textContent = file.name;
 }
@@ -2651,8 +2651,8 @@ function _avtEditorInit() {
   if (!canvas) return;
   canvas.width  = W * EDSZ;
   canvas.height = H * EDSZ;
-  canvas.style.width  = (W * EDSZ) + 'px';
-  canvas.style.height = (H * EDSZ) + 'px';
+  canvas.style!.width  = (W * EDSZ) + 'px';
+  canvas.style!.height = (H * EDSZ) + 'px';
   _avtEditorRenderCanvas();
 
   const getTile = (e: any) => {
@@ -2721,7 +2721,7 @@ function _avtEditorAcaoSet(acao: any) {
 function _avtEditorRenderCanvas() {
   const canvas = document.getElementById('avt-ed-canvas');
   if (!canvas || !_avtEd.tiles) return;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext!('2d');
   const EDSZ = 14, W = _avtEd.w, H = _avtEd.h;
   ctx.fillStyle = '#020408';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2768,13 +2768,13 @@ function _avtEditorRenderCanvas() {
   if (leg) return;
   const legEl = document.createElement('div');
   legEl.id = 'avt-ed-legenda';
-  legEl.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;margin-top:5px;font-size:0.6rem;color:#7a92aa;font-family:var(--fonte-d,monospace)';
+  legEl.style!.cssText = 'display:flex;gap:10px;flex-wrap:wrap;margin-top:5px;font-size:0.6rem;color:#7a92aa;font-family:var(--fonte-d,monospace)';
   legEl.innerHTML = `
     <span><span style="display:inline-block;width:10px;height:10px;background:#162840;border:1px solid rgba(79,163,209,0.14);vertical-align:middle;margin-right:3px"></span>Piso</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:#060810;vertical-align:middle;margin-right:3px"></span>Parede</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:#0b0e18;border:1px solid rgba(79,163,209,0.12);vertical-align:middle;margin-right:3px"></span>Borda de parede</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:#0d2a10;border:1px solid rgba(46,204,113,0.35);vertical-align:middle;margin-right:3px"></span>Saída</span>`;
-  canvas.parentNode.insertBefore(legEl, canvas.nextSibling);
+  canvas.parentNode!.insertBefore(legEl, canvas.nextSibling);
 }
 
 function _avtEditorExport() {
@@ -3395,7 +3395,7 @@ async function _avtCarregarAtribuicaoJogador(rpgId: any) {
   try {
     const membros = await _avtSb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&select=player_id,nickname,role,linked`);
     AVT_STATE.membros = membros || [];
-    const meu = (membros || []).find((m: any) => m.player_id === SESSION.user.id);
+    const meu = (membros || []).find((m: any) => m.player_id === SESSION!.user.id);
     if (meu?.linked) AVT_STATE.myCharNome = meu.linked;
   } catch(e) {}
 }
@@ -3442,7 +3442,7 @@ async function _avtMestreSelecionarPersonagem(charNome: any) {
   try {
     await _avtSb(`rpg_members?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}&player_id=eq.${encodeURIComponent(SESSION.user.id)}`,
       { method:'PATCH', body:JSON.stringify({ linked: charNome || null }) });
-    const m = AVT_STATE.membros.find((x: any) => x.player_id === SESSION.user.id);
+    const m = AVT_STATE.membros.find((x: any) => x.player_id === SESSION!.user.id);
     if (m) m.linked = charNome || null;
     try { _avtBroadcast('avt_member_linked', { player_id: SESSION.user.id, linked: charNome || null }); } catch(_) {}
     mostrarToast(charNome ? `Personagem do mestre: ${charNome}` : 'Personagem do mestre removido', 'ok');
@@ -3528,7 +3528,7 @@ function _avtMestreEditarBau(bauId: any) {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'avt-bau-editor-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
     document.body.appendChild(overlay);
   }
   const lootItens = Array.isArray(bau.loot_itens) ? bau.loot_itens : [];
@@ -3595,7 +3595,7 @@ function _avtMestreEditarBau(bauId: any) {
         <button class="avt-mp-btn avt-mp-btn-danger" style="flex:1" onclick="document.getElementById('avt-bau-editor-overlay').style.display='none'">✕ Fechar</button>
       </div>
     </div>`;
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
   // Store current bauId for sub-functions
   overlay._bauId = bauId;
 }
@@ -3603,8 +3603,8 @@ function _avtMestreEditarBau(bauId: any) {
 function _avtBauAddItem(bauId: any) {
   const sel = document.getElementById('avt-bau-catalog-sel');
   if (!sel) return;
-  sel.style.display = sel.style.display === 'none' ? '' : 'none';
-  if (sel.style.display !== 'none') {
+  sel.style!.display = sel.style!.display === 'none' ? '' : 'none';
+  if (sel.style!.display !== 'none') {
     sel.onchange = () => {
       const itemId = sel.value;
       if (!itemId) return;
@@ -3615,7 +3615,7 @@ function _avtBauAddItem(bauId: any) {
       if (!Array.isArray(bau.loot_itens)) bau.loot_itens = [];
       bau.loot_itens.push({ id: item.id, nome: item.nome, icone: item.icone||'📦', quantidade: 1 });
       sel.value = '';
-      sel.style.display = 'none';
+      sel.style!.display = 'none';
       _avtMestreEditarBau(bauId);
     };
   }
@@ -3650,7 +3650,7 @@ async function _avtBauUploadImg(input: any, bauId: any) {
     const inp = document.getElementById('avt-bau-img-url');
     if (inp) inp.value = url;
     const prev = document.getElementById('avt-bau-img-preview');
-    if (prev) { prev.style.backgroundImage = `url('${url.replace(/'/g,'%27')}')`; prev.textContent = ''; }
+    if (prev) { prev.style!.backgroundImage = `url('${url.replace(/'/g,'%27')}')`; prev.textContent = ''; }
     mostrarToast('Imagem enviada!', 'ok');
   } catch (e: any) {
     mostrarToast('Erro no upload: ' + (e?.message || e), 'erro');
@@ -3662,9 +3662,9 @@ function _avtBauSalvar(bauId: any) {
   const bau = _avtGetBauById(bauId);
   if (!bau) return;
   bau.nome  = document.getElementById('avt-bau-nome')?.value || 'Baú';
-  bau.ouro  = parseInt(document.getElementById('avt-bau-ouro')?.value) || 0;
+  bau.ouro  = parseInt(document.getElementById('avt-bau-ouro')?.value!) || 0;
   bau.img_url = (document.getElementById('avt-bau-img-url')?.value || '').trim() || null;
-  document.getElementById('avt-bau-editor-overlay').style.display = 'none';
+  document.getElementById('avt-bau-editor-overlay')!.style!.display = 'none';
   const isInDungeon = AVT_STATE.dungeon?.render_data?.objetos?.some((o: any) => String(o.id) === String(bauId));
   if (isInDungeon) _avtSalvarDungeon();
   _avtMestrePainelRender();
@@ -3787,7 +3787,7 @@ function _avtBauPreParaMapa(bauId: any) {
   AVT_STATE._bausPreDungeon.splice(idx, 1);
   _avtSalvarDungeon();
   _avtMestrePainelRender();
-  document.getElementById('avt-mestre-panel').style.display = 'none';
+  document.getElementById('avt-mestre-panel')!.style!.display = 'none';
   _avtEntrarModoBauPlacement(bauId);
 }
 
@@ -4075,7 +4075,7 @@ window._avtCarregarDados = _avtCarregarDados;
 
 function _avtIniciarCanvas() {
   const seEl = document.getElementById('avt-sala-espera');
-  if (seEl) seEl.style.display = 'none';
+  if (seEl) seEl.style!.display = 'none';
   // Double-RAF: aguarda reflow antes de medir dimensões do canvas
   requestAnimationFrame(() => requestAnimationFrame(() => {
     _avtCanvasInit();
@@ -4166,14 +4166,14 @@ function _avtMostrarAventuraScreen() {
   if (typeof AudioManager !== 'undefined' && typeof window._avtMenuPlayerMusicPref === 'undefined') {
     AudioManager.onEnterPhase({ audio: t.audio || {} });
   }
-  document.getElementById('hub').style.display = 'none';
+  document.getElementById('hub')!.style!.display = 'none';
   const menuSc = document.getElementById('avt-menu-screen');
-  if (menuSc) menuSc.style.display = 'none';
+  if (menuSc) menuSc.style!.display = 'none';
   const screen = document.getElementById('aventura-screen');
   if (!screen) throw new Error('Elemento #aventura-screen não encontrado');
-  screen.style.display = 'flex';
-  document.getElementById('avt-nome').textContent = AVT_STATE.rpg.name;
-  document.getElementById('avt-nome').style.color = t.destaque || '#c8a84b';
+  screen.style!.display = 'flex';
+  document.getElementById('avt-nome')!.textContent = AVT_STATE.rpg.name;
+  document.getElementById('avt-nome')!.style!.color = t.destaque || '#c8a84b';
   ocultarLoading();
   const _seNomeEl = document.getElementById('avt-sala-nome');
   if (_seNomeEl) _seNomeEl.textContent = AVT_STATE.rpg.name || '';
@@ -4202,8 +4202,8 @@ async function entrarAventura(rpgId: any) {
       ocultarLoading();
       mostrarToast('Erro ao carregar dungeon: ' + (e?.message || e), 'erro');
       const screen = document.getElementById('aventura-screen');
-      if (screen) screen.style.display = 'none';
-      document.getElementById('hub').style.display = 'block';
+      if (screen) screen.style!.display = 'none';
+      document.getElementById('hub')!.style!.display = 'block';
     }
   }
 }
@@ -4272,8 +4272,8 @@ function sairAventura__sombreado_32() {
   try { if (typeof RTNet !== 'undefined' && RTNet.initialized) RTNet.shutdown(); } catch(_) {}
   try { if (typeof _avtNpcSyncShutdown === 'function') _avtNpcSyncShutdown(); } catch(_){}
   const screen = document.getElementById('aventura-screen');
-  if (screen) screen.style.display = 'none';
-  document.getElementById('hub').style.display = 'block';
+  if (screen) screen.style!.display = 'none';
+  document.getElementById('hub')!.style!.display = 'block';
   avtHubRenderSection();
   AVT_STATE.rpgId   = null;
   AVT_STATE.dungeon = null;
@@ -4682,7 +4682,7 @@ function _avtCelulaValidaMaisProxima(x: any, y: any, dungeon: any) {
   const visited = new Set([`${sx},${sy}`]);
   const queue = [[sx, sy]];
   while (queue.length) {
-    const [qx, qy] = queue.shift();
+    const [qx, qy] = queue.shift()!;
     for (const [ddx, ddy] of [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]]) {
       const nx = qx + ddx, ny = qy + ddy;
       const key = `${nx},${ny}`;
@@ -4957,7 +4957,7 @@ function _avtCanvasInit() {
 
   const canvas = document.createElement('canvas');
   canvas.id = 'avt-canvas';
-  canvas.style.cssText = 'display:block;cursor:pointer;image-rendering:pixelated;position:absolute;inset:0';
+  canvas.style!.cssText = 'display:block;cursor:pointer;image-rendering:pixelated;position:absolute;inset:0';
   wrap.appendChild(canvas);
 
   // Re-attach overlay (above canvas, below HUD)
@@ -4966,7 +4966,7 @@ function _avtCanvasInit() {
   } else {
     const ov = document.createElement('div');
     ov.id = 'avt-dados-overlay';
-    ov.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:35;overflow:hidden';
+    ov.style!.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:35;overflow:hidden';
     wrap.appendChild(ov);
   }
   // Re-add D-pad inside wrap so it stays on top of canvas
@@ -5041,7 +5041,7 @@ function _avtCanvasInit() {
         if (dist < _avtPanDeadzone()) return;
         pan.thresholdMet = true;
         (AVT_STATE as any)._userPanned = true;
-        canvas.style.cursor = 'grabbing';
+        canvas.style!.cursor = 'grabbing';
       }
       let dx = dxRaw, dy = dyRaw;
       if (typeof _avtIsoDeltaToCanvas === 'function' && AVT_GRAFICOS?.isoAtivo) {
@@ -5058,7 +5058,7 @@ function _avtCanvasInit() {
     }
     // Hover: cursor grab/pointer
     const t = _tileFromEvent(ev);
-    canvas.style.cursor = _tilePanavel(t.x, t.y) ? 'grab' : 'pointer';
+    canvas.style!.cursor = _tilePanavel(t.x, t.y) ? 'grab' : 'pointer';
   });
   const _endPan = (ev: any) => {
     const pan = (AVT_STATE as any)._pan;
@@ -5067,7 +5067,7 @@ function _avtCanvasInit() {
     (AVT_STATE as any)._panSuprimirClick = pan.moved;
     // Marca câmera como "arrastada pelo usuário" — próximo movimento do jogador centraliza.
     if (pan.moved) (AVT_STATE.camera as any)._userDragged = true;
-    canvas.style.cursor = 'pointer';
+    canvas.style!.cursor = 'pointer';
     try { canvas.releasePointerCapture(ev.pointerId); } catch(_){}
   };
   canvas.addEventListener('pointerup', _endPan);
@@ -5192,21 +5192,21 @@ function _avtCanvasInit() {
   window.addEventListener('blur', () => { (AVT_STATE as any)._holdMove = null; });
 
   // O modo controle real (catalog.js) gerencia os controles touch — ocultar d-pad legado
-  if (_savedDpad) _savedDpad.style.display = 'none';
+  if (_savedDpad) _savedDpad.style!.display = 'none';
   const dpadBtn = document.getElementById('avt-btn-dpad');
-  if (dpadBtn) dpadBtn.style.display = 'none';
+  if (dpadBtn) dpadBtn.style!.display = 'none';
   const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   const isRealMobile = isMobile && (isMobileUA || window.innerWidth <= 1024);
   const ctrlBtn = document.getElementById('avt-btn-controle');
-  if (ctrlBtn) ctrlBtn.style.display = isRealMobile ? 'inline-block' : 'none';
+  if (ctrlBtn) ctrlBtn.style!.display = isRealMobile ? 'inline-block' : 'none';
 
   // Criar minimap canvas se não existir
   if (!document.getElementById('avt-minimap')) {
     const mm = document.createElement('canvas');
     mm.id = 'avt-minimap';
     mm.width = 120; mm.height = 120;
-    mm.style.cssText = [
+    mm.style!.cssText = [
       'position:fixed',
       'left:12px',
       'top:50%',
@@ -5253,7 +5253,7 @@ function _avtCanvasResize() {
   const ctrlOverlay = document.getElementById('mobile-ctrl-overlay');
   const isAvtDisp = typeof _emModoAventura === 'function' && _emModoAventura() &&
     typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
-  if (ctrlOverlay && ctrlOverlay.style.display !== 'none' && !isAvtDisp) {
+  if (ctrlOverlay && ctrlOverlay.style!.display !== 'none' && !isAvtDisp) {
     const ctrlH = ctrlOverlay.getBoundingClientRect().height;
     if (ctrlH > 0) {
       h = Math.max(h - ctrlH, 80);
@@ -5578,8 +5578,8 @@ function _avtRenderFrame() {
 
   // Detectar se menu do personagem ou painel do mestre está aberto (pausa paciência)
   AVT_STATE._menuJogadorAberto = !!(
-    document.getElementById('avt-char-editor')?.style.display === 'flex' ||
-    document.getElementById('avt-mestre-panel')?.style.display === 'flex'
+    document.getElementById('avt-char-editor')?.style!.display === 'flex' ||
+    document.getElementById('avt-mestre-panel')?.style!.display === 'flex'
   );
 
   // Update patience timers (only for enemies not already in a combat)
@@ -5596,7 +5596,7 @@ function _avtRenderFrame() {
     if (_agPanel - ((AVT_STATE as any)._lastPanelEfRender || 0) >= 1000) {
       (AVT_STATE as any)._lastPanelEfRender = _agPanel;
       const _ceEl = document.getElementById('avt-char-editor');
-      if (_ceEl && _ceEl.style.display !== 'none') {
+      if (_ceEl && _ceEl.style!.display !== 'none') {
         const _meuEl = document.getElementById('avt-ce-meu');
         if (_meuEl && typeof avtJogadorPainelRender === 'function') {
           try { avtJogadorPainelRender(_meuEl, { compact: true }); } catch(_) {}
@@ -6719,8 +6719,8 @@ function _avtRenderMinimap() {
   const mm = document.getElementById('avt-minimap');
   if (!mm) return;
   const { dungeon, entidades, npcTimers } = AVT_STATE;
-  if (!dungeon || !dungeon.tiles) { mm.style.display = 'none'; return; }
-  mm.style.display = 'block';
+  if (!dungeon || !dungeon.tiles) { mm.style!.display = 'none'; return; }
+  mm.style!.display = 'block';
 
   // Throttle: pontos do minimapa a 10 Hz são suficientes (e o mapa é estático)
   const _mmNow = performance.now();
@@ -6729,11 +6729,11 @@ function _avtRenderMinimap() {
 
   const W = dungeon.w, H = dungeon.h;
   const mmW = mm.width, mmH = mm.height;
-  const scaleX = mmW / W, scaleY = mmH / H;
+  const scaleX = mmW! / W, scaleY = mmH! / H;
 
   const ctx = AVT_STATE._mmCtx && (AVT_STATE as any)._mmCtxEl === mm
     ? (AVT_STATE as any)._mmCtx
-    : (AVT_STATE._mmCtxEl = mm, (AVT_STATE as any)._mmCtx = mm.getContext('2d'));
+    : (AVT_STATE._mmCtxEl = mm, (AVT_STATE as any)._mmCtx = mm.getContext!('2d'));
   ctx.clearRect(0, 0, mmW, mmH);
 
   // Tiles: bakeados 1x por fase num offscreen (invalidado por _avtMinimapInvalidate
@@ -6762,7 +6762,7 @@ function _avtRenderMinimap() {
     // Borda (estática — entra no bake)
     bctx.strokeStyle = 'rgba(100,150,200,0.25)';
     bctx.lineWidth = 1;
-    bctx.strokeRect(0.5, 0.5, mmW - 1, mmH - 1);
+    bctx.strokeRect(0.5, 0.5, mmW! - 1, mmH! - 1);
     (AVT_STATE as any)._mmBake = bake;
   }
   ctx.drawImage(bake, 0, 0);
@@ -6859,12 +6859,12 @@ function _avtAtualizarPosRollInimigos() {
   const { camera } = AVT_STATE;
   const SZ = Math.round(AVT_SZ * (camera.zoom || 1));
   els.forEach(el => {
-    const ent = _avtEntById(el.dataset.avtRollEnt);
+    const ent = _avtEntById(el.dataset!.avtRollEnt);
     if (!ent) return;
     const px = Math.round((ent.renderX ?? ent.x) * SZ - camera.x);
     const py = Math.round((ent.renderY ?? ent.y) * SZ - camera.y);
     // transform (composited) em vez de left/top para não forçar layout por frame
-    el.style.transform = `translate(${px + SZ + 2}px, ${py + Math.round(SZ * 0.25)}px)`;
+    el.style!.transform = `translate(${px + SZ + 2}px, ${py + Math.round(SZ * 0.25)}px)`;
   });
 }
 
@@ -6886,7 +6886,7 @@ function _avtMostrarRollInimigo(entNpc: any, resultado: any, isCrit: any) {
   const hud = document.createElement('div');
   hud.id = 'avt-roll-ent-' + entNpc.id;
   hud.setAttribute('data-avt-roll-ent', entNpc.id);
-  hud.style.cssText = [
+  hud.style!.cssText = [
     'position:absolute',
     'pointer-events:none',
     'z-index:36',
@@ -6924,11 +6924,11 @@ function _avtMostrarRollInimigo(entNpc: any, resultado: any, isCrit: any) {
   const finalVal = dieRef.valor ?? dieRef.val ?? total;
 
   const wrap2 = document.createElement('div');
-  wrap2.style.cssText = `position:relative;width:${halfSZ}px;height:${halfSZ}px;display:flex;align-items:center;justify-content:center`;
+  wrap2.style!.cssText = `position:relative;width:${halfSZ}px;height:${halfSZ}px;display:flex;align-items:center;justify-content:center`;
 
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 26 26');
-  svg.style.cssText = `width:${halfSZ}px;height:${halfSZ}px;position:absolute;top:0;left:0`;
+  svg.style!.cssText = `width:${halfSZ}px;height:${halfSZ}px;position:absolute;top:0;left:0`;
   const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
   poly.setAttribute('points', pts);
   poly.setAttribute('fill', isCrit ? critColor + '33' : 'rgba(255,255,255,0.10)');
@@ -6938,7 +6938,7 @@ function _avtMostrarRollInimigo(entNpc: any, resultado: any, isCrit: any) {
   wrap2.appendChild(svg);
 
   const numEl = document.createElement('span');
-  numEl.style.cssText = `position:relative;z-index:1;font-family:var(--fonte-d,sans-serif);font-size:${fontSize}px;font-weight:700;color:${isCrit ? critColor : '#fff'};line-height:1;text-shadow:0 0 4px rgba(0,0,0,0.9)`;
+  numEl.style!.cssText = `position:relative;z-index:1;font-family:var(--fonte-d,sans-serif);font-size:${fontSize}px;font-weight:700;color:${isCrit ? critColor : '#fff'};line-height:1;text-shadow:0 0 4px rgba(0,0,0,0.9)`;
   numEl.textContent = '?';
   wrap2.appendChild(numEl);
   hud.appendChild(wrap2);
@@ -6947,7 +6947,7 @@ function _avtMostrarRollInimigo(entNpc: any, resultado: any, isCrit: any) {
   let totalEl = null;
   if (dados.length > 1) {
     totalEl = document.createElement('div');
-    totalEl.style.cssText = `font-family:var(--fonte-d,sans-serif);font-size:${totalFontSize}px;font-weight:700;color:${isCrit ? critColor : '#e0eaf4'};line-height:1;text-shadow:0 0 4px rgba(0,0,0,0.9);text-align:center`;
+    totalEl.style!.cssText = `font-family:var(--fonte-d,sans-serif);font-size:${totalFontSize}px;font-weight:700;color:${isCrit ? critColor : '#e0eaf4'};line-height:1;text-shadow:0 0 4px rgba(0,0,0,0.9);text-align:center`;
     totalEl.textContent = '?';
     hud.appendChild(totalEl);
   }
@@ -6966,7 +6966,7 @@ function _avtMostrarRollInimigo(entNpc: any, resultado: any, isCrit: any) {
 
   // Fade out e remoção
   const fadeDelay = animDurMs + 1800;
-  setTimeout(() => { hud.style.opacity = '0'; }, fadeDelay);
+  setTimeout(() => { hud.style!.opacity = '0'; }, fadeDelay);
   setTimeout(() => { hud.remove(); }, fadeDelay + 400);
 }
 
@@ -7314,14 +7314,14 @@ function _avtPathfindSimples(startX: any, startY: any, goalX: any, goalY: any, m
   visited.set(`${startX},${startY}`, true);
   while (queue.length) {
     const cur = queue.shift();
-    if (cur.x === goalX && cur.y === goalY) return cur.path;
-    if (cur.path.length > limit) continue; // limite de segurança
+    if (cur!.x === goalX && cur!.y === goalY) return cur!.path;
+    if (cur!.path.length > limit) continue; // limite de segurança
     for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-      const nx = cur.x + dx, ny = cur.y + dy, key = `${nx},${ny}`;
+      const nx = cur!.x + dx, ny = cur!.y + dy, key = `${nx},${ny}`;
       if (visited.has(key)) continue;
       if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) continue;
       visited.set(key, true);
-      queue.push({ x: nx, y: ny, path: [...cur.path, { x: nx, y: ny }] });
+      queue.push({ x: nx, y: ny, path: [...cur!.path, { x: nx, y: ny }] });
     }
   }
   return [{ x: startX, y: startY }]; // sem caminho — fica no lugar
@@ -7445,8 +7445,8 @@ function _avtMostrarDadosAcimaDaHeadCompleto(ent: any, resultado: any, nomeHabil
 
   const el = document.createElement('div');
   el.className = 'avt-dados-popup';
-  el.style.left = (px + SZ / 2) + 'px';
-  el.style.top  = Math.max(4, py - 18) + 'px';
+  el.style!.left = (px + SZ / 2) + 'px';
+  el.style!.top  = Math.max(4, py - 18) + 'px';
 
   const dados = resultado.dados || [];
   const totalClass = critTipo === 'critico_maior' ? 'critico'
@@ -7482,8 +7482,8 @@ function _avtMostrarDanoAbaixoHp(ent: any, dano: any, isCrit: any) {
 
   const el = document.createElement('div');
   el.className = 'avt-dano-popup-baixo' + (isCrit ? ' critico' : '');
-  el.style.left = (px + SZ / 2) + 'px';
-  el.style.top  = (py + SZ + 4) + 'px';
+  el.style!.left = (px + SZ / 2) + 'px';
+  el.style!.top  = (py + SZ + 4) + 'px';
   el.textContent = isCrit ? `✦ -${dano}!` : `-${dano}`;
   overlay.appendChild(el);
   setTimeout(() => el.remove(), 600);
@@ -7501,8 +7501,8 @@ function _avtMostrarD20AbaixoDaHead(ent: any, hitRoll: any, critMult: any) {
   const el = document.createElement('div');
   const cls = critMult === 0 ? ' fumble' : critMult > 1 ? ' critico' : '';
   el.className = 'avt-dano-popup-baixo' + cls;
-  el.style.left = (px + SZ / 2) + 'px';
-  el.style.top  = (py + SZ + 4) + 'px';
+  el.style!.left = (px + SZ / 2) + 'px';
+  el.style!.top  = (py + SZ + 4) + 'px';
   el.textContent = `d20: ${hitRoll}`;
   overlay.appendChild(el);
   setTimeout(() => el.remove(), 1500);
@@ -7520,8 +7520,8 @@ function _avtMostrarDanoAcimaDaHead(ent: any, dano: any, isCrit: any) {
 
   const el = document.createElement('div');
   el.className = 'avt-dano-popup' + (isCrit ? ' critico' : '');
-  el.style.left = (px + SZ / 2) + 'px';
-  el.style.top  = Math.max(4, py) + 'px';
+  el.style!.left = (px + SZ / 2) + 'px';
+  el.style!.top  = Math.max(4, py) + 'px';
   el.textContent = isCrit ? `✦ ${dano}!` : String(dano);
   overlay.appendChild(el);
   setTimeout(() => el.remove(), 1500);
@@ -7538,8 +7538,8 @@ function _avtMostrarCuraAcimaDaHead(ent: any, valor: any) {
   const py = Math.round(ry * SZ - AVT_STATE.camera.y);
   const el = document.createElement('div');
   el.className = 'avt-dano-popup cura';
-  el.style.left = (px + SZ / 2) + 'px';
-  el.style.top  = Math.max(4, py) + 'px';
+  el.style!.left = (px + SZ / 2) + 'px';
+  el.style!.top  = Math.max(4, py) + 'px';
   el.textContent = `+${valor}`;
   overlay.appendChild(el);
   setTimeout(() => el.remove(), 1500);
@@ -7561,13 +7561,13 @@ function _avtMostrarDotDrip(ent: any, variante: any) {
     for (let i = 0; i < 3; i++) {
       const sp = document.createElement('div');
       sp.className = 'avt-dot-fx avt-dot-spark';
-      sp.style.cssText = `left:${_jitter()}px;top:${py}px;animation-delay:${i * 90}ms`;
+      sp.style!.cssText = `left:${_jitter()}px;top:${py}px;animation-delay:${i * 90}ms`;
       overlay.appendChild(sp);
       setTimeout(() => sp.remove(), 1100 + i * 90);
     }
     const smoke = document.createElement('div');
     smoke.className = 'avt-dot-fx avt-dot-smoke';
-    smoke.style.cssText = `left:${px}px;top:${py - Math.round(SZ * 0.2)}px`;
+    smoke.style!.cssText = `left:${px}px;top:${py - Math.round(SZ * 0.2)}px`;
     overlay.appendChild(smoke);
     setTimeout(() => smoke.remove(), 1400);
     return;
@@ -7577,7 +7577,7 @@ function _avtMostrarDotDrip(ent: any, variante: any) {
     for (let i = 0; i < 2; i++) {
       const bub = document.createElement('div');
       bub.className = 'avt-dot-fx avt-dot-toxic';
-      bub.style.cssText = `left:${_jitter()}px;top:${py}px;animation-delay:${i * 120}ms`;
+      bub.style!.cssText = `left:${_jitter()}px;top:${py}px;animation-delay:${i * 120}ms`;
       overlay.appendChild(bub);
       setTimeout(() => bub.remove(), 1300 + i * 120);
     }
@@ -7587,7 +7587,7 @@ function _avtMostrarDotDrip(ent: any, variante: any) {
   // sangramento (padrão)
   const el = document.createElement('div');
   el.className = 'avt-dot-drip avt-dot-sangramento';
-  el.style.cssText = `left:${_jitter()}px;top:${py}px`;
+  el.style!.cssText = `left:${_jitter()}px;top:${py}px`;
   overlay.appendChild(el);
   setTimeout(() => el.remove(), 1350);
 }
@@ -7786,7 +7786,7 @@ function _avtMostrarRollCenter(resultado: any, isCrit: any, multInfo: any) {
   const overlayH = isAvtCtrlDisp ? 0
     : (document.getElementById('mobile-ctrl-overlay')?.offsetHeight
        || (typeof AVT_STATE !== 'undefined' && (AVT_STATE as any)._overlayH) || 0);
-  hud.style.setProperty('--avt-ctrl-h', overlayH + 'px');
+  hud.style!.setProperty('--avt-ctrl-h', overlayH + 'px');
 
   // Classe de tamanho reduzido no modo controle
   if (isAvtCtrlDisp) hud.classList.add('avt-rc-ctrl');
@@ -7855,11 +7855,11 @@ function _avtMostrarRollCenter(resultado: any, isCrit: any, multInfo: any) {
       const numEl = document.createElement('span');
       numEl.className = 'avt-rc-die-num' + critCls;
       if (isCrit) {
-        numEl.style.color = critColor;
-        numEl.style.textShadow = `0 0 10px ${critColor}, 2px 2px 0 rgba(0,0,0,0.75)`;
+        numEl.style!.color = critColor;
+        numEl.style!.textShadow = `0 0 10px ${critColor}, 2px 2px 0 rgba(0,0,0,0.75)`;
       } else {
-        numEl.style.color = '#ffffff';
-        numEl.style.textShadow = '0 1px 4px rgba(0,0,0,0.8)';
+        numEl.style!.color = '#ffffff';
+        numEl.style!.textShadow = '0 1px 4px rgba(0,0,0,0.8)';
       }
       wrap.appendChild(numEl);
       row.appendChild(wrap);
@@ -7884,11 +7884,11 @@ function _avtMostrarRollCenter(resultado: any, isCrit: any, multInfo: any) {
   const totalEl = document.createElement('div');
   totalEl.className = 'avt-rc-total' + critCls;
   if (isCrit) {
-    totalEl.style.color = critColor;
-    totalEl.style.textShadow = `0 0 14px ${critColor}, 3px 3px 0 rgba(0,0,0,0.8)`;
+    totalEl.style!.color = critColor;
+    totalEl.style!.textShadow = `0 0 14px ${critColor}, 3px 3px 0 rgba(0,0,0,0.8)`;
   } else {
-    totalEl.style.color = '#ffffff';
-    totalEl.style.textShadow = '0 1px 6px rgba(0,0,0,0.9)';
+    totalEl.style!.color = '#ffffff';
+    totalEl.style!.textShadow = '0 1px 6px rgba(0,0,0,0.9)';
   }
   totalEl.textContent = total;
   hud.appendChild(totalEl);
@@ -7897,7 +7897,7 @@ function _avtMostrarRollCenter(resultado: any, isCrit: any, multInfo: any) {
   if (multInfo && multInfo.atributoVal > 0 && multInfo.danoFinal !== total) {
     const multEl = document.createElement('div');
     multEl.className = 'avt-rc-mult' + critCls;
-    if (isCrit) multEl.style.color = critColor + 'cc';
+    if (isCrit) multEl.style!.color = critColor + 'cc';
     hud.appendChild(multEl);
     multEl.textContent = `× ${multInfo.atributoVal} = ${multInfo.danoFinal}`;
   }
@@ -8021,7 +8021,7 @@ function _avtMostrarBotaoRolar() {
       const btnTop  = Math.max(pos.y - SZ - 52, 8);
       posStyle = `top:${btnTop}px;left:${btnLeft}px;transform:none`;
     }
-    btn.style.cssText = `position:fixed;${posStyle};`
+    btn.style!.cssText = `position:fixed;${posStyle};`
       + 'z-index:9920;padding:7px 14px;min-width:120px;'
       + 'background:linear-gradient(180deg,#c8a84b,#a8893a);'
       + 'color:#0a0f18;border:1px solid #6b5520;border-radius:8px;'
@@ -8030,7 +8030,7 @@ function _avtMostrarBotaoRolar() {
       + 'animation:avtPulseRolar 1.2s ease-in-out infinite;';
     document.body.appendChild(btn);
   } else {
-    btn.style.display = '';
+    btn.style!.display = '';
   }
 }
 
@@ -8041,7 +8041,7 @@ function _avtEsconderBotaoRolar() {
 // Atualiza a posição do botão "Rolar Dados" no desktop para seguir o token ativo
 function _avtAtualizarPosBotaoRolar() {
   const btn = document.getElementById('avt-btn-rolar');
-  if (!btn || btn.style.position !== 'fixed') return; // mobile mode — não reposicionar
+  if (!btn || btn.style!.position !== 'fixed') return; // mobile mode — não reposicionar
   const ativo = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
   const pos = ativo ? _avtSkillOverlayGetAlvoScreenPos(ativo) : null;
   if (!pos) return;
@@ -8051,9 +8051,9 @@ function _avtAtualizarPosBotaoRolar() {
   // Só escreve estilo quando a posição muda — evita invalidação de layout por frame
   if (btn._avtPosL !== btnLeft || btn._avtPosT !== btnTop) {
     btn._avtPosL = btnLeft; btn._avtPosT = btnTop;
-    btn.style.left = btnLeft + 'px';
-    btn.style.top  = btnTop  + 'px';
-    btn.style.transform = 'none';
+    btn.style!.left = btnLeft + 'px';
+    btn.style!.top  = btnTop  + 'px';
+    btn.style!.transform = 'none';
   }
 }
 
@@ -8195,17 +8195,17 @@ function _avtBFS(startX: any, startY: any, range: any, entId: any, entTipo: any)
   const atravessarParedes = mover?._atravessar;
   while (queue.length) {
     const cur = queue.shift();
-    if (cur.dist > 0) result.push({x:cur.x, y:cur.y});
-    if (cur.dist >= range) continue;
+    if (cur!.dist > 0) result.push({x:cur!.x, y:cur!.y});
+    if (cur!.dist >= range) continue;
     [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
-      const nx=cur.x+dx, ny=cur.y+dy, key=`${nx},${ny}`;
+      const nx=cur!.x+dx, ny=cur!.y+dy, key=`${nx},${ny}`;
       if (visited.has(key)) return;
       if (!atravessarParedes && !_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
       // Com atravessar: permitir qualquer tile inclusive fora do mapa, apenas limitar por safety bounds
       if (atravessarParedes && (Math.abs(nx) > 300 || Math.abs(ny) > 300)) return;
       if (_avtCelulaOcupada(nx, ny, entId, entTipo, true)) return;
       visited.set(key, true);
-      queue.push({x:nx, y:ny, dist:cur.dist+1});
+      queue.push({x:nx, y:ny, dist:cur!.dist+1});
     });
   }
   return result;
@@ -8523,7 +8523,7 @@ function _avtCanvasDblClick(e: any) {
 
 function _avtCanvasKey(e: any) {
   // Only capture keys when aventura screen is visible
-  if (document.getElementById('aventura-screen')?.style.display === 'none') return;
+  if (document.getElementById('aventura-screen')?.style!.display === 'none') return;
   // Ignora se foco está em campo editável (input/textarea/contentEditable)
   const _tgt = e.target;
   if (_tgt && (_tgt.tagName === 'INPUT' || _tgt.tagName === 'TEXTAREA' || _tgt.isContentEditable)) return;
@@ -8546,7 +8546,7 @@ function _avtCanvasKey(e: any) {
     e.preventDefault();
     // Botão de rolar dados visível (combate ou primeiro ataque mobile)
     const _btnRolar = document.getElementById('avt-btn-rolar');
-    if (_btnRolar && _btnRolar.style.display !== 'none' && document.body.contains(_btnRolar)) {
+    if (_btnRolar && _btnRolar.style!.display !== 'none' && document.body.contains(_btnRolar)) {
       _btnRolar.click();
       return;
     }
@@ -8823,7 +8823,7 @@ function _avtRenderBannerPausa(show: any) {
   if (!banner) {
     banner = document.createElement('div');
     banner.id = 'avt-inatividade-banner';
-    banner.style.cssText = [
+    banner.style!.cssText = [
       'position:fixed', 'top:50%', 'left:50%', 'transform:translate(-50%,-50%)',
       'z-index:9500', 'background:rgba(5,8,16,0.92)', 'border:1px solid rgba(79,163,209,0.4)',
       'border-radius:12px', 'padding:18px 28px', 'text-align:center',
@@ -9520,7 +9520,7 @@ function _avtMostrarPrimeiroAtaqueModal(jogador: any) {
   const overlay = document.createElement('div');
   overlay.id = 'avt-skill-overlay';
   // No PC, sempre à direita; no mobile, também à direita
-  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);right:10px;
+  overlay.style!.cssText = `position:fixed;top:50%;transform:translateY(-50%);right:10px;
     width:180px;max-height:70vh;overflow-y:auto;z-index:9900;
     background:rgba(5,8,16,0.97);border:1px solid rgba(79,163,209,0.35);
     border-radius:10px;padding:8px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
@@ -9589,7 +9589,7 @@ function _avtMostrarPrimeiroAtaqueModal(jogador: any) {
     if (!_jOv) return;
     _ov.querySelectorAll('[data-cdkey]').forEach(el => {
       const key = el.getAttribute('data-cdkey');
-      const cdMs = (AVT_STATE._oocCooldowns[key] || 0) - Date.now();
+      const cdMs = (AVT_STATE._oocCooldowns[key!] || 0) - Date.now();
       const cdEl = el.querySelector('.avt-cd-label');
       if (!cdEl) return;
       // Só escreve no DOM quando o texto exibido muda (evita invalidação a cada tick)
@@ -9597,11 +9597,11 @@ function _avtMostrarPrimeiroAtaqueModal(jogador: any) {
       if (cdEl.textContent === txt) return;
       cdEl.textContent = txt;
       if (cdMs > 0) {
-        el.style.opacity = '0.45';
-        el.style.pointerEvents = 'none';
+        el.style!.opacity = '0.45';
+        el.style!.pointerEvents = 'none';
       } else {
-        el.style.opacity = '';
-        el.style.pointerEvents = '';
+        el.style!.opacity = '';
+        el.style!.pointerEvents = '';
       }
     });
   }, 500);
@@ -9732,7 +9732,7 @@ function _avtMostrarListaAliadosParaSkillOoc(skId: any, jogador: any) {
   if (!aliados.length) { mostrarToast('Nenhum aliado disponível', 'aviso'); return; }
   const ov = document.createElement('div');
   ov.id = 'avt-alvo-skill-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  ov.style!.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
   const skNome = sk?.habilidade || 'Habilidade';
   ov.innerHTML = `
     <div style="background:#0a0f18;border:1px solid rgba(39,174,96,0.35);border-radius:12px;padding:16px;width:100%;max-width:320px">
@@ -9858,7 +9858,7 @@ function _avtMostrarBotaoRolarPerseguicaoMobile() {
     btn.innerHTML = '🎲 Rolar Dados';
     btn.addEventListener('touchend', e => { e.preventDefault(); _avtRolarDadosPrimAtaqueMobile(); });
     btn.onclick = _avtRolarDadosPrimAtaqueMobile;
-    btn.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);'
+    btn.style!.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);'
       + 'z-index:9920;padding:10px 28px;min-width:140px;'
       + 'background:linear-gradient(180deg,#c8a84b,#a8893a);'
       + 'color:#0a0f18;border:1px solid #6b5520;border-radius:8px;'
@@ -9867,7 +9867,7 @@ function _avtMostrarBotaoRolarPerseguicaoMobile() {
       + 'animation:avtPulseRolar 1.2s ease-in-out infinite;';
     document.body.appendChild(btn);
   } else {
-    btn.style.display = '';
+    btn.style!.display = '';
   }
 }
 
@@ -9903,9 +9903,9 @@ function _avtVerificarAlvoAindaNoRangeMobile() {
   );
   const btn = document.getElementById('avt-btn-rolar');
   if (dist > alcance) {
-    if (btn) btn.style.display = 'none';
+    if (btn) btn.style!.display = 'none';
   } else {
-    if (btn) btn.style.display = '';
+    if (btn) btn.style!.display = '';
     else _avtMostrarBotaoRolarPerseguicaoMobile();
   }
 }
@@ -9923,7 +9923,7 @@ function _avtMostrarListaAlvosPrimeiroAtaque(skId: any, jogador: any) {
   const skNome = sk?.habilidade || 'Ataque básico';
   const ov = document.createElement('div');
   ov.id = 'avt-alvo-skill-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  ov.style!.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
   ov.innerHTML = `
     <div style="background:#0a0f18;border:1px solid rgba(200,168,75,0.35);border-radius:12px;padding:16px;width:100%;max-width:320px">
       <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.85rem;margin-bottom:12px;text-align:center">⚔ ${skNome} — Selecionar Alvo</div>
@@ -10335,11 +10335,11 @@ async function _avtExecutarPrimeiroAtaqueCore(skId: any, targetId: any, _remote:
       mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${realIni} HP${_critMsg}`, 'ok');
       // Modificador: ataque básico em múltiplos alvos (OOC) — atinge alvos extras no alcance.
       if (!sk && (_abBuffs?.multiExtra || 0) > 0) {
-        const _baseAlcOoc = (_abCfg?.alcance_celulas ?? _defAbCore.alcance_celulas) + (_abBuffs.alcanceBonus || 0);
+        const _baseAlcOoc = (_abCfg?.alcance_celulas ?? _defAbCore.alcance_celulas) + (_abBuffs!.alcanceBonus || 0);
         const _jxM = Math.round(jogador.x), _jyM = Math.round(jogador.y);
         const _extrasOoc = AVT_STATE.entidades.filter((e: any) => e.tipo === 'inimigo' && e.hp > 0 && e.id !== ini.id && !e.escondido &&
             Math.max(Math.abs(Math.round(e.x) - _jxM), Math.abs(Math.round(e.y) - _jyM)) <= _baseAlcOoc)
-          .slice(0, _abBuffs.multiExtra);
+          .slice(0, _abBuffs!.multiExtra);
         _extrasOoc.forEach((alvX: any, idxX: any) => {
           _avtSetTimeout(() => {
             const entAlvX = AVT_STATE.entidades.find((e: any) => e.id === alvX.id) || alvX;
@@ -10611,13 +10611,13 @@ function _avtRolarPacienciaNpc(carismaJogador: any) {
 
 async function _avtSalvarPacienciaConfig() {
   const vals = {
-    paciencia_base_s:    parseFloat(document.getElementById('avt-mp-pac-base')?.value),
-    paciencia_chance_7s: parseFloat(document.getElementById('avt-mp-pac-c7')?.value),
-    paciencia_tempo_7s:  parseFloat(document.getElementById('avt-mp-pac-t7')?.value),
-    paciencia_chance_5s: parseFloat(document.getElementById('avt-mp-pac-c5')?.value),
-    paciencia_tempo_5s:  parseFloat(document.getElementById('avt-mp-pac-t5')?.value),
-    paciencia_chance_2s: parseFloat(document.getElementById('avt-mp-pac-c2')?.value),
-    paciencia_tempo_2s:  parseFloat(document.getElementById('avt-mp-pac-t2')?.value),
+    paciencia_base_s:    parseFloat(document.getElementById('avt-mp-pac-base')?.value!),
+    paciencia_chance_7s: parseFloat(document.getElementById('avt-mp-pac-c7')?.value!),
+    paciencia_tempo_7s:  parseFloat(document.getElementById('avt-mp-pac-t7')?.value!),
+    paciencia_chance_5s: parseFloat(document.getElementById('avt-mp-pac-c5')?.value!),
+    paciencia_tempo_5s:  parseFloat(document.getElementById('avt-mp-pac-t5')?.value!),
+    paciencia_chance_2s: parseFloat(document.getElementById('avt-mp-pac-c2')?.value!),
+    paciencia_tempo_2s:  parseFloat(document.getElementById('avt-mp-pac-t2')?.value!),
   };
   if (Object.values<any>(vals).some(v => isNaN(v))) { mostrarToast('Valores inválidos', 'erro'); return; }
   const rpg = AVT_STATE.rpg;
@@ -11172,7 +11172,7 @@ function _avtTickEfeitosOOC(now: any) {
           // ex.: 60×40 = 2400 células, deixando a entidade presa dentro da parede).
           const _bfsCap = AVT_STATE.dungeon ? (AVT_STATE.dungeon.w * AVT_STATE.dungeon.h + 1) : 4000;
           while (queue.length && !valid) {
-            const [qx, qy] = queue.shift();
+            const [qx, qy] = queue.shift()!;
             for (const [ddx, ddy] of [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]]) {
               const nx = qx + ddx, ny = qy + ddy;
               const key = `${nx},${ny}`;
@@ -11640,7 +11640,7 @@ function _avtMostrarConviteCombate(batId: any, expiry: any) {
   document.getElementById('avt-convite-combate')?.remove();
   const el = document.createElement('div');
   el.id = 'avt-convite-combate';
-  el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9900;background:rgba(5,8,16,0.97);border:1px solid rgba(200,60,40,0.5);border-radius:10px;padding:12px 20px;text-align:center;font-family:var(--fonte-d);color:#c8a84b';
+  el.style!.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9900;background:rgba(5,8,16,0.97);border:1px solid rgba(200,60,40,0.5);border-radius:10px;padding:12px 20px;text-align:center;font-family:var(--fonte-d);color:#c8a84b';
   const secsLeft = Math.ceil((expiry - Date.now()) / 1000);
   el.innerHTML = `<div style="font-size:0.8rem;margin-bottom:8px">⚔ Aliados entraram em combate!</div>
     <button onclick="_avtAceitarConviteCombate('${batId}')" style="padding:6px 16px;background:rgba(232,96,76,0.15);border:1px solid rgba(232,96,76,0.5);border-radius:6px;color:#e8604c;cursor:pointer;font-family:var(--fonte-d);font-size:0.75rem">Entrar no Combate (${secsLeft}s)</button>
@@ -11717,7 +11717,7 @@ function _avtDpadDoMove(dx: any, dy: any) {
 function _avtToggleDpad() {
   const dpad = document.getElementById('avt-dpad');
   if (!dpad) return;
-  dpad.style.display = dpad.style.display === 'none' ? 'block' : 'none';
+  dpad.style!.display = dpad.style!.display === 'none' ? 'block' : 'none';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -12380,8 +12380,8 @@ function _avtMostrarXpFloat(xp: any) {
   if (!hud) return;
   const el = document.createElement('div');
   el.textContent = `+${xp} XP`;
-  el.style.cssText = 'position:absolute;right:10px;top:4px;color:#ffe066;font-family:var(--fonte-d);font-size:0.85rem;font-weight:bold;pointer-events:none;z-index:10;text-shadow:0 0 8px rgba(200,168,75,0.8);animation:avt-xp-float 2s ease-out forwards';
-  hud.style.position = 'relative';
+  el.style!.cssText = 'position:absolute;right:10px;top:4px;color:#ffe066;font-family:var(--fonte-d);font-size:0.85rem;font-weight:bold;pointer-events:none;z-index:10;text-shadow:0 0 8px rgba(200,168,75,0.8);animation:avt-xp-float 2s ease-out forwards';
+  hud.style!.position = 'relative';
   hud.appendChild(el);
   setTimeout(() => el.remove(), 2100);
 }
@@ -12394,7 +12394,7 @@ function _avtMostrarXpLoss(charNome: any, xpPerdido: any) {
   const cy = pos ? pos.y : window.innerHeight / 2;
   const el = document.createElement('div');
   el.textContent = `-${xpPerdido} XP`;
-  el.style.cssText = `position:fixed;left:${cx}px;top:${cy}px;transform:translate(-50%,-50%);color:#e85c4c;font-family:var(--fonte-d);font-size:1.1rem;font-weight:bold;pointer-events:none;z-index:9999;text-shadow:0 0 10px rgba(232,92,76,0.9);animation:avt-xp-loss 2.2s ease-out forwards`;
+  el.style!.cssText = `position:fixed;left:${cx}px;top:${cy}px;transform:translate(-50%,-50%);color:#e85c4c;font-family:var(--fonte-d);font-size:1.1rem;font-weight:bold;pointer-events:none;z-index:9999;text-shadow:0 0 10px rgba(232,92,76,0.9);animation:avt-xp-loss 2.2s ease-out forwards`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2300);
   // Também no HUD local (se for o próprio personagem)
@@ -12402,8 +12402,8 @@ function _avtMostrarXpLoss(charNome: any, xpPerdido: any) {
   if (hud) {
     const hudEl = document.createElement('div');
     hudEl.textContent = `-${xpPerdido} XP`;
-    hudEl.style.cssText = 'position:absolute;right:10px;top:4px;color:#e85c4c;font-family:var(--fonte-d);font-size:0.85rem;font-weight:bold;pointer-events:none;z-index:10;text-shadow:0 0 8px rgba(232,92,76,0.8);animation:avt-xp-float 2s ease-out forwards';
-    hud.style.position = 'relative';
+    hudEl.style!.cssText = 'position:absolute;right:10px;top:4px;color:#e85c4c;font-family:var(--fonte-d);font-size:0.85rem;font-weight:bold;pointer-events:none;z-index:10;text-shadow:0 0 8px rgba(232,92,76,0.8);animation:avt-xp-float 2s ease-out forwards';
+    hud.style!.position = 'relative';
     hud.appendChild(hudEl);
     setTimeout(() => hudEl.remove(), 2100);
   }
@@ -12440,20 +12440,20 @@ function _avtLevelUpParticleEffect(charNome: any, novoNivel: any) {
 
   // Glow radial ao redor do personagem
   const glow = document.createElement('div');
-  glow.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:130px;height:130px;border-radius:50%;background:radial-gradient(circle,rgba(255,224,102,0.75) 0%,rgba(200,168,75,0.35) 40%,transparent 70%);filter:blur(10px);pointer-events:none;z-index:9700;animation:avt-levelup-glow 1.8s ease-out forwards`;
+  glow.style!.cssText = `position:fixed;left:${x}px;top:${y}px;width:130px;height:130px;border-radius:50%;background:radial-gradient(circle,rgba(255,224,102,0.75) 0%,rgba(200,168,75,0.35) 40%,transparent 70%);filter:blur(10px);pointer-events:none;z-index:9700;animation:avt-levelup-glow 1.8s ease-out forwards`;
   document.body.appendChild(glow);
   els.push(glow);
 
   // Anel expansivo
   const ring = document.createElement('div');
-  ring.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:72px;height:72px;border-radius:50%;border:2px solid rgba(255,224,102,0.85);box-shadow:0 0 14px rgba(255,224,102,0.5);pointer-events:none;z-index:9701;animation:avt-levelup-ring 1.1s ease-out forwards`;
+  ring.style!.cssText = `position:fixed;left:${x}px;top:${y}px;width:72px;height:72px;border-radius:50%;border:2px solid rgba(255,224,102,0.85);box-shadow:0 0 14px rgba(255,224,102,0.5);pointer-events:none;z-index:9701;animation:avt-levelup-ring 1.1s ease-out forwards`;
   document.body.appendChild(ring);
   els.push(ring);
 
   // Texto flutuante a partir do personagem
   const label = document.createElement('div');
   label.textContent = `⬆ Nível ${novoNivel}`;
-  label.style.cssText = `position:fixed;left:${x}px;top:${y}px;color:#ffe066;font-family:var(--fonte-d);font-size:0.9rem;font-weight:bold;text-shadow:0 0 10px rgba(200,168,75,0.9),0 1px 3px rgba(0,0,0,0.9);pointer-events:none;z-index:9702;white-space:nowrap;animation:avt-levelup-text 2.2s ease-out forwards`;
+  label.style!.cssText = `position:fixed;left:${x}px;top:${y}px;color:#ffe066;font-family:var(--fonte-d);font-size:0.9rem;font-weight:bold;text-shadow:0 0 10px rgba(200,168,75,0.9),0 1px 3px rgba(0,0,0,0.9);pointer-events:none;z-index:9702;white-space:nowrap;animation:avt-levelup-text 2.2s ease-out forwards`;
   document.body.appendChild(label);
   els.push(label);
 
@@ -13313,15 +13313,15 @@ function _avtHudMostrar(show: any) {
   // No modo controle mobile dispositivo, o HUD é suprimido (botões ficam no overlay)
   const ctrlAtivo = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL.ativo && MOBILE_CTRL.modoTela === 'dispositivo';
   const hud = document.getElementById('avt-hud');
-  if (hud) hud.style.display = (show && !ctrlAtivo) ? 'flex' : 'none';
+  if (hud) hud.style!.display = (show && !ctrlAtivo) ? 'flex' : 'none';
   // Botão encerrar: visível para jogador (não mestre) quando em combate
   const _ehMestreEnc = typeof _avtSouMestre === 'function' && _avtSouMestre();
   const _showEnc = show && !_ehMestreEnc;
   const btnEnc = document.getElementById('avt-btn-encerrar');
-  if (btnEnc) btnEnc.style.display = _showEnc ? 'inline-flex' : 'none';
+  if (btnEnc) btnEnc.style!.display = _showEnc ? 'inline-flex' : 'none';
   // Botão encerrar no overlay do modo controle
   const mcEncBtn = document.getElementById('mc-encerrar-btn');
-  if (mcEncBtn) mcEncBtn.style.display = _showEnc ? 'inline-flex' : 'none';
+  if (mcEncBtn) mcEncBtn.style!.display = _showEnc ? 'inline-flex' : 'none';
   // Atualizar zona direita do controle mobile se ativo
   if (ctrlAtivo && typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
 }
@@ -13373,7 +13373,7 @@ function _avtMostrarListaAlvosMobile(bat: any) {
   // Fallback: overlay full-screen para touch sem controle ativo
   const ov = document.createElement('div');
   ov.id = 'avt-alvo-mobile-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.75);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  ov.style!.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.75);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
   ov.innerHTML = `
     <div style="background:#0a0f18;border:1px solid rgba(79,163,209,0.35);border-radius:12px;padding:16px;width:100%;max-width:320px">
       <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.85rem;margin-bottom:12px;text-align:center">&#127919; Selecionar Alvo</div>
@@ -13441,7 +13441,7 @@ function _avtMostrarSkillOverlay() {
   const overlay = document.createElement('div');
   overlay.id = 'avt-skill-overlay';
   // Sempre à direita no PC e no mobile
-  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);right:10px;
+  overlay.style!.cssText = `position:fixed;top:50%;transform:translateY(-50%);right:10px;
     width:180px;max-height:70vh;overflow-y:auto;z-index:9900;
     background:rgba(5,8,16,0.97);border:1px solid rgba(79,163,209,0.35);
     border-radius:10px;padding:8px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
@@ -13617,7 +13617,7 @@ function _avtMostrarListaAlvosComSkill(b: any, skId: any) {
   }
   const ov = document.createElement('div');
   ov.id = 'avt-alvo-skill-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  ov.style!.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
   const skNome = sk?.habilidade || 'Ataque básico';
   ov.innerHTML = `
     <div style="background:#0a0f18;border:1px solid rgba(200,168,75,0.35);border-radius:12px;padding:16px;width:100%;max-width:320px">
@@ -13688,7 +13688,7 @@ function _avtMostrarDiceOverlay(alvo: any, skId: any, countdown: any) {
   // Position near enemy token (offset to not cover it)
   const left = Math.min(Math.max(pos.x - 50, 8), window.innerWidth - 110);
   const top  = Math.min(Math.max(pos.y + 40, 8), window.innerHeight - 120);
-  overlay.style.cssText = `left:${left}px;top:${top}px`;
+  overlay.style!.cssText = `left:${left}px;top:${top}px`;
 
   const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
   const formula = sk?.formula_dano || '1d8';
@@ -13704,8 +13704,8 @@ function _avtMostrarDiceOverlay(alvo: any, skId: any, countdown: any) {
   const cdEl = () => document.getElementById('avt-dice-cd');
   const tick = () => {
     if (!document.getElementById('avt-dice-overlay')) return;
-    if (cd <= 0) { if (cdEl()) cdEl().textContent = 'Rolando…'; return; }
-    if (cdEl()) cdEl().textContent = `Rolando em ${cd}…`;
+    if (cd <= 0) { if (cdEl()) cdEl()!.textContent = 'Rolando…'; return; }
+    if (cdEl()) cdEl()!.textContent = `Rolando em ${cd}…`;
     cd--;
     setTimeout(tick, 1000);
   };
@@ -13717,13 +13717,13 @@ function _avtMostrarResultadoDice(alvo: any, skNome: any, dadosRolados: any, tot
   const pos = _avtSkillOverlayGetAlvoScreenPos(alvo);
   if (!existing && !pos) return;
 
-  const left = existing ? parseInt(existing.style.left) : Math.min(Math.max(pos.x - 50, 8), window.innerWidth - 110);
-  const top  = existing ? parseInt(existing.style.top)  : Math.min(Math.max(pos.y + 40, 8), window.innerHeight - 120);
+  const left = existing ? parseInt(existing.style!.left) : Math.min(Math.max(pos!.x - 50, 8), window.innerWidth - 110);
+  const top  = existing ? parseInt(existing.style!.top)  : Math.min(Math.max(pos!.y + 40, 8), window.innerHeight - 120);
   existing?.remove();
 
   const overlay = document.createElement('div');
   overlay.id = 'avt-dice-overlay';
-  overlay.style.cssText = `left:${left}px;top:${top}px`;
+  overlay.style!.cssText = `left:${left}px;top:${top}px`;
 
   const pips = dadosRolados.map((d: any) => `<span class="avt-dice-pip">${d.val}</span>`).join('');
   overlay.innerHTML = `
@@ -14276,7 +14276,7 @@ async function _avtExecutarAtaque() {
           const _cxM = Math.round(_entCasterAB.x), _cyM = Math.round(_entCasterAB.y);
           const _extrasMulti = b.iniciativa.filter((e: any) => e.tipo === 'inimigo' && e.hp > 0 && e.id !== alvo.id &&
               Math.max(Math.abs(Math.round(e.x) - _cxM), Math.abs(Math.round(e.y) - _cyM)) <= _raioMulti)
-            .slice(0, _abBuffs.multiExtra);
+            .slice(0, _abBuffs!.multiExtra);
           // Números de dano nos peers: lote único (stagger reproduzido no receptor).
           if (_extrasMulti.length) {
             try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _extrasMulti.map((a: any) => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
@@ -14409,7 +14409,7 @@ function avtReceberRsvUpdate({ nome, atributos }: any) {
   Object.keys(atributos).forEach(k => { atrsLocais[k] = atributos[k]; });
   _avtRenderHpBar();
   const pp = document.getElementById('avt-player-panel');
-  if (pp && pp.style.display !== 'none') avtJogadorPainelRender();
+  if (pp && pp.style!.display !== 'none') avtJogadorPainelRender();
 }
 window.avtReceberRsvUpdate = avtReceberRsvUpdate;
 
@@ -14769,7 +14769,7 @@ function _avtProcessarStatusEffects(bat: any, ent: any) {
         const _bfsVisited = new Set([`${ex},${ey}`]);
         const _bfsQueue = [[ex, ey]];
         while (_bfsQueue.length && !valid) {
-          const [qx, qy] = _bfsQueue.shift();
+          const [qx, qy] = _bfsQueue.shift()!;
           for (const [ddx, ddy] of [[0,-1],[0,1],[-1,0],[1,0],[-1,-1],[-1,1],[1,-1],[1,1]]) {
             const nx = qx+ddx, ny = qy+ddy;
             const key = `${nx},${ny}`;
@@ -14817,7 +14817,7 @@ function _avtMostrarListaAliadosParaSkill(skId: any) {
   if (!aliados.length) { mostrarToast('Nenhum aliado disponível', 'aviso'); return; }
   const ov = document.createElement('div');
   ov.id = 'avt-alvo-skill-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  ov.style!.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
   const skNome = sk?.habilidade || 'Habilidade';
   ov.innerHTML = `
     <div style="background:#0a0f18;border:1px solid rgba(39,174,96,0.35);border-radius:12px;padding:16px;width:100%;max-width:320px">
@@ -14994,7 +14994,7 @@ function _avtTurnoAvancar(bat: any) {
         if (_entTerminou.nome === AVT_STATE.myCharNome) {
           _avtRenderHpBar();
           const _pp = document.getElementById('avt-player-panel');
-          if (_pp && _pp.style.display !== 'none') avtJogadorPainelRender();
+          if (_pp && _pp.style!.display !== 'none') avtJogadorPainelRender();
         }
         _avtSb(`characters?id=eq.${encodeURIComponent(_charTerm.id)}`,
           { method: 'PATCH', body: JSON.stringify({ custom_attrs: _charTerm.custom_attrs }) }
@@ -15780,20 +15780,20 @@ function _avtNpcMelhorDirecao(entNpc: any, alvo: any, skillAlcance: any) {
   let best = null, bestScore = Infinity, bestDist = Infinity;
   while (queue.length) {
     const cur = queue.shift();
-    if (cur.dist > 0) {
-      const score = Math.abs(cheb(cur.x, cur.y) - wantDist); // proximidade da distância ideal
-      if (score < bestScore || (score === bestScore && cur.dist < bestDist)) {
-        bestScore = score; bestDist = cur.dist; best = cur;
+    if (cur!.dist > 0) {
+      const score = Math.abs(cheb(cur!.x, cur!.y) - wantDist); // proximidade da distância ideal
+      if (score < bestScore || (score === bestScore && cur!.dist < bestDist)) {
+        bestScore = score; bestDist = cur!.dist; best = cur;
       }
     }
-    if (cur.dist >= RAIO || visited.size >= CAP) continue;
+    if (cur!.dist >= RAIO || visited.size >= CAP) continue;
     for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-      const nx = cur.x + dx, ny = cur.y + dy, key = `${nx},${ny}`;
+      const nx = cur!.x + dx, ny = cur!.y + dy, key = `${nx},${ny}`;
       if (visited.has(key)) continue;
       if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) continue;
       if (_avtCelulaOcupada(nx, ny, entNpc.id, entNpc.tipo, true)) continue;
-      visited.set(key, { x: nx, y: ny, px: cur.x, py: cur.y });
-      queue.push({ x: nx, y: ny, dist: cur.dist + 1 });
+      visited.set(key, { x: nx, y: ny, px: cur!.x, py: cur!.y });
+      queue.push({ x: nx, y: ny, dist: cur!.dist + 1 });
     }
   }
   if (!best) return null;                 // cercado — sem movimento possível
@@ -16180,7 +16180,7 @@ function _avtRenderHpBar() {
 function _avtToggleLog() {
   const panel = document.getElementById('avt-log-panel');
   if (!panel) return;
-  panel.style.display = panel.style.display==='none' ? 'block' : 'none';
+  panel.style!.display = panel.style!.display==='none' ? 'block' : 'none';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -16231,23 +16231,23 @@ function _avtSouHostBatalha() { return true; }
 function _avtAtualizarUiPorRole() {
   const ehMestre = _avtSouMestre();
   const btnM = document.getElementById('avt-btn-mestre');
-  if (btnM) btnM.style.display = ehMestre ? 'inline-flex' : 'none';
+  if (btnM) btnM.style!.display = ehMestre ? 'inline-flex' : 'none';
   const btnP = document.getElementById('avt-btn-player');
-  if (btnP) btnP.style.display = ehMestre ? 'none' : 'inline-flex';
+  if (btnP) btnP.style!.display = ehMestre ? 'none' : 'inline-flex';
   const btnEnc = document.getElementById('avt-btn-encerrar');
-  if (btnEnc && ehMestre) btnEnc.style.display = 'none';
+  if (btnEnc && ehMestre) btnEnc.style!.display = 'none';
   const btnC = document.getElementById('avt-btn-combate');
-  if (btnC) btnC.style.display = ehMestre ? 'inline-flex' : 'none';
+  if (btnC) btnC.style!.display = ehMestre ? 'inline-flex' : 'none';
 
   // Atualiza indicador de host no header (evita topbar duplicada)
   const hostInd = document.getElementById('avt-host-indicator');
   if (hostInd) {
     const rtAtivo = typeof RTNet !== 'undefined' && RTNet.initialized;
     const euHost  = rtAtivo && RTNet.isHost();
-    hostInd.style.display = rtAtivo ? '' : 'none';
+    hostInd.style!.display = rtAtivo ? '' : 'none';
     hostInd.textContent   = euHost ? '👑 Host' : '◯ Peer';
-    hostInd.style.color   = euHost ? '#c8a84b' : '#7a92aa';
-    hostInd.style.cursor  = euHost ? 'pointer' : 'default';
+    hostInd.style!.color   = euHost ? '#c8a84b' : '#7a92aa';
+    hostInd.style!.cursor  = euHost ? 'pointer' : 'default';
     hostInd.onclick = euHost
       ? () => { if (typeof window._avtAbrirModalTransferirHost === 'function') window._avtAbrirModalTransferirHost(); }
       : null;
@@ -16260,7 +16260,7 @@ function _avtAtualizarUiPorRole() {
       tog = document.createElement('button');
       tog.id = 'avt-btn-mestre-toggle';
       tog.type = 'button';
-      tog.style.cssText = [
+      tog.style!.cssText = [
         'padding:3px 7px','border-radius:6px','cursor:pointer',
         'font:500 10px/1 system-ui,sans-serif',
         'border:1px solid #2a3a52','color:#e8eef5',
@@ -16268,8 +16268,8 @@ function _avtAtualizarUiPorRole() {
         'box-shadow:0 1px 4px rgba(0,0,0,.35)',
         'opacity:.85','transition:opacity .15s','letter-spacing:.02em'
       ].join(';');
-      tog.onmouseover = () => { tog.style.opacity = '1'; };
-      tog.onmouseout  = () => { tog.style.opacity = '.85'; };
+      tog.onmouseover = () => { tog!.style!.opacity = '1'; };
+      tog.onmouseout  = () => { tog!.style!.opacity = '.85'; };
       tog.onclick = _avtToggleModoJogador;
     }
     // Coloca o botão no header (antes do host indicator)
@@ -16279,18 +16279,18 @@ function _avtAtualizarUiPorRole() {
       if (_hi) _header.insertBefore(tog, _hi);
       else _header.appendChild(tog);
     }
-    tog.style.display = 'inline-flex';
+    tog.style!.display = 'inline-flex';
     tog.textContent = AVT_STATE.mestreComoJogador
       ? '👑 Mestre'
       : '🎭 Jogador';
   } else if (tog) {
-    tog.style.display = 'none';
+    tog.style!.display = 'none';
   }
 
   // Se virou jogador, fecha o painel do mestre caso esteja aberto
   if (!ehMestre) {
     const panel = document.getElementById('avt-mestre-panel');
-    if (panel && panel.style.display !== 'none') panel.style.display = 'none';
+    if (panel && panel.style!.display !== 'none') panel.style!.display = 'none';
   }
 }
 
@@ -16375,7 +16375,7 @@ function _avtRecuperarPorMovimento(jogador: any, celulas: any) {
 
   _avtRenderHpBar();
   const pp = document.getElementById('avt-player-panel');
-  if (pp && pp.style.display !== 'none') avtJogadorPainelRender();
+  if (pp && pp.style!.display !== 'none') avtJogadorPainelRender();
 
   // Propaga HP atualizado para host e demais clientes
   try { _avtBroadcast('avt_hp_update', { nome: jogador.nome, hp: hpDepois, hpMax: jogador.hpMax ?? hpMax }); } catch(_) {}
@@ -16564,7 +16564,7 @@ window.avtDescansar = avtDescansar;
 function avtJogadorPainel() {
   // Sidebar antiga "Meu Personagem" foi unificada ao modal de duplo-clique.
   const panel = document.getElementById('avt-player-panel');
-  if (panel) panel.style.display = 'none';
+  if (panel) panel.style!.display = 'none';
   const meuJog = _avtMeuJogador();
   if (!meuJog) { mostrarToast('Nenhum personagem vinculado à sua sessão', 'aviso'); return; }
   abrirAvtCharEditor(meuJog.id);
@@ -17140,7 +17140,7 @@ function avtImportarCatalogo() {
 
   const modal = document.createElement('div');
   modal.id = 'avt-catalog-import-modal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.style!.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;padding:20px';
   modal.innerHTML = `
     <div style="background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:12px;padding:20px;width:min(560px,95vw);display:flex;flex-direction:column;gap:12px">
       <div style="display:flex;align-items:center;gap:10px">
@@ -17160,7 +17160,7 @@ function avtImportarCatalogo() {
 window.avtImportarCatalogo = avtImportarCatalogo;
 
 async function avtImportarCatalogoConfirmar() {
-  const raw = document.getElementById('avt-catalog-json')?.value.trim();
+  const raw = document.getElementById('avt-catalog-json')?.value!.trim!()!;
   if (!raw) { mostrarToast('Cole o JSON do catálogo', 'aviso'); return; }
   let itens;
   try { itens = JSON.parse(raw); } catch (e: any) { mostrarToast('JSON inválido: ' + e.message, 'erro'); return; }
@@ -17201,7 +17201,7 @@ function _avtCatItemEditor(itemId: any) {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'avt-catitem-editor-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
     document.body.appendChild(overlay);
   }
   const inputCss = 'width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem';
@@ -17261,7 +17261,7 @@ function _avtCatItemEditor(itemId: any) {
         <button class="avt-mp-btn" style="flex:1" onclick="document.getElementById('avt-catitem-editor-overlay').remove()">Cancelar</button>
       </div>
     </div>`;
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
 }
 window._avtCatItemEditor = _avtCatItemEditor;
 
@@ -17275,7 +17275,7 @@ async function _avtCatItemUploadImg(input: any) {
     const inp = document.getElementById('avt-catitem-img-url');
     if (inp) inp.value = url;
     const prev = document.getElementById('avt-catitem-img-preview');
-    if (prev) { prev.style.backgroundImage = `url('${url.replace(/'/g,'%27')}')`; prev.textContent = ''; }
+    if (prev) { prev.style!.backgroundImage = `url('${url.replace(/'/g,'%27')}')`; prev.textContent = ''; }
     mostrarToast('Imagem enviada!', 'ok');
   } catch (e: any) { mostrarToast('Erro no upload: ' + (e?.message || e), 'erro'); console.error(e); }
 }
@@ -17294,7 +17294,7 @@ async function _avtCatItemSalvar(itemId: any) {
     slot_padrao: (document.getElementById('avt-catitem-slot')?.value || '').trim() || null,
     img_url: (document.getElementById('avt-catitem-img-url')?.value || '').trim() || null,
     droppable: !!document.getElementById('avt-catitem-droppable')?.checked,
-    drop_rate: parseFloat(document.getElementById('avt-catitem-droprate')?.value) || 0,
+    drop_rate: parseFloat(document.getElementById('avt-catitem-droprate')?.value!) || 0,
   };
   try {
     if (itemId) {
@@ -17335,9 +17335,9 @@ window._avtCatItemRemover = _avtCatItemRemover;
 function avtMestrePainel() {
   const panel = document.getElementById('avt-mestre-panel');
   if (!panel) return;
-  if (!_avtSouMestre()) { panel.style.display = 'none'; return; }
-  const open = panel.style.display !== 'none';
-  panel.style.display = open ? 'none' : 'flex';
+  if (!_avtSouMestre()) { panel.style!.display = 'none'; return; }
+  const open = panel.style!.display !== 'none';
+  panel.style!.display = open ? 'none' : 'flex';
   if (!open) _avtMestrePainelRender();
 }
 
@@ -17794,7 +17794,7 @@ function _avtCanvasFlash(screenX: any, screenY: any, cor: any, tipo: any) {
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const d = Math.round(SZ * 1.6);
   const el = document.createElement('div');
-  el.style.cssText = [
+  el.style!.cssText = [
     'position:absolute',
     'pointer-events:none',
     'z-index:35',
@@ -17811,8 +17811,8 @@ function _avtCanvasFlash(screenX: any, screenY: any, cor: any, tipo: any) {
   ].join(';');
   wrap.appendChild(el);
   requestAnimationFrame(() => {
-    el.style.opacity = '0';
-    el.style.transform = 'scale(1.25)';
+    el.style!.opacity = '0';
+    el.style!.transform = 'scale(1.25)';
   });
   setTimeout(() => { try { el.remove(); } catch (_) {} }, 220);
 }
@@ -19768,7 +19768,7 @@ function _avtVfxHost() {
     const overlayCanvas = document.createElement('canvas');
     overlayCanvas.id = 'avt-vfx-host';
     overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
-    overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
+    overlayCanvas.style!.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
     canvas.parentElement.style.position = 'relative';
     canvas.parentElement.appendChild(overlayCanvas);
     const app = new PIXI.Application({
@@ -20593,7 +20593,7 @@ function _avtPixiSpineAnim(spineConfig: any, screenX: any, screenY: any) {
     overlayCanvas.id = 'avt-pixi-spine-overlay';
     overlayCanvas.width = canvas.width;
     overlayCanvas.height = canvas.height;
-    overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:101`;
+    overlayCanvas.style!.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:101`;
     canvas.parentElement.style.position = 'relative';
     canvas.parentElement.appendChild(overlayCanvas);
 
@@ -20647,9 +20647,9 @@ function _avtPixiSpineAnim(spineConfig: any, screenX: any, screenY: any) {
 function _avtMestrePainelRender() {
   const panel = document.getElementById('avt-mestre-panel');
   if (!panel) return;
-  if (!_avtSouMestre()) { panel.style.display = 'none'; return; }
+  if (!_avtSouMestre()) { panel.style!.display = 'none'; return; }
   // Só re-renderiza se já estiver aberto; nunca força abertura.
-  if (panel.style.display === 'none' || !panel.style.display) return;
+  if (panel.style!.display === 'none' || !panel.style!.display) return;
   // Garantir entradas de _avtBulkAparState para todos os presets conhecidos
   Object.keys(_avtGetNpcClasses()).forEach(k => {
     if (!window._avtBulkAparState[k])
@@ -21770,10 +21770,10 @@ function _avtMestreAbrirEditorUnificado() {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'avt-mestre-map-editor-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px;overflow:auto';
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px;overflow:auto';
     document.body.appendChild(overlay);
   }
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
 
   const EDSZ = _AVT_ED_SZ;
   const W = dungeon.w, H = dungeon.h;
@@ -21849,11 +21849,11 @@ function _avtMestreAbrirEditorUnificado() {
   const canvas = document.getElementById('avt-ed-canvas-mestre');
   if (!canvas) return;
   canvas.width = W * EDSZ; canvas.height = H * EDSZ;
-  canvas.style.width = (W * EDSZ) + 'px'; canvas.style.height = (H * EDSZ) + 'px';
+  canvas.style!.width = (W * EDSZ) + 'px'; canvas.style!.height = (H * EDSZ) + 'px';
 
   // Render WYSIWYG (espelha o render loop ao vivo: tileset + autotiler)
   (_avtEd as any)._render = function() {
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext!('2d');
     const view = { w: W, h: H, tiles: _avtEd.tiles, _chestPositions: dungeon._chestPositions };
     ctx.imageSmoothingEnabled = false;
     for (let y = 0; y < H; y++) {
@@ -21936,7 +21936,7 @@ function _avtMestreAbrirEditorUnificado() {
   const tsOverlay = document.getElementById('avt-ts-overlay');
   if (tsImg && tsOverlay) {
     const picker = document.getElementById('avt-ts-picker');
-    picker.addEventListener('click', e => {
+    picker!.addEventListener('click', e => {
       const rect = tsImg.getBoundingClientRect();
       const cellW = rect.width / TS_COLS, cellH = rect.height / TS_ROWS;
       const tc = Math.floor((e.clientX - rect.left) / cellW);
@@ -21950,8 +21950,8 @@ function _avtMestreAbrirEditorUnificado() {
       const info = document.getElementById('avt-ts-brush-info');
       if (info) info.textContent = key ? `Peça: ${key} (${fnLabel})` : `Bloco (${tc},${tr}) — ${fnLabel}`;
       _avtEdStatus(`Peça do tileset: ${key || (tc + ',' + tr)} → ${fnLabel}`);
-      const oc = tsOverlay.getContext('2d');
-      tsOverlay.style.width = rect.width + 'px'; tsOverlay.style.height = rect.height + 'px';
+      const oc = tsOverlay.getContext!('2d');
+      tsOverlay.style!.width = rect.width + 'px'; tsOverlay.style!.height = rect.height + 'px';
       tsOverlay.width = rect.width; tsOverlay.height = rect.height;
       oc.clearRect(0, 0, tsOverlay.width, tsOverlay.height);
       oc.strokeStyle = '#4fa3d1'; oc.lineWidth = 2;
@@ -22057,7 +22057,7 @@ function _avtEdAbrirConfigPorta(col: any, row: any) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'avt-ed-porta-modal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9600;display:flex;align-items:center;justify-content:center';
+    modal.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9600;display:flex;align-items:center;justify-content:center';
     document.body.appendChild(modal);
   }
   const fases = (_avtEd as any).fasesExtras || [];
@@ -22084,12 +22084,12 @@ function _avtEdAbrirConfigPorta(col: any, row: any) {
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtEdConfirmarPorta()">Confirmar</button>
       </div>
     </div>`;
-  modal.style.display = 'flex';
+  modal.style!.display = 'flex';
   modal.querySelectorAll('input[name="avt-ed-porta-tipo"]').forEach(r =>
     r.addEventListener('change', () => {
       const tipo = document.querySelector('input[name="avt-ed-porta-tipo"]:checked')?.value;
       const cfg = document.getElementById('avt-ed-porta-fase-cfg');
-      if (cfg) cfg.style.display = tipo === 'fase' ? 'block' : 'none';
+      if (cfg) cfg.style!.display = tipo === 'fase' ? 'block' : 'none';
     }));
 }
 
@@ -22097,7 +22097,7 @@ function _avtEdConfirmarPorta() {
   const cell = (_avtEd as any)._portaCfgCell;
   if (!cell) return;
   const tipo = document.querySelector('input[name="avt-ed-porta-tipo"]:checked')?.value || 'interna';
-  document.getElementById('avt-ed-porta-modal').style.display = 'none';
+  document.getElementById('avt-ed-porta-modal')!.style!.display = 'none';
   if (tipo === 'interna') {
     (_avtEd as any).pendingDoorAnchor = { col: cell.col, row: cell.row };
     _avtEd.tiles[cell.row][cell.col] = AVT_T.PISO; // passável
@@ -22162,7 +22162,7 @@ async function _avtMestreSalvarMapaUnificado() {
   if (tj.tileset_paints) delete tj.tileset_paints;
 
   const overlay = document.getElementById('avt-mestre-map-editor-overlay');
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) overlay.style!.display = 'none';
   try {
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
       method: 'PATCH', body: JSON.stringify({ theme_json: tj })
@@ -22216,7 +22216,7 @@ window._avtMestreAplicarTilesetUpload = _avtMestreAplicarTilesetUpload;
 
 async function _avtSalvarBossDoorConfig() {
   const modo = document.querySelector('input[name="avt-boss-door-mode"]:checked')?.value || 'spawn_door';
-  const segs = Math.max(0, Math.min(3600, parseInt(document.getElementById('avt-mp-boss-door-segs')?.value) || 30));
+  const segs = Math.max(0, Math.min(3600, parseInt(document.getElementById('avt-mp-boss-door-segs')?.value!) || 30));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22292,10 +22292,10 @@ async function _avtSalvarJanelaMovimento() {
 }
 
 async function _avtSalvarHpConfig() {
-  const hpBase = Math.max(1, parseInt(document.getElementById('avt-mp-hp-base')?.value) || 100);
+  const hpBase = Math.max(1, parseInt(document.getElementById('avt-mp-hp-base')?.value!) || 100);
   const hpAttr = document.getElementById('avt-mp-hp-attr')?.value || '';
   const _hpMultStr = document.getElementById('avt-mp-hp-mult')?.value?.trim();
-  const _hpMultNum = parseFloat(_hpMultStr);
+  const _hpMultNum = parseFloat(_hpMultStr!);
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22326,7 +22326,7 @@ async function _avtSalvarVelocidadePerseguicao() {
 }
 
 async function _avtSalvarVelocidadeCorrida() {
-  const val = Math.max(100, Math.min(5000, parseInt(document.getElementById('avt-mp-vel-corrida')?.value) || 400));
+  const val = Math.max(100, Math.min(5000, parseInt(document.getElementById('avt-mp-vel-corrida')?.value!) || 400));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22347,7 +22347,7 @@ async function _avtSalvarDropsConfig() {
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
-  const clamp = (id: any, def?: any) => Math.max(0, Math.min(100, parseInt(document.getElementById(id)?.value))) / 100;
+  const clamp = (id: any, def?: any) => Math.max(0, Math.min(100, parseInt(document.getElementById(id)?.value!))) / 100;
   const cfg = {
     drop_item_chance:   isNaN(clamp('avt-mp-drop-item-pct'))   ? 0.10 : clamp('avt-mp-drop-item-pct'),
     orbe_hp_chance:     isNaN(clamp('avt-mp-orbe-hp-pct'))     ? 0.10 : clamp('avt-mp-orbe-hp-pct'),
@@ -22370,11 +22370,11 @@ async function _avtSalvarDynSpawnConfig() {
   if (!rpg.theme_json) rpg.theme_json = {};
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
   const pct = (id: any, def: any) => {
-    const v = parseInt(document.getElementById(id)?.value);
+    const v = parseInt(document.getElementById(id)?.value!);
     return isNaN(v) ? def : Math.max(0, Math.min(100, v)) / 100;
   };
   const num = (id: any, def: any, min: any, max: any) => {
-    const v = parseInt(document.getElementById(id)?.value);
+    const v = parseInt(document.getElementById(id)?.value!);
     return isNaN(v) ? def : Math.max(min, Math.min(max, v));
   };
   const cfg = {
@@ -22405,7 +22405,7 @@ function _avtOrbeConfigEditor() {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'avt-orbe-config-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
     document.body.appendChild(overlay);
   }
   const inputCss = 'box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem';
@@ -22463,7 +22463,7 @@ function _avtOrbeConfigEditor() {
         <button class="avt-mp-btn" style="flex:1" onclick="document.getElementById('avt-orbe-config-overlay').remove()">Cancelar</button>
       </div>
     </div>`;
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
 }
 window._avtOrbeConfigEditor = _avtOrbeConfigEditor;
 
@@ -22475,9 +22475,9 @@ async function _avtSalvarOrbeTiers() {
   const coletar = (pref: any) => {
     const tiers = [];
     for (let i = 0; i < 3; i++) {
-      const valor = parseFloat(document.getElementById(`avt-orbe-${pref}-valor-${i}`)?.value);
+      const valor = parseFloat(document.getElementById(`avt-orbe-${pref}-valor-${i}`)?.value!);
       const modo  = document.getElementById(`avt-orbe-${pref}-modo-${i}`)?.value === 'abs' ? 'abs' : 'pct';
-      const rar   = parseFloat(document.getElementById(`avt-orbe-${pref}-rar-${i}`)?.value);
+      const rar   = parseFloat(document.getElementById(`avt-orbe-${pref}-rar-${i}`)?.value!);
       if (!isNaN(valor) && !isNaN(rar) && rar > 0) tiers.push({ valor, modo, raridade_pct: rar });
     }
     return tiers;
@@ -22489,9 +22489,9 @@ async function _avtSalvarOrbeTiers() {
     const efeitos: Record<string, any> = {};
     EFFECT_REGISTRY.orbEligible().forEach((t: any) => {
       const on   = document.getElementById(`avt-orbe-ef-on-${t.id}`);
-      const peso = parseFloat(document.getElementById(`avt-orbe-ef-peso-${t.id}`)?.value);
+      const peso = parseFloat(document.getElementById(`avt-orbe-ef-peso-${t.id}`)?.value!);
       const modo = document.getElementById(`avt-orbe-ef-modo-${t.id}`)?.value === 'cargas' ? 'cargas' : 'tempo';
-      const dur  = parseInt(document.getElementById(`avt-orbe-ef-dur-${t.id}`)?.value);
+      const dur  = parseInt(document.getElementById(`avt-orbe-ef-dur-${t.id}`)?.value!);
       if (!on) return; // linha não renderizada: mantém defaults
       efeitos[t.id] = {
         ativo: !!on.checked,
@@ -22514,7 +22514,7 @@ async function _avtSalvarOrbeTiers() {
 window._avtSalvarOrbeTiers = _avtSalvarOrbeTiers;
 
 async function _avtSalvarDestrezaVelPct() {
-  const val = Math.max(0, Math.min(50, parseInt(document.getElementById('avt-mp-dex-vel-pct')?.value) || 5));
+  const val = Math.max(0, Math.min(50, parseInt(document.getElementById('avt-mp-dex-vel-pct')?.value!) || 5));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22532,7 +22532,7 @@ window._avtSalvarDestrezaVelPct = _avtSalvarDestrezaVelPct;
 // Salva velocidade de patrulha dos NPCs (perseguição agora controlada pela aba Balanceamento)
 async function _avtSalvarVelocidadesIA() {
   const inP = document.getElementById('avt-mp-vel-patrulha-npc');
-  const patrol = Math.max(200, Math.min(10000, parseInt(inP?.value) || 1500));
+  const patrol = Math.max(200, Math.min(10000, parseInt(inP?.value!) || 1500));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22550,9 +22550,9 @@ window._avtSalvarVelocidadesIA = _avtSalvarVelocidadesIA;
 
 async function _avtSalvarAtaqueBasicoNpc() {
   const fGuer = (document.getElementById('avt-mp-ab-f-guer')?.value || '1d10').trim();
-  const aGuer = Math.max(1, Math.min(20, parseInt(document.getElementById('avt-mp-ab-a-guer')?.value) || 2));
+  const aGuer = Math.max(1, Math.min(20, parseInt(document.getElementById('avt-mp-ab-a-guer')?.value!) || 2));
   const fMago = (document.getElementById('avt-mp-ab-f-mago')?.value || '1d8').trim();
-  const aMago = Math.max(1, Math.min(20, parseInt(document.getElementById('avt-mp-ab-a-mago')?.value) || 4));
+  const aMago = Math.max(1, Math.min(20, parseInt(document.getElementById('avt-mp-ab-a-mago')?.value!) || 4));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22583,8 +22583,8 @@ async function _avtMestreSalvarAtaqueBasicoJog(entId: any) {
   const fEl = document.getElementById('avt-mp-ab-f-jog-' + eId);
   const aEl = document.getElementById('avt-mp-ab-a-jog-' + eId);
   if (!fEl || !aEl) return;
-  const formula = fEl.value.trim();
-  const alcance = parseInt(aEl.value) || null;
+  const formula = fEl.value!.trim();
+  const alcance = parseInt(aEl.value!) || null;
   const ent = AVT_STATE.entidades.find((e: any) => e.id === entId);
   const dbChar = ent ? AVT_STATE.chars.find((c: any) => c.id === ent.dbId || c.nome === ent.nome) : null;
   if (!dbChar) { mostrarToast('Personagem não encontrado', 'aviso'); return; }
@@ -22602,9 +22602,9 @@ async function _avtMestreSalvarAtaqueBasicoJog(entId: any) {
 window._avtMestreSalvarAtaqueBasicoJog = _avtMestreSalvarAtaqueBasicoJog;
 
 async function _avtSalvarPerseguicaoDesistir() {
-  const apos = Math.max(1, Math.min(120, parseInt(document.getElementById('avt-mp-desistir-apos')?.value) || 10));
-  const chance = Math.max(1, Math.min(100, parseInt(document.getElementById('avt-mp-desistir-chance')?.value) || 10)) / 100;
-  const intervalo = Math.max(1, Math.min(60, parseInt(document.getElementById('avt-mp-desistir-intervalo')?.value) || 3));
+  const apos = Math.max(1, Math.min(120, parseInt(document.getElementById('avt-mp-desistir-apos')?.value!) || 10));
+  const chance = Math.max(1, Math.min(100, parseInt(document.getElementById('avt-mp-desistir-chance')?.value!) || 10)) / 100;
+  const intervalo = Math.max(1, Math.min(60, parseInt(document.getElementById('avt-mp-desistir-intervalo')?.value!) || 3));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22634,7 +22634,7 @@ function avtReceberLevelConfigUpdate({ config }: any = {}) {
   }
   try {
     const painel = document.getElementById('avt-mestre-panel');
-    if (painel && painel.style.display !== 'none' && typeof _avtMestrePainelRender === 'function') _avtMestrePainelRender();
+    if (painel && painel.style!.display !== 'none' && typeof _avtMestrePainelRender === 'function') _avtMestrePainelRender();
   } catch(_) {}
 }
 window.avtReceberLevelConfigUpdate = avtReceberLevelConfigUpdate;
@@ -22809,7 +22809,7 @@ window.avtAplicarSnapshotMerge = avtAplicarSnapshotMerge;
 })();
 
 async function _avtSalvarSecsPerTurno() {
-  const val = Math.max(1, Math.min(60, parseInt(document.getElementById('avt-mp-secs-turno')?.value) || 5));
+  const val = Math.max(1, Math.min(60, parseInt(document.getElementById('avt-mp-secs-turno')?.value!) || 5));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22822,7 +22822,7 @@ async function _avtSalvarSecsPerTurno() {
 }
 
 async function _avtSalvarManaSabedoria() {
-  const val = Math.max(0, Math.min(100, parseInt(document.getElementById('avt-mp-mana-sab-pct')?.value) ?? 10));
+  const val = Math.max(0, Math.min(100, parseInt(document.getElementById('avt-mp-mana-sab-pct')?.value!) ?? 10));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22835,7 +22835,7 @@ async function _avtSalvarManaSabedoria() {
 }
 
 async function _avtSalvarManaRegenTurno() {
-  const val = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-mana-regen-turno')?.value) ?? 1));
+  const val = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-mana-regen-turno')?.value!) ?? 1));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22848,9 +22848,9 @@ async function _avtSalvarManaRegenTurno() {
 }
 
 async function _avtSalvarManaRegenOoc() {
-  const qtd   = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-mana-regen-qtd')?.value)   ?? 1));
-  const intv  = Math.max(1, Math.min(300,  parseInt(document.getElementById('avt-mp-mana-regen-intv')?.value)  ?? 5));
-  const passo = Math.max(0, Math.min(9999, parseFloat(document.getElementById('avt-mp-mana-regen-passo')?.value) ?? 1));
+  const qtd   = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-mana-regen-qtd')?.value!)   ?? 1));
+  const intv  = Math.max(1, Math.min(300,  parseInt(document.getElementById('avt-mp-mana-regen-intv')?.value!)  ?? 5));
+  const passo = Math.max(0, Math.min(9999, parseFloat(document.getElementById('avt-mp-mana-regen-passo')?.value!) ?? 1));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22867,7 +22867,7 @@ async function _avtSalvarManaRegenOoc() {
 }
 
 async function _avtSalvarAtaqueBasicoCooldown() {
-  const val = Math.max(0, Math.min(20, parseInt(document.getElementById('avt-mp-ataque-basico-cd')?.value) ?? 2));
+  const val = Math.max(0, Math.min(20, parseInt(document.getElementById('avt-mp-ataque-basico-cd')?.value!) ?? 2));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22880,7 +22880,7 @@ async function _avtSalvarAtaqueBasicoCooldown() {
 }
 
 async function _avtSalvarAtaqueBasicoForcaMult() {
-  const val = Math.max(0, Math.min(10, parseFloat(document.getElementById('avt-mp-ab-forca-mult')?.value) ?? 0.5));
+  const val = Math.max(0, Math.min(10, parseFloat(document.getElementById('avt-mp-ab-forca-mult')?.value!) ?? 0.5));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22893,7 +22893,7 @@ async function _avtSalvarAtaqueBasicoForcaMult() {
 }
 
 async function _avtSalvarRaioAliado() {
-  const val = Math.max(1, Math.min(20, parseInt(document.getElementById('avt-mp-raio-aliado')?.value) || 5));
+  const val = Math.max(1, Math.min(20, parseInt(document.getElementById('avt-mp-raio-aliado')?.value!) || 5));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22906,7 +22906,7 @@ async function _avtSalvarRaioAliado() {
 }
 
 async function _avtSalvarRangeAceitarCombate() {
-  const val = Math.max(1, Math.min(30, parseInt(document.getElementById('avt-mp-range-aceitar-combate')?.value) || 8));
+  const val = Math.max(1, Math.min(30, parseInt(document.getElementById('avt-mp-range-aceitar-combate')?.value!) || 8));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22919,7 +22919,7 @@ async function _avtSalvarRangeAceitarCombate() {
 }
 
 async function _avtSalvarDuracaoAnimDados() {
-  const val = Math.max(100, Math.min(2000, parseInt(document.getElementById('avt-mp-duracao-anim-dados')?.value) || 500));
+  const val = Math.max(100, Math.min(2000, parseInt(document.getElementById('avt-mp-duracao-anim-dados')?.value!) || 500));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22932,7 +22932,7 @@ async function _avtSalvarDuracaoAnimDados() {
 }
 
 async function _avtSalvarEfeitoCooldownMs() {
-  const val = Math.max(500, Math.min(30000, parseInt(document.getElementById('avt-mp-efeito-cooldown')?.value) || 3000));
+  const val = Math.max(500, Math.min(30000, parseInt(document.getElementById('avt-mp-efeito-cooldown')?.value!) || 3000));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22945,7 +22945,7 @@ async function _avtSalvarEfeitoCooldownMs() {
 }
 
 async function _avtSalvarXpPerdaMorte() {
-  const val = Math.max(0, parseInt(document.getElementById('avt-mp-xp-perda-morte')?.value) || 0);
+  const val = Math.max(0, parseInt(document.getElementById('avt-mp-xp-perda-morte')?.value!) || 0);
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22986,7 +22986,7 @@ async function _avtSalvarDowngradeMorte() {
 }
 
 async function _avtSalvarHpRecuperacaoMorte() {
-  const val = Math.max(0, Math.min(100, parseInt(document.getElementById('avt-mp-hp-recuperacao-morte')?.value) || 100));
+  const val = Math.max(0, Math.min(100, parseInt(document.getElementById('avt-mp-hp-recuperacao-morte')?.value!) || 100));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -22999,7 +22999,7 @@ async function _avtSalvarHpRecuperacaoMorte() {
 }
 
 async function _avtSalvarInvisibilidadeMorte() {
-  const seg = Math.max(0, Math.min(60, parseInt(document.getElementById('avt-mp-invis-morte-seg')?.value) || 0));
+  const seg = Math.max(0, Math.min(60, parseInt(document.getElementById('avt-mp-invis-morte-seg')?.value!) || 0));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -23014,8 +23014,8 @@ async function _avtSalvarInvisibilidadeMorte() {
 window._avtSalvarInvisibilidadeMorte = _avtSalvarInvisibilidadeMorte;
 
 async function _avtSalvarHpRegen() {
-  const regenS = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-hp-regen-segundo')?.value) || 0));
-  const regenP = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-hp-regen-passo')?.value) ?? 1));
+  const regenS = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-hp-regen-segundo')?.value!) || 0));
+  const regenP = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-hp-regen-passo')?.value!) ?? 1));
   const emPers = !!(document.getElementById('avt-mp-hp-regen-perseguicao')?.checked);
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
@@ -23032,10 +23032,10 @@ async function _avtSalvarHpRegen() {
 }
 
 async function _avtSalvarTrilhaSonora() {
-  const exploracaoUrl = document.getElementById('avt-mp-audio-exploracao')?.value.trim() || '';
-  const combateUrl    = document.getElementById('avt-mp-audio-combate')?.value.trim() || '';
-  const bossUrl       = document.getElementById('avt-mp-audio-boss')?.value.trim() || '';
-  const volume        = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-mp-audio-volume')?.value) || 0.45));
+  const exploracaoUrl = document.getElementById('avt-mp-audio-exploracao')?.value!.trim!()! || '';
+  const combateUrl    = document.getElementById('avt-mp-audio-combate')?.value!.trim!()! || '';
+  const bossUrl       = document.getElementById('avt-mp-audio-boss')?.value!.trim!()! || '';
+  const volume        = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-mp-audio-volume')?.value!) || 0.45));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -23054,17 +23054,17 @@ async function _avtSalvarTrilhaSonora() {
 
 function _avtPreviewTrilha() {
   if (typeof AudioManager === 'undefined') { mostrarToast('AudioManager não disponível', 'aviso'); return; }
-  const url = document.getElementById('avt-mp-audio-exploracao')?.value.trim();
+  const url = document.getElementById('avt-mp-audio-exploracao')?.value!.trim!()!;
   if (!url) { mostrarToast('Insira uma URL de exploração para testar', 'aviso'); return; }
-  const vol = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-mp-audio-volume')?.value) || 0.45));
+  const vol = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-mp-audio-volume')?.value!) || 0.45));
   AudioManager._playBgm(url, { volume: vol });
 }
 
 function _avtPreviewTrilhaTipo(tipo: any) {
   if (typeof AudioManager === 'undefined') { mostrarToast('AudioManager não disponível', 'aviso'); return; }
-  const url = document.getElementById(`avt-mp-audio-${tipo}`)?.value.trim();
+  const url = document.getElementById(`avt-mp-audio-${tipo}`)?.value!.trim!()!;
   if (!url) { mostrarToast(`Insira uma URL de ${tipo} para testar`, 'aviso'); return; }
-  const vol = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-mp-audio-volume')?.value) || 0.45));
+  const vol = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-mp-audio-volume')?.value!) || 0.45));
   AudioManager._playBgm(url, { volume: vol });
 }
 window._avtPreviewTrilhaTipo = _avtPreviewTrilhaTipo;
@@ -23079,7 +23079,7 @@ function _avtAudioPresetChange(tipo: any) {
 function _avtBulkAttrAplicar(filtro: any) {
   const attrKey = document.getElementById('avt-mp-bulk-attr')?.value;
   const rawVal  = document.getElementById('avt-mp-bulk-attr-val')?.value;
-  const val     = parseFloat(rawVal);
+  const val     = parseFloat(rawVal!);
   if (!attrKey || isNaN(val) || val < 0) {
     mostrarToast('Selecione um atributo e um valor válido', 'aviso'); return;
   }
@@ -23110,12 +23110,12 @@ function _avtBulkAttrAplicar(filtro: any) {
 
 // Config em massa das skills de NPC (atribuídas + skill de mago auto-gerada das fases).
 function _avtBulkNpcSkillAplicar() {
-  const formula = document.getElementById('avt-mp-npcsk-formula')?.value.trim();
+  const formula = document.getElementById('avt-mp-npcsk-formula')?.value!.trim!()!;
   const cdRaw   = document.getElementById('avt-mp-npcsk-cd')?.value;
   const multRaw = document.getElementById('avt-mp-npcsk-mult')?.value;
   const tipo    = document.getElementById('avt-mp-npcsk-tipo')?.value;
-  const cd   = cdRaw   !== '' ? Math.max(0, parseInt(cdRaw)) : null;
-  const mult = multRaw !== '' ? Math.max(0, parseFloat(multRaw)) : null;
+  const cd   = cdRaw   !== '' ? Math.max(0, parseInt(cdRaw!)) : null;
+  const mult = multRaw !== '' ? Math.max(0, parseFloat(multRaw!)) : null;
 
   // Defaults para skills de mago auto-geradas (futuras fases) ficam em level_config.
   const rpg = AVT_STATE.rpg;
@@ -23295,7 +23295,7 @@ let _avtMpTilesetFile: any = null;
 function _avtMestreToggleTrocaTileset() {
   const painel = document.getElementById('avt-ts-troca-painel');
   if (!painel) return;
-  painel.style.display = painel.style.display === 'none' ? 'block' : 'none';
+  painel.style!.display = painel.style!.display === 'none' ? 'block' : 'none';
 }
 
 function _avtMestreCopiarPromptTileset() {
@@ -23316,7 +23316,7 @@ function _avtMestreHandleTilesetUpload(input: any) {
   _avtMpTilesetFile = file;
   const url = URL.createObjectURL(file);
   const prev = document.getElementById('avt-mp-ts-preview');
-  if (prev) { prev.src = url; prev.style.display = 'block'; }
+  if (prev) { prev.src = url; prev.style!.display = 'block'; }
   const nome = document.getElementById('avt-mp-ts-nome');
   if (nome) nome.textContent = file.name;
 }
@@ -23352,7 +23352,7 @@ async function _avtMestreAplicarTilesetUpload() {
       method: 'PATCH', body: JSON.stringify({ theme_json: newTheme })
     });
     mostrarToast('Tileset aplicado!', 'ok');
-    document.getElementById('avt-mestre-map-editor-overlay').style.display = 'none';
+    document.getElementById('avt-mestre-map-editor-overlay')!.style!.display = 'none';
     setTimeout(_avtMestreAbrirEditorUnificado, 200);
   } catch (e: any) {
     mostrarToast('Erro: ' + (e?.message || e), 'erro');
@@ -23387,7 +23387,7 @@ function _avtMestreNovaFaseRender() {
     { v:'editor',     ico:'✏', label:'Editor' }
   ];
 
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
   overlay.innerHTML = `
     <div class="avt-modal-box" style="max-width:540px;width:100%;max-height:90vh;overflow-y:auto">
       <div class="avt-modal-header">
@@ -23476,7 +23476,7 @@ function _avtNfCancelar() {
   AVT_STATE._modoPortaPlacement = false;
   if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
   const overlay = document.getElementById('avt-anim-import-overlay');
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) overlay.style!.display = 'none';
 }
 
 function _avtNfLockChange(val: any) {
@@ -23508,8 +23508,8 @@ function _avtNfSelecionarMapa(opcao: any) {
     [...grid.children].forEach((el, i) => {
       const opts: any = ['procedural','json','claude','editor'];
       const sel = opts[i] === opcao;
-      el.style.border = `1px solid ${sel?'rgba(79,163,209,0.6)':'rgba(255,255,255,0.08)'}`;
-      el.style.background = sel?'rgba(79,163,209,0.12)':'rgba(255,255,255,0.02)';
+      el.style!.border = `1px solid ${sel?'rgba(79,163,209,0.6)':'rgba(255,255,255,0.08)'}`;
+      el.style!.background = sel?'rgba(79,163,209,0.12)':'rgba(255,255,255,0.02)';
     });
   }
   _avtNfRenderMapaSub(opcao);
@@ -23585,7 +23585,7 @@ function _avtNfGerarProcedural() {
   const el = document.querySelector('#avt-nf-mapa-sub');
   if (el) {
     const st = document.createElement('div');
-    st.style.cssText = 'font-size:0.68rem;color:#27ae60;margin-top:6px';
+    st.style!.cssText = 'font-size:0.68rem;color:#27ae60;margin-top:6px';
     st.textContent = `✓ Mapa gerado — ${w.dungeon.w}×${w.dungeon.h} tiles, ${salas} salas`;
     el.appendChild(st);
   }
@@ -23672,8 +23672,8 @@ function _avtNfEditorInit() {
 function _avtNfEditorDraw() {
   const canvas = document.getElementById('avt-nf-ed-canvas');
   if (!canvas||!_avtNfEd.tiles) return;
-  const ctx = canvas.getContext('2d');
-  const cw = canvas.width/_avtNfEd.w, ch = canvas.height/_avtNfEd.h;
+  const ctx = canvas.getContext!('2d');
+  const cw = canvas.width!/_avtNfEd.w, ch = canvas.height!/_avtNfEd.h;
   for (let y=0;y<_avtNfEd.h;y++) for (let x=0;x<_avtNfEd.w;x++) {
     ctx.fillStyle = _avtNfEd.tiles[y][x]===AVT_T.PISO?'#1a2535':'#0a0c14';
     ctx.fillRect(x*cw,y*ch,cw,ch);
@@ -23732,7 +23732,7 @@ function _avtNfIniciarPlacement() {
   // Save current nome to wizard state before hiding overlay
   w.nome = document.getElementById('avt-nf-nome')?.value?.trim() || w.nome;
   const overlay = document.getElementById('avt-anim-import-overlay');
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) overlay.style!.display = 'none';
   AVT_STATE._modoPortaPlacement = true;
   if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = 'crosshair';
   mostrarToast('📍 Clique no mapa para posicionar a porta da nova fase', 'ok');
@@ -23797,7 +23797,7 @@ async function _avtMestreSalvarNovaFase() {
       method:'PATCH', body:JSON.stringify({ theme_json: AVT_STATE.rpg.theme_json })
     });
     AVT_STATE._novaFaseWizard = null;
-    document.getElementById('avt-anim-import-overlay').style.display = 'none';
+    document.getElementById('avt-anim-import-overlay')!.style!.display = 'none';
     mostrarToast(`Fase "${nome}" criada!`, 'ok');
     _avtMestrePainelRender();
     // Navigate mestre directly to the new phase
@@ -23826,8 +23826,8 @@ async function _avtMestreRemoverFase(faseId: any) {
 async function _avtSalvarFaseBalance(faseId: any) {
   const tj = AVT_STATE.rpg.theme_json || (AVT_STATE.rpg.theme_json = {});
   const g = (id: any) => document.getElementById(id);
-  const numv = (suf: any, def: any) => { const el = g(`avt-fb-${faseId}-${suf}`); if (!el) return def; const v = parseFloat(el.value); return Number.isFinite(v) ? v : def; };
-  const strv = (suf: any, def: any) => { const el = g(`avt-fb-${faseId}-${suf}`); return el ? (el.value.trim() || def) : def; };
+  const numv = (suf: any, def: any) => { const el = g(`avt-fb-${faseId}-${suf}`); if (!el) return def; const v = parseFloat(el.value!); return Number.isFinite(v) ? v : def; };
+  const strv = (suf: any, def: any) => { const el = g(`avt-fb-${faseId}-${suf}`); return el ? (el.value!.trim() || def) : def; };
 
   if (faseId === 'principal') {
     const dd = tj.dungeon_data || (tj.dungeon_data = {});
@@ -24404,7 +24404,7 @@ function _avtPromptHostFase(faseId: any) {
   if (!ov) {
     ov = document.createElement('div');
     ov.id = 'avt-prompt-host-fase';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5)';
+    ov.style!.cssText = 'position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5)';
     document.body.appendChild(ov);
   }
   const fechar = () => { (AVT_STATE as any)._promptHostAberto = false; ov.remove(); };
@@ -24417,8 +24417,8 @@ function _avtPromptHostFase(faseId: any) {
         <button id="avt-host-fase-yes" style="flex:1;padding:10px;border-radius:8px;cursor:pointer;background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.5);color:#c8a84b;font-family:var(--fonte-d, sans-serif);font-size:0.72rem">Ser host</button>
       </div>
     </div>`;
-  ov.querySelector('#avt-host-fase-yes').onclick = () => { fechar(); _avtClaimHostFase(faseId); };
-  ov.querySelector('#avt-host-fase-wait').onclick = () => {
+  ov.querySelector('#avt-host-fase-yes')!.onclick = () => { fechar(); _avtClaimHostFase(faseId); };
+  ov.querySelector('#avt-host-fase-wait')!.onclick = () => {
     fechar();
     mostrarToast('⏳ Aguardando um host para esta fase…', '', 2500);
     // Se ninguém assumir em ~6s e ainda não houver host, assume para não travar a fase.
@@ -24440,9 +24440,9 @@ function _avtSalaEsperaFase(faseId: any) {
     const fase = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find((f: any) => f.id === faseId);
     nomeEl.textContent = fase?.nome ? `Fase: ${fase.nome}` : 'Nova Fase';
   }
-  seEl.style.display = 'flex';
+  seEl.style!.display = 'flex';
   _avtSalaEspera(nomeEl?.textContent || 'Nova Fase', () => {
-    if (seEl) seEl.style.display = 'none';
+    if (seEl) seEl.style!.display = 'none';
   });
 }
 window._avtSalaEsperaFase = _avtSalaEsperaFase;
@@ -24464,7 +24464,7 @@ function _avtPromptFase(titulo: any, labelAvancar: any, onAdvance: any) {
   if (!ov) {
     ov = document.createElement('div');
     ov.id = 'avt-prompt-fase';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45)';
+    ov.style!.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45)';
     document.body.appendChild(ov);
   }
   const fechar = () => { (AVT_STATE as any)._promptFaseAberto = false; ov.remove(); };
@@ -24476,8 +24476,8 @@ function _avtPromptFase(titulo: any, labelAvancar: any, onAdvance: any) {
         <button id="avt-prompt-fase-yes" style="flex:1;padding:10px;border-radius:8px;cursor:pointer;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.5);color:#4fa3d1;font-family:var(--fonte-d, sans-serif);font-size:0.72rem">${labelAvancar || 'Avançar'}</button>
       </div>
     </div>`;
-  ov.querySelector('#avt-prompt-fase-no').onclick = fechar;
-  ov.querySelector('#avt-prompt-fase-yes').onclick = () => { fechar(); try { onAdvance && onAdvance(); } catch (e: any) { mostrarToast('Erro: '+(e?.message||e),'erro'); } };
+  ov.querySelector('#avt-prompt-fase-no')!.onclick = fechar;
+  ov.querySelector('#avt-prompt-fase-yes')!.onclick = () => { fechar(); try { onAdvance && onAdvance(); } catch (e: any) { mostrarToast('Erro: '+(e?.message||e),'erro'); } };
 }
 window._avtPromptFase = _avtPromptFase;
 
@@ -24507,7 +24507,7 @@ function _avtMestreGerarPersonagensExterno() {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = overlayId;
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box';
+    overlay.style!.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box';
     document.body.appendChild(overlay);
   }
   overlay.innerHTML = `
@@ -24536,7 +24536,7 @@ function _avtMestreGerarPersonagensExterno() {
         ✓ Aplicar ao dungeon
       </button>
     </div>`;
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
 }
 
 function _avtMestreAplicarPersonagensExterno() {
@@ -24590,7 +24590,7 @@ function _avtMestreAssumir() {
   if (!sel?.value) return;
   AVT_STATE.npcControlando = sel.value;
   AVT_STATE.npcIaAtiva = false;
-  mostrarToast('🎮 Controlando: ' + (sel.options[sel.selectedIndex]?.text?.split('(')[0].trim()||'NPC'), 'ok');
+  mostrarToast('🎮 Controlando: ' + (sel.options[sel.selectedIndex!]?.text?.split('(')[0].trim()||'NPC'), 'ok');
   _avtMestrePainelRender();
 }
 
@@ -24617,7 +24617,7 @@ function _avtMestreAddInimigo() {
   const overlay = document.getElementById('avt-anim-import-overlay');
   if (!overlay) return;
 
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
   overlay.innerHTML = `
     <div class="avt-modal-box">
       <div class="avt-modal-header">
@@ -24681,9 +24681,9 @@ function _avtNpcConfirmarAdd() {
   if (!pisos.length) { mostrarToast('Sem espaço no mapa', 'aviso'); return; }
   const pos = pisos[Math.floor(Math.random()*pisos.length)];
   const nome = document.getElementById('avt-npc-nome')?.value?.trim() || 'Inimigo';
-  const hp   = parseInt(document.getElementById('avt-npc-hp')?.value) || 20;
-  const pac  = parseFloat(document.getElementById('avt-npc-pac')?.value) || 5;
-  const raio = parseInt(document.getElementById('avt-npc-raio')?.value) || 3;
+  const hp   = parseInt(document.getElementById('avt-npc-hp')?.value!) || 20;
+  const pac  = parseFloat(document.getElementById('avt-npc-pac')?.value!) || 5;
+  const raio = parseInt(document.getElementById('avt-npc-raio')?.value!) || 3;
   const cor  = document.getElementById('avt-npc-cor')?.value || '#7a5c00';
   const isBoss = document.getElementById('avt-npc-boss')?.checked || false;
   const presetKey = window._avtNpcAddPresetKey || (isBoss ? 'boss' : null);
@@ -24700,7 +24700,7 @@ function _avtNpcConfirmarAdd() {
   AVT_STATE.entidades.push(ent);
   _avtInitNpcTimer(ent);
   window._avtNpcAddPresetKey = null;
-  document.getElementById('avt-anim-import-overlay').style.display = 'none';
+  document.getElementById('avt-anim-import-overlay')!.style!.display = 'none';
   mostrarToast(`${nome} adicionado!`, 'ok');
 }
 
@@ -24789,13 +24789,13 @@ function abrirAvtCharEditor(entId: any) {
     };
   } catch(_) {}
   const screen = document.getElementById('avt-char-editor');
-  if (screen) screen.style.display = 'flex';
+  if (screen) screen.style!.display = 'flex';
   _avtCharEditorRender();
 }
 
 function fecharAvtCharEditor() {
   const screen = document.getElementById('avt-char-editor');
-  if (screen) screen.style.display = 'none';
+  if (screen) screen.style!.display = 'none';
   AVT_STATE.charEditorId = null;
 }
 
@@ -24837,7 +24837,7 @@ function _avtCharEditorRender() {
   const outerWrap = extPortrait?.closest('.avt-ce2-outer-wrap');
   if (extPortrait) {
     if (hasImage) {
-      extPortrait.style.display = '';
+      extPortrait.style!.display = '';
       outerWrap?.classList.add('tem-retrato');
       extPortrait.innerHTML = `
         <div class="avt-ce2-portrait-wrap" id="avt-ce2-portrait-wrap"
@@ -24851,7 +24851,7 @@ function _avtCharEditorRender() {
         if (wrap) animRendererMount(wrap, animData, { displayWidth: 220, displayHeight: 260 });
       }
     } else {
-      extPortrait.style.display = 'none';
+      extPortrait.style!.display = 'none';
       extPortrait.innerHTML = '';
       outerWrap?.classList.remove('tem-retrato');
     }
@@ -24965,13 +24965,13 @@ function _avtCe2TrocarImagemTipo(entId: any, alvo: any) {
   if (!wrap) {
     const extPortrait = document.getElementById('avt-ce2-ext-portrait');
     if (!extPortrait) return;
-    extPortrait.style.display = '';
+    extPortrait.style!.display = '';
     extPortrait.innerHTML = `<div class="avt-ce2-portrait-wrap" id="avt-ce2-portrait-wrap"><div class="avt-ce2-portrait-inner"></div></div>`;
     wrap = document.getElementById('avt-ce2-portrait-wrap');
     if (!wrap) return;
   }
   if (wrap.querySelector('.avt-ce2-img-popover')) {
-    wrap.querySelector('.avt-ce2-img-popover').remove(); return;
+    wrap.querySelector('.avt-ce2-img-popover')!.remove!()!; return;
   }
   const idSafe = entId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const titulo = alvo === 'iso' ? 'Sprite isométrico' : alvo === 'token' ? 'Trocar token (mapa)' : 'Trocar foto de perfil';
@@ -24996,7 +24996,7 @@ function _avtCe2TrocarImagemTipo(entId: any, alvo: any) {
   `;
   pop.addEventListener('click', e => e.stopPropagation());
   wrap.appendChild(pop);
-  setTimeout(() => { const inp = document.getElementById('avt-ce2-img-url-inp'); if (inp) inp.focus(); }, 30);
+  setTimeout(() => { const inp = document.getElementById('avt-ce2-img-url-inp'); if (inp) inp.focus!(); }, 30);
 }
 
 // Back-compat: comportamento antigo equivale a alterar a "ficha" (foto).
@@ -25006,7 +25006,7 @@ async function _avtCe2SalvarImgUrlTipo(entId: any, alvo: any) {
   alvo = (alvo === 'token' || alvo === 'iso') ? alvo : 'ficha'; // preserva 'iso' (antes virava 'ficha')
   const inp = document.getElementById('avt-ce2-img-url-inp');
   if (!inp) return;
-  const url = inp.value.trim();
+  const url = inp.value!.trim();
   if (!url) { mostrarToast('Cole uma URL válida', 'aviso'); return; }
   const ent = AVT_STATE.entidades.find((e: any) => e.id === entId);
   if (!ent) return;
@@ -26025,7 +26025,7 @@ function _avtSkillField(id: any, field: any, val: any) { const sk=AVT_STATE.skil
 function _avtSkmAreaTipoChange() {
   const v = document.getElementById('avt-skm-tipo-area')?.value || '';
   const wrap = document.getElementById('avt-skm-area-tamanho-wrap');
-  if (wrap) wrap.style.display = v === 'quadrado' ? '' : 'none';
+  if (wrap) wrap.style!.display = v === 'quadrado' ? '' : 'none';
 }
 
 // ─── MODAL DE SKILLS DO MODO AVENTURA ────────────────────────────────────────
@@ -26344,8 +26344,8 @@ window._avtSkmEfTipoChange = _avtSkmEfTipoChange;
 async function _avtEfPixiCarregar(idx: any) {
   const listaEl = document.getElementById('avt-ef-pixi-lista-' + idx);
   if (!listaEl) return;
-  const isOpen = listaEl.style.display !== 'none';
-  listaEl.style.display = isOpen ? 'none' : 'block';
+  const isOpen = listaEl.style!.display !== 'none';
+  listaEl.style!.display = isOpen ? 'none' : 'block';
   if (isOpen) return;
   const rowsEl = document.getElementById('avt-ef-pixi-rows-' + idx);
   if (rowsEl) rowsEl.innerHTML = '<div style="padding:8px;font-size:0.7rem;color:#7a92aa">Carregando...</div>';
@@ -26439,7 +26439,7 @@ function _avtSkmPararPreviewAnim() {
 function _avtSkmDesenharPreview(now: any) {
   const canvas = document.getElementById('avt-skm-anim-canvas');
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext!('2d');
   const W = canvas.width, H = canvas.height;
   const t    = (now - _AVT_SKM_PREV.start) / 1000;
   const loop2 = t % 2;
@@ -26447,11 +26447,11 @@ function _avtSkmDesenharPreview(now: any) {
 
   ctx.fillStyle = '#050810'; ctx.fillRect(0, 0, W, H);
   ctx.strokeStyle = 'rgba(79,163,209,0.06)'; ctx.lineWidth = 0.5;
-  for (let gx = 0; gx <= W; gx += 20) { ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
-  for (let gy = 0; gy <= H; gy += 20) { ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
+  for (let gx = 0; gx <= W!; gx += 20) { ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
+  for (let gy = 0; gy <= H!; gy += 20) { ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
 
-  const atk = { x:50, y:H/2 };
-  const def = { x:W-50, y:H/2 };
+  const atk = { x:50, y:H!/2 };
+  const def = { x:W!-50, y:H!/2 };
   const animTipo = document.getElementById('avt-skm-anim-tipo')?.value || 'nenhuma';
   const cor      = document.getElementById('avt-skm-anim-cor')?.value || '#e74c3c';
   const icone    = document.getElementById('avt-skm-icone')?.value || '';
@@ -26528,7 +26528,7 @@ function _avtSkmDesenharPreview(now: any) {
     } else {
       ctx.restore();
       ctx.fillStyle='rgba(79,163,209,0.4)';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(`preview: ${animTipo}`,W/2,H/2);
+      ctx.fillText(`preview: ${animTipo}`,W!/2,H!/2);
     }
     ctx.restore();
   }
@@ -26739,7 +26739,7 @@ async function _avtAbrirModalSkill(skId: any, entId: any) {
 
   const overlay = document.createElement('div');
   overlay.id = 'avt-modal-skill-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.87);z-index:9950;display:flex;align-items:flex-end;justify-content:center';
+  overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.87);z-index:9950;display:flex;align-items:flex-end;justify-content:center';
   overlay.innerHTML = `
     <div style="background:#0d1520;border:1px solid rgba(79,163,209,0.3);border-top:2px solid #4fa3d1;border-radius:16px 16px 0 0;padding:20px 18px 48px;width:100%;max-width:540px;max-height:94vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -26975,7 +26975,7 @@ async function _avtPixiStudioCarregar(skId: any) {
   const listaEl = document.getElementById('avt-pixi-studio-lista-' + sid);
   if (!listaEl) return;
   listaEl.innerHTML = '<div style="padding:8px;font-size:0.7rem;color:#7a92aa">Carregando...</div>';
-  listaEl.style.display = 'block';
+  listaEl.style!.display = 'block';
   try {
     if (!_AVT_PIXI_STUDIO_CACHE) {
       const uid   = SESSION?.user?.id;
@@ -27001,7 +27001,7 @@ function _avtPixiStudioFiltrar(skId: any, query: any) {
   if (!_AVT_PIXI_STUDIO_CACHE) { _avtPixiStudioCarregar(skId); return; }
   const sid = skId.replace(/[^a-z0-9]/gi, '_');
   const listaEl = document.getElementById('avt-pixi-studio-lista-' + sid);
-  if (listaEl) listaEl.style.display = 'block';
+  if (listaEl) listaEl.style!.display = 'block';
   _avtPixiStudioRenderLista(skId, _AVT_PIXI_STUDIO_CACHE, query);
 }
 
@@ -27041,11 +27041,11 @@ function _avtPixiStudioSelecionar(skId: any, animId: any, animNome: any) {
   const sid = skId.replace(/[^a-z0-9]/gi, '_');
   const selEl = document.getElementById('avt-pixi-studio-sel-' + sid);
   if (selEl) {
-    selEl.style.color = '#7ec8f0';
+    selEl.style!.color = '#7ec8f0';
     selEl.innerHTML = `✓ <strong>${(animNome || animId).replace(/</g, '&lt;')}</strong>`;
   }
   const listaEl = document.getElementById('avt-pixi-studio-lista-' + sid);
-  if (listaEl) listaEl.style.display = 'none';
+  if (listaEl) listaEl.style!.display = 'none';
   const searchEl = document.getElementById('avt-pixi-studio-search-' + sid);
   if (searchEl) searchEl.value = animNome || '';
 }
@@ -27056,10 +27056,10 @@ function _isSfxUrlDireta(url: any) {
 
 function _avtSkTestarSfx(tipo: any) {
   if (typeof AudioManager === 'undefined') { mostrarToast('AudioManager não disponível', 'aviso'); return; }
-  const vol    = parseFloat(document.getElementById('avt-skm-audio-volume')?.value) || 0.75;
+  const vol    = parseFloat(document.getElementById('avt-skm-audio-volume')?.value!) || 0.75;
   const urlEl  = document.getElementById(`avt-skm-audio-${tipo}-url`);
   const selEl  = document.getElementById(`avt-skm-audio-${tipo}-sel`);
-  const sfxId  = urlEl?.value.trim() || selEl?.value || '';
+  const sfxId  = urlEl?.value!.trim!()! || selEl?.value || '';
   if (sfxId) {
     if (sfxId.startsWith('http') && !_isSfxUrlDireta(sfxId)) {
       mostrarToast('Use uma URL direta para o arquivo de áudio (.mp3, .wav ou .ogg). Links de páginas como Epidemic Sound não funcionam — baixe o arquivo e faça upload.', 'aviso');
@@ -27079,7 +27079,7 @@ function _avtSkTestarSfx(tipo: any) {
 function _avtSfxBibliotecaToggle() {
   const p = document.getElementById('avt-sfx-lib-panel');
   if (!p) return;
-  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  p.style!.display = p.style!.display === 'none' ? 'block' : 'none';
 }
 
 function _avtSfxBibliotecaListHTML() {
@@ -27101,7 +27101,7 @@ function _avtSfxBibliotecaListHTML() {
 async function _avtSfxBibliotecaUpload() {
   const fileEl  = document.getElementById('avt-sfx-up-file');
   const file    = fileEl?.files?.[0];
-  const nome    = document.getElementById('avt-sfx-up-nome')?.value.trim();
+  const nome    = document.getElementById('avt-sfx-up-nome')?.value!.trim!()!;
   const cat     = document.getElementById('avt-sfx-up-cat')?.value || 'custom';
   const statusEl = document.getElementById('avt-sfx-up-status');
   if (!file) return;
@@ -27113,7 +27113,7 @@ async function _avtSfxBibliotecaUpload() {
     mostrarToast('Formato não suportado. Use .mp3, .wav ou .ogg', 'erro'); return;
   }
   if (file.size > 8 * 1024 * 1024) { mostrarToast('Arquivo muito grande (máx. 8 MB)', 'erro'); return; }
-  const _show = (txt: any, cor: any) => { if (statusEl) { statusEl.textContent = txt; statusEl.style.color = cor; statusEl.style.display = 'block'; } };
+  const _show = (txt: any, cor: any) => { if (statusEl) { statusEl.textContent = txt; statusEl.style!.color = cor; statusEl.style!.display = 'block'; } };
   _show('Enviando…', '#7ec8f0');
   try {
     const userId = SESSION?.user?.id || 'anon';
@@ -27128,9 +27128,9 @@ async function _avtSfxBibliotecaUpload() {
     const listEl = document.getElementById('avt-sfx-lib-list');
     if (listEl) listEl.innerHTML = _avtSfxBibliotecaListHTML();
     _avtSfxDropdownsRefresh();
-    document.getElementById('avt-sfx-up-nome').value = '';
+    document.getElementById('avt-sfx-up-nome')!.value = '';
     if (fileEl) fileEl.value = '';
-    setTimeout(() => { if (statusEl) statusEl.style.display = 'none'; }, 3000);
+    setTimeout(() => { if (statusEl) statusEl.style!.display = 'none'; }, 3000);
   } catch (e: any) {
     _show('Erro: ' + (e.message || e), '#e74c3c');
   }
@@ -27179,7 +27179,7 @@ function _avtFecharModalSkill() {
 }
 
 async function _avtModalSkillSalvar() {
-  const nome = document.getElementById('avt-skm-nome')?.value.trim();
+  const nome = document.getElementById('avt-skm-nome')?.value!.trim!()!;
   if (!nome) { mostrarToast('Nome da habilidade obrigatório', 'erro'); return; }
 
   // Sincronizar formulas dos builders de efeito antes de salvar
@@ -27202,11 +27202,11 @@ async function _avtModalSkillSalvar() {
 
   // Áudio da skill (do modal de aventura)
   if (animacao) {
-    const _aC = document.getElementById('avt-skm-audio-cast-url')?.value.trim()
+    const _aC = document.getElementById('avt-skm-audio-cast-url')?.value!.trim!()!
               || document.getElementById('avt-skm-audio-cast-sel')?.value || '';
-    const _aI = document.getElementById('avt-skm-audio-impact-url')?.value.trim()
+    const _aI = document.getElementById('avt-skm-audio-impact-url')?.value!.trim!()!
               || document.getElementById('avt-skm-audio-impact-sel')?.value || '';
-    const _aV = parseFloat(document.getElementById('avt-skm-audio-volume')?.value) || 0.75;
+    const _aV = parseFloat(document.getElementById('avt-skm-audio-volume')?.value!) || 0.75;
     // Avisar se URL parece ser página web e não arquivo de áudio direto
     [_aC, _aI].forEach(u => {
       if (u && u.startsWith('http') && typeof _isSfxUrlDireta === 'function' && !_isSfxUrlDireta(u))
@@ -27231,20 +27231,20 @@ async function _avtModalSkillSalvar() {
     personagem:        dbChar?.nome || ent?.nome || '',
     character_id:      dbChar?.id || null,
     habilidade:        nome,
-    custo_rsv:         document.getElementById('avt-skm-custo')?.value.trim() || null,
-    efeito:            document.getElementById('avt-skm-efeito')?.value.trim() || '',
+    custo_rsv:         document.getElementById('avt-skm-custo')?.value!.trim!()! || null,
+    efeito:            document.getElementById('avt-skm-efeito')?.value!.trim!()! || '',
     formula_dano:      formula || null,
     tipo_dano:         document.getElementById('avt-skm-tipo-dano')?.value || 'fisico',
-    alcance_celulas:   parseInt(document.getElementById('avt-skm-alcance')?.value) || null,
-    cooldown_turnos:   parseInt(document.getElementById('avt-skm-cooldown')?.value) || 0,
+    alcance_celulas:   parseInt(document.getElementById('avt-skm-alcance')?.value!) || null,
+    cooldown_turnos:   parseInt(document.getElementById('avt-skm-cooldown')?.value!) || 0,
     alvo_tipo:         document.getElementById('avt-skm-alvo')?.value || 'inimigo',
     tipo_area:         document.getElementById('avt-skm-tipo-area')?.value || null,
-    tamanho_area:      parseInt(document.getElementById('avt-skm-tamanho-area')?.value) || 1,
+    tamanho_area:      parseInt(document.getElementById('avt-skm-tamanho-area')?.value!) || 1,
     atributo_base:     document.getElementById('avt-skm-atributo')?.value || null,
-    mod_atributo_pct:  document.getElementById('avt-skm-mult')?.value !== '' ? parseFloat(document.getElementById('avt-skm-mult').value) : null,
+    mod_atributo_pct:  document.getElementById('avt-skm-mult')?.value !== '' ? parseFloat(document.getElementById('avt-skm-mult')!.value!) : null,
     efeitos_bonus:     _AVT_SK_MODAL.efeitos.length ? _AVT_SK_MODAL.efeitos : null,
     gatilho_tipo:      document.getElementById('avt-skm-gatilho')?.value || null,
-    gatilho_descricao: document.getElementById('avt-skm-gatilho-desc')?.value.trim() || null,
+    gatilho_descricao: document.getElementById('avt-skm-gatilho-desc')?.value!.trim!()! || null,
     animacao,
   };
 
@@ -27347,8 +27347,8 @@ function _avtMostrarAnimacaoCarismaCritico(hitOriginal: any) {
 }
 
 async function _avtSalvarCarismaCritConfig() {
-  const basePct = parseFloat(document.getElementById('avt-mp-car-crit-base')?.value);
-  const prog    = parseFloat(document.getElementById('avt-mp-car-crit-prog')?.value);
+  const basePct = parseFloat(document.getElementById('avt-mp-car-crit-base')?.value!);
+  const prog    = parseFloat(document.getElementById('avt-mp-car-crit-prog')?.value!);
   if (isNaN(basePct) || isNaN(prog)) { mostrarToast('Valores inválidos', 'erro'); return; }
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
@@ -27392,7 +27392,7 @@ function _avtAbrirModalAtaqueBasico(entId: any) {
   document.getElementById('avt-modal-ab-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'avt-modal-ab-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
   overlay.innerHTML = `
     <div style="background:#0d1520;border:1px solid rgba(79,163,209,0.3);border-top:2px solid #c8a84b;border-radius:16px 16px 0 0;padding:20px 18px 40px;width:100%;max-width:500px;max-height:88vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -27456,10 +27456,10 @@ async function _avtSalvarAtaqueBasico(entId: any) {
   const _multRaw = document.getElementById('avt-ab-forca-mult')?.value;
   const _multVal = _multRaw !== '' && _multRaw !== undefined ? parseFloat(_multRaw) : null;
   dbChar.custom_attrs.ataque_basico = {
-    nome:           document.getElementById('avt-ab-nome')?.value.trim() || 'Ataque básico',
-    formula_dano:   document.getElementById('avt-ab-formula')?.value.trim() || '1d8',
+    nome:           document.getElementById('avt-ab-nome')?.value!.trim!()! || 'Ataque básico',
+    formula_dano:   document.getElementById('avt-ab-formula')?.value!.trim!()! || '1d8',
     tipo_dano:      document.getElementById('avt-ab-tipo-dano')?.value || 'fisico',
-    alcance_celulas: parseInt(document.getElementById('avt-ab-alcance')?.value) || 1,
+    alcance_celulas: parseInt(document.getElementById('avt-ab-alcance')?.value!) || 1,
     atributo_base:  document.getElementById('avt-ab-atributo')?.value || null,
     animacao:       tipo === 'nenhuma' ? null : { tipo, cor, icone },
     ...(_multVal !== null && !isNaN(_multVal) ? { mod_atributo_mult: _multVal } : {}),
@@ -27492,11 +27492,11 @@ function _avtSkillAddEfeito(skId: any) {
   const eid = 'avt-sk-f-' + skId.replace(/[^a-z0-9]/gi,'_');
   const container = document.getElementById(eid);
   if (!container) return;
-  const expanded = container.style.display !== 'none';
+  const expanded = container.style!.display !== 'none';
   const parent = container.parentElement;
   if (parent) parent.outerHTML = _avtSkillCardHtml(sk);
   const newEl = document.getElementById(eid);
-  if (newEl && expanded) newEl.style.display = 'block';
+  if (newEl && expanded) newEl.style!.display = 'block';
 }
 
 function _avtSkillRemEfeito(skId: any, idx: any) {
@@ -27506,11 +27506,11 @@ function _avtSkillRemEfeito(skId: any, idx: any) {
   const eid = 'avt-sk-f-' + skId.replace(/[^a-z0-9]/gi,'_');
   const container = document.getElementById(eid);
   if (!container) return;
-  const expanded = container.style.display !== 'none';
+  const expanded = container.style!.display !== 'none';
   const parent = container.parentElement;
   if (parent) parent.outerHTML = _avtSkillCardHtml(sk);
   const newEl = document.getElementById(eid);
-  if (newEl && expanded) newEl.style.display = 'block';
+  if (newEl && expanded) newEl.style!.display = 'block';
 }
 
 function _avtSkillAnimSetTipo(skId: any, tipo: any, btn: any) {
@@ -27713,7 +27713,7 @@ function _avtSkillAnexarRefImg(skId: any, file: any) {
   const reader = new FileReader();
   reader.onload = e => {
     if (!sk.animacao) sk.animacao = {};
-    sk.animacao.referencia_img = e.target.result;
+    sk.animacao.referencia_img = e.target!.result;
     sk.animacao.referencia_img_mime = file.type;
     const cfgId = 'avt-sk-anim-cfg-' + skId.replace(/[^a-z0-9]/gi,'_');
     const cfgEl = document.getElementById(cfgId);
@@ -27982,7 +27982,7 @@ async function _avtSkillSalvar(id: any) {
     // Collapse the card as visual feedback
     const eid = 'avt-sk-f-' + id.replace(/[^a-z0-9]/gi,'_');
     const formEl = document.getElementById(eid);
-    if (formEl) formEl.style.display = 'none';
+    if (formEl) formEl.style!.display = 'none';
   } catch (e: any) { mostrarToast('Erro: ' + (e?.message || e), 'erro'); }
 }
 
@@ -28021,7 +28021,7 @@ function _avtCharImportarAparencia(entId: any) {
   const overlay = document.getElementById('avt-anim-import-overlay');
   if (!overlay) return;
   const promptTxt = _AVT_ANIM_PROMPT.replace('[NOME_DESCRICAO]', ent.nome + ' — ' + (ent.tipo==='jogador'?'herói':'NPC inimigo'));
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
   overlay.innerHTML = `
     <div class="avt-modal-box">
       <div class="avt-modal-header">
@@ -28162,12 +28162,12 @@ function _avtCharImportarAparencia(entId: any) {
 
 function _avtAparTabSwitch(tab: any) {
   const isAnim = tab === 'anim', isTd = tab === 'topdown', isIso = tab === 'iso';
-  const show = (id: any, on: any) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  const show = (id: any, on: any) => { const el = document.getElementById(id); if (el) el.style!.display = on ? '' : 'none'; };
   show('avt-apar-tab-anim-body',    isAnim);
   show('avt-apar-tab-topdown-body', isTd);
   show('avt-apar-tab-iso-body',     isIso);
   show('avt-apar-footer-anim',      isAnim); // rodapé (validar/salvar JSON) só p/ a aba Animado
-  const bg = (id: any, on: any, col: any) => { const el = document.getElementById(id); if (el) el.style.background = on ? col : col.replace(/0\.\d+\)$/, '0.07)'); };
+  const bg = (id: any, on: any, col: any) => { const el = document.getElementById(id); if (el) el.style!.background = on ? col : col.replace(/0\.\d+\)$/, '0.07)'); };
   bg('avt-apar-tab-anim',    isAnim, 'rgba(79,163,209,0.25)');
   bg('avt-apar-tab-topdown', isTd,   'rgba(200,168,75,0.25)');
   bg('avt-apar-tab-iso',     isIso,  'rgba(126,200,240,0.25)');
@@ -28238,7 +28238,7 @@ async function _avtAnimSalvar(entId: any) {
   // Recarrega aparência da entidade correspondente para atualizar o token no mapa
   const entMapa = AVT_STATE.entidades.find((e: any) => e.dbId === dbChar.id || e.nome === dbChar.nome);
   if (entMapa) _avtCarregarAparencia(entMapa);
-  document.getElementById('avt-anim-import-overlay').style.display = 'none';
+  document.getElementById('avt-anim-import-overlay')!.style!.display = 'none';
   _avtCharEditorRender();
 }
 
@@ -28286,7 +28286,7 @@ async function _avtTopdownIaSalvar(entId: any) {
       method: 'POST',
       headers: {
         'apikey':        SUPABASE_KEY,
-        'Authorization': `Bearer ${SESSION.access_token}`,
+        'Authorization': `Bearer ${SESSION!.access_token}`,
         'Content-Type':  file.type || 'image/png',
         'Cache-Control': '3600',
         'x-upsert':      'true',
@@ -28334,7 +28334,7 @@ async function _avtTopdownIaSalvar(entId: any) {
     }
 
     mostrarToast(novaFichaFile ? 'Token e imagem da ficha salvos!' : 'Token salvo!', 'ok');
-    document.getElementById('avt-anim-import-overlay').style.display = 'none';
+    document.getElementById('avt-anim-import-overlay')!.style!.display = 'none';
   } catch (err: any) {
     console.error('_avtTopdownIaSalvar:', err);
     mostrarToast('Erro ao salvar: ' + (err.message || String(err)), 'aviso');
@@ -28374,7 +28374,7 @@ async function _avtIsoIaSalvar(entId: any) {
     _avtCharEditorRender();
     mostrarToast('Sprite isométrico salvo!', 'ok');
     const ov = document.getElementById('avt-anim-import-overlay');
-    if (ov) ov.style.display = 'none';
+    if (ov) ov.style!.display = 'none';
   } catch (e: any) {
     console.error('_avtIsoIaSalvar:', e);
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
@@ -28435,7 +28435,7 @@ function _avtWalkStudioFechar() {
   if (S?.raf) cancelAnimationFrame(S.raf);
   if (S) S.aberto = false;
   const ov = document.getElementById('avt-anim-import-overlay');
-  if (ov) ov.style.display = 'none';
+  if (ov) ov.style!.display = 'none';
 }
 window._avtWalkStudioFechar = _avtWalkStudioFechar;
 
@@ -28500,18 +28500,18 @@ function _avtWalkStudioLoop() {
   if (typeof avtWalkRender === 'function' && img && img.complete && img.naturalWidth > 0) {
     // Cards: cada preset andando com seus parâmetros padrão (comparação lado a lado).
     document.querySelectorAll('#avt-walk-cards canvas').forEach(cv => {
-      const id = cv.dataset.preset; if (!AVT_WALK_PRESETS[id]) return;
+      const id = cv.dataset!.preset; if (!AVT_WALK_PRESETS[id!]) return;
       const cx = cv.getContext('2d'); cx.clearRect(0, 0, cv.width, cv.height);
       avtWalkRender(cx, img, {
-        footX: cv.width / 2, footY: cv.height - 8, SZ: cv.height * 0.6,
+        footX: cv.width! / 2, footY: cv.height! - 8, SZ: cv.height! * 0.6,
         now, state: 'walk', tState: now, facing: 1,
-        presetId: id, params: AVT_WALK_PRESETS[id].paramsPadrao, pernas: true,
+        presetId: id, params: AVT_WALK_PRESETS[id!].paramsPadrao, pernas: true,
       });
     });
     // Preview grande: preset selecionado + parâmetros editados + estado/facing.
     const big = document.getElementById('avt-walk-preview');
     if (big) {
-      const cx = big.getContext('2d'); cx.clearRect(0, 0, big.width, big.height);
+      const cx = big.getContext!('2d'); cx.clearRect(0, 0, big.width, big.height);
       let tState = 0;
       if (S.state === 'attack') tState = (now - (S.stateStart || now)) % 700;
       else if (S.state === 'idle') tState = now - (S.stateStart || now);
@@ -28520,7 +28520,7 @@ function _avtWalkStudioLoop() {
       const facingPreview = (typeof _avtIsoFacing === 'function')
         ? _avtIsoFacing(S.facing, S.facingMode) : S.facing;
       avtWalkRender(cx, img, {
-        footX: big.width / 2, footY: big.height - 18, SZ: big.height * 0.6,
+        footX: big.width! / 2, footY: big.height! - 18, SZ: big.height! * 0.6,
         now, state: S.state, tState, facing: facingPreview,
         presetId: S.presetId, params: S.params, pernas: S.pernas,
       });
@@ -28544,7 +28544,7 @@ function _avtWalkStudioRender() {
   const S = window._avtWalkStudio; if (!S) return;
   const overlay = document.getElementById('avt-anim-import-overlay');
   if (!overlay) return;
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
 
   const wa = S.params.weaponAnchor || { yTop: 0.3, yBot: 0.8, damp: 0 };
   const cards = Object.entries<any>(AVT_WALK_PRESETS).map(([id, p]) => {
@@ -28667,7 +28667,7 @@ window._avtNpcClasseNovaForm = window._avtNpcClasseNovaForm || false;
 // Renderiza a seção "Classes de NPCs" no painel do mestre
 function _avtNpcClassesSecao() {
   const npcClasses = _avtGetNpcClasses();
-  const S = (s: any) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const S = (s: any) => String(s ?? '').replace(/[&<>"']/g, c => (({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'} as any)[c]));
   const inimigos = AVT_STATE.entidades.filter((e: any) => e.tipo === 'inimigo');
   const inputSt = 'padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.7rem';
 
@@ -28791,15 +28791,15 @@ async function _avtSalvarNpcClasse(key: any) {
   const nome    = get(`npc-cls-nome-${kSafe}`)?.value?.trim();
   const icone   = get(`npc-cls-icone-${kSafe}`)?.value?.trim();
   const cor     = get(`npc-cls-cor-${kSafe}`)?.value || '#7a5c00';
-  const hpBase  = parseInt(get(`npc-cls-hp-${kSafe}`)?.value) || 40;
-  const pac     = parseFloat(get(`npc-cls-pac-${kSafe}`)?.value) || 5;
-  const raio    = parseInt(get(`npc-cls-raio-${kSafe}`)?.value) || 3;
-  const xp      = parseInt(get(`npc-cls-xp-${kSafe}`)?.value) || 10;
+  const hpBase  = parseInt(get(`npc-cls-hp-${kSafe}`)?.value!) || 40;
+  const pac     = parseFloat(get(`npc-cls-pac-${kSafe}`)?.value!) || 5;
+  const raio    = parseInt(get(`npc-cls-raio-${kSafe}`)?.value!) || 3;
+  const xp      = parseInt(get(`npc-cls-xp-${kSafe}`)?.value!) || 10;
   const isBoss  = get(`npc-cls-boss-${kSafe}`)?.checked || false;
-  const rspDelay= parseInt(get(`npc-cls-rspd-${kSafe}`)?.value) || (isBoss ? 300 : 60);
+  const rspDelay= parseInt(get(`npc-cls-rspd-${kSafe}`)?.value!) || (isBoss ? 300 : 60);
   const rspTipo = get(`npc-cls-rspt-${kSafe}`)?.value || 'timer';
   const abFormula = (get(`npc-cls-abf-${kSafe}`)?.value || '').trim();
-  const abAlcance = parseInt(get(`npc-cls-aba-${kSafe}`)?.value) || null;
+  const abAlcance = parseInt(get(`npc-cls-aba-${kSafe}`)?.value!) || null;
 
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
@@ -28846,7 +28846,7 @@ async function _avtCriarNpcClasse() {
   if (!rpg.theme_json) rpg.theme_json = {};
   const npcClasses = _avtGetNpcClasses();
   if (npcClasses[slug]) { mostrarToast('Já existe uma classe com esse nome', 'aviso'); return; }
-  const baseClasse = npcClasses[base] || AVT_NPC_PRESETS[base] || AVT_NPC_PRESETS.goblin;
+  const baseClasse = npcClasses[base!] || AVT_NPC_PRESETS[base!] || AVT_NPC_PRESETS.goblin;
   npcClasses[slug] = { ...baseClasse, nome, icone, cor, ataqueBasico: null };
   try {
     await _avtSalvarThemeJson();
@@ -28966,7 +28966,7 @@ window._avtBulkAplicarAparenciaPreset = _avtBulkAplicarAparenciaPreset;
 // tipo (esqueleto, orc, etc.) e classes custom.
 function _avtBulkAparMassaSecoes() {
   const npcClasses = _avtGetNpcClasses();
-  const S = (s: any) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const S = (s: any) => String(s ?? '').replace(/[&<>"']/g, c => (({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'} as any)[c]));
   const inimigos = AVT_STATE.entidades.filter((e: any) => e.tipo === 'inimigo');
   const countByPreset: Record<string, any> = {};
   inimigos.forEach((e: any) => { countByPreset[e.presetTipo] = (countByPreset[e.presetTipo] || 0) + 1; });
@@ -28997,8 +28997,8 @@ async function _avtBulkMaskPng(file: any, hexCor: any) {
   const canvas = document.createElement('canvas');
   canvas.width = img.width; canvas.height = img.height;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
-  const iData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  ctx!.drawImage(img, 0, 0);
+  const iData = ctx!.getImageData(0, 0, canvas.width, canvas.height);
   const d = iData.data;
   // Hex → RGB inline (evita dependência de token.js)
   const mr = parseInt(hexCor.slice(1,3),16);
@@ -29011,7 +29011,7 @@ async function _avtBulkMaskPng(file: any, hexCor: any) {
       d[i+2] = Math.round(d[i+2] * 0.65 + mb * 0.35);
     }
   }
-  ctx.putImageData(iData, 0, 0);
+  ctx!.putImageData(iData, 0, 0);
   return new Promise(res => canvas.toBlob(res, 'image/png'));
 }
 
@@ -29022,7 +29022,7 @@ async function _avtBulkUpload(blob: any, entId: any, suffix: any) {
     method: 'POST',
     headers: {
       'apikey':        SUPABASE_KEY,
-      'Authorization': `Bearer ${SESSION.access_token}`,
+      'Authorization': `Bearer ${SESSION!.access_token}`,
       'Content-Type':  'image/png',
       'Cache-Control': '3600',
       'x-upsert':      'true',
@@ -29362,7 +29362,7 @@ try{
       // Renova se já sou host (próximo do vencimento) OU tenta claim se não tenho
       if (leaseLocal > Date.now() + 1500) continue; // ainda tenho ≥1.5s de lease
       try {
-        const res = await sbRpc('npc_claim_host', { _rpg: AVT_STATE.rpgId, _npc: ent.id, _user: uid });
+        const res: any = await sbRpc('npc_claim_host', { _rpg: AVT_STATE.rpgId, _npc: ent.id, _user: uid });
         _markRpcOk();
         const row = Array.isArray(res) ? res[0] : res;
         if (row && row.host_user === uid) {
@@ -29981,14 +29981,14 @@ try{
 
     modal.querySelectorAll('button[data-uid]').forEach(b => {
       b.onclick = () => {
-        const uid = b.dataset.uid;
+        const uid = b.dataset!.uid;
         if (RTNet.transferirHost(uid)) {
           try { mostrarToast('Host transferido para ' + _nickFor(uid), 'ok'); } catch(_){}
         }
         modal.remove();
       };
     });
-    modal.querySelector('.avt-host-close').onclick = () => modal.remove();
+    modal.querySelector('.avt-host-close')!.onclick = () => modal.remove();
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
   };
 

@@ -4,7 +4,7 @@
 
 // ── LEVEL UP (MESTRE) ──────────────────────────────────────────
 function abrirModalLevelUp(nome: any){
- const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
+ const c=RPG_DATA!.characters.find(x=>x.nome===nome); if(!c)return;
  const ca=c.custom_attrs||{};
  const nivel=ca.nivel||1;
  const lc=(CURRENT_RPG?.theme?.level_config)||{};
@@ -26,7 +26,7 @@ function abrirModalLevelUp(nome: any){
 
  const overlay=document.createElement('div');
  overlay.id='modal-levelup-overlay';
- overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+ overlay.style!.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
  overlay.innerHTML=`
    <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.4);border-radius:12px;padding:24px;width:100%;max-width:400px">
      <div style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--destaque);text-transform:uppercase;margin-bottom:4px">⬆ Level Up</div>
@@ -42,7 +42,7 @@ function abrirModalLevelUp(nome: any){
 }
 
 async function executarLevelUp(nome: any){
- const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
+ const c=RPG_DATA!.characters.find(x=>x.nome===nome); if(!c)return;
  const ca={...(c.custom_attrs||{})};
  const nivel=(ca.nivel||1);
  const lc=(CURRENT_RPG?.theme?.level_config)||{};
@@ -59,7 +59,7 @@ async function executarLevelUp(nome: any){
  ca.pontos_attr=(ca.pontos_attr||0)+pontos_attr_por_nivel;
  if(!ca.atributos)ca.atributos={};
  // Aplicar aumentos automáticos de atributo PRIMEIRO
- Object.entries<any>(aumentos).forEach(([attr,val])=>{ca.atributos[attr]=(parseFloat(ca.atributos[attr])||0)+val;});
+ Object.entries<any>(aumentos).forEach(([attr,val])=>{ca.atributos![attr]=(parseFloat(ca.atributos![attr])||0)+val;});
 
  // BUG-04 FIX: recalcular hp_max APÓS os aumentos de atributo, para que
  // hp_attr_mult seja aplicado sobre o novo valor do atributo
@@ -74,7 +74,7 @@ async function executarLevelUp(nome: any){
  c.hp_atual = Math.min(novo_hp_max, (c.hp_atual ?? hp_antigo) + Math.max(0, ganho_hp));
  c.custom_attrs = ca;
  try{
-   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
      {method:'PATCH',body:JSON.stringify({
        hp_atual:c.hp_atual,
        custom_attrs:ca,
@@ -100,20 +100,20 @@ function abrirModalXP(nome: any) {
   _xpModalNome = nome;
   const overlay = document.getElementById('modal-xp-overlay');
   if (!overlay) return;
-  document.getElementById('xp-modal-nome').textContent = nome;
-  document.getElementById('xp-todos-input').style.display = 'none';
+  document.getElementById('xp-modal-nome')!.textContent = nome;
+  document.getElementById('xp-todos-input')!.style!.display = 'none';
   xpAtualizarModalUI(nome);
-  overlay.style.display = 'flex';
+  overlay.style!.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalXP(); };
 }
 
 function fecharModalXP() {
-  document.getElementById('modal-xp-overlay').style.display = 'none';
+  document.getElementById('modal-xp-overlay')!.style!.display = 'none';
   _xpModalNome = null;
 }
 
 function xpAtualizarModalUI(nome: any) {
-  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  const c = RPG_DATA!.characters.find(x => x.nome === nome);
   if (!c) return;
   const ca = c.custom_attrs || {};
   const lc = (CURRENT_RPG?.theme?.level_config) || {};
@@ -123,25 +123,25 @@ function xpAtualizarModalUI(nome: any) {
   const xp_proximo = nivel < nivel_maximo ? nivel * 100 : null;
   const pct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 100;
 
-  document.getElementById('xp-modal-nivel').textContent = `Nivel ${nivel}`;
-  document.getElementById('xp-modal-xp-label').textContent = xp_proximo
+  document.getElementById('xp-modal-nivel')!.textContent = `Nivel ${nivel}`;
+  document.getElementById('xp-modal-xp-label')!.textContent = xp_proximo
     ? `XP: ${xp} / ${xp_proximo}`
     : `XP: ${xp} (nivel maximo)`;
-  document.getElementById('xp-modal-pct').textContent = xp_proximo ? `${pct}%` : 'Max';
-  document.getElementById('xp-modal-barra').style.width = `${pct}%`;
-  document.getElementById('xp-manual-input').value = (xp) as any;
+  document.getElementById('xp-modal-pct')!.textContent = xp_proximo ? `${pct}%` : 'Max';
+  document.getElementById('xp-modal-barra')!.style!.width = `${pct}%`;
+  document.getElementById('xp-manual-input')!.value = (xp) as any;
 
   // Mostrar botao de level up se XP suficiente
   const levelupWrap = document.getElementById('xp-modal-levelup-wrap');
   const btnForcar = document.getElementById('xp-btn-forcar-levelup');
   if (xp_proximo && xp >= xp_proximo && nivel < nivel_maximo) {
-    document.getElementById('xp-modal-levelup-label').textContent =
+    document.getElementById('xp-modal-levelup-label')!.textContent =
       `${nome} atingiu XP suficiente para o Nivel ${nivel + 1}!`;
-    levelupWrap.style.display = 'block';
-    if (btnForcar) btnForcar.style.display = 'none';
+    levelupWrap!.style!.display = 'block';
+    if (btnForcar) btnForcar.style!.display = 'none';
   } else {
-    levelupWrap.style.display = 'none';
-    if (btnForcar) btnForcar.style.display = nivel < nivel_maximo ? '' : 'none';
+    levelupWrap!.style!.display = 'none';
+    if (btnForcar) btnForcar.style!.display = nivel < nivel_maximo ? '' : 'none';
   }
 }
 
@@ -149,7 +149,7 @@ function xpAtualizarModalUI(nome: any) {
 async function xpDarRapido(quantidade: any) {
   const nome = _xpModalNome;
   if (!nome) return;
-  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  const c = RPG_DATA!.characters.find(x => x.nome === nome);
   if (!c) return;
   const ca = { ...(c.custom_attrs || {}) };
   ca.xp = (ca.xp || 0) + quantidade;
@@ -164,19 +164,19 @@ async function xpDarRapido(quantidade: any) {
 // Toggle painel "dar para todos"
 function xpDarParaTodos() {
   const wrap = document.getElementById('xp-todos-input');
-  wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
-  if (wrap.style.display === 'block') document.getElementById('xp-todos-valor').focus();
+  wrap!.style!.display = wrap!.style!.display === 'none' ? 'block' : 'none';
+  if (wrap!.style!.display === 'block') document.getElementById('xp-todos-valor')!.focus!()!;
 }
 
 // Confirmar XP para todos os jogadores PCs
 async function xpConfirmarTodos() {
-  const val = parseInt(document.getElementById('xp-todos-valor').value);
+  const val = parseInt(document.getElementById('xp-todos-valor')!.value!);
   if (!val || val <= 0) { mostrarToast('Informe um valor valido', 'erro'); return; }
-  const pcs = (RPG_DATA.characters || []).filter(c =>
+  const pcs = (RPG_DATA!.characters || []).filter(c =>
     (c.custom_attrs?.tipo || 'jogador') === 'jogador'
   );
-  document.getElementById('xp-todos-input').style.display = 'none';
-  document.getElementById('xp-todos-valor').value = '';
+  document.getElementById('xp-todos-input')!.style!.display = 'none';
+  document.getElementById('xp-todos-valor')!.value = '';
   for (const c of pcs) {
     const ca = { ...(c.custom_attrs || {}) };
     ca.xp = (ca.xp || 0) + val;
@@ -196,9 +196,9 @@ async function xpConfirmarTodos() {
 async function xpSalvarManual() {
   const nome = _xpModalNome;
   if (!nome) return;
-  const val = parseInt(document.getElementById('xp-manual-input').value);
+  const val = parseInt(document.getElementById('xp-manual-input')!.value!);
   if (isNaN(val) || val < 0) { mostrarToast('Valor invalido', 'erro'); return; }
-  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  const c = RPG_DATA!.characters.find(x => x.nome === nome);
   if (!c) return;
   const ca = { ...(c.custom_attrs || {}) };
   ca.xp = val;
@@ -236,7 +236,7 @@ function _xpParaNivel(nivel: any) {
 // Verifica se o personagem atingiu XP para subir e faz o level up automaticamente.
 // BUG-02 FIX: while loop para suportar múltiplos níveis de uma vez.
 async function xpChecarAutoLevelUp(nome: any) {
-  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  const c = RPG_DATA!.characters.find(x => x.nome === nome);
   if (!c) return;
   const lc = (CURRENT_RPG?.theme?.level_config) || {};
   const nivel_maximo = lc.nivel_maximo || 20;
@@ -263,17 +263,17 @@ async function xpChecarAutoLevelUp(nome: any) {
 async function xpSalvarChar(c: any, ca: any) {
   try {
     await sb(
-      `characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(c.nome)}`,
+      `characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(c.nome)}`,
       { method: 'PATCH', body: JSON.stringify({ custom_attrs: ca, xp: ca.xp }) }
     );
   } catch(e) { mostrarToast('Erro ao salvar XP', 'erro'); }
 }
 
 async function distribuirPontosAttr(nome: any){
- const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
+ const c=RPG_DATA!.characters.find(x=>x.nome===nome); if(!c)return;
  const ca: any={...(c.custom_attrs||{})};
  if(!ca.atributos)ca.atributos={};
- const attrDefs=RPG_DATA.attrDefs||[];
+ const attrDefs=RPG_DATA!.attrDefs||[];
  let total=0;
  const aumentos: Record<string, any> = {};
  // BUG-03 FIX: Somente atributos básicos/especiais podem receber pontos (não status nem resistência)
@@ -295,7 +295,7 @@ async function distribuirPontosAttr(nome: any){
  try{
    const patchBody: any={custom_attrs:ca,pontos_attr:ca.pontos_attr};
    if(novoHpMax && novoHpMax !== (c.hp_max||0)) patchBody.hp_max=novoHpMax;
-   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
      {method:'PATCH',body:JSON.stringify(patchBody)});
    if(c.custom_attrs?.linhagem_id && typeof window._avtSyncLinhagem==='function') window._avtSyncLinhagem(c);
    mostrarToast('Atributos distribuídos!','sucesso');
@@ -316,28 +316,28 @@ function renderAttrView(nome: any) {
   if (typeof renderFichaView === 'function') renderFichaView(nome);
 }
 
-function toggleEdit(nome: any){document.getElementById('edit-form-'+nome).classList.toggle('aberto');}
-function toggleEditChar(nome: any){document.getElementById('edit-char-form-'+nome).classList.toggle('aberto');}
+function toggleEdit(nome: any){document.getElementById('edit-form-'+nome)!.classList!.toggle!('aberto')!;}
+function toggleEditChar(nome: any){document.getElementById('edit-char-form-'+nome)!.classList!.toggle!('aberto')!;}
 
 
 async function attrviewToggleOcultarAtribs(nome: any) {
-  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  const c = RPG_DATA!.characters.find(x => x.nome === nome);
   if (!c || !c.custom_attrs) return;
   const novoEstado = document.getElementById('attrview-toggle-ocultar')?.checked ?? false;
   c.custom_attrs.ocultar_atributos = novoEstado;
   try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
       { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
     mostrarToast(novoEstado ? '🔒 Atributos ocultos para jogadores' : '🔓 Atributos visíveis', '');
   } catch(e) { mostrarToast('Erro ao salvar', 'erro'); }
 }
 
 async function charviewToggleOcultarAtribs(nome: any, checked: any) {
-  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  const c = RPG_DATA!.characters.find(x => x.nome === nome);
   if (!c || !c.custom_attrs) return;
   c.custom_attrs.ocultar_atributos = checked;
   try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
       { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
     mostrarToast(checked ? '🔒 Atributos ocultos para jogadores' : '🔓 Atributos visíveis', '');
   } catch(e) { mostrarToast('Erro ao salvar', 'erro'); }
@@ -346,9 +346,9 @@ async function charviewToggleOcultarAtribs(nome: any, checked: any) {
 // ── salvarAtributos: salva apenas HP atual + attrDefs (aba Atributos) ──
 async function salvarAtributos(nome: any){
  if (!podeEditarPersonagem(nome)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }
- const c=RPG_DATA.characters.find(x=>x.nome===nome);
+ const c=RPG_DATA!.characters.find(x=>x.nome===nome);
  if(!c)return;
- const ad=RPG_DATA.attrDefs||[];
+ const ad=RPG_DATA!.attrDefs||[];
  // @ts-expect-error — bug latente preservado: '+x' nunca é nullish, o ?? à direita nunca dispara
  const hp=(+(document.getElementById('f-hp_atual')?.value) as any)??c.hp_atual;
  const ca: any={...(c.custom_attrs||{})};
@@ -358,7 +358,7 @@ async function salvarAtributos(nome: any){
    const key='fca-'+a.nome.replace(/[^a-z0-9]/gi,'_');
    const el=document.getElementById(key);
    if(!el)return;
-   if(a.tipo==='number')ca.atributos[a.nome]=+el.value;
+   if(a.tipo==='number')ca.atributos[a.nome]=+el.value!;
    else if(a.tipo==='boolean')ca.atributos[a.nome]=el.value==='true';
    else ca.atributos[a.nome]=el.value;
  });
@@ -373,7 +373,7 @@ async function salvarAtributos(nome: any){
  try{
    const patchBody: any={hp_atual:hp,custom_attrs:ca};
    if(novoHpMax && novoHpMax > 0) patchBody.hp_max=novoHpMax;
-   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
      {method:'PATCH',body:JSON.stringify(patchBody)});
    mostrarToast('Atributos salvos!','sucesso');
    if(typeof renderFichaView==='function') renderFichaView(nome); else renderAttrView(nome);
@@ -386,7 +386,7 @@ async function salvarAtributos(nome: any){
 // ── salvarInfoPersonagem: salva info do personagem (aba Personagem) ──
 async function salvarInfoPersonagem(nome: any){
  if (!podeEditarPersonagem(nome)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }
- const c=RPG_DATA.characters.find(x=>x.nome===nome);
+ const c=RPG_DATA!.characters.find(x=>x.nome===nome);
  if(!c)return;
  const ca: any={...(c.custom_attrs||{})};
  const tipoVal=document.getElementById('fc-tipo')?.value; if(tipoVal) ca.tipo=tipoVal;
@@ -404,7 +404,7 @@ async function salvarInfoPersonagem(nome: any){
  const novoNome=(document.getElementById('fc-nome')?.value||'').trim();
  const renomear=novoNome && novoNome!==nome;
  if(renomear){
-   const dup=RPG_DATA.characters.find(x=>x.nome===novoNome);
+   const dup=RPG_DATA!.characters.find(x=>x.nome===novoNome);
    if(dup){mostrarToast(`Já existe um personagem chamado "${novoNome}"`, 'erro');return;}
  }
  c.custom_attrs=ca;
@@ -412,21 +412,21 @@ async function salvarInfoPersonagem(nome: any){
  try{
    const bodyChar: any={custom_attrs:ca};
    if(renomear) bodyChar.nome=novoNome;
-   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
      {method:'PATCH',body:JSON.stringify(bodyChar)});
    if(renomear){
      // Atualizar campo personagem para compat com registros antigos
-     await sb(`skills?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&personagem=eq.${encodeURIComponent(nome)}`,
+     await sb(`skills?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&personagem=eq.${encodeURIComponent(nome)}`,
        {method:'PATCH',body:JSON.stringify({personagem:novoNome})});
      // Migrar character_id em skills que ainda não o possuem
-     const _cIdRename = RPG_DATA.characters.find(x => x.nome === nome)?.id;
+     const _cIdRename = RPG_DATA!.characters.find(x => x.nome === nome)?.id;
      if (_cIdRename) {
-       await sb(`skills?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&personagem=eq.${encodeURIComponent(nome)}&character_id=is.null`,
+       await sb(`skills?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&personagem=eq.${encodeURIComponent(nome)}&character_id=is.null`,
          {method:'PATCH',body:JSON.stringify({character_id:_cIdRename})}).catch(()=>{});
      }
-     RPG_DATA.skills.forEach(s=>{if(s.personagem===nome){s.personagem=novoNome;if(_cIdRename&&!s.character_id)s.character_id=_cIdRename;}});
+     RPG_DATA!.skills.forEach(s=>{if(s.personagem===nome){s.personagem=novoNome;if(_cIdRename&&!s.character_id)s.character_id=_cIdRename;}});
      try{
-       await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&linked=eq.${encodeURIComponent(nome)}`,
+       await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&linked=eq.${encodeURIComponent(nome)}`,
          {method:'PATCH',body:JSON.stringify({linked:novoNome})});
      }catch(e2){}
      c.nome=novoNome;
@@ -434,7 +434,7 @@ async function salvarInfoPersonagem(nome: any){
      if(ATTR_VIEW===nome) ATTR_VIEW=novoNome;
      if(FICHAS_VIEW===nome) FICHAS_VIEW=novoNome;
      if(CFG_CHAR===nome) CFG_CHAR=novoNome;
-     if(RPG_DATA.linked===nome) RPG_DATA.linked=novoNome;
+     if(RPG_DATA!.linked===nome) RPG_DATA!.linked=novoNome;
      renderCharButtons(); if(typeof renderFichasBtns==='function') renderFichasBtns(); renderAttrButtons(); renderConfig(); renderHeader();
    }
    mostrarToast('Personagem salvo!','sucesso');
@@ -447,36 +447,36 @@ async function salvarInfoPersonagem(nome: any){
 // ── NOVO PERSONAGEM — (movido de characters/skills.js) ──────────
 // ── 14B: NOVO PERSONAGEM ──────────────────────────────────────
 function abrirModalNovoChar() {
-  document.getElementById('nc-nome').value = '';
-  document.getElementById('nc-tipo').value = 'jogador';
+  document.getElementById('nc-nome')!.value = '';
+  document.getElementById('nc-tipo')!.value = 'jogador';
   const lc=(CURRENT_RPG?.theme?.level_config)||{};
   const hp_base=lc.hp_base||100;
-  document.getElementById('nc-nivel').value = (1) as any;
-  document.getElementById('nc-hp').value = hp_base;
-  document.getElementById('nc-classe').value = '';
-  document.getElementById('nc-raca').value = '';
-  document.getElementById('nc-cor').value = '#4fa3d1';
+  document.getElementById('nc-nivel')!.value = (1) as any;
+  document.getElementById('nc-hp')!.value = hp_base;
+  document.getElementById('nc-classe')!.value = '';
+  document.getElementById('nc-raca')!.value = '';
+  document.getElementById('nc-cor')!.value = '#4fa3d1';
   const overlay = document.getElementById('modal-novo-char-overlay');
-  overlay.style.display = 'flex';
-  overlay.onclick = e => { if (e.target === overlay) fecharModalNovoChar(); };
+  overlay!.style!.display = 'flex';
+  overlay!.onclick = e => { if (e.target === overlay) fecharModalNovoChar(); };
 }
 function fecharModalNovoChar() {
-  document.getElementById('modal-novo-char-overlay').style.display = 'none';
+  document.getElementById('modal-novo-char-overlay')!.style!.display = 'none';
 }
 async function criarNovoPersonagem() {
-  const nome = document.getElementById('nc-nome').value.trim();
+  const nome = document.getElementById('nc-nome')!.value!.trim!()!;
   if (!nome) { mostrarToast('Nome obrigatório', 'erro'); return; }
-  if (RPG_DATA.characters.find(c => c.nome === nome)) { mostrarToast('Já existe um personagem com esse nome', 'erro'); return; }
-  const tipo = document.getElementById('nc-tipo').value;
-  const nivel = parseInt(document.getElementById('nc-nivel')?.value)||1;
+  if (RPG_DATA!.characters.find(c => c.nome === nome)) { mostrarToast('Já existe um personagem com esse nome', 'erro'); return; }
+  const tipo = document.getElementById('nc-tipo')!.value!;
+  const nivel = parseInt(document.getElementById('nc-nivel')?.value!)||1;
   const lc=(CURRENT_RPG?.theme?.level_config)||{};
   const hp_base=lc.hp_base||100;
   const hp_por_nivel=lc.hp_por_nivel||0;
   const hp_max=hp_base+(nivel-1)*hp_por_nivel;
-  const hp_max_override=+(document.getElementById('nc-hp').value)||hp_max;
-  const cor = document.getElementById('nc-cor').value || '#4fa3d1';
-  const classe = document.getElementById('nc-classe').value.trim();
-  const raca = document.getElementById('nc-raca').value.trim();
+  const hp_max_override=+(document.getElementById('nc-hp')!.value!)!||hp_max;
+  const cor = document.getElementById('nc-cor')!.value! || '#4fa3d1';
+  const classe = document.getElementById('nc-classe')!.value!.trim!()!;
+  const raca = document.getElementById('nc-raca')!.value!.trim!()!;
   const ca: any = { tipo, cor, nivel, hp_max:hp_max_override, xp:0, pontos_attr:0 };
   if (classe) ca.classe = classe;
   if (raca) ca.raca = raca;
@@ -490,11 +490,11 @@ async function criarNovoPersonagem() {
       method: 'POST',
       headers: { 'Prefer': 'return=representation' },
       body: JSON.stringify({
-        rpg_id: RPG_DATA.rpgId, nome, hp_atual: hp_max_override, custom_attrs: ca,
+        rpg_id: RPG_DATA!.rpgId, nome, hp_atual: hp_max_override, custom_attrs: ca,
         nivel: nivel, hp_max: hp_max_override, xp: 0, pontos_attr: 0
       })
     });
-    RPG_DATA.characters.push(novo || { nome, hp_atual: hp_max_override, custom_attrs: ca });
+    RPG_DATA!.characters.push(novo || { nome, hp_atual: hp_max_override, custom_attrs: ca });
     fecharModalNovoChar();
     renderCharButtons();
     renderAttrButtons();

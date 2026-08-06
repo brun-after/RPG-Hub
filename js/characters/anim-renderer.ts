@@ -60,8 +60,8 @@ function _svgToTexture(svgStr: any, w: any, h: any) {
       canvas.width  = w;
       canvas.height = h;
       const ctx = canvas.getContext('2d');
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, 0, 0, w, h);
+      ctx!.imageSmoothingEnabled = false;
+      ctx!.drawImage(img, 0, 0, w, h);
       try {
         resolve(PIXI.Texture.from(canvas.toDataURL('image/png')));
       } catch (e) { resolve(null); }
@@ -403,7 +403,7 @@ function animRendererMount(container: any, animadoData: any, opts: any = {}) {
   const placeholder = document.createElement('canvas');
   placeholder.width  = cssW;
   placeholder.height = cssH;
-  placeholder.style.cssText = `width:${cssW}px;height:${cssH}px;display:block;margin:auto;image-rendering:pixelated`;
+  placeholder.style!.cssText = `width:${cssW}px;height:${cssH}px;display:block;margin:auto;image-rendering:pixelated`;
   container.appendChild(placeholder);
 
   // Desenhar fallback no placeholder enquanto aguarda PIXI
@@ -607,7 +607,7 @@ function animRendererMount(container: any, animadoData: any, opts: any = {}) {
       container.innerHTML = '';
       const img = document.createElement('img');
       img.src = (opts as any).fallbackSrc;
-      img.style.cssText = `width:${cssW}px;height:${cssH}px;object-fit:contain;display:block;margin:auto`;
+      img.style!.cssText = `width:${cssW}px;height:${cssH}px;object-fit:contain;display:block;margin:auto`;
       container.appendChild(img);
     }
   });

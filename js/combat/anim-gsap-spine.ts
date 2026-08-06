@@ -137,7 +137,7 @@
 
       // Flash no local de chegada
       const flash = document.createElement('div');
-      flash.style.cssText = `position:fixed;left:${rb.left}px;top:${rb.top}px;` +
+      flash.style!.cssText = `position:fixed;left:${rb.left}px;top:${rb.top}px;` +
         `width:${rb.width}px;height:${rb.height}px;border-radius:50%;` +
         `pointer-events:none;z-index:10200;background:radial-gradient(circle,rgba(255,255,255,0.95),${cor}44);opacity:0`;
       document.body.appendChild(flash);
@@ -192,7 +192,7 @@
         .to(inner, { x: dist, scaleX: 0.75, scaleY: 1.2, filter: `drop-shadow(${dist}px 0 10px ${cor})`, duration: dur * 0.3, ease: 'power3.out' })
         .to(inner, { x: dist * 0.4, duration: dur * 0.15 })
         .to(inner, { x: 0, scaleX: 1, scaleY: 1, filter: 'none', duration: dur * 0.4, ease: 'elastic.out(1, 0.3)' })
-        .add(() => gsap.set(inner, { clearProps: 'transform,filter,opacity' }));
+        .add((() => gsap.set(inner, { clearProps: 'transform,filter,opacity' })) as any);
     },
 
     // ── Movimento Permanente (token NÃO retorna à origem) ────────────
@@ -239,7 +239,7 @@
       // Flash de partida
       const flash = document.createElement('div');
       const r = atacEl.getBoundingClientRect();
-      flash.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;border-radius:50%;pointer-events:none;z-index:10200;background:radial-gradient(circle,rgba(255,255,255,0.9),${cor}66);opacity:0`;
+      flash.style!.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;border-radius:50%;pointer-events:none;z-index:10200;background:radial-gradient(circle,rgba(255,255,255,0.9),${cor}66);opacity:0`;
       document.body.appendChild(flash);
 
       return gsap.timeline()
@@ -474,7 +474,7 @@
     const canvas = document.createElement('canvas');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10100;width:100vw;height:100vh';
+    canvas.style!.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10100;width:100vw;height:100vh';
     document.body.appendChild(canvas);
     return _renderEsqueleticoEmCanvas(cfg, canvas, posX, posY, durMs).then(() => canvas.remove());
   }

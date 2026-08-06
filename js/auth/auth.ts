@@ -25,55 +25,55 @@ if (window._hcaptchaApiPronta) { try { onHcaptchaLoad(); } catch (e) { console.e
 function authTab(modo: any) {
   AUTH_MODE = modo;
   const isLogin = modo === 'login';
-  document.getElementById('auth-tab-login').style.background    = isLogin ? 'var(--primario)' : 'transparent';
-  document.getElementById('auth-tab-login').style.color         = isLogin ? '#fff' : 'var(--suave)';
-  document.getElementById('auth-tab-cadastro').style.background = isLogin ? 'transparent' : 'var(--primario)';
-  document.getElementById('auth-tab-cadastro').style.color      = isLogin ? 'var(--suave)' : '#fff';
-  document.getElementById('auth-nickname-wrap').style.display    = isLogin ? 'none'  : 'block';
-  document.getElementById('auth-nome-real-wrap').style.display   = isLogin ? 'none'  : 'block';
-  document.getElementById('auth-cadastro-extra').style.display  = isLogin ? 'none'  : 'block';
-  document.getElementById('auth-esqueci-wrap').style.display    = (isLogin && EMAIL_CONFIRMATION_ENABLED) ? 'block' : 'none';
-  document.getElementById('auth-btn').textContent               = isLogin ? 'Entrar' : 'Criar Conta';
+  document.getElementById('auth-tab-login')!.style!.background    = isLogin ? 'var(--primario)' : 'transparent';
+  document.getElementById('auth-tab-login')!.style!.color         = isLogin ? '#fff' : 'var(--suave)';
+  document.getElementById('auth-tab-cadastro')!.style!.background = isLogin ? 'transparent' : 'var(--primario)';
+  document.getElementById('auth-tab-cadastro')!.style!.color      = isLogin ? 'var(--suave)' : '#fff';
+  document.getElementById('auth-nickname-wrap')!.style!.display    = isLogin ? 'none'  : 'block';
+  document.getElementById('auth-nome-real-wrap')!.style!.display   = isLogin ? 'none'  : 'block';
+  document.getElementById('auth-cadastro-extra')!.style!.display  = isLogin ? 'none'  : 'block';
+  document.getElementById('auth-esqueci-wrap')!.style!.display    = (isLogin && EMAIL_CONFIRMATION_ENABLED) ? 'block' : 'none';
+  document.getElementById('auth-btn')!.textContent               = isLogin ? 'Entrar' : 'Criar Conta';
   authErro(''); authSucesso(''); authOcultarRecuperacao();
   if (HCAPTCHA_WIDGET_ID !== null) hcaptcha.reset(HCAPTCHA_WIDGET_ID);
 }
 
 function authErro(msg: any) {
   const el = document.getElementById('auth-erro');
-  el.textContent = msg; el.style.display = msg ? 'block' : 'none';
+  el!.textContent = msg; el!.style!.display = msg ? 'block' : 'none';
 }
 
 function authSucesso(msg: any) {
   const el = document.getElementById('auth-sucesso');
-  el.textContent = msg; el.style.display = msg ? 'block' : 'none';
+  el!.textContent = msg; el!.style!.display = msg ? 'block' : 'none';
 }
 
 function authToggleSenha() {
   const inp = document.getElementById('auth-senha');
-  inp.type = inp.type === 'password' ? 'text' : 'password';
+  inp!.type = inp!.type === 'password' ? 'text' : 'password';
 }
 function authToggleSenha2() {
   const inp = document.getElementById('auth-senha2');
-  inp.type = inp.type === 'password' ? 'text' : 'password';
+  inp!.type = inp!.type === 'password' ? 'text' : 'password';
 }
 
 async function authSubmit() {
-  const email = document.getElementById('auth-email').value.trim().toLowerCase();
-  const senha  = document.getElementById('auth-senha').value;
+  const email = document.getElementById('auth-email')!.value!.trim!()!.toLowerCase!()!;
+  const senha  = document.getElementById('auth-senha')!.value!;
   if (!email || !email.includes('@')) { authErro('Informe um e-mail válido'); return; }
-  if (senha.length < 8) { authErro('Senha deve ter no mínimo 8 caracteres'); return; }
+  if (senha!.length < 8) { authErro('Senha deve ter no mínimo 8 caracteres'); return; }
   // Verificar se o widget do hCaptcha já foi renderizado antes de tentar obter resposta
   if (HCAPTCHA_WIDGET_ID === null) {
     authErro('O desafio de segurança ainda está carregando. Aguarde um instante e tente novamente.');
     return;
   }
   const btn = document.getElementById('auth-btn');
-  btn.textContent = '...'; btn.disabled = true;
+  btn!.textContent = '...'; btn!.disabled = true;
   try {
     if (AUTH_MODE === 'cadastro') {
-      const nickname = document.getElementById('auth-nickname').value.trim().toLowerCase();
-      const nomeReal  = document.getElementById('auth-nome-real').value.trim();
-      const senha2   = document.getElementById('auth-senha2').value;
+      const nickname = document.getElementById('auth-nickname')!.value!.trim!()!.toLowerCase!()!;
+      const nomeReal  = document.getElementById('auth-nome-real')!.value!.trim!()!;
+      const senha2   = document.getElementById('auth-senha2')!.value!;
       if (!nickname) { authErro('Informe seu nickname'); return; }
       if (!/^[a-z0-9_]{2,30}$/.test(nickname)) {
         authErro('Nickname: apenas letras minúsculas, números e _ (2–30 caracteres)'); return;
@@ -87,8 +87,8 @@ async function authSubmit() {
   } catch (e: any) {
     authErro(e.message || 'Erro desconhecido');
   } finally {
-    btn.disabled = false;
-    btn.textContent = AUTH_MODE === 'login' ? 'Entrar' : 'Criar Conta';
+    btn!.disabled = false;
+    btn!.textContent = AUTH_MODE === 'login' ? 'Entrar' : 'Criar Conta';
   }
 }
 
@@ -152,27 +152,27 @@ async function authEntrar(email: any, senha: any) {
 
 // ── RECUPERAÇÃO DE SENHA ──────────────────────────────────────
 function authMostrarRecuperacao() {
-  document.getElementById('auth-recuperacao-painel').style.display = 'block';
-  document.getElementById('auth-recuperacao-email').value = document.getElementById('auth-email').value;
-  document.getElementById('auth-recuperacao-msg').style.display = 'none';
-  setTimeout(() => document.getElementById('auth-recuperacao-email').focus(), 100);
+  document.getElementById('auth-recuperacao-painel')!.style!.display = 'block';
+  document.getElementById('auth-recuperacao-email')!.value = document.getElementById('auth-email')!.value!;
+  document.getElementById('auth-recuperacao-msg')!.style!.display = 'none';
+  setTimeout(() => document.getElementById('auth-recuperacao-email')!.focus!()!, 100);
 }
 
 function authOcultarRecuperacao() {
-  document.getElementById('auth-recuperacao-painel').style.display = 'none';
+  document.getElementById('auth-recuperacao-painel')!.style!.display = 'none';
 }
 
 async function authEnviarRecuperacao() {
   const msgEl = document.getElementById('auth-recuperacao-msg');
   if (!EMAIL_CONFIRMATION_ENABLED) {
-    msgEl.textContent = 'Recuperação de senha temporariamente indisponível. Tente mais tarde.';
-    msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+    msgEl!.textContent = 'Recuperação de senha temporariamente indisponível. Tente mais tarde.';
+    msgEl!.style!.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
     return;
   }
-  const email = document.getElementById('auth-recuperacao-email').value.trim().toLowerCase();
+  const email = document.getElementById('auth-recuperacao-email')!.value!.trim!()!.toLowerCase!()!;
   if (!email || !email.includes('@')) {
-    msgEl.textContent = 'Informe um e-mail válido';
-    msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+    msgEl!.textContent = 'Informe um e-mail válido';
+    msgEl!.style!.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
     return;
   }
   try {
@@ -181,11 +181,11 @@ async function authEnviarRecuperacao() {
       headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
       body: JSON.stringify({ email })
     });
-    msgEl.textContent = 'Se o e-mail estiver cadastrado, o link chegará em instantes. Verifique também o spam.';
-    msgEl.style.cssText = 'display:block;color:#5ee09a;background:rgba(94,224,154,0.06);border:1px solid rgba(94,224,154,0.2);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+    msgEl!.textContent = 'Se o e-mail estiver cadastrado, o link chegará em instantes. Verifique também o spam.';
+    msgEl!.style!.cssText = 'display:block;color:#5ee09a;background:rgba(94,224,154,0.06);border:1px solid rgba(94,224,154,0.2);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
   } catch(e) {
-    msgEl.textContent = 'Erro ao enviar. Tente novamente.';
-    msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+    msgEl!.textContent = 'Erro ao enviar. Tente novamente.';
+    msgEl!.style!.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
   }
 }
 
@@ -233,19 +233,19 @@ async function authVerificarConfirmacaoEmail() {
     iniciarApp();
   } catch(e) {
     // Se falhar, apenas mostra o login normalmente
-    document.getElementById('hub').style.display       = 'none';
-    document.getElementById('tela-auth').style.display = 'flex';
+    document.getElementById('hub')!.style!.display       = 'none';
+    document.getElementById('tela-auth')!.style!.display = 'flex';
     authSucesso('E-mail confirmado! Faça login para continuar.');
   }
   return true;
 }
 
 function authExibirFormNovaSenha(tokenRecuperacao: any) {
-  document.getElementById('hub').style.display       = 'none';
-  document.getElementById('tela-auth').style.display = 'flex';
+  document.getElementById('hub')!.style!.display       = 'none';
+  document.getElementById('tela-auth')!.style!.display = 'flex';
   const overlay = document.createElement('div');
   overlay.id = 'modal-nova-senha';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   overlay.innerHTML = `
     <div style="background:var(--painel);border:1px solid var(--borda);border-radius:12px;padding:28px;width:100%;max-width:360px">
       <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;margin-bottom:16px">🗝 Nova Senha</div>
@@ -264,21 +264,21 @@ function authExibirFormNovaSenha(tokenRecuperacao: any) {
     </div>
   `;
   document.body.appendChild(overlay);
-  setTimeout(() => document.getElementById('nova-senha-input')?.focus(), 100);
+  setTimeout(() => document.getElementById('nova-senha-input')?.focus!(), 100);
 }
 
 async function authSalvarNovaSenha(tokenRecuperacao: any) {
-  const nova  = document.getElementById('nova-senha-input').value;
-  const conf  = document.getElementById('nova-senha-conf').value;
+  const nova  = document.getElementById('nova-senha-input')!.value!;
+  const conf  = document.getElementById('nova-senha-conf')!.value!;
   const msgEl = document.getElementById('nova-senha-msg');
-  if (nova.length < 8) {
-    msgEl.textContent = 'Senha deve ter no mínimo 8 caracteres';
-    msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+  if (nova!.length < 8) {
+    msgEl!.textContent = 'Senha deve ter no mínimo 8 caracteres';
+    msgEl!.style!.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
     return;
   }
   if (nova !== conf) {
-    msgEl.textContent = 'As senhas não coincidem';
-    msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+    msgEl!.textContent = 'As senhas não coincidem';
+    msgEl!.style!.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
     return;
   }
   try {
@@ -293,15 +293,15 @@ async function authSalvarNovaSenha(tokenRecuperacao: any) {
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error.message);
-    msgEl.textContent = 'Senha alterada com sucesso!';
-    msgEl.style.cssText = 'display:block;color:#5ee09a;background:rgba(94,224,154,0.06);border:1px solid rgba(94,224,154,0.2);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+    msgEl!.textContent = 'Senha alterada com sucesso!';
+    msgEl!.style!.cssText = 'display:block;color:#5ee09a;background:rgba(94,224,154,0.06);border:1px solid rgba(94,224,154,0.2);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
     setTimeout(() => {
       document.getElementById('modal-nova-senha')?.remove();
       authSucesso('Senha alterada! Faça login com sua nova senha.');
     }, 1500);
   } catch(e) {
-    msgEl.textContent = 'Erro ao salvar. O link pode ter expirado — solicite um novo.';
-    msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+    msgEl!.textContent = 'Erro ao salvar. O link pode ter expirado — solicite um novo.';
+    msgEl!.style!.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
   }
 }
 
@@ -345,11 +345,11 @@ function authSair() {
   SESSION = null;
   localStorage.removeItem('rpghub_session');
   localStorage.removeItem('rpghub_nav');
-  document.getElementById('hub').style.display       = 'none';
-  document.getElementById('tela-auth').style.display = 'flex';
+  document.getElementById('hub')!.style!.display       = 'none';
+  document.getElementById('tela-auth')!.style!.display = 'flex';
   authTab('login');
-  document.getElementById('auth-email').value = '';
-  document.getElementById('auth-senha').value = '';
+  document.getElementById('auth-email')!.value = '';
+  document.getElementById('auth-senha')!.value = '';
 }
 
 // ── INIT ──────────────────────────────────────────────────────
@@ -372,15 +372,15 @@ window.addEventListener('load', async () => {
 
   // Sem sessão válida: mostrar tela de login
   esconderSplash();
-  document.getElementById('hub').style.display       = 'none';
-  document.getElementById('tela-auth').style.display = 'flex';
+  document.getElementById('hub')!.style!.display       = 'none';
+  document.getElementById('tela-auth')!.style!.display = 'flex';
 });
 
 async function iniciarApp() {
-  document.getElementById('tela-auth').style.display = 'none';
+  document.getElementById('tela-auth')!.style!.display = 'none';
   // Hub fica oculto até confirmar que não há campanha salva para entrar direto
   USER_ID = SESSION?.nickname || SESSION?.user?.email || 'usuário';
-  document.getElementById('hub-email').textContent = USER_ID;
+  document.getElementById('hub-email')!.textContent = USER_ID;
   try {
     const rpgs = await getAllRPGs();
     HUB_DATA.rpgs = rpgs || [];
@@ -408,10 +408,10 @@ async function iniciarApp() {
       }
     } catch(e) { localStorage.removeItem('rpghub_nav'); }
     // Sem campanha salva: exibe hub normalmente
-    document.getElementById('hub').style.display = 'block';
+    document.getElementById('hub')!.style!.display = 'block';
   } catch(e) {
-    document.getElementById('hub').style.display = 'block';
-    document.getElementById('rpg-list').innerHTML =
+    document.getElementById('hub')!.style!.display = 'block';
+    document.getElementById('rpg-list')!.innerHTML =
       `<div style="color:#e74c3c;padding:20px;text-align:center">Erro ao conectar.</div>`;
   }
 }
@@ -420,7 +420,7 @@ async function iniciarApp() {
 // ── HUB ───────────────────────────────────────────────────────
 function renderRPGList(rpgs: any){
  const list=document.getElementById('rpg-list');
- if(!rpgs||!rpgs.length){list.innerHTML='<div style="text-align:center;padding:30px;color:#7a92aa;font-style:italic">Nenhuma campanha. Importe um RPG.</div>';return;}
+ if(!rpgs||!rpgs.length){list!.innerHTML='<div style="text-align:center;padding:30px;color:#7a92aa;font-style:italic">Nenhuma campanha. Importe um RPG.</div>';return;}
 
  // Separar campanhas normais de arenas e aventuras
  const campanhas: any[]=[], arenas: any=[];
@@ -478,13 +478,13 @@ function renderRPGList(rpgs: any){
    }).join('');
  }
 
- list.innerHTML=html;
+ list!.innerHTML=html;
 }
 
 async function entrarArenaFromHub(rpgId: any){
  // Abre o hub de arena e entra direto na sessão
- document.getElementById('hub').style.display='none';
- document.getElementById('arena-hub').style.display='block';
+ document.getElementById('hub')!.style!.display='none';
+ document.getElementById('arena-hub')!.style!.display='block';
  await carregarArenaList();
  await entrarArena(rpgId);
 }
