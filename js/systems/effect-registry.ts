@@ -263,7 +263,7 @@
     types: TYPES,
     get: id => byId[id] || null,
     // Tipos que entram em status_effects, opcionalmente filtrados por polaridade.
-    statusTipos: (opts = {}) => TYPES
+    statusTipos: (opts: any = {}) => TYPES
       .filter(t => t.isStatus)
       .filter(t => opts.positivos == null || t.positivo === !!opts.positivos)
       .map(t => t.id),

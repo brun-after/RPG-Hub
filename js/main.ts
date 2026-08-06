@@ -22,13 +22,13 @@ import './chat/chat';
 import './systems/audio';
 
 // Registry central de tipos de efeito de skill (consumido por combate/aventura)
-import './systems/effect-registry.js';
+import './systems/effect-registry';
 
 // Combate
-import './combat/combat.js';
-import './combat/animations.js';
-import './combat/battle-system.js';
-import './combat/reactions.js';
+import './combat/combat';
+import './combat/animations';
+import './combat/battle-system';
+import './combat/reactions';
 
 // Mapas
 import './maps/camera';
@@ -69,7 +69,7 @@ import './systems/pixi-studio.js';
 import './systems/pixi-studio-avt.js';
 import './systems/market.js';
 import './ui/modals.js';
-import './combat/anim-gsap-spine.js';
+import './combat/anim-gsap-spine';
 import './characters/anim-renderer.js';
 import './characters/token';
 import './characters/anim-generator.js';

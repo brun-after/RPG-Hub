@@ -44,7 +44,7 @@ function _skFiltrarPorChar(skills, nome) {
   return skills.filter(s => s.personagem === nome);
 }
 let _skModalCharId = null; // UUID do personagem no modal de skill aberto
-let MAPA_STATE = {
+let MAPA_STATE: any = {
   mapaAtualId:null, mapaGeralId:null, toolMode:null, medicaoAtiva:null, dragging:null, dragTimer:null,
   batalhas: {}, // { [batalha_id]: objetoBatalha }
   // compat: getter para a batalha do mapa atual

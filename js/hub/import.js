@@ -2698,7 +2698,7 @@ function abrirAba(id,btn){
   }
   if(RPG_DATA?.rpgId) salvarAba(RPG_DATA.rpgId, id);
 }
-function mostrarToast(msg,tipo){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(tipo||'');t.classList.add('visivel');setTimeout(()=>t.classList.remove('visivel'),2400);}
+function mostrarToast(msg,tipo,_dur){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(tipo||'');t.classList.add('visivel');setTimeout(()=>t.classList.remove('visivel'),2400);}
 
 if ('serviceWorker' in navigator) {
    window.addEventListener('load', () => {

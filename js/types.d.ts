@@ -18,6 +18,9 @@ declare global {
   interface HTMLElement {
     [key: string]: any;
   }
+  interface Element {
+    [key: string]: any;
+  }
 
   // Bibliotecas de terceiros expostas pelo core/vendor.ts e core/pixi-lazy.ts
   var gsap: any;
@@ -32,4 +35,39 @@ declare global {
 
   // Globals definidos nos <script> inline do index.html
   var esconderSplash: any;
+
+  // Globals atribuídos só via window.* (nunca declarados no escopo do módulo)
+  var AudioManager: any;
+
+  // Globals de módulos ainda em .js, referenciados por arquivos já convertidos.
+  // Bloco regenerado automaticamente durante a Entrega 2; esvazia conforme os
+  // módulos donos são convertidos. (Sobras no fim = globals de runtime puro.)
+  // [migração-ts:auto-globals:início]
+  var INVENTARIO_CACHE: any;
+  var ITEMS_CATALOG: any;
+  var LOOT_CACHE: any;
+  var MERCADO_CACHE: any;
+  var MOEDAS_CACHE: any;
+  var TOKEN_CTRL: any;
+  var TRADES_CACHE: any;
+  var arLog: any;
+  var atualizarDisplayMoedas: any;
+  var atualizarInventarioUI: any;
+  var atualizarMapaLoot: any;
+  var atualizarTradesUI: any;
+  var executarAnimacaoAtaque: any;
+  var executarAnimacaoDados: any;
+  var mostrarTelaVitoria: any;
+  var mostrarTriggerVisual: any;
+  var ocultarTriggerVisual: any;
+  var renderBaus: any;
+  var renderCatalogo: any;
+  var renderEquipamentos: any;
+  var renderInventario: any;
+  var renderItemCatalog: any;
+  var renderMercado: any;
+  var renderMoedas: any;
+  var renderPersonagens: any;
+  var renderTrades: any;
+  // [migração-ts:auto-globals:fim]
 }

@@ -440,7 +440,7 @@
       ctx.restore();
     }
 
-    return new Promise(resolve => {
+    return new Promise<void>(resolve => {
       const start = performance.now();
       let raf;
       let done = false;
@@ -521,7 +521,7 @@
     const escala   = cfg.escala || 0.5;
     const animName = cfg.animation_name || 'animation';
 
-    return new Promise(resolve => {
+    return new Promise<void>(resolve => {
       let app;
       try {
         app = new PIXI.Application({
@@ -588,7 +588,7 @@
       const tipo = animacao?.tipo;
 
       if (tipo === GSAP_TYPE || tipo === SPINE_TYPE || tipo === COMBO_TYPE || tipo === COMBO_TOTAL_TYPE) {
-        return new Promise(resolve => {
+        return new Promise<void>(resolve => {
           const c = el => {
             if (typeof _animCentro === 'function') return _animCentro(el);
             const r = el.getBoundingClientRect();
@@ -617,7 +617,7 @@
           if (tipo === SPINE_TYPE || tipo === COMBO_TYPE) {
             tarefas.push(_animPixiSpine(animacao, origem, alvo));
           }
-          Promise.all(tarefas).then(resolve).catch(resolve);
+          Promise.all(tarefas).then(resolve as any).catch(resolve as any);
         });
       }
 
