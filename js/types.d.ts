@@ -1,8 +1,10 @@
 // types.d.ts
-// RPG Hub — Declarações de globals compartilhados entre módulos durante a migração.
+// RPG Hub — Declarações de globals compartilhados entre módulos.
 // Os módulos se comunicam via window (rodapés "[migração-esm] accessors globais");
-// aqui declaramos o que os arquivos .ts referenciam de módulos ainda em .js.
-// Tipos serão refinados conforme os módulos forem convertidos (Entregas 2-4).
+// aqui declaramos o que não existe como declaração top-level em nenhum módulo:
+// libs de CDN, globals dos <script> inline do index.html e globals de runtime
+// puro (atribuídos via window.* ou referenciados sob guarda de typeof).
+// Tipos serão refinados nas próximas entregas (Entregas 3-4).
 
 export {};
 
@@ -32,7 +34,7 @@ declare global {
   var PIXI: any;
   var hcaptcha: any;
 
-  // Globals de módulos ainda não convertidos, referenciados por arquivos .ts
+  // Globals expostos dinamicamente pelo core (window.RTNet etc.)
   var RTNet: any;
   var _mapeamentoCache: any;
 
@@ -42,9 +44,10 @@ declare global {
   // Globals atribuídos só via window.* (nunca declarados no escopo do módulo)
   var AudioManager: any;
 
-  // Globals de módulos ainda em .js, referenciados por arquivos já convertidos.
-  // Bloco regenerado automaticamente durante a Entrega 2; esvazia conforme os
-  // módulos donos são convertidos. (Sobras no fim = globals de runtime puro.)
+  // Globals de runtime puro: nomes sem declaração top-level em nenhum módulo —
+  // são atribuídos via window.*, criados por patches dinâmicos ou referenciados
+  // apenas sob guarda de typeof. Refletem o comportamento real do app; candidatos
+  // a limpeza/tipagem nas Entregas 3-4.
   // [migração-ts:auto-globals:início]
   var AVT_WALK_PRESETS: any;
   var EFFECT_REGISTRY: any;
