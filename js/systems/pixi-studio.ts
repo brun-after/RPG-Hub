@@ -334,7 +334,7 @@ async function psSalvar() {
   const preview = await _psCaptureThumbnail().catch(() => null);
   let previewUrl = cur.preview_url || null;
   if (preview) {
-    try { previewUrl = await uploadToStorage(preview, 'pixi-previews'); } catch (_) {}
+    try { previewUrl = await uploadToStorage(preview as any, 'pixi-previews'); } catch (_) {}
   }
 
   const body = {

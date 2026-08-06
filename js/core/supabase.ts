@@ -6,7 +6,7 @@
 
 
 // ── SUPABASE FETCH ────────────────────────────────────────────
-async function sb(path: string, opts: any = {}, _retry = 0) {
+async function sb<T = any>(path: string, opts: any = {}, _retry = 0): Promise<T | null> {
   const url = `${SUPABASE_URL}/rest/v1/${path}`;
   const headers = {
     'apikey':       SUPABASE_KEY,
@@ -40,7 +40,7 @@ async function sb(path: string, opts: any = {}, _retry = 0) {
 
 
 // ── UPLOAD PARA SUPABASE STORAGE ─────────────────────────────
-async function uploadToStorage(file, folder = 'misc') {
+async function uploadToStorage(file: File, folder = 'misc'): Promise<string> {
   const ext  = file.name?.split('.').pop() || 'png';
   const nome = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
 
@@ -64,7 +64,7 @@ async function uploadToStorage(file, folder = 'misc') {
 }
 
 // ── LEITURA ───────────────────────────────────────────────────
-async function getAllRPGs(){ return await sb('rpg_registry?select=*,owner_id&order=name'); }
+async function getAllRPGs(): Promise<RpgRegistryRow[] | null>{ return await sb<RpgRegistryRow[]>('rpg_registry?select=*,owner_id&order=name'); }
 
 
 async function getRPGData(rpgId){
@@ -86,10 +86,10 @@ async function _carregarProgressivo(rpgId) {
  try {
    const uid=SESSION?.user?.id;
    const [attrDefs,batalhasRows,atributosMapeados,memberRows]=await Promise.all([
-     sb(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`).catch(()=>[]),
-     sb(`batalhas?rpg_id=eq.${e}&ativa=eq.true&select=*`).catch(()=>[]),
-     sb(`atributos_grupos?rpg_id=eq.${e}&select=*&order=nome_customizado`).catch(()=>[]),
-     uid?sb(`rpg_members?rpg_id=eq.${e}&player_id=eq.${encodeURIComponent(uid)}&select=linked`).catch(()=>[]):[],
+     sb<AttrDefRow[]>(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`).catch(()=>[]),
+     sb<BatalhaRow[]>(`batalhas?rpg_id=eq.${e}&ativa=eq.true&select=*`).catch(()=>[]),
+     sb<AtributosGrupoRow[]>(`atributos_grupos?rpg_id=eq.${e}&select=*&order=nome_customizado`).catch(()=>[]),
+     uid?sb<Pick<RpgMemberRow, 'linked'>[]>(`rpg_members?rpg_id=eq.${e}&player_id=eq.${encodeURIComponent(uid)}&select=linked`).catch(()=>[]):[],
    ]);
    RPG_DATA.attrDefs=attrDefs||[];
    if(atributosMapeados && typeof ATTR_MAPPING_CACHE !== 'undefined') ATTR_MAPPING_CACHE[rpgId]=atributosMapeados;
@@ -109,7 +109,7 @@ async function _carregarProgressivo(rpgId) {
  // Fase 1: Mapas (sem img_url)
  _setStatus('⏳ Carregando mapas…');
  try {
-   const mapasRaw=await sb(`mapas?rpg_id=eq.${e}&select=id,rpg_id,map_id,nome,escala_val,escala_unit,grid,parent_map_id,tipo,zona_x,zona_y,zona_w_percent,zona_h_percent,largura_total,altura_total,largura_real,altura_real,representar_pct,locais,render_data&order=id`);
+   const mapasRaw=await sb<MapaRow[]>(`mapas?rpg_id=eq.${e}&select=id,rpg_id,map_id,nome,escala_val,escala_unit,grid,parent_map_id,tipo,zona_x,zona_y,zona_w_percent,zona_h_percent,largura_total,altura_total,largura_real,altura_real,representar_pct,locais,render_data&order=id`);
    RPG_DATA.mapas=(mapasRaw||[]).map(m=>({
      id:m.id,rpg_id:m.rpg_id,
      mapa:{map_id:m.map_id,nome:m.nome,img_url:'',escala_val:m.escala_val??1.5,escala_unit:m.escala_unit||'m',grid:m.grid??20,parent_map_id:m.parent_map_id||null,tipo:m.tipo||'geral',zona_x:m.zona_x,zona_y:m.zona_y,zona_w_percent:m.zona_w_percent,zona_h_percent:m.zona_h_percent,largura_total:m.largura_total||null,altura_total:m.altura_total||null,largura_real:m.largura_real||null,altura_real:m.altura_real||null,representar_pct:m.representar_pct??100,locais:Array.isArray(m.locais)?m.locais:(typeof m.locais==='string'?JSON.parse(m.locais||'[]'):[]),render_data:m.render_data||null,transform3d:m.render_data?.transform3d||null}
@@ -123,7 +123,7 @@ async function _carregarProgressivo(rpgId) {
 
  // Fase 2: Personagens (sem imagens)
  try {
-   const chars=await sb(`characters?rpg_id=eq.${e}&select=id,rpg_id,nome,hp_atual,hp_max,xp,nivel,pontos_attr,custom_attrs,map_positions,active_map_id,buffs&order=id`);
+   const chars=await sb<CharacterRow[]>(`characters?rpg_id=eq.${e}&select=id,rpg_id,nome,hp_atual,hp_max,xp,nivel,pontos_attr,custom_attrs,map_positions,active_map_id,buffs&order=id`);
    (chars||[]).forEach(c=>{
      if(typeof c.custom_attrs==='string'){try{c.custom_attrs=JSON.parse(c.custom_attrs);}catch(ex){c.custom_attrs={};}}
      if(!c.custom_attrs||typeof c.custom_attrs!=='object')c.custom_attrs={};
@@ -159,9 +159,9 @@ async function _carregarProgressivo(rpgId) {
  // Fase 3: Skills + Lore + Criativos
  try {
    const [skills,lore,criativos]=await Promise.all([
-     sb(`skills?rpg_id=eq.${e}&select=*&order=id`).catch(()=>[]),
-     sb(`lore?rpg_id=eq.${e}&select=*&order=id`).catch(()=>[]),
-     sb(`criativos?rpg_id=eq.${e}&status=in.(pendente,aprovado_dc,dc_rolado_sucesso,dc_rolado_narrativo,dc_rolado_falha,aprovado_aguardando_rolagem)&select=*`).catch(()=>[]),
+     sb<SkillRow[]>(`skills?rpg_id=eq.${e}&select=*&order=id`).catch(()=>[]),
+     sb<LoreRow[]>(`lore?rpg_id=eq.${e}&select=*&order=id`).catch(()=>[]),
+     sb<CriativoRow[]>(`criativos?rpg_id=eq.${e}&status=in.(pendente,aprovado_dc,dc_rolado_sucesso,dc_rolado_narrativo,dc_rolado_falha,aprovado_aguardando_rolagem)&select=*`).catch(()=>[]),
    ]);
    (skills||[]).forEach(s=>{
      if(typeof s.animacao==='string'){try{s.animacao=JSON.parse(s.animacao);}catch(ex){s.animacao=null;}}
@@ -441,11 +441,11 @@ async function insertSection(rpgId,section,rows,levelConfig){
  await Promise.all(P);
 }
 
-async function importRPG(payload, mapasJSON=null){
+async function importRPG(payload: any, mapasJSON: any=null): Promise<string>{
  const cfg=(payload.config||[])[0];
  if(!cfg||!cfg.rpg_id)throw new Error('rpg_id não encontrado no config.');
  const rpgId=cfg.rpg_id;
- const existing=await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=rpg_id`);
+ const existing=await sb<Pick<RpgRegistryRow, 'rpg_id'>[]>(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=rpg_id`);
  if(existing&&existing.length)throw new Error(`RPG "${rpgId}" já existe.`);
  
  const theme=buildTheme(cfg);
@@ -500,7 +500,7 @@ async function importRPG(payload, mapasJSON=null){
 }
 
 
-async function updateRPG(rpgId,payload){
+async function updateRPG(rpgId: string, payload: any): Promise<string[]>{
  const sections=Object.keys(payload).filter(k=>payload[k]&&payload[k].length);
  let levelConfig=null;
  for(const sec of sections){
@@ -529,7 +529,7 @@ async function updateRPG(rpgId,payload){
 // ── RPC helper (Postgres functions via PostgREST /rpc/<name>) ─────────────
 // Reaproveita sb(): mantém retry 57014, refresh 401 e Bearer do usuário.
 // Uso: const row = await sbRpc('npc_apply_damage', { _rpg, _npc, _delta, _attacker, _nonce });
-async function sbRpc(name, args = {}) {
+async function sbRpc<T = any>(name: string, args: any = {}): Promise<T | null> {
   return sb(`rpc/${encodeURIComponent(name)}`, {
     method: 'POST',
     body: JSON.stringify(args || {}),
@@ -548,11 +548,11 @@ function _isUuidId(id) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''));
 }
 
-async function sessionStateGet(rpgId) {
+async function sessionStateGet(rpgId: string): Promise<(RpgSessionStateRow | AvtSessionStateRow)[] | null> {
   if (_isUuidId(rpgId)) {
-    return sb(`rpg_session_state?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`);
+    return sb<RpgSessionStateRow[]>(`rpg_session_state?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`);
   }
-  return sb(`avt_session_state?session_key=eq.${encodeURIComponent(rpgId)}&select=*`);
+  return sb<AvtSessionStateRow[]>(`avt_session_state?session_key=eq.${encodeURIComponent(rpgId)}&select=*`);
 }
 
 async function sessionStateUpdate(rpgId, snapshot) {

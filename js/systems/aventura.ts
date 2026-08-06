@@ -1350,7 +1350,7 @@ window._avtBulkAparState = window._avtBulkAparState || {};
 // DB HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function _avtSb(path, opts?) { return sb(path, opts); }
+async function _avtSb<T = any>(path: string, opts?: any): Promise<T | null> { return sb<T>(path, opts); }
 
 // ── LINHAGEM (personagem compartilhado entre aventuras) ───────────────────────
 // Um personagem importado de outra aventura carrega um `linhagem_id` em custom_attrs

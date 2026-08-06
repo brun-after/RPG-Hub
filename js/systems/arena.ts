@@ -89,7 +89,7 @@ function arTab(nome, btn) {
 // ═══════════════════════════════════════════════════════════════
 // SUPABASE ARENA HELPERS
 // ═══════════════════════════════════════════════════════════════
-async function arSb(path, opts={}) {
+async function arSb<T = any>(path: string, opts: any={}): Promise<T | null> {
   return sb(path, opts); // usa a função sb() já existente
 }
 async function sbAnon(path) {
