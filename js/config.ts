@@ -77,19 +77,19 @@ function _isMobile() {
     /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-function _charSizeKey(nome: any) {
+function _charSizeKey(nome: string) {
   const rpgId = window.RPG_DATA?.rpgId || 'default';
   return `rpghub_charsize_${rpgId}_${nome}`;
 }
 
-function _getMobileSize(nome: any) {
+function _getMobileSize(nome: string) {
   try {
     const v = localStorage.getItem(_charSizeKey(nome));
     return v !== null ? parseFloat(v) : null;
   } catch { return null; }
 }
 
-function _setMobileSize(nome: any, val: any) {
+function _setMobileSize(nome: string, val: number) {
   try { localStorage.setItem(_charSizeKey(nome), String(val)); } catch {}
 }
 

@@ -6,9 +6,17 @@
 
 
 // ── SUPABASE FETCH ────────────────────────────────────────────
-async function sb<T = any>(path: string, opts: any = {}, _retry = 0): Promise<T | null> {
+interface SbOpts {
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+  body?: string;
+  headers?: Record<string, string>;
+  prefer?: string;
+  [k: string]: any;   // repassado ao fetch (signal, cache, …)
+}
+
+async function sb<T = any>(path: string, opts: SbOpts = {}, _retry = 0): Promise<T | null> {
   const url = `${SUPABASE_URL}/rest/v1/${path}`;
-  const headers = {
+  const headers: Record<string, string> = {
     'apikey':       SUPABASE_KEY,
     'Content-Type': 'application/json',
     'Prefer':       opts.prefer || 'return=representation',
@@ -67,14 +75,14 @@ async function uploadToStorage(file: File, folder = 'misc'): Promise<string> {
 async function getAllRPGs(): Promise<RpgRegistryRow[] | null>{ return await sb<RpgRegistryRow[]>('rpg_registry?select=*,owner_id&order=name'); }
 
 
-async function getRPGData(rpgId: any){
+async function getRPGData(rpgId: string): Promise<RpgData>{
  // Retorno instantâneo — sem nenhuma query de rede.
  // Todo carregamento real é feito por _carregarProgressivo() depois que o app já está visível.
  return{rpgId,characters:[] as any[],skills:[] as any[],lore:[] as any[],mapas:[] as any[],attrDefs:[] as any[],linked:null as any,membrosLinked:{},_carregandoProgressivo:true};
 }
 
 // ── CARREGAMENTO PROGRESSIVO ─────────────────────────────────
-async function _carregarProgressivo(rpgId: any) {
+async function _carregarProgressivo(rpgId: string) {
  const e=encodeURIComponent(rpgId);
  function _setStatus(txt: any) {
    const el=document.getElementById('rpg-load-status');
@@ -200,7 +208,7 @@ async function _carregarProgressivo(rpgId: any) {
 }
 
 // ── ESCRITA ───────────────────────────────────────────────────
-async function saveCharacterStats(rpgId: any,charNameOrId: any,stats: any){
+async function saveCharacterStats(rpgId: string, charNameOrId: string, stats: { hp_atual?: number; custom_attrs?: CustomAttrs; [k: string]: any }){
  const body: any = {};
  if(stats.hp_atual!==undefined)body.hp_atual=stats.hp_atual;
  if(stats.custom_attrs!==undefined)body.custom_attrs=stats.custom_attrs; // jsonb
@@ -240,7 +248,7 @@ async function saveMemberLinked(rpgId: any,charName: any){
 }
 
 
-async function deleteRPGData(rpgId: any){
+async function deleteRPGData(rpgId: string){
  if(rpgId==='dual')throw new Error('DUAL não pode ser deletado.');
  await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'DELETE'});
 }
@@ -544,7 +552,7 @@ try { window.sbRpc = sbRpc; } catch(_) {}
 // string usam a tabela avt_session_state (chave text, sem FK) — ver
 // docs/migration_avt_session_state.sql. Sem a migração aplicada, as chamadas
 // falham e o chamador (RTNet) tolera o erro (resync segue só via peer snapshot).
-function _isUuidId(id: any) {
+function _isUuidId(id: string | null | undefined): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''));
 }
 
@@ -566,7 +574,7 @@ try { window.sessionStateGet    = sessionStateGet;    } catch(_) {}
 try { window.sessionStateUpdate = sessionStateUpdate; } catch(_) {}
 
 // ── PATCH v9: helper sessionData ─────────────────────────────────────────
-async function salvarSessionData(rpgId: any, userId: any, patch: any) {
+async function salvarSessionData(rpgId: string, userId: string, patch: Record<string, any>) {
   if (!rpgId || !userId || !patch) return null;
   try {
     const row = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${encodeURIComponent(userId)}&select=session_data`);
@@ -595,7 +603,7 @@ async function sfxBibliotecaCarregar() {
   } catch(e) { try { console.warn('[SFX]', e); } catch(_) {} return []; }
 }
 
-async function sfxBibliotecaSalvar(biblioteca: any) {
+async function sfxBibliotecaSalvar(biblioteca: any[]) {
   if (!SESSION?.access_token) throw new Error('Não autenticado');
   const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     method: 'PUT',

@@ -11,7 +11,7 @@ function temPermissao(chave: any) {
   return perm[chave] !== undefined ? perm[chave] : padrao;
 }
 
-function podeEditarPersonagem(nomePersonagem: any) {
+function podeEditarPersonagem(nomePersonagem: string) {
   if (RPG_DATA?.myRole === 'mestre') return true;
   return RPG_DATA?.linked === nomePersonagem;
 }

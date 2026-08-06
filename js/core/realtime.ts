@@ -20,7 +20,7 @@
 //  10. Logging [RT] para diagnóstico
 
 // ── REALTIME ──────────────────────────────────────────────────
-function iniciarRealtime(rpgId: any){
+function iniciarRealtime(rpgId: string){
  fecharRealtime();
 
  // Estado por sessão de iniciarRealtime (cada chamada começa do zero)
@@ -673,7 +673,7 @@ function fecharRealtime(){
 // ── Enviar evento broadcast para todos os jogadores ──────────────────────
 // API pública preservada. Usa o sender da sessão ativa (com outbox + throttle).
 // Se não houver sessão ativa, faz fallback ao envio direto antigo.
-function realtimeBroadcast(tipo: any, payload: any) {
+function realtimeBroadcast(tipo: string, payload?: any) {
   const rpgId =
        (typeof CURRENT_RPG !== 'undefined' && CURRENT_RPG)
     || (typeof AVT_STATE  !== 'undefined' && AVT_STATE  && AVT_STATE.rpgId)
