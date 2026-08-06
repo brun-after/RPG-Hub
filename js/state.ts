@@ -4,17 +4,17 @@
 
 
 
-let HUB_DATA={rpgs:[]}, RPG_DATA=null, CURRENT_RPG=null;
+let HUB_DATA: { rpgs: RpgRegistryRow[] }={rpgs:[]}, RPG_DATA: RpgData | null=null, CURRENT_RPG: any=null;
 let DADO_SEL=null, FICHAS_VIEW=null, CHAR_VIEW=null, ATTR_VIEW=null, CFG_CHAR=null;
 let HISTORICO=[], USER_ID=null, realtimeWS=null;
-let SESSION=null; // {access_token, user:{id,email}} — preenchido por iniciarApp() após login bem-sucedido
+let SESSION: SessaoAuth | null=null; // {access_token, user:{id,email}} — preenchido por iniciarApp() após login bem-sucedido
 
 // ── Ação Criativa ────────────────────────────────────────────────
 let CRIATIVO_TIPO = 'ataque'; // 'ataque', 'suporte', 'narrativo'
 let CRIATIVO_ALVO_TIPO = 'unico'; // 'unico', 'area', 'proprio'
 
 // ── 19A: CHAT ────────────────────────────────────────────────
-const CHAT: any = {
+const CHAT: ChatState = {
   msgs:     [],
   aberto:   false,
   naoLidos: 0,
@@ -25,7 +25,7 @@ const CHAT: any = {
 let INI_VALOR_ATUAL = null;
 let INI_NOME_ATUAL = null;
 let CRIATIVO_ID_ATUAL = null;
-let CRIATIVOS_CAMP = []; // ataques criativos da campanha (sincronizados via rpg_registry)
+let CRIATIVOS_CAMP: CriativoCampanha[] = []; // ataques criativos da campanha (sincronizados via rpg_registry)
 let CRIATIVO_MESTRE_BUILDER = []; // builder de dados do modal do mestre
 let BATALHA_ATUAL_ID = null; // id da batalha sendo visualizada no mapa atual
 
@@ -44,7 +44,7 @@ function _skFiltrarPorChar(skills, nome) {
   return skills.filter(s => s.personagem === nome);
 }
 let _skModalCharId = null; // UUID do personagem no modal de skill aberto
-let MAPA_STATE: any = {
+let MAPA_STATE: MapaState = {
   mapaAtualId:null, mapaGeralId:null, toolMode:null, medicaoAtiva:null, dragging:null, dragTimer:null,
   batalhas: {}, // { [batalha_id]: objetoBatalha }
   // compat: getter para a batalha do mapa atual
@@ -88,7 +88,7 @@ function mapaIsTatico(mapa) { return mapaGetTipo(mapa) === 'tatico'; }
 function mapaIsFase(mapa)   { return mapaGetTipo(mapa) === 'fase'; }
 
 // ── Estado global do mapa de fase ────────────────────────────────────────────
-let FASE_STATE: any = {
+let FASE_STATE: FaseState = {
   faseAtualId:  null,
   app:          null,   // instância PIXI.Application ativa
   worldContainer: null, // container raiz do mundo (câmera aplica transform aqui)

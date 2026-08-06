@@ -173,8 +173,8 @@ let _faseGenMapId     = null;   // map_id em edição (null = novo mapa via fase
 function abrirModalFaseConfig(mapId) {
   _faseGenMapId = mapId || null;
   const entry = mapId ? (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === mapId) : null;
-  const mapa  = entry?.mapa || {};
-  const rd    = mapa.render_data || {};
+  const mapa: any  = entry?.mapa || {};
+  const rd    = (mapa as any).render_data || {};
   _faseGenModalData = faseGenValidarJSON(rd);
 
   const el = document.getElementById('modal-fase-config-overlay');
@@ -186,7 +186,7 @@ function abrirModalFaseConfig(mapId) {
   if (apiKeyEl) apiKeyEl.value = faseGenGetApiKey();
 
   // Atualizar preview de imagem
-  _faseGenAtualizarPreview(mapa.img_url || '');
+  _faseGenAtualizarPreview((mapa as any).img_url || '');
   // Atualizar título
   const titulo = document.getElementById('modal-fase-titulo');
   if (titulo) titulo.textContent = mapId ? `Fase: ${mapa.nome}` : 'Novo Mapa de Fase';
@@ -524,7 +524,7 @@ async function faseExportarCombate(batalhaId) {
         (b.participantes || []).includes(e.nome)
       ),
       jogadores: (b.participantes || [])
-        .map(nome => (RPG_DATA?.characters || []).find(c => c.nome === nome))
+        .map((nome: any) => (RPG_DATA?.characters || []).find(c => c.nome === nome))
         .filter(Boolean)
         .map(c => ({ nome: c.nome, nivel: c.custom_attrs?.nivel, hp_max: c.hp_max }))
     },

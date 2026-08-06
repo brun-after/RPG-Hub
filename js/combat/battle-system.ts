@@ -365,12 +365,12 @@ const BATTLE_SYSTEM = {
       
       for (const sk of skReativas) {
         // SEGURANÇA: Garantir que o dono está correto
-        const candidata = { ...sk, _dono: sk.personagem || nome };
+        const candidata: any = { ...sk, _dono: sk.personagem || nome };
         
         // BUG-FIX: ignorar habilidades em cooldown
         if (this._estaEmCooldown(candidata)) {
           if (DEBUG_MODE) {
-            console.log(`[BattleSystem DEBUG]      └─ ⏱️ ${candidata.habilidade || candidata.nome} (cooldown ativo)`);
+            console.log(`[BattleSystem DEBUG]      └─ ⏱️ ${candidata.habilidade || (candidata as any).nome} (cooldown ativo)`);
           }
           continue;
         }

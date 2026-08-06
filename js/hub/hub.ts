@@ -1021,7 +1021,7 @@ async function _mesaDispararAnimacao(atacanteNome, alvoNome, animacao) {
     y: rectAtk.top + rectAtk.height / 2
   };
   
-  const alvo = {
+  const alvo: any = {
     x: rectAlvo.left + rectAlvo.width / 2,
     y: rectAlvo.top + rectAlvo.height / 2
   };
@@ -1203,8 +1203,8 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
       '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">🎯 Escolha o alvo</div>' +
       alvosDisponiveis.map(alvo => {
         const cor = alvo.cor || '#7ec8f0';
-        const distCelulas = alvo.distCelulas;
-        const foraAlcance = alvo.foraAlcance || (h.alcance_celulas != null && distCelulas != null && distCelulas > h.alcance_celulas);
+        const distCelulas = (alvo as any).distCelulas;
+        const foraAlcance = (alvo as any).foraAlcance || (h.alcance_celulas != null && distCelulas != null && distCelulas > h.alcance_celulas);
         
         // v2.6: Warnings de fogo amigo
         const ffWarning = alvo.fogoAmigoForte 
@@ -1708,7 +1708,7 @@ function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
   }
   
   // Ordenar: alvos fora do alcance por último
-  return lista.sort((a, b) => (a.foraAlcance ? 1 : 0) - (b.foraAlcance ? 1 : 0));
+  return lista.sort((a, b) => ((a as any).foraAlcance ? 1 : 0) - ((b as any).foraAlcance ? 1 : 0));
 }
 
 // ══════════════════════════════════════════════════════════════════════════

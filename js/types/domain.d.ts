@@ -14,7 +14,7 @@ declare global {
   // custom_attrs (jsonb) após a normalização de supabase.ts:127-136, que
   // espelha nivel/hp_max/xp/pontos_attr das colunas para dentro do objeto.
   interface CustomAttrs {
-    atributos?: Record<string, number | string>;
+    atributos?: Record<string, any>;   // valores mistos: números, strings de CSV e fórmulas
     tipo?: string;                 // 'jogador' | 'npc' | 'criatura'
     tipo_personagem?: string;
     nivel?: number;
@@ -94,23 +94,23 @@ declare global {
   interface MapaInfo {
     map_id: string;
     nome: string;
-    img_url: string;
-    escala_val: number;
-    escala_unit: string;
-    grid: number;
-    parent_map_id: string | null;
+    img_url?: string;
+    escala_val?: number;
+    escala_unit?: string;
+    grid?: number;
+    parent_map_id?: string | null;
     tipo: string;                  // 'geral'|'mundo'|'local'|'tatico'|'fase' (mapaGetTipo normaliza aliases)
     zona_x?: number | null;
     zona_y?: number | null;
     zona_w_percent?: number | null;
     zona_h_percent?: number | null;
-    largura_total: number | null;
-    altura_total: number | null;
+    largura_total?: number | null;
+    altura_total?: number | null;
     largura_real?: number | null;
     altura_real?: number | null;
     representar_pct?: number;
-    locais: any[];
-    render_data: RenderData | null;
+    locais?: any[];
+    render_data?: RenderData | null;
     transform3d?: any;
     tiles?: any;
     [k: string]: any;
@@ -148,9 +148,9 @@ declare global {
 
   interface Batalha {
     id: string;
-    mapa_id: string;
+    mapa_id?: string;   // ausente na variante de batalha criada em maps.ts:1129 (estrutura alternativa)
     mapa_nome?: string;
-    ativa: boolean;
+    ativa?: boolean;
     // BUG documentado: o hydrate escreve 'pausada', mas combat.ts também
     // lê/escreve o alias 'pausado' — os dois coexistem em runtime.
     pausada?: boolean;
@@ -207,6 +207,23 @@ declare global {
     [k: string]: any;
   }
 
+
+  // ── Criativo em memória (mapeado de CriativoRow em supabase.ts:174-179) ─
+  interface CriativoCampanha {
+    id: string;
+    atacante?: string;
+    alvo?: string;
+    descricao?: string;
+    turno?: number;
+    status?: string;
+    formula_aprovada?: string | null;
+    mod_atributo?: string | null;
+    mod_atributo_pct?: number | null;
+    custo_cobrado?: any;
+    animacao?: any;
+    [k: string]: any;
+  }
+
   // ── Objetos de estado (state.ts) ───────────────────────────────
   interface MapaState {
     mapaAtualId: string | null;
@@ -243,7 +260,7 @@ declare global {
     _presenceInterval: any;
     _saveTimer?: any;
     _loreId?: string | null;
-    _lastSeenAll?: number;
+    _lastSeenAll?: Record<string, number>;
     [k: string]: any;
   }
 

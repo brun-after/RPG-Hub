@@ -908,7 +908,7 @@ async function apmodSalvar(nome){
   Object.entries<any>(bonusNovo).forEach(([k,v])=>{if(v)atributos[k]=(parseFloat(atributos[k])||0)+v;});
   ca.atributos=atributos;
 
-  const novoCa={...ca,aparencia:{...ap, composed_img: null}};
+  const novoCa: any={...ca,aparencia:{...ap, composed_img: null}};
   // Fase 1.3: espelhar imagens da aparência para campos diretos de leitura
   if (ap.img_frente) novoCa.img_retrato = ap.img_frente;
   if (ap.img_iso)    novoCa.img_full    = ap.img_iso;

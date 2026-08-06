@@ -1733,7 +1733,7 @@ function arSincronizarChatBadge() {
   const hdrBadge = document.getElementById('chat-fab-badge');
   if (!badge) return;
   const n = CHAT?.naoLidos || 0;
-  badge.textContent = n > 9 ? '9+' : n;
+  (badge as any).textContent = n > 9 ? '9+' : n;
   badge.style.display = n > 0 ? 'flex' : 'none';
   // Tint do botão quando chat aberto
   const btn = document.getElementById('ar-chat-btn');
@@ -3621,11 +3621,11 @@ async function importarBatalhaIA() {
           })
         });
         if (row) {
-          RPG_DATA.characters.push({
+          RPG_DATA.characters.push({   // pseudo-personagem sintético da arena (parcial por design)
             id: row.id, nome: ini.nome, hp_atual: ini.hp || hpMax,
             active_map_id: subMapId, map_positions: novoCa.map_positions,
             custom_attrs: novoCa
-          });
+          } as any);
           ok++;
         }
       } catch(e) { erros.push(ini.nome + ' (erro ao criar NPC)'); }
@@ -3677,11 +3677,11 @@ async function importarBatalhaIA() {
           })
         });
         if (row) {
-          RPG_DATA.characters.push({
+          RPG_DATA.characters.push({   // pseudo-personagem sintético da arena (parcial por design)
             id: row.id, nome: npc.nome, hp_atual: npc.hp || hpMax,
             active_map_id: subMapId, map_positions: novoCa.map_positions,
             custom_attrs: novoCa
-          });
+          } as any);
           ok++;
         }
       } catch(e) { erros.push(npc.nome + ' (erro ao criar NPC especial)'); }

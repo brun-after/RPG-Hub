@@ -114,7 +114,7 @@ function skPopularAtributos() {
   // mesmo que fora da lista — evita derrubar o scaling de skills antigas antes da migração.
   let opts = defs.filter(a => a.tipo === 'number' && (permitidosNorm.has(_norm(a.nome)) || a.nome === atual));
   if (atual && !opts.some(a => a.nome === atual) && !defs.some(a => a.nome === atual)) {
-    opts = opts.concat([{ nome: atual, categoria: 'basico' }]);
+    opts = opts.concat([{ nome: atual, categoria: 'basico' } as any]);
   }
   sel.innerHTML = '<option value="">— Nenhum —</option>'
     + opts.map(a=>`<option value="${a.nome}"${a.nome===atual?' selected':''}>${catLabel[a.categoria]||'🔷'} ${a.nome}</option>`).join('');

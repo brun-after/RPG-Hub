@@ -4167,7 +4167,7 @@ function _atkMostrarCalcDano() {
             clearInterval(iv);
             const rollBase = Math.floor(Math.random() * 20) + 1;
             const roll = rollBase + penalidade;
-            chip.textContent = rollBase + (penalidade !== 0 ? (penalidade > 0 ? '+' + penalidade : penalidade) : '');
+            (chip as any).textContent = (rollBase as any) + (penalidade !== 0 ? (penalidade > 0 ? '+' + penalidade : penalidade) : '');
             chip.style.borderColor = roll >= DC ? 'rgba(94,224,154,0.6)' : 'rgba(232,80,60,0.5)';
             chip.style.background  = roll >= DC ? 'rgba(94,224,154,0.12)' : 'rgba(232,80,60,0.08)';
             chip.style.color       = roll >= DC ? '#5ee09a' : '#e8604c';
@@ -6800,7 +6800,7 @@ function _parseLinha(raw, cenaAtual) {
     const tokens = body.split('|').map(t => t.trim());
     const spawns = []; let temErro = false;
     for (const tok of tokens) {
-      const m = tok.match(/^([\w\s]+)\s+([A-Za-z]+\d+)/);
+      const m: any = tok.match(/^([\w\s]+)\s+([A-Za-z]+\d+)/);
       if (!m) continue;
       const nomeRaw = m[1].trim();
       const coord   = _parseCoordenada(m[2]);
@@ -6839,7 +6839,7 @@ function _parseLinha(raw, cenaAtual) {
     return { status:'ok', acao:{ tipo:'organograma', nome } };
   }
   if (/^N[ÓO]:/i.test(raw)) {
-    const m = raw.match(/^N[ÓO]:\s*(\w+)\s+"([^"]+)"/i);
+    const m: any = raw.match(/^N[ÓO]:\s*(\w+)\s+"([^"]+)"/i);
     if (!m) return { status:'aviso', msg:'Formato de NÓ inválido', acao:null };
     return { status:'ok', acao:{ tipo:'no_organograma', no_id: m[1], label: m[2] } };
   }
@@ -7036,7 +7036,7 @@ Object.defineProperty(window, 'BATALHA_ATUAL_ID', {
   set(v) {
     _batalhaAtualIdInterno = v;
     if (v && MAPA_STATE?.mapaAtualId) {
-      if (!MAPA_STATE.batalhas[v]) MAPA_STATE.batalhas[v] = {};
+      if (!MAPA_STATE.batalhas[v]) MAPA_STATE.batalhas[v] = {} as any;
       MAPA_STATE.batalhas[v].mapa_id = MAPA_STATE.mapaAtualId;
     }
   },
@@ -7842,7 +7842,7 @@ async function batalhaPassarVez() {
   if (novoRound) {
     bs.turnoRound++;
     const elTurnoPass = document.getElementById('mapa-batalha-turno');
-    if (elTurnoPass) elTurnoPass.textContent = bs.turnoRound;
+    if (elTurnoPass) (elTurnoPass as any).textContent = bs.turnoRound;
     mostrarToast(`🔄 Round ${bs.turnoRound}`, '');
     // Processar DOT/HOT/buffs por turno a cada novo round
     await _processarEfeitosCampanha();
@@ -8302,7 +8302,7 @@ function batalhaAvancarTurno() {
 function batalhaAtualizarTurno() {
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
   const el = document.getElementById('mapa-batalha-turno');
-  if (el && bs) el.textContent = bs.turnoRound || 1;
+  if (el && bs) (el as any).textContent = bs.turnoRound || 1;
 }
 
 // ── PAUSAR / RETOMAR ─────────────────────────────────────────
@@ -8640,7 +8640,7 @@ function _aplicarEstadoBatalhaUI() {
   if (btnPausar) btnPausar.textContent = bs.pausada ? '▶ Retomar' : '⏸ Pausar';
 
   const elTurno = document.getElementById('mapa-batalha-turno');
-  if (elTurno) elTurno.textContent = bs.turnoRound || 1;
+  if (elTurno) (elTurno as any).textContent = bs.turnoRound || 1;
 
   const faseIni = document.getElementById('batalha-fase-iniciativa');
   const faseCom = document.getElementById('batalha-fase-combate');
@@ -9814,7 +9814,7 @@ function mapaDesenharDistancia() {
   if (!med || !med.pA || !med.pB) return;
   const mapas = RPG_DATA.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
-  const m = entry ? entry.mapa : {};
+  const m: any = entry ? entry.mapa : {};
   const escala = m.escala_val || 1.5;
   const unit = m.escala_unit || 'm';
   const grid = m.grid || 20;

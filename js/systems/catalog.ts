@@ -4973,7 +4973,7 @@ function _atualizarZonaDireita() {
       const charAtual = (RPG_DATA?.characters || []).find(c => c.nome === atacanteNomeTurno);
       const hpAtual = charAtual?.hp_atual ?? '?';
       const hpMax   = charAtual?.hp_max ?? charAtual?.custom_attrs?.hp_max ?? '?';
-      const hpPct   = (charAtual && hpMax !== '?') ? Math.round((hpAtual / hpMax) * 100) : 50;
+      const hpPct   = (charAtual && hpMax !== '?') ? Math.round(((hpAtual as any) / (hpMax as any)) * 100) : 50;
       const hpCor   = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
       const rodada  = bs.turno_round || 1;
       const obs = document.createElement('div');

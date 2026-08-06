@@ -587,7 +587,7 @@ async function sfxBibliotecaCarregar() {
     });
     const data = await res.json();
     if (data.user_metadata) {
-      if (!SESSION.user) SESSION.user = {};
+      if (!SESSION.user) SESSION.user = {} as any;
       SESSION.user.user_metadata = data.user_metadata;
       try { localStorage.setItem('rpghub_session', JSON.stringify(SESSION)); } catch(_) {}
     }
@@ -608,7 +608,7 @@ async function sfxBibliotecaSalvar(biblioteca) {
   });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-  if (!SESSION.user) SESSION.user = {};
+  if (!SESSION.user) SESSION.user = {} as any;
   if (!SESSION.user.user_metadata) SESSION.user.user_metadata = {};
   SESSION.user.user_metadata.sfx_biblioteca = biblioteca;
   try { localStorage.setItem('rpghub_session', JSON.stringify(SESSION)); } catch(_) {}
