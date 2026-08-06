@@ -198,6 +198,8 @@ function _avtGraficosIsoAplicar() {
   const wrap = document.getElementById('avt-mapa-wrap');
   if (!wrap) return;
   _avtIsoParamsAtualizar(); // ângulo/escala efetivos (depende de "profundidade")
+  // Host VFX é criado com resolution/antialias do modo vigente — recria no toggle.
+  try { window._avtVfxHostDestroy?.(); } catch (_) {}
   if (AVT_GRAFICOS.isoAtivo) {
     wrap.style.transform = `rotateX(${_ISO_ANGLE_X}deg) rotateZ(45deg) scale(${_ISO_SCALE})`;
     wrap.style.transformOrigin = 'center center';

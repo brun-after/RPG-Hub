@@ -4296,10 +4296,14 @@ function _avtCleanupListeners() {
   window.removeEventListener('keydown', _avtCanvasKey);
   (AVT_STATE._pendingTimeouts || []).forEach(id => clearTimeout(id));
   AVT_STATE._pendingTimeouts = [];
+  if (AVT_STATE._fxAtivos) AVT_STATE._fxAtivos.length = 0;
   if (AVT_STATE._resizeObs) { AVT_STATE._resizeObs.disconnect(); AVT_STATE._resizeObs = null; }
   avtDpadStop();
   if (typeof avtPixiCleanupAll === 'function') avtPixiCleanupAll();
   _avtVfxHostDestroy();
+  // Tudo que o semáforo do fallback guardava acabou de ser destruído.
+  _avtPixiActiveApps = 0;
+  _avtPixiQueue.length = 0;
   // Texturas procedurais: PIXI.Texture.from(canvas) registra no TextureCache
   // global do PIXI, então sem destroy explícito elas (e o contexto GL antigo)
   // ficam retidas entre ciclos de entrar/sair. Aqui é o ponto seguro — depois
@@ -4314,7 +4318,14 @@ function _avtCleanupListeners() {
 }
 
 function _avtSetTimeout(fn, ms) {
-  const id = setTimeout(fn, ms);
+  // Auto-prune: sem remover o id ao disparar, _pendingTimeouts cresce sem limite
+  // (agora timers de dano/efeito de alta frequência também passam por aqui).
+  const id = setTimeout(() => {
+    const arr = AVT_STATE._pendingTimeouts;
+    const i = arr ? arr.indexOf(id) : -1;
+    if (i >= 0) arr.splice(i, 1);
+    fn();
+  }, ms);
   AVT_STATE._pendingTimeouts.push(id);
   return id;
 }
@@ -6684,6 +6695,10 @@ function _avtRenderFrame() {
     }
   }
 
+  // Efeitos de skill em canvas (projétil/onda/explosão/raio/aura/áreas) — desenhados
+  // pelo próprio loop para não competir com o clearRect (ver _avtCanvasEfeito).
+  try { _avtDesenharEfeitosCanvas(ctx, SZ, camera, now); } catch (e) { console.warn('[avt-fx] draw:', e); }
+
   // Atualizar posição do botão de rolar dados (desktop) para seguir o token ativo
   _avtAtualizarPosBotaoRolar();
   // Atualizar posição dos dados de inimigos acoplados ao token
@@ -7357,17 +7372,38 @@ function _avtEntViva(ref) {
 function _avtElPosicaoCanvas(ent) {
   if (!ent) return null;
   ent = _avtEntViva(ent);
-  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  const canvasEl = document.getElementById('avt-canvas');
-  const cr = canvasEl?.getBoundingClientRect() || { left:0, top:0 };
-  // Função dinâmica: lê renderX/Y no momento em que animarAtaque consultar,
-  // para que a animação acompanhe a posição atual do token (não a do início da batalha).
+  // Função dinâmica: lê renderX/Y (e o rect/zoom atuais) no momento em que
+  // animarAtaque consultar, para que a animação acompanhe a posição atual do
+  // token — o rect era capturado 1× e ficava stale após scroll/resize.
   return {
     getBoundingClientRect: () => {
       const live = _avtEntViva(ent);
-      const rx = (live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + cr.left;
-      const ry = (live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + cr.top;
-      return { left:rx, top:ry, width:SZ, height:SZ, x:rx, y:ry };
+      const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+      // Centro da célula em coordenadas locais do canvas (== locais do wrap).
+      const cx = (live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + SZ / 2;
+      const cy = (live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + SZ / 2;
+      const wrap = document.getElementById('avt-mapa-wrap');
+      // Modo isométrico: #avt-mapa-wrap tem rotateX/rotateZ/scale (origem no
+      // centro), mas animarAtaque desenha num canvas fixo em viewport — sem
+      // projetar, o placeholder saía deslocado do token. Mesma matemática de
+      // _avtIsoCanvasToScreen, ancorada no centro do client rect do wrap (uma
+      // transform afim com origem no centro mapeia centro → centro do bbox).
+      if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
+          && wrap && typeof _ISO_ANGLE_X !== 'undefined') {
+        const wr = wrap.getBoundingClientRect();
+        const k = _ISO_SCALE / Math.SQRT2;
+        const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
+        const cxd = cx - wrap.offsetWidth / 2, cyd = cy - wrap.offsetHeight / 2;
+        const sx = wr.left + wr.width / 2 + (cxd - cyd) * k;
+        const sy = wr.top + wr.height / 2 + (cxd + cyd) * k * cosX;
+        const l = sx - SZ / 2, t = sy - SZ / 2;
+        return { left: l, top: t, width: SZ, height: SZ, x: l, y: t };
+      }
+      const canvasEl = document.getElementById('avt-canvas');
+      const cr = canvasEl?.getBoundingClientRect() || { left: 0, top: 0 };
+      const rx = cr.left + cx - SZ / 2;
+      const ry = cr.top + cy - SZ / 2;
+      return { left: rx, top: ry, width: SZ, height: SZ, x: rx, y: ry };
     }
   };
 }
@@ -7563,7 +7599,16 @@ function _avtMostrarDotDrip(ent, variante) {
 // para críticos. Substitui a exibição anterior imediatamente; some após 2 s.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AVT_SLOT_MACHINE_MS = 12 * 42; // 504ms — duração da animação de sorteio dos dados
+const AVT_SLOT_MACHINE_MS = 12 * 42; // 504ms — duração default da animação de sorteio dos dados
+
+// Duração REAL do sorteio de dados: o mestre pode configurar duracao_anim_dados_ms
+// (100–2000ms) e _avtMostrarRollCenter gira em ticks de 42ms — dano/animações devem
+// esperar o mesmo tempo, senão disparam com o dado ainda girando. Espelha a fórmula
+// de ticks do HUD (Math.max(4, round(ms/42)) × 42 → 504 no default 500).
+function _avtSlotMachineMs() {
+  const ms = AVT_STATE?.rpg?.theme_json?.level_config?.duracao_anim_dados_ms ?? 500;
+  return Math.max(4, Math.round(ms / 42)) * 42;
+}
 
 (function _injetarCssEfeitoStatus() {
   if (document.getElementById('css-efeito-status')) return;
@@ -10116,16 +10161,20 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   const animCustomAB = !sk ? _abAnimCfg : null;
   const animPlaceholder = _avtAnimacaoPlaceholder(entJog || jogador, sk);
   const animFinal = animCustomAB?.tipo ? animCustomAB : (sk?.animacao?.tipo ? sk.animacao : animPlaceholder);
+  // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+  if (sk?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+    try { _psAvtLoadCfg(sk.animacao.pixi_studio_id); } catch (_) {}
+  }
   if (animFinal && typeof animarAtaque === 'function') {
     const atacEl = _avtElPosicaoCanvas(entJog || jogador);
     const alvoEl = _avtElPosicaoCanvas(ini);
     // Dispara após a animação de dados (slot machine) terminar — mesmo padrão dos ataques de NPC
     if (atacEl && alvoEl)
-      setTimeout(() => {
+      _avtSetTimeout(() => {
         animarAtaque({ atacEl, alvoEl, animacao: animFinal, dano: 0 });
         _avtSfxPosicional('hit_physical', ini, 0.5);
-      }, AVT_SLOT_MACHINE_MS);
-    try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: ini.nome, animacao: animFinal, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+      }, _avtSlotMachineMs());
+    try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: ini.nome, animacao: animFinal, delay: _avtSlotMachineMs() }); } catch(_) {}
   }
 
   // Aplicar cooldown OOC (multiplica turnos pelo tempo por turno).
@@ -10138,7 +10187,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   if (!sk && _abBuffs?.cdOocMs) _oocMs = Math.min(_oocMs, _abBuffs.cdOocMs);
   _avtSetOocCooldown(_oocKey, Date.now() + _oocMs);
 
-  setTimeout(() => {
+  _avtSetTimeout(() => {
     if (critMult === 0) {
       // Skill usada (mesmo errando) consome carga de orbe
       try { _avtOrbConsumirCargas(AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador); } catch(_) {}
@@ -10167,14 +10216,11 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       const _critMsgArea = critMult === 2 ? '🎯✦✦ CRÍTICO TOTAL! ' : critMult === 1.5 ? '🎯 CRÍTICO! ' : critMult === 1.2 ? '⭐ CRÍTICO MENOR! ' : '';
       mostrarToast(`${_critMsgArea}${skillNome} [${_areaLabel}] atinge ${_alvosAreaOoc.length} alvo(s)!`, 'ok');
 
-      // Animação de skill em área
-      if (sk && typeof _avtPlaySkillAnim === 'function') {
+      // Animação de skill em área (local + peers, geometria no payload)
+      if (sk) {
         const entJogVivoArea = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
-        _avtPlaySkillAnim(sk, entJogVivoArea, entJogVivoArea, true);
-        // Para skills de área, enviar a geometria (centro/linha) e ancorar no conjurador —
-        // o rótulo "_areaLabel" não resolve uma entidade nos peers, e _areaCentro/_areaLinha
-        // são estado local, então a animação não aparecia para quem não conjurou.
-        try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivoArea.nome, alvoNome: entJogVivoArea.nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null }); } catch(_) {}
+        _avtSkillAnimEmit({ sk, casterEnt: entJogVivoArea, isArea: true,
+          areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null });
       }
 
       // Invocações (efeito 'invocar_catalogo'): vinculadas ao conjurador, uma vez por uso
@@ -10186,7 +10232,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       });
 
       _alvosAreaOoc.forEach((alvA, idxA) => {
-        setTimeout(() => {
+        _avtSetTimeout(() => {
           const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id) || alvA;
           if (entAlvA.hp <= 0) return;
 
@@ -10295,7 +10341,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
             Math.max(Math.abs(Math.round(e.x) - _jxM), Math.abs(Math.round(e.y) - _jyM)) <= _baseAlcOoc)
           .slice(0, _abBuffs.multiExtra);
         _extrasOoc.forEach((alvX, idxX) => {
-          setTimeout(() => {
+          _avtSetTimeout(() => {
             const entAlvX = AVT_STATE.entidades.find(e => e.id === alvX.id) || alvX;
             if (entAlvX.hp <= 0) return;
             // Anima o ataque básico em cada alvo extra (modificador multi-alvo).
@@ -10306,9 +10352,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
               try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: entAlvX.nome, animacao: animFinal }); } catch(_) {}
             }
             // Animação rica (pixi/partículas) configurada replica em cada alvo extra (paridade com combate e com o alvo primário OOC).
-            if (skEfetiva?.animacao?.tipo && skEfetiva.animacao.tipo !== 'nenhuma' && typeof _avtPlaySkillAnim === 'function') {
-              try { _avtPlaySkillAnim(skEfetiva, entAlvX, entJog || jogador); } catch(_) {}
-              try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entJog||jogador).nome, alvoNome: entAlvX.nome }); } catch(_) {}
+            if (skEfetiva?.animacao?.tipo && skEfetiva.animacao.tipo !== 'nenhuma') {
+              _avtSkillAnimEmit({ sk: skEfetiva, casterEnt: entJog || jogador, alvoEnt: entAlvX });
             }
             entAlvX.hp = Math.max(0, entAlvX.hp - real);
             _avtAplicarDanoPersistir(entAlvX, entAlvX.hp);
@@ -10381,11 +10426,10 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
 
       // Animação de skill / ataque básico configurada (pixi, partículas, etc.)
       const _temAnimRicaOOC = !!(skEfetiva?.animacao && skEfetiva.animacao.tipo && skEfetiva.animacao.tipo !== 'nenhuma');
-      if ((sk || _temAnimRicaOOC) && typeof _avtPlaySkillAnim === 'function') {
+      if (sk || _temAnimRicaOOC) {
         const entIniVivo = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
         const entJogVivo = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
-        _avtPlaySkillAnim(skEfetiva, entIniVivo, entJogVivo);
-        try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome: entJogVivo.nome, alvoNome: entIniVivo.nome }); } catch(_) {}
+        _avtSkillAnimEmit({ sk: skEfetiva, casterEnt: entJogVivo, alvoEnt: entIniVivo });
       }
 
       if (ini.hp <= 0) {
@@ -11277,13 +11321,10 @@ function _avtTickEfeitosOOC(now) {
                 if (_animOoc && typeof animarAtaque === 'function') {
                   const _atacElOoc = _avtElPosicaoCanvas(ent);
                   const _alvoElOoc = _avtElPosicaoCanvas(_alvoDom);
-                  if (_atacElOoc && _alvoElOoc) setTimeout(() => animarAtaque({ atacEl: _atacElOoc, alvoEl: _alvoElOoc, animacao: _animOoc, dano: 0 }), AVT_SLOT_MACHINE_MS);
-                  try { _avtBroadcast('avt_attack_anim', { atacanteNome: ent.nome, alvoNome: _alvoDom.nome, animacao: _animOoc, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+                  if (_atacElOoc && _alvoElOoc) _avtSetTimeout(() => animarAtaque({ atacEl: _atacElOoc, alvoEl: _alvoElOoc, animacao: _animOoc, dano: 0 }), _avtSlotMachineMs());
+                  try { _avtBroadcast('avt_attack_anim', { atacanteNome: ent.nome, alvoNome: _alvoDom.nome, animacao: _animOoc, delay: _avtSlotMachineMs() }); } catch(_) {}
                 }
-                if (_skUsadaOoc && typeof _avtPlaySkillAnim === 'function') {
-                  _avtPlaySkillAnim(_skUsadaOoc, _alvoDom, ent);
-                  try { _avtBroadcast('avt_skill_anim', { skillId: _skUsadaOoc.id || null, animacao: _skUsadaOoc.animacao || null, atacanteNome: ent.nome, alvoNome: _alvoDom.nome }); } catch(_) {}
-                }
+                if (_skUsadaOoc) _avtSkillAnimEmit({ sk: _skUsadaOoc, casterEnt: ent, alvoEnt: _alvoDom });
               } catch(_) {}
 
               if (_isFumbleOoc) {
@@ -11466,18 +11507,22 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   _avtMostrarD20AbaixoDaHead(ini, hitRoll, critMult);
 
   const animPlaceholder = _avtAnimacaoPlaceholder(ini, sk);
+  // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+  if (sk?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+    try { _psAvtLoadCfg(sk.animacao.pixi_studio_id); } catch (_) {}
+  }
   if (animPlaceholder && typeof animarAtaque === 'function') {
     const atacEl = _avtElPosicaoCanvas(ini);
     const alvoEl = _avtElPosicaoCanvas(alvo);
     if (atacEl && alvoEl)
-      setTimeout(() => {
+      _avtSetTimeout(() => {
         animarAtaque({ atacEl, alvoEl, animacao: animPlaceholder, dano: 0 });
         _avtSfxPosicional('hit_physical', alvo, 0.5);
-      }, AVT_SLOT_MACHINE_MS);
-      try { _avtBroadcast('avt_attack_anim', { atacanteNome: ini.nome, alvoNome: alvo.nome, animacao: animPlaceholder, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+      }, _avtSlotMachineMs());
+      try { _avtBroadcast('avt_attack_anim', { atacanteNome: ini.nome, alvoNome: alvo.nome, animacao: animPlaceholder, delay: _avtSlotMachineMs() }); } catch(_) {}
   }
 
-  setTimeout(() => {
+  _avtSetTimeout(() => {
     if (isFumble) {
       mostrarToast(`💨 ${ini.nome} errou o ataque! (d20: ${hitRoll})`, '');
       timer.inactionTimer = 0;
@@ -11501,8 +11546,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     if (alvo.tipo !== 'jogador') {
       try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
     }
-    if (sk && typeof _avtPlaySkillAnim === 'function') _avtPlaySkillAnim(sk, alvo, ini);
-    try { _avtBroadcast('avt_skill_anim', { skillId: sk?.id || null, animacao: sk?.animacao || null, atacanteNome: ini.nome, alvoNome: alvo.nome }); } catch(_) {}
+    _avtSkillAnimEmit({ sk, casterEnt: ini, alvoEnt: alvo });
     if (sk?.efeitos_bonus?.length && alvo.hp > 0) {
       const _entAlvoNpc = AVT_STATE.entidades.find(e => e.id === alvo.id) || alvo;
       const _coolEfNpc = _avtGetEfeitoCooldownMs();
@@ -11529,7 +11573,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
       _avtCancelarPerseguicao(enemyId);
       if (alvo.tipo === 'jogador') _avtProcessarMorteJogador(alvo, null);
     }
-  }, AVT_SLOT_MACHINE_MS + 200);
+  }, _avtSlotMachineMs() + 200);
 }
 
 function _avtMostrarBannerAceitarCombate() {
@@ -13528,10 +13572,7 @@ async function _avtSkillOverlaySel(skId) {
     _avtRenderHpBar();
     _avtBroadcastBatalha(b);
     mostrarToast(`✨ ${sk.habilidade} aplicado em si mesmo`, 'ok', 2500);
-    if (typeof _avtPlaySkillAnim === 'function') {
-      _avtPlaySkillAnim(sk, casterEnt, casterEnt, false);
-      try { _avtBroadcast('avt_skill_anim', { skillId: sk.id||null, animacao: sk.animacao||null, atacanteNome: casterEnt.nome, alvoNome: casterEnt.nome }); } catch(_) {}
-    }
+    _avtSkillAnimEmit({ sk, casterEnt });
     _avtJanelaMovimentoPosDado(b, ativo, () => _avtTurnoAvancar(b));
     return;
   }
@@ -13963,13 +14004,17 @@ async function _avtExecutarAtaque() {
   const _temAnimRicaAtk = !!(skEfetiva?.animacao && skEfetiva.animacao.tipo && skEfetiva.animacao.tipo !== 'nenhuma');
   const animPlaceholderAtk = _temAnimRicaAtk ? null : _avtAnimacaoPlaceholder(entAtacanteAnim || ativo, sk);
   const _animDuracao = skEfetiva?.animacao?.duracao ?? animPlaceholderAtk?.duracao ?? 600;
+  // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+  if (skEfetiva?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+    try { _psAvtLoadCfg(skEfetiva.animacao.pixi_studio_id); } catch (_) {}
+  }
   if (animPlaceholderAtk && typeof animarAtaque === 'function') {
     const entAlvoAnim = AVT_STATE.entidades.find(e => e.id === alvo.id);
     const atacEl = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
     const alvoEl = _avtElPosicaoCanvas(entAlvoAnim || alvo);
     if (atacEl && alvoEl)
-      setTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholderAtk, dano: 0 }), AVT_SLOT_MACHINE_MS);
-    try { _avtBroadcast('avt_attack_anim', { atacanteNome: (entAtacanteAnim||ativo).nome, alvoNome: alvo.nome, animacao: animPlaceholderAtk, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+      _avtSetTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholderAtk, dano: 0 }), _avtSlotMachineMs());
+    try { _avtBroadcast('avt_attack_anim', { atacanteNome: (entAtacanteAnim||ativo).nome, alvoNome: alvo.nome, animacao: animPlaceholderAtk, delay: _avtSlotMachineMs() }); } catch(_) {}
   }
 
   // Broadcast para todos verem a animação de dados
@@ -14070,18 +14115,16 @@ async function _avtExecutarAtaque() {
         _avtLog(`${isCrit ? '🎯 CRÍTICO! ' : ''}${ativo.nome} usa ${skillNome} [${areaLabel}] → ${_alvosAreaFinal.length} alvo(s)`, b.id);
         if (!_mobileAvtDisp) mostrarToast(`${isCrit ? '🎯 CRÍTICO! ' : ''}${skillNome} atinge ${_alvosAreaFinal.length} alvo(s)!`, 'ok');
 
-        // Animar área e limpar estado
-        const _delayMorteArea = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entCaster), _avtEntViva(entCaster), _isAreaAttack) : 0;
-        // Skills de área: enviar geometria (centro/linha) e ancorar no conjurador, pois o
-        // rótulo de área não resolve entidade nos peers e _areaCentro/_areaLinha são locais.
-        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAtacanteAnim||ativo).nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null }); } catch(_) {} }
+        // Animar área (local + peers) e limpar estado
+        const _delayMorteArea = _avtSkillAnimEmit({ sk, casterEnt: entCaster, isArea: true,
+          areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null });
 
         // Números de dano nos peers: 1 broadcast em lote (o stagger de 80ms é
         // reproduzido no receptor) em vez de 1 evento por alvo dentro do loop.
         try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _alvosAreaFinal.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
         _alvosAreaFinal.forEach((alvA, idxA) => {
           const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id);
-          setTimeout(() => {
+          _avtSetTimeout(() => {
             if (alvA.hp <= 0) return;
             const realAlvo = _avtAplicarImunidadeDano(entAlvA || alvA, real);
             if (alvA.tipo === 'jogador') {
@@ -14146,7 +14189,7 @@ async function _avtExecutarAtaque() {
 
             if (alvA.hp <= 0) {
               _avtLog(`💀 ${alvA.nome} derrotado!`, b.id);
-              setTimeout(() => {
+              _avtSetTimeout(() => {
                 if (alvA.tipo === 'inimigo') { _avtNpcMorreu(entAlvA || alvA, b); _avtCheckVitoria(b); }
               }, _delayMorteArea + 100);
             }
@@ -14156,7 +14199,7 @@ async function _avtExecutarAtaque() {
 
         AVT_STATE._areaCentro = null;
         AVT_STATE._areaLinha  = null;
-        setTimeout(() => { _avtBroadcastBatalha(b); }, (_alvosAreaFinal.length * 80) + 100);
+        _avtSetTimeout(() => { _avtBroadcastBatalha(b); }, (_alvosAreaFinal.length * 80) + 100);
       } else {
         // ── Alvo único ────────────────────────────────────────────────────
         real = _avtAplicarImunidadeDano(entAlvo || alvo, real);
@@ -14240,13 +14283,12 @@ async function _avtExecutarAtaque() {
           }
           _extrasMulti.forEach((alvX, idxX) => {
             const entAlvX = AVT_STATE.entidades.find(e => e.id === alvX.id);
-            setTimeout(() => {
+            _avtSetTimeout(() => {
               if (alvX.hp <= 0) return;
               // Anima o ataque em cada alvo extra (modificador multi-alvo): animação rica
               // (skill/ataque básico configurado) ou placeholder, conforme o ataque primário.
               if (_temAnimRicaAtk) {
-                try { _avtPlaySkillAnim(skEfetiva, _avtEntViva(entAlvX || alvX), _avtEntViva(entAtacanteAnim || ativo)); } catch(_) {}
-                try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome: alvX.nome }); } catch(_) {}
+                _avtSkillAnimEmit({ sk: skEfetiva, casterEnt: entAtacanteAnim || ativo, alvoEnt: entAlvX || alvX });
               } else if (animPlaceholderAtk && typeof animarAtaque === 'function') {
                 const _elXm = _avtElPosicaoCanvas(entAlvX || alvX);
                 const _elAm = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
@@ -14264,7 +14306,7 @@ async function _avtExecutarAtaque() {
               _avtLog(`  ↳ ${alvX.nome}: ${real} ${tipoDano} (multi-alvo)`, b.id);
               if (alvX.hp <= 0) {
                 _avtLog(`💀 ${alvX.nome} derrotado!`, b.id);
-                setTimeout(() => { if (alvX.tipo === 'inimigo') { _avtNpcMorreu(entAlvX || alvX, b); _avtCheckVitoria(b); } }, 100);
+                _avtSetTimeout(() => { if (alvX.tipo === 'inimigo') { _avtNpcMorreu(entAlvX || alvX, b); _avtCheckVitoria(b); } }, 100);
               }
               _avtRenderHpBar();
             }, (idxX + 1) * 80);
@@ -14273,11 +14315,12 @@ async function _avtExecutarAtaque() {
         }
         _avtRenderHpBar();
         const _playAnimAtk = sk || _temAnimRicaAtk;
-        const _delayMorte = _playAnimAtk ? _avtPlaySkillAnim(skEfetiva, _avtEntViva(entAlvo || alvo), _avtEntViva(entAtacanteAnim || ativo)) : 0;
-        if (_playAnimAtk) { try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAlvo||alvo).nome }); } catch(_) {} }
+        const _delayMorte = _playAnimAtk
+          ? _avtSkillAnimEmit({ sk: skEfetiva, casterEnt: entAtacanteAnim || ativo, alvoEnt: entAlvo || alvo })
+          : 0;
         if (alvo.hp <= 0) {
           _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
-          setTimeout(() => {
+          _avtSetTimeout(() => {
             if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
             else { _avtCheckDerrota(b); _avtProcessarMorteJogador(entAlvo || alvo, b); }
             if (AVT_STATE.alvoSelecionado === alvo.id) AVT_STATE.alvoSelecionado = null;
@@ -14297,7 +14340,7 @@ async function _avtExecutarAtaque() {
         _avtTurnoAvancar(b);
       }
     });
-  }, AVT_SLOT_MACHINE_MS + _animDuracao);
+  }, _avtSlotMachineMs() + _animDuracao);
 }
 
 // Receive skill-selected broadcast from another player
@@ -14886,10 +14929,7 @@ async function _avtExecutarSkillEmAliado(skId, alvoId) {
   if (!bat._cooldowns) bat._cooldowns = {};
   if (sk.cooldown_turnos > 0) bat._cooldowns[cdKey] = sk.cooldown_turnos;
 
-  if (typeof _avtPlaySkillAnim === 'function') {
-    _avtPlaySkillAnim(sk, entAlvoObj||entAlvo, caster, false);
-    try { _avtBroadcast('avt_skill_anim', { skillId: sk.id||null, animacao: sk.animacao||null, atacanteNome: ativo.nome, alvoNome: entAlvo.nome }); } catch(_) {}
-  }
+  _avtSkillAnimEmit({ sk, casterEnt: caster, alvoEnt: entAlvoObj || entAlvo });
 
   _avtRenderHpBar();
   _avtBroadcastBatalha(bat);
@@ -15167,13 +15207,17 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
     // Animação placeholder do NPC em direção ao alvo
     const animPlaceholderNpc = _avtAnimacaoPlaceholder(entNpc || npc, sk);
     const _animDuracaoNpc = sk?.animacao?.duracao ?? animPlaceholderNpc?.duracao ?? 600;
+    // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+    if (sk?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+      try { _psAvtLoadCfg(sk.animacao.pixi_studio_id); } catch (_) {}
+    }
     if (animPlaceholderNpc && typeof animarAtaque === 'function') {
       const entAlvoNpcAnim = AVT_STATE.entidades.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
       const atacElNpc = _avtElPosicaoCanvas(entNpc || npc);
       const alvoElNpc = _avtElPosicaoCanvas(entAlvoNpcAnim || skillAlvo);
       if (atacElNpc && alvoElNpc)
-        setTimeout(() => animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 }), AVT_SLOT_MACHINE_MS);
-      try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entNpc||npc).nome, alvoNome: skillAlvo.nome, animacao: animPlaceholderNpc, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+        _avtSetTimeout(() => animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 }), _avtSlotMachineMs());
+      try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entNpc||npc).nome, alvoNome: skillAlvo.nome, animacao: animPlaceholderNpc, delay: _avtSlotMachineMs() }); } catch(_) {}
     }
 
     _avtBroadcast('avt_dado_rolado', {
@@ -15204,11 +15248,16 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
           // Alvos do NPC = jogadores e aliados dos jogadores (avatares/dominados)
           const _ehAlvoNpc = e => (e.tipo === 'jogador' || e.tipo === 'avatar' || e.tipo === 'invocado') && e.hp > 0;
           const _cx = Math.round(skillAlvo.x), _cy = Math.round(skillAlvo.y);
-          let _alvosNpcArea;
+          // Geometria da área p/ animação local e broadcast — o caminho do NPC não
+          // passa pelo seletor de área do jogador, então _areaCentro/_areaLinha
+          // nunca são preenchidos aqui; sem isso a animação ancorava no NPC e os
+          // peers não recebiam geometria nenhuma.
+          let _alvosNpcArea, _areaGeoC = null, _areaGeoL = null;
           if (_npcTodos) {
             _alvosNpcArea = bat.iniciativa.filter(_ehAlvoNpc);
           } else if (_npcTipoArea === 'quadrado') {
             const _t = sk?.tamanho_area || 1;
+            _areaGeoC = { x: _cx, y: _cy, tamanho: _t };
             _alvosNpcArea = bat.iniciativa.filter(e => _ehAlvoNpc(e) &&
               Math.max(Math.abs(Math.round(e.x) - _cx), Math.abs(Math.round(e.y) - _cy)) <= _t);
           } else { // linha: do NPC em direção ao alvo primário
@@ -15217,6 +15266,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
             const _dyL = _cy === _ay ? 0 : (_cy > _ay ? 1 : -1);
             const _cells = [];
             for (let i = 1; i <= (skillAlcance || 1); i++) _cells.push({ x: _ax + _dxL * i, y: _ay + _dyL * i });
+            _areaGeoL = { cells: _cells };
             _alvosNpcArea = bat.iniciativa.filter(e => _ehAlvoNpc(e) &&
               _cells.some(c => c.x === Math.round(e.x) && c.y === Math.round(e.y)));
           }
@@ -15226,15 +15276,18 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
           const _areaLabelNpc = _npcTipoArea === 'linha' ? '▬ Linha' : '◼ Área';
           _avtLog(`👹 ${npc.nome} usa ${skillNome} [${_areaLabelNpc}] → ${_alvosNpcArea.length} alvo(s)`, bat.id);
           mostrarToast(`👹 ${npc.nome} usa ${skillNome} e atinge ${_alvosNpcArea.length} alvo(s)!`, 'aviso');
-          const _delayMorteNpcArea = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entNpc), _avtEntViva(entNpc), true) : 0;
-          if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:_areaLabelNpc }); } catch(_) {} }
+          // Animação local com a geometria da área + broadcast com geometria e
+          // âncora no conjurador (o rótulo "◼ Área"/"▬ Linha" não resolve
+          // entidade nos peers).
+          const _delayMorteNpcArea = _avtSkillAnimEmit({ sk, casterEnt: entNpc || npc,
+            isArea: true, areaCentro: _areaGeoC, areaLinha: _areaGeoL });
 
           // Números de dano nos peers: lote único (stagger reproduzido no receptor).
           try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _alvosNpcArea.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
           _alvosNpcArea.forEach((alvA, idxA) => {
             const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id) || alvA;
             const initA   = bat.iniciativa.find(e => e.id === alvA.id);
-            setTimeout(() => {
+            _avtSetTimeout(() => {
               if (alvA.hp <= 0) return;
               // Avatar: conta hit, não aplica dano em HP
               if (entAlvA?.tipo === 'avatar') {
@@ -15275,17 +15328,17 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
               if (alvA.hp <= 0) {
                 _avtLog(`💀 ${alvA.nome} caiu!`, bat.id);
                 if (alvA._dominado || entAlvA._dominado) {
-                  setTimeout(() => { _avtNpcMorreu(entAlvA, bat); _avtCheckVitoria(bat); }, _delayMorteNpcArea);
+                  _avtSetTimeout(() => { _avtNpcMorreu(entAlvA, bat); _avtCheckVitoria(bat); }, _delayMorteNpcArea);
                 } else if (alvA.tipo === 'jogador') {
-                  setTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(alvA, bat); }, _delayMorteNpcArea);
+                  _avtSetTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(alvA, bat); }, _delayMorteNpcArea);
                 }
               }
               _avtRenderHpBar();
             }, idxA * 80);
           });
 
-          setTimeout(() => { _avtBroadcastBatalha(bat); }, (_alvosNpcArea.length * 80) + 100);
-          setTimeout(() => _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat)), (_alvosNpcArea.length * 80) + 150);
+          _avtSetTimeout(() => { _avtBroadcastBatalha(bat); }, (_alvosNpcArea.length * 80) + 100);
+          _avtSetTimeout(() => _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat)), (_alvosNpcArea.length * 80) + 150);
           return;
         }
 
@@ -15348,23 +15401,22 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         const _critLabelNpc = critMult === 2 ? ' ✦✦ CRÍTICO TOTAL!' : critMult === 1.5 ? ' ✦ CRÍTICO!' : critMult === 1.2 ? ' ⭐ CRÍTICO MENOR!' : '';
         _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${_critLabelNpc}`, bat.id);
         mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${_critLabelNpc}`, 'aviso');
-        const _delayMorteNpc = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || skillAlvo), _avtEntViva(entNpc)) : 0;
-        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:(entAlvo||skillAlvo).nome }); } catch(_) {} }
+        const _delayMorteNpc = _avtSkillAnimEmit({ sk, casterEnt: entNpc || npc, alvoEnt: entAlvo || skillAlvo });
         _avtRenderHpBar();
         _avtBroadcastBatalha(bat);
         if (skillAlvo.hp <= 0) {
           _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id);
           if (skillAlvo._dominado || (entAlvo && entAlvo._dominado)) {
             // Dominado por Necromante morreu — tratar como NPC morto
-            setTimeout(() => { _avtNpcMorreu(entAlvo || skillAlvo, bat); _avtCheckVitoria(bat); }, _delayMorteNpc);
+            _avtSetTimeout(() => { _avtNpcMorreu(entAlvo || skillAlvo, bat); _avtCheckVitoria(bat); }, _delayMorteNpc);
           } else {
-            setTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }, _delayMorteNpc);
+            _avtSetTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }, _delayMorteNpc);
           }
         }
       }
       // Cooldown já foi gravado antes da animação (fix UI lag); nada a fazer aqui.
       _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat));
-    }, AVT_SLOT_MACHINE_MS + _animDuracaoNpc);
+    }, _avtSlotMachineMs() + _animDuracaoNpc);
   }, 800);
 }
 
@@ -17286,14 +17338,71 @@ function avtMestrePainel() {
   if (!open) _avtMestrePainelRender();
 }
 
+// Tempo (ms) que a parte "viajante" da animação leva até o impacto no alvo.
+// Fonte única para o delay do SFX de impacto e para o retorno de _avtPlaySkillAnim
+// (que os callers usam para atrasar animações de morte). Espelha o que cada
+// branch do dispatcher desenha de fato.
+function _avtSkillTravelMs(anim, isAreaMode) {
+  const tipo = anim?.tipo || 'nenhuma';
+  const pos  = anim?.posicao || anim?.gsap_config?.alvo_efeito || 'alvo';
+  const viaja = ['trajetoria', 'raio', 'retorno'].includes(pos);
+  if (tipo === 'gsap') return viaja ? 400 : 0; // espelha o projétil de 400ms do branch gsap
+  if (['projetil', 'onda', 'explosao', 'raio', 'aura'].includes(tipo)) {
+    return viaja ? (anim.duracao || 600) : 0;
+  }
+  if (tipo === 'pixi_particulas') {
+    let cfg = anim.particle_config;
+    // Preset com envelope de fases: expande igual a _avtPixiParticleAnim, senão
+    // o impacto de presets tipo meteor_fall seria tratado como imediato.
+    if (cfg?.preset && !(cfg.phases || cfg.cast || cfg.travel || cfg.impact)) {
+      const pd = (typeof AVT_FX_PRESETS !== 'undefined') ? AVT_FX_PRESETS[cfg.preset] : null;
+      if (pd && (pd.phases || pd.cast || pd.travel || pd.impact)) cfg = Object.assign({}, pd, cfg);
+    }
+    if (cfg && (cfg.phases || cfg.cast || cfg.travel || cfg.impact)) {
+      return ((cfg.cast && cfg.cast.ms) || 0) + ((cfg.travel && cfg.travel.ms) || 0);
+    }
+    return (viaja && !isAreaMode) ? (anim.duracao || 600) : 0;
+  }
+  return 0; // simples/áreas/spine: impacto imediato; pixi_studio via avtPixiGetAnimDelaySync
+}
+
+// Toca a animação da skill localmente E replica nos peers (avt_skill_anim) —
+// o par play+broadcast que antes era copiado em cada coreografia de ataque.
+// Payload idêntico ao dos call sites que substitui; campos de área só quando
+// isArea (aditivo, retrocompatível). Devolve o delay (ms) a aplicar antes de
+// animações de morte.
+function _avtSkillAnimEmit({ sk, casterEnt, alvoEnt = null, isArea = false,
+                             areaCentro = null, areaLinha = null, alvoNome = null } = {}) {
+  if (!sk || !sk.animacao) return 0;
+  const caster = _avtEntViva(casterEnt);
+  const alvo = _avtEntViva(alvoEnt || casterEnt);
+  let delay = 0;
+  const _sc = AVT_STATE._areaCentro, _sl = AVT_STATE._areaLinha;
+  if (isArea) { AVT_STATE._areaCentro = areaCentro; AVT_STATE._areaLinha = areaLinha; }
+  try { delay = _avtPlaySkillAnim(sk, alvo, caster, isArea) || 0; }
+  catch (e) { console.warn('[avt-fx] play:', e); }
+  finally { if (isArea) { AVT_STATE._areaCentro = _sc; AVT_STATE._areaLinha = _sl; } }
+  try {
+    const payload = { skillId: sk.id || null, animacao: sk.animacao || null,
+      atacanteNome: caster?.nome, alvoNome: alvoNome || alvo?.nome };
+    if (isArea) {
+      // Âncora no conjurador: rótulos de área não resolvem entidade nos peers.
+      payload.alvoNome = caster?.nome;
+      payload.areaCentro = areaCentro; payload.areaLinha = areaLinha;
+    }
+    _avtBroadcast('avt_skill_anim', payload);
+  } catch (e) { console.warn('[avt-fx] broadcast:', e); }
+  return delay;
+}
+
 function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
-  if (!sk) return;
+  if (!sk) return 0;
   alvoEnt = _avtEntViva(alvoEnt);
   atacanteEnt = atacanteEnt ? _avtEntViva(atacanteEnt) : null;
-  if (!alvoEnt) return;
+  if (!alvoEnt) return 0;
   const anim = sk.animacao || {};
   const tipo = anim.tipo || 'nenhuma';
-  if (tipo === 'nenhuma') return;
+  if (tipo === 'nenhuma') return 0;
 
   if (typeof AudioManager !== 'undefined') {
     const audioConf = anim.audio || {};
@@ -17313,12 +17422,16 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
     const impactSfx = audioConf.impact || autoSfx.impact;
     if (castSfx && volCast > 0.001) AudioManager.playSFX(castSfx, { volume: volCast, pitchVariance: 0.06 });
     if (impactSfx && volImp > 0.001) {
-      const travelTypes = ['projetil', 'onda', 'raio'];
-      const isTravel = travelTypes.includes(tipo) &&
-        ['trajetoria', 'raio', 'retorno'].includes(anim.posicao || '');
-      const impactDelay = isTravel ? (anim.duracao || 600) : 0;
+      // Delay alinhado ao tempo real de viagem do visual (inclui gsap com
+      // trajetória e envelopes pixi com fases cast→travel). Para pixi_studio,
+      // usa o delay síncrono do cache do Studio quando disponível.
+      let impactDelay = _avtSkillTravelMs(anim, isAreaMode);
+      if (anim.pixi_studio_id && typeof avtPixiGetAnimDelaySync === 'function') {
+        const dSync = avtPixiGetAnimDelaySync(anim.pixi_studio_id);
+        if (typeof dSync === 'number') impactDelay = dSync;
+      }
       if (impactDelay > 0) {
-        setTimeout(() => AudioManager.playSFX(impactSfx, { volume: volImp, pitchVariance: 0.06 }), impactDelay);
+        _avtSetTimeout(() => AudioManager.playSFX(impactSfx, { volume: volImp, pitchVariance: 0.06 }), impactDelay);
       } else {
         AudioManager.playSFX(impactSfx, { volume: volImp, pitchVariance: 0.06 });
       }
@@ -17326,13 +17439,14 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
   }
 
   const canvas = AVT_STATE.canvas;
-  if (!canvas) return;
-  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  if (!canvas) return 0;
+  // SZ recalculado a cada chamada: repetições/callbacks tardios usam o zoom atual.
   const toScreen = (ent) => {
     const live = _avtEntViva(ent);
+    const SZn = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
     return {
-      x: Math.round((live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + SZ / 2),
-      y: Math.round((live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + SZ / 2),
+      x: Math.round((live.renderX ?? live.x) * SZn - AVT_STATE.camera.x + SZn / 2),
+      y: Math.round((live.renderY ?? live.y) * SZn - AVT_STATE.camera.y + SZn / 2),
     };
   };
 
@@ -17357,7 +17471,7 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
       _avtCanvasFlash(alvoScr.x, alvoScr.y, cor, gc.preset || 'Impacto');
     } else if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno') {
       _avtCanvasEfeito('projetil', atacScr.x, atacScr.y, alvoScr.x, alvoScr.y, cor, 400, 20, true, null, posicao);
-      return 400;
+      return _avtSkillTravelMs(anim, isAreaMode);
     } else if (posicao === 'area') {
       _avtCanvasEfeito('explosao', midX, midY, midX, midY, cor, 600, 60, false, null);
     } else {
@@ -17395,39 +17509,36 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
     const trilha = !!anim.trilha;
     const icone = anim.icone || '';
 
-    const midX = Math.round((atacScr.x + alvoScr.x) / 2);
-    const midY = Math.round((atacScr.y + alvoScr.y) / 2);
-
     for (let r = 0; r < repeticoes; r++) {
-      setTimeout(() => {
+      _avtSetTimeout(() => {
+        // Posições recalculadas no disparo de cada repetição: entidades e câmera
+        // podem ter se movido desde o cast.
+        const aScr = toScreen(alvoEnt);
+        const cScr = atacanteEnt ? toScreen(atacanteEnt) : aScr;
+        const midX = Math.round((cScr.x + aScr.x) / 2);
+        const midY = Math.round((cScr.y + aScr.y) / 2);
         if (posicao === 'alvo') {
-          _avtCanvasEfeito(tipo, alvoScr.x, alvoScr.y, alvoScr.x, alvoScr.y, cor, dur, tamanho, trilha, icone);
+          _avtCanvasEfeito(tipo, aScr.x, aScr.y, aScr.x, aScr.y, cor, dur, tamanho, trilha, icone);
         } else if (posicao === 'atacante') {
-          _avtCanvasEfeito(tipo, atacScr.x, atacScr.y, atacScr.x, atacScr.y, cor, dur, tamanho, trilha, icone);
+          _avtCanvasEfeito(tipo, cScr.x, cScr.y, cScr.x, cScr.y, cor, dur, tamanho, trilha, icone);
         } else if (posicao === 'meio') {
           _avtCanvasEfeito(tipo, midX, midY, midX, midY, cor, dur, tamanho, trilha, icone);
         } else if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno') {
-          _avtCanvasEfeito(tipo, atacScr.x, atacScr.y, alvoScr.x, alvoScr.y, cor, dur, tamanho, trilha, icone, posicao);
+          _avtCanvasEfeito(tipo, cScr.x, cScr.y, aScr.x, aScr.y, cor, dur, tamanho, trilha, icone, posicao);
         } else if (posicao === 'area') {
           _avtCanvasEfeito('explosao', midX, midY, midX, midY, cor, dur, Math.max(tamanho, 60), trilha, icone);
         } else {
-          _avtCanvasEfeito(tipo, alvoScr.x, alvoScr.y, alvoScr.x, alvoScr.y, cor, dur, tamanho, trilha, icone);
+          _avtCanvasEfeito(tipo, aScr.x, aScr.y, aScr.x, aScr.y, cor, dur, tamanho, trilha, icone);
         }
       }, r * (dur + 100));
     }
-    const viajando = posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno';
-    return viajando ? dur : 0;
+    return _avtSkillTravelMs(anim, isAreaMode);
   }
 
   if (tipo === 'pixi_particulas' && anim.particle_config) {
     const posicao = isAreaMode ? 'area' : (anim.posicao || 'alvo');
     _avtPixiParticleAnim(anim.particle_config, atacScr, alvoScr, posicao);
-    const cfg = anim.particle_config;
-    if (cfg && (cfg.phases || cfg.cast || cfg.travel || cfg.impact)) {
-      return ((cfg.cast && cfg.cast.ms) || 0) + ((cfg.travel && cfg.travel.ms) || 0);
-    }
-    const viajando = posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno';
-    return viajando ? (anim.duracao || 600) : 0;
+    return _avtSkillTravelMs(anim, isAreaMode);
   }
 
   if (tipo === 'pixi_spine' && anim.spine_config) {
@@ -17440,28 +17551,59 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
     return 0;
   }
 
-  // Studio Pixi — play by animation ID
+  // Studio Pixi — play by animation ID. A execução é async (o cfg pode vir da
+  // rede), mas o delay de viagem sai síncrono do cache do Studio quando o cfg
+  // já foi carregado — senão 0 (comportamento antigo, degradação suave).
   if ((tipo === 'pixi_studio' || anim.pixi_studio_id) && anim.pixi_studio_id) {
     if (typeof avtPixiPlayAnimation === 'function') {
-      avtPixiPlayAnimation(anim.pixi_studio_id, atacanteEnt, alvoEnt, isAreaMode);
+      try {
+        const p = avtPixiPlayAnimation(anim.pixi_studio_id, atacanteEnt, alvoEnt, isAreaMode);
+        if (p && typeof p.catch === 'function') p.catch(e => console.warn('[avt-fx] pixi_studio:', e));
+      } catch (e) { console.warn('[avt-fx] pixi_studio:', e); }
     }
-    return 0;
+    const dSync = (typeof avtPixiGetAnimDelaySync === 'function')
+      ? avtPixiGetAnimDelaySync(anim.pixi_studio_id) : null;
+    return typeof dSync === 'number' ? dSync : 0;
   }
 
   return 0;
 }
 
+// Enfileira um efeito no registro world-space (AVT_STATE._fxAtivos). Antes: rAF
+// próprio desenhando no #avt-canvas — competia com o clearRect/fillRect do loop
+// principal (mesma corrida documentada em _avtCanvasFlash) e congelava as
+// coordenadas de tela no momento do cast. Agora o loop principal desenha os
+// efeitos a cada frame via _avtDesenharEfeitosCanvas, reconvertendo célula→tela
+// por frame (efeito acompanha pan/zoom da câmera).
 function _avtCanvasEfeito(tipo, x1, y1, x2, y2, cor, dur, tamanho, trilha, icone, trajetoMode) {
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const startMs = performance.now();
+  const cam = AVT_STATE.camera || { x: 0, y: 0, zoom: 1 };
+  const SZ = Math.round(AVT_SZ * (cam.zoom || 1)) || AVT_SZ;
+  (AVT_STATE._fxAtivos = AVT_STATE._fxAtivos || []).push({
+    tipo,
+    w1x: (x1 + cam.x) / SZ, w1y: (y1 + cam.y) / SZ,
+    w2x: (x2 + cam.x) / SZ, w2y: (y2 + cam.y) / SZ,
+    cor, dur: dur || 600, tamCell: (tamanho || 40) / SZ,
+    trilha: !!trilha, icone: icone || '', trajetoMode: trajetoMode || null,
+    startMs: performance.now(),
+  });
+}
 
-  function lerp(a, b, t) { return a + (b - a) * t; }
-
-  function tick(now) {
-    const elapsed = now - startMs;
-    const t = Math.min(1, elapsed / dur);
+// Desenha os efeitos ativos — chamado 1× por frame pelo loop principal de render,
+// depois de tiles/entidades/objetos. Remove efeitos concluídos e dispara o flash
+// de impacto dos projéteis nas coordenadas atuais.
+function _avtDesenharEfeitosCanvas(ctx, SZ, camera, now) {
+  const list = AVT_STATE._fxAtivos;
+  if (!list || !list.length) return;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const fx = list[i];
+    const t = Math.min(1, (now - fx.startMs) / fx.dur);
+    const tipo = fx.tipo, cor = fx.cor, trilha = fx.trilha, icone = fx.icone, trajetoMode = fx.trajetoMode;
+    const x1 = fx.w1x * SZ - camera.x, y1 = fx.w1y * SZ - camera.y;
+    const x2 = fx.w2x * SZ - camera.x, y2 = fx.w2y * SZ - camera.y;
+    const tamanho = fx.tamCell * SZ;
 
     ctx.save();
     ctx.globalAlpha = 1 - t;
@@ -17632,15 +17774,12 @@ function _avtCanvasEfeito(tipo, x1, y1, x2, y2, cor, dur, tamanho, trilha, icone
 
     ctx.restore();
 
-    if (t < 1) requestAnimationFrame(tick);
-    else if (tipo === 'projetil' && (trajetoMode === 'retorno')) {
-      _avtCanvasFlash(x1, y1, cor, 'Impacto');
-    } else if (tipo === 'projetil') {
-      _avtCanvasFlash(x2, y2, cor, 'Impacto');
+    if (t >= 1) {
+      list.splice(i, 1);
+      if (tipo === 'projetil' && trajetoMode === 'retorno') _avtCanvasFlash(x1, y1, cor, 'Impacto');
+      else if (tipo === 'projetil') _avtCanvasFlash(x2, y2, cor, 'Impacto');
     }
   }
-
-  requestAnimationFrame(tick);
 }
 
 function _avtCanvasFlash(screenX, screenY, cor, tipo) {
@@ -19637,11 +19776,16 @@ function _avtVfxHost() {
       width: canvas.width, height: canvas.height, powerPreference: 'high-performance',
     });
     h = _avtVfxHostState = { app, canvasRef: canvas, overlayCanvas, active: new Set() };
+    // Tamanho CSS pretendido do overlay. Comparar overlayCanvas.width (backing
+    // store = CSS × resolution) com c.width falha sempre que resolution ≠ 1 (iso
+    // usa ~0.55) e disparava renderer.resize() a cada tick.
+    h._syncW = canvas.width; h._syncH = canvas.height;
     // Sincroniza tamanho/posição com o canvas do mapa (barato; roda só com efeitos ativos)
     h._syncFn = () => {
       const c = h.canvasRef;
       if (!c || !c.isConnected) return;
-      if (h.overlayCanvas.width !== c.width || h.overlayCanvas.height !== c.height) {
+      if (h._syncW !== c.width || h._syncH !== c.height) {
+        h._syncW = c.width; h._syncH = c.height;
         try { h.app.renderer.resize(c.width, c.height); } catch(_) {}
       }
       const l = c.offsetLeft + 'px', t = c.offsetTop + 'px';
@@ -19715,19 +19859,12 @@ let _avtPixiActiveApps = 0;
 const _AVT_PIXI_MAX_CONCURRENT = 3;
 const _avtPixiQueue = [];
 
-function _avtPixiRunOrQueue(fn) {
-  if (_avtPixiActiveApps < _AVT_PIXI_MAX_CONCURRENT) {
-    fn();
-  } else {
-    _avtPixiQueue.push(fn);
-  }
-}
-
 function _avtPixiDrainQueue() {
   if (_avtPixiQueue.length && _avtPixiActiveApps < _AVT_PIXI_MAX_CONCURRENT) {
-    _avtPixiActiveApps++;
-    const fn = _avtPixiQueue.shift();
-    fn();
+    // Sem pré-incremento: a closure re-entra _avtPixiParticleAnim, que faz o
+    // próprio check/incremento do semáforo. O incremento extra daqui nunca era
+    // liberado — o contador inflava até nenhum efeito do fallback tocar mais.
+    _avtPixiQueue.shift()();
   }
 }
 
@@ -20238,7 +20375,7 @@ function _avtPlayPhases(env, atacScr, alvoScr, posicao) {
   if (env.cast) {
     const castCfg = Object.assign({}, env.cast, { intensidade, cor });
     if (!castCfg.layers && !castCfg.preset) castCfg.preset = 'arcane_lance';
-    setTimeout(() => {
+    _avtSetTimeout(() => {
       _avtPixiParticleAnim(castCfg, atacScr, atacScr, 'atacante');
     }, 0);
   }
@@ -20246,7 +20383,7 @@ function _avtPlayPhases(env, atacScr, alvoScr, posicao) {
 
   // TRAVEL: corpo viajando + trail
   if (env.travel) {
-    setTimeout(() => _avtPlayTravelBody(env.travel, atacScr, alvoScr, cor, intensidade), castMs);
+    _avtSetTimeout(() => _avtPlayTravelBody(env.travel, atacScr, alvoScr, cor, intensidade), castMs);
   }
   const travelMs = (env.travel && env.travel.ms) || 0;
 
@@ -20254,7 +20391,7 @@ function _avtPlayPhases(env, atacScr, alvoScr, posicao) {
   if (env.impact) {
     const impactCfg = Object.assign({}, env.impact, { intensidade, cor });
     if (!impactCfg.layers && !impactCfg.preset) impactCfg.preset = 'precise_strike';
-    setTimeout(() => {
+    _avtSetTimeout(() => {
       _avtPixiParticleAnim(impactCfg, atacScr, alvoScr, 'alvo');
     }, castMs + travelMs);
   }
@@ -30670,12 +30807,16 @@ function _avtNpcTurnoInvocado(bat) {
     // Animação de ataque (placeholder ou da skill)
     const _animInv = _avtAnimacaoPlaceholder(entInv, _skUsada);
     const _animDuracaoInv = _skUsada?.animacao?.duracao ?? _animInv?.duracao ?? 600;
+    // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+    if (_skUsada?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+      try { _psAvtLoadCfg(_skUsada.animacao.pixi_studio_id); } catch (_) {}
+    }
     if (_animInv && typeof animarAtaque === 'function') {
       const _atacElInv = _avtElPosicaoCanvas(entInv);
       const _alvoElInv = _avtElPosicaoCanvas(alvo);
       if (_atacElInv && _alvoElInv)
-        setTimeout(() => animarAtaque({ atacEl: _atacElInv, alvoEl: _alvoElInv, animacao: _animInv, dano: 0 }), AVT_SLOT_MACHINE_MS);
-      try { _avtBroadcast('avt_attack_anim', { atacanteNome: entInv.nome, alvoNome: alvo.nome, animacao: _animInv, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
+        _avtSetTimeout(() => animarAtaque({ atacEl: _atacElInv, alvoEl: _alvoElInv, animacao: _animInv, dano: 0 }), _avtSlotMachineMs());
+      try { _avtBroadcast('avt_attack_anim', { atacanteNome: entInv.nome, alvoNome: alvo.nome, animacao: _animInv, delay: _avtSlotMachineMs() }); } catch(_) {}
     }
 
     _avtSetTimeout(() => {
@@ -30706,10 +30847,7 @@ function _avtNpcTurnoInvocado(bat) {
       }
 
       // Animação de skill configurada
-      if (_skUsada && typeof _avtPlaySkillAnim === 'function') {
-        _avtPlaySkillAnim(_skUsada, _avtEntViva(alvo), _avtEntViva(entInv));
-        try { _avtBroadcast('avt_skill_anim', { skillId: _skUsada.id || null, animacao: _skUsada.animacao || null, atacanteNome: entInv.nome, alvoNome: alvo.nome }); } catch(_) {}
-      }
+      _avtSkillAnimEmit({ sk: _skUsada, casterEnt: entInv, alvoEnt: alvo });
 
       // Aplicar dano
       alvo.hp = Math.max(0, alvo.hp - _danoFinalInv);
@@ -30756,7 +30894,7 @@ function _avtNpcTurnoInvocado(bat) {
 
       _avtBroadcastBatalha(bat);
       _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
-    }, AVT_SLOT_MACHINE_MS + _animDuracaoInv);
+    }, _avtSlotMachineMs() + _animDuracaoInv);
     return;
   }
 
@@ -31283,7 +31421,6 @@ Object.defineProperty(globalThis, "_fxTintMatrix", { configurable: true, get: ()
 Object.defineProperty(globalThis, "_avtPixiActiveApps", { configurable: true, get: () => _avtPixiActiveApps, set: (__v) => { _avtPixiActiveApps = __v; } });
 Object.defineProperty(globalThis, "_AVT_PIXI_MAX_CONCURRENT", { configurable: true, get: () => _AVT_PIXI_MAX_CONCURRENT });
 Object.defineProperty(globalThis, "_avtPixiQueue", { configurable: true, get: () => _avtPixiQueue });
-Object.defineProperty(globalThis, "_avtPixiRunOrQueue", { configurable: true, get: () => _avtPixiRunOrQueue, set: (__v) => { _avtPixiRunOrQueue = __v; } });
 Object.defineProperty(globalThis, "_avtPixiDrainQueue", { configurable: true, get: () => _avtPixiDrainQueue, set: (__v) => { _avtPixiDrainQueue = __v; } });
 Object.defineProperty(globalThis, "_avtPixiParticleAnim", { configurable: true, get: () => _avtPixiParticleAnim, set: (__v) => { _avtPixiParticleAnim = __v; } });
 Object.defineProperty(globalThis, "_avtPlayPhases", { configurable: true, get: () => _avtPlayPhases, set: (__v) => { _avtPlayPhases = __v; } });

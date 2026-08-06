@@ -367,6 +367,22 @@ async function _psAvtLoadCfg(animId) {
   }
 }
 
+// ── Delay de viagem SÍNCRONO de uma animação do Studio ─────────────────────
+// avtPixiPlayAnimation é async (o cfg pode vir da rede), mas _avtPlaySkillAnim
+// e os callers que agendam animação de morte são síncronos. Quando o cfg já está
+// no cache de 30s, devolve o mesmo delay que _psAvtProjectile retornaria; sem
+// cache devolve null (desconhecido) e o caller usa 0 como hoje.
+function avtPixiGetAnimDelaySync(animId) {
+  const cache = (typeof PIXI_STUDIO_STATE !== 'undefined') ? PIXI_STUDIO_STATE._animCache : null;
+  const cfg = cache && animId ? cache[animId] : null;
+  if (!cfg) return null;
+  if ((cfg.behavior || 'one-shot') !== 'projectile') return 0;
+  const hasSpawnPath = (cfg.layers || []).some(l => l.tipo === 'emitter' && l.spawn_path?.length);
+  if (hasSpawnPath || (cfg.travel?.path && cfg.travel.path !== 'linear'))
+    return cfg.duracao_ms || cfg.duration || 1000; // espelha _psAvtProjectile (spawn_path/curvo)
+  return cfg.behavior_config?.projectile_speed_ms || 500; // espelha o caminho linear
+}
+
 // ── Build screen coordinates from entity (mirrors _avtPlaySkillAnim) ───────
 function _psAvtToScreen(ent) {
   const canvas = AVT_STATE.canvas;
@@ -1408,6 +1424,7 @@ Object.defineProperty(globalThis, "_psAvtLayerAnchor", { configurable: true, get
 Object.defineProperty(globalThis, "_avtScaleEmitterCfg", { configurable: true, get: () => _avtScaleEmitterCfg, set: (__v) => { _avtScaleEmitterCfg = __v; } });
 Object.defineProperty(globalThis, "_psAvtRenderWithSpawnPath", { configurable: true, get: () => _psAvtRenderWithSpawnPath, set: (__v) => { _psAvtRenderWithSpawnPath = __v; } });
 Object.defineProperty(globalThis, "avtPixiPlayAnimation", { configurable: true, get: () => avtPixiPlayAnimation, set: (__v) => { avtPixiPlayAnimation = __v; } });
+Object.defineProperty(globalThis, "avtPixiGetAnimDelaySync", { configurable: true, get: () => avtPixiGetAnimDelaySync, set: (__v) => { avtPixiGetAnimDelaySync = __v; } });
 Object.defineProperty(globalThis, "_psAvtPathPos", { configurable: true, get: () => _psAvtPathPos, set: (__v) => { _psAvtPathPos = __v; } });
 Object.defineProperty(globalThis, "_psAvtRenderTravel", { configurable: true, get: () => _psAvtRenderTravel, set: (__v) => { _psAvtRenderTravel = __v; } });
 Object.defineProperty(globalThis, "_psAvtProjectile", { configurable: true, get: () => _psAvtProjectile, set: (__v) => { _psAvtProjectile = __v; } });
