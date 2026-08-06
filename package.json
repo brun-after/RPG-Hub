@@ -14,7 +14,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "debito": "bash scripts/debito-tipos.sh"
   },
   "repository": {
     "type": "git",

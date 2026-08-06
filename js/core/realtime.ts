@@ -20,12 +20,12 @@
 //  10. Logging [RT] para diagnóstico
 
 // ── REALTIME ──────────────────────────────────────────────────
-function iniciarRealtime(rpgId){
+function iniciarRealtime(rpgId: string){
  fecharRealtime();
 
  // Estado por sessão de iniciarRealtime (cada chamada começa do zero)
  let _reconectando=false, _tentativas=0, _timerReconexao=null;
- let _heartbeatTimer=null;
+ let _heartbeatTimer: any=null;
  let _ref=0;
  const _novoRef=()=>String(++_ref);
 
@@ -61,7 +61,7 @@ function iniciarRealtime(rpgId){
    }
  }
 
- const _modeChangeHandler = (e) => {
+ const _modeChangeHandler = (e: any) => {
    try {
      const { mode } = e.detail || {};
      if (mode === 'p2p' || mode === 'mixed') _pausarVolateisP2P();
@@ -78,7 +78,7 @@ function iniciarRealtime(rpgId){
 
  // Outbox: mensagens já serializadas a enviar quando o socket abrir.
  // {kind:'frame', frame:string} ou {kind:'broadcast', tipo, payload}
- const _outbox = [];
+ const _outbox: any = [];
  const _OUTBOX_MAX = 100;
 
  // Throttle de token_move (por entidade) — coalesce envios contíguos.
@@ -94,16 +94,16 @@ function iniciarRealtime(rpgId){
  // Telemetria WS para o overlay AVT_PERF (contadores acumulados)
  if (!globalThis.__rtWsStats) globalThis.__rtWsStats = { in: 0, out: 0 };
 
- function _log(...args){ try{ console.log('[RT]', ...args); }catch(_){} }
- function _warn(...args){ try{ console.warn('[RT]', ...args); }catch(_){} }
+ function _log(...args: any[]){ try{ console.log('[RT]', ...args); }catch(_){} }
+ function _warn(...args: any[]){ try{ console.warn('[RT]', ...args); }catch(_){} }
 
- function _setStatus(state){
+ function _setStatus(state: any){
    // state: 'connected' | 'connecting' | 'disconnected'
    const dot=document.getElementById('realtime-dot');
    if(dot){
-     if(state==='connected'){ dot.style.display='inline-block'; dot.title='Tempo real conectado'; dot.classList.remove('reconectando'); }
-     else if(state==='connecting'){ dot.style.display='inline-block'; dot.title='Reconectando…'; dot.classList.add('reconectando'); }
-     else { dot.style.display='none'; dot.title='Desconectado'; dot.classList.remove('reconectando'); }
+     if(state==='connected'){ dot.style!.display='inline-block'; dot.title='Tempo real conectado'; dot.classList.remove('reconectando'); }
+     else if(state==='connecting'){ dot.style!.display='inline-block'; dot.title='Reconectando…'; dot.classList.add('reconectando'); }
+     else { dot.style!.display='none'; dot.title='Desconectado'; dot.classList.remove('reconectando'); }
    }
    const banner=document.getElementById('reconexao-banner');
    if(banner){
@@ -112,7 +112,7 @@ function iniciarRealtime(rpgId){
    }
  }
 
- function _enviarFrame(frameStr){
+ function _enviarFrame(frameStr: any){
    const ws = realtimeWS;
    if(ws && ws.readyState===WebSocket.OPEN){
      try { ws.send(frameStr); globalThis.__rtWsStats && globalThis.__rtWsStats.out++; return true; } catch(e){ _warn('send falhou:', e); }
@@ -142,7 +142,7 @@ function iniciarRealtime(rpgId){
    }
  }
 
- function _doJoin(topic){
+ function _doJoin(topic: any){
    _topicosAtivos.add(topic);
    const ref = _novoRef();
    _joinsPendentes.set(ref, {topic, attempt: 0});
@@ -154,7 +154,7 @@ function iniciarRealtime(rpgId){
    _enviarFrame(frame);
  }
 
- function _agendarRejoin(topic, attempt){
+ function _agendarRejoin(topic: any, attempt: any){
    const delay = Math.min(300 * Math.pow(2, attempt), 5000);
    setTimeout(()=>{
      // só re-join se ainda não confirmado e ainda queremos esse tópico
@@ -196,7 +196,7 @@ function iniciarRealtime(rpgId){
    _heartbeatPendente = 0;
  }
 
- function _sendBroadcastNow(tipo, payload){
+ function _sendBroadcastNow(tipo: any, payload: any){
    if(!realtimeWS || realtimeWS.readyState!==WebSocket.OPEN){
      if(_outbox.length>=_OUTBOX_MAX){
        const dropped = _outbox.shift();
@@ -217,7 +217,7 @@ function iniciarRealtime(rpgId){
  // Expor a função de envio para `realtimeBroadcast` (global) chamar via closure.
  // Guardamos no globalThis para que `realtimeBroadcast` (definido fora) use a
  // versão da sessão atual de iniciarRealtime. Em fecharRealtime, limpamos.
- globalThis.__rtSendBroadcast = function(tipo, payload){
+ globalThis.__rtSendBroadcast = function(tipo: any, payload: any){
    // Throttle dedicado para movimento contínuo de token
    if(tipo==='avt_token_move' && payload && payload.nome){
      const key = payload.nome;
@@ -300,22 +300,22 @@ function iniciarRealtime(rpgId){
    // Sem isso, o host persiste HP/posição/XP no DB, o postgres_change chega nos outros
    // clientes, mas eles só atualizam RPG_DATA — AVT_STATE.chars/entidades ficam stale
    // e cada jogador vê um jogo diferente.
-   function _syncAvtCharFromRecord(rec, ev, oldRec){
+   function _syncAvtCharFromRecord(rec: any, ev: any, oldRec: any){
      try{
        if(typeof AVT_STATE === 'undefined' || !AVT_STATE || !AVT_STATE.rpgId) return;
        if(rec && rec.rpg_id && rec.rpg_id !== AVT_STATE.rpgId) return;
        if(ev === 'DELETE'){
          const delId = (oldRec && oldRec.id) || (rec && rec.id);
-         if(Array.isArray(AVT_STATE.chars))     AVT_STATE.chars     = AVT_STATE.chars.filter(c=>c.id!==delId);
-         if(Array.isArray(AVT_STATE.entidades)) AVT_STATE.entidades = AVT_STATE.entidades.filter(e=>e.dbId!==delId);
+         if(Array.isArray(AVT_STATE.chars))     AVT_STATE.chars     = AVT_STATE.chars.filter((c: any)=>c.id!==delId);
+         if(Array.isArray(AVT_STATE.entidades)) AVT_STATE.entidades = AVT_STATE.entidades.filter((e: any)=>e.dbId!==delId);
          return;
        }
        if(!rec || !rec.id) return;
        if(!Array.isArray(AVT_STATE.chars)) AVT_STATE.chars = [];
-       const ci = AVT_STATE.chars.findIndex(c=>c.id===rec.id);
+       const ci = AVT_STATE.chars.findIndex((c: any)=>c.id===rec.id);
        if(ci>=0) AVT_STATE.chars[ci] = rec; else AVT_STATE.chars.push(rec);
        if(Array.isArray(AVT_STATE.entidades)){
-         const ent = AVT_STATE.entidades.find(e=>e.dbId===rec.id || e.nome===rec.nome);
+         const ent = AVT_STATE.entidades.find((e: any)=>e.dbId===rec.id || e.nome===rec.nome);
          if(ent){
            const ca = (rec.custom_attrs && typeof rec.custom_attrs==='object') ? rec.custom_attrs : {};
            if(typeof rec.hp_atual === 'number') ent.hp = rec.hp_atual;
@@ -383,53 +383,15 @@ function iniciarRealtime(rpgId){
          if(typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode === 'p2p') return;
          const _avtEv = msg.payload.event;
          const _avtPl = msg.payload.payload;
-         const _map = {
-           avt_host_heartbeat: 'avtReceberHostHeartbeat', // no-op stub
-           avt_token_move: 'avtReceberMovimento',
-           avt_combate_inicio: 'avtReceberCombateInicio',
-           avt_batalha_update: 'avtReceberBatalhaUpdate',
-           avt_combate_fim: 'avtReceberFimBatalha',
-           avt_combate_join: 'avtReceberJoinBatalha',
-           avt_npc_morreu: 'avtReceberNpcMorreu',
-           avt_npc_perseguindo: 'avtReceberNpcPerseguindo',
-           avt_npc_respawn: 'avtReceberNpcRespawn',
-           avt_convite_combate: 'avtReceberConviteCombate',
-           avt_xp_ganho: 'avtReceberXpGanho',
-           avt_level_up: 'avtReceberLevelUp',
-           avt_jogador_morreu: 'avtReceberJogadorMorreu',
-           avt_jogador_ressurgiu: 'avtReceberJogadorRessurgiu',
-           avt_jogador_visivel: 'avtReceberJogadorVisivel',
-           avt_skill_selecionada: 'avtReceberSkillSelecionada',
-           avt_dado_rolado: 'avtReceberDadoRolado',
-           avt_dano_visual: 'avtReceberDanoVisual',
-           avt_dano_visual_batch: 'avtReceberDanoVisualBatch',
-           avt_hp_update: 'avtReceberHpUpdate',
-           avt_rsv_update: 'avtReceberRsvUpdate',
-           avt_member_linked: 'avtReceberMemberLinked',
-           avt_primeiro_ataque: 'avtReceberPrimeiroAtaque',
-           avt_skill_anim: 'avtReceberSkillAnim',
-           avt_efeito_anim_start: 'avtReceberEfeitoAnimStart',
-           avt_efeito_anim_stop: 'avtReceberEfeitoAnimStop',
-           avt_attack_anim: 'avtReceberAttackAnim',
-           avt_level_config_update: 'avtReceberLevelConfigUpdate',
-           avt_colisao_config: 'avtReceberColisaoConfig',
-           avt_entidade_nova: 'avtReceberEntidadeNova',
-           avt_invocacao_destruida: 'avtReceberInvocacaoDestruida',
-           avt_state_tick:    'avtReceberStateTick',
-           avt_player_hp:     'avtReceberPlayerHp',
-           avt_player_damage: 'avtReceberPlayerDamage',
-           avt_fase_host:     'avtReceberFaseHost',
-           avt_fase_host_release: 'avtReceberFaseHostRelease',
-           avt_ping:          'avtReceberPing',
-           avt_pong:          'avtReceberPong',
-         };
          if(_avtEv === 'avt_bau_aberto'){
            try{ if(typeof mostrarToast==='function') mostrarToast((_avtPl && _avtPl.jogadorNome ? _avtPl.jogadorNome : 'Alguém') + ' abriu um baú!','ok'); }catch(_){}
            return;
          }
-         const _hName = _map[_avtEv];
+         // Handler resolvido no catálogo único window.AVT_EVENTS (rtnet.ts) —
+         // consulta tardia porque rtnet.ts carrega depois deste módulo.
+         const _hName = window.AVT_EVENTS?.[_avtEv]?.handler;
          if(_hName){
-           const _fn = (typeof window !== 'undefined' ? window[_hName] : undefined);
+           const _fn = (typeof window !== 'undefined' ? (window as any)[_hName] : undefined);
            if(typeof _fn === 'function'){
              try{ (_fn as any)(_avtPl); }catch(err){ _warn('handler', _hName, 'falhou:', err); }
            } else {
@@ -482,23 +444,23 @@ function iniciarRealtime(rpgId){
          if(ev==='DELETE'){
            const oldRec=msg.payload.old_record||{};
            const nome=oldRec.nome||rec.nome;
-           RPG_DATA.characters=RPG_DATA.characters.filter(c=>!(c.nome===nome&&c.rpg_id===rec.rpg_id));
+           RPG_DATA!.characters=RPG_DATA!.characters.filter(c=>!(c.nome===nome&&c.rpg_id===rec.rpg_id));
            renderCharButtons(); if(typeof renderFichasBtns==='function') renderFichasBtns();
            mostrarToast(`✕ ${nome} removido`,'');
            return;
          }
-         const idx=RPG_DATA.characters.findIndex(c=>c.nome===rec.nome&&c.rpg_id===rec.rpg_id);
+         const idx=RPG_DATA!.characters.findIndex(c=>c.nome===rec.nome&&c.rpg_id===rec.rpg_id);
          if(idx>=0){
-           RPG_DATA.characters[idx]=rec;
+           RPG_DATA!.characters[idx]=rec;
            if(FICHAS_VIEW===rec.nome&&typeof renderFichaView==='function')renderFichaView(rec.nome);
            else{if(CHAR_VIEW===rec.nome)renderCharView(rec.nome);if(ATTR_VIEW===rec.nome)renderAttrView(rec.nome);}
            mostrarToast(`↺ ${rec.nome} atualizado`,'');
          } else if(ev==='INSERT'){
-           RPG_DATA.characters.push(rec);
+           RPG_DATA!.characters.push(rec);
            mostrarToast(`✦ ${rec.nome} adicionado`,'sucesso');
          }
          renderCharButtons(); if(typeof renderFichasBtns==='function') renderFichasBtns();
-         if(MAPA_STATE.mapaAtualId){const mapas=RPG_DATA.mapas||[];const entry=mapas.find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);mapaRenderStatus();}
+         if(MAPA_STATE.mapaAtualId){const mapas=RPG_DATA!.mapas||[];const entry=mapas.find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);mapaRenderStatus();}
        }
 
        // ── SKILLS ──
@@ -506,22 +468,22 @@ function iniciarRealtime(rpgId){
          if(ev==='DELETE'){
            const oldRec=msg.payload.old_record||{};
            const skId=oldRec.id||rec.id;
-           RPG_DATA.skills=RPG_DATA.skills.filter(s=>s.id!==skId);
+           RPG_DATA!.skills=RPG_DATA!.skills.filter(s=>s.id!==skId);
          } else {
            if(typeof rec.animacao==='string'){try{rec.animacao=JSON.parse(rec.animacao);}catch(e){rec.animacao=null;}}
            if(typeof rec.efeitos_bonus==='string'){try{rec.efeitos_bonus=JSON.parse(rec.efeitos_bonus);}catch(e){rec.efeitos_bonus=[];}}
-           const idx=RPG_DATA.skills.findIndex(s=>s.id===rec.id);
+           const idx=RPG_DATA!.skills.findIndex(s=>s.id===rec.id);
            if(idx>=0){
-             const existente = RPG_DATA.skills[idx];
+             const existente = RPG_DATA!.skills[idx];
              if (rec.animacao == null &&
                  (existente?.animacao?.tipo === 'pixi_particles' || existente?.animacao?.tipo === 'pixi') &&
                  typeof window._pixiPatchPendente === 'object' &&
                  window._pixiPatchPendente[rec.id]) {
                rec.animacao = existente.animacao;
              }
-             RPG_DATA.skills[idx]=rec;
+             RPG_DATA!.skills[idx]=rec;
            }
-           else RPG_DATA.skills.push(rec);
+           else RPG_DATA!.skills.push(rec);
          }
          if(FICHAS_VIEW&&typeof renderFichaView==='function')renderFichaView(FICHAS_VIEW);
          else if(CHAR_VIEW)renderCharView(CHAR_VIEW);
@@ -537,11 +499,11 @@ function iniciarRealtime(rpgId){
          if(ev==='DELETE'){
            const oldRec=msg.payload.old_record||{};
            const lId=oldRec.id||rec.id;
-           RPG_DATA.lore=RPG_DATA.lore.filter(l=>l.id!==lId);
+           RPG_DATA!.lore=RPG_DATA!.lore.filter(l=>l.id!==lId);
          } else {
-           const idx=RPG_DATA.lore.findIndex(l=>l.id===rec.id);
-           if(idx>=0)RPG_DATA.lore[idx]=rec;
-           else RPG_DATA.lore.push(rec);
+           const idx=RPG_DATA!.lore.findIndex(l=>l.id===rec.id);
+           if(idx>=0)RPG_DATA!.lore[idx]=rec;
+           else RPG_DATA!.lore.push(rec);
          }
          if(typeof renderLore==='function'&&document.getElementById('lore-items'))renderLore();
        }
@@ -551,11 +513,11 @@ function iniciarRealtime(rpgId){
          if(ev==='DELETE'){
            const oldRec=msg.payload.old_record||{};
            const adId=oldRec.id||rec.id;
-           RPG_DATA.attrDefs=(RPG_DATA.attrDefs||[]).filter(a=>a.id!==adId);
+           RPG_DATA!.attrDefs=(RPG_DATA!.attrDefs||[]).filter(a=>a.id!==adId);
          } else {
-           const idx=(RPG_DATA.attrDefs||[]).findIndex(a=>a.id===rec.id);
-           if(idx>=0)RPG_DATA.attrDefs[idx]=rec;
-           else{if(!RPG_DATA.attrDefs)RPG_DATA.attrDefs=[];RPG_DATA.attrDefs.push(rec);}
+           const idx=(RPG_DATA!.attrDefs||[]).findIndex(a=>a.id===rec.id);
+           if(idx>=0)RPG_DATA!.attrDefs[idx]=rec;
+           else{if(!RPG_DATA!.attrDefs)RPG_DATA!.attrDefs=[];RPG_DATA!.attrDefs.push(rec);}
          }
          if(FICHAS_VIEW&&typeof renderFichaView==='function')renderFichaView(FICHAS_VIEW);
          else{if(CHAR_VIEW)renderCharView(CHAR_VIEW);if(ATTR_VIEW)renderAttrView(ATTR_VIEW);}
@@ -581,8 +543,8 @@ function iniciarRealtime(rpgId){
            try{
              const raw=rec.config;
              const cfg=typeof raw==='object'?raw:JSON.parse(raw||'{}');
-             if(cfg.permissoes&&RPG_DATA.myRole!=='mestre'){
-               RPG_DATA.myPermissoes=cfg.permissoes[RPG_DATA.userId]||{};
+             if(cfg.permissoes&&RPG_DATA!.myRole!=='mestre'){
+               RPG_DATA!.myPermissoes=cfg.permissoes[RPG_DATA!.userId!]||{};
              }
            }catch(e){}
          }
@@ -602,7 +564,7 @@ function iniciarRealtime(rpgId){
 
        // ── MAPAS ──
        if(topic.includes('mapas')){
-         const parseMapa = (r) => ({
+         const parseMapa = (r: any) => ({
            id: r.id, rpg_id: r.rpg_id,
            mapa: {
              map_id: r.map_id, nome: r.nome, img_url: r.img_url||'',
@@ -620,13 +582,13 @@ function iniciarRealtime(rpgId){
          if(ev==='DELETE'){
            const oldRec=msg.payload.old_record||{};
            const mapId=oldRec.map_id||rec.map_id;
-           RPG_DATA.mapas=(RPG_DATA.mapas||[]).filter(l=>l.mapa.map_id!==mapId);
+           RPG_DATA!.mapas=(RPG_DATA!.mapas||[]).filter(l=>l.mapa.map_id!==mapId);
            if(MAPA_STATE.mapaAtualId===mapId){MAPA_STATE.mapaAtualId=null;}
          } else {
            const entry=parseMapa(rec);
-           const idx=(RPG_DATA.mapas||[]).findIndex(l=>l.mapa.map_id===rec.map_id);
-           if(idx>=0) RPG_DATA.mapas[idx]=entry;
-           else {if(!RPG_DATA.mapas)RPG_DATA.mapas=[];RPG_DATA.mapas.push(entry);}
+           const idx=(RPG_DATA!.mapas||[]).findIndex(l=>l.mapa.map_id===rec.map_id);
+           if(idx>=0) RPG_DATA!.mapas[idx]=entry;
+           else {if(!RPG_DATA!.mapas)RPG_DATA!.mapas=[];RPG_DATA!.mapas.push(entry);}
            if(MAPA_STATE.mapaAtualId===rec.map_id){renderMapaViewer();}
          }
          if(document.getElementById('mapa-lista'))renderMapasTab();
@@ -697,7 +659,7 @@ function fecharRealtime(){
  } catch(_) {}
  if(realtimeWS){try{realtimeWS.close();}catch(e){}realtimeWS=null;}
  const dot=document.getElementById('realtime-dot');
- if(dot){ dot.style.display='none'; dot.classList.remove('reconectando'); }
+ if(dot){ dot.style!.display='none'; dot.classList.remove('reconectando'); }
  const banner=document.getElementById('reconexao-banner');
  if(banner) banner.classList.remove('visible');
  if(CHAT && CHAT._presenceInterval){clearInterval(CHAT._presenceInterval);CHAT._presenceInterval=null;}
@@ -711,7 +673,7 @@ function fecharRealtime(){
 // ── Enviar evento broadcast para todos os jogadores ──────────────────────
 // API pública preservada. Usa o sender da sessão ativa (com outbox + throttle).
 // Se não houver sessão ativa, faz fallback ao envio direto antigo.
-function realtimeBroadcast(tipo, payload) {
+function realtimeBroadcast(tipo: string, payload?: any) {
   const rpgId =
        (typeof CURRENT_RPG !== 'undefined' && CURRENT_RPG)
     || (typeof AVT_STATE  !== 'undefined' && AVT_STATE  && AVT_STATE.rpgId)
@@ -746,42 +708,13 @@ window.__avtFlushPendingBroadcasts = function(){
   try{
     const q = window.__avtPendingBroadcasts || [];
     if(!q.length) return;
-    const _map = {
-      avt_host_heartbeat: 'avtReceberHostHeartbeat',
-      avt_token_move: 'avtReceberMovimento',
-      avt_combate_inicio: 'avtReceberCombateInicio',
-      avt_batalha_update: 'avtReceberBatalhaUpdate',
-      avt_combate_fim: 'avtReceberFimBatalha',
-      avt_combate_join: 'avtReceberJoinBatalha',
-      avt_npc_morreu: 'avtReceberNpcMorreu',
-      avt_npc_perseguindo: 'avtReceberNpcPerseguindo',
-      avt_npc_respawn: 'avtReceberNpcRespawn',
-      avt_convite_combate: 'avtReceberConviteCombate',
-      avt_xp_ganho: 'avtReceberXpGanho',
-      avt_level_up: 'avtReceberLevelUp',
-      avt_jogador_morreu: 'avtReceberJogadorMorreu',
-      avt_jogador_ressurgiu: 'avtReceberJogadorRessurgiu',
-      avt_jogador_visivel: 'avtReceberJogadorVisivel',
-      avt_skill_selecionada: 'avtReceberSkillSelecionada',
-      avt_dado_rolado: 'avtReceberDadoRolado',
-      avt_dano_visual: 'avtReceberDanoVisual',
-      avt_dano_visual_batch: 'avtReceberDanoVisualBatch',
-      avt_hp_update: 'avtReceberHpUpdate',
-      avt_rsv_update: 'avtReceberRsvUpdate',
-      avt_member_linked: 'avtReceberMemberLinked',
-      avt_skill_anim: 'avtReceberSkillAnim',
-      avt_efeito_anim_start: 'avtReceberEfeitoAnimStart',
-      avt_efeito_anim_stop: 'avtReceberEfeitoAnimStop',
-      avt_attack_anim: 'avtReceberAttackAnim',
-      avt_level_config_update: 'avtReceberLevelConfigUpdate',
-      avt_colisao_config: 'avtReceberColisaoConfig',
-      avt_entidade_nova: 'avtReceberEntidadeNova',
-      avt_invocacao_destruida: 'avtReceberInvocacaoDestruida'
-    };
+    // Catálogo único (rtnet.ts). A cópia local antiga estava defasada e
+    // descartava silenciosamente ~20 tipos enfileirados antes do join
+    // (avt_state_tick, avt_player_hp, avt_obj_spawn, …).
     const kept = [];
     for(const item of q){
-      const fnName = _map[item.ev];
-      const fn = fnName ? window[fnName] : null;
+      const fnName = window.AVT_EVENTS?.[item.ev]?.handler;
+      const fn = fnName ? (window as any)[fnName] : null;
       if(typeof fn === 'function'){
         try{ (fn as any)(item.pl); }catch(err){ console.warn('[RT] flush handler', fnName, 'falhou:', err); }
       } else {
@@ -799,7 +732,7 @@ window.__avtFlushPendingBroadcasts = function(){
   window._RT_HP_THROTTLE_INSTALLED = true;
   const _origRB = window.realtimeBroadcast;
   if (typeof _origRB !== 'function') return;
-  let _lastHpTs = 0; let _pendingHp = null; let _hpTimer = null;
+  let _lastHpTs = 0; let _pendingHp: any = null; let _hpTimer: any = null;
   const _flushHp = () => {
     if (_hpTimer) { clearTimeout(_hpTimer); _hpTimer = null; }
     if (_pendingHp == null) return;
@@ -820,7 +753,7 @@ window.__avtFlushPendingBroadcasts = function(){
       _hpTimer = setTimeout(_flushHp, wait);
       return;
     }
-    return _origRB.apply(this, arguments);
+    return _origRB.apply(this, arguments as any);
   };
   // Flush do HP pendente ao esconder/fechar a aba — antes não havia teardown, então um HP
   // pendente (inclusive a morte) se perdia se a aba fechasse dentro dos 60ms de coalescing.

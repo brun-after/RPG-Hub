@@ -4,17 +4,17 @@
 
 
 
-let HUB_DATA={rpgs:[]}, RPG_DATA=null, CURRENT_RPG=null;
-let DADO_SEL=null, FICHAS_VIEW=null, CHAR_VIEW=null, ATTR_VIEW=null, CFG_CHAR=null;
-let HISTORICO=[], USER_ID=null, realtimeWS=null;
-let SESSION=null; // {access_token, user:{id,email}} — preenchido por iniciarApp() após login bem-sucedido
+let HUB_DATA: { rpgs: RpgRegistryRow[] }={rpgs:[]}, RPG_DATA: RpgData | null=null, CURRENT_RPG: any=null;
+let DADO_SEL: any=null, FICHAS_VIEW: any=null, CHAR_VIEW: any=null, ATTR_VIEW: any=null, CFG_CHAR: any=null;
+let HISTORICO: any[]=[], USER_ID: any=null, realtimeWS: any=null;
+let SESSION: SessaoAuth | null=null; // {access_token, user:{id,email}} — preenchido por iniciarApp() após login bem-sucedido
 
 // ── Ação Criativa ────────────────────────────────────────────────
 let CRIATIVO_TIPO = 'ataque'; // 'ataque', 'suporte', 'narrativo'
 let CRIATIVO_ALVO_TIPO = 'unico'; // 'unico', 'area', 'proprio'
 
 // ── 19A: CHAT ────────────────────────────────────────────────
-const CHAT = {
+const CHAT: ChatState = {
   msgs:     [],
   aberto:   false,
   naoLidos: 0,
@@ -22,29 +22,29 @@ const CHAT = {
   online:   [],
   _presenceInterval: null,
 };
-let INI_VALOR_ATUAL = null;
-let INI_NOME_ATUAL = null;
-let CRIATIVO_ID_ATUAL = null;
-let CRIATIVOS_CAMP = []; // ataques criativos da campanha (sincronizados via rpg_registry)
-let CRIATIVO_MESTRE_BUILDER = []; // builder de dados do modal do mestre
-let BATALHA_ATUAL_ID = null; // id da batalha sendo visualizada no mapa atual
+let INI_VALOR_ATUAL: any = null;
+let INI_NOME_ATUAL: any = null;
+let CRIATIVO_ID_ATUAL: any = null;
+let CRIATIVOS_CAMP: CriativoCampanha[] = []; // ataques criativos da campanha (sincronizados via rpg_registry)
+let CRIATIVO_MESTRE_BUILDER: any = []; // builder de dados do modal do mestre
+let BATALHA_ATUAL_ID: any = null; // id da batalha sendo visualizada no mapa atual
 
 // ── Vínculo skill↔character por UUID ─────────────────────────
 // Retorna o UUID do personagem a partir do nome (ou null).
-function _skCharId(nome) {
+function _skCharId(nome: any) {
   if (!nome) return null;
   const c = (RPG_DATA?.characters || []).find(x => x.nome === nome);
   return c?.id || null;
 }
 // Filtra skills pelo UUID do personagem, com fallback gracioso para
 // registros antigos que só possuem o campo "personagem" (nome).
-function _skFiltrarPorChar(skills, nome) {
+function _skFiltrarPorChar(skills: any, nome: any) {
   const cid = _skCharId(nome);
-  if (cid) return skills.filter(s => s.character_id === cid || (!s.character_id && s.personagem === nome));
-  return skills.filter(s => s.personagem === nome);
+  if (cid) return skills.filter((s: any) => s.character_id === cid || (!s.character_id && s.personagem === nome));
+  return skills.filter((s: any) => s.personagem === nome);
 }
-let _skModalCharId = null; // UUID do personagem no modal de skill aberto
-let MAPA_STATE = {
+let _skModalCharId: any = null; // UUID do personagem no modal de skill aberto
+let MAPA_STATE: MapaState = {
   mapaAtualId:null, mapaGeralId:null, toolMode:null, medicaoAtiva:null, dragging:null, dragTimer:null,
   batalhas: {}, // { [batalha_id]: objetoBatalha }
   // compat: getter para a batalha do mapa atual
@@ -52,22 +52,22 @@ let MAPA_STATE = {
 };
 
 // ── Zoom/Pan do mapa da campanha ──────────────────────────────
-let MAPA_ZOOM = { zoom:1, panX:0, panY:0, _inited:false, _keyInited:false, _resizeInited:false, locked:true, activeChar:null, modo:'auto', _autoRafId:null };
+let MAPA_ZOOM = { zoom:1, panX:0, panY:0, _inited:false, _keyInited:false, _resizeInited:false, locked:true, activeChar:null as any, modo:'auto', _autoRafId:null as any };
 
 function mapaZoomApply() {
   const img = document.getElementById('mapa-img');
   if (!img) return;
-  img.style.transformOrigin = '0 0';
-  img.style.transform = `translate(${MAPA_ZOOM.panX}px,${MAPA_ZOOM.panY}px) scale(${MAPA_ZOOM.zoom})`;
-  img.style.willChange = 'transform';
-  img.style.backfaceVisibility = 'hidden';
+  img.style!.transformOrigin = '0 0';
+  img.style!.transform = `translate(${MAPA_ZOOM.panX}px,${MAPA_ZOOM.panY}px) scale(${MAPA_ZOOM.zoom})`;
+  img.style!.willChange = 'transform';
+  img.style!.backfaceVisibility = 'hidden';
   // Renderização nítida (vetorial/CSS) ao ampliar; suaviza apenas ao reduzir
-  img.style.imageRendering = MAPA_ZOOM.zoom > 1 ? 'crisp-edges' : 'high-quality';
+  img.style!.imageRendering = MAPA_ZOOM.zoom > 1 ? 'crisp-edges' : 'high-quality';
   // Garante visibilidade ao reaplica zoom após resize do browser
-  img.style.visibility = 'visible';
+  img.style!.visibility = 'visible';
   // Atualiza tokens para renderização nítida conforme o zoom
   const bgImg = img.querySelector('img.mapa-bg-img') as HTMLElement;
-  if (bgImg) bgImg.style.imageRendering = MAPA_ZOOM.zoom > 1 ? 'crisp-edges' : 'auto';
+  if (bgImg) bgImg.style!.imageRendering = MAPA_ZOOM.zoom > 1 ? 'crisp-edges' : 'auto';
   const lbl = document.getElementById('mapa-zoom-val');
   if (lbl) lbl.textContent = Math.round(MAPA_ZOOM.zoom * 100) + '%';
 }
@@ -77,18 +77,18 @@ function mapaZoomApply() {
 // 2.1 — Aliases de tipo de mapa: 'geral'→'mundo', 'local'→'tatico'
 // Retrocompatível: código antigo continua funcionando
 // ════════════════════════════════════════════════════════════════════════════
-function mapaGetTipo(mapa) {
+function mapaGetTipo(mapa: any) {
   const t = mapa?.tipo || 'mundo';
   if (t === 'geral') return 'mundo';
   if (t === 'local') return 'tatico';
   return t; // 'mundo', 'tatico', 'fase' já no novo formato
 }
-function mapaIsMundo(mapa)  { return mapaGetTipo(mapa) === 'mundo'; }
-function mapaIsTatico(mapa) { return mapaGetTipo(mapa) === 'tatico'; }
-function mapaIsFase(mapa)   { return mapaGetTipo(mapa) === 'fase'; }
+function mapaIsMundo(mapa: any)  { return mapaGetTipo(mapa) === 'mundo'; }
+function mapaIsTatico(mapa: any) { return mapaGetTipo(mapa) === 'tatico'; }
+function mapaIsFase(mapa: any)   { return mapaGetTipo(mapa) === 'fase'; }
 
 // ── Estado global do mapa de fase ────────────────────────────────────────────
-let FASE_STATE = {
+let FASE_STATE: FaseState = {
   faseAtualId:  null,
   app:          null,   // instância PIXI.Application ativa
   worldContainer: null, // container raiz do mundo (câmera aplica transform aqui)
@@ -106,13 +106,13 @@ function mapaToggleLock() {
   const btn = document.getElementById('mapa-lock-btn');
   if (btn) {
     btn.textContent = MAPA_ZOOM.locked ? '🔒' : '🔓';
-    btn.style.borderColor = MAPA_ZOOM.locked ? 'rgba(200,168,75,0.6)' : 'rgba(30,45,66,0.7)';
-    btn.style.color = MAPA_ZOOM.locked ? '#f0cc6a' : '#7a92aa';
-    btn.style.background = MAPA_ZOOM.locked ? 'rgba(200,168,75,0.12)' : 'rgba(5,8,16,0.85)';
+    btn.style!.borderColor = MAPA_ZOOM.locked ? 'rgba(200,168,75,0.6)' : 'rgba(30,45,66,0.7)';
+    btn.style!.color = MAPA_ZOOM.locked ? '#f0cc6a' : '#7a92aa';
+    btn.style!.background = MAPA_ZOOM.locked ? 'rgba(200,168,75,0.12)' : 'rgba(5,8,16,0.85)';
     btn.title = MAPA_ZOOM.locked ? 'Mapa travado — clique para destravar' : 'Travar posição do mapa';
   }
   const wrap = document.getElementById('mapa-wrap');
-  if (wrap) wrap.style.cursor = MAPA_ZOOM.locked ? 'default' : 'grab';
+  if (wrap) wrap.style!.cursor = MAPA_ZOOM.locked ? 'default' : 'grab';
   mostrarToast(MAPA_ZOOM.locked ? '🔒 Mapa travado' : '🔓 Mapa destravado', MAPA_ZOOM.locked ? '' : 'ok');
 }
 // ════════════════════════════════════════════════════════════════════════════
@@ -123,7 +123,7 @@ function mapaToggleModoCamera() {
   const btn = document.getElementById('mapa-camera-btn');
   if (btn) {
     btn.textContent = MAPA_ZOOM.modo === 'auto' ? '📷 Auto' : '🎮 Manual';
-    btn.style.borderColor = MAPA_ZOOM.modo === 'auto'
+    btn.style!.borderColor = MAPA_ZOOM.modo === 'auto'
       ? 'rgba(94,224,154,0.5)' : 'rgba(30,45,66,0.7)';
   }
   mostrarToast(MAPA_ZOOM.modo === 'auto'
@@ -131,7 +131,7 @@ function mapaToggleModoCamera() {
   if (MAPA_ZOOM.modo === 'auto') _cameraAutoLoop();
 }
 
-function _cameraCalcCentroide(mapId) {
+function _cameraCalcCentroide(mapId: any) {
   const chars = RPG_DATA?.characters || [];
   const jogadores = chars.filter(c => {
     const ca = c.custom_attrs || {};
@@ -177,7 +177,7 @@ function _cameraAutoTick() {
   // Zoom automático: mantém grupo visível com margem
   const mapa = _getMapaById(mapId);
   const chars = (RPG_DATA?.characters || []).filter(c =>
-    c.active_map_id === mapId && !['npc','criatura'].includes(c.custom_attrs?.tipo_personagem)
+    c.active_map_id === mapId && !['npc','criatura'].includes(c.custom_attrs?.tipo_personagem!)
   );
 
   let minX = centro.x, maxX = centro.x, minY = centro.y, maxY = centro.y;
@@ -230,7 +230,7 @@ function mapaZoomManualGuard() {
 
 
 // ── Tamanho individual de personagem no mapa ────────────────────────────────
-function mapaCharSizeAtivar(nome) {
+function mapaCharSizeAtivar(nome: any) {
   const c = RPG_DATA?.characters?.find(x => x.nome === nome); if (!c) return;
   const ca = c.custom_attrs || {};
   const tam = ca.aparencia?.tamanho || 1.0;
@@ -254,9 +254,9 @@ function mapaCharSizeAtivar(nome) {
     }
   }
   
-  hud.style.display = 'flex';
+  hud.style!.display = 'flex';
 }
-function mapaCharSizeSlide(v) {
+function mapaCharSizeSlide(v: any) {
   const val = parseFloat(v);
   const valEl = document.getElementById('mapa-char-size-val');
   if (valEl) valEl.textContent = Math.round(val * 100) + '%';
@@ -275,12 +275,12 @@ function mapaCharSizeSlide(v) {
   // Atualizar o token visualmente via escala CSS direto — sem re-render completo
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`) as HTMLElement;
   if (tokenEl) {
-    const baseTamanho = parseFloat(tokenEl.dataset.baseTamanho || '1');
-    tokenEl.style.transform = `translate(-50%,-50%) scale(${(val / baseTamanho).toFixed(3)})`;
+    const baseTamanho = parseFloat(tokenEl.dataset!.baseTamanho || '1');
+    tokenEl.style!.transform = `translate(-50%,-50%) scale(${(val / baseTamanho).toFixed(3)})`;
   }
 }
 
-function mapaCharSizeStep(delta) {
+function mapaCharSizeStep(delta: any) {
   const slider = document.getElementById('mapa-char-size-slider') as HTMLInputElement; if (!slider) return;
   slider.blur(); // Prevent keyboard on mobile
   const v = Math.max(0.4, Math.min(5, parseFloat(slider.value) + delta));
@@ -310,7 +310,7 @@ async function mapaCharSizeConfirmar() {
     const entry = (RPG_DATA?.mapas || []).find(
       l => l.mapa.map_id === MAPA_STATE?.mapaAtualId
     );
-    if (entry && window.mapaRenderTokens) mapaRenderTokens(entry.mapa);
+    if (entry && (window as any).mapaRenderTokens) mapaRenderTokens(entry.mapa);
     return;
   }
   
@@ -321,7 +321,7 @@ async function mapaCharSizeConfirmar() {
   if (!c.custom_attrs.aparencia) c.custom_attrs.aparencia = {};
   c.custom_attrs.aparencia.tamanho = tam;
   try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
       method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs })
     });
     mostrarToast('✓ Tamanho salvo', 'ok');
@@ -335,10 +335,10 @@ async function mapaCharSizeConfirmar() {
 function mapaCharSizeFechar() {
   MAPA_ZOOM.activeChar = null;
   const hud = document.getElementById('mapa-char-size-hud');
-  if (hud) hud.style.display = 'none';
+  if (hud) hud.style!.display = 'none';
 }
 
-function mapaZoomSet(z, pivotX, pivotY) {
+function mapaZoomSet(z: any, pivotX: any, pivotY: any) {
   const oldZoom = MAPA_ZOOM.zoom;
   const newZoom = Math.max(0.05, Math.min(20, z));
   if (pivotX != null && pivotY != null) {
@@ -361,8 +361,8 @@ function mapaZoomInit() {
   MAPA_ZOOM._inited = true;
 
   // Permitir que o conteúdo extravase mas com clip nas bordas
-  wrap.style.overflow = 'visible';
-  wrap.style.clipPath = 'inset(0 round 10px)';
+  wrap.style!.overflow = 'visible';
+  wrap.style!.clipPath = 'inset(0 round 10px)';
 
   // ── Wheel zoom (centrado no cursor) ───────────────────────────
   wrap.addEventListener('wheel', (e) => {
@@ -402,7 +402,7 @@ function mapaZoomInit() {
   const _panIsMobile = () => navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
   const _panDeadzone = () => _panIsMobile() ? 3 : 6;
 
-  let _isPanning = false, _panPointerId = null, _panSX = 0, _panSY = 0, _panOX = 0, _panOY = 0;
+  let _isPanning = false, _panPointerId: any = null, _panSX = 0, _panSY = 0, _panOX = 0, _panOY = 0;
   let _panThresholdMet = false;
   wrap.addEventListener('pointerdown', (e: any) => {
     if (e.target.closest('#mapa-zoom-hud')) return;
@@ -423,16 +423,16 @@ function mapaZoomInit() {
     if (!_panThresholdMet) {
       if (Math.abs(dx) + Math.abs(dy) < _panDeadzone()) return;
       _panThresholdMet = true;
-      wrap.style.cursor = 'grabbing';
+      wrap.style!.cursor = 'grabbing';
     }
     MAPA_ZOOM.panX = _panOX + dx;
     MAPA_ZOOM.panY = _panOY + dy;
     mapaZoomApply();
   });
-  const _endPan = (e) => {
+  const _endPan = (e: any) => {
     if (e.pointerId !== _panPointerId) return;
     _isPanning = false; _panPointerId = null;
-    wrap.style.cursor = MAPA_ZOOM.locked ? 'default' : 'grab';
+    wrap.style!.cursor = MAPA_ZOOM.locked ? 'default' : 'grab';
   };
   wrap.addEventListener('pointerup', _endPan);
   wrap.addEventListener('pointercancel', _endPan);
@@ -444,8 +444,8 @@ function mapaZoomInit() {
       const imgEl = document.getElementById('mapa-img');
       if (!imgEl) return;
       // Garante que a imagem de fundo continua visível após zoom do browser
-      imgEl.style.visibility = 'visible';
-      imgEl.style.opacity = '1';
+      imgEl.style!.visibility = 'visible';
+      imgEl.style!.opacity = '1';
       mapaZoomApply();
     };
     window.addEventListener('resize', _handleResize);
@@ -471,7 +471,7 @@ function mapaZoomInit() {
   }
 }
 
-function normalizeImgUrl(url) {
+function normalizeImgUrl(url: any) {
   if (!url) return url;
   url = url.trim();
   // Extrair ID do Google Drive de qualquer variante de link:
@@ -483,9 +483,9 @@ function normalizeImgUrl(url) {
   return url;
 }
 const TIPOS_DADO=[4,6,8,10,20,100];
-function getDiceConfig(rpgId){ try{ const s=localStorage.getItem('rpghub_dice_'+rpgId); return s?JSON.parse(s):TIPOS_DADO; }catch(e){ return TIPOS_DADO; } }
-function setDiceConfig(rpgId,arr){ try{ localStorage.setItem('rpghub_dice_'+rpgId,JSON.stringify(arr)); }catch(e){} }
-const IMPORT_CSVS={};
+function getDiceConfig(rpgId: any){ try{ const s=localStorage.getItem('rpghub_dice_'+rpgId); return s?JSON.parse(s):TIPOS_DADO; }catch(e){ return TIPOS_DADO; } }
+function setDiceConfig(rpgId: any,arr: any){ try{ localStorage.setItem('rpghub_dice_'+rpgId,JSON.stringify(arr)); }catch(e){} }
+const IMPORT_CSVS: any={};
 const COR_MAP={primario:'var(--primario-v)',perigo:'#e74c3c',sucesso:'#5ee09a',especial:'#b07ef0',destaque:'var(--destaque-v)',suave:'var(--suave)'};
 
 

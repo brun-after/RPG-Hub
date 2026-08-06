@@ -6,7 +6,9 @@
 import { describe, it, expect } from 'vitest';
 
 describe('boot do bundle', () => {
-  it('importar js/main.ts na ordem real não lança', async () => {
+  // Timeout folgado: com o bundle inteiro em TypeScript, o transform frio do
+  // primeiro import passa dos 5s padrão (o teste valida "não lança", não tempo).
+  it('importar js/main.ts na ordem real não lança', { timeout: 30000 }, async () => {
     await expect(import('../../js/main')).resolves.toBeTruthy();
   });
 

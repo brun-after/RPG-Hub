@@ -4,7 +4,7 @@
 // (core espalhado, .filters, .particles, .spine), carregado só quando necessário.
 // O Vite separa cada import() em chunk próprio, preservando o lazy-load.
 
-let _corePromise = null;
+let _corePromise: any = null;
 function pixiEnsureCore() {
   if (window.PIXI) return Promise.resolve();
   if (!_corePromise) {
@@ -27,7 +27,7 @@ function pixiEnsureParticles() {
   });
 }
 
-const _filterSpecs = {
+const _filterSpecs: Record<string, any> = {
   glow:      { key: 'GlowFilter',          load: () => import('@pixi/filter-glow') },
   bloom:     { key: 'AdvancedBloomFilter', load: () => import('@pixi/filter-advanced-bloom') },
   shockwave: { key: 'ShockwaveFilter',     load: () => import('@pixi/filter-shockwave') },
@@ -37,12 +37,12 @@ const _filterSpecs = {
   crt:       { key: 'CRTFilter',           load: () => import('@pixi/filter-crt') },
 };
 
-function pixiEnsureFilter(name) {
+function pixiEnsureFilter(name: any) {
   return pixiEnsureCore().then(() => {
     const spec = _filterSpecs[name];
     if (!spec) return;
     if (window.PIXI.filters[spec.key]) return;
-    return spec.load().then((ns) => {
+    return spec.load().then((ns: any) => {
       window.PIXI.filters[spec.key] = ns[spec.key];
     }).catch(() => { /* filtro indisponível não bloqueia a animação (paridade com loader antigo) */ });
   });

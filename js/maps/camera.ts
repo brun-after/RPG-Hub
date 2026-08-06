@@ -49,9 +49,9 @@
   document.head.appendChild(s);
 })();
 
-const _TIPO_ANIM_CLASS = { fisico:'fisico', fogo:'fogo', gelo:'gelo', veneno:'veneno', magico:'magico', psiquico:'magico', cura:'cura', outro:'fisico' };
+const _TIPO_ANIM_CLASS: Record<string, any> = { fisico:'fisico', fogo:'fogo', gelo:'gelo', veneno:'veneno', magico:'magico', psiquico:'magico', cura:'cura', outro:'fisico' };
 
-function animarAtaque3Camadas(atacanteNome, alvoNome, dano, tipoDano, ehCritico, ehCura) {
+function animarAtaque3Camadas(atacanteNome: any, alvoNome: any, dano: any, tipoDano: any, ehCritico: any, ehCura: any) {
   const tipoClass = _TIPO_ANIM_CLASS[tipoDano]||'fisico';
   const atacEl = document.querySelector('.mapa-token[data-nome="'+CSS.escape(atacanteNome)+'"]');
   const alvoEl = document.querySelector('.mapa-token[data-nome="'+CSS.escape(alvoNome)+'"]');
@@ -72,22 +72,22 @@ function animarAtaque3Camadas(atacanteNome, alvoNome, dano, tipoDano, ehCritico,
     const _polir = (typeof AVT_GRAFICOS === 'undefined' || AVT_GRAFICOS?.polimento !== false);
     const _danoExib = (dano===0||dano===null) ? dano : (_polir ? Math.round(dano) : dano);
     num.className='numero-flutuante'+(ehCura?' cura':ehCritico?' critico':dano===0||dano===null?' errou':' dano');
-    num.style.cssText='left:'+(rect.left-mapaRect.left+rect.width/2)+'px;top:'+(rect.top-mapaRect.top-10)+'px';
+    num.style!.cssText='left:'+(rect.left-mapaRect.left+rect.width/2)+'px;top:'+(rect.top-mapaRect.top-10)+'px';
     num.textContent = ehCura ? '+'+_danoExib : (dano===0||dano===null ? 'ERROU' : '-'+_danoExib);
-    mapaImg.style.position='relative'; mapaImg.appendChild(num); setTimeout(()=>num.remove(),1000);
+    mapaImg!.style!.position='relative'; mapaImg!.appendChild(num); setTimeout(()=>num.remove(),1000);
   }, 300);
 }
 
-function _dispararParticulasToken(tokenEl, tipoClass) {
+function _dispararParticulasToken(tokenEl: any, tipoClass: any) {
   const rect=tokenEl.getBoundingClientRect(), mapaImg=document.getElementById('mapa-img'), mapaRect=mapaImg?.getBoundingClientRect();
   if (!mapaRect) return;
-  const corMap={fisico:'#e74c3c',fogo:'#e67e22',gelo:'#7fd3f5',veneno:'#27ae60',magico:'#9b59b6',cura:'#5ee09a'};
+  const corMap: Record<string, any> = {fisico:'#e74c3c',fogo:'#e67e22',gelo:'#7fd3f5',veneno:'#27ae60',magico:'#9b59b6',cura:'#5ee09a'};
   const cor=corMap[tipoClass]||'#e74c3c', cx=rect.left-mapaRect.left+rect.width/2, cy=rect.top-mapaRect.top+rect.height/2;
   for (let i=0;i<8;i++) {
     const ang=(Math.PI*2*i/8)+(Math.random()-0.5)*0.5, dist=20+Math.random()*30;
     const p=document.createElement('div'); p.className='particula-impacto';
-    p.style.cssText='left:'+cx+'px;top:'+cy+'px;width:5px;height:5px;background:'+cor+';--px:'+(Math.cos(ang)*dist)+'px;--py:'+(Math.sin(ang)*dist)+'px';
-    mapaImg.appendChild(p); setTimeout(()=>p.remove(),450);
+    p.style!.cssText='left:'+cx+'px;top:'+cy+'px;width:5px;height:5px;background:'+cor+';--px:'+(Math.cos(ang)*dist)+'px;--py:'+(Math.sin(ang)*dist)+'px';
+    mapaImg!.appendChild(p); setTimeout(()=>p.remove(),450);
   }
 }
 
@@ -107,19 +107,19 @@ window.mapaRenderTokens = function(m) {
   _origMRTokens7(m); _aplicarPulsoZonas(m); _verificarProximidadeZonas(m); _aplicarIconesLootTokens();
 };
 
-function _aplicarPulsoZonas(m) {
+function _aplicarPulsoZonas(m: any) {
   if (!m?.locais?.length) return;
   const zonaEls = document.querySelectorAll('.mapa-zona');
   zonaEls.forEach(el => el.classList.remove('zona-pulso-interesse','zona-pulso-perigo','zona-pulso-saida','zona-pulso-bau_grupo','zona-pulso-passagem'));
-  m.locais.forEach((zona, i) => { const tipo=zona.zona_tipo||'interesse'; const el=zonaEls[i]; if(el) el.classList.add('zona-pulso-'+tipo); });
+  m.locais.forEach((zona: any, i: any) => { const tipo=zona.zona_tipo||'interesse'; const el=zonaEls[i]; if(el) el.classList.add('zona-pulso-'+tipo); });
 }
 
-function _verificarProximidadeZonas(m) {
+function _verificarProximidadeZonas(m: any) {
   const mapId = MAPA_STATE?.mapaAtualId;
   if (!mapId||!m?.locais?.length) return;
   const jogadores = (RPG_DATA?.characters||[]).filter(c => { const ca=c.custom_attrs||{}; return c.active_map_id===mapId&&ca.tipo_personagem!=='npc'&&ca.tipo!=='npc'; });
   const W=m.largura_total||20, H=m.altura_total||20;
-  m.locais.forEach(zona => {
+  m.locais.forEach((zona: any) => {
     if (zona._visitada) return;
     const zC=Math.round(((zona.x??zona.x_percent??0)/100)*W), zR=Math.round(((zona.y??zona.y_percent??0)/100)*H);
     for (const jog of jogadores) {
@@ -138,20 +138,20 @@ function _aplicarIconesLootTokens() {
     const ca=c.custom_attrs||{}; if(!ca.morto||!ca.tem_loot) return;
     const tokenEl=document.querySelector('.mapa-token[data-nome="'+CSS.escape(c.nome)+'"]'); if(!tokenEl||tokenEl.querySelector('.loot-badge-v2')) return;
     const badge=document.createElement('div'); badge.className='loot-badge-v2';
-    badge.style.cssText='position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:rgba(200,168,75,0.95);border-radius:8px;padding:2px 6px;font-size:0.55rem;color:#050810;font-family:var(--fonte-d);z-index:20;pointer-events:none;white-space:nowrap;border:1px solid rgba(240,204,106,0.8);animation:lootPiscar 1.5s ease-in-out infinite';
+    badge.style!.cssText='position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:rgba(200,168,75,0.95);border-radius:8px;padding:2px 6px;font-size:0.55rem;color:#050810;font-family:var(--fonte-d);z-index:20;pointer-events:none;white-space:nowrap;border:1px solid rgba(240,204,106,0.8);animation:lootPiscar 1.5s ease-in-out infinite';
     badge.textContent='💰 Loot'; tokenEl.appendChild(badge);
   });
 }
 (function(){ const s=document.createElement('style'); s.textContent='@keyframes lootPiscar{0%,100%{opacity:1}50%{opacity:0.6}}'; document.head.appendChild(s); })();
 
 // ── 7.4 Aviso mapa iso legado ────────────────────────────────────────────
-function _verificarMapaIsoLegado(m) {
+function _verificarMapaIsoLegado(m: any) {
   if (!m) return;
   const bannerId='banner-iso-legado';
   if (m.transform3d?.depth||m.render_data?.transform3d?.depth) {
     if (!document.getElementById(bannerId)) {
       const b=document.createElement('div'); b.id=bannerId;
-      b.style.cssText='position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:25;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.4);border-radius:8px;padding:6px 14px;font-size:0.7rem;color:#f0cc6a;pointer-events:none;white-space:nowrap';
+      b.style!.cssText='position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:25;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.4);border-radius:8px;padding:6px 14px;font-size:0.7rem;color:#f0cc6a;pointer-events:none;white-space:nowrap';
       b.textContent='⚠ Mapa isométrico legado — posições dos tokens podem estar incorretas';
       document.getElementById('mapa-tokens')?.appendChild(b);
     }
@@ -160,7 +160,7 @@ function _verificarMapaIsoLegado(m) {
 HUB_EVENTS.on('cena_carregada', () => { const m=_getMapaById(MAPA_STATE?.mapaAtualId); if(m) _verificarMapaIsoLegado(m); });
 
 // ── 7.5 snapParaCelula no renderer procedural ─────────────────────────────
-function snapParaCelula(xPct, yPct, mapa) {
+function snapParaCelula(xPct: any, yPct: any, mapa: any) {
   const largura=mapa?.largura_total||20, altura=mapa?.altura_total||20;
   return { col:Math.max(0,Math.min(largura-1,Math.round((xPct/100)*largura))), row:Math.max(0,Math.min(altura-1,Math.round((yPct/100)*altura))) };
 }
@@ -171,7 +171,7 @@ window.mapaRenderCanvas = function(m) {
   const resultado = _origMapaRenderCanvas7(m);
   if (!resultado) return resultado;
   if (mapaIsTatico(m) && m.render_data?.saidas?.length) {
-    m.render_data.saidas.forEach(s => { if(s.x_percent!==undefined&&s.col===undefined){const sn=snapParaCelula(s.x_percent,s.y_percent,m);s.col=sn.col;s.row=sn.row;} });
+    m.render_data.saidas.forEach((s: any) => { if(s.x_percent!==undefined&&s.col===undefined){const sn=snapParaCelula(s.x_percent,s.y_percent,m);s.col=sn.col;s.row=sn.row;} });
   }
   if (mapaIsTatico(m) && m.grid) {
     const canvas = document.getElementById('mapa-canvas') as HTMLCanvasElement;
@@ -191,23 +191,23 @@ window.mapaRenderCanvas = function(m) {
       const altura  = m.altura_total  || 20;
       const cW = W / largura;
       const cH = H / altura;
-      const _hasTileset = typeof AVT_STATE !== 'undefined' && AVT_STATE._tilesetLoaded;
-      ctx.save();
-      ctx.strokeStyle = _hasTileset ? 'rgba(126,200,240,0.04)' : 'rgba(126,200,240,0.12)';
-      ctx.lineWidth   = _hasTileset ? 0.3 : 0.5;
+      const _hasTileset = typeof AVT_STATE !== 'undefined' && (AVT_STATE as any)._tilesetLoaded;
+      ctx!.save();
+      ctx!.strokeStyle = _hasTileset ? 'rgba(126,200,240,0.04)' : 'rgba(126,200,240,0.12)';
+      ctx!.lineWidth   = _hasTileset ? 0.3 : 0.5;
       for (let c = 0; c <= largura; c++) {
-        ctx.beginPath(); ctx.moveTo(Math.round(c * cW) + 0.5, 0); ctx.lineTo(Math.round(c * cW) + 0.5, H); ctx.stroke();
+        ctx!.beginPath(); ctx!.moveTo(Math.round(c * cW) + 0.5, 0); ctx!.lineTo(Math.round(c * cW) + 0.5, H); ctx!.stroke();
       }
       for (let r = 0; r <= altura; r++) {
-        ctx.beginPath(); ctx.moveTo(0, Math.round(r * cH) + 0.5); ctx.lineTo(W, Math.round(r * cH) + 0.5); ctx.stroke();
+        ctx!.beginPath(); ctx!.moveTo(0, Math.round(r * cH) + 0.5); ctx!.lineTo(W, Math.round(r * cH) + 0.5); ctx!.stroke();
       }
-      ctx.restore();
+      ctx!.restore();
     }
   }
   return resultado;
 };
 
-function animarAtaque({ atacEl, alvoEl, animacao, dano }) {
+function animarAtaque({ atacEl, alvoEl, animacao, dano }: any) {
   return new Promise(resolve => {
     const origem = _animCentro(atacEl);
     const alvo   = _animCentro(alvoEl);
@@ -219,7 +219,7 @@ function animarAtaque({ atacEl, alvoEl, animacao, dano }) {
     const ctx    = canvas.getContext('2d');
     function destruir() { canvas.remove(); (resolve as any)(); }
 
-    const tipos = {
+    const tipos: Record<string, any> = {
       projetil:       () => _animProjetil     (ctx, canvas, origem, alvo, cor, rgb, icone, trilha, destruir),
       onda:           () => _animOnda         (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
       explosao:       () => _animExplosao     (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
@@ -238,18 +238,18 @@ function animarAtaque({ atacEl, alvoEl, animacao, dano }) {
   });
 }
 
-function _animProjetil(ctx, canvas, origem, alvo, cor, rgb, icone, trilha, done) {
+function _animProjetil(ctx: any, canvas: any, origem: any, alvo: any, cor: any, rgb: any, icone: any, trilha: any, done: any) {
   const dur = 500, start = performance.now();
   const cx = (origem.x + alvo.x) / 2;
   const cy = Math.min(origem.y, alvo.y) - 80;
-  const trail = [];
-  function bezier(t) {
+  const trail: any = [];
+  function bezier(t: any) {
     return {
       x: (1-t)*(1-t)*origem.x + 2*(1-t)*t*cx + t*t*alvo.x,
       y: (1-t)*(1-t)*origem.y + 2*(1-t)*t*cy + t*t*alvo.y
     };
   }
-  function frame(now) {
+  function frame(now: any) {
     const t = Math.min((now - start) / dur, 1);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const pos = bezier(t);
@@ -282,10 +282,10 @@ function _animProjetil(ctx, canvas, origem, alvo, cor, rgb, icone, trilha, done)
   requestAnimationFrame(frame);
 }
 
-function _animOnda(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
+function _animOnda(ctx: any, canvas: any, origem: any, alvo: any, cor: any, rgb: any, icone: any, done: any) {
   const dur = 700, start = performance.now();
   const ondas = [0, 0.2, 0.4];
-  function frame(now) {
+  function frame(now: any) {
     const t = Math.min((now - start) / dur, 1);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const off of ondas) {
@@ -305,14 +305,14 @@ function _animOnda(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
   requestAnimationFrame(frame);
 }
 
-function _animExplosao(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
+function _animExplosao(ctx: any, canvas: any, origem: any, alvo: any, cor: any, rgb: any, icone: any, done: any) {
   const dur = 600, start = performance.now();
   const N = 28;
   const ps = Array.from({length:N},(_,i)=>{
     const ang=(Math.PI*2*i/N)+(Math.random()-0.5)*0.4, spd=60+Math.random()*80;
     return {vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd, size:3+Math.random()*5};
   });
-  function frame(now) {
+  function frame(now: any) {
     const t = Math.min((now - start) / dur, 1);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (t < 0.15) {
@@ -337,10 +337,10 @@ function _animExplosao(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
   requestAnimationFrame(frame);
 }
 
-function _animRaio(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
+function _animRaio(ctx: any, canvas: any, origem: any, alvo: any, cor: any, rgb: any, icone: any, done: any) {
   const dur = 400, start = performance.now();
   let segs = _animGerarZigzag(origem, alvo, 8), lastRegen = 0;
-  function frame(now) {
+  function frame(now: any) {
     const t = Math.min((now - start) / dur, 1);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (now - lastRegen > 60) { segs = _animGerarZigzag(origem, alvo, 8); lastRegen = now; }
@@ -362,7 +362,7 @@ function _animRaio(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
   requestAnimationFrame(frame);
 }
 
-function _animGerarZigzag(a, b, n) {
+function _animGerarZigzag(a: any, b: any, n: any) {
   const pts = [a];
   for (let i = 1; i < n; i++) {
     const tt = i/n;
@@ -375,9 +375,9 @@ function _animGerarZigzag(a, b, n) {
   pts.push(b); return pts;
 }
 
-function _animAura(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
+function _animAura(ctx: any, canvas: any, origem: any, alvo: any, cor: any, rgb: any, icone: any, done: any) {
   const dur = 800, start = performance.now();
-  function frame(now) {
+  function frame(now: any) {
     const t = Math.min((now - start) / dur, 1);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const pulse = Math.sin(t*Math.PI*4)*0.5+0.5;
@@ -400,9 +400,9 @@ function _animAura(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
   requestAnimationFrame(frame);
 }
 
-function _animAuraGuerreiro(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
+function _animAuraGuerreiro(ctx: any, canvas: any, origem: any, alvo: any, cor: any, rgb: any, icone: any, done: any) {
   const dur = 900, start = performance.now();
-  function frame(now) {
+  function frame(now: any) {
     const t = Math.min((now - start) / dur, 1);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const pulse = Math.sin(t * Math.PI * 4) * 0.5 + 0.5;
@@ -432,14 +432,14 @@ function _animAuraGuerreiro(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
   requestAnimationFrame(frame);
 }
 
-function _animCorte(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
+function _animCorte(ctx: any, canvas: any, origem: any, alvo: any, cor: any, rgb: any, icone: any, done: any) {
   const dur = 420, start = performance.now();
   const slashes = [
     { ox: -12, oy: -12, ex: 28, ey: 28 },
     { ox: -2,  oy: -18, ex: 38, ey: 22 },
     { ox: -22, oy: -6,  ex: 18, ey: 34 },
   ];
-  function frame(now) {
+  function frame(now: any) {
     const t = Math.min((now - start) / dur, 1);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const alpha = t < 0.5 ? t / 0.5 : (1 - t) / 0.5;
@@ -464,18 +464,18 @@ function _animCorte(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
   requestAnimationFrame(frame);
 }
 
-function _animBolaEnergia(ctx, canvas, origem, alvo, cor, rgb, icone, trilha, done) {
+function _animBolaEnergia(ctx: any, canvas: any, origem: any, alvo: any, cor: any, rgb: any, icone: any, trilha: any, done: any) {
   const dur = 480, start = performance.now();
   const cx = (origem.x + alvo.x) / 2;
   const cy = Math.min(origem.y, alvo.y) - 60;
-  const trail = [];
-  function bezier(t) {
+  const trail: any = [];
+  function bezier(t: any) {
     return {
       x: (1-t)*(1-t)*origem.x + 2*(1-t)*t*cx + t*t*alvo.x,
       y: (1-t)*(1-t)*origem.y + 2*(1-t)*t*cy + t*t*alvo.y,
     };
   }
-  function frame(now) {
+  function frame(now: any) {
     const t = Math.min((now - start) / dur, 1);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const pos = bezier(t);

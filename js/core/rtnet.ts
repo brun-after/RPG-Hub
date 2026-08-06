@@ -18,63 +18,63 @@ window.RTNet = (() => {
 
   // ── ESTADO INTERNO ─────────────────────────────────────────────
   const _s = {
-    rpgId:    null,
-    userId:   null,
+    rpgId:    null as any,
+    userId:   null as any,
     initialized: false,
     joinedAt: 0,            // ms epoch — minha entrada
     paused:   false,
 
     // WebRTC
-    peers:       new Map(), // peerId → RTCPeerConnection
-    channels:    new Map(), // peerId → RTCDataChannel (reliable)
-    fastChannels:new Map(), // peerId → RTCDataChannel (unreliable)
-    connectingTo:new Set(),
-    peerJoinTs:  new Map(), // peerId → ms epoch reportado pelo peer
+    peers:       new Map<string, RTCPeerConnection>(),
+    channels:    new Map<string, RTCDataChannel>(),          // reliable
+    fastChannels:new Map<string, RTCDataChannel>(),          // unreliable
+    connectingTo:new Set<string>(),
+    peerJoinTs:  new Map<string, number>(),                  // ms epoch reportado pelo peer
 
     // Host
-    hostId:      null,
+    hostId:      null as any,
     _isHost:     false,
-    hostCbs:     [],
+    hostCbs:     [] as any[],
     lastHostHb:  0,
 
     // Timers
-    snapshotTimer:    null,
-    heartbeatTimer:   null,
-    stateTickTimer:   null,
-    _hostDeadTimer:   null,
-    _candidateTimer:  null,
-    _soloHostTimer:   null,
-    periodicSyncTimer:null,
+    snapshotTimer:    null as any,
+    heartbeatTimer:   null as any,
+    stateTickTimer:   null as any,
+    _hostDeadTimer:   null as any,
+    _candidateTimer:  null as any,
+    _soloHostTimer:   null as any,
+    periodicSyncTimer:null as any,
 
     // Event handlers
-    handlers: new Map(),
+    handlers: new Map<string, Set<(payload: any) => void>>(),
 
     // Snapshot
-    snapshotProvider: null,
+    snapshotProvider: null as any,
 
     // Transport
     mode: 'supabase', // 'p2p' | 'mixed' | 'supabase'
 
     // Election candidates collected during window
-    _candidates: new Map(), // userId → joinTs
+    _candidates: new Map<string, number>(),                  // userId → joinTs
 
     // Voluntary host election
-    _volunteers:    [],     // { userId, ts } — candidatos ao host (modo voluntário)
-    _volunteerTimer: null,  // timer de janela de coleta de volunteers
+    _volunteers:    [] as any[],     // { userId, ts } — candidatos ao host (modo voluntário)
+    _volunteerTimer: null as any,  // timer de janela de coleta de volunteers
 
     // Peer leave callbacks
-    _peerLeaveCallbacks: [],
+    _peerLeaveCallbacks: [] as any[],
 
     // Telemetria (AVT_PERF): contadores de mensagens e RTT ao host
     _stats: { in: 0, out: 0, rtt: -1 },
-    _pingTimer: null,
+    _pingTimer: null as any,
   };
 
   // TURN opcional via env (Vite): VITE_TURN_URL / VITE_TURN_USER / VITE_TURN_PASS.
   // Sem TURN, peers atrás de NAT simétrico caem silenciosamente para o fallback Supabase.
   const _ICE_ENV = (() => { try { return (import.meta as any).env || {}; } catch(_) { return {}; } })();
   function _iceServers() {
-    const servers: any[] = [{ urls: 'stun:stun.l.google.com:19302' }];
+    const servers: any = [{ urls: 'stun:stun.l.google.com:19302' }];
     if (_ICE_ENV.VITE_TURN_URL) {
       servers.push({
         urls: _ICE_ENV.VITE_TURN_URL,
@@ -96,142 +96,111 @@ window.RTNet = (() => {
   const PERIODIC_SYNC_INTERVAL = 10_000; // ms — ressincronização periódica forçada
   const PING_INTERVAL        = 2_000;   // ms — medição de RTT ao host (canal fast)
 
-  // Mapa: tipo de evento → nome da função global handler (mesmo que realtime.js)
-  const AVT_HANDLER_MAP = {
-    avt_token_move:        'avtReceberMovimento',
-    avt_combate_inicio:    'avtReceberCombateInicio',
-    avt_batalha_update:    'avtReceberBatalhaUpdate',
-    avt_combate_fim:       'avtReceberFimBatalha',
-    avt_combate_join:      'avtReceberJoinBatalha',
-    avt_npc_morreu:        'avtReceberNpcMorreu',
-    avt_npc_perseguindo:   'avtReceberNpcPerseguindo',
-    avt_npc_respawn:       'avtReceberNpcRespawn',
-    avt_convite_combate:   'avtReceberConviteCombate',
-    avt_xp_ganho:          'avtReceberXpGanho',
-    avt_level_up:          'avtReceberLevelUp',
-    avt_jogador_morreu:    'avtReceberJogadorMorreu',
-    avt_jogador_ressurgiu: 'avtReceberJogadorRessurgiu',
-    avt_jogador_visivel:   'avtReceberJogadorVisivel',
-    avt_skill_selecionada: 'avtReceberSkillSelecionada',
-    avt_dado_rolado:       'avtReceberDadoRolado',
-    avt_dano_visual:       'avtReceberDanoVisual',
-    avt_dano_visual_batch: 'avtReceberDanoVisualBatch',
-    avt_hp_update:         'avtReceberHpUpdate',
-    avt_member_linked:     'avtReceberMemberLinked',
-    avt_primeiro_ataque:   'avtReceberPrimeiroAtaque',
-    avt_skill_anim:        'avtReceberSkillAnim',
-    avt_attack_anim:       'avtReceberAttackAnim',
-    avt_level_config_update:'avtReceberLevelConfigUpdate',
-    // [HOST-RTC] novos
-    avt_state_tick:           'avtReceberStateTick',
-    avt_player_action:        'avtReceberPlayerAction',
-    avt_authoritative_apply:  'avtReceberAuthoritativeApply',
-    // [HP-AUTHORITY v22] novos
-    avt_player_hp:            'avtReceberPlayerHp',
-    avt_player_damage:        'avtReceberPlayerDamage',
+  // ── Catálogo único dos eventos avt_* (Entrega 3) ──────────────────────────
+  // Fonte de verdade para os 4 consumidores que antes mantinham cópias
+  // divergentes: AVT_HANDLER_MAP e EVENT_OPTS (derivados abaixo) e o
+  // dispatcher + flush do fallback Supabase em realtime.ts (via
+  // window.AVT_EVENTS). A divergência dropava eventos: o flush descartava
+  // ~20 tipos enfileirados pré-join e o fallback não roteava avt_obj_spawn,
+  // avt_rastro_marcar etc.; o DataChannel não roteava avt_invocacao_destruida.
+  // handler: função global receptora (ausente = tratado em camada própria);
+  // persist/reliable/relay: opts de transporte (ausentes = defaults do caller).
+  interface AvtEventSpec {
+    handler?: string;
+    persist?: 'never' | 'snapshot' | 'immediate';
+    reliable?: boolean;
+    relay?: boolean;
+  }
+  const AVT_EVENTS: Record<string, AvtEventSpec> = {
+    avt_token_move:        { handler: 'avtReceberMovimento',        persist: 'never',     reliable: false },
+    avt_host_heartbeat:    { handler: 'avtReceberHostHeartbeat',    persist: 'never',     reliable: false }, // interceptado na camada de transporte do RTNet; handler é o stub do fallback
+    avt_combate_inicio:    { handler: 'avtReceberCombateInicio',    persist: 'immediate', reliable: true  },
+    avt_batalha_update:    { handler: 'avtReceberBatalhaUpdate',    persist: 'snapshot',  reliable: true  },
+    avt_combate_fim:       { handler: 'avtReceberFimBatalha',       persist: 'immediate', reliable: true  },
+    avt_combate_join:      { handler: 'avtReceberJoinBatalha',      persist: 'snapshot',  reliable: true  },
+    avt_npc_morreu:        { handler: 'avtReceberNpcMorreu',        persist: 'immediate', reliable: true  },
+    avt_npc_perseguindo:   { handler: 'avtReceberNpcPerseguindo',   persist: 'never',     reliable: false },
+    avt_npc_respawn:       { handler: 'avtReceberNpcRespawn',       persist: 'immediate', reliable: true  },
+    avt_convite_combate:   { handler: 'avtReceberConviteCombate',   persist: 'never',     reliable: false },
+    avt_xp_ganho:          { handler: 'avtReceberXpGanho',          persist: 'immediate', reliable: true  },
+    avt_level_up:          { handler: 'avtReceberLevelUp',          persist: 'immediate', reliable: true  },
+    avt_jogador_morreu:    { handler: 'avtReceberJogadorMorreu',    persist: 'immediate', reliable: true  },
+    avt_jogador_ressurgiu: { handler: 'avtReceberJogadorRessurgiu', persist: 'immediate', reliable: true  },
+    avt_jogador_visivel:   { handler: 'avtReceberJogadorVisivel',   persist: 'immediate', reliable: true  },
+    avt_skill_selecionada: { handler: 'avtReceberSkillSelecionada', persist: 'never',     reliable: false, relay: true },
+    avt_dado_rolado:       { handler: 'avtReceberDadoRolado',       persist: 'never',     reliable: false, relay: true },
+    avt_dano_visual:       { handler: 'avtReceberDanoVisual',       persist: 'never',     reliable: false, relay: true },
+    avt_dano_visual_batch: { handler: 'avtReceberDanoVisualBatch',  persist: 'never',     reliable: false, relay: true },
+    avt_hp_update:         { handler: 'avtReceberHpUpdate',         persist: 'snapshot',  reliable: true  },
+    avt_member_linked:     { handler: 'avtReceberMemberLinked',     persist: 'immediate', reliable: true  },
+    avt_primeiro_ataque:   { handler: 'avtReceberPrimeiroAtaque',   persist: 'never',     reliable: false, relay: true },
+    avt_skill_anim:        { handler: 'avtReceberSkillAnim',        persist: 'never',     reliable: true,  relay: true },
+    avt_attack_anim:       { handler: 'avtReceberAttackAnim',       persist: 'never',     reliable: true,  relay: true },
+    avt_level_config_update:{ handler: 'avtReceberLevelConfigUpdate', persist: 'immediate', reliable: true },
+    // [HOST-RTC]
+    avt_state_tick:           { handler: 'avtReceberStateTick',          persist: 'never', reliable: true },
+    avt_player_action:        { handler: 'avtReceberPlayerAction',       persist: 'never', reliable: true },
+    avt_authoritative_apply:  { handler: 'avtReceberAuthoritativeApply', persist: 'never', reliable: true },
+    // [HP-AUTHORITY v22]
+    avt_player_hp:            { handler: 'avtReceberPlayerHp',           persist: 'never', reliable: true },
+    avt_player_damage:        { handler: 'avtReceberPlayerDamage',       persist: 'never', reliable: true },
     // [COLISAO + ENTIDADE]
-    avt_colisao_config:       'avtReceberColisaoConfig',
-    avt_entidade_nova:        'avtReceberEntidadeNova',
-    // [MOVE-INPUT] movimento baseado em input (não-host → host)
-    avt_move_input:           'avtReceberMoveInput',
-    // [SYNC-COMPLETO] equipamento, atributos e mudanças do mestre
-    avt_item_equipado:        'avtReceberItemEquipado',
-    avt_item_desequipado:     'avtReceberItemDesequipado',
-    avt_char_update:          'avtReceberCharUpdate',
+    avt_colisao_config:       { handler: 'avtReceberColisaoConfig' },
+    avt_entidade_nova:        { handler: 'avtReceberEntidadeNova' },
+    avt_invocacao_destruida:  { handler: 'avtReceberInvocacaoDestruida' },
+    // [MOVE-INPUT]
+    avt_move_input:           { handler: 'avtReceberMoveInput',          persist: 'never', reliable: true },
+    // [SYNC-COMPLETO]
+    avt_item_equipado:        { handler: 'avtReceberItemEquipado',       persist: 'never', reliable: true },
+    avt_item_desequipado:     { handler: 'avtReceberItemDesequipado',    persist: 'never', reliable: true },
+    avt_char_update:          { handler: 'avtReceberCharUpdate',         persist: 'never', reliable: true },
     // [RECURSOS + BAÚS]
-    avt_rsv_update:           'avtReceberRsvUpdate',
-    avt_bau_aberto:           'avtReceberBauAberto',
-    // [OBJETOS] loot no chão e orbes de recurso (spawn/coleta)
-    avt_obj_spawn:            'avtReceberObjSpawn',
-    avt_obj_pickup:           'avtReceberObjPickup',
-    // [COBERTURA COMPLETA] rastro autoritativo, cooldown OOC e cache de inventário
-    avt_rastro_marcar:        'avtReceberRastroMarcar',
-    avt_ooc_cooldown:         'avtReceberOocCooldown',
-    avt_inv_update:           'avtReceberInvUpdate',
+    avt_rsv_update:           { handler: 'avtReceberRsvUpdate',          persist: 'never', reliable: true },
+    avt_bau_aberto:           { handler: 'avtReceberBauAberto',          persist: 'immediate', reliable: true },
+    // [OBJETOS]
+    avt_obj_spawn:            { handler: 'avtReceberObjSpawn',           persist: 'immediate', reliable: true },
+    avt_obj_pickup:           { handler: 'avtReceberObjPickup',          persist: 'immediate', reliable: true },
+    // [COBERTURA COMPLETA]
+    avt_rastro_marcar:        { handler: 'avtReceberRastroMarcar',       persist: 'never', reliable: true },
+    avt_ooc_cooldown:         { handler: 'avtReceberOocCooldown',        persist: 'never', reliable: true },
+    avt_inv_update:           { handler: 'avtReceberInvUpdate',          persist: 'never', reliable: true },
     // [FASES]
-    avt_fase_mudou:           'avtReceberFaseMudou',
-    avt_fase_host:            'avtReceberFaseHost',
-    avt_fase_host_release:    'avtReceberFaseHostRelease',
-    avt_porta_proxima:        'avtReceberPortaProxima',
-    avt_dungeon_update:       'avtReceberDungeonUpdate',
-    // [VFX persistente] efeitos de status ancorados em entidade
-    avt_efeito_anim_start:    'avtReceberEfeitoAnimStart',
-    avt_efeito_anim_stop:     'avtReceberEfeitoAnimStop',
-    // [PERF] medição de RTT (tratados internamente em _dispatch; entradas aqui
-    // permitem que o fallback Supabase os roteie para os stubs do avt-perf)
-    avt_ping:                 'avtReceberPing',
-    avt_pong:                 'avtReceberPong',
+    avt_fase_mudou:           { handler: 'avtReceberFaseMudou' },
+    avt_fase_host:            { handler: 'avtReceberFaseHost',           persist: 'never', reliable: true },
+    avt_fase_host_release:    { handler: 'avtReceberFaseHostRelease',    persist: 'never', reliable: true },
+    avt_porta_proxima:        { handler: 'avtReceberPortaProxima' },
+    avt_dungeon_update:       { handler: 'avtReceberDungeonUpdate',      persist: 'never', reliable: true },
+    // presença por fase: tratada por handler anônimo via RTNet.on (avt-menu.ts)
+    avt_fase_presenca:        {},
+    // [VFX persistente]
+    avt_efeito_anim_start:    { handler: 'avtReceberEfeitoAnimStart',    persist: 'never', reliable: true, relay: true },
+    avt_efeito_anim_stop:     { handler: 'avtReceberEfeitoAnimStop',     persist: 'never', reliable: true, relay: true },
+    // [PERF] ping/pong tratados na camada de transporte; handlers = stubs do fallback
+    avt_ping:                 { handler: 'avtReceberPing',               persist: 'never', reliable: false },
+    avt_pong:                 { handler: 'avtReceberPong',               persist: 'never', reliable: false },
   };
+  try { (window as any).AVT_EVENTS = AVT_EVENTS; } catch(_) {}
 
-  // opts padrão por tipo de evento (camada A/B/C conforme plano §5)
-  const EVENT_OPTS = {
-    avt_token_move:        { persist: 'never',     reliable: false },
-    avt_host_heartbeat:    { persist: 'never',     reliable: false },
-    avt_combate_inicio:    { persist: 'immediate', reliable: true  },
-    avt_batalha_update:    { persist: 'snapshot',  reliable: true  },
-    avt_combate_fim:       { persist: 'immediate', reliable: true  },
-    avt_combate_join:      { persist: 'snapshot',  reliable: true  },
-    avt_npc_morreu:        { persist: 'immediate', reliable: true  },
-    avt_npc_perseguindo:   { persist: 'never',     reliable: false },
-    avt_npc_respawn:       { persist: 'immediate', reliable: true  },
-    avt_convite_combate:   { persist: 'never',     reliable: false },
-    avt_xp_ganho:          { persist: 'immediate', reliable: true  },
-    avt_level_up:          { persist: 'immediate', reliable: true  },
-    avt_jogador_morreu:    { persist: 'immediate', reliable: true  },
-    avt_jogador_ressurgiu: { persist: 'immediate', reliable: true  },
-    avt_jogador_visivel:   { persist: 'immediate', reliable: true  },
-    avt_skill_selecionada: { persist: 'never',     reliable: false, relay: true },
-    avt_dado_rolado:       { persist: 'never',     reliable: false, relay: true },
-    avt_dano_visual:       { persist: 'never',     reliable: false, relay: true },
-    avt_dano_visual_batch: { persist: 'never',     reliable: false, relay: true },
-    avt_hp_update:         { persist: 'snapshot',  reliable: true  },
-    avt_member_linked:     { persist: 'immediate', reliable: true  },
-    avt_primeiro_ataque:   { persist: 'never',     reliable: false, relay: true },
-    avt_bau_aberto:        { persist: 'immediate', reliable: true  },
-    avt_obj_spawn:         { persist: 'immediate', reliable: true  },
-    avt_obj_pickup:        { persist: 'immediate', reliable: true  },
-    avt_skill_anim:        { persist: 'never',     reliable: true,  relay: true },
-    avt_efeito_anim_start: { persist: 'never',     reliable: true,  relay: true },
-    avt_efeito_anim_stop:  { persist: 'never',     reliable: true,  relay: true },
-    avt_attack_anim:       { persist: 'never',     reliable: true,  relay: true },
-    avt_level_config_update:{ persist: 'immediate',reliable: true  },
-    // [HOST-RTC] novos
-    avt_state_tick:           { persist: 'never',     reliable: true  }, // tick autoritativo usa canal confiável
-    avt_player_action:        { persist: 'never',     reliable: true  },
-    avt_authoritative_apply:  { persist: 'never',     reliable: true  },
-    // [HP-AUTHORITY v22] novos — HP fast (unreliable, alta frequência); damage reliable
-    avt_player_hp:            { persist: 'never',     reliable: true  },
-    avt_player_damage:        { persist: 'never',     reliable: true  },
-    // [MOVE-INPUT] intenção de movimento do cliente para o host (canal confiável)
-    avt_move_input:           { persist: 'never',     reliable: true  },
-    // [SYNC-COMPLETO] equipamento e mudanças de atributos pelo mestre
-    avt_item_equipado:        { persist: 'never',     reliable: true  },
-    avt_item_desequipado:     { persist: 'never',     reliable: true  },
-    avt_char_update:          { persist: 'never',     reliable: true  },
-    // [RECURSOS + BAÚS]
-    avt_rsv_update:           { persist: 'never',     reliable: true  },
-    // [COBERTURA COMPLETA] eventos confiáveis de baixa frequência
-    avt_rastro_marcar:        { persist: 'never',     reliable: true  },
-    avt_ooc_cooldown:         { persist: 'never',     reliable: true  },
-    avt_inv_update:           { persist: 'never',     reliable: true  },
-    // [MAPA] edição de mapa ao vivo pelo mestre (já persistido via theme_json)
-    avt_dungeon_update:       { persist: 'never',     reliable: true  },
-    // [FASES] anúncio/reafirmação de host por fase
-    avt_fase_host:            { persist: 'never',     reliable: true  },
-    avt_fase_host_release:    { persist: 'never',     reliable: true  },
-    // [PERF] ping/pong de RTT — alta frequência, perda tolerável
-    avt_ping:                 { persist: 'never',     reliable: false },
-    avt_pong:                 { persist: 'never',     reliable: false },
-  };
+  // Derivados do catálogo — mesmo conteúdo que os literais antigos, sem cópia.
+  const AVT_HANDLER_MAP: Record<string, string> = {};
+  const EVENT_OPTS: Record<string, Partial<AvtEventSpec>> = {};
+  for (const _ev in AVT_EVENTS) {
+    const _spec = AVT_EVENTS[_ev];
+    if (_spec.handler) AVT_HANDLER_MAP[_ev] = _spec.handler;
+    if (_spec.persist !== undefined) {
+      EVENT_OPTS[_ev] = { persist: _spec.persist, reliable: !!_spec.reliable };
+      if (_spec.relay) EVENT_OPTS[_ev].relay = true;
+    }
+  }
 
-  function _log(...a)  { try { console.log('[RTNet]',  ...a); } catch(_) {} }
-  function _warn(...a) { try { console.warn('[RTNet]', ...a); } catch(_) {} }
+  function _log(...a: any[])  { try { console.log('[RTNet]',  ...a); } catch(_) {} }
+  function _warn(...a: any[]) { try { console.warn('[RTNet]', ...a); } catch(_) {} }
 
   function _webRTCOk() { return typeof RTCPeerConnection !== 'undefined'; }
 
   // ── DISPATCH ────────────────────────────────────────────────────
 
-  function _dispatch(tipo, payload) {
+  function _dispatch(tipo: any, payload: any) {
     _s._stats.in++;
     // Heartbeat do host via DataChannel — resetar watchdog de host morto
     if (tipo === 'avt_host_heartbeat') {
@@ -247,7 +216,7 @@ window.RTNet = (() => {
 
     const fnName = AVT_HANDLER_MAP[tipo];
     if (fnName) {
-      const fn = window[fnName];
+      const fn = (window as any)[fnName];
       if (typeof fn === 'function') { try { (fn as any)(payload); } catch(e) { _warn('global handler:', fnName, e); } }
       else {
         try {
@@ -262,12 +231,12 @@ window.RTNet = (() => {
 
   // ── SINALIZAÇÃO (via Supabase Realtime existente) ───────────────
 
-  function _signal(tipo, payload) {
+  function _signal(tipo: any, payload: any) {
     if (typeof realtimeBroadcast !== 'function') return;
     try { realtimeBroadcast('rtnet_' + tipo, { ...payload, _from: _s.userId }); } catch(e) { _warn('signal falhou:', tipo, e); }
   }
 
-  function _handleSignaling(tipo, payload) {
+  function _handleSignaling(tipo: any, payload: any) {
     if (!_s.initialized) return;
     if (!payload) return;
     const from = payload._from;
@@ -308,7 +277,7 @@ window.RTNet = (() => {
 
   // ── WEBRTC ──────────────────────────────────────────────────────
 
-  async function _connectTo(peerId) {
+  async function _connectTo(peerId: any) {
     if (_s.peers.has(peerId) || _s.connectingTo.has(peerId)) return;
     _s.connectingTo.add(peerId);
     _log('iniciando conexão WebRTC com', peerId);
@@ -343,7 +312,7 @@ window.RTNet = (() => {
     }
   }
 
-  async function _onOffer(fromId, payload) {
+  async function _onOffer(fromId: any, payload: any) {
     if (_s.peers.has(fromId)) return;
     _log('recebendo offer de', fromId);
 
@@ -373,22 +342,22 @@ window.RTNet = (() => {
     _signal('peer_answer', { target_id: fromId, sdp: answer });
   }
 
-  async function _onAnswer(fromId, payload) {
+  async function _onAnswer(fromId: any, payload: any) {
     const pc = _s.peers.get(fromId);
     if (!pc) return;
     try { await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp)); } catch(e) { _warn('setRemote:', e); }
   }
 
-  async function _onIce(fromId, payload) {
+  async function _onIce(fromId: any, payload: any) {
     const pc = _s.peers.get(fromId);
     if (!pc) return;
     try { await pc.addIceCandidate(new RTCIceCandidate(payload.candidate)); } catch(e) { _warn('addIce:', e); }
   }
 
-  function _bindChannel(ch, peerId, kind) {
+  function _bindChannel(ch: any, peerId: any, kind: any) {
     ch.onopen  = () => { _log(`DataChannel ${kind} aberto com`, peerId); _updateMode(); };
     ch.onclose = () => { _cleanPeer(peerId); };
-    ch.onmessage = e => {
+    ch.onmessage = (e: any) => {
       try {
         const msg = JSON.parse(e.data);
         if (msg && msg.tipo) {
@@ -405,8 +374,8 @@ window.RTNet = (() => {
 
   // [RELAY] Reenvia um frame já serializado a todos os peers abertos exceto o remetente.
   // Usa o mapa de canais conforme a confiabilidade do evento.
-  function _relayFanout(frame, tipo, exceptPeerId) {
-    const o = EVENT_OPTS[tipo] || {};
+  function _relayFanout(frame: any, tipo: any, exceptPeerId: any) {
+    const o: Partial<AvtEventSpec> = EVENT_OPTS[tipo] || {};
     const chMap = o.reliable !== false ? _s.channels : _s.fastChannels;
     for (const [pid, ch] of chMap.entries()) {
       if (pid === exceptPeerId) continue;
@@ -414,7 +383,7 @@ window.RTNet = (() => {
     }
   }
 
-  function _cleanPeer(peerId) {
+  function _cleanPeer(peerId: any) {
     // peerId IS the userId in this mesh — notify before cleaning
     if (_s.peers.has(peerId) && _s._peerLeaveCallbacks.length) {
       _s._peerLeaveCallbacks.forEach(fn => { try { fn(peerId); } catch(_) {} });
@@ -535,7 +504,7 @@ window.RTNet = (() => {
     }
   }
 
-  function _onAnnounce(fromId, payload) {
+  function _onAnnounce(fromId: any, payload: any) {
     const ts = typeof payload.joinTs === 'number' ? payload.joinTs : Date.now();
     _s.peerJoinTs.set(fromId, ts);
     if (payload.isHostCandidate) {
@@ -580,7 +549,7 @@ window.RTNet = (() => {
     _startSnapshotTimer();
   }
 
-  function _onHostElected(hostId) {
+  function _onHostElected(hostId: any) {
     if (_s.hostId === hostId) return;
     _log('host eleito:', hostId);
     const wasHost = _s._isHost;
@@ -605,7 +574,7 @@ window.RTNet = (() => {
 
   // ── TRANSFERÊNCIA MANUAL DE HOST ────────────────────────────────
 
-  function _onHostTransferOffer(fromId, payload) {
+  function _onHostTransferOffer(fromId: any, payload: any) {
     // Apenas aceita se vier do host atual
     if (fromId !== _s.hostId) { _warn('host_transfer ignorado — origem não é host:', fromId); return; }
     _log('recebido pedido de host_transfer de', fromId);
@@ -614,7 +583,7 @@ window.RTNet = (() => {
     _onHostElected(_s.userId);
   }
 
-  function _onHostTransferAck(newHostId, oldHostId) {
+  function _onHostTransferAck(newHostId: any, oldHostId: any) {
     if (!newHostId) return;
     _log('host transfer ack:', oldHostId, '→', newHostId);
     _onHostElected(newHostId);
@@ -652,7 +621,7 @@ window.RTNet = (() => {
     _stopStateTick();
     _updateHostIndicator();
     const banner = document.getElementById('avt-host-dead-banner');
-    if (banner) banner.style.display = 'flex';
+    if (banner) banner.style!.display = 'flex';
     try { window.dispatchEvent(new CustomEvent('rtnet:hostlost')); } catch(_) {}
   }
 
@@ -681,7 +650,7 @@ window.RTNet = (() => {
     _s._stats.rtt = -1;
   }
 
-  function _onPing(payload) {
+  function _onPing(payload: any) {
     // Só o host responde (via Supabase o ping chega a todos os peers)
     if (!_s._isHost || !payload || !payload.from || payload.from === _s.userId) return;
     const pong = { to: payload.from, t: payload.t };
@@ -694,7 +663,7 @@ window.RTNet = (() => {
     }
   }
 
-  function _onPong(payload) {
+  function _onPong(payload: any) {
     if (!payload || payload.to !== _s.userId || typeof payload.t !== 'number') return;
     _s._stats.rtt = Math.max(0, Math.round(performance.now() - payload.t));
   }
@@ -731,7 +700,7 @@ window.RTNet = (() => {
     _saveSnapshot();
   }
 
-  let _lastSnapshotJson = null;
+  let _lastSnapshotJson: any = null;
   let _lastSnapshotTs   = 0;
   async function _saveSnapshot() {
     if (!_s._isHost || !_s.snapshotProvider) return;
@@ -753,7 +722,7 @@ window.RTNet = (() => {
     } catch(e) { _warn('saveSnapshot:', e); }
   }
 
-  async function _pushSnapshotTo(peerId) {
+  async function _pushSnapshotTo(peerId: any) {
     if (!_s.snapshotProvider) return;
     try {
       const snapshot = _s.snapshotProvider();
@@ -761,13 +730,13 @@ window.RTNet = (() => {
     } catch(e) { _warn('pushSnapshot:', e); }
   }
 
-  function _applySnapshot(snapshot) {
+  function _applySnapshot(snapshot: any) {
     if (!snapshot) return;
     _log('aplicando snapshot do host');
     try {
       if (typeof AVT_STATE === 'undefined' || !AVT_STATE) return;
       // Isolamento por fase: não aplicar snapshot de fase diferente da minha.
-      const _minhaFase = AVT_STATE._faseAtualId || 'principal';
+      const _minhaFase = (AVT_STATE as any)._faseAtualId || 'principal';
       if (snapshot.faseId != null && snapshot.faseId !== _minhaFase) return;
       // Merge não-destrutivo (preserva posição do MEU personagem) quando disponível
       if (typeof window !== 'undefined' && typeof window.avtAplicarSnapshotMerge === 'function') {
@@ -788,7 +757,7 @@ window.RTNet = (() => {
 
   // ── BROADCAST ───────────────────────────────────────────────────
 
-  function _broadcast(tipo: any, payload: any, opts?: any) {
+  function _broadcast<K extends AvtEventName>(tipo: K, payload?: AvtPayloadMap[K], opts?: any) {
     const defaults = EVENT_OPTS[tipo] || { persist: 'never', reliable: true };
     const o = { ...defaults, ...opts };
 
@@ -839,7 +808,7 @@ window.RTNet = (() => {
   }
 
   // Unicast direcionado (jogador → host)
-  function _sendToHost(tipo, payload) {
+  function _sendToHost(tipo: any, payload: any) {
     if (!_s.hostId) return;
     if (_s._isHost) { _dispatch(tipo, payload); return; }
     const ch = _s.channels.get(_s.hostId);
@@ -857,14 +826,14 @@ window.RTNet = (() => {
   function _updateTransportIndicator() {
     const el = document.getElementById('avt-p2p-indicator');
     if (!el) return;
-    const map = { p2p: ['🟢', 'P2P ativo'], mixed: ['🟡', 'P2P parcial'], supabase: ['🔴', 'Supabase (fallback)'] };
+    const map: Record<string, any> = { p2p: ['🟢', 'P2P ativo'], mixed: ['🟡', 'P2P parcial'], supabase: ['🔴', 'Supabase (fallback)'] };
     const [icon, title] = map[_s.mode] || ['🔴', 'Supabase'];
     const degradado = _s.mode !== 'p2p' && _s.peerJoinTs.size > 0;
     el.textContent = icon;
     el.title = degradado
       ? title + ' — sem conexão direta com algum jogador (latência maior). Um servidor TURN resolve NAT restrito; veja docs/setup.md.'
       : title;
-    el.style.display = 'inline';
+    el.style!.display = 'inline';
   }
 
   function _updateHostIndicator() {
@@ -872,21 +841,21 @@ window.RTNet = (() => {
     if (el) {
       if (_s._isHost) {
         el.textContent = '⚡ Host';
-        el.style.color = '#c8a84b';
-        el.style.cursor = 'pointer';
+        el.style!.color = '#c8a84b';
+        el.style!.cursor = 'pointer';
         el.title = 'Clique para transferir o host';
       } else if (_s.hostId) {
         el.textContent = '◉ Online';
-        el.style.color = '#4fa3d1';
-        el.style.cursor = 'default';
+        el.style!.color = '#4fa3d1';
+        el.style!.cursor = 'default';
         el.title = 'Host: ' + _s.hostId.slice(0, 8) + '…';
       } else {
         el.textContent = '◯';
-        el.style.color = '#7a92aa';
-        el.style.cursor = 'default';
+        el.style!.color = '#7a92aa';
+        el.style!.cursor = 'default';
         el.title = 'Sem host eleito';
       }
-      el.style.display = 'inline-block';
+      el.style!.display = 'inline-block';
     }
     // Re-render topbar button if presente
     try { if (typeof window._avtRenderTopbar === 'function') window._avtRenderTopbar(); } catch(_) {}
@@ -917,7 +886,7 @@ window.RTNet = (() => {
     get mode()        { return _s.mode; },
     get hostId()      { return _s.hostId; },
 
-    async init({ rpgId, userId, isAventura = true }) {
+    async init({ rpgId, userId, isAventura = true }: any) {
       if (_s.initialized) this.shutdown();
       _s.rpgId       = rpgId;
       _s.userId      = userId;
@@ -1003,14 +972,14 @@ window.RTNet = (() => {
       _s._peerLeaveCallbacks = [];
 
       const banner = document.getElementById('avt-host-dead-banner');
-      if (banner) banner.style.display = 'none';
+      if (banner) banner.style!.display = 'none';
       const hi = document.getElementById('avt-host-indicator');
-      if (hi) hi.style.display = 'none';
+      if (hi) hi.style!.display = 'none';
       const pi = document.getElementById('avt-p2p-indicator');
-      if (pi) pi.style.display = 'none';
+      if (pi) pi.style!.display = 'none';
     },
 
-    broadcast(tipo, payload, opts) {
+    broadcast<K extends AvtEventName>(tipo: K, payload?: AvtPayloadMap[K], opts?: any) {
       if (!_s.initialized) {
         if (typeof realtimeBroadcast === 'function') realtimeBroadcast(tipo, payload);
         return;
@@ -1018,7 +987,7 @@ window.RTNet = (() => {
       _broadcast(tipo, payload, opts);
     },
 
-    broadcastP2POnly(tipo, payload, opts) {
+    broadcastP2POnly(tipo: any, payload: any, opts: any) {
       if (!_s.initialized || _s.mode === 'supabase') return;
       const defaults = EVENT_OPTS[tipo] || { persist: 'never', reliable: true };
       const o = { ...defaults, ...opts };
@@ -1029,17 +998,17 @@ window.RTNet = (() => {
       }
     },
 
-    sendToHost(tipo, payload) {
+    sendToHost(tipo: any, payload: any) {
       if (!_s.initialized) return;
       _sendToHost(tipo, payload);
     },
 
-    on(tipo, handler) {
+    on(tipo: any, handler: any) {
       if (!_s.handlers.has(tipo)) _s.handlers.set(tipo, new Set());
-      _s.handlers.get(tipo).add(handler);
+      _s.handlers.get(tipo)!.add!(handler)!;
     },
 
-    off(tipo, handler) { _s.handlers.get(tipo)?.delete(handler); },
+    off(tipo: any, handler: any) { _s.handlers.get(tipo)?.delete(handler); },
 
     isHost()    { return _s._isHost; },
     isPaused()  { return !!_s.paused; },
@@ -1060,8 +1029,8 @@ window.RTNet = (() => {
 
     // Handlers de ping/pong para o caminho de fallback Supabase (o caminho P2P
     // é interceptado em _dispatch antes do lookup global).
-    _onPing(payload) { _onPing(payload); },
-    _onPong(payload) { _onPong(payload); },
+    _onPing(payload: any) { _onPing(payload); },
+    _onPong(payload: any) { _onPong(payload); },
 
     listarPeers() {
       const out = [];
@@ -1094,7 +1063,7 @@ window.RTNet = (() => {
     // Expõe mapa de joinTs dos peers para listagem na sala de espera
     _peerJoinTs() { return _s.peerJoinTs; },
 
-    transferirHost(targetUserId) {
+    transferirHost(targetUserId: any) {
       if (!_s._isHost) { _warn('transferirHost: só o host pode transferir'); return false; }
       if (!targetUserId || targetUserId === _s.userId) return false;
       _log('transferindo host para', targetUserId);
@@ -1102,12 +1071,12 @@ window.RTNet = (() => {
       return true;
     },
 
-    onHostChange(cb) {
+    onHostChange(cb: any) {
       _s.hostCbs.push(cb);
       return () => { _s.hostCbs = _s.hostCbs.filter(c => c !== cb); };
     },
 
-    onPeerLeave(fn) {
+    onPeerLeave(fn: any) {
       _s._peerLeaveCallbacks.push(fn);
       return () => { _s._peerLeaveCallbacks = _s._peerLeaveCallbacks.filter(c => c !== fn); };
     },
@@ -1123,10 +1092,10 @@ window.RTNet = (() => {
       _s.paused = false;
       _electSelf();
       const banner = document.getElementById('avt-host-dead-banner');
-      if (banner) banner.style.display = 'none';
+      if (banner) banner.style!.display = 'none';
     },
 
-    registrarSnapshotProvider(fn) { _s.snapshotProvider = fn; },
+    registrarSnapshotProvider(fn: any) { _s.snapshotProvider = fn; },
 
     async requisitarSnapshot() {
       if (!_s.hostId || _s._isHost) return;
@@ -1134,12 +1103,12 @@ window.RTNet = (() => {
       _signal('snapshot_request', { target_id: _s.hostId });
     },
 
-    async persistirImediato(rpcName, args) {
+    async persistirImediato(rpcName: any, args: any) {
       if (!_s._isHost) return;
       try { if (typeof sbRpc === 'function') await sbRpc(rpcName, args); } catch(e) { _warn('persistirImediato:', rpcName, e); }
     },
 
-    _handleSignaling(tipo, payload) { _handleSignaling(tipo, payload); },
+    _handleSignaling(tipo: any, payload: any) { _handleSignaling(tipo, payload); },
     _onSignalingReconnect() { _onSignalingReconnect(); },
     _signalingActive: false,
   };

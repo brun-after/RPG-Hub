@@ -25,7 +25,7 @@ const CHUNK = 16;        // tiles por chunk (culling de visibilidade)
 
 let _app: any = null;                 // PIXI.Application (autoStart: false)
 let _tileRoot: any = null;            // container com os chunks da fase
-let _chunks: any[] = [];              // [{c: Container, px, py, w, h}]
+let _chunks: any = [];              // [{c: Container, px, py, w, h}]
 let _bakeSig = '';                    // assinatura da última fase assada
 let _hueFilter: any = null;
 let _hueAtual = 0;
@@ -39,9 +39,9 @@ let _viewCss = '';                    // último cssText espelhado do canvas 2D
 // Gate: iso + atmosfera + AVT_GRAFICOS.luzGpu (preset Médio+).
 let _lightRoot: any = null;
 let _lightTex: any = null;
-let _lightSprites: any[] = [];
+let _lightSprites: any = [];
 let _lightsOn = false;
-let _dustSprites: any[] = [];
+let _dustSprites: any = [];
 
 function _luzGpuHabilitada(): boolean {
   const G = (window as any).AVT_GRAFICOS;

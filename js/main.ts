@@ -18,66 +18,66 @@ import './core/rtnet';
 import './core/events';
 
 // Chat + áudio
-import './chat/chat.js';
-import './systems/audio.js';
+import './chat/chat';
+import './systems/audio';
 
 // Registry central de tipos de efeito de skill (consumido por combate/aventura)
-import './systems/effect-registry.js';
+import './systems/effect-registry';
 
 // Combate
-import './combat/combat.js';
-import './combat/animations.js';
-import './combat/battle-system.js';
-import './combat/reactions.js';
+import './combat/combat';
+import './combat/animations';
+import './combat/battle-system';
+import './combat/reactions';
 
 // Mapas
 import './maps/camera';
-import './maps/fase-renderer.js';
-import './maps/fase-generator.js';
-import './maps/fase-tileset.js';
-import './maps/maps.js';
-import './maps/tactical.js';
-import './maps/background.js';
+import './maps/fase-renderer';
+import './maps/fase-generator';
+import './maps/fase-tileset';
+import './maps/maps';
+import './maps/tactical';
+import './maps/background';
 
 // Auth, hub e sistemas
-import './auth/auth.js';
-import './hub/hub.js';
-import './systems/lore.js';
-import './characters/characters.js';
-import './characters/fichas.js';
-import './characters/skills.js';
-import './characters/invocacoes.js';
-import './characters/appearance.js';
-import './systems/npcs.js';
-import './hub/import.js';
-import './systems/arena.js';
-import './systems/inventory.js';
-import './systems/aventura.js';
+import './auth/auth';
+import './hub/hub';
+import './systems/lore';
+import './characters/characters';
+import './characters/fichas';
+import './characters/skills';
+import './characters/invocacoes';
+import './characters/appearance';
+import './systems/npcs';
+import './hub/import';
+import './systems/arena';
+import './systems/inventory';
+import './systems/aventura';
 import './aventura/renderer-pixi';
-import './systems/avt-walk-presets.js';
-import './systems/avt-menu.js';
-import './systems/avt-inventario.js';
-import './systems/avt-perf.js';
-import './systems/catalog-packages.js';
-import './systems/catalog.js';
-import './systems/attribute-mapping.js';
-import './systems/rest.js';
-import './ui/tutorial.js';
-import './systems/creative.js';
-import './systems/pixi-studio-presets.js';
-import './systems/pixi-studio.js';
-import './systems/pixi-studio-avt.js';
-import './systems/market.js';
-import './ui/modals.js';
-import './combat/anim-gsap-spine.js';
-import './characters/anim-renderer.js';
+import './systems/avt-walk-presets';
+import './systems/avt-menu';
+import './systems/avt-inventario';
+import './systems/avt-perf';
+import './systems/catalog-packages';
+import './systems/catalog';
+import './systems/attribute-mapping';
+import './systems/rest';
+import './ui/tutorial';
+import './systems/creative';
+import './systems/pixi-studio-presets';
+import './systems/pixi-studio';
+import './systems/pixi-studio-avt';
+import './systems/market';
+import './ui/modals';
+import './combat/anim-gsap-spine';
+import './characters/anim-renderer';
 import './characters/token';
-import './characters/anim-generator.js';
-import './init.js';
+import './characters/anim-generator';
+import './init';
 
 // Blocos que eram <script> inline no index.html (mesma ordem relativa)
-import './ui/inline-patch-import.js';
-import './ui/inline-tema.js';
-import './ui/inline-mapa-ataque.js';
-import './ui/inline-combate-log.js';
-import './ui/inline-error-handler.js';
+import './ui/inline-patch-import';
+import './ui/inline-tema';
+import './ui/inline-mapa-ataque';
+import './ui/inline-combate-log';
+import './ui/inline-error-handler';
