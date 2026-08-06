@@ -27,6 +27,25 @@ export default defineConfig({
       executablePath: executablePathFallback(),
     },
   },
+  projects: [
+    {
+      name: 'smoke',
+      testMatch: /smoke\.spec\.ts/,
+    },
+    {
+      // Gameplay multiplayer (2 contexts + WebRTC): mais pesado e mais
+      // suscetível a flake em runner compartilhado — job de CI separado.
+      name: 'aventura',
+      testMatch: /aventura-.*\.spec\.ts/,
+      timeout: 180_000,
+      use: {
+        launchOptions: {
+          executablePath: executablePathFallback(),
+          args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'],
+        },
+      },
+    },
+  ],
   // Serve o build de produção (dist/) — rodar `npm run build` antes.
   webServer: {
     command: 'npm run preview',
