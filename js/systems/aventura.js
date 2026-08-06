@@ -7372,17 +7372,38 @@ function _avtEntViva(ref) {
 function _avtElPosicaoCanvas(ent) {
   if (!ent) return null;
   ent = _avtEntViva(ent);
-  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  const canvasEl = document.getElementById('avt-canvas');
-  const cr = canvasEl?.getBoundingClientRect() || { left:0, top:0 };
-  // Função dinâmica: lê renderX/Y no momento em que animarAtaque consultar,
-  // para que a animação acompanhe a posição atual do token (não a do início da batalha).
+  // Função dinâmica: lê renderX/Y (e o rect/zoom atuais) no momento em que
+  // animarAtaque consultar, para que a animação acompanhe a posição atual do
+  // token — o rect era capturado 1× e ficava stale após scroll/resize.
   return {
     getBoundingClientRect: () => {
       const live = _avtEntViva(ent);
-      const rx = (live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + cr.left;
-      const ry = (live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + cr.top;
-      return { left:rx, top:ry, width:SZ, height:SZ, x:rx, y:ry };
+      const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+      // Centro da célula em coordenadas locais do canvas (== locais do wrap).
+      const cx = (live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + SZ / 2;
+      const cy = (live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + SZ / 2;
+      const wrap = document.getElementById('avt-mapa-wrap');
+      // Modo isométrico: #avt-mapa-wrap tem rotateX/rotateZ/scale (origem no
+      // centro), mas animarAtaque desenha num canvas fixo em viewport — sem
+      // projetar, o placeholder saía deslocado do token. Mesma matemática de
+      // _avtIsoCanvasToScreen, ancorada no centro do client rect do wrap (uma
+      // transform afim com origem no centro mapeia centro → centro do bbox).
+      if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
+          && wrap && typeof _ISO_ANGLE_X !== 'undefined') {
+        const wr = wrap.getBoundingClientRect();
+        const k = _ISO_SCALE / Math.SQRT2;
+        const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
+        const cxd = cx - wrap.offsetWidth / 2, cyd = cy - wrap.offsetHeight / 2;
+        const sx = wr.left + wr.width / 2 + (cxd - cyd) * k;
+        const sy = wr.top + wr.height / 2 + (cxd + cyd) * k * cosX;
+        const l = sx - SZ / 2, t = sy - SZ / 2;
+        return { left: l, top: t, width: SZ, height: SZ, x: l, y: t };
+      }
+      const canvasEl = document.getElementById('avt-canvas');
+      const cr = canvasEl?.getBoundingClientRect() || { left: 0, top: 0 };
+      const rx = cr.left + cx - SZ / 2;
+      const ry = cr.top + cy - SZ / 2;
+      return { left: rx, top: ry, width: SZ, height: SZ, x: rx, y: ry };
     }
   };
 }
