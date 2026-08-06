@@ -6,7 +6,7 @@
 // Attribute mapping moved to: js/systems/attribute-mapping.js
 
 // Guard: ATTR_MAPPING_CACHE referenced by supabase.js before attribute-mapping.js loads
-var ATTR_MAPPING_CACHE = window.ATTR_MAPPING_CACHE || {};
+var ATTR_MAPPING_CACHE: any = window.ATTR_MAPPING_CACHE || {};
 
 // Guard: tintOverlayHtml used by maps.js — stub until appearance.js loads
 if (typeof tintOverlayHtml === 'undefined') {
@@ -20,15 +20,15 @@ if (typeof _limparNotifCreativo === 'undefined') {
 // I1 — CATÁLOGO DE ITENS (CRUD)
 // ════════════════════════════════════════════════════════════════════════════
 const CATALOGO_STATE = {
-  itens: [],
-  filtrados: [],
-  itemEditando: null,
-  bonusLinhas: [],    // [{ atributo, valor, modo }]
-  efeitosLista: [],   // [{ tipo, gatilho, chance, efeito_aplicado }]
+  itens: [] as any[],
+  filtrados: [] as any[],
+  itemEditando: null as any,
+  bonusLinhas: [] as any[],    // [{ atributo, valor, modo }]
+  efeitosLista: [] as any[],   // [{ tipo, gatilho, chance, efeito_aplicado }]
   visualConfig: { tipo_visual:'emoji', valor:'✨', cor_fundo:'#1a1a2e', cor_borda:'#888888', animacao:'none' }
 };
 
-const TIPO_DEFAULTS = {
+const TIPO_DEFAULTS: Record<string, any> = {
   arma:        { slot:'arma_principal', grupo:'forca',        emoji:'⚔️' },
   escudo:      { slot:'arma_secundaria',grupo:'constituicao', emoji:'🛡️' },
   armadura:    { slot:'corpo',          grupo:'constituicao', emoji:'🥋' },
@@ -43,7 +43,7 @@ const TIPO_DEFAULTS = {
   customizado: { slot:'',               grupo:'',             emoji:'✨' }
 };
 
-const RARIDADE_CORES = {
+const RARIDADE_CORES: Record<string, any> = {
   comum:    { borda:'#888888', fundo:'#1a1a2e', label:'COMUM',    badge:'badge-comum' },
   incomum:  { borda:'#2ecc71', fundo:'#0e1f14', label:'INCOMUM',  badge:'badge-incomum' },
   raro:     { borda:'#3498db', fundo:'#0e1620', label:'RARO',     badge:'badge-raro' },
@@ -122,7 +122,7 @@ function renderListaCatalogo() {
 }
 
 // ── FORMULÁRIO DE ITEM ──
-function abrirFormItem(id) {
+function abrirFormItem(id: any) {
   const overlay = document.getElementById('modal-item-overlay');
   CATALOGO_STATE.bonusLinhas = [];
   CATALOGO_STATE.efeitosLista = [];
@@ -204,10 +204,10 @@ function fecharFormItem() {
 }
 
 // Abre o modal avançado de edição a partir do catálogo das tabelas (sincroniza INV.itemDefs → CATALOGO_STATE)
-function abrirEditarItemCatalogo(id) {
+function abrirEditarItemCatalogo(id: any) {
   // Sincroniza todos os itens de INV para CATALOGO_STATE se necessário
   if (INV.itemDefs && INV.itemDefs.length) {
-    INV.itemDefs.forEach(def => {
+    INV.itemDefs.forEach((def: any) => {
       if (!CATALOGO_STATE.itens.find(x => x.id === def.id)) {
         CATALOGO_STATE.itens.push(def);
       } else {
@@ -220,7 +220,7 @@ function abrirEditarItemCatalogo(id) {
   abrirFormItem(id);
 }
 
-function trocarAbaItem(aba) {
+function trocarAbaItem(aba: any) {
   document.querySelectorAll('.item-form-tab').forEach(b => {
     const ativo = b.dataset.tab === aba;
     b.classList.toggle('active', ativo);
@@ -256,7 +256,7 @@ function itemRaridadeChange() {
   atualizarPreviewCard();
 }
 
-function setVisualTipo(tipo) {
+function setVisualTipo(tipo: any) {
   CATALOGO_STATE.visualConfig.tipo_visual = tipo;
   document.querySelectorAll('.vis-tipo-btn').forEach(b=>{
     const ativo = b.dataset.tipo === tipo;
@@ -278,7 +278,7 @@ function fiImgurlChange() {
   atualizarPreviewCard();
 }
 
-async function fiUploadImagem(input) {
+async function fiUploadImagem(input: any) {
   const file = input.files[0]; if (!file) return;
   try {
     mostrarToast('Enviando imagem…', 'info');
@@ -295,7 +295,7 @@ async function fiUploadImagem(input) {
   }
 }
 
-function setAnimacao(anim) {
+function setAnimacao(anim: any) {
   CATALOGO_STATE.visualConfig.animacao = anim;
   document.querySelectorAll('.anim-btn').forEach(b=>{
     const ativo = b.dataset.anim === anim;
@@ -517,7 +517,7 @@ function renderEfeitosLista() {
   }).join('');
 }
 
-function _descreverEfeito(ef) {
+function _descreverEfeito(ef: any) {
   const ch = Math.round((ef.chance||0)*100);
   const ea = ef.efeito_aplicado || {};
   const gatilho = (ef.gatilho||'').replace(/_/g,' ');
@@ -549,12 +549,12 @@ async function salvarItem() {
   const severo = CATALOGO_STATE.bonusLinhas.some(l => parseFloat(l.valor) < 0 && Math.abs(parseFloat(l.valor)) > 10);
   if (severo && !confirm('⚠️ Trade-off severo detectado. Confirmar salvar?')) return;
 
-  const bonusObj = {};
+  const bonusObj: Record<string, any> = {};
   for (const l of CATALOGO_STATE.bonusLinhas) {
     if (!l.atributo) continue;
     bonusObj[l.atributo] = l.modo === 'pct' ? { modo:'pct', valor: parseFloat(l.valor)||0 } : parseFloat(l.valor)||0;
   }
-  const tradeoffs = {};
+  const tradeoffs: Record<string, any> = {};
   for (const [k,v] of Object.entries<any>(bonusObj)) {
     const n = typeof v==='object' ? v.valor : v;
     if (n < 0) tradeoffs[k] = v;
@@ -605,7 +605,7 @@ async function salvarItem() {
     }
     // Sincronizar com INV.itemDefs para que renderTabelasTab reflita a mudança
     if (savedRow && INV.itemDefs) {
-      const idx = INV.itemDefs.findIndex(d => d.id === savedRow.id);
+      const idx = INV.itemDefs.findIndex((d: any) => d.id === savedRow.id);
       if (idx >= 0) INV.itemDefs[idx] = { ...INV.itemDefs[idx], ...savedRow };
       else INV.itemDefs.push(savedRow);
     }
@@ -647,8 +647,8 @@ async function deletarItemAtual() {
 }
 
 // ── DAR ITEM A PERSONAGEM ──
-let _darItemId = null;
-function abrirDarItem(itemId) {
+let _darItemId: any = null;
+function abrirDarItem(itemId: any) {
   _darItemId = itemId;
   const it = CATALOGO_STATE.itens.find(x=>x.id==itemId);
   document.getElementById('dar-item-nome').textContent = it?.nome || 'item';
@@ -730,7 +730,7 @@ const INV_SLOTS = [
 ];
 
 // ── A3 — CÁLCULO DE MÉDIA DE GRUPO ───────────────────────────────────────
-async function calcularMediaGrupo(rpgId, grupoBase) {
+async function calcularMediaGrupo(rpgId: any, grupoBase: any) {
   await carregarMapeamento(rpgId);
   const attrNomes = getAtributosPorGrupo(rpgId, grupoBase);
   if (!attrNomes.length) return { media: 0, atributos: [], personagens: [] };
@@ -742,8 +742,8 @@ async function calcularMediaGrupo(rpgId, grupoBase) {
   if (!chars.length) return { media: 0, atributos: attrNomes, personagens: [] };
   const mediasChar = chars.map(c => {
     const atribs = c.custom_attrs?.atributos || {};
-    const vals = attrNomes.map(n => parseFloat(atribs[n]) || 0);
-    const media = vals.reduce((a,b)=>a+b, 0) / (vals.length || 1);
+    const vals = attrNomes.map((n: any) => parseFloat(atribs[n]) || 0);
+    const media = vals.reduce((a: any,b: any)=>a+b, 0) / (vals.length || 1);
     return { nome: c.nome, media };
   });
   const mediaGeral = mediasChar.reduce((a,b)=>a+b.media, 0) / (mediasChar.length || 1);
@@ -751,11 +751,11 @@ async function calcularMediaGrupo(rpgId, grupoBase) {
 }
 
 // ── ABRIR / FECHAR INVENTÁRIO ─────────────────────────────────────────────
-async function abrirInventario(nomeChar) {
+async function abrirInventario(nomeChar: any) {
   // Support both RPG_DATA (main view) and AR.chars (arena view)
   let c = RPG_DATA?.characters?.find(x => x.nome === nomeChar);
   if (!c && typeof AR !== 'undefined' && AR?.chars) {
-    c = AR.chars.find(x => x.nome === nomeChar);
+    c = AR.chars.find((x: any) => x.nome === nomeChar);
   }
   if (!c) return;
   INV.charAtivo = nomeChar;
@@ -775,19 +775,19 @@ function fecharInventario() {
 }
 
 // ── I2 — CARREGAR INVENTÁRIO ──────────────────────────────────────────────
-async function carregarInventarioChar(charId) {
+async function carregarInventarioChar(charId: any) {
   if (!charId) return;
   try {
     // JOIN: inventario → item_catalog
     const data = await sb(
       `inventario?character_id=eq.${charId}&rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}&select=*,item:item_catalog_id(*)`
     );
-    INV.inventarios[charId] = data || [];
-    INV.carregado[charId] = true;
+    (INV.inventarios as any)[charId] = data || [];
+    (INV.carregado as any)[charId] = true;
     renderInvCompleto();
   } catch(e) {
     console.warn('[I2] Erro ao carregar inventário:', e);
-    INV.inventarios[charId] = [];
+    (INV.inventarios as any)[charId] = [];
     renderInvCompleto();
   }
 }
@@ -802,7 +802,7 @@ function renderInvCompleto() {
 // ── SLOTS DE EQUIPAMENTOS ─────────────────────────────────────────────────
 function renderInvSlots() {
   const charId = INV.charId;
-  const itens  = INV.inventarios[charId] || [];
+  const itens  = (INV.inventarios as any)[charId] || [];
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const c = RPG_DATA?.characters?.find(x=>x.id===charId||x.nome===INV.charAtivo);
   const charNivel = c?.custom_attrs?.nivel || 1;
@@ -810,14 +810,14 @@ function renderInvSlots() {
 
   let html = '';
   for (const slot of INV_SLOTS) {
-    const equipado = itens.find(i => i.equipado && i.slot_equipado === slot.id);
-    const amuleto  = itens.find(i => i.equipado && i.slot_equipado === slot.id + '_amuleto');
+    const equipado = itens.find((i: any) => i.equipado && i.slot_equipado === slot.id);
+    const amuleto  = itens.find((i: any) => i.equipado && i.slot_equipado === slot.id + '_amuleto');
     html += renderSlotCard(slot, equipado, amuleto, podeEditar, charNivel);
   }
   document.getElementById('inv-slots-grid').innerHTML = html;
 }
 
-function renderSlotCard(slot, equipado, amuleto, podeEditar, charNivel) {
+function renderSlotCard(slot: any, equipado: any, amuleto: any, podeEditar: any, charNivel: any) {
   if (!equipado) {
     return `<div class="inv-slot vazio" onclick="invClicarSlotVazio('${slot.id}')">
       <div class="slot-icon" style="opacity:0.3">${slot.emoji}</div>
@@ -843,11 +843,11 @@ function renderSlotCard(slot, equipado, amuleto, podeEditar, charNivel) {
   </div>`;
 }
 
-function invClicarSlotVazio(slotId) {
+function invClicarSlotVazio(slotId: any) {
   // Se há item na mochila compatível, exibir popup para equipar
   const charId = INV.charId;
-  const itens  = (INV.inventarios[charId] || []).filter(i => !i.equipado);
-  const compativeis = itens.filter(i => {
+  const itens  = ((INV.inventarios as any)[charId] || []).filter((i: any) => !i.equipado);
+  const compativeis = itens.filter((i: any) => {
     const slot = i.item?.slot_padrao;
     if (!slot) return false;
     if (slot === slotId) return true;
@@ -865,7 +865,7 @@ function invClicarSlotVazio(slotId) {
 // ── MOCHILA ───────────────────────────────────────────────────────────────
 function renderInvMochila() {
   const charId   = INV.charId;
-  const itens    = (INV.inventarios[charId] || []).filter(i => !i.equipado);
+  const itens    = ((INV.inventarios as any)[charId] || []).filter((i: any) => !i.equipado);
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const podeEditar = podeEditarPersonagem(INV.charAtivo);
   const wrapper  = document.getElementById('inv-btn-adicionar-wrap');
@@ -876,7 +876,7 @@ function renderInvMochila() {
     el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--suave);font-style:italic;font-size:0.85rem">Mochila vazia</div>';
     return;
   }
-  el.innerHTML = itens.map(inv => {
+  el.innerHTML = itens.map((inv: any) => {
     const it  = inv.item || {};
     const vc  = it.visual_config || {};
     const icon = _itemIcon(it);
@@ -903,7 +903,7 @@ function renderInvMochila() {
 // ── I5 — ENCUMBRANCE ─────────────────────────────────────────────────────
 function renderInvCarga() {
   const charId = INV.charId;
-  const itens  = INV.inventarios[charId] || [];
+  const itens  = (INV.inventarios as any)[charId] || [];
   const c = RPG_DATA?.characters?.find(x=>x.id===charId||x.nome===INV.charAtivo);
   const ca = c?.custom_attrs || {};
 
@@ -913,8 +913,8 @@ function renderInvCarga() {
 
   // Equipados não contam. Usa campo `peso` do item_catalog quando disponível,
   // senão soma unidades (1 por stack independente de quantidade).
-  const naoEquipados = itens.filter(i => !i.equipado);
-  const cargaAtual   = naoEquipados.reduce((s, i) => {
+  const naoEquipados = itens.filter((i: any) => !i.equipado);
+  const cargaAtual   = naoEquipados.reduce((s: any, i: any) => {
     const pesoUnit = (i.item?.peso) || 1;
     return s + pesoUnit * (i.quantidade || 1);
   }, 0);
@@ -944,7 +944,7 @@ function renderInvVisual() {
   const podeEditar = podeEditarPersonagem(nomeChar);
 
   // Todos os itens equipados (de qualquer tipo)
-  const itensEquipados = (INV.inventarios[charId] || []).filter(i => i.equipado);
+  const itensEquipados = ((INV.inventarios as any)[charId] || []).filter((i: any) => i.equipado);
 
   // equipamentos_visuais salvos na aparência do personagem
   const equipVisuais = ca.aparencia?.equipamentos_visuais || [];
@@ -973,10 +973,10 @@ function renderInvVisual() {
         </div>`;
     } else {
       const tokenBase = apmodTokenSVG(c, 'local');
-      const _eqHtml = (camada) => equipVisuais
-        .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
+      const _eqHtml = (camada: any) => equipVisuais
+        .filter((eq: any) => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
           && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
-        .map(eq => {
+        .map((eq: any) => {
           const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
           const esc = (eq.escala != null ? eq.escala : 100) / 100;
           // Mesma fórmula que _equipOverlayHtml: 35%×45% do container
@@ -986,7 +986,7 @@ function renderInvVisual() {
           const t = Math.round((yP / 100) * th - eH / 2);
           const rot = eq.rotacao || 0;
           const rotH = eq.rotacaoH || 0;
-          const _warp = eq.warpCorners ? _aeqComputeMatrix3d(eW, eH, eq.warpCorners.map(c=>({x:c.x*eW,y:c.y*eH}))) : null;
+          const _warp = eq.warpCorners ? _aeqComputeMatrix3d(eW, eH, eq.warpCorners.map((c: any)=>({x:c.x*eW,y:c.y*eH}))) : null;
           const _tfParts = _warp && _warp !== 'none' ? [_warp] : [
             rotH ? `perspective(400px) rotateY(${rotH}deg)` : '',
             rot  ? `rotate(${rot}deg)` : '',
@@ -1017,15 +1017,15 @@ function renderInvVisual() {
   const listaHtml = `
     <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.08em">Itens equipados</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
-      ${itensEquipados.map(inv => {
-        const def = INV.itemDefs.find(d => d.id === (inv.item_catalog_id || inv.item_def_id));
+      ${itensEquipados.map((inv: any) => {
+        const def = INV.itemDefs.find((d: any) => d.id === (inv.item_catalog_id || inv.item_def_id));
         const itData = def || inv.item || {};
         const nome    = itData.nome || inv.item?.nome || '?';
         const icone   = itData.icone || inv.item?.icone || '⚔';
         // Usa mesma lógica do _itemIcon: img_url direto ou visual_config.valor (sistema novo)
         const imgSrc  = _resolveItemImgSrc(def) || _resolveItemImgSrc(inv.item);
         const temVisual = !!imgSrc;
-        const posData = equipVisuais.find(ev => ev.item_inv_id === inv.id || ev.nome === nome);
+        const posData = equipVisuais.find((ev: any) => ev.item_inv_id === inv.id || ev.nome === nome);
         const posicionado = !!posData;
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(20,29,43,0.6);border:1px solid ${posicionado?'rgba(79,163,209,0.4)':'var(--borda)'};border-radius:8px">
           <div style="width:44px;height:50px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
@@ -1050,7 +1050,7 @@ function renderInvVisual() {
 // Extrai a URL de imagem de um item considerando AMBOS os sistemas de cadastro:
 // - Sistema antigo: campo img_url direto
 // - Sistema novo (salvarItem): visual_config.valor quando tipo_visual === 'url'
-function _resolveItemImgSrc(it) {
+function _resolveItemImgSrc(it: any) {
   if (!it) return '';
   if (it.img_url) return it.img_url;
   const vc = it.visual_config || {};
@@ -1059,9 +1059,9 @@ function _resolveItemImgSrc(it) {
 }
 
 // Abre o posicionador simplificado (só posição/escala/rotação/camada — sem edição de aparência do item)
-function _normalizarSlotParaTipo(slot) {
+function _normalizarSlotParaTipo(slot: any) {
   // Mapear slots do inventário para tipos reconhecidos pelo sistema visual
-  const mapa = {
+  const mapa: Record<string, any> = {
     'mao_principal':'mao_principal','mao_secundaria':'mao_secundaria',
     'armadura':'armadura','capacete':'capacete','luvas':'luvas',
     'botas':'botas','amuleto':'amuleto','anel':'anel',
@@ -1070,14 +1070,14 @@ function _normalizarSlotParaTipo(slot) {
   return mapa[slot] || 'geral';
 }
 
-function invAbrirPosicionarEquip(invId) {
+function invAbrirPosicionarEquip(invId: any) {
   const charId = INV.charId;
   const nomeChar = INV.charAtivo;
-  const invItem = (INV.inventarios[charId] || []).find(i => i.id === invId);
+  const invItem = ((INV.inventarios as any)[charId] || []).find((i: any) => i.id === invId);
   if (!invItem) return;
 
   // Resolve dados do item — tenta itemDefs primeiro, depois JOIN (i.item)
-  const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
+  const def = INV.itemDefs.find((d: any) => d.id === (invItem.item_catalog_id || invItem.item_def_id));
   const itData = def || invItem.item || {};
   const nome = itData.nome || invItem.item?.nome || '?';
   // Suporta ambos os sistemas: img_url direto (antigo) ou visual_config.valor (novo)
@@ -1089,7 +1089,7 @@ function invAbrirPosicionarEquip(invId) {
   const equipVisuais = JSON.parse(JSON.stringify(ca.aparencia?.equipamentos_visuais || []));
 
   // Localiza ou cria entrada de posicionamento
-  let idx = equipVisuais.findIndex(ev => ev.item_inv_id === invId || ev.nome === nome);
+  let idx = equipVisuais.findIndex((ev: any) => ev.item_inv_id === invId || ev.nome === nome);
   let eq;
   if (idx >= 0) {
     eq = equipVisuais[idx];
@@ -1220,7 +1220,7 @@ async function invConfirmarPosicionarEquip() {
   const ca = c.custom_attrs || {};
   // Limpa composed_img stale para que a visualização imediata use o render dinâmico
   // (com as novas posições) em vez da imagem antiga gerada anteriormente
-  const novaAparencia = { ...(ca.aparencia || {}), equipamentos_visuais: equipVisuais, composed_img: null };
+  const novaAparencia = { ...(ca.aparencia || {}), equipamentos_visuais: equipVisuais, composed_img: null as any };
   const novoCa = { ...ca, aparencia: novaAparencia };
 
   try {
@@ -1275,9 +1275,9 @@ async function invConfirmarPosicionarEquip() {
     if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Salvar Posição'; saveBtn.style.opacity = '1'; }
   }
 }
-function invClicarItem(invId) {
+function invClicarItem(invId: any) {
   const charId = INV.charId;
-  const inv = (INV.inventarios[charId] || []).find(i => i.id === invId);
+  const inv = ((INV.inventarios as any)[charId] || []).find((i: any) => i.id === invId);
   if (!inv) return;
   const it = inv.item || {};
   const vc = it.visual_config || {};
@@ -1306,7 +1306,7 @@ function invClicarItem(invId) {
       const n=typeof v==='object'?v.valor:v; const suf=typeof v==='object'&&v.modo==='pct'?'%':'';
       return `<div style="color:#e05040">↓ ${n}${suf} ${k} ⚠️</div>`;
     }),
-    ...efeitos.map(ef=>`<div style="color:#a070d8;font-size:0.72rem">${_descreverEfeito(ef)}</div>`)
+    ...efeitos.map((ef: any)=>`<div style="color:#a070d8;font-size:0.72rem">${_descreverEfeito(ef)}</div>`)
   ].join('') || '<div style="color:var(--suave);font-style:italic;font-size:0.78rem">Sem bônus</div>';
 
   document.getElementById('inv-detail-titulo').textContent = it.nome || 'Item';
@@ -1366,9 +1366,9 @@ function invClicarItem(invId) {
 }
 
 // ── I3 — EQUIPAR ─────────────────────────────────────────────────────────
-async function invEquipar(invId) {
+async function invEquipar(invId: any) {
   const charId = INV.charId;
-  const inv = (INV.inventarios[charId] || []).find(i => i.id === invId);
+  const inv = ((INV.inventarios as any)[charId] || []).find((i: any) => i.id === invId);
   if (!inv) return;
   const it = inv.item || {};
   const c  = RPG_DATA?.characters?.find(x=>x.id===charId||x.nome===INV.charAtivo);
@@ -1399,7 +1399,7 @@ async function invEquipar(invId) {
   // Amuleto aninhado: se o slot principal estiver ocupado e o item for amuleto,
   // redirecionar automaticamente para o sub-slot _amuleto correspondente.
   if (it.tipo_canonico === 'amuleto' && !slotAlvo.endsWith('_amuleto')) {
-    const slotPrincipalOcupado = (INV.inventarios[charId] || []).find(i => i.equipado && i.slot_equipado === slotAlvo);
+    const slotPrincipalOcupado = ((INV.inventarios as any)[charId] || []).find((i: any) => i.equipado && i.slot_equipado === slotAlvo);
     if (slotPrincipalOcupado) {
       // Verificar se o item principal aceita amuleto aninhado
       const itemPrincipal = slotPrincipalOcupado.item || {};
@@ -1409,7 +1409,7 @@ async function invEquipar(invId) {
     }
   }
 
-  const slotOcupado = (INV.inventarios[charId] || []).find(i => i.equipado && i.slot_equipado === slotAlvo);
+  const slotOcupado = ((INV.inventarios as any)[charId] || []).find((i: any) => i.equipado && i.slot_equipado === slotAlvo);
   if (slotOcupado) {
     const nomeAtual = slotOcupado.item?.nome || 'item atual';
     if (!confirm(`O slot já contém "${nomeAtual}". Substituir?`)) return;
@@ -1420,7 +1420,7 @@ async function invEquipar(invId) {
   const ca = { ...(c.custom_attrs || {}) };
   ca.atributos = { ...(ca.atributos || {}) };
   const bonus = it.atributos_bonus || {};
-  const snapshot = {};
+  const snapshot: Record<string, any> = {};
 
   for (const [attr, val] of Object.entries<any>(bonus)) {
     const atual = parseFloat(ca.atributos[attr]) || 0;
@@ -1447,11 +1447,11 @@ async function invEquipar(invId) {
       body: JSON.stringify({ equipado: true, slot_equipado: slotAlvo, bonus_snapshot: snapshot })
     });
     // Atualizar estado local
-    const idx = INV.inventarios[charId].findIndex(i => i.id === invId);
+    const idx = (INV.inventarios as any)[charId].findIndex((i: any) => i.id === invId);
     if (idx >= 0) {
-      INV.inventarios[charId][idx].equipado = true;
-      INV.inventarios[charId][idx].slot_equipado = slotAlvo;
-      INV.inventarios[charId][idx].bonus_snapshot = snapshot;
+      (INV.inventarios as any)[charId][idx].equipado = true;
+      (INV.inventarios as any)[charId][idx].slot_equipado = slotAlvo;
+      (INV.inventarios as any)[charId][idx].bonus_snapshot = snapshot;
     }
     document.getElementById('modal-inv-item-overlay').style.display = 'none';
     mostrarToast(`✓ ${it.nome} equipado!`, 'ok');
@@ -1466,9 +1466,9 @@ async function invEquipar(invId) {
 }
 
 // ── I3 — DESEQUIPAR ───────────────────────────────────────────────────────
-async function invDesequipar(invId, silencioso = false) {
+async function invDesequipar(invId: any, silencioso = false) {
   const charId = INV.charId;
-  const inv = (INV.inventarios[charId] || []).find(i => i.id === invId);
+  const inv = ((INV.inventarios as any)[charId] || []).find((i: any) => i.id === invId);
   if (!inv || !inv.equipado) return;
   const it = inv.item || {};
   const c  = RPG_DATA?.characters?.find(x=>x.id===charId||x.nome===INV.charAtivo);
@@ -1504,11 +1504,11 @@ async function invDesequipar(invId, silencioso = false) {
       method: 'PATCH',
       body: JSON.stringify({ equipado: false, slot_equipado: null, bonus_snapshot: null })
     });
-    const idx = INV.inventarios[charId].findIndex(i => i.id === invId);
+    const idx = (INV.inventarios as any)[charId].findIndex((i: any) => i.id === invId);
     if (idx >= 0) {
-      INV.inventarios[charId][idx].equipado = false;
-      INV.inventarios[charId][idx].slot_equipado = null;
-      INV.inventarios[charId][idx].bonus_snapshot = null;
+      (INV.inventarios as any)[charId][idx].equipado = false;
+      (INV.inventarios as any)[charId][idx].slot_equipado = null;
+      (INV.inventarios as any)[charId][idx].bonus_snapshot = null;
     }
     if (!silencioso) {
       document.getElementById('modal-inv-item-overlay').style.display = 'none';
@@ -1523,15 +1523,15 @@ async function invDesequipar(invId, silencioso = false) {
 }
 
 // ── REMOVER ITEM DO INVENTÁRIO ────────────────────────────────────────────
-async function invRemoverItem(invId) {
+async function invRemoverItem(invId: any) {
   const charId = INV.charId;
-  const inv = (INV.inventarios[charId] || []).find(i => i.id === invId);
+  const inv = ((INV.inventarios as any)[charId] || []).find((i: any) => i.id === invId);
   if (!inv) return;
   if (inv.equipado) { await invDesequipar(invId, true); }
   if (!confirm(`Remover "${inv.item?.nome}" do inventário?`)) return;
   try {
     await sb(`inventario?id=eq.${invId}`, { method: 'DELETE', headers:{'Prefer':'return=minimal'} });
-    INV.inventarios[charId] = INV.inventarios[charId].filter(i => i.id !== invId);
+    (INV.inventarios as any)[charId] = (INV.inventarios as any)[charId].filter((i: any) => i.id !== invId);
     document.getElementById('modal-inv-item-overlay').style.display = 'none';
     mostrarToast('Item removido', '');
     renderInvCompleto();
@@ -1555,10 +1555,10 @@ async function abrirAdicionarItemInv() {
 
 function filtrarAddInv() {
   const busca = (document.getElementById('add-inv-busca')?.value||'').toLowerCase();
-  const itens = INV.catalogo.filter(it => !busca || it.nome.toLowerCase().includes(busca));
+  const itens = INV.catalogo.filter((it: any) => !busca || it.nome.toLowerCase().includes(busca));
   const c = RPG_DATA?.characters?.find(x=>x.nome===INV.charAtivo);
   const charNivel = c?.custom_attrs?.nivel || 1;
-  document.getElementById('add-inv-lista').innerHTML = itens.slice(0, 50).map(it => {
+  document.getElementById('add-inv-lista').innerHTML = itens.slice(0, 50).map((it: any) => {
     const rc = RARIDADE_CORES[it.raridade] || RARIDADE_CORES.comum;
     const icon = _itemIcon(it);
     const bloq = charNivel < (it.nivel_minimo_uso || 1);
@@ -1575,10 +1575,10 @@ function filtrarAddInv() {
   }).join('') || '<div style="text-align:center;padding:20px;color:var(--suave);font-style:italic">Nenhum item encontrado</div>';
 }
 
-async function addInvConfirmar(catalogId) {
+async function addInvConfirmar(catalogId: any) {
   const charId  = INV.charId;
   const c       = RPG_DATA?.characters?.find(x=>x.id===charId||x.nome===INV.charAtivo);
-  const it      = INV.catalogo.find(x=>x.id===catalogId);
+  const it      = INV.catalogo.find((x: any)=>x.id===catalogId);
   if (!c || !it) return;
   const charNivel = c.custom_attrs?.nivel || 1;
   const bloq = charNivel < (it.nivel_minimo_uso || 1);
@@ -1602,7 +1602,7 @@ async function addInvConfirmar(catalogId) {
 }
 
 // ── I4 — VERIFICAR DESBLOQUEIO DE ITENS AO SUBIR NÍVEL ──────────────────
-async function verificarDesbloqueioItens(nomeChar, novoNivel) {
+async function verificarDesbloqueioItens(nomeChar: any, novoNivel: any) {
   const c = RPG_DATA?.characters?.find(x=>x.nome===nomeChar);
   if (!c) return;
   const charId = c.id;
@@ -1666,7 +1666,7 @@ async function renderInvMoedas() {
     // Bolsa individual
     const bolsa = await sb(
       `moedas?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}&dono_id=eq.${charId}&select=*`
-    ).catch(()=>[]) || [];
+    ).catch((): any[] => []) || [];
 
     // Denominações configuradas ou padrão
     const denoms = CURRENT_RPG?.theme?.denominacoes_moeda || MOEDAS_DEFAULTS;
@@ -1674,7 +1674,7 @@ async function renderInvMoedas() {
     let html = `<div style="margin-bottom:10px;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em">💰 Bolsa de ${INV.charAtivo}</div>`;
 
     for (const denom of denoms) {
-      const entrada = bolsa.find(b => b.denominacao === denom.nome);
+      const entrada = bolsa.find((b: any) => b.denominacao === denom.nome);
       const qtd     = entrada?.quantidade || 0;
       html += `<div class="inv-moeda-card">
         <div style="display:flex;align-items:center;justify-content:space-between">
@@ -1699,11 +1699,11 @@ async function renderInvMoedas() {
     // Histórico de transações recentes
     const log = await sb(
       `log_transacoes?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}&or=(dono_id.eq.${charId},destino_id.eq.${charId})&order=created_at.desc&limit=10&select=*`
-    ).catch(()=>[]) || [];
+    ).catch((): any[] => []) || [];
 
     if (log.length) {
       html += `<div style="margin:14px 0 8px;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em">📋 Histórico recente</div>`;
-      html += log.map(tx=>{
+      html += log.map((tx: any)=>{
         const sinal = tx.dono_id === charId ? (tx.tipo==='receber'?'+':'-') : '+';
         const cor = sinal==='+' ? '#4eca7e' : '#e05040';
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.75rem">
@@ -1719,7 +1719,7 @@ async function renderInvMoedas() {
   }
 }
 
-function invTrocarAba(aba) {
+function invTrocarAba(aba: any) {
   document.querySelectorAll('.inv-tab').forEach(b=>{
     const ativo = b.dataset.tab === aba;
     b.classList.toggle('active', ativo);
@@ -1776,15 +1776,15 @@ function _criarModalMoedaTxSeNecessario() {
   document.body.appendChild(el);
 }
 
-function abrirTxMoeda(tipo, denomDefault) {
+function abrirTxMoeda(tipo: any, denomDefault: any) {
   _criarModalMoedaTxSeNecessario();
   const overlay = document.getElementById('modal-moeda-tx-overlay');
   document.getElementById('moeda-tx-tipo').value  = tipo;
-  const titulos = { dar:'＋ Adicionar Moedas', remover:'− Remover Moedas', transferir:'→ Transferir Moedas' };
+  const titulos: Record<string, any> = { dar:'＋ Adicionar Moedas', remover:'− Remover Moedas', transferir:'→ Transferir Moedas' };
   document.getElementById('moeda-tx-titulo').textContent = titulos[tipo] || tipo;
   const denoms = CURRENT_RPG?.theme?.denominacoes_moeda || MOEDAS_DEFAULTS;
   const sel = document.getElementById('moeda-tx-denom');
-  sel.innerHTML = denoms.map(d=>`<option value="${d.nome}" ${d.nome===denomDefault?'selected':''}>${d.emoji} ${d.nome}</option>`).join('');
+  sel.innerHTML = denoms.map((d: any)=>`<option value="${d.nome}" ${d.nome===denomDefault?'selected':''}>${d.emoji} ${d.nome}</option>`).join('');
   document.getElementById('moeda-tx-qtd').value = 1;
   document.getElementById('moeda-tx-desc').value = '';
   const destWrap = document.getElementById('moeda-tx-destino-wrap');
@@ -1815,7 +1815,7 @@ async function confirmarTransacaoMoeda() {
       // Verificar saldo antes de debitar
       const saldoAtual = await sb(
         `moedas?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}&dono_id=eq.${charId}&denominacao=eq.${encodeURIComponent(denom)}&select=quantidade`
-      ).catch(()=>[]);
+      ).catch((): any[] => []);
       const saldo = saldoAtual?.[0]?.quantidade || 0;
       if (saldo < qtd) { mostrarToast(`❌ Saldo insuficiente — você tem ${saldo} ${denom}`, 'erro'); return; }
       await _moedaUpsert(charId, denom, -qtd);
@@ -1829,11 +1829,11 @@ async function confirmarTransacaoMoeda() {
   } catch(e) { mostrarToast('Erro: ' + e.message, 'erro'); }
 }
 
-async function _moedaUpsert(charId, denominacao, delta) {
+async function _moedaUpsert(charId: any, denominacao: any, delta: any) {
   // Buscar registro atual
   const atual = await sb(
     `moedas?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}&dono_id=eq.${charId}&denominacao=eq.${encodeURIComponent(denominacao)}&select=id,quantidade`
-  ).catch(()=>null);
+  ).catch((): any => null);
   const reg = atual?.[0];
   if (reg) {
     const novo = Math.max(0, (reg.quantidade||0) + delta);
@@ -1845,7 +1845,7 @@ async function _moedaUpsert(charId, denominacao, delta) {
   }
 }
 
-async function _moedaLog(donoId, destinoId, denominacao, quantidade, tipo, descricao) {
+async function _moedaLog(donoId: any, destinoId: any, denominacao: any, quantidade: any, tipo: any, descricao: any) {
   try {
     await sb('log_transacoes', { method:'POST', body: JSON.stringify({
       rpg_id: CURRENT_RPG.id, dono_id: donoId, destino_id: destinoId||null,
@@ -1856,7 +1856,7 @@ async function _moedaLog(donoId, destinoId, denominacao, quantidade, tipo, descr
 
 // ── CFG-MOEDAS — Configuração de denominações (Mestre) ───────
 // Estado local para o editor de moedas
-let _cfgMoedasTemp = [];
+let _cfgMoedasTemp: any = [];
 
 function cfgMoedasRender() {
   const el = document.getElementById('cfg-moedas-lista');
@@ -1866,7 +1866,7 @@ function cfgMoedasRender() {
     el.innerHTML = '<div style="font-size:0.75rem;color:var(--suave);font-style:italic;padding:8px 0">Nenhuma denominação. Adicione uma abaixo.</div>';
     return;
   }
-  el.innerHTML = denoms.map((d, i) => `
+  el.innerHTML = denoms.map((d: any, i: any) => `
     <div style="display:flex;gap:6px;align-items:center;padding:8px 10px;background:rgba(10,14,22,0.6);border:1px solid rgba(30,45,66,0.7);border-radius:8px;margin-bottom:6px">
       <input value="${d.emoji||''}" maxlength="4" placeholder="🪙" oninput="_cfgMoedasTemp[${i}].emoji=this.value"
         style="width:40px;text-align:center;padding:5px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8a84b;font-size:1rem">
@@ -1893,12 +1893,12 @@ function cfgMoedasInit() {
   cfgMoedasRender();
 }
 
-function _cfgMoedasRemover(i) {
+function _cfgMoedasRemover(i: any) {
   _cfgMoedasTemp.splice(i, 1);
   cfgMoedasRender();
 }
 
-function _cfgMoedasMover(i, dir) {
+function _cfgMoedasMover(i: any, dir: any) {
   const j = i + dir;
   if (j < 0 || j >= _cfgMoedasTemp.length) return;
   [_cfgMoedasTemp[i], _cfgMoedasTemp[j]] = [_cfgMoedasTemp[j], _cfgMoedasTemp[i]];
@@ -1919,10 +1919,10 @@ function cfgMoedasAdicionar() {
 
 async function cfgMoedasSalvar() {
   // Validar: pelo menos 1 denominação com nome não vazio
-  const validas = _cfgMoedasTemp.filter(d => d.nome?.trim());
+  const validas = _cfgMoedasTemp.filter((d: any) => d.nome?.trim());
   if (!validas.length) { mostrarToast('Adicione pelo menos uma moeda', 'aviso'); return; }
   // Garantir cor padrão
-  validas.forEach(d => { if (!d.cor) d.cor = '#c8a84b'; });
+  validas.forEach((d: any) => { if (!d.cor) d.cor = '#c8a84b'; });
   try {
     const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
     // Ler theme_json atual
@@ -1941,7 +1941,7 @@ async function cfgMoedasSalvar() {
 }
 
 // ── BROADCAST HELPER ─────────────────────────────────────────────────────
-function _invBroadcastDrop(it, personagemDestino, origem) {
+function _invBroadcastDrop(it: any, personagemDestino: any, origem: any) {
   try {
     const ws = (window as any).ws;   // nunca foi definido — broadcast é no-op desde sempre (antes: ReferenceError engolido pelo try)
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -1965,7 +1965,7 @@ function _invBroadcastDrop(it, personagemDestino, origem) {
 }
 
 // ── HELPER: ícone de item ─────────────────────────────────────────────────
-function _itemIcon(it) {
+function _itemIcon(it: any) {
   if (!it) return '📦';
   const vc = it.visual_config || {};
   // Support img_url directly on item def (new field)
@@ -1976,7 +1976,7 @@ function _itemIcon(it) {
 }
 
 // Expor emitirEvento globalmente para Parte 1 (dar item broadcast)
-window.emitirEvento = function(evento, dados) { _invBroadcastDrop(dados.item||{}, dados.personagem_destino, dados.origem||evento); };
+window.emitirEvento = function(evento: any, dados: any) { _invBroadcastDrop(dados.item||{}, dados.personagem_destino, dados.origem||evento); };
 
 // Realtime: receber item_dropado de outros jogadores
 document.addEventListener('DOMContentLoaded', () => {
@@ -1987,12 +1987,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Hook no ws message handler para item_dropado
 const _origWsHandler = window.wsHandler;
-function _patchWsItemDropado(payload) {
+function _patchWsItemDropado(payload: any) {
   if (payload?.event !== 'item_dropado') return;
   const data = payload.payload || payload;
   const it = data.item || {};
   const rc = RARIDADE_CORES[it.raridade] || RARIDADE_CORES.comum;
-  const dur = { comum:4000, incomum:4000, raro:6000, epico:8000, lendario:12000 }[it.raridade] || 5000;
+  const dur = ({ comum:4000, incomum:4000, raro:6000, epico:8000, lendario:12000 } as any)[it.raridade] || 5000;
   const icon = _itemIcon(it);
   const corBorda = it.visual_config?.cor_borda || rc.borda;
   const corFundo = it.visual_config?.cor_fundo || rc.fundo;
@@ -2024,7 +2024,7 @@ const _wsCheckInterval = setInterval(() => {
   const ws = (window as any).ws;   // nunca foi global — o monkey-patch fica dormente (comportamento atual)
   if (ws) {
     const originalOnMessage = ws.onmessage;
-    ws.onmessage = function(e) {
+    ws.onmessage = function(e: any) {
       if (originalOnMessage) originalOnMessage.call(this, e);
       try {
         const msg = JSON.parse(e.data);
@@ -2042,21 +2042,21 @@ console.log('[RPGHUB] ✓ Parte 2 carregada — I2 Inventário · I3 Equip/Deseq
 // ─────────────────────────────────────────────────────────────────
 
 // Vocabulário genérico de fantasia (fallback quando campanha sem vocab)
-const VOCAB_FALLBACK = {
+const VOCAB_FALLBACK: Record<string, any> = {
   prefixo_material: ['Ferro','Aço','Mithril','Obsidiana','Osso','Couro','Prata','Cristal','Rúnico','Bronze','Pedra','Seda'],
   adjetivo_qualidade: ['Afiado','Forjado','Sombrio','Encantado','Antigo','Corrompido','Sagrado','Maldito','Purificado','Bendito','Lendário','Esquecido','Eterno','Veloz','Pesado'],
   nome_origem: ['da Forja Esquecida','do Rei Traído','das Sombras Eternas','da Ordem Caída','do Dragão Ancestral','das Ruínas Antigas','do Abismo','da Luz Dourada','dos Guerreiros Perdidos','do Templo Proibido']
 };
 
 // Cache de vocabulário por rpgId
-const _vocabCache = {};
+const _vocabCache: Record<string, any> = {};
 
-async function carregarVocabulario(rpgId) {
+async function carregarVocabulario(rpgId: any) {
   if (_vocabCache[rpgId]) return _vocabCache[rpgId];
   try {
     const rows = await sb(`vocabulario_tematico?rpg_id=eq.${encodeURIComponent(rpgId)}&select=tipo,valor`);
-    const vocab = { prefixo_material: [], adjetivo_qualidade: [], nome_origem: [] };
-    (rows||[]).forEach(r => {
+    const vocab: Record<string, any> = { prefixo_material: [], adjetivo_qualidade: [], nome_origem: [] };
+    (rows||[]).forEach((r: any) => {
       if (vocab[r.tipo]) vocab[r.tipo].push(r.valor);
     });
     // Completar com fallback se categoria vazia
@@ -2071,7 +2071,7 @@ async function carregarVocabulario(rpgId) {
 }
 
 // Nome base por tipo canônico + subtipo
-const NOMES_BASE_TIPO = {
+const NOMES_BASE_TIPO: Record<string, any> = {
   arma: { default:'Arma', espada:'Espada', machado:'Machado', cajado:'Cajado', arco:'Arco', adaga:'Adaga', lança:'Lança', martelo:'Martelo' },
   escudo: { default:'Escudo', broquel:'Broquel' },
   armadura: { default:'Armadura', cota_malha:'Cota de Malha', peitoral:'Peitoral', manto:'Manto', túnica:'Túnica' },
@@ -2086,9 +2086,9 @@ const NOMES_BASE_TIPO = {
 
 // Função principal: gerarNomeItem(tipoCanônico, subtipo, raridade) → String
 // Returns um objeto com as 3 partes para a UI de 3 colunas
-async function _gerarPartesNome(rpgId, tipo, subtipo, raridade) {
+async function _gerarPartesNome(rpgId: any, tipo: any, subtipo: any, raridade: any) {
   const vocab = await carregarVocabulario(rpgId||RPG_DATA?.rpgId||'');
-  const rand = arr => arr[Math.floor(Math.random()*arr.length)];
+  const rand = (arr: any) => arr[Math.floor(Math.random()*arr.length)];
 
   const nomeBase = NOMES_BASE_TIPO[tipo]?.[subtipo] || NOMES_BASE_TIPO[tipo]?.default || 'Item';
   const material = rand(vocab.prefixo_material);
@@ -2101,7 +2101,7 @@ async function _gerarPartesNome(rpgId, tipo, subtipo, raridade) {
   return { nomeBase, material, adjetivo, origem };
 }
 
-function _montarNomeGerado(nomeBase, material, adjetivo, origem) {
+function _montarNomeGerado(nomeBase: any, material: any, adjetivo: any, origem: any) {
   let nome = `${nomeBase} ${material} ${adjetivo}`.trim();
   if (origem) nome += ` ${origem}`;
   return nome;
@@ -2155,7 +2155,7 @@ function itemAplicarNomeGerado() {
 }
 
 // Exportar função pública de geração de nome
-async function gerarNomeItem(rpgId, tipo, subtipo, raridade) {
+async function gerarNomeItem(rpgId: any, tipo: any, subtipo: any, raridade: any) {
   const partes = await _gerarPartesNome(rpgId, tipo, subtipo, raridade);
   return _montarNomeGerado(partes.nomeBase, partes.material, partes.adjetivo, partes.origem);
 }
@@ -2166,7 +2166,7 @@ async function gerarNomeItem(rpgId, tipo, subtipo, raridade) {
 // ─────────────────────────────────────────────────────────────────
 
 // Fatores de escala por tier e raridade
-const _FATOR_ESCALA = {
+const _FATOR_ESCALA: Record<string, any> = {
   1: { comum:0.05 },
   2: { comum:0.08, incomum:0.12 },
   3: { comum:0.10, incomum:0.16, raro:0.22 },
@@ -2175,17 +2175,17 @@ const _FATOR_ESCALA = {
 };
 
 // Cor de borda por raridade
-const _BORDA_RARIDADE = {
+const _BORDA_RARIDADE: Record<string, any> = {
   comum:'#888888', incomum:'#2ecc71', raro:'#3498db', epico:'#9b59b6', lendario:'#f39c12'
 };
 
 // Animação automática por raridade
-const _ANIMACAO_RARIDADE = {
+const _ANIMACAO_RARIDADE: Record<string, any> = {
   comum:'none', incomum:'none', raro:'none', epico:'glow', lendario:'shimmer'
 };
 
 // Efeitos compatíveis por tipo canônico
-const _EFEITOS_TIPO = {
+const _EFEITOS_TIPO: Record<string, any> = {
   arma: ['ao_atacar','ao_matar'],
   escudo: ['ao_ser_atacado','ao_receber_dano_critico'],
   armadura: ['hp_abaixo_30pct','aura_resistencia'],
@@ -2199,19 +2199,19 @@ const _EFEITOS_TIPO = {
 };
 
 // Chance de efeito por raridade
-const _CHANCE_EFEITO = { comum:0.05, incomum:0.175, raro:0.50, epico:0.775, lendario:1.0 };
+const _CHANCE_EFEITO: Record<string, any> = { comum:0.05, incomum:0.175, raro:0.50, epico:0.775, lendario:1.0 };
 
 /*
   gerarStatusItem(rpgId, tipoCanônico, grupoAtributo, tierInimigo, raridade, slotFuncional, personagemAlvo?)
   Retorna: { atributos_bonus, trade_offs, efeitos, nivel, visual_config, params_geracao }
 */
-async function gerarStatusItem(rpgId, tipoCanônico, grupoAtributo, tierInimigo, raridade, slotFuncional, personagemAlvo) {
+async function gerarStatusItem(rpgId: any, tipoCanônico: any, grupoAtributo: any, tierInimigo: any, raridade: any, slotFuncional: any, personagemAlvo: any) {
   const tier = Math.min(5, Math.max(1, parseInt(tierInimigo)||1));
   const fatorObj = _FATOR_ESCALA[tier] || {};
   const fator = fatorObj[raridade];
   if (fator === undefined) {
     // Combinação inválida tier/raridade
-    return { atributos_bonus:{}, trade_offs:{}, efeitos:[], nivel:tier, visual_config:{}, params_geracao:{aviso:'Combinação tier/raridade inválida'} };
+    return { atributos_bonus:{}, trade_offs:{}, efeitos:[] as any[], nivel:tier, visual_config:{}, params_geracao:{aviso:'Combinação tier/raridade inválida'} };
   }
 
   // PASSO 1: Bônus base
@@ -2240,13 +2240,13 @@ async function gerarStatusItem(rpgId, tipoCanônico, grupoAtributo, tierInimigo,
   }
 
   // PASSO 3: Bônus secundário misto (Incomum+)
-  const atributosBonus = {};
+  const atributosBonus: Record<string, any> = {};
   const raresIds = ['incomum','raro','epico','lendario'];
   let grupoAtributoNome = grupoAtributo;
   // Usar primeiro atributo do grupo como nome display
   try {
     const mapa = await carregarMapeamento(rpgId);
-    const atrsDoGrupo = mapa.filter(m=>m.grupo_base===grupoAtributo);
+    const atrsDoGrupo = mapa.filter((m: any)=>m.grupo_base===grupoAtributo);
     if (atrsDoGrupo.length) grupoAtributoNome = atrsDoGrupo[0].nome_customizado;
   } catch(e) {}
 
@@ -2259,14 +2259,14 @@ async function gerarStatusItem(rpgId, tipoCanônico, grupoAtributo, tierInimigo,
     let grupoSecNome = grupoSec;
     try {
       const mapa = await carregarMapeamento(rpgId);
-      const atrsGrupoSec = mapa.filter(m=>m.grupo_base===grupoSec);
+      const atrsGrupoSec = mapa.filter((m: any)=>m.grupo_base===grupoSec);
       if (atrsGrupoSec.length) grupoSecNome = atrsGrupoSec[Math.floor(Math.random()*atrsGrupoSec.length)].nome_customizado;
     } catch(e) {}
     atributosBonus[grupoSecNome] = bonusSec;
   }
 
   // PASSO 4: Trade-off (penalidade)
-  const tradeOffs = {};
+  const tradeOffs: Record<string, any> = {};
   const temTradeOff = ['raro','epico','lendario'].includes(raridade) && bonusBase > mediaGrupo * 0.25 && Math.random() < 0.30;
   if (temTradeOff) {
     const gruposAll = ['forca','destreza','constituicao','inteligencia'].filter(g=>g!==grupoAtributo);
@@ -2275,7 +2275,7 @@ async function gerarStatusItem(rpgId, tipoCanônico, grupoAtributo, tierInimigo,
     let grupoPenNome = grupoPen;
     try {
       const mapa = await carregarMapeamento(rpgId);
-      const atrsPen = mapa.filter(m=>m.grupo_base===grupoPen);
+      const atrsPen = mapa.filter((m: any)=>m.grupo_base===grupoPen);
       if (atrsPen.length) grupoPenNome = atrsPen[Math.floor(Math.random()*atrsPen.length)].nome_customizado;
     } catch(e) {}
     tradeOffs[grupoPenNome] = -penalidade;
@@ -2322,7 +2322,7 @@ async function gerarStatusItem(rpgId, tipoCanônico, grupoAtributo, tierInimigo,
   const nivelPct = Math.min(1, nivel / nivelMaxCamp);
   const lightness = Math.floor(10 + nivelPct * 12);
   const saturation = Math.floor(30 + nivelPct * 20);
-  const EMOJI_TIPO = { arma:'⚔️', escudo:'🛡️', armadura:'🥋', calcas:'👖', amuleto:'💎', capacete:'⛑️', botas:'👢', capa:'🧣', consumivel:'🧪', customizado:'✨' };
+  const EMOJI_TIPO: Record<string, any> = { arma:'⚔️', escudo:'🛡️', armadura:'🥋', calcas:'👖', amuleto:'💎', capacete:'⛑️', botas:'👢', capa:'🧣', consumivel:'🧪', customizado:'✨' };
 
   const visual_config = {
     tipo_visual: 'emoji',
@@ -2349,7 +2349,7 @@ async function gerarStatusItem(rpgId, tipoCanônico, grupoAtributo, tierInimigo,
 // ─────────────────────────────────────────────────────────────────
 
 // Tabelas de drop por tier
-const _DROP_QTDE = {
+const _DROP_QTDE: Record<string, any> = {
   1: { minItens:0, maxItens:0, chanceItem:0.15, raridadesPossiveis:['comum'] },
   2: { minItens:0, maxItens:1, chanceItem:0.35, raridadesPossiveis:['comum','incomum'] },
   3: { minItens:0, maxItens:1, chanceItem:0.55, raridadesPossiveis:['comum','incomum','raro'] },
@@ -2357,14 +2357,14 @@ const _DROP_QTDE = {
   5: { minItens:1, maxItens:3, chanceItem:1.00, raridadesPossiveis:['raro','epico','lendario'] }
 };
 
-const _PESO_RARIDADE_TIER = {
+const _PESO_RARIDADE_TIER: Record<string, any> = {
   2: { comum:0.80, incomum:0.20 },
   3: { comum:0.55, incomum:0.35, raro:0.10 },
   4: { incomum:0.50, raro:0.35, epico:0.15 },
   5: { raro:0.55, epico:0.35, lendario:0.10 }
 };
 
-function _sortearRaridade(tier) {
+function _sortearRaridade(tier: any) {
   const pesos = _PESO_RARIDADE_TIER[tier] || { comum:1 };
   const total = Object.values<any>(pesos).reduce((a,b)=>a+b,0);
   let rng = Math.random() * total;
@@ -2376,10 +2376,10 @@ function _sortearRaridade(tier) {
 }
 
 // Chance de drop acima do nível
-const _CHANCE_NIVEL_ACIMA = { comum:0.03, incomum:0.06, raro:0.10, epico:0.15, lendario:0.25 };
-const _MAX_NIVEL_ACIMA = { comum:1, incomum:2, raro:2, epico:3, lendario:3 };
+const _CHANCE_NIVEL_ACIMA: Record<string, any> = { comum:0.03, incomum:0.06, raro:0.10, epico:0.15, lendario:0.25 };
+const _MAX_NIVEL_ACIMA: Record<string, any> = { comum:1, incomum:2, raro:2, epico:3, lendario:3 };
 
-function _calcularNivelItem(tier, raridade, npcNivel) {
+function _calcularNivelItem(tier: any, raridade: any, npcNivel: any) {
   const nivelBase = npcNivel || tier;
   const chanceAcima = _CHANCE_NIVEL_ACIMA[raridade] || 0;
   if (Math.random() < chanceAcima) {
@@ -2390,7 +2390,7 @@ function _calcularNivelItem(tier, raridade, npcNivel) {
 }
 
 // calcularDrops: retorna lista de specs de itens a dropar
-async function calcularDrops(rpgId, npcTier, npcNivel, npcGrupoAtributo) {
+async function calcularDrops(rpgId: any, npcTier: any, npcNivel: any, npcGrupoAtributo: any) {
   const tier = Math.min(5, Math.max(1, parseInt(npcTier)||1));
   const config = _DROP_QTDE[tier] || _DROP_QTDE[1];
 
@@ -2409,7 +2409,7 @@ async function calcularDrops(rpgId, npcTier, npcNivel, npcGrupoAtributo) {
     const nivel = _calcularNivelItem(tier, raridade, npcNivel);
 
     // Slot funcional pelo tipo
-    const SLOT_TIPO = { arma:'arma_principal', escudo:'arma_secundaria', armadura:'corpo', calcas:'pernas', amuleto:'acessorio', capacete:'cabeca', botas:'pes', capa:'capa' };
+    const SLOT_TIPO: Record<string, any> = { arma:'arma_principal', escudo:'arma_secundaria', armadura:'corpo', calcas:'pernas', amuleto:'acessorio', capacete:'cabeca', botas:'pes', capa:'capa' };
     const slot = SLOT_TIPO[tipo] || 'acessorio';
 
     drops.push({ tipo, raridade, grupoAtributo, slot, nivel });
@@ -2419,7 +2419,7 @@ async function calcularDrops(rpgId, npcTier, npcNivel, npcGrupoAtributo) {
 }
 
 // Executar drop: gera itens, insere no banco, cria loot_pendente, broadcast, atualiza token
-async function _executarDropNPC(rpgId, npcNome, npcChar) {
+async function _executarDropNPC(rpgId: any, npcNome: any, npcChar: any) {
   const tier = parseInt(npcChar.custom_attrs?.tier) || 1;
   const nivel = npcChar.nivel || tier;
   const grupoAtributo = npcChar.custom_attrs?.grupo_atributo || null;
@@ -2486,7 +2486,7 @@ async function _executarDropNPC(rpgId, npcNome, npcChar) {
       const payload = {
         tipo_evento: 'item_dropado',
         rpg_id: rpgId,
-        personagem_destino: null,
+        personagem_destino: null as any,
         item: {
           id: itemId,
           nome,
@@ -2539,7 +2539,7 @@ async function _executarDropNPC(rpgId, npcNome, npcChar) {
 // Exibir indicador de loot no token (chamado por mapaRenderTokens)
 // O token morto com loot recebe ícone ✝💰 — injetado via patch de renderização
 const _origRenderTokenStyle = window._renderTokenStyle;
-window._patchTokenLoot = function(c, tokenEl) {
+window._patchTokenLoot = function(c: any, tokenEl: any) {
   if (!tokenEl) return;
   if (c?.custom_attrs?.morto && c?.custom_attrs?.tem_loot) {
     // Adicionar ícone de saque sobre o token
@@ -2550,7 +2550,7 @@ window._patchTokenLoot = function(c, tokenEl) {
       lootBadge.style.cssText = 'position:absolute;top:-10px;right:-6px;font-size:0.75rem;background:rgba(192,57,43,0.85);border-radius:8px;padding:1px 4px;cursor:pointer;z-index:15;animation:pulse 1.5s infinite;user-select:none';
       lootBadge.textContent = '✝💰';
       lootBadge.title = 'Clique para saquear';
-      lootBadge.onclick = (e) => { e.stopPropagation(); abrirModalLootNPC(c.nome); };
+      lootBadge.onclick = (e: any) => { e.stopPropagation(); abrirModalLootNPC(c.nome); };
       tokenEl.appendChild(lootBadge);
     }
   }
@@ -2593,7 +2593,7 @@ console.log('[RPGHUB] ✓ Parte 3A carregada — I7 Vocabulário Temático · A4
 // HELPER: renderizar card de item completo (compartilhado)
 // Usado por I10, I11, I12, I13
 // ─────────────────────────────────────────────────────────────
-function _renderItemCard(it, opts: any = {}) {
+function _renderItemCard(it: any, opts: any = {}) {
   // it: item_catalog ou instância com joins
   const rc = RARIDADE_CORES?.[it.raridade] || { borda:'#888', fundo:'#141d2b', badge:'cat-item-badge', label: it.raridade||'comum' };
   const vc = it.visual_config || {};
@@ -2616,7 +2616,7 @@ function _renderItemCard(it, opts: any = {}) {
   const hasSevere = tradeoffs.some(([,v])=>Math.abs(typeof v==='object'?v.valor:v) > 3);
 
   // Efeitos
-  const efeitos = (it.efeitos||[]).slice(0,2).map(ef=>{
+  const efeitos = (it.efeitos||[]).slice(0,2).map((ef: any)=>{
     if (ef.tipo==='proc') return `<div style="font-size:0.58rem;color:#7ec8f0">${Math.round((ef.chance||0)*100)}% ${ef.gatilho?.replace(/_/g,' ')||''}</div>`;
     if (ef.tipo==='aura') return `<div style="font-size:0.58rem;color:#a77fdb">Aura: +${ef.valor||''}</div>`;
     return '';
@@ -2651,9 +2651,9 @@ function _renderItemCard(it, opts: any = {}) {
 // ─────────────────────────────────────────────────────────────
 // I10 — SAQUE NO MAPA (modal completo)
 // ─────────────────────────────────────────────────────────────
-const LOOT_STATE = { npcNome: null, itens: [], selecionados: new Set() };
+const LOOT_STATE = { npcNome: null as any, itens: [] as any[], selecionados: new Set() };
 
-window.abrirModalLootNPC = async function(npcNome) {
+window.abrirModalLootNPC = async function(npcNome: any) {
   const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
   if (!rpgId) return;
 
@@ -2670,13 +2670,13 @@ window.abrirModalLootNPC = async function(npcNome) {
   if (!loots?.length) { mostrarToast('Nenhum loot disponível', 'info'); return; }
 
   // Buscar detalhes dos itens
-  const ids = loots.map(l=>l.item_id).filter(Boolean);
+  const ids = loots.map((l: any)=>l.item_id).filter(Boolean);
   let itens = [];
   if (ids.length) {
     try { itens = await sb(`item_catalog?id=in.(${ids.join(',')})&select=*`); } catch(e) {}
   }
 
-  LOOT_STATE.itens = itens.map((it, i) => ({ ...it, loot_id: loots[i]?.id }));
+  LOOT_STATE.itens = itens.map((it: any, i: any) => ({ ...it, loot_id: loots[i]?.id }));
 
   // Popular destino
   const chars = (RPG_DATA?.characters||[]).filter(c=>(c.hp_atual??c.custom_attrs?.hp_max??100)>0 && (c.custom_attrs?.tipo==='jogador'||c.custom_attrs?.tipo==='personagem'));
@@ -2703,7 +2703,7 @@ function renderLootCards() {
   }).join('');
 }
 
-window.toggleLootSel = function(i) {
+window.toggleLootSel = function(i: any) {
   if (LOOT_STATE.selecionados.has(i)) LOOT_STATE.selecionados.delete(i);
   else LOOT_STATE.selecionados.add(i);
   renderLootCards();
@@ -2748,7 +2748,7 @@ window.confirmarSaque = async function() {
   mostrarToast(`✓ ${itens.length} ite(ns) saqueado(s) por ${charNome}`, 'ok');
   // Atualizar inventário se for o char ativo
   if (INV?.charAtivo === charNome && INV.carregado?.[charId]) {
-    delete INV.carregado[charId];
+    delete (INV.carregado as any)[charId];
   }
   fecharModalLoot();
 };
@@ -2761,7 +2761,7 @@ window.fecharModalLoot = function() {
 // ─────────────────────────────────────────────────────────────
 // I11 — INVENTÁRIO COMPARTILHADO (Baú do Grupo)
 // ─────────────────────────────────────────────────────────────
-const BAU_STATE = { itens: [], carregado: false };
+const BAU_STATE = { itens: [] as any[], carregado: false };
 
 async function renderInvBau() {
   const el = document.getElementById('inv-bau-conteudo');
@@ -2823,9 +2823,9 @@ function renderBauDepositarLista() {
   const el = document.getElementById('bau-depositar-lista');
   if (!el) return;
   const charId = INV.charId;
-  const mochila = (INV.inventarios[charId]||[]).filter(inst=>!inst.equipado);
+  const mochila = ((INV.inventarios as any)[charId]||[]).filter((inst: any)=>!inst.equipado);
   if (!mochila.length) { el.innerHTML = `<div style="color:var(--suave);font-size:0.8rem;font-style:italic">Mochila vazia</div>`; return; }
-  el.innerHTML = mochila.map(inst=>{
+  el.innerHTML = mochila.map((inst: any)=>{
     const it = inst.item_catalog || inst;
     return _renderItemCard(it, {
       botaoLabel: '⬆ Depositar',
@@ -2834,7 +2834,7 @@ function renderBauDepositarLista() {
   }).join('');
 }
 
-window.bauDepositarItem = async function(instId) {
+window.bauDepositarItem = async function(instId: any) {
   const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
   try {
     // Transferir dono para "grupo"
@@ -2843,20 +2843,20 @@ window.bauDepositarItem = async function(instId) {
       body: JSON.stringify({ personagem_nome: 'grupo', character_id: null, equipado: false, slot_equipado: null })
     });
     // Broadcast
-    const inst = (INV.inventarios[INV.charId]||[]).find(i=>i.id===instId);
+    const inst = ((INV.inventarios as any)[INV.charId]||[]).find((i: any)=>i.id===instId);
     if (inst) {
       const it = inst.item_catalog || inst;
       try { _invBroadcastDrop(it, 'Baú do Grupo', 'deposito'); } catch(e) {}
       mostrarToast(`⬆ ${it.nome} depositado no baú`, 'ok');
     }
     // Atualizar caches
-    if (INV.charId) { delete INV.carregado[INV.charId]; }
+    if (INV.charId) { delete (INV.carregado as any)[INV.charId]; }
     BAU_STATE.carregado = false;
     await renderInvBau();
   } catch(e) { mostrarToast('Erro ao depositar: ' + e.message, 'erro'); }
 };
 
-window.bauRetirarItem = async function(instId) {
+window.bauRetirarItem = async function(instId: any) {
   const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
   const charNome = INV.charAtivo;
   const charId = INV.charId;
@@ -2868,7 +2868,7 @@ window.bauRetirarItem = async function(instId) {
     });
     mostrarToast(`⬇ Item retirado para ${charNome}`, 'ok');
     BAU_STATE.carregado = false;
-    if (charId) delete INV.carregado[charId];
+    if (charId) delete (INV.carregado as any)[charId];
     await renderInvBau();
   } catch(e) { mostrarToast('Erro ao retirar: ' + e.message, 'erro'); }
 };
@@ -2878,13 +2878,13 @@ window.bauRetirarItem = async function(instId) {
 // I12 — TRADE ENTRE JOGADORES
 // ─────────────────────────────────────────────────────────────
 const TRADE_STATE = {
-  remetente: null, remetenteId: null,
-  destinatario: null, destinatarioId: null,
+  remetente: null as any, remetenteId: null as any,
+  destinatario: null as any, destinatarioId: null as any,
   itens_selecionados: new Set(), // ids de inst. inventário
-  proposta_pendente: null // proposta recebida
+  proposta_pendente: null as any // proposta recebida
 };
 
-async function abrirModalTrade(charNome, charId) {
+async function abrirModalTrade(charNome: any, charId: any) {
   TRADE_STATE.remetente = charNome;
   TRADE_STATE.remetenteId = charId;
   TRADE_STATE.itens_selecionados = new Set();
@@ -2898,7 +2898,7 @@ async function abrirModalTrade(charNome, charId) {
   sel.innerHTML = `<option value="">Para quem...</option>` + chars.map(c=>`<option value="${c.id}|${c.nome}">${c.nome}</option>`).join('');
 
   // Carregar itens da mochila do remetente
-  let mochila = (INV.inventarios[charId]||[]).filter(i=>!i.equipado);
+  let mochila = ((INV.inventarios as any)[charId]||[]).filter((i: any)=>!i.equipado);
   if (!mochila.length && charId) {
     try {
       const rows = await sb(`inventario?rpg_id=eq.${encodeURIComponent(RPG_DATA?.rpgId||CURRENT_RPG?.id)}&character_id=eq.${charId}&equipado=eq.false&select=*,item_catalog(*)`);
@@ -2907,7 +2907,7 @@ async function abrirModalTrade(charNome, charId) {
   }
 
   const grid = document.getElementById('trade-oferta-grid');
-  grid.innerHTML = mochila.map(inst=>{
+  grid.innerHTML = mochila.map((inst: any)=>{
     const it = inst.item_catalog || inst;
     return _renderItemCard(it, { onclick:`toggleTradeSel('${inst.id}')`, selecionado: false });
   }).join('') || `<div style="color:var(--suave);font-size:0.82rem;font-style:italic">Mochila vazia</div>`;
@@ -2916,7 +2916,7 @@ async function abrirModalTrade(charNome, charId) {
   document.getElementById('modal-trade-overlay').style.display = 'flex';
 }
 
-window.toggleTradeSel = function(instId) {
+window.toggleTradeSel = function(instId: any) {
   if (TRADE_STATE.itens_selecionados.has(instId)) TRADE_STATE.itens_selecionados.delete(instId);
   else TRADE_STATE.itens_selecionados.add(instId);
   // Reatualizar visual
@@ -2964,7 +2964,7 @@ window.enviarProposta = async function() {
   } catch(e) { mostrarToast('Erro ao enviar proposta: ' + e.message.replace(/^.*:\s*/, '') , 'erro'); }
 };
 
-window.responderTrade = async function(acao) {
+window.responderTrade = async function(acao: any) {
   const proposta = TRADE_STATE.proposta_pendente;
   if (!proposta) return;
   const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
@@ -2988,7 +2988,7 @@ window.responderTrade = async function(acao) {
     }
     // Broadcast item_saqueado para todos
     for (const instId of instIds) {
-      const rows = await sb(`inventario?id=eq.${instId}&select=*,item_catalog(*)`).catch(()=>[]);
+      const rows = await sb(`inventario?id=eq.${instId}&select=*,item_catalog(*)`).catch((): any[] => []);
       if (rows?.[0]) _invBroadcastDrop(rows[0].item_catalog || rows[0], destinatarioNome, 'trade');
     }
     _broadcastTradeEvento('trade_aceito', { de: proposta.de, para: proposta.para });
@@ -3016,7 +3016,7 @@ window.responderTrade = async function(acao) {
   fecharModalTrade();
 };
 
-function _broadcastTradeEvento(evento, dados) {
+function _broadcastTradeEvento(evento: any, dados: any) {
   try {
     const ws = realtimeWS || AR?.ws;
     const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
@@ -3035,7 +3035,7 @@ window.fecharModalTrade = function() {
 
 // Botão de Trade no inventário (injetado dinamicamente)
 // Chamado por _abrirItemPopup existente — adicionamos opção de trade
-function adicionarBotaoTrade(charNome, charId) {
+function adicionarBotaoTrade(charNome: any, charId: any) {
   // Adicionar botão "🔄 Trade" no modal de inventário da mochila
   const wrap = document.getElementById('inv-mochila-lista');
   if (!wrap) return;
@@ -3084,11 +3084,11 @@ window._avtCtrlToggleSkills = _avtCtrlToggleSkills;
 
 // ── Anel de skills (modo recolhido) ─────────────────────────────────────────
 
-function _mcSkillsOrdenados(skillItems) {
+function _mcSkillsOrdenados(skillItems: any) {
   // Skills sem cooldown primeiro (em ordem numérica), depois as em cooldown
   return [
-    ...skillItems.filter(s => s.cd === 0),
-    ...skillItems.filter(s => s.cd > 0),
+    ...skillItems.filter((s: any) => s.cd === 0),
+    ...skillItems.filter((s: any) => s.cd > 0),
   ];
 }
 
@@ -3124,10 +3124,10 @@ function _avtCtrlToggleAutoAlvo() {
 }
 window._avtCtrlToggleAutoAlvo = _avtCtrlToggleAutoAlvo;
 
-function _getUltSkillId(charKey) {
+function _getUltSkillId(charKey: any) {
   try { return localStorage.getItem('mc_ult_' + charKey) || null; } catch (_) { return null; }
 }
-function _setUltSkillId(charKey, skillId) {
+function _setUltSkillId(charKey: any, skillId: any) {
   try {
     const cur = localStorage.getItem('mc_ult_' + charKey);
     if (cur === skillId) localStorage.removeItem('mc_ult_' + charKey);
@@ -3153,17 +3153,17 @@ function _avtCtrlAplicarAutoAlvo() {
   const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
   if (!jogador) return;
   const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
-  const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
   const alcanceSk = sk?.alcance_celulas ?? 1;
   let candidatos = [];
   if (bat) {
-    candidatos = bat.iniciativa.filter(e => {
+    candidatos = bat.iniciativa.filter((e: any) => {
       if (e.tipo !== 'inimigo' || e.hp <= 0) return false;
       const d = Math.max(Math.abs(Math.round(e.x) - Math.round(jogador.x)), Math.abs(Math.round(e.y) - Math.round(jogador.y)));
       return d <= alcanceSk;
     });
   } else {
-    candidatos = AVT_STATE.entidades.filter(e => {
+    candidatos = AVT_STATE.entidades.filter((e: any) => {
       if (e.tipo !== 'inimigo' || e.hp <= 0) return false;
       if (typeof _avtBatalhaDeEnt === 'function' && _avtBatalhaDeEnt(e.id)) return false;
       const d = Math.max(Math.abs(Math.round(e.x) - Math.round(jogador.x)), Math.abs(Math.round(e.y) - Math.round(jogador.y)));
@@ -3176,8 +3176,8 @@ function _avtCtrlAplicarAutoAlvo() {
     return;
   }
   const alvo = MOBILE_CTRL.autoAlvoPrefMenorHP
-    ? candidatos.reduce((m, e) => e.hp < m.hp ? e : m, candidatos[0])
-    : candidatos.reduce((m, e) => {
+    ? candidatos.reduce((m: any, e: any) => e.hp < m.hp ? e : m, candidatos[0])
+    : candidatos.reduce((m: any, e: any) => {
         const dm = Math.max(Math.abs(Math.round(m.x) - Math.round(jogador.x)), Math.abs(Math.round(m.y) - Math.round(jogador.y)));
         const de = Math.max(Math.abs(Math.round(e.x) - Math.round(jogador.x)), Math.abs(Math.round(e.y) - Math.round(jogador.y)));
         return de < dm ? e : m;
@@ -3287,7 +3287,7 @@ function _mostrarSeletorModoControle() {
     </div>
     <button id="mc-modo-cancel" style="margin-top:6px;padding:6px 18px;background:none;border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:rgba(255,255,255,0.35);font-size:0.65rem;cursor:pointer;touch-action:manipulation">✕ Cancelar</button>
   `;
-  const _ativar = (modo) => {
+  const _ativar = (modo: any) => {
     d.remove();
     MOBILE_CTRL.modoTela = modo;
     (MOBILE_CTRL as any).ativadoManualmente = true;
@@ -3326,7 +3326,7 @@ function _mostrarSeletorModoControle() {
       </div>
       <button id="mc-cam-cancel" style="margin-top:6px;padding:6px 18px;background:none;border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:rgba(255,255,255,0.35);font-size:0.65rem;cursor:pointer;touch-action:manipulation">✕ Cancelar</button>
     `;
-    const _ativarCam = (cam) => {
+    const _ativarCam = (cam: any) => {
       MOBILE_CTRL.modoCamara = cam;
       try { localStorage.setItem('mc_modo_camera', cam); } catch (_) {}
       d2.remove();
@@ -3589,7 +3589,7 @@ function _desativarControleMobile() {
   _atualizarBannerControleMobile?.();
 }
 
-function _avtMinimapSetMobile(mobile) {
+function _avtMinimapSetMobile(mobile: any) {
   const mm = document.getElementById('avt-minimap');
   if (!mm) return;
   if (mobile) {
@@ -3776,9 +3776,9 @@ function _iniciarDpadReposicionamento() {
   zonaEsq.style.bottom = '';
   zonaEsq.style.top = '';
 
-  let holdTimer = null;
+  let holdTimer: any = null;
   let reposMode = false;
-  let dragStart = null;
+  let dragStart: any = null;
 
   const _dpadPosKey = () => {
     const rpgId = (typeof AVT_STATE !== 'undefined' && AVT_STATE?.rpgId) || 'default';
@@ -3825,7 +3825,7 @@ function _iniciarDpadReposicionamento() {
     zonaEsq.style.transform = `translate(${dx}px,${dy}px)`;
   }, { passive: false });
 
-  const _finalizarHold = (e) => {
+  const _finalizarHold = (e: any) => {
     if (e) e.preventDefault();
     clearTimeout(holdTimer);
     center.style.background = '';
@@ -3846,7 +3846,7 @@ function _iniciarDpadReposicionamento() {
 }
 
 // ── Zoom do mapa aventura via controle mobile ────────────────────────────
-window._avtCtrlZoom = function(delta) {
+window._avtCtrlZoom = function(delta: any) {
   if (typeof AVT_STATE === 'undefined') return;
   const atual = AVT_STATE.camera?.zoom || 1;
   AVT_STATE.camera.zoom = Math.max(0.3, Math.min(3.0, atual + delta));
@@ -3895,10 +3895,10 @@ window._avtToggleLogMobile = function() {
 };
 
 // ── D-pad 8 direções (substitui joystick) ───────────────────────────────
-let _DPAD_TIMER = null;
+let _DPAD_TIMER: any = null;
 let _DPAD_DC = 0, _DPAD_DR = 0;
 
-window._dpadPress = function(dc, dr) {
+window._dpadPress = function(dc: any, dr: any) {
   _DPAD_DC = dc; _DPAD_DR = dr;
   clearInterval(_DPAD_TIMER);
   _dpadMoverToken(dc, dr);
@@ -3916,7 +3916,7 @@ window._dpadRelease = function() {
 // ═══════════════════════════════════════════════════════════════════════════
 // ── FUNÇÃO CORRIGIDA: _dpadMoverToken ──────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════
-function _dpadMoverToken(dc, dr) {
+function _dpadMoverToken(dc: any, dr: any) {
   // Se em modo aventura, rotear para o sistema de aventura
   if (_emModoAventura() && typeof _avtDpadControle === 'function') {
     _avtDpadControle(dc, dr);
@@ -3991,7 +3991,7 @@ function _iniciarJoystick() {
 // ── NOVAS FUNÇÕES AUXILIARES ──────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════
 
-function _podeMovimentarMobile(charNome) {
+function _podeMovimentarMobile(charNome: any) {
   const batalhaId = BATALHA_ATUAL_ID;
   if (!batalhaId) return true; // Fora de batalha pode mover livremente
 
@@ -4062,10 +4062,10 @@ function _atualizarZonaCentralAventura() {
     const hpPct = Math.round(Math.max(0, Math.min(100, (hp / hpMax) * 100)));
     const hpCor = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
 
-    const _dbChar = typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome) : null;
+    const _dbChar = typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars.find((c: any) => c.id === jogador.dbId || c.nome === jogador.nome) : null;
     const atributos = _dbChar?.custom_attrs?.atributos || {};
     const statusAttrs = (typeof AVT_STATE !== 'undefined' ? (AVT_STATE.rpg?.attr_defs || []) : [])
-      .filter(a => a.categoria === 'status' && a.nome !== 'HP' && a.nome !== 'Nível');
+      .filter((a: any) => a.categoria === 'status' && a.nome !== 'HP' && a.nome !== 'Nível');
     let recursoHtml = '';
     for (const attr of statusAttrs.slice(0, 1)) {
       const val = parseFloat(atributos[attr.nome] || 0);
@@ -4103,7 +4103,7 @@ function _atualizarZonaCentralAventura() {
   _avtCtrlAtualizarAlvosCentral(alvosEl);
 }
 
-function _avtCtrlAtualizarAlvosCentral(alvosEl) {
+function _avtCtrlAtualizarAlvosCentral(alvosEl: any) {
   if (!alvosEl) return;
   const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
   if (!jogador || typeof AVT_STATE === 'undefined') { if (alvosEl) alvosEl.innerHTML = ''; return; }
@@ -4118,15 +4118,15 @@ function _avtCtrlAtualizarAlvosCentral(alvosEl) {
 
   const skId   = (AVT_STATE as any)._pendingSkillId; // undefined=nenhuma selecionada, null=básico, string=skill
   const alvoId = AVT_STATE.alvoSelecionado;
-  const sk = (skId != null) ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const sk = (skId != null) ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
   const alcanceSk = sk?.alcance_celulas ?? 1;
   const skSelecionada = skId !== undefined;
 
   // Se ambos selecionados e em alcance → executa automaticamente (sem botão intermediário)
   if (skSelecionada && alvoId) {
     let alvoEnt = null;
-    if (bat) alvoEnt = bat.iniciativa.find(e => e.id === alvoId && e.hp > 0);
-    else     alvoEnt = AVT_STATE.entidades.find(e => e.id === alvoId && e.hp > 0 && !_avtBatalhaDeEnt(e.id));
+    if (bat) alvoEnt = bat.iniciativa.find((e: any) => e.id === alvoId && e.hp > 0);
+    else     alvoEnt = AVT_STATE.entidades.find((e: any) => e.id === alvoId && e.hp > 0 && !_avtBatalhaDeEnt(e.id));
     if (alvoEnt) {
       const dist = Math.max(Math.abs(Math.round(alvoEnt.x) - Math.round(jogador.x)), Math.abs(Math.round(alvoEnt.y) - Math.round(jogador.y)));
       if (dist <= alcanceSk) {
@@ -4139,15 +4139,15 @@ function _avtCtrlAtualizarAlvosCentral(alvosEl) {
   // Skill de aliado: mostrar lista de aliados (verde para outros, laranja para si mesmo)
   if (sk?.alvo_tipo === 'aliado' && skSelecionada) {
     const aliados = bat
-      ? bat.iniciativa.filter(e => e.tipo === 'jogador' && e.hp > 0)
-      : AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0);
+      ? bat.iniciativa.filter((e: any) => e.tipo === 'jogador' && e.hp > 0)
+      : AVT_STATE.entidades.filter((e: any) => e.tipo === 'jogador' && e.hp > 0);
     if (!aliados.length) {
       alvosEl.innerHTML = `<div style="font-size:0.58rem;color:rgba(255,255,255,0.3);text-align:center;padding:6px;font-family:var(--fonte-d)">Nenhum aliado disponível</div>`;
       return;
     }
     alvosEl.innerHTML =
       `<div style="font-size:0.46rem;color:rgba(255,255,255,0.3);text-align:center;margin-bottom:1px;font-family:var(--fonte-d);letter-spacing:.06em">ALIADOS</div>` +
-      aliados.map(e => {
+      aliados.map((e: any) => {
         const isMe = e.id === jogador.id;
         const rgb = isMe ? '232,150,30' : '39,174,96';
         const cor = isMe ? '#e89600' : '#27ae60';
@@ -4158,9 +4158,9 @@ function _avtCtrlAtualizarAlvosCentral(alvosEl) {
   }
 
   // Montar listas vermelho/azul
-  let vermelhos = [], azuis = [];
+  let vermelhos = [], azuis: any = [];
   if (bat && emMeuTurno) {
-    vermelhos = bat.iniciativa.filter(e => {
+    vermelhos = bat.iniciativa.filter((e: any) => {
       if (e.tipo !== 'inimigo' || e.hp <= 0) return false;
       if (skSelecionada) {
         const d = Math.max(Math.abs(Math.round(e.x) - Math.round(jogador.x)), Math.abs(Math.round(e.y) - Math.round(jogador.y)));
@@ -4171,7 +4171,7 @@ function _avtCtrlAtualizarAlvosCentral(alvosEl) {
   }
   if (primAtaque || algumPerseguindo) {
     const maxAlc = typeof _avtMaxAlcanceJogador === 'function' ? _avtMaxAlcanceJogador(jogador) : 3;
-    AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id)).forEach(e => {
+    AVT_STATE.entidades.filter((e: any) => e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id)).forEach((e: any) => {
       if (Math.abs(e.x - jogador.x) + Math.abs(e.y - jogador.y) > maxAlc) return;
       if (skSelecionada) {
         const d = Math.max(Math.abs(Math.round(e.x) - Math.round(jogador.x)), Math.abs(Math.round(e.y) - Math.round(jogador.y)));
@@ -4188,16 +4188,16 @@ function _avtCtrlAtualizarAlvosCentral(alvosEl) {
     return;
   }
 
-  const _iStyle = (rgb, sel) =>
+  const _iStyle = (rgb: any, sel: any) =>
     `width:100%;padding:3px 4px;border-radius:5px;background:rgba(${rgb},${sel?'0.25':'0.08'});border:1px solid rgba(${rgb},${sel?'0.7':'0.3'});cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;touch-action:manipulation;font-family:var(--fonte-d)`;
 
   alvosEl.innerHTML =
     `<div style="font-size:0.46rem;color:rgba(255,255,255,0.3);text-align:center;margin-bottom:1px;font-family:var(--fonte-d);letter-spacing:.06em">ALVOS</div>` +
-    vermelhos.map(e => {
+    vermelhos.map((e: any) => {
       const sel = e.id === alvoId;
       return `<button ontouchend="event.preventDefault();_avtCtrlSelecionarAlvo('${e.id}')" onclick="_avtCtrlSelecionarAlvo('${e.id}')" style="${_iStyle('232,96,76',sel)}"><span style="color:#e8604c;font-size:0.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;display:block">${e.nome}${sel?' ✓':''}</span><span style="font-size:0.5rem;color:rgba(255,255,255,0.4)">${e.hp}/${e.hpMax||e.hp}</span></button>`;
     }).join('') +
-    azuis.map(e => {
+    azuis.map((e: any) => {
       const sel = e.id === alvoId;
       return `<button ontouchend="event.preventDefault();_avtCtrlSelecionarAlvo('${e.id}')" onclick="_avtCtrlSelecionarAlvo('${e.id}')" style="${_iStyle('79,163,209',sel)}"><span style="color:#4fa3d1;font-size:0.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;display:block">${e.nome}${sel?' ✓':''}</span><span style="font-size:0.5rem;color:rgba(255,255,255,0.4)">${e.hp}/${e.hpMax||e.hp}</span></button>`;
     }).join('');
@@ -4233,7 +4233,7 @@ function _atualizarZonaCentral() {
 
   // Recurso principal (Mana, Stamina etc.)
   const atributos = ca.atributos || {};
-  const statusAttrs = (RPG_DATA?.attr_defs || []).filter(a => a.categoria === 'status' && a.nome !== 'HP' && a.nome !== 'Nível');
+  const statusAttrs = (RPG_DATA?.attr_defs || []).filter((a: any) => a.categoria === 'status' && a.nome !== 'HP' && a.nome !== 'Nível');
   let recursoHtml = '';
   for (const attr of statusAttrs.slice(0, 2)) {
     const val = parseFloat(atributos[attr.nome] || 0);
@@ -4303,10 +4303,10 @@ function _atualizarZonaCentral() {
     const emMeuTurno = _esMeuTurnoMobile(charNome);
     if (emMeuTurno) {
       const habilidades = atkGetHabilidadesCampanha(charNome);
-      const skProprias  = habilidades.filter(h => h.alvo_tipo === 'proprio');
+      const skProprias  = habilidades.filter((h: any) => h.alvo_tipo === 'proprio');
       if (skProprias.length) {
         skWrap.style.display = 'flex';
-        skWrap.innerHTML = skProprias.map(h => `
+        skWrap.innerHTML = skProprias.map((h: any) => `
           <button onclick="mobileUsarSkillPropria(${JSON.stringify(h.nome).replace(/'/g, "\'")})"
             style="padding:5px 8px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;min-height:32px;touch-action:manipulation">
             ${h.nome}
@@ -4335,7 +4335,7 @@ function _atualizarZonaCentral() {
       if (minhaPos && zonas.length) {
         const mc = minhaPos.col ?? minhaPos.x ?? 0;
         const mr = minhaPos.row ?? minhaPos.y ?? 0;
-        const zonaProx = zonas.find(z => {
+        const zonaProx = zonas.find((z: any) => {
           const dc = mc - (z.col ?? z.x ?? 0);
           const dr = mr - (z.row ?? z.y ?? 0);
           return Math.sqrt(dc*dc + dr*dr) <= (z.raio_celulas || 2);
@@ -4348,7 +4348,7 @@ function _atualizarZonaCentral() {
   }
 }
 
-function _encontrarPetVinculado(donoNome) {
+function _encontrarPetVinculado(donoNome: any) {
   if (!donoNome) return null;
   const pet = (RPG_DATA?.characters || []).find(c => {
     const ca = c.custom_attrs || {};
@@ -4357,7 +4357,7 @@ function _encontrarPetVinculado(donoNome) {
   return pet?.nome || null;
 }
 
-function _esMeuTurnoMobile(charNome) {
+function _esMeuTurnoMobile(charNome: any) {
   const batalhaId = BATALHA_ATUAL_ID;
   if (!batalhaId) return false;
   const bs = MAPA_STATE.batalhas[batalhaId];
@@ -4367,7 +4367,7 @@ function _esMeuTurnoMobile(charNome) {
 }
 
 // Alternar modo pet/personagem (3.8)
-window.mobileCtrlSetModo = function(modoPet) {
+window.mobileCtrlSetModo = function(modoPet: any) {
   MOBILE_CTRL.modoPet = modoPet;
   _atualizarZonaCentral();
   _atualizarZonaDireita();
@@ -4380,12 +4380,12 @@ window.mobileCtrlSetModo = function(modoPet) {
 };
 
 // Usar skill própria pelo mobile (3.7)
-window.mobileUsarSkillPropria = function(nomeSkill) {
+window.mobileUsarSkillPropria = function(nomeSkill: any) {
   const charNome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
     ? MOBILE_CTRL.petNome
     : RPG_DATA?.linked;
   if (!charNome) return;
-  const h = atkGetHabilidadesCampanha(charNome).find(sk => sk.nome === nomeSkill);
+  const h = atkGetHabilidadesCampanha(charNome).find((sk: any) => sk.nome === nomeSkill);
   if (!h) return;
   mapaAtaqueIniciar(charNome);
 };
@@ -4448,13 +4448,13 @@ function _atualizarZonaDireitaAventura() {
   // Calcular distância ao alvo selecionado
   let alvoDistancia = null;
   if (alvoId) {
-    let alvoEnt = bat ? bat.iniciativa.find(e => e.id === alvoId) : AVT_STATE.entidades.find(e => e.id === alvoId);
+    let alvoEnt = bat ? bat.iniciativa.find((e: any) => e.id === alvoId) : AVT_STATE.entidades.find((e: any) => e.id === alvoId);
     if (alvoEnt) alvoDistancia = Math.max(Math.abs(Math.round(alvoEnt.x) - Math.round(jogador.x)), Math.abs(Math.round(alvoEnt.y) - Math.round(jogador.y)));
   }
 
   // Montar itens de skill (com número e dbChar para ordenação)
-  const _dbCharCtrl = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
-  const _getNum = (skId2) => (typeof _avtGetSkillNumero === 'function' ? _avtGetSkillNumero(_dbCharCtrl, jogador, skId2) : null);
+  const _dbCharCtrl = AVT_STATE.chars.find((c: any) => c.id === jogador.dbId || c.nome === jogador.nome);
+  const _getNum = (skId2: any) => (typeof _avtGetSkillNumero === 'function' ? _avtGetSkillNumero(_dbCharCtrl, jogador, skId2) : null);
 
   // No modo controle aventura, o ataque básico é automático — não exibir como botão manual
   const _ctrlAventuraDisp = MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
@@ -4462,7 +4462,7 @@ function _atualizarZonaDireitaAventura() {
   const skillItems = [];
   if (bat && emMeuTurno) {
     const _charSkillIds = _dbCharCtrl?.custom_attrs?.skills_ids || [];
-    let mySkills = AVT_STATE.skills.filter(sk =>
+    let mySkills = AVT_STATE.skills.filter((sk: any) =>
       _charSkillIds.includes(sk.id) || sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)
     );
     if (typeof _avtSkillsOrdenadasPorNumero === 'function') mySkills = _avtSkillsOrdenadasPorNumero(mySkills, _dbCharCtrl, jogador);
@@ -4478,9 +4478,9 @@ function _atualizarZonaDireitaAventura() {
       const _abCfg  = _dbCharCtrl?.custom_attrs?.ataque_basico;
       const _abKey  = (jogador.id || jogador.nome) + '_basico';
       const _abCdMs = (AVT_STATE._oocCooldowns[_abKey] || 0) - Date.now();
-      skillItems.push({ id: null, nome: _abCfg?.nome || 'Ataque básico', formula: _abCfg?.formula_dano || '1d8', alcance: _abCfg?.alcance_celulas ?? 1, cd: _abCdMs > 0 ? Math.ceil(_abCdMs/1000) : 0, num: null, basico: true });
+      skillItems.push({ id: null as any, nome: _abCfg?.nome || 'Ataque básico', formula: _abCfg?.formula_dano || '1d8', alcance: _abCfg?.alcance_celulas ?? 1, cd: _abCdMs > 0 ? Math.ceil(_abCdMs/1000) : 0, num: null as any, basico: true });
     }
-    let minhas = AVT_STATE.skills.filter(sk =>
+    let minhas = AVT_STATE.skills.filter((sk: any) =>
       (sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)) &&
       sk.tipo_dano && sk.tipo_dano !== 'cura'
     );
@@ -4813,16 +4813,16 @@ function _atualizarZonaDireitaAventura() {
 
 
 // ── Funções de controle adventure device ────────────────────────────────
-window._avtCtrlSelecionarSkill = function(skId) {
+window._avtCtrlSelecionarSkill = function(skId: any) {
   if (typeof AVT_STATE === 'undefined') return;
   (AVT_STATE as any)._pendingSkillId = skId;
   // Se alvo selecionado mas fora do alcance da nova skill, limpar alvo
   if (AVT_STATE.alvoSelecionado && skId != null) {
-    const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+    const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
     const alcance = sk?.alcance_celulas ?? 1;
     const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
     const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
-    let alvoEnt = bat ? bat.iniciativa.find(e => e.id === AVT_STATE.alvoSelecionado) : AVT_STATE.entidades.find(e => e.id === AVT_STATE.alvoSelecionado);
+    let alvoEnt = bat ? bat.iniciativa.find((e: any) => e.id === AVT_STATE.alvoSelecionado) : AVT_STATE.entidades.find((e: any) => e.id === AVT_STATE.alvoSelecionado);
     if (jogador && alvoEnt) {
       const d = Math.max(Math.abs(Math.round(alvoEnt.x) - Math.round(jogador.x)), Math.abs(Math.round(alvoEnt.y) - Math.round(jogador.y)));
       if (d > alcance) AVT_STATE.alvoSelecionado = null;
@@ -4847,11 +4847,11 @@ window._avtCtrlSelecionarSkill = function(skId) {
   _atualizarZonaCentral();
 };
 
-window._avtCtrlSelecionarAlvo = function(entId) {
+window._avtCtrlSelecionarAlvo = function(entId: any) {
   if (typeof AVT_STATE === 'undefined') return;
   // Skill de aliado: executar diretamente sem passar por lógica de inimigo
   const _skIdAlv = (AVT_STATE as any)._pendingSkillId;
-  const _skAlv = _skIdAlv ? AVT_STATE.skills.find(s => s.id === _skIdAlv) : null;
+  const _skAlv = _skIdAlv ? AVT_STATE.skills.find((s: any) => s.id === _skIdAlv) : null;
   if (_skAlv?.alvo_tipo === 'aliado') {
     const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
     (AVT_STATE as any)._pendingSkillId = undefined;
@@ -4870,11 +4870,11 @@ window._avtCtrlSelecionarAlvo = function(entId) {
   if (skId !== undefined) {
     const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
     const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
-    const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+    const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
     const alcanceSk = sk?.alcance_celulas ?? 1;
     let alvoEnt = bat
-      ? bat.iniciativa.find(e => e.id === entId && e.hp > 0)
-      : AVT_STATE.entidades.find(e => e.id === entId && e.hp > 0 && (typeof _avtBatalhaDeEnt !== 'function' || !_avtBatalhaDeEnt(e.id)));
+      ? bat.iniciativa.find((e: any) => e.id === entId && e.hp > 0)
+      : AVT_STATE.entidades.find((e: any) => e.id === entId && e.hp > 0 && (typeof _avtBatalhaDeEnt !== 'function' || !_avtBatalhaDeEnt(e.id)));
     if (jogador && alvoEnt) {
       const dist = Math.max(Math.abs(Math.round(alvoEnt.x) - Math.round(jogador.x)), Math.abs(Math.round(alvoEnt.y) - Math.round(jogador.y)));
       if (dist <= alcanceSk) { _avtCtrlRolarDados(); return; }
@@ -5054,7 +5054,7 @@ function _atualizarZonaDireita() {
   const botoes = ctxGerarBotoes(charNome, mapId);
   const { visiveis, ocultos } = ctxPriorizar(botoes);
 
-  visiveis.forEach(b => {
+  visiveis.forEach((b: any) => {
     const btn = document.createElement('button');
     btn.style.cssText = [
       'width:100%;min-height:44px;padding:6px 8px',
@@ -5080,10 +5080,10 @@ function _atualizarZonaDireita() {
 
   // ── Botão "Usar Item" ─────────────────────────────────────────────
   if (charNome) {
-    const itensDisp = (INV?.inventario || []).filter(i => {
-      const def = (INV?.itemDefs || []).find(d => d.id === (i.item_catalog_id || i.item_def_id));
+    const itensDisp = (INV?.inventario || []).filter((i: any) => {
+      const def = (INV?.itemDefs || []).find((d: any) => d.id === (i.item_catalog_id || i.item_def_id));
       return def && (def.tipo === 'consumivel' || def.tipo === 'misc') && (i.quantidade > 0);
-    }).filter(i => {
+    }).filter((i: any) => {
       const inv = i;
       // Pertence ao char ativo
       const chars = RPG_DATA?.characters || [];
@@ -5099,8 +5099,8 @@ function _atualizarZonaDireita() {
       lbl.style.cssText = 'font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px';
       lbl.textContent = '🧪 Itens';
       ctxEl.appendChild(lbl);
-      itensDisp.slice(0, 6).forEach(invItem => {
-        const def = (INV?.itemDefs || []).find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
+      itensDisp.slice(0, 6).forEach((invItem: any) => {
+        const def = (INV?.itemDefs || []).find((d: any) => d.id === (invItem.item_catalog_id || invItem.item_def_id));
         if (!def) return;
         const btnItem = document.createElement('button');
         btnItem.style.cssText = 'width:100%;min-height:40px;padding:5px 8px;background:rgba(39,174,96,0.08);border:1px solid rgba(39,174,96,0.25);border-radius:8px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-align:left;touch-action:manipulation;display:flex;align-items:center;gap:6px';
@@ -5160,7 +5160,7 @@ function _atualizarMovInfo() {
       const mapaEntry = (RPG_DATA?.mapas || []).find(m => m.mapa.map_id === MAPA_STATE.mapaAtualId);
       const escala = mapaEntry?.mapa?.escala_val || 1.5;
       const grid   = mapaEntry?.mapa?.grid || 20;
-      let minDist = Infinity, minNome = null;
+      let minDist: any = Infinity, minNome: any = null;
       (RPG_DATA?.characters || []).forEach(c => {
         if (c.nome === charNome) return;
         const pos = c.map_positions?.[MAPA_STATE.mapaAtualId];
@@ -5195,7 +5195,7 @@ function _atualizarMovInfo() {
 }
 
 // ── 3.9 — Badge de trade não-intrusivo ──────────────────────────────────
-function tradeMostrarBadgeMobile(proposta) {
+function tradeMostrarBadgeMobile(proposta: any) {
   let badge = document.getElementById('trade-badge-mobile');
   if (!badge) {
     badge = document.createElement('div');
@@ -5251,8 +5251,8 @@ function tradeMostrarBadgeMobile(proposta) {
       const itensEl = document.getElementById('trade-badge-itens');
       if (!itensEl) return;
       const ids = (proposta.instIds || []).slice(0, 3);
-      const rows = await Promise.all(ids.map(id =>
-        sb(`inventario?id=eq.${id}&select=item_catalog(nome)`).catch(() => [])
+      const rows = await Promise.all(ids.map((id: any) =>
+        sb(`inventario?id=eq.${id}&select=item_catalog(nome)`).catch((): any[] => [])
       ));
       const nomes = rows.map(r => r?.[0]?.item_catalog?.nome).filter(Boolean);
       if (itensEl) itensEl.textContent = nomes.length
@@ -5335,7 +5335,7 @@ HUB_EVENTS.on('cura_aplicada', () => {
 const _origWsCheckTrade = setInterval(()=>{
   if (typeof realtimeWS !== 'undefined' && realtimeWS) {
     const origOnMsg = realtimeWS.onmessage;
-    realtimeWS.onmessage = function(e) {
+    realtimeWS.onmessage = function(e: any) {
       if (origOnMsg) origOnMsg.call(this, e);
       try {
         const msg = JSON.parse(e.data);
@@ -5349,7 +5349,7 @@ const _origWsCheckTrade = setInterval(()=>{
             let nomesItens = '';
             try {
               const ids = (p.instIds || []).slice(0, 3);
-              const rows = await Promise.all(ids.map(id => sb(`inventario?id=eq.${id}&select=item_catalog(nome)`).catch(()=>[])));
+              const rows = await Promise.all(ids.map((id: any) => sb(`inventario?id=eq.${id}&select=item_catalog(nome)`).catch((): any[] => [])));
               const nomes = rows.map(r => r?.[0]?.item_catalog?.nome).filter(Boolean);
               if (nomes.length) nomesItens = ': ' + nomes.join(', ') + (p.instIds?.length > 3 ? ` +${p.instIds.length - 3}` : '');
             } catch(e3) {}
@@ -5365,7 +5365,7 @@ const _origWsCheckTrade = setInterval(()=>{
   }
 }, 800);
 
-async function _mostrarPropostaRecebida(p) {
+async function _mostrarPropostaRecebida(p: any) {
   const wrap = document.getElementById('trade-proposta-recebida');
   if (!wrap) return;
   document.getElementById('trade-proposta-titulo').textContent = `Proposta de ${p.de}`;
@@ -5388,9 +5388,9 @@ async function _mostrarPropostaRecebida(p) {
 // ═══════════════════════════════════════════════════════════════
 
 const MERCADO_STATE = {
-  mercadoId: null, titulo: '', itens: [], todos: [],
+  mercadoId: null as any, titulo: '', itens: [] as any[], todos: [] as any[],
   aba: 'comprar', modoGerenciar: false, gerTab: 'adicionar',
-  modoCustom: false, config: { taxaRevenda: 50 }, _catalogo: [],
+  modoCustom: false, config: { taxaRevenda: 50 }, _catalogo: [] as any[],
 };
 
 function _mercRpgId()    { return RPG_DATA?.rpgId || CURRENT_RPG?.id; }
@@ -5399,15 +5399,15 @@ function _mercCharId()   { return INV?.charId || null; }
 function _mercDenoms()   {
   return CURRENT_RPG?.theme?.denominacoes_moeda || MOEDAS_DEFAULTS;
 }
-function _mercRarCor(r) {
-  return ({comum:'#9aa8b8',incomum:'#5ee09a',raro:'#7ec8f0',epico:'#b07ef0',lendario:'#f0cc6a'})[(r||'').toLowerCase()] || '#9aa8b8';
+function _mercRarCor(r: any) {
+  return ({comum:'#9aa8b8',incomum:'#5ee09a',raro:'#7ec8f0',epico:'#b07ef0',lendario:'#f0cc6a'} as any)[(r||'').toLowerCase()] || '#9aa8b8';
 }
-function _mercRarEmoji(r) {
-  return ({comum:'⬜',incomum:'🟩',raro:'🟦',epico:'🟪',lendario:'🟨'})[(r||'').toLowerCase()] || '⬜';
+function _mercRarEmoji(r: any) {
+  return ({comum:'⬜',incomum:'🟩',raro:'🟦',epico:'🟪',lendario:'🟨'} as any)[(r||'').toLowerCase()] || '⬜';
 }
 
 // ── Abrir ────────────────────────────────────────────────────
-async function abrirModalMercado(mercadoId, titulo) {
+async function abrirModalMercado(mercadoId: any, titulo: any) {
   MERCADO_STATE.mercadoId = mercadoId;
   MERCADO_STATE.titulo = titulo || 'Mercado';
   MERCADO_STATE.aba = 'comprar';
@@ -5433,7 +5433,7 @@ window.fecharModalMercado = function() {
 function _mercPreencherDenomSelect() {
   const sel = document.getElementById('mercado-novo-denom');
   if (!sel) return;
-  sel.innerHTML = _mercDenoms().map(d => `<option value="${d.nome}">${d.emoji} ${d.nome}</option>`).join('');
+  sel.innerHTML = _mercDenoms().map((d: any) => `<option value="${d.nome}">${d.emoji} ${d.nome}</option>`).join('');
 }
 function _mercPreencherTaxaRevenda() {
   const sl = document.getElementById('mercado-taxa-revenda');
@@ -5454,8 +5454,8 @@ async function _mercAtualizarSaldo() {
     const rows = await sb(
       `moedas?rpg_id=eq.${encodeURIComponent(_mercRpgId())}&dono_id=eq.${encodeURIComponent(charId)}&select=denominacao,quantidade`
     );
-    const partes = _mercDenoms().map(d => {
-      const e = (rows||[]).find(r => r.denominacao === d.nome);
+    const partes = _mercDenoms().map((d: any) => {
+      const e = (rows||[]).find((r: any) => r.denominacao === d.nome);
       const q = e?.quantidade || 0;
       return q > 0 ? `${d.emoji} ${q} ${d.nome}` : null;
     }).filter(Boolean);
@@ -5480,7 +5480,7 @@ function mercadoToggleModo() {
 // Alias legado
 function mercadoToggleGerenciar() { mercadoToggleModo(); }
 
-function mercadoGerTabAtivar(tab) {
+function mercadoGerTabAtivar(tab: any) {
   MERCADO_STATE.gerTab = tab;
   ['adicionar','lista','config'].forEach(t => {
     const btn   = document.getElementById(`gertab-${t}`);
@@ -5500,7 +5500,7 @@ async function _mercadoCarregarCatalogo() {
     const rows = await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(_mercRpgId())}&select=id,nome,raridade,tipo_canonico&order=nome`);
     MERCADO_STATE._catalogo = rows || [];
     sel.innerHTML = '<option value="">— Selecionar do catálogo —</option>' +
-      (rows||[]).map(it => `<option value="${it.id}">${it.nome}${it.raridade?' ('+it.raridade+')':''}</option>`).join('');
+      (rows||[]).map((it: any) => `<option value="${it.id}">${it.nome}${it.raridade?' ('+it.raridade+')':''}</option>`).join('');
   } catch(e) { sel.innerHTML = '<option value="">Erro ao carregar</option>'; }
 }
 
@@ -5580,7 +5580,7 @@ function _mercadoRenderListaGerenciar() {
   }).join('');
 }
 
-async function mercadoEditarPreco(rowId, novoPreco, denom) {
+async function mercadoEditarPreco(rowId: any, novoPreco: any, denom: any) {
   try {
     await sb(`mercado?id=eq.${rowId}&rpg_id=eq.${encodeURIComponent(_mercRpgId())}`, {
       method:'PATCH', body:JSON.stringify({ preco: parseFloat(novoPreco)||0 })
@@ -5592,7 +5592,7 @@ async function mercadoEditarPreco(rowId, novoPreco, denom) {
   } catch(e) { mostrarToast('Erro ao atualizar preço', 'erro'); }
 }
 
-async function mercadoRemoverItem(rowId) {
+async function mercadoRemoverItem(rowId: any) {
   if (!confirm('Remover este item do mercado?')) return;
   try {
     await sb(`mercado?id=eq.${rowId}&rpg_id=eq.${encodeURIComponent(_mercRpgId())}`, { method:'DELETE', headers:{Prefer:'return=minimal'} });
@@ -5611,7 +5611,7 @@ function mercadoSalvarConfig() {
 }
 
 // ── Carregar e renderizar (aba Comprar) ──────────────────────
-async function carregarMercadoItens(mercadoId) {
+async function carregarMercadoItens(mercadoId: any) {
   const el = document.getElementById('mercado-itens-grid');
   if (el) el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;color:#7a92aa">Carregando…</div>';
   try {
@@ -5647,7 +5647,7 @@ function renderMercadoItens() {
   el.innerHTML = MERCADO_STATE.itens.map(row => _mercRenderCard(row)).join('');
 }
 
-function _mercRenderCard(row) {
+function _mercRenderCard(row: any) {
   const it    = row.item_catalog || {};
   const nome  = row.custom_nome || it.nome || '?';
   const desc  = row.custom_desc || it.descricao || it.efeito || '';
@@ -5660,7 +5660,7 @@ function _mercRenderCard(row) {
   const semEstoque = estoque != null && estoqueAtual <= 0;
   const cor  = _mercRarCor(rari);
   const emoji = _mercRarEmoji(rari);
-  const tipoEmoji = {arma:'⚔️',armadura:'🛡️',amuleto:'💎',consumivel:'🧪',ferramenta:'🔧',misc:'📦',custom:'✏️'}[tipo]||'📦';
+  const tipoEmoji = ({arma:'⚔️',armadura:'🛡️',amuleto:'💎',consumivel:'🧪',ferramenta:'🔧',misc:'📦',custom:'✏️'} as any)[tipo]||'📦';
   const estoqueHtml = estoque != null
     ? `<span style="font-size:0.6rem;color:${semEstoque?'#e74c3c':'#7a92aa'};margin-top:2px;display:block">${semEstoque?'❌ Sem estoque':`📦 ${estoqueAtual}/${estoque} restantes`}</span>`
     : '';
@@ -5687,7 +5687,7 @@ function _mercRenderCard(row) {
 }
 
 // ── Compra — CORRIGIDO: usa _moedaUpsert (dono_id) ──────────
-window.confirmarCompraMercado = function(rowId, preco, denom, nomeItem, ev) {
+window.confirmarCompraMercado = function(rowId: any, preco: any, denom: any, nomeItem: any, ev: any) {
   if (ev) ev.stopPropagation();
   const charNome = _mercCharNome();
   if (!charNome) { mostrarToast('Abra o inventário de um personagem antes de comprar', 'aviso'); return; }
@@ -5697,7 +5697,7 @@ window.confirmarCompraMercado = function(rowId, preco, denom, nomeItem, ev) {
   comprarItemMercado(rowId, preco, denom);
 };
 
-window.comprarItemMercado = async function(rowId, preco, denom) {
+window.comprarItemMercado = async function(rowId: any, preco: any, denom: any) {
   const charId   = _mercCharId();
   const charNome = _mercCharNome();
   const rpgId    = _mercRpgId();
@@ -5713,7 +5713,7 @@ window.comprarItemMercado = async function(rowId, preco, denom) {
   if (precoNum > 0) {
     const atual = await sb(
       `moedas?rpg_id=eq.${encodeURIComponent(rpgId)}&dono_id=eq.${encodeURIComponent(charId)}&denominacao=eq.${encodeURIComponent(denom)}&select=id,quantidade`
-    ).catch(()=>[]);
+    ).catch((): any[] => []);
     const saldo = atual?.[0]?.quantidade || 0;
     if (saldo < precoNum) { mostrarToast(`❌ Saldo insuficiente — você tem ${saldo} ${denom}`, 'erro'); return; }
 
@@ -5731,7 +5731,7 @@ window.comprarItemMercado = async function(rowId, preco, denom) {
         quantidade:1, equipado:false, origem:'compra', bloqueado_por_nivel:false
       })});
       if (typeof _invBroadcastDrop === 'function') _invBroadcastDrop(it, charNome, 'compra');
-      if (typeof INV !== 'undefined' && charId) delete INV.carregado[charId];
+      if (typeof INV !== 'undefined' && charId) delete (INV.carregado as any)[charId];
     } catch(e) {
       // Estornar débito se inventário falhou
       if (precoNum > 0) {
@@ -5783,9 +5783,9 @@ async function _mercCarregarAbaVender() {
     );
     if (!rows?.length) { listaEl.innerHTML = '<div style="text-align:center;padding:30px;color:#7a92aa;font-style:italic">Nenhum item disponível para venda</div>'; return; }
     const taxa = MERCADO_STATE.config.taxaRevenda / 100;
-    const precosMercado = {};
+    const precosMercado: Record<string, any> = {};
     MERCADO_STATE.todos.forEach(r => { if (r.item_catalog_id) precosMercado[r.item_catalog_id] = { preco:r.preco, denom:r.denominacao }; });
-    listaEl.innerHTML = rows.map(row => {
+    listaEl.innerHTML = rows.map((row: any) => {
       const it   = row.item_catalog || {};
       const nome = it.nome || 'Item';
       const desc = it.descricao || it.efeito || '';
@@ -5811,7 +5811,7 @@ async function _mercCarregarAbaVender() {
   } catch(e) { if (listaEl) listaEl.innerHTML = `<div style="color:#e74c3c;padding:16px">Erro: ${e.message}</div>`; }
 }
 
-window.mercadoVenderItem = async function(invRowId, itemCatalogId, nomeItem, preco, denom, ev) {
+window.mercadoVenderItem = async function(invRowId: any, itemCatalogId: any, nomeItem: any, preco: any, denom: any, ev: any) {
   if (ev) ev.stopPropagation();
   if (!confirm(`Vender "${nomeItem}" por ${preco} ${denom}?`)) return;
   const charId   = _mercCharId();
@@ -5845,9 +5845,9 @@ async function mercadoCarregarHistorico() {
     if (!rows?.length) { el.innerHTML = '<div style="text-align:center;padding:24px;color:#7a92aa;font-style:italic">Nenhuma transação registrada.</div>'; return; }
     // Mapear IDs para nomes de personagens
     const chars = RPG_DATA?.characters || [];
-    const idParaNome = {};
+    const idParaNome: Record<string, any> = {};
     chars.forEach(c => { idParaNome[c.id] = c.nome; });
-    el.innerHTML = rows.map(t => {
+    el.innerHTML = rows.map((t: any) => {
       const isCredito = t.tipo === 'receber';
       const cor   = isCredito ? '#5ee09a' : '#e74c3c';
       const sinal = isCredito ? '+' : '−';
@@ -5866,9 +5866,9 @@ async function mercadoCarregarHistorico() {
 }
 
 // ── Controle de abas ─────────────────────────────────────────
-function mercadoMudarAba(aba) {
+function mercadoMudarAba(aba: any) {
   MERCADO_STATE.aba = aba;
-  const paineis = { comprar:'mercado-painel-comprar', vender:'mercado-painel-vender', historico:'mercado-painel-historico' };
+  const paineis: Record<string, any> = { comprar:'mercado-painel-comprar', vender:'mercado-painel-vender', historico:'mercado-painel-historico' };
   ['comprar','vender','historico'].forEach(a => {
     const btn    = document.getElementById(`merc-aba-${a}`);
     const painel = document.getElementById(paineis[a]);
@@ -5888,7 +5888,7 @@ function mercadoMudarAba(aba) {
 }
 
 // ── Token do mapa ────────────────────────────────────────────
-window._verificarMercadoToken = function(c) {
+window._verificarMercadoToken = function(c: any) {
   if (!c?.custom_attrs?.mercado_id) return '';
   const mid    = c.custom_attrs.mercado_id;
   const titulo = c.custom_attrs.mercado_titulo || c.nome || 'Mercado';
@@ -5923,21 +5923,21 @@ async function a5RecalcularPainel() {
   const mapeados = new Set();
   let mapRows = [];
   try { mapRows = await carregarMapeamento(rpgId); } catch(e) {}
-  mapRows.forEach(m=>mapeados.add(m.nome_customizado?.toLowerCase()));
+  mapRows.forEach((m: any)=>mapeados.add(m.nome_customizado?.toLowerCase()));
 
   const semMapeamento = attrDefsNumericos.filter(a=>!mapeados.has(a.nome?.toLowerCase()));
 
   // Calcular médias de todos os grupos em paralelo
   const resultados = await Promise.all(_GRUPOS_INFO.map(async g=>{
-    let mediaRes = { media:0, atributos:[], personagens:[] };
+    let mediaRes = { media:0, atributos:[] as any[], personagens:[] as any[] };
     try { mediaRes = await calcularMediaGrupo(rpgId, g.id); } catch(e) {}
     // Buscar itens do catálogo que usam esse grupo
     let itensGrupo = [];
     try {
-      const atrsGrupo = mapRows.filter(m=>m.grupo_base===g.id).map(m=>m.nome_customizado);
+      const atrsGrupo = mapRows.filter((m: any)=>m.grupo_base===g.id).map((m: any)=>m.nome_customizado);
       if (atrsGrupo.length) {
         const allItens = await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=nome,raridade,nivel,atributos_bonus`);
-        itensGrupo = (allItens||[]).filter(it=>{
+        itensGrupo = (allItens||[]).filter((it: any)=>{
           return Object.keys(it.atributos_bonus||{}).some(k=>atrsGrupo.includes(k));
         });
       }
@@ -5987,7 +5987,7 @@ async function a5RecalcularPainel() {
           ${g.itens.length
             ? `<div>
                 <div style="font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase;font-family:var(--fonte-d)">Itens no catálogo (${g.itens.length})</div>
-                ${g.itens.slice(0,5).map(it=>`<div style="font-size:0.65rem;color:var(--texto);display:flex;justify-content:space-between;gap:6px"><span>${it.nome}</span><span style="color:var(--suave)">Nv.${it.nivel||1} ${it.raridade}</span></div>`).join('')}
+                ${g.itens.slice(0,5).map((it: any)=>`<div style="font-size:0.65rem;color:var(--texto);display:flex;justify-content:space-between;gap:6px"><span>${it.nome}</span><span style="color:var(--suave)">Nv.${it.nivel||1} ${it.raridade}</span></div>`).join('')}
                 ${g.itens.length>5?`<div style="font-size:0.62rem;color:var(--suave);margin-top:2px">+${g.itens.length-5} itens...</div>`:''}
               </div>` : ''
           }
@@ -6025,7 +6025,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 // Após abrir inventário, adicionar botões de trade/mercado na aba mochila
 const _origAbrirInventario: any = window.abrirInventario;
 if (typeof _origAbrirInventario === 'function') {
-  (window as any).abrirInventario = async function(charNome, charId) {
+  (window as any).abrirInventario = async function(charNome: any, charId: any) {
     await _origAbrirInventario(charNome, charId);
     // Injetar botão de trade assim que o elemento alvo aparecer no DOM
     // (MutationObserver em vez de setTimeout fixo — robusto em redes lentas)
@@ -6167,7 +6167,7 @@ function _aplicarTransicaoFaseModal() {
   document.head.appendChild(style);
 }
 
-async function _trocarFaseModalComTransicao(containerEl, novoConteudoHTML) {
+async function _trocarFaseModalComTransicao(containerEl: any, novoConteudoHTML: any) {
   if (!containerEl) return;
   containerEl.classList.add('fase-saindo');
   await new Promise(r => setTimeout(r, 300));
@@ -6178,7 +6178,7 @@ async function _trocarFaseModalComTransicao(containerEl, novoConteudoHTML) {
 }
 
 // ── UX-05: Preservar Quebras de Linha em Mensagens do Mestre ─────────────────
-function _formatarMensagemMestre(mensagem) {
+function _formatarMensagemMestre(mensagem: any) {
   if (!mensagem) return '';
   return mensagem
     .replace(/&/g, '&amp;')
@@ -6188,7 +6188,7 @@ function _formatarMensagemMestre(mensagem) {
 }
 
 // ── AC-02-B3: Sincronizar Animação para Jogadores Offline ────────────────────
-function _sincronizarAnimacaoCriativo(criativoId) {
+function _sincronizarAnimacaoCriativo(criativoId: any) {
   const c = CRIATIVOS_CAMP.find(x => x.id === criativoId);
   if (!c || !c.animacao) return;
   combateBroadcast('criativo_animacao', {
@@ -6199,7 +6199,7 @@ function _sincronizarAnimacaoCriativo(criativoId) {
   });
 }
 
-function _onReceberAnimacaoCriativo(data) {
+function _onReceberAnimacaoCriativo(data: any) {
   const { criativoId, atacante, alvo, animacao } = data;
   let c = CRIATIVOS_CAMP.find(x => x.id === criativoId);
   if (!c) {
@@ -6249,7 +6249,7 @@ function _onReceberAnimacaoCriativo(data) {
   'use strict';
 
   // Helper para log de fixes aplicados
-  const _fixLog = (id, desc) => console.log(`[FIXES] ✓ ${id}: ${desc}`);
+  const _fixLog = (id: any, desc: any) => console.log(`[FIXES] ✓ ${id}: ${desc}`);
 
   // ═══════════════════════════════════════════════════════════════
   // BUG #1 — RESISTÊNCIA NEGATIVA (FRAQUEZA) COM ARREDONDAMENTO INCORRETO
@@ -6268,7 +6268,7 @@ function _onReceberAnimacaoCriativo(data) {
     if (!danoBruto || danoBruto <= 0) return 0;
 
     const atribs = char?.custom_attrs?.atributos || {};
-    const resistDefs = (attrDefs || []).filter(a => a.categoria === 'resistencia');
+    const resistDefs = (attrDefs || []).filter((a: any) => a.categoria === 'resistencia');
 
     let danoAtual = danoBruto;
 
@@ -6511,13 +6511,13 @@ function _onReceberAnimacaoCriativo(data) {
 
   window.petGetHabilidadesPet = function(petNome, contexto) {
     const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
-    const c = chars.find(x => x.nome === petNome);
+    const c = chars.find((x: any) => x.nome === petNome);
     if (!c) return [];
     const ca = c.custom_attrs || {};
 
     // Criaturas e NPCs com habilidades inline
     if (ca.habilidades?.length) {
-      return ca.habilidades.map((h, i) => ({
+      return ca.habilidades.map((h: any, i: any) => ({
         ...h,
         // BUG #6 FIX: Gerar ID sintético para rastrear cooldowns
         id: h.id || `${petNome}_hab_${i}`,
@@ -6555,7 +6555,7 @@ function _onReceberAnimacaoCriativo(data) {
       ? (c.criativo_alvo_tipo === 'proprio' ? 'proprio' : 'aliado')
       : 'inimigo';
 
-    const ehCura = criativoTipo === 'suporte' && efeitosExtras.some(e => e.tipo === 'cura_imediata' || e.hot_formula);
+    const ehCura = criativoTipo === 'suporte' && efeitosExtras.some((e: any) => e.tipo === 'cura_imediata' || e.hot_formula);
 
     // BUG #11 FIX: Usar tipo_dano definido pelo mestre (salvo em c.tipo_dano ou c._skill_meta.tipo_dano)
     let tipoDanoFinal;
@@ -6643,15 +6643,15 @@ function _onReceberAnimacaoCriativo(data) {
     const todosRolaram = bs.participantes.every(p => bs.iniciativasRoladas[p.nome] != null);
     if (!todosRolaram) return;
 
-    const grupos = {};
+    const grupos: Record<string, any> = {};
     bs.participantes.forEach(p => {
       const v = bs.iniciativasRoladas[p.nome];
       if (!grupos[v]) grupos[v] = [];
       grupos[v].push(p);
     });
-    const empatados = [];
+    const empatados: any = [];
     Object.values<any>(grupos).forEach(grp => {
-      if (grp.length > 1) grp.forEach(p => empatados.push(p.nome));
+      if (grp.length > 1) grp.forEach((p: any) => empatados.push(p.nome));
     });
 
     if (empatados.length) {
@@ -6674,7 +6674,7 @@ function _onReceberAnimacaoCriativo(data) {
         // Continuar para ordenação final (sem loop)
       } else {
         bs.empatados = empatados;
-        empatados.forEach(n => {
+        empatados.forEach((n: any) => {
           delete bs.iniciativasRoladas[n];
           const p = bs.participantes.find(x => x.nome === n);
           if (p) p.iniciativa = null;
@@ -6735,7 +6735,7 @@ function _onReceberAnimacaoCriativo(data) {
   window.atkAplicarRecuperacaoAtributo = async function(nomeAlvo, atributo, quantidade, contexto) {
     if (!atributo || !quantidade) return;
     const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
-    const c = chars.find(x => x.nome === nomeAlvo);
+    const c = chars.find((x: any) => x.nome === nomeAlvo);
     if (!c || !c.custom_attrs) return;
     if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
 
@@ -6748,7 +6748,7 @@ function _onReceberAnimacaoCriativo(data) {
       // BUG #14 FIX: Calcular pool máximo e clampar
       let maxPool = Infinity;
       const attrDefs = contexto === 'arena' ? (AR.attrDefs || RPG_DATA?.attrDefs || []) : (RPG_DATA?.attrDefs || []);
-      const attrDef = attrDefs.find(a => a.nome === atributo);
+      const attrDef = attrDefs.find((a: any) => a.nome === atributo);
       if (attrDef?.opcoes) {
         try {
           const cfg = JSON.parse(attrDef.opcoes);
@@ -6797,8 +6797,8 @@ function _onReceberAnimacaoCriativo(data) {
 
     // Suporte a custo múltiplo: "2 Mana + 5 Stamina"
     if (s.includes('+')) {
-      const partes = s.split('+').map(p => p.trim());
-      const custos = partes.map(p => {
+      const partes = s.split('+').map((p: any) => p.trim());
+      const custos = partes.map((p: any) => {
         const match = p.match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
         if (!match) return null;
         return { quantidade: parseFloat(match[1]), atributo: match[2].trim() };
@@ -6819,11 +6819,11 @@ function _onReceberAnimacaoCriativo(data) {
     const parsed = parsearCustoRSV(custo_rsv);
     if (!parsed) return { ok: true };
     const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
-    const c = chars.find(x => x.nome === atacanteNome);
+    const c = chars.find((x: any) => x.nome === atacanteNome);
     const atribs = c?.custom_attrs?.atributos || {};
 
     // Helper: match case-insensitive do nome do atributo
-    const findAtrib = (nome) => {
+    const findAtrib = (nome: any) => {
       const exact = atribs[nome];
       if (exact != null) return { key: nome, val: parseFloat(exact) || 0 };
       const lc = nome.toLowerCase();
@@ -6858,7 +6858,7 @@ function _onReceberAnimacaoCriativo(data) {
     for (const custo of custos) {
       // Case-insensitive match
       const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
-      const c = chars.find(x => x.nome === atacanteNome);
+      const c = chars.find((x: any) => x.nome === atacanteNome);
       const atribs = c?.custom_attrs?.atributos || {};
       let nomeAtrib = custo.atributo;
       if (atribs[nomeAtrib] == null) {
@@ -6919,7 +6919,7 @@ function _onReceberAnimacaoCriativo(data) {
   // ═══════════════════════════════════════════════════════════════
 
   // Helper global: normalizar tipo de personagem
-  window._normalizarTipoPersonagem = function(ca) {
+  window._normalizarTipoPersonagem = function(ca: any) {
     if (!ca) return;
     // Garantir que ambos os campos existam e sejam iguais
     const tipo = ca.tipo || ca.tipo_personagem || 'jogador';
@@ -6932,7 +6932,7 @@ function _onReceberAnimacaoCriativo(data) {
   };
 
   // Helper global: obter tipo normalizado de um personagem
-  window._getTipoPersonagem = function(c) {
+  window._getTipoPersonagem = function(c: any) {
     const ca = c?.custom_attrs || {};
     return ca.tipo || ca.tipo_personagem || 'jogador';
   };
@@ -6944,14 +6944,14 @@ function _onReceberAnimacaoCriativo(data) {
   // INCOERÊNCIA #2 — HABILIDADES: unificar tabela skills + inline
   // ═══════════════════════════════════════════════════════════════
 
-  window.getTodasHabilidades = function(nome, contexto) {
+  window.getTodasHabilidades = function(nome: any, contexto: any) {
     const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
-    const c = chars.find(x => x.nome === nome);
+    const c = chars.find((x: any) => x.nome === nome);
     if (!c) return [];
     const ca = c.custom_attrs || {};
 
     // Inline habilidades (criaturas/genéricos)
-    const inline = (ca.habilidades || []).map((h, i) => ({
+    const inline = (ca.habilidades || []).map((h: any, i: any) => ({
       ...h,
       id: h.id || `${nome}_hab_${i}`,
       _source: 'inline',
@@ -6965,7 +6965,7 @@ function _onReceberAnimacaoCriativo(data) {
     } else {
       dbSkills = (typeof atkGetHabilidadesCampanha === 'function') ? atkGetHabilidadesCampanha(nome) : [];
     }
-    dbSkills = dbSkills.map(s => ({ ...s, _source: 'db' }));
+    dbSkills = dbSkills.map((s: any) => ({ ...s, _source: 'db' }));
 
     // Deduplicar por nome (prioridade: banco > inline)
     const nomesSeen = new Set();
@@ -6995,14 +6995,14 @@ function _onReceberAnimacaoCriativo(data) {
   // ═══════════════════════════════════════════════════════════════
 
   // Helper: verificar se personagem pode atacar (qualquer tipo)
-  window._personagemPodeAtacar = function(nome, contexto) {
+  window._personagemPodeAtacar = function(nome: any, contexto: any) {
     const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
-    const c = chars.find(x => x.nome === nome);
+    const c = chars.find((x: any) => x.nome === nome);
     if (!c) return false;
     const buffs = c.buffs || [];
 
     // Verificar se tem bloqueio total de ataques
-    const bloqueioTotal = buffs.some(b =>
+    const bloqueioTotal = buffs.some((b: any) =>
       b.sem_ataque &&
       (b.sem_ataque_turnos_restantes ?? 0) > 0 &&
       (b.sem_ataque_tipo || 'todos') === 'todos'
@@ -7040,7 +7040,7 @@ function _onReceberAnimacaoCriativo(data) {
   // Se Constituição muda, hp_max deveria ser recalculado
   // ═══════════════════════════════════════════════════════════════
 
-  window.recalcularHpMax = function(c) {
+  window.recalcularHpMax = function(c: any) {
     if (!c?.custom_attrs) return;
     const ca = c.custom_attrs;
     const lc = RPG_DATA?.level_config;
@@ -7095,14 +7095,14 @@ function _onReceberAnimacaoCriativo(data) {
     // BUG #4 FIX: Verificar se o dono está ativo com bloqueio total
     const donoAtivo = petDonoEstaAtivo(donoNome, contexto);
 
-    const rows = pets.map(pet => {
+    const rows = pets.map((pet: any) => {
       const habilidades = petGetHabilidadesPet(pet.nome, contexto);
       if (!habilidades.length) return '';
       const cor = pet.custom_attrs?.cor || '#7ec8f0';
       const hpAtual = pet.hp_atual ?? (pet.custom_attrs?.hp_max ?? 100);
       const hpMax = pet.custom_attrs?.hp_max ?? 100;
 
-      const habRows = habilidades.map(h => {
+      const habRows = habilidades.map((h: any) => {
         // BUG #4 FIX: Verificar bloqueio por tipo para cada habilidade individual
         const bloqueioTipo = !petDonoEstaAtivo(donoNome, contexto, h.tipo_dano);
         const bloqueioSkill = typeof atkVerificarBloqueioAtaque === 'function' &&
@@ -7143,9 +7143,9 @@ function _onReceberAnimacaoCriativo(data) {
   // ═══════════════════════════════════════════════════════════════
 
   // Helper que pode ser chamado durante importação/criação
-  window._verificarAtributosEspeciais = function(personagemNome, tipo, atribs, attrDefs) {
+  window._verificarAtributosEspeciais = function(personagemNome: any, tipo: any, atribs: any, attrDefs: any) {
     if (tipo !== 'criatura' && tipo !== 'objeto') return;
-    const especiais = (attrDefs || []).filter(a => a.categoria === 'especial');
+    const especiais = (attrDefs || []).filter((a: any) => a.categoria === 'especial');
     for (const def of especiais) {
       const val = atribs?.[def.nome];
       if (val != null && val !== 0 && val !== '') {
@@ -7164,7 +7164,7 @@ function _onReceberAnimacaoCriativo(data) {
   // ═══════════════════════════════════════════════════════════════
 
   // Patch: ao salvar skill, avisar se alcance não definido para tipo físico
-  window._verificarAlcanceSkill = function(tipoDano, alcance) {
+  window._verificarAlcanceSkill = function(tipoDano: any, alcance: any) {
     if ((tipoDano === 'fisico' || tipoDano === 'magico') && (alcance == null || alcance === '')) {
       mostrarToast('💡 Dica: habilidades sem alcance definido atingem qualquer distância. Para corpo-a-corpo, defina alcance 1-2.', '');
     }
@@ -7217,7 +7217,7 @@ function _onReceberAnimacaoCriativo(data) {
   // ═══════════════════════════════════════════════════════════════
 
   // Helper: distância Manhattan entre dois tokens no mapa atual
-  function _distanciaEntreTokens(nomeA, nomeB) {
+  function _distanciaEntreTokens(nomeA: any, nomeB: any) {
     const mapaId = MAPA_STATE.mapaAtualId;
     if (!mapaId) return null;
     const chars = RPG_DATA?.characters || [];
@@ -7303,7 +7303,7 @@ function _nmceGridDims() {
 }
 
 // ── Snap pixel position to nearest grid border (h or v) ─────────────────
-function _nmceSnapPonto(xPx, yPx, canvas) {
+function _nmceSnapPonto(xPx: any, yPx: any, canvas: any) {
   const { cols, rows } = _nmceGridDims();
   const cW = canvas.width  / cols;
   const cH = canvas.height / rows;
@@ -7321,7 +7321,7 @@ function _nmceSnapPonto(xPx, yPx, canvas) {
 }
 
 // ── Snap pixel to cell center ────────────────────────────────────────────
-function _nmceSnapCelula(xPx, yPx, canvas) {
+function _nmceSnapCelula(xPx: any, yPx: any, canvas: any) {
   const { cols, rows } = _nmceGridDims();
   const cW = canvas.width  / cols;
   const cH = canvas.height / rows;
@@ -7331,7 +7331,7 @@ function _nmceSnapCelula(xPx, yPx, canvas) {
 }
 
 // ── Show snap indicator dot ──────────────────────────────────────────────
-function _nmceShowSnapIndicator(snap, canvas) {
+function _nmceShowSnapIndicator(snap: any, canvas: any) {
   const dot = document.getElementById('nmce-wall-snap');
   if (!dot) return;
   const wrap = canvas.parentElement;
@@ -7350,7 +7350,7 @@ function _nmceShowSnapIndicator(snap, canvas) {
 }
 
 // ── Generate wall segments between two snap points ───────────────────────
-function _nmceGerarSegmentos(p1, p2) {
+function _nmceGerarSegmentos(p1: any, p2: any) {
   const segs = [];
 
   // Case 1: both vertical borders on same column → vertical wall run
@@ -7393,7 +7393,7 @@ function _nmceGerarSegmentos(p1, p2) {
 }
 
 // ── Handle a click in scene mode ─────────────────────────────────────────
-function _nmceSceneClick(xPx, yPx, canvas) {
+function _nmceSceneClick(xPx: any, yPx: any, canvas: any) {
   if (nmCE.tool === 'parede') {
     const snap = _nmceSnapPonto(xPx, yPx, canvas);
     if (!nmCE.wallFirstSnap) {
@@ -7461,7 +7461,7 @@ function _nmceSceneClick(xPx, yPx, canvas) {
 }
 
 // ── Render walls/doors/objects as SVG overlay ────────────────────────────
-function _nmceRenderWalls(canvas) {
+function _nmceRenderWalls(canvas: any) {
   const svg = document.getElementById('nmce-walls-svg');
   if (!svg || !canvas) return;
   svg.innerHTML = '';
@@ -7480,8 +7480,8 @@ function _nmceRenderWalls(canvas) {
     if (p.tipo === 'v') { x1 = x2 = p.col * cW; y1 = p.row * cH; y2 = (p.row + 1) * cH; }
     else                { y1 = y2 = p.row * cH; x1 = p.col * cW; x2 = (p.col + 1) * cW; }
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('x1', x1 as any); line.setAttribute('y1', y1 as any);
+    line.setAttribute('x2', x2 as any); line.setAttribute('y2', y2 as any);
     line.setAttribute('stroke', p.cor || '#7ec8f0');
     line.setAttribute('stroke-width', p.largura || 3);
     line.setAttribute('stroke-linecap', 'round');
@@ -7493,18 +7493,18 @@ function _nmceRenderWalls(canvas) {
     const hit: any = line.cloneNode();
     hit.setAttribute('stroke', 'transparent'); hit.setAttribute('stroke-width', '12');
     hit.style.cursor = 'pointer'; hit.style.pointerEvents = 'stroke';
-    hit.addEventListener('click', (e) => { e.stopPropagation(); nmCE.renderData.paredes.splice(i, 1); _nmceRenderWalls(canvas); _nmceAtualizarLista(); });
+    hit.addEventListener('click', (e: any) => { e.stopPropagation(); nmCE.renderData.paredes.splice(i, 1); _nmceRenderWalls(canvas); _nmceAtualizarLista(); });
     svg.appendChild(hit);
   });
 
   // Portas e objetos
-  const renderToken = (cx, cy, emoji, cor, onClick) => {
+  const renderToken = (cx: any, cy: any, emoji: any, cor: any, onClick: any) => {
     const r = Math.min(cW, cH) * 0.35;
     const circ = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     circ.setAttribute('cx', (cx) as any); circ.setAttribute('cy', (cy) as any); circ.setAttribute('r', (r) as any);
     circ.setAttribute('fill', cor); circ.setAttribute('stroke', 'rgba(255,255,255,0.3)'); circ.setAttribute('stroke-width', '1.5');
     const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    txt.setAttribute('x', cx); txt.setAttribute('y', cy + r * 0.38);
+    txt.setAttribute('x', cx as any); txt.setAttribute('y', cy + r * 0.38);
     txt.setAttribute('text-anchor', ('middle') as any); txt.setAttribute('font-size', (Math.round(r * 1.3) as any));
     txt.textContent = emoji;
     [circ, txt].forEach(el => { 
@@ -7519,7 +7519,7 @@ function _nmceRenderWalls(canvas) {
 
   (nmCE.renderData.portas || []).forEach((p, i) => {
     renderToken((p.col + 0.5) * cW, (p.row + 0.5) * cH, p.icone || '🚪', 'rgba(200,168,75,0.25)',
-      (e) => {
+      (e: any) => {
         if (e.shiftKey) {
           // Shift+Click = Remover
           nmCE.renderData.portas.splice(i, 1); 
@@ -7535,10 +7535,10 @@ function _nmceRenderWalls(canvas) {
   });
 
   (nmCE.renderData.objetos || []).forEach((o, i) => {
-    const icons = { obstaculo: '🪨', bau: '📦', chave: '🗝' };
-    const cors  = { obstaculo: 'rgba(100,80,60,0.35)', bau: 'rgba(200,168,75,0.2)', chave: 'rgba(200,168,75,0.2)' };
+    const icons: Record<string, any> = { obstaculo: '🪨', bau: '📦', chave: '🗝' };
+    const cors: Record<string, string>  = { obstaculo: 'rgba(100,80,60,0.35)', bau: 'rgba(200,168,75,0.2)', chave: 'rgba(200,168,75,0.2)' };
     renderToken((o.col + 0.5) * cW, (o.row + 0.5) * cH, icons[o.tipo] || '📦', cors[o.tipo] || 'rgba(80,60,100,0.3)',
-      (e) => {
+      (e: any) => {
         if (e.shiftKey) {
           // Shift+Click = Remover
           nmCE.renderData.objetos.splice(i, 1); 
@@ -7579,7 +7579,7 @@ function nmceLimparParedes() {
 }
 
 // ── Load existing render_data when opening the editor for an existing map ─
-function nmceCarregarRenderData(renderData) {
+function nmceCarregarRenderData(renderData: any) {
   if (!renderData) return;
   nmCE.renderData = {
     paredes: Array.isArray(renderData.paredes) ? renderData.paredes : [],

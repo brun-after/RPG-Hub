@@ -3,7 +3,7 @@
 // Includes: renderCharButtons(), renderCharView(), abrirModalLevelUp(), renderAttrView()
 
 // ── LEVEL UP (MESTRE) ──────────────────────────────────────────
-function abrirModalLevelUp(nome){
+function abrirModalLevelUp(nome: any){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
  const ca=c.custom_attrs||{};
  const nivel=ca.nivel||1;
@@ -41,7 +41,7 @@ function abrirModalLevelUp(nome){
  document.body.appendChild(overlay);
 }
 
-async function executarLevelUp(nome){
+async function executarLevelUp(nome: any){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
  const ca={...(c.custom_attrs||{})};
  const nivel=(ca.nivel||1);
@@ -94,9 +94,9 @@ async function executarLevelUp(nome){
 // SISTEMA DE XP DA MESA
 // ================================================================
 
-let _xpModalNome = null; // personagem atualmente aberto no modal XP
+let _xpModalNome: any = null; // personagem atualmente aberto no modal XP
 
-function abrirModalXP(nome) {
+function abrirModalXP(nome: any) {
   _xpModalNome = nome;
   const overlay = document.getElementById('modal-xp-overlay');
   if (!overlay) return;
@@ -112,7 +112,7 @@ function fecharModalXP() {
   _xpModalNome = null;
 }
 
-function xpAtualizarModalUI(nome) {
+function xpAtualizarModalUI(nome: any) {
   const c = RPG_DATA.characters.find(x => x.nome === nome);
   if (!c) return;
   const ca = c.custom_attrs || {};
@@ -146,7 +146,7 @@ function xpAtualizarModalUI(nome) {
 }
 
 // Dar XP rapido (adiciona ao atual)
-async function xpDarRapido(quantidade) {
+async function xpDarRapido(quantidade: any) {
   const nome = _xpModalNome;
   if (!nome) return;
   const c = RPG_DATA.characters.find(x => x.nome === nome);
@@ -225,7 +225,7 @@ async function xpForcarLevelUp() {
 }
 
 // Retorna XP necessário para subir do nivel informado.
-function _xpParaNivel(nivel) {
+function _xpParaNivel(nivel: any) {
   const thresholds = CURRENT_RPG?.theme?.level_config?.xp_thresholds;
   if (Array.isArray(thresholds) && thresholds[nivel - 1] != null) {
     return thresholds[nivel - 1];
@@ -235,7 +235,7 @@ function _xpParaNivel(nivel) {
 
 // Verifica se o personagem atingiu XP para subir e faz o level up automaticamente.
 // BUG-02 FIX: while loop para suportar múltiplos níveis de uma vez.
-async function xpChecarAutoLevelUp(nome) {
+async function xpChecarAutoLevelUp(nome: any) {
   const c = RPG_DATA.characters.find(x => x.nome === nome);
   if (!c) return;
   const lc = (CURRENT_RPG?.theme?.level_config) || {};
@@ -260,7 +260,7 @@ async function xpChecarAutoLevelUp(nome) {
 }
 
 // Salvar char no banco (XP + colunas dedicadas)
-async function xpSalvarChar(c, ca) {
+async function xpSalvarChar(c: any, ca: any) {
   try {
     await sb(
       `characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(c.nome)}`,
@@ -269,13 +269,13 @@ async function xpSalvarChar(c, ca) {
   } catch(e) { mostrarToast('Erro ao salvar XP', 'erro'); }
 }
 
-async function distribuirPontosAttr(nome){
+async function distribuirPontosAttr(nome: any){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
  const ca: any={...(c.custom_attrs||{})};
  if(!ca.atributos)ca.atributos={};
  const attrDefs=RPG_DATA.attrDefs||[];
  let total=0;
- const aumentos={};
+ const aumentos: Record<string, any> = {};
  // BUG-03 FIX: Somente atributos básicos/especiais podem receber pontos (não status nem resistência)
  attrDefs.filter(a=>a.tipo==='number'&&(a.categoria==='basico'||a.categoria==='especial'||!a.categoria)).forEach(a=>{
    const k='pa-'+a.nome.replace(/[^a-z0-9]/gi,'_');
@@ -310,17 +310,17 @@ function renderAttrButtons() {
 }
 
 
-function renderAttrView(nome) {
+function renderAttrView(nome: any) {
   // Shim: delegates to unified fichas system
   FICHAS_VIEW = ATTR_VIEW = nome;
   if (typeof renderFichaView === 'function') renderFichaView(nome);
 }
 
-function toggleEdit(nome){document.getElementById('edit-form-'+nome).classList.toggle('aberto');}
-function toggleEditChar(nome){document.getElementById('edit-char-form-'+nome).classList.toggle('aberto');}
+function toggleEdit(nome: any){document.getElementById('edit-form-'+nome).classList.toggle('aberto');}
+function toggleEditChar(nome: any){document.getElementById('edit-char-form-'+nome).classList.toggle('aberto');}
 
 
-async function attrviewToggleOcultarAtribs(nome) {
+async function attrviewToggleOcultarAtribs(nome: any) {
   const c = RPG_DATA.characters.find(x => x.nome === nome);
   if (!c || !c.custom_attrs) return;
   const novoEstado = document.getElementById('attrview-toggle-ocultar')?.checked ?? false;
@@ -332,7 +332,7 @@ async function attrviewToggleOcultarAtribs(nome) {
   } catch(e) { mostrarToast('Erro ao salvar', 'erro'); }
 }
 
-async function charviewToggleOcultarAtribs(nome, checked) {
+async function charviewToggleOcultarAtribs(nome: any, checked: any) {
   const c = RPG_DATA.characters.find(x => x.nome === nome);
   if (!c || !c.custom_attrs) return;
   c.custom_attrs.ocultar_atributos = checked;
@@ -344,7 +344,7 @@ async function charviewToggleOcultarAtribs(nome, checked) {
 }
 
 // ── salvarAtributos: salva apenas HP atual + attrDefs (aba Atributos) ──
-async function salvarAtributos(nome){
+async function salvarAtributos(nome: any){
  if (!podeEditarPersonagem(nome)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }
  const c=RPG_DATA.characters.find(x=>x.nome===nome);
  if(!c)return;
@@ -384,7 +384,7 @@ async function salvarAtributos(nome){
 }
 
 // ── salvarInfoPersonagem: salva info do personagem (aba Personagem) ──
-async function salvarInfoPersonagem(nome){
+async function salvarInfoPersonagem(nome: any){
  if (!podeEditarPersonagem(nome)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }
  const c=RPG_DATA.characters.find(x=>x.nome===nome);
  if(!c)return;

@@ -2,12 +2,12 @@
 // Módulo: CRUD de invocações, editor modal (mestre), accordion na ficha, item effect 'invocar'
 
 // ── Estado ────────────────────────────────────────────────────
-const INV_OCACOES = { catalogo: [], carregado: false };
-let _invModalId = null;      // UUID sendo editado (null = nova)
-let _invDarCharNome = null;  // char alvo do modal "Dar Invocação"
+const INV_OCACOES = { catalogo: [] as any[], carregado: false };
+let _invModalId: any = null;      // UUID sendo editado (null = nova)
+let _invDarCharNome: any = null;  // char alvo do modal "Dar Invocação"
 
 // ── Carregar dados do Supabase ─────────────────────────────────
-async function invocacoesCarregarDados(rpgId) {
+async function invocacoesCarregarDados(rpgId: any) {
   if (!rpgId || typeof sb !== 'function') return;
   try {
     const rows = await sb(`invocacoes?rpg_id=eq.${encodeURIComponent(rpgId)}&order=nome`);
@@ -50,7 +50,7 @@ async function invocacoesCarregarDados(rpgId) {
 })();
 
 // ── Seção da ficha ─────────────────────────────────────────────
-function renderSecaoInvocacoes(c, ca, isMestre, podEditar) {
+function renderSecaoInvocacoes(c: any, ca: any, isMestre: any, podEditar: any) {
   const invs = Array.isArray(ca.invocacoes) ? ca.invocacoes : [];
   const nomeSafe = (c.nome || '').replace(/'/g, "\\'");
 
@@ -60,7 +60,7 @@ function renderSecaoInvocacoes(c, ca, isMestre, podEditar) {
     html = `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;padding:6px 0">Nenhuma invocação disponível.</div>`;
   }
 
-  invs.forEach(entry => {
+  invs.forEach((entry: any) => {
     const def = INV_OCACOES.catalogo.find(i => i.id === entry.invocacao_id);
     if (!def) return;
     const comp = _invComportamentoBadge(def.comportamento);
@@ -81,12 +81,12 @@ function renderSecaoInvocacoes(c, ca, isMestre, podEditar) {
       : `<div style="width:32px;height:32px;border-radius:50%;border:1.5px solid #b07ef0;background:rgba(176,126,240,0.15);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🔮</div>`;
 
     // Skills vinculadas
-    const skillIds = Array.isArray(def.habilidades) ? def.habilidades.filter(h => typeof h === 'string') : [];
+    const skillIds = Array.isArray(def.habilidades) ? def.habilidades.filter((h: any) => typeof h === 'string') : [];
     const skills = typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA.skills)
       ? RPG_DATA.skills.filter(s => skillIds.includes(s.id))
       : (typeof AVT_STATE !== 'undefined' && Array.isArray(AVT_STATE.skills)
-          ? AVT_STATE.skills.filter(s => skillIds.includes(s.id)) : []);
-    const skillsStr = skills.length ? skills.map(s => s.habilidade).join(', ') : '';
+          ? AVT_STATE.skills.filter((s: any) => skillIds.includes(s.id)) : []);
+    const skillsStr = skills.length ? skills.map((s: any) => s.habilidade).join(', ') : '';
 
     html += `<div class="skill-item">
       <div class="skill-header">
@@ -115,13 +115,13 @@ function renderSecaoInvocacoes(c, ca, isMestre, podEditar) {
 }
 window.renderSecaoInvocacoes = renderSecaoInvocacoes;
 
-function _invComportamentoBadge(c) {
-  const map = { protetor: '🛡 Protetor', curador: '💚 Curador', agressivo: '⚔ Agressivo', assassino: '🗡 Assassino', dummy: '🎯 Isca' };
+function _invComportamentoBadge(c: any) {
+  const map: Record<string, any> = { protetor: '🛡 Protetor', curador: '💚 Curador', agressivo: '⚔ Agressivo', assassino: '🗡 Assassino', dummy: '🎯 Isca' };
   return map[c] || c || '—';
 }
 
 // ── Upload de imagem ──────────────────────────────────────────
-async function _invFileUpload(input, targetId, isToken) {
+async function _invFileUpload(input: any, targetId: any, isToken: any) {
   const file = input.files?.[0]; if (!file) return;
   mostrarToast('Enviando imagem…', 'info');
   try {
@@ -165,13 +165,13 @@ function _invAtualizarPerfilPreview() {
 window._invAtualizarPerfilPreview = _invAtualizarPerfilPreview;
 
 // ── Checklist de skills ───────────────────────────────────────
-function _invRenderSkillsChecklist(selectedIds) {
+function _invRenderSkillsChecklist(selectedIds: any) {
   const container = document.getElementById('inv-skills-lista');
   if (!container) return;
 
   const selectedSet = new Set(Array.isArray(selectedIds) ? selectedIds.filter(h => typeof h === 'string') : []);
   const allSkills = (typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA.skills) ? RPG_DATA.skills : [])
-    .concat(typeof AVT_STATE !== 'undefined' && Array.isArray(AVT_STATE.skills) ? AVT_STATE.skills.filter(s =>
+    .concat(typeof AVT_STATE !== 'undefined' && Array.isArray(AVT_STATE.skills) ? AVT_STATE.skills.filter((s: any) =>
       !(typeof RPG_DATA !== 'undefined' && Array.isArray(RPG_DATA.skills) && RPG_DATA.skills.some(r => r.id === s.id))
     ) : []);
 
@@ -196,7 +196,7 @@ function _invRenderSkillsChecklist(selectedIds) {
 window._invRenderSkillsChecklist = _invRenderSkillsChecklist;
 
 // ── Editor Modal ──────────────────────────────────────────────
-function abrirModalInvocacao(invId, charNomeHint) {
+function abrirModalInvocacao(invId: any, charNomeHint: any) {
   const overlay = document.getElementById('modal-invocacao-overlay');
   if (!overlay) return;
   _invModalId = invId || null;
@@ -245,7 +245,7 @@ function abrirModalInvocacao(invId, charNomeHint) {
     { const _gEl = document.getElementById('inv-global'); if (_gEl) _gEl.checked = !!inv.global; }
 
     // Skills (carregar apenas UUIDs — ignora formato antigo de objetos)
-    const skillIds = Array.isArray(inv.habilidades) ? inv.habilidades.filter(h => typeof h === 'string') : [];
+    const skillIds = Array.isArray(inv.habilidades) ? inv.habilidades.filter((h: any) => typeof h === 'string') : [];
     _invRenderSkillsChecklist(skillIds);
   } else {
     document.getElementById('modal-invocacao-titulo').textContent = 'Nova Invocação';
@@ -386,7 +386,7 @@ async function salvarInvocacao() {
 }
 window.salvarInvocacao = salvarInvocacao;
 
-async function removerInvocacaoGlobal(invId, nome) {
+async function removerInvocacaoGlobal(invId: any, nome: any) {
   if (!confirm(`Remover a invocação "${nome}"? Ela será removida de todos os personagens.`)) return;
   try {
     await sb(`invocacoes?id=eq.${encodeURIComponent(invId)}`, { method: 'DELETE' });
@@ -414,7 +414,7 @@ async function removerInvocacaoGlobal(invId, nome) {
 window.removerInvocacaoGlobal = removerInvocacaoGlobal;
 
 // ── Dar/Remover invocação de personagem ────────────────────────
-async function invocacaoDarAPersonagem(invId, charNome) {
+async function invocacaoDarAPersonagem(invId: any, charNome: any) {
   const char = RPG_DATA?.characters?.find(c => c.nome === charNome);
   if (!char) return;
   const ca = char.custom_attrs || {};
@@ -435,7 +435,7 @@ async function invocacaoDarAPersonagem(invId, charNome) {
 }
 window.invocacaoDarAPersonagem = invocacaoDarAPersonagem;
 
-async function invocacaoRemoverDePersonagem(invId, charNome) {
+async function invocacaoRemoverDePersonagem(invId: any, charNome: any) {
   const char = RPG_DATA?.characters?.find(c => c.nome === charNome);
   if (!char) return;
   const ca = char.custom_attrs || {};
@@ -453,7 +453,7 @@ async function invocacaoRemoverDePersonagem(invId, charNome) {
 window.invocacaoRemoverDePersonagem = invocacaoRemoverDePersonagem;
 
 // ── Modal "Dar Invocação" ──────────────────────────────────────
-function abrirModalDarInvocacao(charNome) {
+function abrirModalDarInvocacao(charNome: any) {
   const overlay = document.getElementById('modal-dar-invocacao-overlay');
   if (!overlay) return;
   _invDarCharNome = charNome;
@@ -503,7 +503,7 @@ function _invRenderListaDarInvocacao() {
 window._invRenderListaDarInvocacao = _invRenderListaDarInvocacao;
 
 // ── Helpers para o editor de itens ────────────────────────────
-function invocacoesPopularSelectInvocacoes(selectId) {
+function invocacoesPopularSelectInvocacoes(selectId: any) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
   const cur = sel.value;

@@ -14,10 +14,10 @@
   const PIXI_TYPE = 'pixi_particles';
 
   // ── Canvas Persistente para Decalques COM FADE GRADUAL ───────────────
-  let DECAL_CANVAS = null;
-  let DECAL_CTX = null;
-  let DECAL_ITEMS = []; // Array de {imageData, alpha, x, y, w, h, fadeRate}
-  let DECAL_RAF = null;
+  let DECAL_CANVAS: any = null;
+  let DECAL_CTX: any = null;
+  let DECAL_ITEMS: any = []; // Array de {imageData, alpha, x, y, w, h, fadeRate}
+  let DECAL_RAF: any = null;
 
   function _getDecalCanvas() {
     if (!DECAL_CANVAS) {
@@ -45,7 +45,7 @@
     
     let lastTime = performance.now();
     
-    function fadeLoop(now) {
+    function fadeLoop(now: any) {
       const dt = (now - lastTime) / 1000;
       lastTime = now;
       
@@ -62,7 +62,7 @@
       if (DECAL_CTX && DECAL_CANVAS) {
         DECAL_CTX.clearRect(0, 0, DECAL_CANVAS.width, DECAL_CANVAS.height);
         
-        DECAL_ITEMS.forEach(item => {
+        DECAL_ITEMS.forEach((item: any) => {
           DECAL_CTX.save();
           DECAL_CTX.globalAlpha = Math.max(0, Math.min(1, item.alpha));
           DECAL_CTX.putImageData(item.imageData, item.x, item.y);
@@ -85,7 +85,7 @@
 
   // ── Custom Shape Definitions COM RAIOS ───────────────────────────────
 
-  function _executeCustomShapeCode(code, ctx, size, progress) {
+  function _executeCustomShapeCode(code: any, ctx: any, size: any, progress: any) {
     try {
       const cos = Math.cos, sin = Math.sin, PI = Math.PI;
       const abs = Math.abs, sqrt = Math.sqrt, pow = Math.pow;
@@ -105,11 +105,11 @@
     }
   }
   
-  const CUSTOM_SHAPES = {
+  const CUSTOM_SHAPES: Record<string, any> = {
     // ═══ RAIOS E ELETRICIDADE ═══
     
     // Raio simples (bolt)
-    lightning_bolt: function(ctx, size, progress) {
+    lightning_bolt: function(ctx: any, size: any, progress: any) {
       const s = size;
       const jitter = Math.sin(progress * Math.PI * 16) * 0.08;
       
@@ -142,7 +142,7 @@
     },
     
     // Corrente elétrica (chain)
-    electric_chain: function(ctx, size, progress) {
+    electric_chain: function(ctx: any, size: any, progress: any) {
       const s = size;
       const wobble = Math.sin(progress * Math.PI * 12);
       
@@ -182,7 +182,7 @@
     },
     
     // Arco elétrico (arc)
-    electric_arc: function(ctx, size, progress) {
+    electric_arc: function(ctx: any, size: any, progress: any) {
       const s = size;
       const pulse = 0.8 + Math.sin(progress * Math.PI * 10) * 0.2;
       
@@ -230,7 +230,7 @@
     },
     
     // Plasma ball (esfera de plasma)
-    plasma_ball: function(ctx, size, progress) {
+    plasma_ball: function(ctx: any, size: any, progress: any) {
       const s = size;
       const flicker = 0.85 + Math.sin(progress * Math.PI * 20) * 0.15;
       
@@ -276,7 +276,7 @@
     },
     
     // Spark (faísca)
-    spark: function(ctx, size, progress) {
+    spark: function(ctx: any, size: any, progress: any) {
       const s = size;
       const intensity = 1 - progress * 0.3;
       
@@ -307,7 +307,7 @@
     // ═══ FORMAS ORIGINAIS ═══
     
     // Cabeça de dragão
-    dragon_head: function(ctx, size, progress) {
+    dragon_head: function(ctx: any, size: any, progress: any) {
       const s = size;
       ctx.save();
       // Mandíbula inferior
@@ -344,7 +344,7 @@
     },
 
     // Punho de energia
-    fist: function(ctx, size, progress) {
+    fist: function(ctx: any, size: any, progress: any) {
       const s = size;
       const pulse = 1 + Math.sin(progress * Math.PI * 4) * 0.1;
       ctx.save();
@@ -382,7 +382,7 @@
     },
 
     // Espada fantasma
-    blade: function(ctx, size, progress) {
+    blade: function(ctx: any, size: any, progress: any) {
       const s = size;
       const trail = Math.max(0, progress - 0.5) * 2;
       ctx.save();
@@ -420,7 +420,7 @@
     },
 
     // Chamas (anatomia vetorial)
-    flame: function(ctx, size, progress) {
+    flame: function(ctx: any, size: any, progress: any) {
       const s = size;
       const flicker = Math.sin(progress * Math.PI * 8) * 0.15;
       ctx.save();
@@ -462,7 +462,7 @@
     },
 
     // Garra/Raiz (para efeitos de natureza)
-    claw: function(ctx, size, progress) {
+    claw: function(ctx: any, size: any, progress: any) {
       const s = size;
       const grow = Math.min(1, progress * 2);
       ctx.save();
@@ -497,7 +497,7 @@
   // ── Motor Canvas 2D com Sakuga Features ──────────────────────────────
   class PixiParticleEngine {
     [key: string]: any;
-    constructor(canvas, config, emitterPos) {
+    constructor(canvas: any, config: any, emitterPos: any) {
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
       this.cfg = config || {};
@@ -584,16 +584,16 @@
       this.pingpong = !!c.pingpong;
     }
 
-    _hex(h) {
+    _hex(h: any) {
       if (!h) return {r:255,g:255,b:255};
       const s = h.replace('#','');
       if (s.length===3) return {r:parseInt(s[0]+s[0],16),g:parseInt(s[1]+s[1],16),b:parseInt(s[2]+s[2],16)};
       return {r:parseInt(s.slice(0,2),16),g:parseInt(s.slice(2,4),16),b:parseInt(s.slice(4,6),16)};
     }
 
-    _lerp(a,b,t) { return a+(b-a)*t; }
+    _lerp(a: any,b: any,t: any) { return a+(b-a)*t; }
 
-    _lerpColor(t) {
+    _lerpColor(t: any) {
       if (this.colorMid) {
         if (t < 0.5) return this._lerpC(this.colorStart, this.colorMid, t * 2);
         return this._lerpC(this.colorMid, this.colorEnd, (t - 0.5) * 2);
@@ -601,7 +601,7 @@
       return this._lerpC(this.colorStart, this.colorEnd, t);
     }
     
-    _lerpC(a,b,t) {
+    _lerpC(a: any,b: any,t: any) {
       return {
         r:Math.round(this._lerp(a.r,b.r,t)),
         g:Math.round(this._lerp(a.g,b.g,t)),
@@ -609,7 +609,7 @@
       };
     }
 
-    _ease(t, curve) {
+    _ease(t: any, curve: any) {
       switch(curve) {
         case 'easeIn': return t * t;
         case 'easeOut': return 1 - (1-t)*(1-t);
@@ -680,7 +680,7 @@
       };
     }
 
-    update(dt) {
+    update(dt: any) {
       // Verificar impact frames
       if (this.impactFrame && !this.impacted) {
         const progress = this.time / (this.emitterLifetime > 0 ? this.emitterLifetime : 1);
@@ -811,7 +811,7 @@
       }
     }
 
-    _createDecal(particle) {
+    _createDecal(particle: any) {
       const decal = this.persistentDecal;
       const { ctx, canvas } = _getDecalCanvas();
       if (!ctx || !canvas) return;
@@ -862,7 +862,7 @@
     }
 
     // Desenho de formas
-    _drawShape(ctx, shape, size, progress, particle) {
+    _drawShape(ctx: any, shape: any, size: any, progress: any, particle: any) {
       // 1. Código customizado inline (prioridade máxima)
       if (this.customShapeCode && typeof this.customShapeCode === 'string') {
         _executeCustomShapeCode(this.customShapeCode, ctx, size, progress);
@@ -903,7 +903,7 @@
       this._drawBasicShape(ctx, shape, size, progress);
     }
 
-    _drawBasicShape(ctx, shape, size, progress) {
+    _drawBasicShape(ctx: any, shape: any, size: any, progress: any) {
       switch(shape) {
         case 'star': {
           const pts=5, outer=size, inner=size*.42;
@@ -948,8 +948,8 @@
       }
     }
 
-    _blendOp(m) {
-      const MAP = {
+    _blendOp(m: any) {
+      const MAP: Record<string, any> = {
         normal:'source-over', add:'lighter', screen:'screen', multiply:'multiply',
         overlay:'overlay', 'soft-light':'soft-light', 'hard-light':'hard-light',
         'color-dodge':'color-dodge'
@@ -994,7 +994,7 @@
         ctx.scale(p.stretchX, p.stretchY);
 
         // Resolver shape: textureName sobrescreve particleShape por partícula
-        const TEX_SHAPE_MAP = { spark:'spark', glow:'circle', smoke:'circle', ember:'flame',
+        const TEX_SHAPE_MAP: Record<string, any> = { spark:'spark', glow:'circle', smoke:'circle', ember:'flame',
           ring:'ring', streak:'spark', star:'star', noise:'square', arrowhead:'diamond',
           blade_slice:'blade', rune:'rune_ring' };
         const activeShape = (p.textureName && TEX_SHAPE_MAP[p.textureName]) || this.particleShape;
@@ -1075,8 +1075,8 @@
       return this.particles.length > 0 || this.emitterLifetime < 0 || this.time < this.emitterLifetime;
     }
 
-    start(onDone) {
-      const loop = (ts) => {
+    start(onDone: any) {
+      const loop = (ts: any) => {
         if (!this.lastTs) this.lastTs = ts;
         const dt = Math.min((ts - this.lastTs) / 1000, .05);
         this.lastTs = ts;
@@ -1097,8 +1097,8 @@
   }
 
   // ── Variáveis de preview ──────────────────────────────────────────────
-  let _previewEng = null;
-  let _previewRaf = null;
+  let _previewEng: any = null;
+  let _previewRaf: any = null;
 
   // ── Injetar UI ────────────────────────────────────────────────────────
   function _injetarUI() {
@@ -1239,7 +1239,7 @@
     const wrapEl = document.getElementById('sk-anim-pixi-prompt-wrap');
     const outEl = document.getElementById('sk-anim-pixi-prompt-out');
 
-    const posDescMap = {
+    const posDescMap: Record<string, any> = {
       alvo: 'no alvo (impacto direto)',
       atacante: 'no atacante (emana do caster)',
       meio: 'no meio do campo (área central)',
@@ -1577,7 +1577,7 @@ JSON:`;
     const canvas = document.getElementById('sk-anim-spine-preview-canvas');
     const wrap = document.getElementById('sk-anim-spine-preview-wrap');
     if (!jsonEl || !canvas) return;
-    let cfg;
+    let cfg: any;
     try { cfg = JSON.parse(jsonEl.value.trim()); } catch (_) { return; }
     if (!cfg.skeleton) { return; }
     if (wrap) wrap.style.display = '';
@@ -1626,7 +1626,7 @@ JSON:`;
     const wrapEl = document.getElementById('sk-anim-pixi-prompt-wrap');
     const outEl  = document.getElementById('sk-anim-pixi-prompt-out');
 
-    const posDescMap = {
+    const posDescMap: Record<string, any> = {
       alvo:'no alvo', atacante:'no atacante', meio:'no meio', trajetoria:`trajetória ${tipoTraj==='direta'?'reta':'arco'}`,
       raio:'raio contínuo', area:'AoE ampla', multiplo_alvo:'múltiplos alvos',
       orbital:'orbital (em torno do atacante)', cadeia:'cadeia (salta alvos)',
@@ -1722,7 +1722,7 @@ JSON:`;
   };
 
   // ── Preview ───────────────────────────────────────────────────────────
-  function _drawPreviewMarkers(ctx, OX, OY, TX, TY) {
+  function _drawPreviewMarkers(ctx: any, OX: any, OY: any, TX: any, TY: any) {
     ctx.save();
     // Marcador origem (azul)
     ctx.beginPath();
@@ -1798,7 +1798,7 @@ JSON:`;
       let last = performance.now();
       const t0 = last;
 
-      function raioPreviewLoop(ts) {
+      function raioPreviewLoop(ts: any) {
         const dt = Math.min((ts - last) / 1000, 0.05);
         last = ts;
         const elapsed = ts - t0;
@@ -1859,7 +1859,7 @@ JSON:`;
       let last = performance.now(), boom = false;
       const t0 = last;
 
-      function previewLoop(ts) {
+      function previewLoop(ts: any) {
         const dt = Math.min((ts - last) / 1000, 0.05);
         last = ts;
         const elapsed = ts - t0;
@@ -1962,7 +1962,7 @@ JSON:`;
 
         let last2 = performance.now();
 
-        function fixoLoop(ts) {
+        function fixoLoop(ts: any) {
           const dt = Math.min((ts - last2) / 1000, 0.05);
           last2 = ts;
           previewEngines.forEach(eng => {
@@ -1995,7 +1995,7 @@ JSON:`;
   };
 
   // ── Adaptador para trajetória ─────────────────────────────────────────
-  function _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, canvasRef, tipoTrajetoria) {
+  function _adaptarLayerParaTrajetoria(layerCfg: any, origem: any, alvo: any, totalMs: any, canvasRef: any, tipoTrajetoria: any) {
     const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
     const travelSecs = totalMs / 1000;
@@ -2057,7 +2057,7 @@ JSON:`;
   }
 
   // ── Adaptador para RAIO ───────────────────────────────────────────────
-  function _adaptarLayerParaRaio(layerCfg, origem, alvo, totalMs) {
+  function _adaptarLayerParaRaio(layerCfg: any, origem: any, alvo: any, totalMs: any) {
     const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
     const travelSecs = totalMs / 1000;
@@ -2133,7 +2133,7 @@ JSON:`;
     const duracao = parseInt(document.getElementById('sk-anim-pixi-duracao')?.value) || 1500;
     const repeticao = parseInt(document.getElementById('sk-anim-pixi-repeticao')?.value) || 1;
 
-    const animacaoPixi = {
+    const animacaoPixi: Record<string, any> = {
       tipo: animTipo,
       pixi_config: pixiCfg,
       posicao,
@@ -2216,7 +2216,7 @@ JSON:`;
     if (animacao?.tipo === PIXI_TYPE || animacao?.tipo === 'pixi') {
       console.log('[PixiParticles] Executando animação em jogo:', animacao);
       return new Promise(resolve => {
-        const c = el => {
+        const c = (el: any) => {
           if (typeof _animCentro === 'function') return _animCentro(el);
           if (!el) return { x: innerWidth / 2, y: innerHeight / 2 };
           const r = el.getBoundingClientRect();
@@ -2243,7 +2243,7 @@ JSON:`;
     return c;
   }
 
-  function _runPixi(animacao, origem, alvo, resolve) {
+  function _runPixi(animacao: any, origem: any, alvo: any, resolve: any) {
     console.log('[PixiParticles] _runPixi chamado');
     
     _clearDecals();
@@ -2255,7 +2255,7 @@ JSON:`;
     
     const maxDecalTime = 8000;
     setTimeout(() => {
-      DECAL_ITEMS.forEach(item => {
+      DECAL_ITEMS.forEach((item: any) => {
         item.fadeRate = 1.0 / 2; // Fade mais rápido após tempo máximo
       });
     }, durMs + maxDecalTime);
@@ -2309,13 +2309,13 @@ JSON:`;
     _runFixo(layers, emPos, durMs, resolve);
   }
 
-  function _runFixo(layers, emPos, durMs, resolve) {
+  function _runFixo(layers: any, emPos: any, durMs: any, resolve: any) {
     console.log('[PixiParticles] _runFixo - layers:', layers.length);
     const canvas = _mkCanvas();
     const travelSecs = durMs / 1000;
 
-    const back = layers.filter(l => l.addAtBack);
-    const front = layers.filter(l => !l.addAtBack);
+    const back = layers.filter((l: any) => l.addAtBack);
+    const front = layers.filter((l: any) => !l.addAtBack);
     const ordered = [...back, ...front];
 
     const engines = ordered.map(layerCfg => {
@@ -2331,7 +2331,7 @@ JSON:`;
     const t0 = performance.now();
     let last = t0, raf = null;
 
-    function loop(ts) {
+    function loop(ts: any) {
       const dt = Math.min((ts - last) / 1000, 0.05);
       last = ts;
       const elapsed = ts - t0;
@@ -2357,13 +2357,13 @@ JSON:`;
     raf = requestAnimationFrame(loop);
   }
 
-  function _runTrajetoria(layers, origem, alvo, totalMs, tipoTrajetoria, resolve) {
+  function _runTrajetoria(layers: any, origem: any, alvo: any, totalMs: any, tipoTrajetoria: any, resolve: any) {
     console.log('[PixiParticles] _runTrajetoria - tipo:', tipoTrajetoria);
     const canvas = _mkCanvas();
     const t0 = performance.now();
 
-    const back = layers.filter(l => l.addAtBack);
-    const front = layers.filter(l => !l.addAtBack);
+    const back = layers.filter((l: any) => l.addAtBack);
+    const front = layers.filter((l: any) => !l.addAtBack);
     const ordered = [...back, ...front];
 
     const emPos = { ...origem };
@@ -2379,7 +2379,7 @@ JSON:`;
 
     let last = t0, boom = false, raf = null;
 
-    function loop(ts) {
+    function loop(ts: any) {
       const dt = Math.min((ts - last) / 1000, 0.05);
       last = ts;
       const elapsed = ts - t0;
@@ -2452,13 +2452,13 @@ JSON:`;
   }
 
   // ── NOVA FUNÇÃO: _runRaio ─────────────────────────────────────────────
-  function _runRaio(layers, origem, alvo, totalMs, resolve) {
+  function _runRaio(layers: any, origem: any, alvo: any, totalMs: any, resolve: any) {
     console.log('[PixiParticles] _runRaio - raio contínuo');
     const canvas = _mkCanvas();
     const t0 = performance.now();
 
-    const back = layers.filter(l => l.addAtBack);
-    const front = layers.filter(l => !l.addAtBack);
+    const back = layers.filter((l: any) => l.addAtBack);
+    const front = layers.filter((l: any) => !l.addAtBack);
     const ordered = [...back, ...front];
 
     const emPos = { ...origem };
@@ -2478,7 +2478,7 @@ JSON:`;
     const angleToTarget = Math.atan2(dy, dx);
     const spread = 0.1; // Pequeno spread para raios caóticos
 
-    function loop(ts) {
+    function loop(ts: any) {
       const dt = Math.min((ts - last) / 1000, 0.05);
       last = ts;
       const elapsed = ts - t0;

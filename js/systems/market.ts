@@ -10,7 +10,7 @@
 // ══════════════════════════════════════════════════════════════
 
 // Selecionar tipo no painel gerenciar do mercado
-function mercadoSelecionarTipo(tipo) {
+function mercadoSelecionarTipo(tipo: any) {
   const formItem = document.getElementById('mercado-form-item');
   const formInfo = document.getElementById('mercado-form-informacao');
   const btnItem  = document.getElementById('merc-tipo-item');
@@ -30,7 +30,7 @@ function mercadoSelecionarTipo(tipo) {
     // Preencher select de moedas se vazio
     const select = document.getElementById('mercado-info-denom');
     if (select && select.options.length === 0 && typeof _mercDenoms === 'function') {
-      _mercDenoms().forEach(d => {
+      _mercDenoms().forEach((d: any) => {
         const opt = document.createElement('option');
         opt.value = d.nome;
         opt.textContent = (d.emoji || '') + ' ' + d.nome;
@@ -91,7 +91,7 @@ function _limparFormularioInformacao() {
 }
 
 // Confirmar compra de informação (com dialog)
-function confirmarCompraInfo(rowId, preco, denom) {
+function confirmarCompraInfo(rowId: any, preco: any, denom: any) {
   const rowData = MERCADO_STATE.todos.find(r => r.id == rowId);
   if (!rowData) return;
   const nomeItem = rowData.custom_nome || 'Informação';
@@ -104,7 +104,7 @@ function confirmarCompraInfo(rowId, preco, denom) {
 }
 
 // Comprar informação secreta
-async function comprarInformacao(rowId, preco, denom) {
+async function comprarInformacao(rowId: any, preco: any, denom: any) {
   const charId   = _mercCharId();
   const rpgId    = _mercRpgId();
   const precoNum = parseFloat(preco) || 0;
@@ -120,7 +120,7 @@ async function comprarInformacao(rowId, preco, denom) {
   if (precoNum > 0) {
     const atual = await sb(
       `moedas?rpg_id=eq.${encodeURIComponent(rpgId)}&dono_id=eq.${encodeURIComponent(charId)}&denominacao=eq.${encodeURIComponent(denom)}&select=id,quantidade`
-    ).catch(() => []);
+    ).catch((): any[] => []);
     const saldo = atual?.[0]?.quantidade || 0;
     if (saldo < precoNum) { mostrarToast(`❌ Saldo insuficiente — você tem ${saldo} ${denom}`, 'erro'); return; }
     try { await _moedaUpsert(charId, denom, -precoNum); }
@@ -166,7 +166,7 @@ async function comprarInformacao(rowId, preco, denom) {
 }
 
 // Modal para mostrar informação adquirida
-function mostrarInformacaoAdquirida(nome, conteudo) {
+function mostrarInformacaoAdquirida(nome: any, conteudo: any) {
   const existing = document.getElementById('modal-info-adquirida');
   if (existing) existing.remove();
 
@@ -202,7 +202,7 @@ async function verInformacoesCompradas() {
     modal.id = 'modal-infos-compradas';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
 
-    const itensHtml = rows.map(r => {
+    const itensHtml = rows.map((r: any) => {
       const nome = r.mercado_item?.custom_nome || 'Informação';
       const data = r.comprado_em ? new Date(r.comprado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
       const conteudoEsc = (r.conteudo||'').replace(/'/g,"\'").replace(/\n/g,'\\n');
@@ -259,7 +259,7 @@ async function verInformacoesCompradas() {
       return;
     }
 
-    const _getEmoji = tipo => ({'arma':'⚔️','armadura':'🛡️','amuleto':'💎','consumivel':'🧪','ferramenta':'🔧','informacao':'📜'}[tipo] || '📦');
+    const _getEmoji = (tipo: any) => (({'arma':'⚔️','armadura':'🛡️','amuleto':'💎','consumivel':'🧪','ferramenta':'🔧','informacao':'📜'} as any)[tipo] || '📦');
 
     grid.innerHTML = itens.map(r => {
       const nome    = r.custom_nome || 'Informação';

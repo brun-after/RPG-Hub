@@ -71,7 +71,7 @@ function sairArenaSession() {
   carregarArenaList();
 }
 
-function arTab(nome, btn) {
+function arTab(nome: any, btn: any) {
   document.querySelectorAll('.ar-tab-content').forEach(el => el.classList.remove('ativo'));
   document.querySelectorAll('.ar-tab').forEach(b => b.classList.remove('ativo'));
   document.getElementById('ar-tab-' + nome).classList.add('ativo');
@@ -92,11 +92,11 @@ function arTab(nome, btn) {
 async function arSb<T = any>(path: string, opts: any={}): Promise<T | null> {
   return sb(path, opts); // usa a função sb() já existente
 }
-async function sbAnon(path) {
+async function sbAnon(path: any) {
   // Para busca pública por código de acesso, usa anon key sem JWT.
   // Se houver sessão ativa, injeta o Bearer para que RLS do usuário se aplique.
   const url = `${SUPABASE_URL}/rest/v1/${path}`;
-  const headers = { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' };
+  const headers: Record<string, any> = { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' };
   if (SESSION?.access_token) headers['Authorization'] = `Bearer ${SESSION.access_token}`;
   const res = await fetch(url, { headers });
   if (!res.ok) throw new Error(await res.text());
@@ -114,12 +114,12 @@ async function carregarArenaList() {
     if (userId) {
       try {
         const membros = await arSb(`rpg_members?player_id=eq.${userId}&select=rpg_id`);
-        membrosIds = (membros||[]).map(m=>m.rpg_id);
+        membrosIds = (membros||[]).map((m: any)=>m.rpg_id);
       } catch(e){}
     }
-    const arenas = (all||[]).filter(r => r.owner_id === userId || membrosIds.includes(r.rpg_id));
+    const arenas = (all||[]).filter((r: any) => r.owner_id === userId || membrosIds.includes(r.rpg_id));
     if (!arenas.length) { el.innerHTML = '<div class="ar-empty">Nenhuma arena ainda<br><small style="font-size:0.78rem">Crie uma ou entre com um código</small></div>'; return; }
-    el.innerHTML = arenas.map(a => {
+    el.innerHTML = arenas.map((a: any) => {
       const t = a.theme_json || {};
       const bn = t.batalha_num || 1;
       const ehDono = a.owner_id === userId;
@@ -146,13 +146,13 @@ async function criarArenaSession() {
   const dadoEfetiv = parseInt(document.getElementById('ar-nova-dado-efetiv')?.value || '20') || 20;
   // Ler penalidades
   const penalidadesRows = document.querySelectorAll('#ar-nova-penalidades .ar-penal-row');
-  const penalidades = [];
+  const penalidades: any = [];
   penalidadesRows.forEach(row => {
     const hp = parseInt(row.querySelector('.ar-penal-hp')?.value);
     const val = parseInt(row.querySelector('.ar-penal-val')?.value);
     if (!isNaN(hp) && !isNaN(val) && hp > 0 && val > 0) penalidades.push({ hp, penalidade: val });
   });
-  penalidades.sort((a,b) => b.hp - a.hp); // ordem decrescente de HP
+  penalidades.sort((a: any,b: any) => b.hp - a.hp); // ordem decrescente de HP
   const theme = { batalha_num:1, dado_efetividade:dadoEfetiv, penalidades_hp:penalidades, preto:'#080608', escuro:'#100a0a', painel:'#180e0e', borda:'#2a1212', cinza:'#3a2020', texto:'#d8c8c8', suave:'#8a7070', primario:'#e8604c', primario_v:'#ff9580', destaque:'#e8604c', destaque_v:'#ff9580', perigo:'#c0392b', sucesso:'#27ae60', especial:'#7b2fbe' };
   try {
     await arSb('rpg_registry', {method:'POST', body:JSON.stringify({rpg_id:id, name:nome, owner_id: SESSION?.user?.id||null, theme_json:theme, is_arena:true, codigo_acesso:codigo})});
@@ -249,7 +249,7 @@ async function arEntrarPorCodigo() {
   } catch(e) { arToast('Erro ao entrar por código','erro'); console.error(e); }
 }
 
-async function entrarArena(rpgId) {
+async function entrarArena(rpgId: any) {
   salvarNav('arena', rpgId);
   document.getElementById('arena-hub').style.display = 'none';
   document.getElementById('arena-session').style.display = 'block';
@@ -327,7 +327,7 @@ function arAtualizarUIpeloPapel() {
   const btnPlayer = document.getElementById('ar-btn-novo-jogador-player');
   if (btnMestre) btnMestre.style.display = isMestre ? 'block' : 'none';
   if (btnPlayer) {
-    const jaTemChar = AR.myCharNome || AR.chars.some(c => (c.custom_attrs?.owner_nickname||'') === AR.myNickname && (c.custom_attrs?.tipo||'jogador') === 'jogador');
+    const jaTemChar = AR.myCharNome || AR.chars.some((c: any) => (c.custom_attrs?.owner_nickname||'') === AR.myNickname && (c.custom_attrs?.tipo||'jogador') === 'jogador');
     btnPlayer.style.display = (!isMestre && !jaTemChar) ? 'block' : 'none';
   }
   // Entidades
@@ -364,7 +364,7 @@ async function arCarregarTudo() {
   AR.attrDefs = arAttrDefs || [];
 
   // custom_attrs é jsonb — já vem como objeto do Supabase
-  AR.chars = (chars||[]).map(c => {
+  AR.chars = (chars||[]).map((c: any) => {
     if(typeof c.custom_attrs==='string'){try{c.custom_attrs=JSON.parse(c.custom_attrs);}catch(e){c.custom_attrs={};}}
     if(!c.custom_attrs||typeof c.custom_attrs!=='object')c.custom_attrs={};
     if (!Array.isArray(c.buffs)) c.buffs = [];
@@ -378,7 +378,7 @@ async function arCarregarTudo() {
 
   // Estado arena: lido de rpg_registry.arena_estado (novo schema)
   const lores = loreData || [];
-  AR.histList = lores.filter(l => l.secao === 'historico');
+  AR.histList = lores.filter((l: any) => l.secao === 'historico');
   try {
     const reg = await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(id)}&select=arena_estado&limit=1`);
     const raw = reg&&reg[0]?reg[0].arena_estado:null;
@@ -404,7 +404,7 @@ async function arCarregarTudo() {
     const critivosArena = await arSb(`criativos?rpg_id=eq.${encodeURIComponent(id)}&status=in.(pendente,aprovado_dc,dc_rolado_sucesso,dc_rolado_narrativo,dc_rolado_falha,aprovado_aguardando_rolagem)&select=*`);
     if (critivosArena && critivosArena.length) {
       // Fundir com CRIATIVOS_CAMP sem duplicar
-      critivosArena.forEach(c => {
+      critivosArena.forEach((c: any) => {
         const idx = CRIATIVOS_CAMP.findIndex(x => x.id === c.id);
         if (idx >= 0) CRIATIVOS_CAMP[idx] = c;
         else CRIATIVOS_CAMP.push(c);
@@ -418,33 +418,33 @@ async function arCarregarTudo() {
 // RENDER: PERSONAGENS
 // ═══════════════════════════════════════════════════════════════
 function renderArenaPersonagens() {
-  const jogadores = AR.chars.filter(c => (c.custom_attrs.tipo||'jogador') === 'jogador');
+  const jogadores = AR.chars.filter((c: any) => (c.custom_attrs.tipo||'jogador') === 'jogador');
   const el = document.getElementById('ar-chars-list');
   if (!jogadores.length) { el.innerHTML = '<div class="ar-empty">Nenhum jogador ainda<br><small>Adicione ou aguarde outros jogadores criarem seus personagens</small></div>'; return; }
-  el.innerHTML = jogadores.map(c => arCharCardHTML(c)).join('');
+  el.innerHTML = jogadores.map((c: any) => arCharCardHTML(c)).join('');
   // Atualizar botão de criação de personagem do player
   const btnPlayer = document.getElementById('ar-btn-novo-jogador-player');
   if (btnPlayer && AR.myRole !== 'mestre') {
-    const jaTemChar = AR.myNickname && AR.chars.some(c => (c.custom_attrs?.owner_nickname||'') === AR.myNickname && (c.custom_attrs?.tipo||'jogador') === 'jogador');
+    const jaTemChar = AR.myNickname && AR.chars.some((c: any) => (c.custom_attrs?.owner_nickname||'') === AR.myNickname && (c.custom_attrs?.tipo||'jogador') === 'jogador');
     btnPlayer.style.display = jaTemChar ? 'none' : 'block';
   }
 }
 
 function renderArenaEntidades() {
-  const ents = AR.chars.filter(c => ['criatura','objeto'].includes(c.custom_attrs.tipo||''));
+  const ents = AR.chars.filter((c: any) => ['criatura','objeto'].includes(c.custom_attrs.tipo||''));
   const el = document.getElementById('ar-entidades-list');
   if (!ents.length) { el.innerHTML = '<div class="ar-empty">Nenhuma entidade declarada</div>'; return; }
-  el.innerHTML = ents.map(c => arCharCardHTML(c)).join('');
+  el.innerHTML = ents.map((c: any) => arCharCardHTML(c)).join('');
 }
 
-function arCharCardHTML(c) {
+function arCharCardHTML(c: any) {
   const ca = c.custom_attrs || {};
   const hpMax = ca.hp_max ?? 100;
   const hp = c.hp_atual ?? hpMax;
   const hpPct = Math.round((hp / hpMax) * 100);
   const hpClass = hpPct >= 60 ? 'ar-hp-high' : hpPct >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
   const cor = ca.cor || '#e8604c';
-  const buffs = (c.buffs||ca.buffs||[]).filter(b => _buffAtivo(b));
+  const buffs = (c.buffs||ca.buffs||[]).filter((b: any) => _buffAtivo(b));
   const tipoIcon = ca.tipo === 'criatura' ? '👹' : ca.tipo === 'objeto' ? '🗡' : '⚔';
   const hpColor = hp === 0 ? '#555' : `hsl(${hpPct*1.2},70%,50%)`;
   const incapacitado = hp <= 0;
@@ -492,7 +492,7 @@ function arCharCardHTML(c) {
     ${ca.descricao ? `<div class="ar-char-desc">${ca.descricao}</div>` : ''}
     <div class="ar-hp-label"><span>Vida</span><span style="color:${hpColor};font-family:'Cinzel',serif">${hp} / ${hpMax}</span></div>
     <div class="ar-hp-bar"><div class="ar-hp-fill ${hpClass}" style="width:${Math.min(hpPct,100)}%"></div></div>
-    ${buffs.length ? `<div class="ar-efeitos-row">${buffs.map(b => {
+    ${buffs.length ? `<div class="ar-efeitos-row">${buffs.map((b: any) => {
       const resumo = atkResumoBuff ? atkResumoBuff(b) : (b.nome);
       const bc = b.sem_ataque || b.sem_movimento ? '#e8604c' : b.dot_formula ? '#f0cc6a' : (b.mod_dano??0)<0 ? '#e8604c' : '#7ec8f0';
       return `<span class="ar-badge" style="background:${bc}15;border:1px solid ${bc}33;color:${bc}">${b.nome}</span>`;
@@ -536,7 +536,7 @@ async function salvarCenario() {
 // RENDER: EFEITOS
 // ═══════════════════════════════════════════════════════════════
 // ── Helper: ícones/resumo de um buff ─────────────────────────
-function atkResumoBuff(b) {
+function atkResumoBuff(b: any) {
   const partes = [];
   // Negativos
   if (b.dot_formula && (b.dot_turnos_restantes ?? 0) > 0)             partes.push(`🩸 DOT ${b.dot_formula} ×${b.dot_turnos_restantes}t`);
@@ -557,9 +557,9 @@ function atkResumoBuff(b) {
 function renderArenaEfeitos() {
   const el = document.getElementById('ar-efeitos-list');
   if (!el) return;
-  const efeitosMap = {};
-  AR.chars.forEach(c => {
-    (c.buffs||[]).forEach(b => {
+  const efeitosMap: Record<string, any> = {};
+  AR.chars.forEach((c: any) => {
+    (c.buffs||[]).forEach((b: any) => {
       if (!efeitosMap[b.id]) efeitosMap[b.id] = { efeito: b, alvos: [] };
       efeitosMap[b.id].alvos.push(c.nome);
     });
@@ -578,7 +578,7 @@ function renderArenaEfeitos() {
       <div class="ar-efeito-nome" style="color:${cor}">${icone} ${b.nome}</div>
       <div class="ar-efeito-desc" style="color:${cor}99">${resumo}</div>
       <div class="ar-efeito-meta">
-        ${alvos.map(a => `<span class="ar-efeito-alvo">→ ${a}</span>`).join('')}
+        ${alvos.map((a: any) => `<span class="ar-efeito-alvo">→ ${a}</span>`).join('')}
         <button class="ar-inline-btn-danger" onclick="removerEfeito('${b.id}')">✕</button>
       </div>
     </div>`;
@@ -592,7 +592,7 @@ function renderArenaLog() {
   const el = document.getElementById('ar-log-list');
   const logs = (AR.estado.log||[]).slice().reverse();
   if (!logs.length) { el.innerHTML = '<div class="ar-empty">Sem eventos registrados</div>'; return; }
-  el.innerHTML = logs.map(l => `<div class="ar-log-item"><span class="ar-log-turno">T${l.turno||0}</span><span class="ar-log-texto">${l.texto}</span></div>`).join('');
+  el.innerHTML = logs.map((l: any) => `<div class="ar-log-item"><span class="ar-log-turno">T${l.turno||0}</span><span class="ar-log-texto">${l.texto}</span></div>`).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -601,7 +601,7 @@ function renderArenaLog() {
 function renderArenaD100Hist() {
   const el = document.getElementById('ar-d100-hist');
   if (!AR.d100Hist.length) { el.innerHTML = '<div style="padding:14px;text-align:center;color:#7a6060;font-style:italic;font-size:0.85rem">Nenhuma rolagem</div>'; return; }
-  el.innerHTML = AR.d100Hist.map(h => {
+  el.innerHTML = AR.d100Hist.map((h: any) => {
     let cor = '#c8d8e8', tag = '';
     if (h.num >= 95) { cor='#5ee09a'; tag=' ✦ Prodígio!'; }
     else if (h.num <= 5) { cor='#e74c3c'; tag=' ✦ Catástrofe!'; }
@@ -635,7 +635,7 @@ function renderArenaConfig() {
   // Histórico
   const el = document.getElementById('ar-historico-list');
   if (!AR.histList.length) { el.innerHTML = '<div class="ar-empty">Nenhuma batalha salva</div>'; return; }
-  el.innerHTML = AR.histList.map(h => {
+  el.innerHTML = AR.histList.map((h: any) => {
     let hd: any = {}; try { hd = JSON.parse(h.conteudo||'{}'); } catch(e) {}
     return `<div class="ar-hist-item" onclick="verHistorico(${h.id})">
       <div class="ar-hist-nome">${h.titulo}</div>
@@ -654,9 +654,9 @@ function arCopiarCodigoCfg() {
 // ═══════════════════════════════════════════════════════════════
 // AÇÕES: HP
 // ═══════════════════════════════════════════════════════════════
-function abrirModalHP(nome) {
+function abrirModalHP(nome: any) {
   AR.hpEditNome = nome;
-  const c = AR.chars.find(x => x.nome === nome);
+  const c = AR.chars.find((x: any) => x.nome === nome);
   if (!c) return;
   const hpMax = c.custom_attrs?.hp_max ?? 100;
   const hp = c.hp_atual ?? hpMax;
@@ -676,7 +676,7 @@ function arHpSliderChange() {
   arAtualizarBarraHP(v, hpMax);
 }
 
-function arHpDelta(delta) {
+function arHpDelta(delta: any) {
   const sl = document.getElementById('ar-hp-slider');
   const hpMax = parseInt(sl.max)||100;
   const novo = Math.max(0, Math.min(hpMax, parseInt(sl.value) + delta));
@@ -684,7 +684,7 @@ function arHpDelta(delta) {
   arHpSliderChange();
 }
 
-function arAtualizarBarraHP(hp, hpMax) {
+function arAtualizarBarraHP(hp: any, hpMax: any) {
   hpMax = hpMax || parseInt(document.getElementById('ar-hp-slider').max)||100;
   const pct = Math.round((hp/hpMax)*100);
   const fill = document.getElementById('ar-hp-bar-fill');
@@ -696,7 +696,7 @@ function arAtualizarBarraHP(hp, hpMax) {
 async function confirmarHP() {
   const nome = AR.hpEditNome;
   const novo = parseInt(document.getElementById('ar-hp-slider').value);
-  const c = AR.chars.find(x => x.nome === nome);
+  const c = AR.chars.find((x: any) => x.nome === nome);
   if (!c) return;
   const old = c.hp_atual;
   c.hp_atual = novo;
@@ -718,7 +718,7 @@ async function confirmarHP() {
 // ═══════════════════════════════════════════════════════════════
 // AÇÕES: PERSONAGENS / ENTIDADES
 // ═══════════════════════════════════════════════════════════════
-function abrirModalCriarChar(tipo) {
+function abrirModalCriarChar(tipo: any) {
   AR.charTipoModal = tipo;
   document.getElementById('ar-char-edit-nome').value = '';
   document.getElementById('ar-char-nome').value = '';
@@ -737,8 +737,8 @@ function abrirModalCriarChar(tipo) {
   abrirModal('ar-modal-char');
 }
 
-function abrirModalEditarChar(nome) {
-  const c = AR.chars.find(x => x.nome === nome);
+function abrirModalEditarChar(nome: any) {
+  const c = AR.chars.find((x: any) => x.nome === nome);
   if (!c) return;
   const ca = c.custom_attrs || {};
   document.getElementById('ar-char-edit-nome').value = nome;
@@ -765,13 +765,13 @@ function abrirModalEditarChar(nome) {
   abrirModal('ar-modal-char');
 }
 
-function renderCoresSwatch(corSel) {
+function renderCoresSwatch(corSel: any) {
   document.getElementById('ar-char-cores').innerHTML = AR_CORES.map(c =>
     `<div class="ar-cor${c===corSel?' sel':''}" style="background:${c}" data-cor="${c}" onclick="selecionarCor(this,'${c}')"></div>`
   ).join('');
 }
 
-function selecionarCor(el, cor) {
+function selecionarCor(el: any, cor: any) {
   document.querySelectorAll('#ar-char-cores .ar-cor').forEach(d => d.classList.remove('sel'));
   el.classList.add('sel');
 }
@@ -793,12 +793,12 @@ async function salvarChar() {
   if (!nome) { arToast('Informe o nome','erro'); return; }
 
   const isEdit = !!nomeOld;
-  const existente = AR.chars.find(c => c.nome === nome && nome !== nomeOld);
+  const existente = AR.chars.find((c: any) => c.nome === nome && nome !== nomeOld);
   if (existente) { arToast('Já existe personagem com este nome','erro'); return; }
 
   // Regra: jogador só pode ter 1 personagem comum (não-mestre)
   if (!isEdit && tipo === 'jogador' && AR.myRole !== 'mestre') {
-    const jaTemChar = AR.chars.some(c =>
+    const jaTemChar = AR.chars.some((c: any) =>
       (c.custom_attrs?.owner_nickname||'') === AR.myNickname &&
       (c.custom_attrs?.tipo||'jogador') === 'jogador'
     );
@@ -807,7 +807,7 @@ async function salvarChar() {
 
   const customAttrs: any = {};
   if (isEdit) {
-    const oldChar = AR.chars.find(c => c.nome === nomeOld);
+    const oldChar = AR.chars.find((c: any) => c.nome === nomeOld);
     if (oldChar) Object.assign(customAttrs, oldChar.custom_attrs || {});
   }
   (customAttrs as any).descricao = desc;
@@ -837,7 +837,7 @@ async function salvarChar() {
       await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeOld)}`, {
         method:'PATCH', body:JSON.stringify({nome, hp_atual:hp, custom_attrs:customAttrs, hp_max:hpMax})
       });
-      const idx = AR.chars.findIndex(c => c.nome === nomeOld);
+      const idx = AR.chars.findIndex((c: any) => c.nome === nomeOld);
       if (idx >= 0) { AR.chars[idx].nome = nome; AR.chars[idx].hp_atual = hp; AR.chars[idx].hp_max = hpMax; AR.chars[idx].custom_attrs = customAttrs; }
       arToast('Personagem atualizado!','sucesso');
     } else {
@@ -868,7 +868,7 @@ async function deletarChar() {
   if (!confirm(`Remover "${nome}" da batalha?`)) return;
   try {
     await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nome)}`, {method:'DELETE'});
-    AR.chars = AR.chars.filter(c => c.nome !== nome);
+    AR.chars = AR.chars.filter((c: any) => c.nome !== nome);
     arAddLog(`🚪 ${nome} removido da batalha`);
     await arSalvarEstado();
     fecharModal('ar-modal-char');
@@ -881,8 +881,8 @@ async function deletarChar() {
 // ═══════════════════════════════════════════════════════════════
 // AÇÕES: EFEITOS / BUFFS / DEBUFFS
 // ═══════════════════════════════════════════════════════════════
-function arEfToggle(key) {
-  const map = { heal:'ar-ef-heal-fields', hot:'ar-ef-hot-fields', boost:'ar-ef-boost-fields',
+function arEfToggle(key: any) {
+  const map: Record<string, any> = { heal:'ar-ef-heal-fields', hot:'ar-ef-hot-fields', boost:'ar-ef-boost-fields',
     rec:'ar-ef-rec-fields', dot:'ar-ef-dot-fields', deb:'ar-ef-deb-fields',
     mov:'ar-ef-mov-fields', atk:'ar-ef-atk-fields', def:'ar-ef-def-fields' };
   const el = document.getElementById(map[key]);
@@ -890,7 +890,7 @@ function arEfToggle(key) {
   if (el && chk) el.style.display = chk.checked ? 'block' : 'none';
 }
 
-function arEfSelectGroup(grupo) {
+function arEfSelectGroup(grupo: any) {
   const items = [...document.querySelectorAll('#ar-ef-targets .ar-check-item')];
   items.forEach(el => {
     const tipo = el.dataset.tipo || 'jogador';
@@ -927,7 +927,7 @@ function abrirModalCriarEfeito() {
   arEfTipoChange();
   // Targets
   const targets = document.getElementById('ar-ef-targets');
-  targets.innerHTML = AR.chars.map(c => {
+  targets.innerHTML = AR.chars.map((c: any) => {
     const tipo = c.custom_attrs?.tipo || 'jogador';
     const cor = tipo === 'jogador' ? '#7ec8f0' : '#e8604c';
     return `<div class="ar-check-item" data-nome="${c.nome}" data-tipo="${tipo}" onclick="this.classList.toggle('sel');this.querySelector('.ar-chk').textContent=this.classList.contains('sel')?'✓':''">
@@ -1005,7 +1005,7 @@ async function salvarEfeito() {
 
   // Aplicar cura imediata + buff a cada personagem
   for (const charNome of selecionados) {
-    const c = AR.chars.find(x => x.nome === charNome);
+    const c = AR.chars.find((x: any) => x.nome === charNome);
     if (!c) continue;
     // Cura imediata
     if ((efBase as any).heal_formula) {
@@ -1043,11 +1043,11 @@ async function salvarEfeito() {
   arToast('Efeito aplicado!','sucesso');
 }
 
-async function removerEfeito(efId) {
+async function removerEfeito(efId: any) {
   if (!confirm('Remover este efeito de todos os personagens?')) return;
   for (const c of AR.chars) {
     const antes = (c.buffs||[]).length;
-    c.buffs = (c.buffs||[]).filter(b => b.id !== efId);
+    c.buffs = (c.buffs||[]).filter((b: any) => b.id !== efId);
     if (c.buffs.length < antes) {
       try {
         await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(c.nome)}`, {
@@ -1167,7 +1167,7 @@ async function avancarTurno() {
   logsMensagens.forEach(msg => arAddLog(msg));
 
   // ── Expirar invocações temporárias ──────────────────────────
-  const invExpirados = AR.chars.filter(c =>
+  const invExpirados = AR.chars.filter((c: any) =>
     c.custom_attrs?.invocado &&
     c.custom_attrs?.turno_expira != null &&
     t >= c.custom_attrs.turno_expira
@@ -1179,7 +1179,7 @@ async function avancarTurno() {
         { method: 'DELETE' }
       );
     } catch(e) {}
-    AR.chars = AR.chars.filter(x => x.nome !== inv.nome);
+    AR.chars = AR.chars.filter((x: any) => x.nome !== inv.nome);
     logsMensagens.push(`💨 ${inv.nome} (invocação) foi disperso no turno ${t}`);
     arAddLog(`💨 ${inv.nome} foi disperso`);
   }
@@ -1232,7 +1232,7 @@ async function adicionarLogManual() {
 let AR_DADO_SEL = 20;
 
 function getArenaDiceConfig(){ try{ const id=AR.session&&AR.session.rpg_id; if(!id) return TIPOS_DADO; const s=localStorage.getItem('rpghub_dice_arena_'+id); return s?JSON.parse(s):TIPOS_DADO; }catch(e){ return TIPOS_DADO; } }
-function setArenaDiceConfig(arr){ try{ const id=AR.session&&AR.session.rpg_id; if(id) localStorage.setItem('rpghub_dice_arena_'+id,JSON.stringify(arr)); }catch(e){} }
+function setArenaDiceConfig(arr: any){ try{ const id=AR.session&&AR.session.rpg_id; if(id) localStorage.setItem('rpghub_dice_arena_'+id,JSON.stringify(arr)); }catch(e){} }
 
 function renderArenaDados(){
   const ativos = getArenaDiceConfig();
@@ -1240,7 +1240,7 @@ function renderArenaDados(){
 
   const grid = document.getElementById('ar-dado-grid');
   if(grid){
-    grid.innerHTML = ativos.map(d=>{
+    grid.innerHTML = ativos.map((d: any)=>{
       const sel = d===AR_DADO_SEL;
       return `<button onclick="arSelecionarDado(${d})" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border-radius:8px;border:1px solid ${sel?'#e8604c':'rgba(60,30,30,0.5)'};background:${sel?'rgba(232,80,60,0.12)':'transparent'};cursor:pointer;color:${sel?'#e8604c':'#7a6060'}">
         <svg viewBox="0 0 40 40" fill="none" style="width:28px;height:28px">${svgDadoArena(d)}</svg>
@@ -1261,11 +1261,11 @@ function renderArenaDiceConfig(){
     </button>`;
   }).join('');
 }
-function toggleDadoArena(d){
+function toggleDadoArena(d: any){
   let ativos = getArenaDiceConfig();
   if(ativos.includes(d)){
     if(ativos.length<=1){ arToast('Mínimo 1 dado ativo','erro'); return; }
-    ativos = ativos.filter(x=>x!==d);
+    ativos = ativos.filter((x: any)=>x!==d);
   } else {
     ativos = [...ativos,d].sort((a,b)=>a-b);
   }
@@ -1273,13 +1273,13 @@ function toggleDadoArena(d){
   renderArenaDiceConfig();
   renderArenaDados();
 }
-function arSelecionarDado(d){ AR_DADO_SEL=d; renderArenaDados(); }
+function arSelecionarDado(d: any){ AR_DADO_SEL=d; renderArenaDados(); }
 function arRolarDadoSel(){
   const r = Math.floor(Math.random()*AR_DADO_SEL)+1;
   const el = document.getElementById('ar-dado-resultado');
   if(el){ el.classList.remove('girar'); void el.offsetWidth; el.classList.add('girar'); (el as any).textContent=r; }
 }
-function svgDadoArena(d){
+function svgDadoArena(d: any){
   const s=`stroke="#e8604c" stroke-width="1.5"`,t=`fill="#e8604c" font-size="10" font-family="Cinzel,serif"`;
   if(d===4)return`<polygon points="20,4 36,34 4,34" fill="none" ${s}/><text x="20" y="28" text-anchor="middle" ${t}>4</text>`;
   if(d===6)return`<rect x="6" y="6" width="28" height="28" rx="4" fill="none" ${s}/><text x="20" y="26" text-anchor="middle" ${t}>6</text>`;
@@ -1321,7 +1321,7 @@ async function salvarHistoricoArena() {
     turno_final: AR.estado.turno,
     cenario_final: AR.estado.cenario,
     chars_count: AR.chars.length,
-    chars_snapshot: AR.chars.map(c => ({
+    chars_snapshot: AR.chars.map((c: any) => ({
       nome: c.nome, hp: c.hp_atual, hpMax: c.custom_attrs?.hp_max||100, tipo: c.custom_attrs?.tipo||'jogador',
       descricao: c.custom_attrs?.descricao||'', cor: c.custom_attrs?.cor||'#e8604c'
     })),
@@ -1334,7 +1334,7 @@ async function salvarHistoricoArena() {
     })});
     // Refresh history
     const lores = await arSb(`lore?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&select=*`);
-    AR.histList = (lores||[]).filter(l => l.secao === 'historico');
+    AR.histList = (lores||[]).filter((l: any) => l.secao === 'historico');
     renderArenaConfig();
     arToast('Batalha salva no histórico!','sucesso');
   } catch(e) { arToast('Erro ao salvar histórico','erro'); }
@@ -1358,12 +1358,12 @@ async function resetarBatalha() {
       AR.chars = [];
     } else {
       // Deletar apenas criaturas, objetos e invocações temporárias; manter jogadores mas resetar HP e efeitos
-      const criaturas = AR.chars.filter(c => ['criatura','objeto'].includes(c.custom_attrs?.tipo||'') || c.custom_attrs?.invocado);
+      const criaturas = AR.chars.filter((c: any) => ['criatura','objeto'].includes(c.custom_attrs?.tipo||'') || c.custom_attrs?.invocado);
       for (const cc of criaturas) {
         try { await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(cc.nome)}`, {method:'DELETE'}); } catch(e) {}
       }
       // Resetar HP e buffs dos jogadores
-      const jogadores = AR.chars.filter(c => (c.custom_attrs?.tipo||'jogador') === 'jogador');
+      const jogadores = AR.chars.filter((c: any) => (c.custom_attrs?.tipo||'jogador') === 'jogador');
       for (const jog of jogadores) {
         const hpMax = jog.custom_attrs?.hp_max ?? 100;
         jog.hp_atual = hpMax;
@@ -1406,7 +1406,7 @@ async function resetarBatalha() {
   } catch(e) { arToast('Erro ao resetar','erro'); console.error(e); }
 }
 
-function arResetToggleOpcao(el, opcao) {
+function arResetToggleOpcao(el: any, opcao: any) {
   document.querySelectorAll('#ar-modal-reset .ar-check-item').forEach(item => {
     item.classList.remove('sel');
     item.querySelector('.ar-chk').textContent = '';
@@ -1416,13 +1416,13 @@ function arResetToggleOpcao(el, opcao) {
   document.getElementById('ar-reset-opcao-chars').value = opcao;
 }
 
-async function verHistorico(loreId) {
-  const h = AR.histList.find(x => x.id === loreId);
+async function verHistorico(loreId: any) {
+  const h = AR.histList.find((x: any) => x.id === loreId);
   if (!h) return;
   let hd: any = {}; try { hd = JSON.parse(h.conteudo||'{}'); } catch(e) {}
   document.getElementById('ar-hist-view-titulo').textContent = h.titulo;
-  const chars = ((hd as any).chars_snapshot||[]).map(c => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><div style="width:8px;height:8px;border-radius:50%;background:${c.cor||'#e8604c'}"></div><span style="font-family:'Cinzel',serif;font-size:0.85rem">${c.nome}</span><span style="margin-left:auto;color:${c.hp<=0?'#e74c3c':c.hp<(c.hpMax||100)*0.3?'#f39c12':'#5ee09a'};font-family:'Cinzel',serif;font-size:0.82rem">${c.hp}/${c.hpMax||100}</span></div>`).join('');
-  const logs = ((hd as any).log||[]).slice(-20).map(l => `<div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.85rem;color:#9a8888"><span style="font-family:'Cinzel',serif;font-size:0.6rem;color:rgba(232,80,60,0.4);margin-right:8px">T${l.turno||0}</span>${l.texto}</div>`).join('');
+  const chars = ((hd as any).chars_snapshot||[]).map((c: any) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><div style="width:8px;height:8px;border-radius:50%;background:${c.cor||'#e8604c'}"></div><span style="font-family:'Cinzel',serif;font-size:0.85rem">${c.nome}</span><span style="margin-left:auto;color:${c.hp<=0?'#e74c3c':c.hp<(c.hpMax||100)*0.3?'#f39c12':'#5ee09a'};font-family:'Cinzel',serif;font-size:0.82rem">${c.hp}/${c.hpMax||100}</span></div>`).join('');
+  const logs = ((hd as any).log||[]).slice(-20).map((l: any) => `<div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.85rem;color:#9a8888"><span style="font-family:'Cinzel',serif;font-size:0.6rem;color:rgba(232,80,60,0.4);margin-right:8px">T${l.turno||0}</span>${l.texto}</div>`).join('');
   document.getElementById('ar-hist-view-conteudo').innerHTML = `
     <div style="margin-bottom:12px"><span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">DATA:</span> ${hd.data||'—'} · <span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">TURNOS:</span> ${(hd as any).turno_final||0}</div>
     ${hd.cenario_final?`<div style="background:rgba(20,12,12,0.7);border-left:2px solid rgba(232,80,60,0.3);padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:0.9rem;color:#b8a0a0">${hd.cenario_final}</div>`:''}
@@ -1447,7 +1447,7 @@ async function confirmarDeletarArena() {
 // ═══════════════════════════════════════════════════════════════
 // UTILS: ESTADO / LORE
 // ═══════════════════════════════════════════════════════════════
-function arAddLog(texto) {
+function arAddLog(texto: any) {
   if (!AR.estado.log) AR.estado.log = [];
   AR.estado.log.push({turno:AR.estado.turno, texto, ts:Date.now()});
   if (AR.estado.log.length > 200) AR.estado.log.shift();
@@ -1459,7 +1459,7 @@ async function arSalvarEstado() {
   else delete (AR.estado as any).iniciativa_arena;
   // Limpar ataques finalizados (evita payload crescer e salvar falhar silenciosamente)
   if ((AR.estado as any).ataques_arena) {
-    AR.estado.ataques_arena = (AR.estado as any).ataques_arena.filter(a =>
+    AR.estado.ataques_arena = (AR.estado as any).ataques_arena.filter((a: any) =>
       a.status === 'aguardando_mestre' || a.status === 'aprovado_dc' || a.status === 'rolagem_enviada'
     );
   }
@@ -1474,7 +1474,7 @@ async function arSalvarEstado() {
 // ═══════════════════════════════════════════════════════════════
 // REALTIME
 // ═══════════════════════════════════════════════════════════════
-function arIniciarRealtime(rpgId) {
+function arIniciarRealtime(rpgId: any) {
   arFecharRealtime();
   let _arReconectando=false, _arTentativas=0, _arTimer=null;
 
@@ -1485,7 +1485,7 @@ function arIniciarRealtime(rpgId) {
 
     ws.onopen = () => {
       _arTentativas=0; _arReconectando=false;
-      const join = (t) => ws.send(JSON.stringify({topic:t, event:'phx_join', payload:{config:{broadcast:{self:false},presence:{key:''}}}, ref:'ar1'}));
+      const join = (t: any) => ws.send(JSON.stringify({topic:t, event:'phx_join', payload:{config:{broadcast:{self:false},presence:{key:''}}}, ref:'ar1'}));
       join(`realtime:public:characters:rpg_id=eq.${rpgId}`);
       join(`realtime:public:rpg_registry:rpg_id=eq.${rpgId}`);
       join(`realtime:public:batalhas:rpg_id=eq.${rpgId}`);
@@ -1517,11 +1517,11 @@ function arIniciarRealtime(rpgId) {
           if(ev==='DELETE'){
             const oldRec=msg.payload.old_record||{};
             const nome=oldRec.nome||rec.nome;
-            AR.chars=AR.chars.filter(c=>!(c.nome===nome&&c.rpg_id===rec.rpg_id));
+            AR.chars=AR.chars.filter((c: any)=>!(c.nome===nome&&c.rpg_id===rec.rpg_id));
             // também remove do RPG_DATA principal se disponível
             if(RPG_DATA&&RPG_DATA.characters)RPG_DATA.characters=RPG_DATA.characters.filter(c=>!(c.nome===nome&&c.rpg_id===rec.rpg_id));
           } else {
-            const idx = AR.chars.findIndex(c => c.nome === rec.nome && c.rpg_id === rec.rpg_id);
+            const idx = AR.chars.findIndex((c: any) => c.nome === rec.nome && c.rpg_id === rec.rpg_id);
             if (idx >= 0) AR.chars[idx] = rec;
             else if (ev === 'INSERT') AR.chars.push(rec);
             // Sync para RPG_DATA também
@@ -1598,8 +1598,8 @@ function arFecharRealtime() {
 // ═══════════════════════════════════════════════════════════════
 // UTILS: MODAIS / TOAST / SLIDER
 // ═══════════════════════════════════════════════════════════════
-function abrirModal(id) { document.getElementById(id).style.display='flex'; }
-function fecharModal(id) { document.getElementById(id).style.display='none'; }
+function abrirModal(id: any) { document.getElementById(id).style.display='flex'; }
+function fecharModal(id: any) { document.getElementById(id).style.display='none'; }
 function abrirModalCenario() {
   if (AR.myRole !== 'mestre') { arToast('Apenas o Mestre pode alterar o cenário diretamente','erro'); return; }
   document.getElementById('ar-cenario-input').value=AR.estado.cenario||'';
@@ -1625,21 +1625,21 @@ function abrirModalSolicitarEntidade() {
   document.getElementById('ar-sol-ent-img').value='';
   abrirModal('ar-modal-solicitar-entidade');
 }
-function abrirModalVincular(nomeEntidade) {
+function abrirModalVincular(nomeEntidade: any) {
   AR.vincularCriaturaNome = nomeEntidade;
   document.getElementById('ar-vincular-nome-criatura').textContent = nomeEntidade;
   // Listar jogadores
-  const jogadores = AR.chars.filter(c => (c.custom_attrs?.tipo||'jogador') === 'jogador');
-  const criatura = AR.chars.find(c => c.nome === nomeEntidade);
+  const jogadores = AR.chars.filter((c: any) => (c.custom_attrs?.tipo||'jogador') === 'jogador');
+  const criatura = AR.chars.find((c: any) => c.nome === nomeEntidade);
   const vinculoAtual = criatura?.custom_attrs?.vinculado_a || null;
   const list = document.getElementById('ar-vincular-jogadores-list');
   list.innerHTML = [
     `<div class="ar-check-item${!vinculoAtual?' sel':''}" onclick="arVincularSel(this,null)"><div class="ar-chk">${!vinculoAtual?'✓':''}</div><div><div style="font-family:'Cinzel',serif;font-size:0.78rem">Sem vínculo — turno próprio</div></div></div>`,
-    ...jogadores.map(j => `<div class="ar-check-item${vinculoAtual===j.nome?' sel':''}" onclick="arVincularSel(this,'${j.nome}')"><div class="ar-chk">${vinculoAtual===j.nome?'✓':''}</div><div><div style="font-family:'Cinzel',serif;font-size:0.78rem">${j.nome}</div><div style="font-size:0.7rem;color:#7a6060">${j.custom_attrs?.owner_nickname||''}</div></div></div>`)
+    ...jogadores.map((j: any) => `<div class="ar-check-item${vinculoAtual===j.nome?' sel':''}" onclick="arVincularSel(this,'${j.nome}')"><div class="ar-chk">${vinculoAtual===j.nome?'✓':''}</div><div><div style="font-family:'Cinzel',serif;font-size:0.78rem">${j.nome}</div><div style="font-size:0.7rem;color:#7a6060">${j.custom_attrs?.owner_nickname||''}</div></div></div>`)
   ].join('');
   abrirModal('ar-modal-vincular');
 }
-function arVincularSel(el, jogNome) {
+function arVincularSel(el: any, jogNome: any) {
   document.querySelectorAll('#ar-vincular-jogadores-list .ar-check-item').forEach(i=>{ i.classList.remove('sel'); i.querySelector('.ar-chk').textContent=''; });
   el.classList.add('sel');
   el.querySelector('.ar-chk').textContent='✓';
@@ -1651,7 +1651,7 @@ async function arConfirmarVinculo() {
   const selecionado = document.querySelector('#ar-vincular-jogadores-list .ar-check-item.sel');
   const jogNome = selecionado?._vinculo !== undefined ? selecionado._vinculo : null;
   const posicao = document.getElementById('ar-vincular-posicao').value;
-  const c = AR.chars.find(x => x.nome === nome);
+  const c = AR.chars.find((x: any) => x.nome === nome);
   if (!c) return;
   c.custom_attrs.vinculado_a = jogNome;
   try {
@@ -1671,7 +1671,7 @@ async function arConfirmarVinculo() {
   } catch(e) { arToast('Erro ao vincular','erro'); }
 }
 
-function arPreviewCenarioImg(url) {
+function arPreviewCenarioImg(url: any) {
   const prev = document.getElementById('ar-cenario-img-preview');
   const prevEl = document.getElementById('ar-cenario-img-preview-el');
   if (!prev || !prevEl) return;
@@ -1689,7 +1689,7 @@ function arImportarCenarioJSON() {
     arToast('JSON importado!','sucesso');
   } catch(e) { arToast('JSON inválido','erro'); }
 }
-function arImportarCenarioArquivo(input) {
+function arImportarCenarioArquivo(input: any) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
@@ -1716,7 +1716,7 @@ function arImportarPropostaCenarioJSON() {
 
 
 
-function arToast(msg, tipo) {
+function arToast(msg: any, tipo: any) {
   // Reutiliza o toast existente
   mostrarToast(msg, tipo);
 }
@@ -1742,7 +1742,7 @@ function arSincronizarChatBadge() {
 
 
 
-function arSliderUpdate(sliderId, valId, suffix) {
+function arSliderUpdate(sliderId: any, valId: any, suffix: any) {
   const v = document.getElementById(sliderId).value;
   document.getElementById(valId).textContent = v + (suffix||'');
 }
@@ -1765,13 +1765,13 @@ document.addEventListener('input', (e) => {
 // CRIAÇÃO DE PERSONAGEM PELO PRÓPRIO JOGADOR
 // ═══════════════════════════════════════════════════════════════
 function arCriarMeuPersonagem() {
-  const jaTemChar = AR.myNickname && AR.chars.some(c => (c.custom_attrs?.owner_nickname||'') === AR.myNickname && (c.custom_attrs?.tipo||'jogador') === 'jogador');
+  const jaTemChar = AR.myNickname && AR.chars.some((c: any) => (c.custom_attrs?.owner_nickname||'') === AR.myNickname && (c.custom_attrs?.tipo||'jogador') === 'jogador');
   if (jaTemChar) { arToast('Você já tem um personagem nesta batalha','erro'); return; }
   abrirModalCriarChar('jogador');
 }
 
-function arAbrirAparencia(nome) {
-  const c = AR.chars.find(x => x.nome === nome);
+function arAbrirAparencia(nome: any) {
+  const c = AR.chars.find((x: any) => x.nome === nome);
   if (!c) return;
   if (!window.RPG_DATA) window.RPG_DATA = {} as any;   // stub mínimo da arena, preenchido em seguida
   if (!RPG_DATA.characters) RPG_DATA.characters = [];
@@ -1788,7 +1788,7 @@ document.addEventListener('arAparenciaSalva', function(e) {
   if (!window._arAparenciaHook || !window._arAparenciaNome) return;
   const nome = window._arAparenciaNome;
   const charRpd = RPG_DATA?.characters?.find(x => x.nome === nome);
-  const charAr = AR.chars.find(x => x.nome === nome);
+  const charAr = AR.chars.find((x: any) => x.nome === nome);
   if (charRpd && charAr) {
     charAr.custom_attrs = { ...charAr.custom_attrs, aparencia: charRpd.custom_attrs?.aparencia };
     arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nome)}`, {
@@ -1822,7 +1822,7 @@ function renderPropostasCenario() {
   const propostas = (AR.estado as any).propostas_cenario || [];
   if (AR.myRole !== 'mestre') return;
   wrap.style.display = propostas.length ? 'block' : 'none';
-  list.innerHTML = propostas.map(p => `
+  list.innerHTML = propostas.map((p: any) => `
     <div class="ar-proposta-card pendente">
       <div class="ar-proposta-titulo">💡 Proposta de <strong>${p.autor||'jogador'}</strong></div>
       <div class="ar-proposta-desc">${p.texto}</div>
@@ -1834,12 +1834,12 @@ function renderPropostasCenario() {
     </div>`).join('') || '<div class="ar-empty">Nenhuma proposta pendente</div>';
 }
 
-async function arAprovarPropostaCenario(id) {
-  const p = ((AR.estado as any).propostas_cenario||[]).find(x=>x.id===id);
+async function arAprovarPropostaCenario(id: any) {
+  const p = ((AR.estado as any).propostas_cenario||[]).find((x: any)=>x.id===id);
   if (!p) return;
   AR.estado.cenario = p.texto;
   if (p.img) (AR.estado as any).cenario_img = p.img;
-  AR.estado.propostas_cenario = ((AR.estado as any).propostas_cenario||[]).filter(x=>x.id!==id);
+  AR.estado.propostas_cenario = ((AR.estado as any).propostas_cenario||[]).filter((x: any)=>x.id!==id);
   arAddLog(`📍 Cenário aprovado (proposta de ${p.autor}): ${p.texto}`);
   await arSalvarEstado();
   renderArenaCenario();
@@ -1848,8 +1848,8 @@ async function arAprovarPropostaCenario(id) {
   arToast('Cenário aprovado e aplicado!','sucesso');
 }
 
-async function arRejeitarPropostaCenario(id) {
-  AR.estado.propostas_cenario = ((AR.estado as any).propostas_cenario||[]).filter(x=>x.id!==id);
+async function arRejeitarPropostaCenario(id: any) {
+  AR.estado.propostas_cenario = ((AR.estado as any).propostas_cenario||[]).filter((x: any)=>x.id!==id);
   await arSalvarEstado();
   renderPropostasCenario();
   arToast('Proposta rejeitada','');
@@ -1882,7 +1882,7 @@ function renderSolicitacoesEntidade() {
   const sols = (AR.estado as any).solicitacoes_entidade || [];
   if (AR.myRole !== 'mestre') return;
   wrap.style.display = sols.length ? 'block' : 'none';
-  list.innerHTML = sols.map(s => `
+  list.innerHTML = sols.map((s: any) => `
     <div class="ar-proposta-card pendente">
       <div class="ar-proposta-titulo">${s.tipo==='criatura'?'👹':'🗡'} <strong>${s.nome}</strong> — solicitado por ${s.autor}</div>
       <div class="ar-proposta-desc">${s.desc||'(sem descrição)'}</div>
@@ -1894,8 +1894,8 @@ function renderSolicitacoesEntidade() {
     </div>`).join('') || '<div class="ar-empty">Nenhuma solicitação</div>';
 }
 
-async function arAprovarEntidade(id) {
-  const s = ((AR.estado as any).solicitacoes_entidade||[]).find(x=>x.id===id);
+async function arAprovarEntidade(id: any) {
+  const s = ((AR.estado as any).solicitacoes_entidade||[]).find((x: any)=>x.id===id);
   if (!s) return;
   const cor = AR_CORES[Math.floor(Math.random()*AR_CORES.length)];
   const customAttrs = {
@@ -1904,7 +1904,7 @@ async function arAprovarEntidade(id) {
     vinculado_a: s.autor, // vínculo automático com quem solicitou
     owner_nickname: s.autor,
     pos: {x:20+Math.random()*60, y:20+Math.random()*60},
-    buffs: []
+    buffs: [] as any[]
   };
   try {
     const novo = await arSb('characters', {method:'POST', body:JSON.stringify({
@@ -1914,7 +1914,7 @@ async function arAprovarEntidade(id) {
     const charObj = Array.isArray(novo)?novo[0]:novo;
     charObj.custom_attrs = customAttrs;
     AR.chars.push(charObj);
-    AR.estado.solicitacoes_entidade = ((AR.estado as any).solicitacoes_entidade||[]).filter(x=>x.id!==id);
+    AR.estado.solicitacoes_entidade = ((AR.estado as any).solicitacoes_entidade||[]).filter((x: any)=>x.id!==id);
     arAddLog(`✨ ${s.nome} (${s.tipo}) criado e vinculado a ${s.autor}`);
     await arSalvarEstado();
     renderArenaEntidades();
@@ -1924,8 +1924,8 @@ async function arAprovarEntidade(id) {
   } catch(e) { arToast('Erro ao criar entidade','erro'); }
 }
 
-async function arRejeitarEntidade(id) {
-  AR.estado.solicitacoes_entidade = ((AR.estado as any).solicitacoes_entidade||[]).filter(x=>x.id!==id);
+async function arRejeitarEntidade(id: any) {
+  AR.estado.solicitacoes_entidade = ((AR.estado as any).solicitacoes_entidade||[]).filter((x: any)=>x.id!==id);
   await arSalvarEstado();
   renderSolicitacoesEntidade();
   arToast('Solicitação rejeitada','');
@@ -1943,7 +1943,7 @@ function abrirModalBulkCriaturas() {
 function renderBulkCriaturas() {
   const list = document.getElementById('ar-bulk-criaturas-lista');
   if (!list) return;
-  list.innerHTML = AR.bulkCriaturas.map((c, i) => `
+  list.innerHTML = AR.bulkCriaturas.map((c: any, i: any) => `
     <div class="ar-bulk-item">
       <div class="ar-bulk-item-header">
         <span>Criatura ${i+1}</span>
@@ -1963,18 +1963,18 @@ function arBulkAddCriatura() {
   renderBulkCriaturas();
 }
 
-function arBulkRemoveCriatura(i) {
+function arBulkRemoveCriatura(i: any) {
   AR.bulkCriaturas.splice(i, 1);
   renderBulkCriaturas();
 }
 
 async function arBulkCriarCriaturas() {
-  const criaturas = AR.bulkCriaturas.map((_, i) => ({
+  const criaturas = AR.bulkCriaturas.map((_: any, i: any) => ({
     nome: (document.getElementById(`ar-bulk-nome-${i}`)?.value||'').trim(),
     hp: parseInt(document.getElementById(`ar-bulk-hp-${i}`)?.value)||100,
     desc: (document.getElementById(`ar-bulk-desc-${i}`)?.value||'').trim(),
     img: (document.getElementById(`ar-bulk-img-${i}`)?.value||'').trim(),
-  })).filter(c => c.nome);
+  })).filter((c: any) => c.nome);
 
   if (!criaturas.length) { arToast('Adicione ao menos uma criatura com nome','erro'); return; }
 
@@ -1983,7 +1983,7 @@ async function arBulkCriarCriaturas() {
     const cor = AR_CORES[Math.floor(Math.random()*AR_CORES.length)];
     const customAttrs = {
       tipo:'criatura', descricao:c.desc, cor, hp_max:c.hp,
-      img_url:normalizeImgUrl(c.img), buffs:[],
+      img_url:normalizeImgUrl(c.img), buffs:[] as any[],
       pos:{x:20+Math.random()*60, y:20+Math.random()*60},
       temporaria:true // marca para ser apagada ao zerar batalha
     };
@@ -2064,7 +2064,7 @@ function renderListaRolagem() {
   const ini = AR.iniciativa;
   const lista = document.getElementById('ar-ini-lista-rolagem');
   if (!lista || !ini) return;
-  lista.innerHTML = ini.participantes.map(p => {
+  lista.innerHTML = ini.participantes.map((p: any) => {
     const rolou = ini.iniciativas && ini.iniciativas[p.nome] != null;
     const valor = rolou ? ini.iniciativas[p.nome] : '?';
     return `<div class="ar-ini-card" style="opacity:${rolou?1:0.5}">
@@ -2085,7 +2085,7 @@ function renderOrdemCombate() {
 
   // Render strip (mini-cards horizontais como na campanha)
   if (strip) {
-    strip.innerHTML = ini.ordem.filter(p => !p.vinculado_a).map((p, idx) => {
+    strip.innerHTML = ini.ordem.filter((p: any) => !p.vinculado_a).map((p: any, idx: any) => {
       const isAtual = idx === ini.ordemAtual;
       const cor = p.cor || '#e8604c';
       return `<div onclick="${AR.myRole==='mestre'?`arDarVezPara(${idx})`:'undefined'}" style="
@@ -2112,7 +2112,7 @@ function renderOrdemCombate() {
   if (acoesEl) acoesEl.style.display = (ehMeuTurno || isMestre) ? 'block' : 'none';
 
   // Criaturas vinculadas
-  const minhasCriaturas = AR.chars.filter(c => {
+  const minhasCriaturas = AR.chars.filter((c: any) => {
     const owner = c.custom_attrs?.vinculado_a;
     return owner && (owner === meuChar || isMestre);
   });
@@ -2120,7 +2120,7 @@ function renderOrdemCombate() {
   const criatList = document.getElementById('ar-ini-criaturas-list');
   if (criatWrap && criatList) {
     criatWrap.style.display = minhasCriaturas.length ? 'block' : 'none';
-    criatList.innerHTML = minhasCriaturas.map(c => `
+    criatList.innerHTML = minhasCriaturas.map((c: any) => `
       <button onclick="abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="width:100%;margin-bottom:4px;padding:7px 10px;background:rgba(232,80,60,0.08);border:1px solid rgba(232,80,60,0.25);border-radius:6px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer;text-align:left">
         ⚔ ${c.nome} <span style="color:#7a6060;font-size:0.65rem">(${c.hp_atual??'?'}/${c.custom_attrs?.hp_max??'?'} HP)</span>
       </button>`).join('');
@@ -2129,18 +2129,18 @@ function renderOrdemCombate() {
 
 function arMeuChar() {
   if (AR.myCharNome) return AR.myCharNome;
-  return AR.chars.find(c => {
+  return AR.chars.find((c: any) => {
     const ca = c.custom_attrs || {};
     return (ca.owner_nickname === AR.myNickname || ca.owner_nickname === SESSION?.user?.email) && (ca.tipo || 'jogador') === 'jogador';
   })?.nome || null;
 }
 
-function hexToRgb(hex) {
+function hexToRgb(hex: any) {
   const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
   return isNaN(r) ? '232,80,60' : `${r},${g},${b}`;
 }
 
-function arDarVezPara(idx) {
+function arDarVezPara(idx: any) {
   if (AR.myRole !== 'mestre' || !AR.iniciativa) return;
   AR.iniciativa.ordemAtual = idx;
   arSalvarEstado();
@@ -2150,24 +2150,24 @@ function arDarVezPara(idx) {
 async function arIniciarIniciativa() {
   if (AR.myRole !== 'mestre') return;
   // Participantes: jogadores + criaturas sem vínculo
-  const participantes = AR.chars.filter(c => {
+  const participantes = AR.chars.filter((c: any) => {
     const tipo = c.custom_attrs?.tipo || 'jogador';
     const hpAtual = c.hp_atual ?? c.custom_attrs?.hp_max ?? c.hp_max ?? 100;
     if (tipo === 'jogador') return hpAtual > 0;
     if (tipo === 'criatura' || tipo === 'objeto') return !c.custom_attrs?.vinculado_a && hpAtual > 0;
     return false;
-  }).map(c => ({
+  }).map((c: any) => ({
     nome: c.nome,
     tipo: c.custom_attrs?.tipo||'jogador',
     cor: c.custom_attrs?.cor || '#e8604c',
-    iniciativa: null,
+    iniciativa: null as any,
   }));
 
   if (!participantes.length) { arToast('Nenhum participante disponível','erro'); return; }
 
   // NPCs rolam automaticamente; jogadores rolam por conta
-  const iniciativas = {};
-  participantes.forEach(p => {
+  const iniciativas: Record<string, any> = {};
+  participantes.forEach((p: any) => {
     if (p.tipo === 'criatura' || p.tipo === 'objeto') {
       iniciativas[p.nome] = Math.floor(Math.random()*20)+1;
       p.iniciativa = iniciativas[p.nome];
@@ -2208,7 +2208,7 @@ async function arConfirmarIniciativa() {
   if (!meuChar) { arToast('Você não tem um personagem nesta batalha','erro'); return; }
   AR.iniciativa.iniciativas = AR.iniciativa.iniciativas || {};
   AR.iniciativa.iniciativas[meuChar] = AR.iniValorAtual;
-  const p = AR.iniciativa.participantes.find(x=>x.nome===meuChar);
+  const p = AR.iniciativa.participantes.find((x: any)=>x.nome===meuChar);
   if (p) p.iniciativa = AR.iniValorAtual;
   arAddLog(`🎲 ${meuChar} rolou iniciativa: ${AR.iniValorAtual}`);
   await arSalvarEstado();
@@ -2237,8 +2237,8 @@ async function arCalcularOrdemIniciativa() {
 }
 
 // Helper: retorna true se o personagem está morto (hp <= 0)
-const _charMorto = (p) => {
-  const c = AR.chars.find(x => x.nome === p?.nome);
+const _charMorto = (p: any) => {
+  const c = AR.chars.find((x: any) => x.nome === p?.nome);
   return c && (c.hp_atual ?? 100) <= 0;
 };
 
@@ -2303,9 +2303,9 @@ async function arEncerrarBatalhaIniciativa() {
   arToast('Combate encerrado','');
 }
 
-function arInserirCriaturaIniciativa(nome, posicao) {
+function arInserirCriaturaIniciativa(nome: any, posicao: any) {
   if (!AR.iniciativa || AR.iniciativa.fase !== 'combate') return;
-  const c = AR.chars.find(x=>x.nome===nome);
+  const c = AR.chars.find((x: any)=>x.nome===nome);
   if (!c) return;
   const novaEntrada = {nome, tipo:c.custom_attrs?.tipo||'criatura', cor:c.custom_attrs?.cor||'#e8604c', iniciativa:Math.floor(Math.random()*20)+1};
   if (posicao === 'imediato') {
@@ -2314,7 +2314,7 @@ function arInserirCriaturaIniciativa(nome, posicao) {
     AR.iniciativa.ordem.push(novaEntrada);
   } else {
     // próxima: inserir baseado na iniciativa rolada
-    const pos = AR.iniciativa.ordem.findIndex((p,i)=>i>AR.iniciativa.ordemAtual&&p.iniciativa<novaEntrada.iniciativa);
+    const pos = AR.iniciativa.ordem.findIndex((p: any,i: any)=>i>AR.iniciativa.ordemAtual&&p.iniciativa<novaEntrada.iniciativa);
     if (pos<0) AR.iniciativa.ordem.push(novaEntrada);
     else AR.iniciativa.ordem.splice(pos,0,novaEntrada);
   }
@@ -2328,7 +2328,7 @@ async function arAcaoAtacar() {
     const atual = ini.ordem[ini.ordemAtual];
     if (atual) { abrirModalAtaque(atual.nome, 'arena'); return; }
   }
-  const meuChar = AR.myCharNome || AR.chars.find(c=>(c.custom_attrs?.owner_nickname||'')===AR.myNickname&&(c.custom_attrs?.tipo||'jogador')==='jogador')?.nome;
+  const meuChar = AR.myCharNome || AR.chars.find((c: any)=>(c.custom_attrs?.owner_nickname||'')===AR.myNickname&&(c.custom_attrs?.tipo||'jogador')==='jogador')?.nome;
   if (meuChar) abrirModalAtaque(meuChar, 'arena');
 }
 
@@ -2336,7 +2336,7 @@ async function arAcaoPassar() {
   if (AR.myRole === 'mestre') { await arProximoTurnoIniciativa(); return; }
   const ini = AR.iniciativa;
   if (!ini || ini.fase !== 'combate') return;
-  const meuChar = AR.myCharNome || AR.chars.find(c=>(c.custom_attrs?.owner_nickname||'')===AR.myNickname&&(c.custom_attrs?.tipo||'jogador')==='jogador')?.nome;
+  const meuChar = AR.myCharNome || AR.chars.find((c: any)=>(c.custom_attrs?.owner_nickname||'')===AR.myNickname&&(c.custom_attrs?.tipo||'jogador')==='jogador')?.nome;
   const atual = ini.ordem[ini.ordemAtual];
   if (atual && atual.nome === meuChar) {
     arAddLog(`⏩ ${meuChar} passou o turno`);
@@ -2371,20 +2371,20 @@ async function arAcaoPassar() {
 // ═══════════════════════════════════════════════════════════════
 // 🎲 DADO RÁPIDO DA MESA — Rolagem de dados integrada ao mapa da Arena
 // ═══════════════════════════════════════════════════════════════
-let AR_MESA_DADO_SEL = null;
+let AR_MESA_DADO_SEL: any = null;
 
 function arMesaRenderDados() {
   if (!AR.session) return;
   const cfg = getArenaDiceConfig();
   const el = document.getElementById('ar-mesa-dado-btns');
   if (!el) return;
-  el.innerHTML = cfg.map(d =>
+  el.innerHTML = cfg.map((d: any) =>
     `<button class="ar-mesa-dado-btn${AR_MESA_DADO_SEL === d ? ' ativo' : ''}"
              onclick="arMesaSelecionarDado(${d})" title="d${d}">d${d}</button>`
   ).join('');
 }
 
-function arMesaSelecionarDado(d) {
+function arMesaSelecionarDado(d: any) {
   AR_MESA_DADO_SEL = d;
   arMesaRenderDados();
 }
@@ -2440,7 +2440,7 @@ function mesaZoomReset() {
   if (btn) btn.textContent = '100%';
 }
 
-function mesaZoomSet(z, pivotX, pivotY) {
+function mesaZoomSet(z: any, pivotX: any, pivotY: any) {
   const wrap = document.getElementById('ar-mesa-wrap');
   if (!wrap) return;
   const oldZoom = MESA.zoom;
@@ -2493,7 +2493,7 @@ function mesaZoomInit() {
   }, { passive: false });
 
   // ── Pan com pointer em qualquer lugar do mapa ─────────────────
-  let _isPanning = false, _panPointerId = null, _panSX = 0, _panSY = 0, _panOX = 0, _panOY = 0;
+  let _isPanning = false, _panPointerId: any = null, _panSX = 0, _panSY = 0, _panOX = 0, _panOY = 0;
   wrap.addEventListener('pointerdown', (e) => {
     if ((e.target as any).closest('#ar-mesa-zoom-hud')) return;
     if (MESA.toolMode) return;
@@ -2511,7 +2511,7 @@ function mesaZoomInit() {
     MESA.panY = _panOY + (e.clientY - _panSY);
     mesaZoomApply();
   });
-  const _endPan = (e) => {
+  const _endPan = (e: any) => {
     if (e.pointerId !== _panPointerId) return;
     _isPanning = false; _panPointerId = null;
     wrap.style.cursor = 'grab';
@@ -2650,7 +2650,7 @@ function mesaRenderTokens() {
   const layer = document.getElementById('ar-mesa-tokens');
   if (!layer) return;
   layer.innerHTML = '';
-  AR.chars.forEach(c => mesaCriarToken(c, layer));
+  AR.chars.forEach((c: any) => mesaCriarToken(c, layer));
   // Montar canvas animado após inserção no DOM
   requestAnimationFrame(() => { window._animScheduleTokenMount?.(true); });
   // Restaurar linha de medição de distância caso exista (sobrevive a re-renders)
@@ -2662,7 +2662,7 @@ function mesaRenderTokens() {
   }
 }
 
-function mesaCriarToken(c, layer) {
+function mesaCriarToken(c: any, layer: any) {
   const ca = c.custom_attrs || {};
   const pos = ca.pos || { x: 50, y: 50 };
   const cor = ca.cor || '#e8604c';
@@ -2672,7 +2672,7 @@ function mesaCriarToken(c, layer) {
   const tipoIcon = ca.tipo === 'criatura' ? '👹' : ca.tipo === 'objeto' ? '🗡' : '';
   const iniciais = c.nome.slice(0,2).toUpperCase();
   const incapacitado = hp <= 0;
-  const buffsCount = (ca.buffs||[]).filter(b => _buffAtivo(b)).length;
+  const buffsCount = (ca.buffs||[]).filter((b: any) => _buffAtivo(b)).length;
 
   // Escala de profundidade iso: y=0 (fundo) → 0.72×; y=100 (frente) → 1.22×
   const arDepthOn = !!(AR.estado?.transform3d?.depth ?? true); // arena sempre depth=true por default
@@ -2717,7 +2717,7 @@ function mesaCriarToken(c, layer) {
     if (composedImgAr && !isAnimadoAr) {
       inner.innerHTML = `<img src="${composedImgAr}" style="width:${tw}px;height:${th}px;object-fit:contain;display:block" crossorigin="anonymous">`;
     } else {
-      const _arEquipHtml = (camada) => _arEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:30,esc=(eq.escala!=null?eq.escala:100)/100,eW=Math.round(0.35*tw*esc),eH=Math.round(0.45*th*esc),l=Math.round((xP/100)*tw-eW/2),t=Math.round((yP/100)*th-eH/2);const rot=eq.rotacao!=null?eq.rotacao:0;const rotH=eq.rotacaoH||0;const _arWarp=eq.warpCorners?_aeqComputeMatrix3d(eW,eH,eq.warpCorners.map(c=>({x:c.x*eW,y:c.y*eH}))):null;const _arTfParts=_arWarp&&_arWarp!=='none'?[_arWarp]:[rotH?`perspective(400px) rotateY(${rotH}deg)`:'',rot?`rotate(${rot}deg)`:'',eq.skewX?`skewX(${eq.skewX}deg)`:'',eq.skewY?`skewY(${eq.skewY}deg)`:''].filter(Boolean);const rotS=_arTfParts.length?`transform:${_arTfParts.join(' ')};transform-origin:${(_arWarp&&_arWarp!=='none')?'0 0':'center center'};`:'';const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rotS}">${inn}</div>`;}).join('');
+      const _arEquipHtml = (camada: any) => _arEquips.filter((eq: any)=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map((eq: any)=>{const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:30,esc=(eq.escala!=null?eq.escala:100)/100,eW=Math.round(0.35*tw*esc),eH=Math.round(0.45*th*esc),l=Math.round((xP/100)*tw-eW/2),t=Math.round((yP/100)*th-eH/2);const rot=eq.rotacao!=null?eq.rotacao:0;const rotH=eq.rotacaoH||0;const _arWarp=eq.warpCorners?_aeqComputeMatrix3d(eW,eH,eq.warpCorners.map((c: any)=>({x:c.x*eW,y:c.y*eH}))):null;const _arTfParts=_arWarp&&_arWarp!=='none'?[_arWarp]:[rotH?`perspective(400px) rotateY(${rotH}deg)`:'',rot?`rotate(${rot}deg)`:'',eq.skewX?`skewX(${eq.skewX}deg)`:'',eq.skewY?`skewY(${eq.skewY}deg)`:''].filter(Boolean);const rotS=_arTfParts.length?`transform:${_arTfParts.join(' ')};transform-origin:${(_arWarp&&_arWarp!=='none')?'0 0':'center center'};`:'';const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rotS}">${inn}</div>`;}).join('');
       inner.innerHTML = _arEquipHtml('atras') + apmodSvg + _arEquipHtml('frente');
     }
     token.appendChild(inner);
@@ -2775,15 +2775,15 @@ function mesaCriarToken(c, layer) {
 }
 
 // ── DRAG ────────────────────────────────────────────────────
-function mesaIniciarDrag(nome, el, e) {
+function mesaIniciarDrag(nome: any, el: any, e: any) {
   // Verificar debuff sem_movimento (apenas para não-mestre)
   const isMestreArena = AR.myRole === 'mestre';
   if (!isMestreArena) {
-    const c = AR.chars.find(ch => ch.nome === nome);
+    const c = AR.chars.find((ch: any) => ch.nome === nome);
     const buffs = c?.buffs || [];
-    const imobilizado = buffs.some(b => b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0);
+    const imobilizado = buffs.some((b: any) => b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0);
     if (imobilizado) {
-      const buff = buffs.find(b => b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0);
+      const buff = buffs.find((b: any) => b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0);
       arToast(`🚫 ${nome} está imobilizado — "${buff?.nome || 'Debuff'}"`, 'erro');
       return;
     }
@@ -2797,7 +2797,7 @@ function mesaIniciarDrag(nome, el, e) {
   el.addEventListener('pointerup', mesaFimDrag);
 }
 
-function mesaOnDrag(e) {
+function mesaOnDrag(e: any) {
   if (!MESA.dragging) return;
   (MESA as any).tokenMoveu = true;
   const wrap = document.getElementById('ar-mesa-wrap');
@@ -2811,7 +2811,7 @@ function mesaOnDrag(e) {
   const layoutH = bg.offsetHeight || wrapRect.height;
   const x = Math.max(2, Math.min(98, localX / layoutW * 100));
   const y = Math.max(2, Math.min(98, localY / layoutH * 100));
-  const c = AR.chars.find(ch => ch.nome === MESA.dragging);
+  const c = AR.chars.find((ch: any) => ch.nome === MESA.dragging);
   if (!c) return;
   c.custom_attrs.pos = { x, y };
   // Mover token visualmente sem re-render completo
@@ -2843,12 +2843,12 @@ function mesaOnDrag(e) {
   }, 400);
 }
 
-async function mesaFimDrag(e) {
+async function mesaFimDrag(e: any) {
   if (!MESA.dragging) return;
   const nome = MESA.dragging;
   MESA.dragging = null;
   MESA.tokenMoveu = false;
-  const c = AR.chars.find(ch => ch.nome === nome);
+  const c = AR.chars.find((ch: any) => ch.nome === nome);
   // Forçar save imediato ao soltar (cancela debounce pendente)
   clearTimeout(MESA.dragTimer);
   if (c) {
@@ -2884,7 +2884,7 @@ function toggleMesaTool() {
   mesaRenderTokens();   // atualiza cursors
 }
 
-function mesaClicarToken(nome) {
+function mesaClicarToken(nome: any) {
   if (!MESA.medindo[0]) {
     MESA.medindo[0] = nome;
     arToast(`${nome} selecionado — agora toque no segundo`, '');
@@ -2903,8 +2903,8 @@ function mesaClicarToken(nome) {
 
 function mesaCalcularDistancia() {
   const [nA, nB] = MESA.medindo;
-  const cA = AR.chars.find(c => c.nome === nA);
-  const cB = AR.chars.find(c => c.nome === nB);
+  const cA = AR.chars.find((c: any) => c.nome === nA);
+  const cB = AR.chars.find((c: any) => c.nome === nB);
   if (!cA || !cB) return;
   const pA = cA.custom_attrs.pos || {x:50,y:50};
   const pB = cB.custom_attrs.pos || {x:50,y:50};
@@ -2925,7 +2925,7 @@ function mesaCalcularDistancia() {
   setTimeout(() => mesaRenderTokens(), 100);
 }
 
-function mesaRenderDistLine(pA?, pB?, label?) {
+function mesaRenderDistLine(pA?: any, pB?: any, label?: any) {
   const svg = document.getElementById('ar-mesa-dist-svg');
   if (!svg) return;
   if (!pA) { svg.innerHTML = ''; return; }
@@ -2955,9 +2955,9 @@ function limparMedicaoArena() {
 function mesaRenderEfeitosRow() {
   const el = document.getElementById('ar-mesa-efeitos-row');
   if (!el) return;
-  const efeitosMap = {};
-  AR.chars.forEach(c => {
-    (c.buffs||[]).filter(b => _buffAtivo(b)).forEach(b => {
+  const efeitosMap: Record<string, any> = {};
+  AR.chars.forEach((c: any) => {
+    (c.buffs||[]).filter((b: any) => _buffAtivo(b)).forEach((b: any) => {
       if (!efeitosMap[b.id]) efeitosMap[b.id] = b;
     });
   });
@@ -2974,7 +2974,7 @@ function mesaRenderStatus() {
   const el = document.getElementById('ar-mesa-status');
   if (!el) return;
   if (!AR.chars.length) { el.innerHTML = ''; return; }
-  el.innerHTML = AR.chars.map(c => {
+  el.innerHTML = AR.chars.map((c: any) => {
     const ca = c.custom_attrs || {};
     const hpMax = ca.hp_max ?? 100;
     const hp = c.hp_atual ?? hpMax;
@@ -2983,7 +2983,7 @@ function mesaRenderStatus() {
     const hpColor = hpPct >= 60 ? '#5ee09a' : hpPct >= 25 ? '#f0cc6a' : '#e74c3c';
     const hpCls = hpPct >= 60 ? 'ar-hp-high' : hpPct >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
     const tipoIcon = ca.tipo==='criatura'?'👹':ca.tipo==='objeto'?'🗡':'⚔';
-    const buffsCount = (ca.buffs||[]).filter(b => _buffAtivo(b)).length;
+    const buffsCount = (ca.buffs||[]).filter((b: any) => _buffAtivo(b)).length;
     const isMestre = RPG_DATA?.myRole === 'mestre';
     const ehMeuChar = SESSION?.user && c.nome === (RPG_DATA?.linked || '');
     const podeAtacarMesa = ehMeuChar || isMestre;
@@ -3032,12 +3032,12 @@ function salvarEscala() {
 // ── MAPA DA ARENA: configurar imagem de fundo ─────────────────
 // ═══ EDITOR 3D DA ARENA ════════════════════════════════════════════════════
 function arMp3dAtualizar() {
-  const _get = id => parseFloat(document.getElementById(id)?.value ?? 0);
+  const _get = (id: any) => parseFloat(document.getElementById(id)?.value ?? 0);
   const rx = _get('ar-mp3d-rx'), ry = _get('ar-mp3d-ry'), rz = _get('ar-mp3d-rz');
   const persp = _get('ar-mp3d-persp'), ox = _get('ar-mp3d-ox'), oy = _get('ar-mp3d-oy'), sc = _get('ar-mp3d-sc');
 
   // Labels
-  const _lbl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const _lbl = (id: any, v: any) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   _lbl('ar-mp3d-rx-val',    rx    + '°');
   _lbl('ar-mp3d-ry-val',    ry    + '°');
   _lbl('ar-mp3d-rz-val',    rz    + '°');
@@ -3081,15 +3081,15 @@ function arMp3dAtualizar() {
   }
 }
 
-function arPreset3D(preset) {
-  const sets = {
+function arPreset3D(preset: any) {
+  const sets: Record<string, any> = {
     flat:     { rx:0,  ry:0, rz:0,  persp:4000, ox:0, oy:0, sc:100 },
     dimetric: { rx:60, ry:0, rz:45, persp:4000, ox:0, oy:0, sc:110 },
     iso:      { rx:54, ry:0, rz:45, persp:4000, ox:0, oy:0, sc:110 },
     reset:    { rx:0,  ry:0, rz:0,  persp:4000, ox:0, oy:0, sc:100 },
   };
   const s = sets[preset]; if (!s) return;
-  const _set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const _set = (id: any, v: any) => { const el = document.getElementById(id); if (el) el.value = v; };
   _set('ar-mp3d-rx', s.rx);  _set('ar-mp3d-ry', s.ry);   _set('ar-mp3d-rz', s.rz);
   _set('ar-mp3d-persp', s.persp); _set('ar-mp3d-ox', s.ox); _set('ar-mp3d-oy', s.oy); _set('ar-mp3d-sc', s.sc);
   arMp3dAtualizar();
@@ -3116,7 +3116,7 @@ function abrirModalArMapa() {
   }
   // Carregar valores 3D salvos
   const t3d = (AR.estado as any).transform3d || {};
-  const _sv = (id, v, def) => { const el = document.getElementById(id); if (el) el.value = v ?? def; };
+  const _sv = (id: any, v: any, def: any) => { const el = document.getElementById(id); if (el) el.value = v ?? def; };
   _sv('ar-mp3d-rx',    t3d.rx    ?? 0,    0);
   _sv('ar-mp3d-ry',    t3d.ry    ?? 0,    0);
   _sv('ar-mp3d-rz',    t3d.rz    ?? 0,    0);
@@ -3136,7 +3136,7 @@ async function salvarArMapa() {
   const img = (document.getElementById('ar-mapa-img')?.value || '').trim();
   (AR.estado as any).cenario_img = img;
   // Salvar configuração 3D no estado da arena
-  const _gv = id => { const el = document.getElementById(id); return el ? +el.value : null; };
+  const _gv = (id: any) => { const el = document.getElementById(id); return el ? +el.value : null; };
   const arT3d = {
     rx:    _gv('ar-mp3d-rx')    ?? 0,
     ry:    _gv('ar-mp3d-ry')    ?? 0,
@@ -3165,7 +3165,7 @@ function abrirModalArImportarMapa() {
 async function executarArImportarMapa() {
   const raw = (document.getElementById('ar-importar-mapa-json')?.value || '').trim();
   const st  = document.getElementById('ar-importar-mapa-status');
-  const showErr = (msg) => {
+  const showErr = (msg: any) => {
     if (!st) return;
     st.style.display = 'block';
     st.style.background = 'rgba(192,57,43,0.1)';
@@ -3173,7 +3173,7 @@ async function executarArImportarMapa() {
     st.style.border = '1px solid rgba(192,57,43,0.2)';
     st.textContent = msg;
   };
-  const showOk = (msg) => {
+  const showOk = (msg: any) => {
     if (!st) return;
     st.style.display = 'block';
     st.style.background = 'rgba(46,204,113,0.1)';
@@ -3235,7 +3235,7 @@ async function executarArImportarMapa() {
 }
 
 // ── RESIZE: redesenhar grade ao redimensionar ────────────────
-let mesaResizeTimer;
+let mesaResizeTimer: any;
 window.addEventListener('resize', () => {
   clearTimeout(mesaResizeTimer);
   mesaResizeTimer = setTimeout(() => {
@@ -3245,7 +3245,7 @@ window.addEventListener('resize', () => {
 });
 
 // ── MODAL: IMAGEM DE PERSONAGEM ──────────────────────────────
-function abrirModalImg(nome) {
+function abrirModalImg(nome: any) {
   const c = RPG_DATA.characters.find(x => x.nome === nome);
   if (!c) return;
   const ca = c.custom_attrs || {};
@@ -3283,7 +3283,7 @@ function abrirModalImg(nome) {
   m.style.display = 'flex';
 }
 
-function modalImgPreview(url) {
+function modalImgPreview(url: any) {
   const normalized = normalizeImgUrl(url);
   const prev = document.getElementById('modal-img-preview');
   const ph = document.getElementById('modal-img-placeholder');
@@ -3297,7 +3297,7 @@ function modalImgPreview(url) {
   }
 }
 
-function attrImgPreview(url, cor, targetId) {
+function attrImgPreview(url: any, cor: any, targetId: any) {
   const normalized = normalizeImgUrl(url);
   const prev = document.getElementById(targetId || 'f-img-preview');
   if (!prev) return;
@@ -3450,19 +3450,19 @@ x e y: SEMPRE número entre 0 e 100 (sem %).`;
   }).catch(() => mostrarToast('Não foi possível copiar', 'erro'));
 }
 
-function _parseBatalhaCSV(csv) {
-  const lines = csv.trim().split(/\r?\n/).filter(l => l.trim());
+function _parseBatalhaCSV(csv: any) {
+  const lines = csv.trim().split(/\r?\n/).filter((l: any) => l.trim());
   if (lines.length < 2) throw new Error('CSV inválido: mínimo 2 linhas (cabeçalho + dados)');
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-  const rows = lines.slice(1).map(l => {
-    const cols = l.split(',').map(c => c.trim());
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = cols[i] || ''; });
+  const headers = lines[0].split(',').map((h: any) => h.trim().toLowerCase());
+  const rows = lines.slice(1).map((l: any) => {
+    const cols = l.split(',').map((c: any) => c.trim());
+    const obj: Record<string, any> = {};
+    headers.forEach((h: any, i: any) => { obj[h] = cols[i] || ''; });
     return obj;
   });
-  const personagens = [], inimigos = [], npcs_especiais = [];
-  let submapa = null;
-  rows.forEach(r => {
+  const personagens: any = [], inimigos: any = [], npcs_especiais: any = [];
+  let submapa: any = null;
+  rows.forEach((r: any) => {
     if (!submapa && r.submapa) submapa = r.submapa;
     const ent = {
       nome:   r.nome || r.name || '',
@@ -3484,7 +3484,7 @@ async function importarBatalhaIA() {
   const raw = document.getElementById('batalha-ia-input').value.trim();
   const statusEl = document.getElementById('batalha-ia-status');
 
-  const mostrarErro = msg => {
+  const mostrarErro = (msg: any) => {
     statusEl.style.display = 'block';
     statusEl.style.background = 'rgba(192,57,43,0.1)';
     statusEl.style.color = '#e74c3c';
@@ -3561,7 +3561,7 @@ async function importarBatalhaIA() {
       subMapId = mapId;
       const mapaObj = {
         map_id: mapId, nome: nomeSubmapa, tipo: 'local',
-        parent_map_id: mapaAtualId, locais: [],
+        parent_map_id: mapaAtualId, locais: [] as any[],
         ...(render_data ? { render_data } : {}),
       };
       RPG_DATA.mapas.push({ id: row?.id, rpg_id: rpgId, mapa: mapaObj });

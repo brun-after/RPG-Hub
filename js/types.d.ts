@@ -244,6 +244,14 @@ declare global {
   // são atribuídos via window.*, criados por patches dinâmicos ou referenciados
   // apenas sob guarda de typeof. Refletem o comportamento real do app; candidatos
   // a limpeza/tipagem nas Entregas 3-4.
+  // Acessados via globalThis.* (telemetria/patches internos)
+  var __rtModeChangeHandler: any;
+  var __rtSendBroadcast: any;
+  var __rtWsStats: any;
+  var _avtNpcApplyDamage: any;
+  var _avtNpcHostLoop: any;
+  var _avtNpcOnRemoteUpdate: any;
+
   // [migração-ts:auto-globals:início]
   var AVT_WALK_PRESETS: any;
   var EFFECT_REGISTRY: any;

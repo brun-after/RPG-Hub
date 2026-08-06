@@ -4,7 +4,7 @@
 
 // ─── PAINEL DE REAÇÃO ────────────────────────────────────────────────────────
 
-function mostrarPainelReacao(reacaoId, habilidade, gatilho, dono, timeout_ms, contexto) {
+function mostrarPainelReacao(reacaoId: any, habilidade: any, gatilho: any, dono: any, timeout_ms: any, contexto: any) {
   const panel = document.getElementById('reacao-notif-panel');
   if (!panel) return;
 
@@ -35,7 +35,7 @@ function mostrarPainelReacao(reacaoId, habilidade, gatilho, dono, timeout_ms, co
   _iniciarTimer('reacao-timer', timeout_ms, panel, fecharPainelReacao);
 }
 
-function reacaoAceitar(reacaoId) {
+function reacaoAceitar(reacaoId: any) {
   BATTLE_SYSTEM.confirmarReacao(reacaoId, true);
   if (typeof combateBroadcast === 'function') {
     combateBroadcast('reacao_confirmada', { reacaoId, aceita: true });
@@ -43,7 +43,7 @@ function reacaoAceitar(reacaoId) {
   fecharPainelReacao();
 }
 
-function reacaoRecusar(reacaoId) {
+function reacaoRecusar(reacaoId: any) {
   BATTLE_SYSTEM.confirmarReacao(reacaoId, false);
   if (typeof combateBroadcast === 'function') {
     combateBroadcast('reacao_confirmada', { reacaoId, aceita: false });
@@ -61,7 +61,7 @@ function fecharPainelReacao() {
 
 // ─── PAINEL DE DEFESA ATIVA ───────────────────────────────────────────────────
 
-function mostrarPainelDefesaAtiva(defesaId, alvo, resultadoAtacante, tipoAtaque, penalidade, slotsRestantes, timeout_ms) {
+function mostrarPainelDefesaAtiva(defesaId: any, alvo: any, resultadoAtacante: any, tipoAtaque: any, penalidade: any, slotsRestantes: any, timeout_ms: any) {
   const panel = document.getElementById('defesa-ativa-panel');
   if (!panel) return;
 
@@ -99,7 +99,7 @@ function mostrarPainelDefesaAtiva(defesaId, alvo, resultadoAtacante, tipoAtaque,
   _iniciarTimer('defesa-timer', timeout_ms, panel, fecharPainelDefesaAtiva);
 }
 
-function defesaRolar(tipoDefesa) {
+function defesaRolar(tipoDefesa: any) {
   const panel = document.getElementById('defesa-ativa-panel');
   if (!panel) return;
 
@@ -185,7 +185,7 @@ function fecharModalConfigBatalha() {
 async function salvarConfigBatalha() {
   const sistema   = _getVal('bcfg-sistema') || 'custom';
   const defaults  = BATTLE_CONFIG_DEFAULTS[sistema] || BATTLE_CONFIG_DEFAULTS.custom;
-  const numOuUnlim = id => {
+  const numOuUnlim = (id: any) => {
     const v = _getVal(id);
     return v === '' ? 'unlimited' : (parseInt(v) || 1);
   };
@@ -230,29 +230,29 @@ function bcfgSistemaChange() {
 
 // ─── HELPERS INTERNOS ─────────────────────────────────────────────────────────
 
-function _escHtml(str) {
+function _escHtml(str: any) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function _setVal(id, val) {
+function _setVal(id: any, val: any) {
   const el = document.getElementById(id);
   if (el) el.value = (val === null || val === undefined) ? '' : val;
 }
 
-function _setChk(id, val) {
+function _setChk(id: any, val: any) {
   const el = document.getElementById(id);
   if (el) el.checked = !!val;
 }
 
-function _getVal(id) {
+function _getVal(id: any) {
   return document.getElementById(id)?.value ?? '';
 }
 
-function _getChk(id) {
+function _getChk(id: any) {
   return document.getElementById(id)?.checked ?? false;
 }
 
-function _iniciarTimer(timerId, timeout_ms, panel, fecharFn) {
+function _iniciarTimer(timerId: any, timeout_ms: any, panel: any, fecharFn: any) {
   let ms = timeout_ms;
   const timerEl = document.getElementById(timerId);
   if (timerEl) timerEl.textContent = Math.ceil(ms / 1000) + 's';
@@ -266,7 +266,7 @@ function _iniciarTimer(timerId, timeout_ms, panel, fecharFn) {
 
 // ─── HANDLER REALTIME: mostrar indicador de reação executada ─────────────────
 
-window.batalhaReceberReacaoExecutada = function(payload) {
+window.batalhaReceberReacaoExecutada = function(payload: any) {
   if (typeof mostrarToast === 'function') {
     mostrarToast(`⚡ ${payload.personagem}: ${payload.habilidade}`, 'ok');
   }

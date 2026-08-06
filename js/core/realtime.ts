@@ -20,12 +20,12 @@
 //  10. Logging [RT] para diagnóstico
 
 // ── REALTIME ──────────────────────────────────────────────────
-function iniciarRealtime(rpgId){
+function iniciarRealtime(rpgId: any){
  fecharRealtime();
 
  // Estado por sessão de iniciarRealtime (cada chamada começa do zero)
  let _reconectando=false, _tentativas=0, _timerReconexao=null;
- let _heartbeatTimer=null;
+ let _heartbeatTimer: any=null;
  let _ref=0;
  const _novoRef=()=>String(++_ref);
 
@@ -61,7 +61,7 @@ function iniciarRealtime(rpgId){
    }
  }
 
- const _modeChangeHandler = (e) => {
+ const _modeChangeHandler = (e: any) => {
    try {
      const { mode } = e.detail || {};
      if (mode === 'p2p' || mode === 'mixed') _pausarVolateisP2P();
@@ -78,7 +78,7 @@ function iniciarRealtime(rpgId){
 
  // Outbox: mensagens já serializadas a enviar quando o socket abrir.
  // {kind:'frame', frame:string} ou {kind:'broadcast', tipo, payload}
- const _outbox = [];
+ const _outbox: any = [];
  const _OUTBOX_MAX = 100;
 
  // Throttle de token_move (por entidade) — coalesce envios contíguos.
@@ -94,10 +94,10 @@ function iniciarRealtime(rpgId){
  // Telemetria WS para o overlay AVT_PERF (contadores acumulados)
  if (!globalThis.__rtWsStats) globalThis.__rtWsStats = { in: 0, out: 0 };
 
- function _log(...args){ try{ console.log('[RT]', ...args); }catch(_){} }
- function _warn(...args){ try{ console.warn('[RT]', ...args); }catch(_){} }
+ function _log(...args: any[]){ try{ console.log('[RT]', ...args); }catch(_){} }
+ function _warn(...args: any[]){ try{ console.warn('[RT]', ...args); }catch(_){} }
 
- function _setStatus(state){
+ function _setStatus(state: any){
    // state: 'connected' | 'connecting' | 'disconnected'
    const dot=document.getElementById('realtime-dot');
    if(dot){
@@ -112,7 +112,7 @@ function iniciarRealtime(rpgId){
    }
  }
 
- function _enviarFrame(frameStr){
+ function _enviarFrame(frameStr: any){
    const ws = realtimeWS;
    if(ws && ws.readyState===WebSocket.OPEN){
      try { ws.send(frameStr); globalThis.__rtWsStats && globalThis.__rtWsStats.out++; return true; } catch(e){ _warn('send falhou:', e); }
@@ -142,7 +142,7 @@ function iniciarRealtime(rpgId){
    }
  }
 
- function _doJoin(topic){
+ function _doJoin(topic: any){
    _topicosAtivos.add(topic);
    const ref = _novoRef();
    _joinsPendentes.set(ref, {topic, attempt: 0});
@@ -154,7 +154,7 @@ function iniciarRealtime(rpgId){
    _enviarFrame(frame);
  }
 
- function _agendarRejoin(topic, attempt){
+ function _agendarRejoin(topic: any, attempt: any){
    const delay = Math.min(300 * Math.pow(2, attempt), 5000);
    setTimeout(()=>{
      // só re-join se ainda não confirmado e ainda queremos esse tópico
@@ -196,7 +196,7 @@ function iniciarRealtime(rpgId){
    _heartbeatPendente = 0;
  }
 
- function _sendBroadcastNow(tipo, payload){
+ function _sendBroadcastNow(tipo: any, payload: any){
    if(!realtimeWS || realtimeWS.readyState!==WebSocket.OPEN){
      if(_outbox.length>=_OUTBOX_MAX){
        const dropped = _outbox.shift();
@@ -217,7 +217,7 @@ function iniciarRealtime(rpgId){
  // Expor a função de envio para `realtimeBroadcast` (global) chamar via closure.
  // Guardamos no globalThis para que `realtimeBroadcast` (definido fora) use a
  // versão da sessão atual de iniciarRealtime. Em fecharRealtime, limpamos.
- globalThis.__rtSendBroadcast = function(tipo, payload){
+ globalThis.__rtSendBroadcast = function(tipo: any, payload: any){
    // Throttle dedicado para movimento contínuo de token
    if(tipo==='avt_token_move' && payload && payload.nome){
      const key = payload.nome;
@@ -300,22 +300,22 @@ function iniciarRealtime(rpgId){
    // Sem isso, o host persiste HP/posição/XP no DB, o postgres_change chega nos outros
    // clientes, mas eles só atualizam RPG_DATA — AVT_STATE.chars/entidades ficam stale
    // e cada jogador vê um jogo diferente.
-   function _syncAvtCharFromRecord(rec, ev, oldRec){
+   function _syncAvtCharFromRecord(rec: any, ev: any, oldRec: any){
      try{
        if(typeof AVT_STATE === 'undefined' || !AVT_STATE || !AVT_STATE.rpgId) return;
        if(rec && rec.rpg_id && rec.rpg_id !== AVT_STATE.rpgId) return;
        if(ev === 'DELETE'){
          const delId = (oldRec && oldRec.id) || (rec && rec.id);
-         if(Array.isArray(AVT_STATE.chars))     AVT_STATE.chars     = AVT_STATE.chars.filter(c=>c.id!==delId);
-         if(Array.isArray(AVT_STATE.entidades)) AVT_STATE.entidades = AVT_STATE.entidades.filter(e=>e.dbId!==delId);
+         if(Array.isArray(AVT_STATE.chars))     AVT_STATE.chars     = AVT_STATE.chars.filter((c: any)=>c.id!==delId);
+         if(Array.isArray(AVT_STATE.entidades)) AVT_STATE.entidades = AVT_STATE.entidades.filter((e: any)=>e.dbId!==delId);
          return;
        }
        if(!rec || !rec.id) return;
        if(!Array.isArray(AVT_STATE.chars)) AVT_STATE.chars = [];
-       const ci = AVT_STATE.chars.findIndex(c=>c.id===rec.id);
+       const ci = AVT_STATE.chars.findIndex((c: any)=>c.id===rec.id);
        if(ci>=0) AVT_STATE.chars[ci] = rec; else AVT_STATE.chars.push(rec);
        if(Array.isArray(AVT_STATE.entidades)){
-         const ent = AVT_STATE.entidades.find(e=>e.dbId===rec.id || e.nome===rec.nome);
+         const ent = AVT_STATE.entidades.find((e: any)=>e.dbId===rec.id || e.nome===rec.nome);
          if(ent){
            const ca = (rec.custom_attrs && typeof rec.custom_attrs==='object') ? rec.custom_attrs : {};
            if(typeof rec.hp_atual === 'number') ent.hp = rec.hp_atual;
@@ -391,7 +391,7 @@ function iniciarRealtime(rpgId){
          // consulta tardia porque rtnet.ts carrega depois deste módulo.
          const _hName = window.AVT_EVENTS?.[_avtEv]?.handler;
          if(_hName){
-           const _fn = (typeof window !== 'undefined' ? window[_hName] : undefined);
+           const _fn = (typeof window !== 'undefined' ? (window as any)[_hName] : undefined);
            if(typeof _fn === 'function'){
              try{ (_fn as any)(_avtPl); }catch(err){ _warn('handler', _hName, 'falhou:', err); }
            } else {
@@ -564,7 +564,7 @@ function iniciarRealtime(rpgId){
 
        // ── MAPAS ──
        if(topic.includes('mapas')){
-         const parseMapa = (r) => ({
+         const parseMapa = (r: any) => ({
            id: r.id, rpg_id: r.rpg_id,
            mapa: {
              map_id: r.map_id, nome: r.nome, img_url: r.img_url||'',
@@ -673,7 +673,7 @@ function fecharRealtime(){
 // ── Enviar evento broadcast para todos os jogadores ──────────────────────
 // API pública preservada. Usa o sender da sessão ativa (com outbox + throttle).
 // Se não houver sessão ativa, faz fallback ao envio direto antigo.
-function realtimeBroadcast(tipo, payload) {
+function realtimeBroadcast(tipo: any, payload: any) {
   const rpgId =
        (typeof CURRENT_RPG !== 'undefined' && CURRENT_RPG)
     || (typeof AVT_STATE  !== 'undefined' && AVT_STATE  && AVT_STATE.rpgId)
@@ -714,7 +714,7 @@ window.__avtFlushPendingBroadcasts = function(){
     const kept = [];
     for(const item of q){
       const fnName = window.AVT_EVENTS?.[item.ev]?.handler;
-      const fn = fnName ? window[fnName] : null;
+      const fn = fnName ? (window as any)[fnName] : null;
       if(typeof fn === 'function'){
         try{ (fn as any)(item.pl); }catch(err){ console.warn('[RT] flush handler', fnName, 'falhou:', err); }
       } else {
@@ -732,7 +732,7 @@ window.__avtFlushPendingBroadcasts = function(){
   window._RT_HP_THROTTLE_INSTALLED = true;
   const _origRB = window.realtimeBroadcast;
   if (typeof _origRB !== 'function') return;
-  let _lastHpTs = 0; let _pendingHp = null; let _hpTimer = null;
+  let _lastHpTs = 0; let _pendingHp: any = null; let _hpTimer: any = null;
   const _flushHp = () => {
     if (_hpTimer) { clearTimeout(_hpTimer); _hpTimer = null; }
     if (_pendingHp == null) return;

@@ -14,9 +14,9 @@ const CHAT_LORE_SEC  = 'chat_cache';
 
 // Serializa mensagens para string compacta, cortando as mais antigas
 // até caber em CHAT_CHAR_CAP caracteres
-function chatSerializar(msgs) {
+function chatSerializar(msgs: any) {
   const agora = Date.now();
-  let recentes = msgs.filter(m => agora - (m.ts || 0) < CHAT_TTL);
+  let recentes = msgs.filter((m: any) => agora - (m.ts || 0) < CHAT_TTL);
   // Descarta mais antigas até caber no cap
   while (recentes.length > 0) {
     const s = JSON.stringify(recentes);
@@ -26,15 +26,15 @@ function chatSerializar(msgs) {
   return JSON.stringify(recentes);
 }
 
-function chatSalvarLocal(rpgId, msgs) {
+function chatSalvarLocal(rpgId: any, msgs: any) {
   try { localStorage.setItem('chat_hist_' + rpgId, chatSerializar(msgs)); } catch(e) {}
 }
-function chatLerLocal(rpgId) {
+function chatLerLocal(rpgId: any) {
   try {
     const raw = localStorage.getItem('chat_hist_' + rpgId);
     if (!raw) return [];
     const agora = Date.now();
-    return JSON.parse(raw).filter(m => agora - (m.ts || 0) < CHAT_TTL);
+    return JSON.parse(raw).filter((m: any) => agora - (m.ts || 0) < CHAT_TTL);
   } catch(e) { return []; }
 }
 
@@ -66,17 +66,17 @@ function chatAgendarSalvoBanco() {
   }, 30000); // 30 segundos
 }
 
-async function chatCarregarDoBanco(rpgId) {
+async function chatCarregarDoBanco(rpgId: any) {
   try {
     const rows = await sb(`lore?rpg_id=eq.${encodeURIComponent(rpgId)}&secao=eq.${CHAT_LORE_SEC}&limit=1`);
     if (!rows?.length) return [];
     CHAT._loreId = rows[0].id;
     const agora = Date.now();
-    return JSON.parse(rows[0].conteudo || '[]').filter(m => agora - (m.ts || 0) < CHAT_TTL);
+    return JSON.parse(rows[0].conteudo || '[]').filter((m: any) => agora - (m.ts || 0) < CHAT_TTL);
   } catch(e) { return []; }
 }
 
-async function chatIniciar(rpgId, wsRef) {
+async function chatIniciar(rpgId: any, wsRef: any) {
   if (!wsRef) return;
   CHAT._loreId = null;
   // 1) Carrega localStorage imediatamente (sem latência)
@@ -167,7 +167,7 @@ function chatEnviar() {
     cor   = charVinculado?.custom_attrs?.cor || '#e8a09a';
   } else {
     charVinculado = RPG_DATA?.characters?.find(c => c.nome === RPG_DATA?.linked)
-      || AR.chars?.find(c => c.nome === RPG_DATA?.linked);
+      || AR.chars?.find((c: any) => c.nome === RPG_DATA?.linked);
     cor   = charVinculado?.custom_attrs?.cor || '#7ec8f0';
     autor = charVinculado ? charVinculado.nome : (SESSION?.nickname || USER_ID || 'Jogador');
   }
@@ -190,7 +190,7 @@ function chatEnviar() {
   input.focus();
 }
 
-function chatReceberMensagem(pkg) {
+function chatReceberMensagem(pkg: any) {
   if (!pkg?.autor || !pkg?.texto) return;
   // Evitar duplicatas (mensagem já no histórico local)
   const jaExiste = CHAT.msgs.some(m => m.ts === pkg.ts && m.autor === pkg.autor && m.texto === pkg.texto);
@@ -233,7 +233,7 @@ function chatRenderizar() {
   chatAtualizarOnline();
 }
 
-function chatReceberPresenca(pkg) {
+function chatReceberPresenca(pkg: any) {
   if (!pkg?.nick) return;
   // Atualizar lista de online — remover entrada antiga do mesmo nick e adicionar nova
   CHAT.online = CHAT.online.filter(u => u.nick !== pkg.nick);
@@ -259,7 +259,7 @@ function chatAtualizarOnline() {
   ).join('') + `<span style="font-size:0.58rem;color:#3a5270;margin-left:2px">${ativos.length} online</span>`;
 }
 
-function chatMostrar(rpgId) {
+function chatMostrar(rpgId: any) {
   CHAT.rpgId = rpgId;
   const btn = document.getElementById('hdr-chat-btn');
   if (btn) btn.style.display = 'inline-flex';
@@ -344,7 +344,7 @@ async function chatSalvarLog() {
   } catch(e) { mostrarToast('Erro ao salvar log', 'erro'); }
 }
 
-function chatEscapar(texto) {
+function chatEscapar(texto: any) {
   return texto.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 

@@ -7,9 +7,9 @@ var AVT_PERF = (() => {
   const RING = 240; // ~4s de frames a 60fps
   const _ft = new Float32Array(RING);
   let _idx = 0, _count = 0;
-  let _enabled = null;       // null = ainda não avaliado
-  let _uiTimer = null;
-  let _el = null;
+  let _enabled: any = null;       // null = ainda não avaliado
+  let _uiTimer: any = null;
+  let _el: any = null;
   // Amostras anteriores dos contadores acumulados, para taxa por segundo
   let _prev = { p2pIn: 0, p2pOut: 0, wsIn: 0, wsOut: 0, ts: 0 };
 
@@ -59,7 +59,7 @@ var AVT_PERF = (() => {
 
     // Taxas de rede por segundo (diff dos acumulados)
     const now = performance.now();
-    let p2p = { in: 0, out: 0, rtt: -1, mode: '—', peers: [] };
+    let p2p = { in: 0, out: 0, rtt: -1, mode: '—', peers: [] as any[] };
     try { if (typeof RTNet !== 'undefined' && RTNet.getStats) p2p = RTNet.getStats(); } catch (_) {}
     const ws = (globalThis.__rtWsStats || { in: 0, out: 0 });
     const dt = Math.max(0.001, (now - _prev.ts) / 1000);
@@ -98,7 +98,7 @@ var AVT_PERF = (() => {
   // ── Qualidade adaptativa ────────────────────────────────────────────────
   // Checa a cada 5s; exige FPS médio < 45 em DUAS checagens consecutivas com
   // frames fluindo (evita degradar por um único pico ou por aba em background).
-  let _adaptTimer = null, _adaptStrikes = 0, _adaptLastCount = 0;
+  let _adaptTimer: any = null, _adaptStrikes = 0, _adaptLastCount = 0;
   function _adaptTick() {
     try {
       if (typeof AVT_GRAFICOS === 'undefined' || !AVT_GRAFICOS || AVT_GRAFICOS.adaptativo === false) return;
@@ -123,7 +123,7 @@ var AVT_PERF = (() => {
     // Chamado 1x por frame pelo render loop da aventura, com dt em ms.
     // A gravação roda sempre (custo ~zero) para alimentar a qualidade adaptativa;
     // só o overlay é gated por _enabled.
-    frame(dtMs) {
+    frame(dtMs: any) {
       if (typeof dtMs === 'number' && dtMs > 0 && dtMs < 10000) {
         _ft[_idx] = dtMs;
         _idx = (_idx + 1) % RING;
@@ -133,7 +133,7 @@ var AVT_PERF = (() => {
       if (_enabled === null) { _enabled = _checkEnabled(); if (_enabled) _start(); }
       if (_enabled && !_uiTimer) _start();
     },
-    toggle(force) {
+    toggle(force: any) {
       _enabled = (force !== undefined) ? !!force : !_enabled;
       try {
         if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS) {
@@ -157,14 +157,14 @@ var AVT_PERF = (() => {
 
 // Ping/pong de RTT: o caminho P2P é interceptado dentro do RTNet; estes stubs
 // atendem o caminho de fallback Supabase (dispatcher do realtime.ts).
-function avtReceberPing(payload) {
+function avtReceberPing(payload: any) {
   try { if (typeof RTNet !== 'undefined' && RTNet._onPing) RTNet._onPing(payload); } catch (_) {}
 }
-function avtReceberPong(payload) {
+function avtReceberPong(payload: any) {
   try { if (typeof RTNet !== 'undefined' && RTNet._onPong) RTNet._onPong(payload); } catch (_) {}
 }
 
-function avtPerfToggle(force) { return AVT_PERF.toggle(force); }
+function avtPerfToggle(force: any) { return AVT_PERF.toggle(force); }
 
 /* [migração-esm] accessors globais */
 Object.defineProperty(globalThis, "AVT_PERF", { configurable: true, get: () => AVT_PERF });

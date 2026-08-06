@@ -25,8 +25,8 @@ function arGetPenalidades() {
 }
 
 // Calcula penalidade total por HP% do personagem
-function arCalcularPenalidadeHP(nomePersonagem) {
-  const c = AR.chars.find(x => x.nome === nomePersonagem);
+function arCalcularPenalidadeHP(nomePersonagem: any) {
+  const c = AR.chars.find((x: any) => x.nome === nomePersonagem);
   if (!c) return 0;
   const hpMax = c.hp_max ?? c.custom_attrs?.hp_max ?? 100;
   const hpAtual = c.hp_atual ?? hpMax;
@@ -34,7 +34,7 @@ function arCalcularPenalidadeHP(nomePersonagem) {
   const pens = arGetPenalidades();
   let penTotal = 0;
   // Aplicar penalidades cumulativas (todas as que se aplicam)
-  pens.forEach(p => { if (hpPct < p.hp) penTotal += p.penalidade; });
+  pens.forEach((p: any) => { if (hpPct < p.hp) penTotal += p.penalidade; });
   return penTotal;
 }
 
@@ -58,12 +58,12 @@ window.arCarregarTudo = async function(...args) {
 function abrirModalSolicitarAtaque() {
   const meuChar = arMeuChar();
   if (!meuChar) { arToast('Você não tem personagem na arena', 'erro'); return; }
-  const c = AR.chars.find(x => x.nome === meuChar);
+  const c = AR.chars.find((x: any) => x.nome === meuChar);
   if (c && c.hp_atual <= 0) { arToast('Seu personagem está incapacitado', 'erro'); return; }
   document.getElementById('ar-atk-sol-atacante').textContent = meuChar;
   // Preencher alvos
   const sel = document.getElementById('ar-atk-sol-alvo');
-  sel.innerHTML = AR.chars.filter(x => x.nome !== meuChar).map(x =>
+  sel.innerHTML = AR.chars.filter((x: any) => x.nome !== meuChar).map((x: any) =>
     `<option value="${x.nome}">${x.nome}${x.hp_atual <= 0 ? ' [INCAP]' : ''}</option>`
   ).join('');
   document.getElementById('ar-atk-sol-descricao').value = '';
@@ -88,15 +88,15 @@ async function arEnviarSolicitacaoAtaque() {
   arToast('⚔ Solicitação enviada ao Mestre!', 'sucesso');
 }
 
-function mostrarAtaqueAguardando(id) {
+function mostrarAtaqueAguardando(id: any) {
   // Aguarda update via polling/realtime
   const check = setInterval(async () => {
     if (!AR.session) { clearInterval(check); return; }
-    const reg = await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&select=arena_estado&limit=1`).catch(()=>null);
+    const reg = await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&select=arena_estado&limit=1`).catch((): any => null);
     const raw = reg && reg[0] ? reg[0].arena_estado : null;
     if (!raw) return;
     const estado = typeof raw === 'object' ? raw : JSON.parse(raw || '{}');
-    const atk = (estado.ataques_arena || []).find(a => a.id === id);
+    const atk = (estado.ataques_arena || []).find((a: any) => a.id === id);
     if (!atk) { clearInterval(check); return; }
     if (atk.status === 'aprovado_dc') {
       clearInterval(check);
@@ -114,10 +114,10 @@ function mostrarAtaqueAguardando(id) {
 // Mestre: renderiza ataques pendentes de avaliação
 function arRenderAtaquesArenaMestre() {
   if (AR.myRole !== 'mestre') return;
-  const pendentes = (AR.estado.ataques_arena || []).filter(a => a.status === 'aguardando_mestre');
+  const pendentes = (AR.estado.ataques_arena || []).filter((a: any) => a.status === 'aguardando_mestre');
   const el = document.getElementById('ar-ataques-pendentes');
   if (!el) return;
-  const rolagens = (AR.estado.ataques_arena || []).filter(a => a.status === 'rolagem_enviada');
+  const rolagens = (AR.estado.ataques_arena || []).filter((a: any) => a.status === 'rolagem_enviada');
 
   const temQualquer = pendentes.length > 0 || rolagens.length > 0;
   el.style.display = temQualquer ? 'block' : 'none';
@@ -126,7 +126,7 @@ function arRenderAtaquesArenaMestre() {
   let html = '';
   if (pendentes.length) {
     html += `<div style="font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(240,204,106,0.7);text-transform:uppercase;margin-bottom:8px">⚔ Solicitações de Ataque</div>`;
-    html += pendentes.map(a => `
+    html += pendentes.map((a: any) => `
       <div style="background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:12px;margin-bottom:8px">
         <div style="font-family:'Cinzel',serif;font-size:0.8rem;color:var(--destaque);margin-bottom:4px">${a.atacante} → ${a.alvo}</div>
         <div style="font-size:0.85rem;color:#b8a8a8;margin-bottom:10px;line-height:1.5;white-space:pre-line">${a.descricao}</div>
@@ -141,7 +141,7 @@ function arRenderAtaquesArenaMestre() {
 
   if (rolagens.length) {
     html += `<div style="font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(126,200,240,0.7);text-transform:uppercase;margin:10px 0 8px">🎲 Rolagens Recebidas</div>`;
-    html += rolagens.map(a => {
+    html += rolagens.map((a: any) => {
       const dadoFaces = arGetDadoEfetividade();
       const rolou = a.rolagem ?? '?';
       const dc = a.dc ?? '?';
@@ -172,8 +172,8 @@ function arRenderAtaquesArenaMestre() {
   el.innerHTML = html;
 }
 
-function abrirModalAvaliarAtaque(id) {
-  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+function abrirModalAvaliarAtaque(id: any) {
+  const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
   document.getElementById('ar-atk-av-id').value = id;
   document.getElementById('ar-atk-av-atacante').textContent = atk.atacante;
@@ -187,7 +187,7 @@ async function arMestreAprovarAtaque() {
   const id = document.getElementById('ar-atk-av-id').value;
   const dc = parseInt(document.getElementById('ar-atk-av-dc').value);
   if (!id || isNaN(dc) || dc < 1) { arToast('Informe a DC (mínimo 1)', 'erro'); return; }
-  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
   atk.status = 'aprovado_dc';
   atk.dc = dc;
@@ -203,8 +203,8 @@ async function arMestreRejeitarAtaque() {
   fecharModal('ar-modal-atk-mestre-avaliar');
 }
 
-async function arMestreRejeitarAtaqueId(id) {
-  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+async function arMestreRejeitarAtaqueId(id: any) {
+  const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
   atk.status = 'rejeitado';
   arAddLog(`✕ ${atk.atacante} tentou atacar ${atk.alvo} — negado pelo Mestre`);
@@ -220,7 +220,7 @@ async function arMestreRejeitarAtaqueId(id) {
 // Fechar modal de dano sem aplicar — avança turno mesmo assim
 async function arMestreSemDanoFechar() {
   const id = document.getElementById('ar-atk-dn-id').value;
-  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (atk && atk.status !== 'concluido') {
     atk.status = 'concluido';
     atk.dano_aplicado = 0;
@@ -234,8 +234,8 @@ async function arMestreSemDanoFechar() {
   }
 }
 
-function abrirModalRolarEfetividade(id) {
-  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+function abrirModalRolarEfetividade(id: any) {
+  const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
   const dado = arGetDadoEfetividade();
   const pen = arCalcularPenalidadeHP(atk.atacante);
@@ -256,7 +256,7 @@ function abrirModalRolarEfetividade(id) {
 
 function arRolarEfetividade() {
   const id = document.getElementById('ar-atk-rl-id').value;
-  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
   const dado = arGetDadoEfetividade();
   const rolagem = Math.floor(Math.random() * dado) + 1;
@@ -281,7 +281,7 @@ function arRolarEfetividade() {
 async function arConfirmarRolagemEfetividade() {
   const id = document.getElementById('ar-atk-rl-id').value;
   const rolagemFinal = parseInt(document.getElementById('ar-atk-rl-btn-confirmar').dataset.rolagem);
-  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
   atk.rolagem = rolagemFinal;
   atk.status = 'rolagem_enviada';
@@ -291,11 +291,11 @@ async function arConfirmarRolagemEfetividade() {
   // Polling para resultado
   const check = setInterval(async () => {
     if (!AR.session) { clearInterval(check); return; }
-    const reg = await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&select=arena_estado&limit=1`).catch(()=>null);
+    const reg = await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&select=arena_estado&limit=1`).catch((): any => null);
     const raw = reg && reg[0] ? reg[0].arena_estado : null;
     if (!raw) return;
     const estado = typeof raw === 'object' ? raw : JSON.parse(raw || '{}');
-    const a = (estado.ataques_arena || []).find(x => x.id === id);
+    const a = (estado.ataques_arena || []).find((x: any) => x.id === id);
     if (!a) { clearInterval(check); return; }
     if (a.status === 'concluido') {
       clearInterval(check);
@@ -306,8 +306,8 @@ async function arConfirmarRolagemEfetividade() {
   setTimeout(() => clearInterval(check), 120000);
 }
 
-function abrirModalDefinirDano(id) {
-  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+function abrirModalDefinirDano(id: any) {
+  const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
   document.getElementById('ar-atk-dn-id').value = id;
   document.getElementById('ar-atk-dn-atacante').textContent = atk.atacante;
@@ -321,7 +321,7 @@ function abrirModalDefinirDano(id) {
   document.getElementById('ar-atk-dn-status-badge').innerHTML = `<span style="font-family:'Cinzel',serif;font-size:0.72rem;padding:3px 8px;border-radius:4px;background:${sucesso?'rgba(39,174,96,0.1)':'rgba(192,57,43,0.1)'};color:${sucesso?'#5ee09a':'#e8604c'};border:1px solid ${sucesso?'rgba(39,174,96,0.3)':'rgba(192,57,43,0.3)'}">${sucesso?'Sucesso':'Falha'}</span>`;
   // Alvos possíveis — todos participantes
   const alvosEl = document.getElementById('ar-atk-dn-alvos-check');
-  alvosEl.innerHTML = AR.chars.map(c => {
+  alvosEl.innerHTML = AR.chars.map((c: any) => {
     const isAlvoPrincipal = c.nome === atk.alvo;
     return `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(20,12,12,0.6);border:1px solid rgba(60,30,30,0.5);border-radius:6px;cursor:pointer;${isAlvoPrincipal?'border-color:rgba(232,80,60,0.3)':''}">
       <input type="checkbox" value="${c.nome}" ${isAlvoPrincipal?'checked':''} style="accent-color:#e8604c">
@@ -337,7 +337,7 @@ function abrirModalDefinirDano(id) {
   // Reset animação
   const el_tipo = document.getElementById('ar-atk-dn-anim-tipo');
   if (el_tipo) { el_tipo.value = 'nenhuma'; arAnimDnTipoChange(); }
-  const _arRId = (id) => document.getElementById(id);
+  const _arRId = (id: any) => document.getElementById(id);
   if (_arRId('ar-atk-dn-anim-icone'))   _arRId('ar-atk-dn-anim-icone').value  = '';
   if (_arRId('ar-atk-dn-anim-cor'))     _arRId('ar-atk-dn-anim-cor').value    = '#e74c3c';
   if (_arRId('ar-atk-dn-anim-trilha'))  _arRId('ar-atk-dn-anim-trilha').checked = false;
@@ -349,7 +349,7 @@ function abrirModalDefinirDano(id) {
   abrirModal('ar-modal-atk-mestre-dano');
 }
 
-function arAtkDnModo(modo) {
+function arAtkDnModo(modo: any) {
   const dado = document.getElementById('ar-atk-dn-campos-dado');
   const fixo = document.getElementById('ar-atk-dn-campos-fixo');
   const btnDado = document.getElementById('ar-atk-dn-modo-dado');
@@ -377,7 +377,7 @@ function arAtkDnRolarDado() {
 
 async function arMestreAplicarDano() {
   const id = document.getElementById('ar-atk-dn-id').value;
-  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  const atk = (AR.estado.ataques_arena || []).find((a: any) => a.id === id);
   if (!atk) return;
 
   // Calcular dano
@@ -464,7 +464,7 @@ window.arAcaoAtacar = async function() {
 // ═══════════════════════════════════════════════════════════════
 // CENÁRIOS LISTA — NOVO SISTEMA
 // ═══════════════════════════════════════════════════════════════
-function arPreviewCenarioListaImg(url) {
+function arPreviewCenarioListaImg(url: any) {
   const prev = document.getElementById('ar-cenario-lista-img-preview');
   const img = document.getElementById('ar-cenario-lista-img-el');
   if (!url) { prev.style.display = 'none'; return; }
@@ -472,7 +472,7 @@ function arPreviewCenarioListaImg(url) {
   prev.style.display = 'block';
 }
 
-function abrirModalCriarCenarioLista(idEditar) {
+function abrirModalCriarCenarioLista(idEditar: any) {
   const modal = document.getElementById('ar-modal-cenario-lista');
   document.getElementById('ar-cenario-lista-id').value = idEditar || '';
   // Reset bg tabs
@@ -489,7 +489,7 @@ function abrirModalCriarCenarioLista(idEditar) {
   if (cvPrev) cvPrev.style.display = 'none';
 
   if (idEditar) {
-    const cen = (AR.estado.cenarios_lista || []).find(c => c.id === idEditar);
+    const cen = (AR.estado.cenarios_lista || []).find((c: any) => c.id === idEditar);
     if (!cen) return;
     document.getElementById('ar-cenario-lista-titulo').textContent = 'Editar Cenário';
     document.getElementById('ar-cenario-lista-nome').value = cen.nome || '';
@@ -529,7 +529,7 @@ async function salvarCenarioLista() {
 
   if (idEditar) {
     // Editar — verificar permissões
-    const idx = AR.estado.cenarios_lista.findIndex(c => c.id === idEditar);
+    const idx = AR.estado.cenarios_lista.findIndex((c: any) => c.id === idEditar);
     if (idx < 0) return;
     const cen = AR.estado.cenarios_lista[idx];
     const isCenarioAtivo = AR.estado.cenario_ativo_id === idEditar;
@@ -576,9 +576,9 @@ async function salvarCenarioLista() {
   arToast('Cenário salvo!', 'sucesso');
 }
 
-async function arAtivarCenarioLista(id) {
+async function arAtivarCenarioLista(id: any) {
   if (AR.myRole !== 'mestre') { arToast('Só o Mestre pode ativar cenários', 'erro'); return; }
-  const cen = (AR.estado.cenarios_lista || []).find(c => c.id === id);
+  const cen = (AR.estado.cenarios_lista || []).find((c: any) => c.id === id);
   if (!cen) return;
   AR.estado.cenario_ativo_id = id;
   AR.estado.cenario = cen.descricao || cen.nome;
@@ -603,7 +603,7 @@ function renderCenariosLista() {
   const cenarios = AR.estado.cenarios_lista || [];
   const ativoId = AR.estado.cenario_ativo_id;
   if (!cenarios.length) { el.innerHTML = '<div class="ar-empty">Nenhum cenário criado ainda</div>'; return; }
-  el.innerHTML = cenarios.map(cen => {
+  el.innerHTML = cenarios.map((cen: any) => {
     const isAtivo = cen.id === ativoId;
     const ehMeu = cen.autor === AR.myNickname;
     const podeEditar = isMestre || (ehMeu && !isAtivo);
@@ -627,10 +627,10 @@ function renderCenariosLista() {
   }).join('');
 }
 
-async function arDeletarCenario(id) {
+async function arDeletarCenario(id: any) {
   if (AR.myRole !== 'mestre') return;
   if (!confirm('Remover este cenário?')) return;
-  AR.estado.cenarios_lista = (AR.estado.cenarios_lista || []).filter(c => c.id !== id);
+  AR.estado.cenarios_lista = (AR.estado.cenarios_lista || []).filter((c: any) => c.id !== id);
   await arSalvarEstado();
   renderCenariosLista();
   arToast('Cenário removido', '');
@@ -641,11 +641,11 @@ async function arDeletarCenario(id) {
 // Paralelo ao sistema de campanha, sem interferência
 // ═══════════════════════════════════════════════════════════════
 var _arCenBgTab       = 'url';
-var _arCenUploadDataUrl = null;
-var _arCenSvgDataUrl    = null;
-var _arCenCanvasDataUrl = null;
+var _arCenUploadDataUrl: any = null;
+var _arCenSvgDataUrl: any    = null;
+var _arCenCanvasDataUrl: any = null;
 
-function arCenBgTab(tab) {
+function arCenBgTab(tab: any) {
   _arCenBgTab = tab;
   const tabs = ['url','upload','svg','canvas'];
   tabs.forEach(t => {
@@ -667,14 +667,14 @@ function arCenBgGetFinal() {
   return '';
 }
 
-function arCenBgUrlPreview(url) {
+function arCenBgUrlPreview(url: any) {
   const prev = document.getElementById('ar-cen-img-preview');
   if (!prev) return;
   if (url) { prev.src = url; prev.style.display = 'block'; }
   else { prev.style.display = 'none'; }
 }
 
-async function arCenBgUpload(input) {
+async function arCenBgUpload(input: any) {
   const file = input.files?.[0]; if (!file) return;
   try {
     mostrarToast('Enviando cenário…', 'info');
@@ -699,7 +699,7 @@ function arCenBgClearUpload() {
   if (wrap)    wrap.style.display = 'none';
 }
 
-function arCenBgSvgPreview(svgText) {
+function arCenBgSvgPreview(svgText: any) {
   const warn = document.getElementById('ar-cen-svg-warn');
   const prevWrap = document.getElementById('ar-cen-svg-preview-wrap');
   const prevEl   = document.getElementById('ar-cen-svg-preview');
@@ -788,7 +788,7 @@ window.renderPropostasCenario = function() {
   if (!wrap || !list || AR.myRole !== 'mestre') return;
   const propostas = AR.estado.propostas_cenario || [];
   wrap.style.display = propostas.length ? 'block' : 'none';
-  list.innerHTML = propostas.map(p => {
+  list.innerHTML = propostas.map((p: any) => {
     const isCriacao = p.tipo === 'criacao' || !p.tipo;
     const isEdicao = p.tipo === 'edicao';
     const titulo = isCriacao ? `💡 Novo cenário de <strong>${p.autor||'jogador'}</strong>`
@@ -806,18 +806,18 @@ window.renderPropostasCenario = function() {
   }).join('') || '<div class="ar-empty">Nenhuma proposta pendente</div>';
 };
 
-async function arAprovarPropostaCenarioLista(id) {
-  const p = (AR.estado.propostas_cenario||[]).find(x=>x.id===id);
+async function arAprovarPropostaCenarioLista(id: any) {
+  const p = (AR.estado.propostas_cenario||[]).find((x: any)=>x.id===id);
   if (!p) return;
   if (!AR.estado.cenarios_lista) AR.estado.cenarios_lista = [];
   const isCriacao = p.tipo === 'criacao' || !p.tipo;
   if (isCriacao) {
     AR.estado.cenarios_lista.push({ id: 'cen_'+Date.now(), nome: p.nome||p.texto, descricao: p.descricao||p.texto, img: p.img||'', grid: p.grid, escala_val: p.escala_val, escala_unit: p.escala_unit, autor: p.autor, ts: p.ts });
   } else if (p.tipo === 'edicao') {
-    const idx = AR.estado.cenarios_lista.findIndex(c => c.id === p.cenario_id);
+    const idx = AR.estado.cenarios_lista.findIndex((c: any) => c.id === p.cenario_id);
     if (idx >= 0) AR.estado.cenarios_lista[idx] = { ...AR.estado.cenarios_lista[idx], nome: p.nome, descricao: p.descricao, img: p.img, grid: p.grid, escala_val: p.escala_val, escala_unit: p.escala_unit };
   }
-  AR.estado.propostas_cenario = (AR.estado.propostas_cenario||[]).filter(x=>x.id!==id);
+  AR.estado.propostas_cenario = (AR.estado.propostas_cenario||[]).filter((x: any)=>x.id!==id);
   await arSalvarEstado();
   renderCenariosLista();
   renderPropostasCenario();
@@ -873,7 +873,7 @@ window.scrollToPendingApprovals = function() {
   console.log('[Scroll] Iniciando scroll para aprovações pendentes...');
   
   // Renderizar/criar o painel e obter o elemento diretamente
-  let el = null;
+  let el: any = null;
   if (typeof criativoRenderMestre === 'function') {
     el = criativoRenderMestre();
     console.log('[Scroll] criativoRenderMestre retornou:', el ? 'elemento' : 'null');
@@ -1032,7 +1032,7 @@ window.criativoRenderMestre = function() {
     const descricaoTruncada = (criativo.descricao || 'Ação criativa')
       .substring(0, 80) + ((criativo.descricao || '').length > 80 ? '…' : '');
     
-    const tipoCor = {
+    const tipoCor: Record<string, any> = {
       'ataque': '#e74c3c',
       'suporte': '#5ee09a', 
       'narrativo': '#f0cc6a',
@@ -1163,7 +1163,7 @@ window.criativoRenderMestre = function() {
 // ────────────────────────────────────────────────────────────────
 // Função para aprovar uma ação criativa
 // ────────────────────────────────────────────────────────────────
-window.aprovarCriativo = async function(criativoId) {
+window.aprovarCriativo = async function(criativoId: any) {
   const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
   if (!criativo) {
     if (typeof mostrarToast === 'function') {
@@ -1235,7 +1235,7 @@ window.aprovarCriativo = async function(criativoId) {
 // ────────────────────────────────────────────────────────────────
 // Função para rejeitar uma ação criativa
 // ────────────────────────────────────────────────────────────────
-window.rejeitarCriativo = async function(criativoId) {
+window.rejeitarCriativo = async function(criativoId: any) {
   const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
   if (!criativo) {
     if (typeof mostrarToast === 'function') {
@@ -1331,7 +1331,7 @@ console.log('Arena patches loaded ✓');
 // CAMPANHA: Modal de Dano para Ações Criativas
 // ═══════════════════════════════════════════════════════════════
 
-window.abrirModalDanoCriativo = function(criativoId) {
+window.abrirModalDanoCriativo = function(criativoId: any) {
   const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
   if (!criativo) {
     console.error('[Modal Dano] Criativo não encontrado:', criativoId);
@@ -1504,7 +1504,7 @@ window.aplicarDanoCriativo = async function() {
 // CAMPANHA: Executar Efeito de Ações Não-Ofensivas
 // ═══════════════════════════════════════════════════════════════
 
-window.executarEfeitoCriativo = async function(criativo) {
+window.executarEfeitoCriativo = async function(criativo: any) {
   console.log('[Executar Efeito] Tipo:', criativo.criativo_tipo);
   
   // Para ações de suporte, utilidade, narrativo
@@ -1560,7 +1560,7 @@ console.log('[Creative] Funções de execução de ações criativas registradas
 
 // ── Modal de Aprovação Completa (Mestre) ──────────────────────
 
-function abrirModalAprovacaoCompleta(criativoId) {
+function abrirModalAprovacaoCompleta(criativoId: any) {
   var criativo = CRIATIVOS_CAMP.find(function(c){ return c.id === criativoId; });
   if (!criativo) return;
 
@@ -1576,7 +1576,7 @@ function abrirModalAprovacaoCompleta(criativoId) {
   document.getElementById('apr-alvo-tipo').value    = alvoTipo;
 
   // Header
-  var tituloMap = { ataque:'⚔ Aprovar Ataque', suporte:'✨ Aprovar Suporte', narrativo:'📖 Aprovar Narrativo', area:'💥 Aprovar Área' };
+  var tituloMap: Record<string, any> = { ataque:'⚔ Aprovar Ataque', suporte:'✨ Aprovar Suporte', narrativo:'📖 Aprovar Narrativo', area:'💥 Aprovar Área' };
   var tituloEl = document.getElementById('apr-titulo-label');
   if (tituloEl) tituloEl.textContent = tituloMap[ehArea ? 'area' : tipo] || '📋 Aprovar Ação Criativa';
   var infoEl = document.getElementById('apr-info-linha');
@@ -1667,7 +1667,7 @@ function aprSkillToggle() {
 
 function atualizarFormulaPreview() { aprBuilderAtualizar(); }
 
-function aprSelecionarDado(btn, faces) {
+function aprSelecionarDado(btn: any, faces: any) {
   document.querySelectorAll('.apr-dado-btn').forEach(function(b) {
     b.classList.remove('apr-dado-sel');
     b.style.background = 'rgba(200,168,75,0.08)';
@@ -1690,16 +1690,16 @@ function aprDCPreview() {
   el.textContent = 'Crítico se tirar > ' + limiar + ' · Natural ' + faces + ' = Crítico automático';
 }
 
-function aprBuilderAdd(faces) {
+function aprBuilderAdd(faces: any) {
   if (!window._aprBuilder) window._aprBuilder = [];
-  var ex = window._aprBuilder.find(function(g){ return g.faces === faces; });
+  var ex = window._aprBuilder.find(function(g: any){ return g.faces === faces; });
   if (ex) ex.qtd++; else window._aprBuilder.push({ faces: faces, qtd: 1 });
   aprBuilderAtualizar();
 }
 
-function aprBuilderRemove(faces) {
+function aprBuilderRemove(faces: any) {
   if (!window._aprBuilder) return;
-  var idx = window._aprBuilder.findIndex(function(g){ return g.faces === faces; });
+  var idx = window._aprBuilder.findIndex(function(g: any){ return g.faces === faces; });
   if (idx < 0) return;
   window._aprBuilder[idx].qtd--;
   if (window._aprBuilder[idx].qtd <= 0) window._aprBuilder.splice(idx, 1);
@@ -1711,12 +1711,12 @@ function aprBuilderAtualizar() {
   var bonus = parseInt(document.getElementById('apr-bonus')?.value) || 0;
   var chipsEl = document.getElementById('apr-builder-chips');
   var previewEl = document.getElementById('apr-formula-preview');
-  if (chipsEl) chipsEl.innerHTML = builder.map(function(g) {
+  if (chipsEl) chipsEl.innerHTML = builder.map(function(g: any) {
     return '<div style="display:flex;align-items:center;gap:3px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:20px;padding:2px 8px 2px 6px">' +
       '<span style="font-family:var(--fonte-d);font-size:0.82rem;color:#f0cc6a">' + g.qtd + 'd' + g.faces + '</span>' +
       '<button onclick="aprBuilderRemove(' + g.faces + ')" style="background:none;border:none;color:#c8a84b88;cursor:pointer;font-size:0.95rem;padding:0 0 0 2px;line-height:1">−</button></div>';
   }).join('');
-  var formula = builder.map(function(g){ return g.qtd + 'd' + g.faces; }).join('+') || '(sem dados)';
+  var formula = builder.map(function(g: any){ return g.qtd + 'd' + g.faces; }).join('+') || '(sem dados)';
   if (bonus > 0) formula += '+' + bonus;
   else if (bonus < 0) formula += bonus;
   if (previewEl) previewEl.textContent = formula;
@@ -1828,7 +1828,7 @@ async function aprovarCriativoCompleto() {
   // Alvos de área
   var alvosAreaStr = document.getElementById('apr-alvos-area')?.value?.trim();
   var alvosArea = ehArea && alvosAreaStr
-    ? alvosAreaStr.split(',').map(function(a){ return a.trim(); }).filter(Boolean)
+    ? alvosAreaStr.split(',').map(function(a: any){ return a.trim(); }).filter(Boolean)
     : null;
 
   var dadosDano = ehSuporte || ehNarrativo ? null : { grupos: builder, bonus: bonus };
@@ -1867,7 +1867,7 @@ async function aprovarCriativoCompleto() {
     if (cadastrarSkill && RPG_DATA?.myRole === 'mestre' && criativo) {
       var skNome   = document.getElementById('apr-skill-nome')?.value?.trim() || criativo.descricao?.slice(0,40) || 'Habilidade';
       var skEfeito = document.getElementById('apr-skill-efeito')?.value?.trim() || criativo.descricao || '';
-      var formulaDano = (dadosDano && builder.length) ? builder.map(function(g){ return g.qtd+'d'+g.faces; }).join('+') + (bonus ? (bonus>0?'+':'')+bonus : '') : null;
+      var formulaDano = (dadosDano && builder.length) ? builder.map(function(g: any){ return g.qtd+'d'+g.faces; }).join('+') + (bonus ? (bonus>0?'+':'')+bonus : '') : null;
       var skPayload = {
         rpg_id:          RPG_DATA.rpgId,
         personagem:      criativo.atacante,
@@ -1913,9 +1913,9 @@ function fecharModalAprovacaoCompleta() {
 
 // ── Modal de Execução (Jogador) ───────────────────────────────
 
-var EXEC_CRIATIVO_ATUAL = null;
+var EXEC_CRIATIVO_ATUAL: any = null;
 
-function abrirModalExecucaoCriativo(criativoId) {
+function abrirModalExecucaoCriativo(criativoId: any) {
   const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
   if (!criativo || criativo.status !== 'aprovado_pronto') {
     if (typeof mostrarToast === 'function') mostrarToast('Ação não está pronta para execução', 'erro');
@@ -2000,7 +2000,7 @@ function rolarDanoCriativo() {
   let total = 0;
   let rollsHtml = '';
   if (dd.grupos) {
-    dd.grupos.forEach(g => {
+    dd.grupos.forEach((g: any) => {
       const rolls = [];
       for (let i = 0; i < g.qtd; i++) rolls.push(Math.floor(Math.random() * g.faces) + 1);
       const soma = rolls.reduce((a,b)=>a+b,0);
@@ -2034,7 +2034,7 @@ function rolarDanoCriativo() {
   if (efeitosBase.length) {
     efeitosBaseHtml = `<div style="margin-top:7px;padding:6px 8px;background:rgba(200,168,75,0.07);border:1px solid rgba(200,168,75,0.2);border-radius:6px">
       <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;margin-bottom:3px">Efeitos Base</div>
-      ${efeitosBase.map(ef => `<div style="font-size:0.78rem;color:var(--texto)">✦ ${ef.nome||ef.tipo||'efeito'}</div>`).join('')}
+      ${efeitosBase.map((ef: any) => `<div style="font-size:0.78rem;color:var(--texto)">✦ ${ef.nome||ef.tipo||'efeito'}</div>`).join('')}
     </div>`;
   }
 
@@ -2042,7 +2042,7 @@ function rolarDanoCriativo() {
   const critObj = pronto.efeito_critico;
   let efeitoCriticoHtml = '';
   if (critObj && resultado.tipo !== 'normal') {
-    const labels = { dot:'🩸 DOT extra ativo', hot:'💚 HOT extra ativo', debuff:'⬇ Debuff extra aplicado',
+    const labels: Record<string, any> = { dot:'🩸 DOT extra ativo', hot:'💚 HOT extra ativo', debuff:'⬇ Debuff extra aplicado',
       boost:'⬆ Boost extra aplicado', atordoar:'😵 Atordoado!', knockback:'💨 Knockback!', livre:'✏ Efeito especial!' };
     const label = labels[critObj.tipo||critObj] || String(critObj.tipo||critObj);
     const extra = (critObj.formula && critObj.turnos) ? ` (${critObj.formula}×${critObj.turnos}t)` : '';

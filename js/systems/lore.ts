@@ -22,8 +22,8 @@ function renderLore(){
  document.getElementById('lore-items').innerHTML=loreVisivel.map(item=>`<div class="card lore-item${item.secao===secs[0]?' visivel':''}" data-secao="${item.secao}"><div class="lore-titulo" style="display:flex;align-items:center;gap:8px">${item.titulo}<span style="flex:1"></span>${podeEditarL?`<button onclick="abrirModalLore(${item.id})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.85rem;padding:2px 4px;flex-shrink:0" title="Editar">✏️</button><button onclick="removerLore(${item.id},'${item.titulo.replace(/'/g,"\\'")}' )" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.85rem;padding:2px 4px;flex-shrink:0" title="Remover">✕</button>`:''}</div><div class="lore-texto">${item.conteudo}</div></div>`).join('')
    +(podeEditarL?`<button onclick="abrirModalLore(null)" style="width:100%;margin-top:10px;padding:10px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;text-transform:uppercase">＋ Nova Entrada de Lore</button>`:'');
 }
-function fmtSec(s){const m={mundo:'O Mundo',magia:'Magia',sociedade:'Sociedade',segredo:'Segredos',historia:'História',regras:'Regras',facoes:'Facções'};return m[s]||s.charAt(0).toUpperCase()+s.slice(1);}
-function filtrarLore(s,btn){document.querySelectorAll('.lore-filtro').forEach(b=>b.classList.remove('ativo'));btn.classList.add('ativo');document.querySelectorAll('.lore-item').forEach(el=>el.classList.toggle('visivel',el.dataset.secao===s));}
+function fmtSec(s: any){const m: Record<string, any> = {mundo:'O Mundo',magia:'Magia',sociedade:'Sociedade',segredo:'Segredos',historia:'História',regras:'Regras',facoes:'Facções'};return m[s]||s.charAt(0).toUpperCase()+s.slice(1);}
+function filtrarLore(s: any,btn: any){document.querySelectorAll('.lore-filtro').forEach(b=>b.classList.remove('ativo'));btn.classList.add('ativo');document.querySelectorAll('.lore-item').forEach(el=>el.classList.toggle('visivel',el.dataset.secao===s));}
 
 
 // ── PERSONAGEM ────────────────────────────────────────────────
@@ -41,7 +41,7 @@ function renderCharButtons(){
 }
 
 // Mostrar caixa de busca se tiver mais que o threshold
-function _charSearchToggle(tab) {
+function _charSearchToggle(tab: any) {
   const prefix = tab === 'attr' ? 'attr' : 'char';
   const wrap = document.getElementById(prefix + '-search-wrap');
   if (!wrap) return;
@@ -67,7 +67,7 @@ function _charSearchToggle(tab) {
 }
 
 // Filtrar botões em tempo real
-function charFiltrar(input, tab) {
+function charFiltrar(input: any, tab: any) {
   const q = input.value.trim().toLowerCase();
   const prefix = tab === 'attr' ? 'attr' : 'char';
   const row = document.getElementById(prefix + '-select-row');
@@ -81,21 +81,21 @@ function charFiltrar(input, tab) {
 }
 
 // Limpar busca
-function charFiltrarLimpar(tab) {
+function charFiltrarLimpar(tab: any) {
   const prefix = tab === 'attr' ? 'attr' : 'char';
   const inp = document.getElementById(prefix + '-search-input');
   if (inp) { inp.value = ''; charFiltrar(inp, tab); inp.focus(); }
 }
 // Constrói botões de seleção de personagens.
 // Ordem: Jogadores → NPCs especiais → Criaturas/genéricos (pets aparecem logo após seu dono).
-function buildCharBtns(tab) {
+function buildCharBtns(tab: any) {
   const chars = RPG_DATA.characters || [];
   const atualNome = tab === 'attr' ? ATTR_VIEW : CHAR_VIEW;
   const seen = new Set();
-  const btns = [];
+  const btns: any = [];
 
   // Helper: gera o HTML de um botão individual
-  const makeBtn = (c, overrideLabel) => {
+  const makeBtn = (c: any, overrideLabel: any) => {
     const ca = c.custom_attrs || {};
     const nome = c.nome;
     const label = overrideLabel || nome;
@@ -104,10 +104,10 @@ function buildCharBtns(tab) {
   };
 
   // Helper: gera botão de grupo genérico (criatura com múltiplas instâncias)
-  const makeGenBtn = (base, instancias) => {
+  const makeGenBtn = (base: any, instancias: any) => {
     const rep = instancias[0];
     const count = instancias.length;
-    const isAtivo = instancias.some(x => x.nome === atualNome) ? ' ativo' : '';
+    const isAtivo = instancias.some((x: any) => x.nome === atualNome) ? ' ativo' : '';
     const countTag = count > 1
       ? ` <span style='font-size:0.55rem;background:rgba(232,96,76,0.25);border-radius:8px;padding:1px 5px;color:#e8604c;margin-left:2px'>${count}</span>`
       : ' <span style=\'font-size:0.6rem;opacity:0.5\'>⚔</span>';
@@ -130,7 +130,7 @@ function buildCharBtns(tab) {
   const pets = chars.filter(c => c.custom_attrs?.eh_pet === true);
 
   // Função que insere pets vinculados a um dono logo após seu botão
-  const adicionarComPets = (c, labelOverride?) => {
+  const adicionarComPets = (c: any, labelOverride?: any) => {
     if (seen.has(c.nome)) return;
     seen.add(c.nome);
     btns.push(makeBtn(c, labelOverride));
@@ -181,7 +181,7 @@ function buildCharBtns(tab) {
   return btns.join('');
 }
 
-function selecionarChar(nome, btn, tab) {
+function selecionarChar(nome: any, btn: any, tab: any) {
   // Shim: redireciona para fichasSelectChar
   if (typeof fichasSelectChar === 'function') {
     fichasSelectChar(nome, btn);
@@ -195,7 +195,7 @@ function selecionarChar(nome, btn, tab) {
 }
 
 
-function renderCharView(nome) {
+function renderCharView(nome: any) {
   // Shim: delegates to unified fichas system
   FICHAS_VIEW = CHAR_VIEW = nome;
   if (typeof renderFichaView === 'function') renderFichaView(nome);
@@ -204,7 +204,7 @@ function renderCharView(nome) {
 
 // ── LORE CRUD — (movido de characters/skills.js) ────────────────
 // ── 14D: LORE ────────────────────────────────────────────────
-function abrirModalLore(loreId) {
+function abrirModalLore(loreId: any) {
   const overlay = document.getElementById('modal-lore-overlay');
   document.getElementById('modal-lore-id').value = loreId || '';
   if (loreId) {
@@ -248,7 +248,7 @@ async function salvarLore() {
     mostrarToast('Lore salvo!', 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar lore', 'erro'); }
 }
-async function removerLore(loreId, titulo) {
+async function removerLore(loreId: any, titulo: any) {
   if (!temPermissao('editar_lore')) { mostrarToast('Sem permissão para editar Lore', 'erro'); return; }
   if (!confirm(`Remover "${titulo}"?`)) return;
   try {

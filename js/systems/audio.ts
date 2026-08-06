@@ -3,7 +3,7 @@
 // Requer Howler.js carregado antes deste arquivo.
 
 // ── Trilhas padrão dark-fantasy (Kevin MacLeod — CC BY, incompetech.com) ────
-const DEFAULT_SOUNDTRACKS = {
+const DEFAULT_SOUNDTRACKS: Record<string, any> = {
   exploracao: [
     { id:'ossuary5',   label:'Ossuary 5 – Rest',          url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Ossuary%205%20-%20Rest.mp3' },
     { id:'darkest',    label:'Darkest Child',             url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Darkest%20Child.mp3' },
@@ -41,7 +41,7 @@ const DEFAULT_SOUNDTRACKS = {
 };
 
 // ── Biblioteca de efeitos sonoros (gamesounds.xyz — CC0: Kenney & Sonniss GDC Bundles) ─────────
-const DEFAULT_SFX_LIBRARY = {
+const DEFAULT_SFX_LIBRARY: Record<string, any> = {
   // Ataques físicos
   sword_slash:   { label:'Espada – Golpe leve',   url:'https://gamesounds.xyz/Kenney%27s%20Sound%20Pack/Foley%20Sounds/Swords/sword1.ogg',                                                                                                                                                                      cat:'ataque'  },
   sword_heavy:   { label:'Espada – Golpe pesado', url:'https://gamesounds.xyz/Sonniss.com%20-%20GDC%202021-2023%20-%20Game%20Audio%20Bundle/David%20Dumais%20Audio%20-%20Melee%20Weapons%20Sound%20Effects%20Pack%201/SWSH_Sword%20Slash%20Impact%20V2%20Assorted%2018_DDUMAIS_NONE.wav',                    cat:'ataque'  },
@@ -92,7 +92,7 @@ const SOUND_BANK = Object.fromEntries(
 );
 
 // ── Tabela de auto-mapeamento: tipo de animação + contexto → {cast, impact} ──
-const _SFX_AUTO_MAP = {
+const _SFX_AUTO_MAP: Record<string, any> = {
   // Projétil por tipo de dano
   'projetil_fogo':         { cast:'fire_cast',    impact:'fire_impact'   },
   'projetil_gelo':         { cast:'magic_cast',   impact:'ice_shatter'   },
@@ -186,7 +186,7 @@ class _AudioManager {
 
   // ── Música de fundo ───────────────────────────────────────────────────────
 
-  onEnterPhase(fase, phaseId) {
+  onEnterPhase(fase: any, phaseId: any) {
     const audio = fase?.audio || fase?.render_data?.audio || {};
     this._phaseConfig    = audio;
     this._currentPhaseId = phaseId || fase?.map_id || fase?.id || 'main';
@@ -237,7 +237,7 @@ class _AudioManager {
     this._currentBgm = null;
   }
 
-  _playBgm(url, { volume = this.volume.music, fade = 800 } = {}) {
+  _playBgm(url: any, { volume = this.volume.music, fade = 800 } = {}) {
     this._pendingBgm = { url, volume };  // Guarda para retry caso autoplay esteja bloqueado
     if (typeof Howl === 'undefined') return;
     if (this._currentBgm) {
@@ -255,7 +255,7 @@ class _AudioManager {
 
   // URL same-origin (assets locais) pode usar Web Audio (html5:false), que habilita
   // panning estéreo via stereo(); URLs remotas continuam html5:true (evita CORS).
-  _isSameOrigin(url) {
+  _isSameOrigin(url: any) {
     try {
       if (!url) return false;
       if (url.startsWith('/') || url.startsWith('./')) return true;
@@ -264,7 +264,7 @@ class _AudioManager {
     } catch (_) { return false; }
   }
 
-  playSFX(idOrUrl, { volume, pitchVariance = 0, pan = 0 }: any = {}) {
+  playSFX(idOrUrl: any, { volume, pitchVariance = 0, pan = 0 }: any = {}) {
     if (this._muted || typeof Howl === 'undefined') return;
     const url = this._resolveId(idOrUrl);
     if (!url) return;
@@ -278,11 +278,11 @@ class _AudioManager {
         src:    [url],
         volume: vol,
         html5:  !local,
-        onloaderror: (_id, err) => {
+        onloaderror: (_id: any, err: any) => {
           console.warn('[SFX] Falha ao carregar:', url, err);
           try { mostrarToast('Falha ao carregar áudio. Verifique se a URL é um link direto para .mp3, .wav ou .ogg.', 'aviso'); } catch (_) {}
         },
-        onplayerror:  (_id, err) => console.warn('[SFX] Falha ao tocar:', url, err),
+        onplayerror:  (_id: any, err: any) => console.warn('[SFX] Falha ao tocar:', url, err),
       });
       this._sfxCache[url] = howl;
     }
@@ -300,7 +300,7 @@ class _AudioManager {
 
   // Howl em loop para fontes de som ambiente colocadas no mapa (tocha, cachoeira).
   // O chamador controla o volume por distância a cada tick; retorna o Howl ou null.
-  criarLoopAmbiente(idOrUrl) {
+  criarLoopAmbiente(idOrUrl: any) {
     if (typeof Howl === 'undefined') return null;
     const url = this._resolveId(idOrUrl);
     if (!url) return null;
@@ -311,9 +311,9 @@ class _AudioManager {
     } catch (_) { return null; }
   }
 
-  preloadSFX(ids = []) {
+  preloadSFX(ids: any = []) {
     if (typeof Howl === 'undefined') return;
-    ids.forEach(id => {
+    ids.forEach((id: any) => {
       const url = this._resolveId(id);
       if (url && !this._sfxCache[url]) {
         this._sfxCache[url] = new Howl({ src: [url], preload: true, html5: true });
@@ -323,7 +323,7 @@ class _AudioManager {
 
   // ── Auto-mapeamento de SFX por tipo de animação ───────────────────────────
 
-  getSkillSfx(tipo, posicao, tipoDano, gsapPreset) {
+  getSkillSfx(tipo: any, posicao: any, tipoDano: any, gsapPreset: any) {
     if (!tipo || tipo === 'nenhuma') return {};
     let candidate, fallback;
 
@@ -348,43 +348,43 @@ class _AudioManager {
 
   // ── Métodos de consulta para UI ───────────────────────────────────────────
 
-  getDefaultSoundtrackList(tipo) {
+  getDefaultSoundtrackList(tipo: any) {
     return DEFAULT_SOUNDTRACKS[tipo] || [];
   }
 
-  loadUserSfxLibrary(biblioteca = []) {
+  loadUserSfxLibrary(biblioteca: any = []) {
     this._userSfxBiblioteca = Array.isArray(biblioteca) ? biblioteca : [];
     this._userSfxLoaded = true;
   }
 
-  getSfxList(cat) {
+  getSfxList(cat: any) {
     const builtIn = Object.entries(DEFAULT_SFX_LIBRARY).map(([id, v]) => ({ id, ...v }));
-    const user    = this._userSfxBiblioteca.map(e => ({ id: e.id, label: e.nome, url: e.url, cat: e.cat || 'custom', _user: true }));
+    const user    = this._userSfxBiblioteca.map((e: any) => ({ id: e.id, label: e.nome, url: e.url, cat: e.cat || 'custom', _user: true }));
     const all     = [...builtIn, ...user];
     return cat ? all.filter(e => e.cat === cat) : all;
   }
 
-  getSfxLabel(idOrUrl) {
+  getSfxLabel(idOrUrl: any) {
     if (!idOrUrl) return '';
     const entry = DEFAULT_SFX_LIBRARY[idOrUrl];
     if (entry) return entry.label;
-    const userEntry = this._userSfxBiblioteca.find(e => e.id === idOrUrl || e.url === idOrUrl);
+    const userEntry = this._userSfxBiblioteca.find((e: any) => e.id === idOrUrl || e.url === idOrUrl);
     if (userEntry) return userEntry.nome;
     return idOrUrl;
   }
 
   // ── Volume / mute ─────────────────────────────────────────────────────────
 
-  setMusicVolume(v) {
+  setMusicVolume(v: any) {
     this.volume.music = Math.min(1, Math.max(0, v));
     if (this._currentBgm) this._currentBgm.volume(this._muted ? 0 : this.volume.music);
   }
 
-  setSfxVolume(v) {
+  setSfxVolume(v: any) {
     this.volume.sfx = Math.min(1, Math.max(0, v));
   }
 
-  setMuted(muted) {
+  setMuted(muted: any) {
     this._muted = !!muted;
     if (this._currentBgm) this._currentBgm.volume(this._muted ? 0 : this.volume.music);
   }
@@ -396,17 +396,17 @@ class _AudioManager {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  _resolveId(idOrUrl) {
+  _resolveId(idOrUrl: any) {
     if (!idOrUrl) return null;
     if (typeof idOrUrl === 'string' && (idOrUrl.startsWith('http') || idOrUrl.startsWith('/'))) return idOrUrl;
     const sfx = DEFAULT_SFX_LIBRARY[idOrUrl];
     if (sfx) return sfx.url;
-    const userEntry = this._userSfxBiblioteca.find(e => e.id === idOrUrl);
+    const userEntry = this._userSfxBiblioteca.find((e: any) => e.id === idOrUrl);
     if (userEntry) return userEntry.url;
     return null;
   }
 
-  _getOrPickDefaultTrack(tipo, phaseId) {
+  _getOrPickDefaultTrack(tipo: any, phaseId: any) {
     const key = `rpghub_track_${tipo}_${phaseId}`;
     try {
       const cached = sessionStorage.getItem(key);
@@ -421,7 +421,7 @@ class _AudioManager {
 
   // Preferência de música do jogador (definida no menu de início)
   // pref = { mode: 'auto'|'master'|'custom', tracks: { exploracao_url, combate_url, boss_url } }
-  setPlayerPref(pref) {
+  setPlayerPref(pref: any) {
     if (!pref || pref.mode === 'auto') { this._playerPref = null; return; }
     this._playerPref = pref;
     if (pref.mode === 'custom' && pref.tracks) {

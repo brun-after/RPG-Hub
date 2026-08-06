@@ -22,7 +22,7 @@
   const N = 18; // nº de tiras (mantém paridade visual com o motor original)
 
   // Geometria padrão compartilhada (idêntica ao _avtDesenharIsoIa original).
-  function _geo(img, SZ) {
+  function _geo(img: any, SZ: any) {
     const iw = img.naturalWidth, ih = img.naturalHeight;
     const H = SZ * 1.12;           // altura desenhada (pousa no tile, um pouco maior)
     const W = H * (iw / ih);
@@ -33,7 +33,7 @@
   // Réplica fiel do loop original: bob global + sway lateral ponderado pela
   // altura + respiração no idle + avanço no attack. Usado pelo preset "quique" e
   // como ESTADO idle/attack de TODOS os presets (consistência entre estilos).
-  function _generic(ctx, img, o) {
+  function _generic(ctx: any, img: any, o: any) {
     const { SZ, now, state, tState, iw, ih, H, W } = o;
     let swayAmp, swayHz, bobAmp, bobHz, breatheAmp;
     if (state === 'walk')        { swayAmp = W * 0.10; swayHz = 1 / 130; bobAmp = SZ * 0.06; bobHz = 1 / 130; breatheAmp = 0.0; }
@@ -65,8 +65,8 @@
   // (perna esquerda/direita pelo legCenter) e cada uma recebe LIFT vertical +
   // OFFSET horizontal em fase oposta (π) → passos alternados. Acima da divisão, o
   // torso recebe contra-balanço + inclinação, com a banda da arma amortecida.
-  function _makeBipede(cfg) {
-    return function (ctx, img, o) {
+  function _makeBipede(cfg: any) {
+    return function (ctx: any, img: any, o: any) {
       // idle/attack: usa o motor genérico (consistência). Pernas desligadas →
       // cai para o quique de caminhada (bob/sway sem articulação).
       if (o.state !== 'walk' || o.pernas === false) return _generic(ctx, img, o);
@@ -123,7 +123,7 @@
   // ── Motor flutuante (asas) ───────────────────────────────────────────────────
   // Sem pernas: hover vertical suave + pulso lateral na metade superior (asas).
   // Ignora o toggle de pernas (não há pernas para desligar).
-  function _flutuar(ctx, img, o) {
+  function _flutuar(ctx: any, img: any, o: any) {
     if (o.state !== 'walk') return _generic(ctx, img, o);
     const { SZ, now, iw, ih, H, W } = o;
     const p = o.params || {};
@@ -148,7 +148,7 @@
   // ── Motor deslizante (manto/túnica) ──────────────────────────────────────────
   // Corpo desliza suave; a barra inferior (bainha) balança como tecido (pêndulo
   // amortecido). Sem passos discretos. Ignora o toggle de pernas.
-  function _deslizar(ctx, img, o) {
+  function _deslizar(ctx: any, img: any, o: any) {
     if (o.state !== 'walk') return _generic(ctx, img, o);
     const { SZ, now, iw, ih, H, W } = o;
     const p = o.params || {};
@@ -174,7 +174,7 @@
   }
 
   // ── Registro de presets (ordem = ordem de exibição no estúdio) ──────────────
-  const AVT_WALK_PRESETS = {
+  const AVT_WALK_PRESETS: Record<string, any> = {
     quique: {
       nome: 'Quique (clássico)',
       icone: '🔆',
@@ -231,7 +231,7 @@
 
   // ── Ponto de entrada único (jogo + estúdio) ─────────────────────────────────
   // o = { footX, footY, SZ, now, state, tState, facing, presetId, params, pernas }
-  function avtWalkRender(ctx, img, o) {
+  function avtWalkRender(ctx: any, img: any, o: any) {
     if (!img || !(img.complete && img.naturalWidth > 0)) return;
     const id = (o.presetId && AVT_WALK_PRESETS[o.presetId]) ? o.presetId : 'quique';
     const preset = AVT_WALK_PRESETS[id];

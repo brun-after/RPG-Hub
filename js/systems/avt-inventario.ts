@@ -5,8 +5,8 @@
 // ─── ESTADO ──────────────────────────────────────────────────────────────────
 
 const AVT_INV = {
-  rpgId:       null,
-  catalogo:    [],   // item_catalog rows desta aventura
+  rpgId:       null as any,
+  catalogo:    [] as any[],   // item_catalog rows desta aventura
   inventarios: {},   // charId → inventario rows[]
 };
 
@@ -23,7 +23,7 @@ const _AVT_SLOTS = {
   capa:            { label: 'Capa',    icon: '🧣' },
 };
 
-const _AVT_RAR_COR = {
+const _AVT_RAR_COR: Record<string, any> = {
   comum:    '#888',
   incomum:  '#2ecc71',
   raro:     '#3498db',
@@ -32,7 +32,7 @@ const _AVT_RAR_COR = {
 };
 
 // Ícone do item: imagem (img_url) se houver, senão emoji. `px` controla o tamanho.
-function _avtInvIco(def, px) {
+function _avtInvIco(def: any, px: any) {
   px = px || 18;
   if (def && def.img_url) {
     return `<span style="display:inline-block;width:${px}px;height:${px}px;flex-shrink:0;border-radius:4px;vertical-align:middle;background:#0a0f18 center/cover no-repeat;background-image:url('${String(def.img_url).replace(/'/g,'%27')}')"></span>`;
@@ -42,20 +42,20 @@ function _avtInvIco(def, px) {
 
 // ─── INIT & RESET ─────────────────────────────────────────────────────────────
 
-async function avtInvInit(rpgId) {
+async function avtInvInit(rpgId: any) {
   AVT_INV.rpgId       = rpgId;
   AVT_INV.catalogo    = [];
   AVT_INV.inventarios = {};
   try {
     const e = encodeURIComponent(rpgId);
     const [catalogo, inventario] = await Promise.all([
-      sb(`item_catalog?rpg_id=eq.${e}&select=id,nome,tipo,icone,raridade,descricao,slot_padrao,atributos_bonus,efeitos,visual_config,img_url&order=nome`).catch(() => []),
-      sb(`inventario?rpg_id=eq.${e}&select=*&order=id`).catch(() => []),
+      sb(`item_catalog?rpg_id=eq.${e}&select=id,nome,tipo,icone,raridade,descricao,slot_padrao,atributos_bonus,efeitos,visual_config,img_url&order=nome`).catch((): any[] => []),
+      sb(`inventario?rpg_id=eq.${e}&select=*&order=id`).catch((): any[] => []),
     ]);
     AVT_INV.catalogo = catalogo || [];
-    (inventario || []).forEach(row => {
-      if (!AVT_INV.inventarios[row.character_id]) AVT_INV.inventarios[row.character_id] = [];
-      AVT_INV.inventarios[row.character_id].push(row);
+    (inventario || []).forEach((row: any) => {
+      if (!(AVT_INV.inventarios as any)[row.character_id]) (AVT_INV.inventarios as any)[row.character_id] = [];
+      (AVT_INV.inventarios as any)[row.character_id].push(row);
     });
   } catch (e) {
     try { console.warn('[AVT_INV] init error:', e); } catch (_) {}
@@ -68,20 +68,20 @@ function avtInvReset() {
   AVT_INV.inventarios = {};
 }
 
-async function avtInvCarregarChar(charId) {
+async function avtInvCarregarChar(charId: any) {
   if (!charId || !AVT_INV.rpgId) return;
   try {
     const rows = await sb(
       `inventario?character_id=eq.${encodeURIComponent(charId)}&rpg_id=eq.${encodeURIComponent(AVT_INV.rpgId)}&select=*&order=id`
-    ).catch(() => []);
-    AVT_INV.inventarios[charId] = rows || [];
+    ).catch((): any[] => []);
+    (AVT_INV.inventarios as any)[charId] = rows || [];
   } catch (_) {}
 }
 
 // [4.6] Invalida o cache de inventário deste personagem nos demais clientes.
 // O banco é a fonte da verdade; o evento apenas dispara o reload + re-render remoto.
 // `extra` pode trazer campos diretos (ex.: { ouro }) aplicados sem releitura de tabela.
-function avtInvBroadcastUpdate(charId, extra?) {
+function avtInvBroadcastUpdate(charId: any, extra?: any) {
   if (!charId) return;
   try {
     if (typeof window._avtBroadcast === 'function') {
@@ -93,7 +93,7 @@ window.avtInvBroadcastUpdate = avtInvBroadcastUpdate;
 
 // ─── ITEM CRUD ────────────────────────────────────────────────────────────────
 
-async function avtInvDarItem(charId, itemId, qty) {
+async function avtInvDarItem(charId: any, itemId: any, qty: any) {
   if (!charId || !itemId || !AVT_INV.rpgId) return null;
   const q = Math.max(1, parseInt(qty) || 1);
   try {
@@ -112,8 +112,8 @@ async function avtInvDarItem(charId, itemId, qty) {
     });
     const newRow = Array.isArray(row) ? row[0] : row;
     if (newRow) {
-      if (!AVT_INV.inventarios[charId]) AVT_INV.inventarios[charId] = [];
-      AVT_INV.inventarios[charId].push(newRow);
+      if (!(AVT_INV.inventarios as any)[charId]) (AVT_INV.inventarios as any)[charId] = [];
+      (AVT_INV.inventarios as any)[charId].push(newRow);
       avtInvBroadcastUpdate(charId);
     }
     return newRow || null;
@@ -123,15 +123,15 @@ async function avtInvDarItem(charId, itemId, qty) {
   }
 }
 
-async function avtInvRemoverItem(invId, charId) {
+async function avtInvRemoverItem(invId: any, charId: any) {
   try {
     await sb(`inventario?id=eq.${encodeURIComponent(invId)}`, { method: 'DELETE' });
-    if (charId && AVT_INV.inventarios[charId]) {
-      AVT_INV.inventarios[charId] = AVT_INV.inventarios[charId].filter(i => String(i.id) !== String(invId));
+    if (charId && (AVT_INV.inventarios as any)[charId]) {
+      (AVT_INV.inventarios as any)[charId] = (AVT_INV.inventarios as any)[charId].filter((i: any) => String(i.id) !== String(invId));
       avtInvBroadcastUpdate(charId);
     } else {
       Object.keys(AVT_INV.inventarios).forEach(cid => {
-        AVT_INV.inventarios[cid] = AVT_INV.inventarios[cid].filter(i => String(i.id) !== String(invId));
+        (AVT_INV.inventarios as any)[cid] = (AVT_INV.inventarios as any)[cid].filter((i: any) => String(i.id) !== String(invId));
       });
       if (charId) avtInvBroadcastUpdate(charId);
     }
@@ -145,15 +145,15 @@ async function avtInvRemoverItem(invId, charId) {
 
 let _avtInvEquipando = false;
 
-async function avtInvEquipar(charNome, invId) {
+async function avtInvEquipar(charNome: any, invId: any) {
   if (_avtInvEquipando) return;
   _avtInvEquipando = true;
   try {
-    const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find(c => c.nome === charNome);
+    const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === charNome);
     if (!char?.id) return;
 
-    const charInv = AVT_INV.inventarios[char.id] || [];
-    const invItem = charInv.find(i => String(i.id) === String(invId));
+    const charInv = (AVT_INV.inventarios as any)[char.id] || [];
+    const invItem = charInv.find((i: any) => String(i.id) === String(invId));
     if (!invItem) return;
 
     const def = AVT_INV.catalogo.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
@@ -166,7 +166,7 @@ async function avtInvEquipar(charNome, invId) {
       await _avtInvDoDesequipar(char, invItem, def);
     } else {
       const slotDef = def.slot_padrao || def.slot;
-      const slotOcupado = charInv.find(i => i.equipado && i.slot_equipado === slotDef && String(i.id) !== String(invId));
+      const slotOcupado = charInv.find((i: any) => i.equipado && i.slot_equipado === slotDef && String(i.id) !== String(invId));
       if (slotOcupado) {
         const defAnt = AVT_INV.catalogo.find(d => d.id === (slotOcupado.item_catalog_id || slotOcupado.item_def_id));
         await _avtInvDoDesequipar(char, slotOcupado, defAnt);
@@ -182,13 +182,13 @@ async function avtInvEquipar(charNome, invId) {
   }
 }
 
-async function _avtInvDoEquipar(char, invItem, def) {
+async function _avtInvDoEquipar(char: any, invItem: any, def: any) {
   const ca = char.custom_attrs || {};
   if (!ca.atributos) ca.atributos = {};
 
   const bonus   = def.atributos_bonus || def.bonus_attrs || {};
   const slotDef = def.slot_padrao || def.slot;
-  const snapshot = {};
+  const snapshot: Record<string, any> = {};
 
   Object.entries<any>(bonus).forEach(([attr, val]) => {
     const atual = parseFloat(ca.atributos[attr]) || 0;
@@ -245,7 +245,7 @@ async function _avtInvDoEquipar(char, invItem, def) {
   }
 }
 
-async function _avtInvDoDesequipar(char, invItem, def) {
+async function _avtInvDoDesequipar(char: any, invItem: any, def: any) {
   const ca = char.custom_attrs || {};
   if (!ca.atributos) ca.atributos = {};
 
@@ -298,12 +298,12 @@ async function _avtInvDoDesequipar(char, invItem, def) {
 
 // ─── USO DE CONSUMÍVEL (sem aprovação) ────────────────────────────────────────
 
-async function avtInvUsarConsumivel(charNome, invId) {
-  const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find(c => c.nome === charNome);
+async function avtInvUsarConsumivel(charNome: any, invId: any) {
+  const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === charNome);
   if (!char?.id) return mostrarToast('Personagem não encontrado', 'erro');
 
-  const charInv = AVT_INV.inventarios[char.id] || [];
-  const invItem = charInv.find(i => String(i.id) === String(invId));
+  const charInv = (AVT_INV.inventarios as any)[char.id] || [];
+  const invItem = charInv.find((i: any) => String(i.id) === String(invId));
   if (!invItem) return mostrarToast('Item não encontrado', 'erro');
 
   const def = AVT_INV.catalogo.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
@@ -327,7 +327,7 @@ async function avtInvUsarConsumivel(charNome, invId) {
   if (novaQtd <= 0) {
     try {
       await sb(`inventario?id=eq.${encodeURIComponent(invItem.id)}`, { method: 'DELETE' });
-      AVT_INV.inventarios[char.id] = charInv.filter(i => String(i.id) !== String(invItem.id));
+      (AVT_INV.inventarios as any)[char.id] = charInv.filter((i: any) => String(i.id) !== String(invItem.id));
     } catch (_) {}
   } else {
     try {
@@ -344,17 +344,17 @@ async function avtInvUsarConsumivel(charNome, invId) {
   if (modal && modal.style.display !== 'none') avtInvRenderPanel(charNome, 'avt-inv-body');
 }
 
-async function avtInvAplicarEfeitos(efeitos, charNome) {
+async function avtInvAplicarEfeitos(efeitos: any, charNome: any) {
   if (!Array.isArray(efeitos) || !efeitos.length) return;
   const chars = typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : [];
-  const char  = chars.find(c => c.nome === charNome);
+  const char  = chars.find((c: any) => c.nome === charNome);
   if (!char) return;
 
   const ca   = char.custom_attrs || {};
   if (!ca.atributos) ca.atributos = {};
   if (!ca.buffs) ca.buffs = [];
 
-  const ent    = (typeof AVT_STATE !== 'undefined' ? (AVT_STATE.entidades || []) : []).find(e => e.nome === charNome);
+  const ent    = (typeof AVT_STATE !== 'undefined' ? (AVT_STATE.entidades || []) : []).find((e: any) => e.nome === charNome);
   const hpMax  = ent?.hpMax || char.hp_max || 100;
 
   const msgs       = [];
@@ -437,7 +437,7 @@ async function avtInvAplicarEfeitos(efeitos, charNome) {
         const nome  = ef.debuff;
         if (nome) {
           const antes = ca.buffs.length;
-          ca.buffs    = ca.buffs.filter(b => b.nome !== nome);
+          ca.buffs    = ca.buffs.filter((b: any) => b.nome !== nome);
           if (ca.buffs.length < antes) msgs.push(`🧹 ${nome} removido`);
           charModified = true;
         }
@@ -479,7 +479,7 @@ async function avtInvAplicarEfeitos(efeitos, charNome) {
         const invocacaoId = ef.invocacao_id;
         if (invocacaoId) {
           if (!Array.isArray(ca.invocacoes)) ca.invocacoes = [];
-          if (!ca.invocacoes.some(i => i.invocacao_id === invocacaoId)) {
+          if (!ca.invocacoes.some((i: any) => i.invocacao_id === invocacaoId)) {
             ca.invocacoes.push({ invocacao_id: invocacaoId, origem: 'item' });
             msgs.push('🔮 Invocação concedida');
           }
@@ -514,9 +514,9 @@ async function avtInvAplicarEfeitos(efeitos, charNome) {
 
 // ─── OURO ─────────────────────────────────────────────────────────────────────
 
-async function avtInvDarOuro(charNome, qty) {
+async function avtInvDarOuro(charNome: any, qty: any) {
   if (!charNome || !qty) return;
-  const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find(c => c.nome === charNome);
+  const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === charNome);
   if (!char) return;
   if (!char.custom_attrs) char.custom_attrs = {};
   char.custom_attrs.ouro = (char.custom_attrs.ouro || 0) + Math.abs(qty);
@@ -529,9 +529,9 @@ async function avtInvDarOuro(charNome, qty) {
   avtInvBroadcastUpdate(char.id, { ouro: char.custom_attrs.ouro });
 }
 
-async function avtInvRemoverOuro(charNome, qty) {
+async function avtInvRemoverOuro(charNome: any, qty: any) {
   if (!charNome || !qty) return;
-  const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find(c => c.nome === charNome);
+  const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === charNome);
   if (!char) return;
   if (!char.custom_attrs) char.custom_attrs = {};
   char.custom_attrs.ouro = Math.max(0, (char.custom_attrs.ouro || 0) - Math.abs(qty));
@@ -549,10 +549,10 @@ async function avtInvRemoverOuro(charNome, qty) {
 async function avtAbrirInventario() {
   const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
   if (!jogador) return mostrarToast('Nenhum personagem vinculado', 'aviso');
-  const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find(c => c.nome === jogador.nome);
+  const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === jogador.nome);
   if (!char?.id) return;
 
-  if (!AVT_INV.inventarios[char.id]) await avtInvCarregarChar(char.id);
+  if (!(AVT_INV.inventarios as any)[char.id]) await avtInvCarregarChar(char.id);
 
   const modal = document.getElementById('avt-inventario-modal');
   if (modal) {
@@ -566,17 +566,17 @@ function avtFecharInventario() {
   if (modal) modal.style.display = 'none';
 }
 
-function avtInvRenderPanel(charNome, containerId) {
+function avtInvRenderPanel(charNome: any, containerId: any) {
   const el = document.getElementById(containerId || 'avt-inv-body');
   if (!el) return;
   const chars = typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : [];
-  const char  = chars.find(c => c.nome === charNome);
+  const char  = chars.find((c: any) => c.nome === charNome);
   if (!char?.id) {
     el.innerHTML = '<p style="color:#7a92aa;font-family:var(--fonte-d);font-size:0.75rem">Personagem não encontrado.</p>';
     return;
   }
 
-  const inv      = AVT_INV.inventarios[char.id] || [];
+  const inv      = (AVT_INV.inventarios as any)[char.id] || [];
   const ouro     = char.custom_attrs?.ouro || 0;
   const nomeSafe = charNome.replace(/'/g, "\\'");
 
@@ -589,14 +589,14 @@ function avtInvRenderPanel(charNome, containerId) {
   </div>`;
 
   // ── Slots de equipamento ──
-  const equipped = inv.filter(i => i.equipado && i.slot_equipado);
+  const equipped = inv.filter((i: any) => i.equipado && i.slot_equipado);
   html += `
   <div style="margin-bottom:14px">
     <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">⚔ Equipado</div>
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px">`;
 
   for (const [slot, slotInfo] of Object.entries<any>(_AVT_SLOTS)) {
-    const equippedItem = equipped.find(i => i.slot_equipado === slot);
+    const equippedItem = equipped.find((i: any) => i.slot_equipado === slot);
     const def          = equippedItem ? AVT_INV.catalogo.find(d => d.id === (equippedItem.item_catalog_id || equippedItem.item_def_id)) : null;
     const border       = def ? (_AVT_RAR_COR[def.raridade] || '#888') : 'rgba(79,163,209,0.1)';
 
@@ -620,7 +620,7 @@ function avtInvRenderPanel(charNome, containerId) {
   html += `</div></div>`;
 
   // ── Mochila ──
-  const bagItems = inv.filter(i => !i.equipado || !i.slot_equipado);
+  const bagItems = inv.filter((i: any) => !i.equipado || !i.slot_equipado);
 
   if (!bagItems.length) {
     html += `<div style="font-family:var(--fonte-d);font-size:0.7rem;color:#7a92aa;text-align:center;padding:18px 0;border:1px solid rgba(79,163,209,0.08);border-radius:8px">Mochila vazia</div>`;
@@ -667,15 +667,15 @@ function avtInvRenderPanel(charNome, containerId) {
 }
 
 // Render equipment slots summary for the player HUD (replaces section 4b)
-function avtInvRenderSlotsHud(char) {
+function avtInvRenderSlotsHud(char: any) {
   if (!char?.id) return '';
-  const inv      = AVT_INV.inventarios[char.id] || [];
-  const equipped = inv.filter(i => i.equipado && i.slot_equipado);
+  const inv      = (AVT_INV.inventarios as any)[char.id] || [];
+  const equipped = inv.filter((i: any) => i.equipado && i.slot_equipado);
   if (!equipped.length) return '';
 
   const nomeSafe  = char.nome.replace(/'/g, "\\'");
   const equipOpen = (typeof AVT_STATE !== 'undefined' && AVT_STATE._ppEquipOpen) || false;
-  const SLOTS_PP  = { arma_principal: '⚔', arma_secundaria: '🗡', cabeca: '🪖', corpo: '🥋', maos: '🧤', pernas: '👖', pes: '👢', anel: '💍', amuleto: '📿', capa: '🧣' };
+  const SLOTS_PP: Record<string, any> = { arma_principal: '⚔', arma_secundaria: '🗡', cabeca: '🪖', corpo: '🥋', maos: '🧤', pernas: '👖', pes: '👢', anel: '💍', amuleto: '📿', capa: '🧣' };
 
   let html = `
   <div style="border:1px solid rgba(79,163,209,0.1);border-radius:8px;overflow:hidden">
@@ -687,7 +687,7 @@ function avtInvRenderSlotsHud(char) {
 
   if (equipOpen) {
     html += `<div style="padding:8px 10px;display:flex;flex-direction:column;gap:3px">`;
-    equipped.forEach(item => {
+    equipped.forEach((item: any) => {
       const def = AVT_INV.catalogo.find(d => d.id === (item.item_catalog_id || item.item_def_id));
       if (!def) return;
       const slotIcon = SLOTS_PP[item.slot_equipado] || '📦';
@@ -707,10 +707,10 @@ function avtInvRenderSlotsHud(char) {
 }
 
 // Render quick consumables for the player HUD (replaces section 7)
-function avtInvRenderConsumiveisHud(char) {
+function avtInvRenderConsumiveisHud(char: any) {
   if (!char?.id) return '';
-  const inv = AVT_INV.inventarios[char.id] || [];
-  const consumiveis = inv.filter(i => {
+  const inv = (AVT_INV.inventarios as any)[char.id] || [];
+  const consumiveis = inv.filter((i: any) => {
     const def = AVT_INV.catalogo.find(d => d.id === (i.item_catalog_id || i.item_def_id));
     return def?.tipo === 'consumivel' && (i.quantidade || 0) > 0;
   });
@@ -724,7 +724,7 @@ function avtInvRenderConsumiveisHud(char) {
       <button onclick="avtAbrirInventario()" style="background:none;border:none;font-family:var(--fonte-d);font-size:0.58rem;color:#4fa3d1;cursor:pointer;padding:0">ver todos</button>
     </div>`;
 
-  consumiveis.slice(0, 3).forEach(item => {
+  consumiveis.slice(0, 3).forEach((item: any) => {
     const def = AVT_INV.catalogo.find(d => d.id === (item.item_catalog_id || item.item_def_id));
     if (!def) return;
     const idSafe  = String(item.id).replace(/'/g, "\\'");
@@ -747,7 +747,7 @@ function avtInvRenderConsumiveisHud(char) {
 }
 
 // Helper: short label for first effect
-function _avtInvEfLabel(efeitos) {
+function _avtInvEfLabel(efeitos: any) {
   if (!Array.isArray(efeitos) || !efeitos.length) return '';
   const ef = efeitos[0];
   if (!ef) return '';
@@ -760,12 +760,12 @@ function _avtInvEfLabel(efeitos) {
 
 // ─── RENDER INVENTÁRIO DO MESTRE (para o painel master) ───────────────────────
 
-function avtInvRenderMestreInv(charNome) {
+function avtInvRenderMestreInv(charNome: any) {
   const chars   = typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : [];
-  const char    = chars.find(c => c.nome === charNome);
+  const char    = chars.find((c: any) => c.nome === charNome);
   if (!char?.id) return '<div style="font-size:0.62rem;color:#7a92aa">Selecione um personagem.</div>';
 
-  const inv         = AVT_INV.inventarios[char.id] || [];
+  const inv         = (AVT_INV.inventarios as any)[char.id] || [];
   const SLOTS_LBL   = { arma_principal:{l:'Arma',i:'⚔'}, arma_secundaria:{l:'Escudo',i:'🗡'}, cabeca:{l:'Cabeça',i:'🪖'}, corpo:{l:'Corpo',i:'🥋'}, maos:{l:'Mãos',i:'🧤'}, pernas:{l:'Pernas',i:'👖'}, pes:{l:'Pés',i:'👢'}, anel:{l:'Anel',i:'💍'}, amuleto:{l:'Amuleto',i:'📿'}, capa:{l:'Capa',i:'🧣'} };
   const nomeSafe    = charNome.replace(/'/g, "\\'");
   const charIdSafe  = String(char.id).replace(/'/g, "\\'");
@@ -777,8 +777,8 @@ function avtInvRenderMestreInv(charNome) {
     </div>`;
   }
 
-  const equipped    = inv.filter(i => i.equipado && i.slot_equipado);
-  const unequipped  = inv.filter(i => !i.equipado || !i.slot_equipado);
+  const equipped    = inv.filter((i: any) => i.equipado && i.slot_equipado);
+  const unequipped  = inv.filter((i: any) => !i.equipado || !i.slot_equipado);
 
   let html = '';
 
@@ -787,7 +787,7 @@ function avtInvRenderMestreInv(charNome) {
       <div style="font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">⚔ Slots Equipados</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">`;
     Object.entries<any>(SLOTS_LBL).forEach(([slot, {l, i}]) => {
-      const eq  = equipped.find(e => e.slot_equipado === slot);
+      const eq  = equipped.find((e: any) => e.slot_equipado === slot);
       const def = eq ? AVT_INV.catalogo.find(d => d.id === (eq.item_catalog_id || eq.item_def_id)) : null;
       const border = def ? (_AVT_RAR_COR[def.raridade] || '#888') : 'rgba(79,163,209,0.12)';
       if (!def) return;
@@ -804,7 +804,7 @@ function avtInvRenderMestreInv(charNome) {
   if (unequipped.length) {
     html += `<div>
       <div style="font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">🎒 Mochila</div>`;
-    unequipped.forEach(item => {
+    unequipped.forEach((item: any) => {
       const def = AVT_INV.catalogo.find(d => d.id === (item.item_catalog_id || item.item_def_id));
       if (!def) return;
       const idSafe = String(item.id).replace(/'/g, "\\'");

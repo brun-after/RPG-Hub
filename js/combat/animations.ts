@@ -6,7 +6,7 @@
 // ██  BROADCAST DE COMBATE — eventos em tempo real para todos
 // ═══════════════════════════════════════════════════════════════════════════
 
-function combateBroadcast(tipo, dados) {
+function combateBroadcast(tipo: any, dados: any) {
   try {
     const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
     const ws = AR.ws || realtimeWS;
@@ -22,7 +22,7 @@ function combateBroadcast(tipo, dados) {
   } catch(e) {}
 }
 
-function combateReceberBroadcast(payload) {
+function combateReceberBroadcast(payload: any) {
   if (!payload || payload._sid === _ANIM_SID) return; // ignorar eco do próprio emissor
 
   const { tipo } = payload;
@@ -77,14 +77,14 @@ function combateReceberBroadcast(payload) {
     if (!MAPA_STATE.batalhas[batalhaId] && estado) {
       MAPA_STATE.batalhas[batalhaId] = estado;
       if (typeof AudioManager !== 'undefined') {
-        const hasBoss = estado.participantes?.some(p => p.isBoss || p.classe_aventura === 'boss');
+        const hasBoss = estado.participantes?.some((p: any) => p.isBoss || p.classe_aventura === 'boss');
         AudioManager.onCombatStart(hasBoss);
       }
       _atualizarBadgeMesa();
       if (typeof _atualizarSeletorBatalhas === 'function') _atualizarSeletorBatalhas();
       const meuNome = RPG_DATA?.linked;
       const isMestre = RPG_DATA?.myRole === 'mestre';
-      const souParticipante = isMestre || estado.participantes?.some(p => p.nome === meuNome);
+      const souParticipante = isMestre || estado.participantes?.some((p: any) => p.nome === meuNome);
       if (souParticipante && estado.mapa_id && MAPA_STATE.mapaAtualId !== estado.mapa_id) {
         const tabMapas = document.getElementById('tab-mapas');
         const btnMesa  = document.getElementById('tab-btn-mapas');
@@ -262,7 +262,7 @@ function combateReceberBroadcast(payload) {
     const { batalhaId, stats, rounds } = payload;
     // Apenas clientes que NÃO são o mestre veem — mestre já exibiu localmente
     if (RPG_DATA?.myRole !== 'mestre') {
-      const bs = MAPA_STATE.batalhas[batalhaId] || { stats, turnoRound: rounds, participantes: [] };
+      const bs = MAPA_STATE.batalhas[batalhaId] || { stats, turnoRound: rounds, participantes: [] as any[] };
       if (stats) bs.stats = stats;
       setTimeout(() => _mostrarTelaVitoria(bs), 600);
     }
@@ -289,7 +289,7 @@ function combateReceberBroadcast(payload) {
 const _ANIM_SID = Math.random().toString(36).slice(2);
 
 // ── Emite evento de animação para todos via canal characters ─────────────
-function animBroadcast(payload) {
+function animBroadcast(payload: any) {
   try {
     const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
     const ws    = AR.ws || realtimeWS;
@@ -304,7 +304,7 @@ function animBroadcast(payload) {
 }
 
 // ── Recebe e executa animação vinda de outro cliente ───────────────
-async function animReceberBroadcast(payload) {
+async function animReceberBroadcast(payload: any) {
   if (!payload?.animacao?.tipo || payload.animacao.tipo === 'nenhuma') return;
   if (payload.sid === _ANIM_SID) return; // ignorar eco do proprio emissor
   try {
@@ -353,7 +353,7 @@ async function _atkRodarAnimacao() {
 }
 
 // ── Resolve elemento DOM do token pelo nome + contexto ─────────────────────
-function resolverTokenEl(nome, contexto) {
+function resolverTokenEl(nome: any, contexto: any) {
   if (!nome) return null;
   const esc = CSS.escape(nome);
   if (contexto === 'arena') {
@@ -372,14 +372,14 @@ function _animCriarCanvas() {
   return c;
 }
 
-function _animCentro(el) {
+function _animCentro(el: any) {
   const r = el.getBoundingClientRect();
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 
-function _animHexToRgb(hex) {
+function _animHexToRgb(hex: any) {
   hex = hex.replace('#','');
-  if (hex.length === 3) hex = hex.split('').map(c=>c+c).join('');
+  if (hex.length === 3) hex = hex.split('').map((c: any)=>c+c).join('');
   const r = parseInt(hex.slice(0,2),16);
   const g = parseInt(hex.slice(2,4),16);
   const b = parseInt(hex.slice(4,6),16);

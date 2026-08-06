@@ -10,9 +10,9 @@
 
 const GRUPOS_VALIDOS = ['forca','destreza','constituicao','inteligencia'];
 
-function _normalizarAttr(nome){ return (nome||'').toLowerCase().trim(); }
+function _normalizarAttr(nome: any){ return (nome||'').toLowerCase().trim(); }
 
-async function carregarMapeamento(rpgId) {
+async function carregarMapeamento(rpgId: any) {
   if (ATTR_MAPPING_CACHE[rpgId]) return ATTR_MAPPING_CACHE[rpgId];
   try {
     const data = await sb(`atributos_grupos?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=nome_customizado`);
@@ -24,7 +24,7 @@ async function carregarMapeamento(rpgId) {
   }
 }
 
-async function salvarMapeamento(rpgId, nomeCustomizado, grupoBase) {
+async function salvarMapeamento(rpgId: any, nomeCustomizado: any, grupoBase: any) {
   if (!nomeCustomizado || !/^[\w\s\-áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]+$/u.test(nomeCustomizado))
     throw new Error('Nome de atributo inválido.');
   if (!GRUPOS_VALIDOS.includes(grupoBase))
@@ -32,7 +32,7 @@ async function salvarMapeamento(rpgId, nomeCustomizado, grupoBase) {
   const nomeNorm = _normalizarAttr(nomeCustomizado);
   // Verificar duplicidade em outro grupo
   const atual = await carregarMapeamento(rpgId);
-  const existente = atual.find(x => _normalizarAttr(x.nome_customizado) === nomeNorm);
+  const existente = atual.find((x: any) => _normalizarAttr(x.nome_customizado) === nomeNorm);
   if (existente && existente.grupo_base !== grupoBase) {
     // Está em outro grupo, precisará atualizar
   }
@@ -46,21 +46,21 @@ async function salvarMapeamento(rpgId, nomeCustomizado, grupoBase) {
   });
   // Atualizar cache local imediatamente — evita nova ida à rede
   if (!ATTR_MAPPING_CACHE[rpgId]) ATTR_MAPPING_CACHE[rpgId] = [];
-  ATTR_MAPPING_CACHE[rpgId] = ATTR_MAPPING_CACHE[rpgId].filter(x => _normalizarAttr(x.nome_customizado) !== nomeNorm);
+  ATTR_MAPPING_CACHE[rpgId] = ATTR_MAPPING_CACHE[rpgId].filter((x: any) => _normalizarAttr(x.nome_customizado) !== nomeNorm);
   ATTR_MAPPING_CACHE[rpgId].push({ rpg_id: rpgId, nome_customizado: nomeCustomizado, nome_customizado_norm: nomeNorm, grupo_base: grupoBase });
 }
 
-async function removerMapeamento(rpgId, nomeCustomizado) {
+async function removerMapeamento(rpgId: any, nomeCustomizado: any) {
   const nomeNorm = _normalizarAttr(nomeCustomizado);
   // Verificar se algum item usa este atributo
   try {
     const itens = await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=nome,atributos_bonus`);
-    const usando = (itens||[]).filter(it => {
+    const usando = (itens||[]).filter((it: any) => {
       const b = it.atributos_bonus || {};
       return Object.keys(b).some(k => _normalizarAttr(k) === nomeNorm);
     });
     if (usando.length > 0) {
-      const nomes = usando.slice(0,3).map(x=>x.nome).join(', ');
+      const nomes = usando.slice(0,3).map((x: any)=>x.nome).join(', ');
       throw new Error(`Atributo usado por ${usando.length} item(ns): ${nomes}. Remova-o dos itens antes.`);
     }
   } catch(e) {
@@ -72,24 +72,24 @@ async function removerMapeamento(rpgId, nomeCustomizado) {
   );
   // Atualizar cache local imediatamente
   if (ATTR_MAPPING_CACHE[rpgId]) {
-    ATTR_MAPPING_CACHE[rpgId] = ATTR_MAPPING_CACHE[rpgId].filter(x => _normalizarAttr(x.nome_customizado) !== nomeNorm);
+    ATTR_MAPPING_CACHE[rpgId] = ATTR_MAPPING_CACHE[rpgId].filter((x: any) => _normalizarAttr(x.nome_customizado) !== nomeNorm);
   }
 }
 
-function getGrupoDeAtributo(rpgId, nomeCustomizado) {
+function getGrupoDeAtributo(rpgId: any, nomeCustomizado: any) {
   const nomeNorm = _normalizarAttr(nomeCustomizado);
   const lista = ATTR_MAPPING_CACHE[rpgId] || [];
-  return lista.find(x => _normalizarAttr(x.nome_customizado) === nomeNorm)?.grupo_base || null;
+  return lista.find((x: any) => _normalizarAttr(x.nome_customizado) === nomeNorm)?.grupo_base || null;
 }
 
-function getAtributosPorGrupo(rpgId, grupoBase) {
-  return (ATTR_MAPPING_CACHE[rpgId] || []).filter(x => x.grupo_base === grupoBase).map(x => x.nome_customizado);
+function getAtributosPorGrupo(rpgId: any, grupoBase: any) {
+  return (ATTR_MAPPING_CACHE[rpgId] || []).filter((x: any) => x.grupo_base === grupoBase).map((x: any) => x.nome_customizado);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // A2 — INTERFACE DE MAPEAMENTO
 // ════════════════════════════════════════════════════════════════════════════
-const GRUPO_INFO = {
+const GRUPO_INFO: Record<string, any> = {
   forca:         { label:'💪 Força',         desc:'Potência de ataques físicos' },
   destreza:      { label:'🏃 Destreza',       desc:'Velocidade e habilidade física' },
   constituicao:  { label:'🛡️ Constituição',   desc:'Resistência e HP' },
@@ -123,14 +123,14 @@ async function renderAttrMappingUI() {
   }
 }
 
-function _renderMappingGrid(rpgId, attrDefs) {
+function _renderMappingGrid(rpgId: any, attrDefs: any) {
   const grid = document.getElementById('cfg-atrmapping-grid');
-  const mapeados = new Set((ATTR_MAPPING_CACHE[rpgId]||[]).map(x=>_normalizarAttr(x.nome_customizado)));
+  const mapeados = new Set((ATTR_MAPPING_CACHE[rpgId]||[]).map((x: any)=>_normalizarAttr(x.nome_customizado)));
   let html = '';
   for (const [grupo, info] of Object.entries<any>(GRUPO_INFO)) {
     const chips = getAtributosPorGrupo(rpgId, grupo);
-    const naoMapeados = attrDefs.filter(a => !mapeados.has(_normalizarAttr(a.nome)) || chips.some(c=>_normalizarAttr(c)===_normalizarAttr(a.nome)));
-    const opcoes = attrDefs.filter(a => !mapeados.has(_normalizarAttr(a.nome)) || chips.some(c=>_normalizarAttr(c)===_normalizarAttr(a.nome)));
+    const naoMapeados = attrDefs.filter((a: any) => !mapeados.has(_normalizarAttr(a.nome)) || chips.some((c: any)=>_normalizarAttr(c)===_normalizarAttr(a.nome)));
+    const opcoes = attrDefs.filter((a: any) => !mapeados.has(_normalizarAttr(a.nome)) || chips.some((c: any)=>_normalizarAttr(c)===_normalizarAttr(a.nome)));
 
     html += `<div class="atr-mapping-painel">
       <div style="font-family:var(--fonte-d);font-size:0.78rem;margin-bottom:2px">${info.label}</div>
@@ -145,7 +145,7 @@ function _renderMappingGrid(rpgId, attrDefs) {
         <select id="sel-atr-${grupo}" style="flex:1;padding:6px 8px;background:var(--painel);border:1px solid var(--borda);border-radius:5px;color:var(--texto);font-size:0.75rem">
           <option value="">＋ Adicionar atributo...</option>`;
     for (const a of attrDefs) {
-      if (!chips.some(c=>_normalizarAttr(c)===_normalizarAttr(a.nome))) {
+      if (!chips.some((c: any)=>_normalizarAttr(c)===_normalizarAttr(a.nome))) {
         html += `<option value="${a.nome}">${a.nome}</option>`;
       }
     }
@@ -157,7 +157,7 @@ function _renderMappingGrid(rpgId, attrDefs) {
   grid.innerHTML = html || '<div style="color:var(--suave);font-size:0.8rem;text-align:center;padding:10px">Configure os atributos da campanha primeiro (seção acima).</div>';
 }
 
-async function atrMappingAdicionar(rpgId, grupo) {
+async function atrMappingAdicionar(rpgId: any, grupo: any) {
   const sel = document.getElementById(`sel-atr-${grupo}`);
   const nome = sel?.value?.trim();
   if (!nome) return;
@@ -168,7 +168,7 @@ async function atrMappingAdicionar(rpgId, grupo) {
   } catch(e) { mostrarToast(e.message, 'erro'); }
 }
 
-async function atrMappingRemover(rpgId, nome, grupo) {
+async function atrMappingRemover(rpgId: any, nome: any, grupo: any) {
   if (!confirm(`Remover "${nome}" do grupo ${GRUPO_INFO[grupo].label}?`)) return;
   try {
     await removerMapeamento(rpgId, nome);
@@ -180,7 +180,7 @@ async function atrMappingRemover(rpgId, nome, grupo) {
 // Hook: renderizar mapping ao entrar na aba config
 const _origAbrirTab = window.abrirTab;
 if (typeof _origAbrirTab === 'function') {
-  window.abrirTab = function(tab, ...args) {
+  window.abrirTab = function(tab: any, ...args: any[]) {
     const r = _origAbrirTab(tab, ...args);
     if (tab === 'config') setTimeout(renderAttrMappingUI, 100);
     return r;

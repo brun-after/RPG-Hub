@@ -2,7 +2,7 @@
 // Accordion: Aparência / Personagem / Atributos  + Inventário ao final
 
 // ── Seleção de personagem ─────────────────────────────────────
-function fichasSelectChar(nome, btn) {
+function fichasSelectChar(nome: any, btn: any) {
   document.querySelectorAll('#fichas-select-row .char-btn').forEach(b => b.classList.remove('ativo'));
   if (btn) btn.classList.add('ativo');
   FICHAS_VIEW = CHAR_VIEW = ATTR_VIEW = nome;
@@ -10,7 +10,7 @@ function fichasSelectChar(nome, btn) {
 }
 
 // ── Filtro de busca ───────────────────────────────────────────
-function fichasFiltrar(input) {
+function fichasFiltrar(input: any) {
   const q = (input.value || '').trim().toLowerCase();
   const row = document.getElementById('fichas-select-row');
   if (!row) return;
@@ -35,7 +35,7 @@ function buildFichasBtns() {
   const seen = new Set();
   const btns = [];
 
-  const makeBtn = (c, labelHtml) => {
+  const makeBtn = (c: any, labelHtml: any) => {
     const ca = c.custom_attrs || {};
     const cor = ca.cor || 'var(--primario)';
     const ativo = c.nome === atualNome ? ' ativo' : '';
@@ -43,12 +43,12 @@ function buildFichasBtns() {
     return `<button class="char-btn${ativo}" onclick="fichasSelectChar('${nomeSafe}',this)" style="border-left:3px solid ${cor}">${labelHtml || c.nome}</button>`;
   };
 
-  const makeGenBtn = (base, instancias) => {
+  const makeGenBtn = (base: any, instancias: any) => {
     const rep = instancias[0];
     const ca = rep.custom_attrs || {};
     const cor = ca.cor || 'var(--primario)';
     const count = instancias.length;
-    const isAtivo = instancias.some(x => x.nome === atualNome) ? ' ativo' : '';
+    const isAtivo = instancias.some((x: any) => x.nome === atualNome) ? ' ativo' : '';
     const nomeSafe = rep.nome.replace(/'/g, "\\'");
     const countTag = count > 1
       ? ` <span style='font-size:0.55rem;background:rgba(232,96,76,0.25);border-radius:8px;padding:1px 5px;color:#e8604c;margin-left:2px'>${count}</span>`
@@ -58,7 +58,7 @@ function buildFichasBtns() {
 
   const pets = chars.filter(c => c.custom_attrs?.eh_pet === true);
 
-  const adicionarComPets = (c, labelOverride?) => {
+  const adicionarComPets = (c: any, labelOverride?: any) => {
     if (seen.has(c.nome)) return;
     seen.add(c.nome);
     btns.push(makeBtn(c, labelOverride));
@@ -150,7 +150,7 @@ function renderFichasBtns() {
 }
 
 // ── Accordion toggle ─────────────────────────────────────────
-function fichasToggleSection(id) {
+function fichasToggleSection(id: any) {
   const body = document.getElementById('fichas-sec-' + id);
   if (!body) return;
   body.classList.toggle('open');
@@ -161,7 +161,7 @@ function fichasToggleSection(id) {
   }
 }
 
-function _fichasAccordion(id, titulo, conteudo, aberto) {
+function _fichasAccordion(id: any, titulo: any, conteudo: any, aberto: any) {
   const openClass = aberto ? ' open' : '';
   const icone = aberto ? '▲' : '▼';
   return `<div class="fichas-accordion">
@@ -176,16 +176,16 @@ function _fichasAccordion(id, titulo, conteudo, aberto) {
 }
 
 // ── Toggle dos formulários de edição ─────────────────────────
-function fichasToggleEditPersonagem(nome) {
+function fichasToggleEditPersonagem(nome: any) {
   document.getElementById('edit-char-form-' + nome)?.classList.toggle('aberto');
 }
 
-function fichasToggleEditAtributos(nome) {
+function fichasToggleEditAtributos(nome: any) {
   document.getElementById('edit-form-' + nome)?.classList.toggle('aberto');
 }
 
 // ── HP rápido ────────────────────────────────────────────────
-async function fichasHpStep(nome, delta) {
+async function fichasHpStep(nome: any, delta: any) {
   const c = RPG_DATA?.characters?.find(x => x.nome === nome);
   if (!c) return;
   const ca = c.custom_attrs || {};
@@ -202,7 +202,7 @@ async function fichasHpStep(nome, delta) {
 }
 
 // ── Seção: Aparência ─────────────────────────────────────────
-function _fichasSecAparencia(c, ca, cor, podEditar) {
+function _fichasSecAparencia(c: any, ca: any, cor: any, podEditar: any) {
   const ap = ca.aparencia;
   const nomeSafe = c.nome.replace(/'/g, "\\'");
 
@@ -246,7 +246,7 @@ function _fichasSecAparencia(c, ca, cor, podEditar) {
 }
 
 // ── Seção: Personagem ─────────────────────────────────────────
-function _fichasSecPersonagem(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp_max, nivel_maximo) {
+function _fichasSecPersonagem(c: any, ca: any, cor: any, podEditar: any, isMestre: any, nivel: any, xp: any, hp: any, hp_max: any, nivel_maximo: any) {
   const nomeSafe = c.nome.replace(/'/g, "\\'");
   const xp_proximo = nivel < nivel_maximo ? nivel * 100 : null;
   const xp_pct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 100;
@@ -257,7 +257,7 @@ function _fichasSecPersonagem(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp
     ? `<button onclick="abrirModalLevelUp('${nomeSafe}')" style="width:100%;padding:10px;background:linear-gradient(135deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08));border:1px solid rgba(200,168,75,0.5);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">⬆ Level Up — Nível ${nivel} → ${nivel + 1}</button>`
     : '';
 
-  const skH = sk.map(s => {
+  const skH = sk.map((s: any) => {
     const sId = s.id;
     const nivelNecessario = s.nivel_necessario || 1;
     const bloqueada = nivelNecessario > nivel;
@@ -373,7 +373,7 @@ function _fichasSecPersonagem(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp
 }
 
 // ── Seção: Atributos ──────────────────────────────────────────
-function _fichasSecAtributos(c, ca, cor, podEditar, isMestre) {
+function _fichasSecAtributos(c: any, ca: any, cor: any, podEditar: any, isMestre: any) {
   const nomeSafe = c.nome.replace(/'/g, "\\'");
   const ad = RPG_DATA?.attrDefs || [];
   const atribs = ca.atributos || {};
@@ -392,12 +392,12 @@ function _fichasSecAtributos(c, ca, cor, podEditar, isMestre) {
   const adStatus      = adVisiveis.filter(a => a.categoria === 'status');
   const adResistencia = adVisiveis.filter(a => a.categoria === 'resistencia');
 
-  const renderStatBox = (a, cor_) => {
+  const renderStatBox = (a: any, cor_: any) => {
     const v = atribs[a.nome] !== undefined ? atribs[a.nome] : '—';
     return `<div class="stat-box" style="border-top:2px solid ${cor_}"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor_}">${v}</div></div>`;
   };
 
-  const renderStatusBar = (a) => {
+  const renderStatusBar = (a: any) => {
     const v = parseFloat(atribs[a.nome]) || 0;
     let maxVal = v;
     try {
@@ -454,14 +454,14 @@ function _fichasSecAtributos(c, ca, cor, podEditar, isMestre) {
     </div>` : '';
 
   // Formulário de edição
-  const renderEditField = (a) => {
+  const renderEditField = (a: any) => {
     const key = a.nome.replace(/[^a-z0-9]/gi, '_');
     if (a.tipo === 'number') return `<div class="form-group"><label>${a.nome}</label><input type="number" id="fca-${key}" value="${atribs[a.nome] || 0}" min="0"></div>`;
     if (a.tipo === 'text')   return `<div class="form-group"><label>${a.nome}</label><input type="text" id="fca-${key}" value="${atribs[a.nome] || ''}"></div>`;
     if (a.tipo === 'boolean') return `<div class="form-group"><label>${a.nome}</label><select id="fca-${key}"><option value="true"${atribs[a.nome] === true || atribs[a.nome] === 'true' ? ' selected' : ''}>Sim</option><option value="false"${!atribs[a.nome] ? ' selected' : ''}>Não</option></select></div>`;
     if (a.tipo === 'select') {
-      const ops = (a.opcoes || '').split(',').map(x => x.trim()).filter(Boolean);
-      return `<div class="form-group"><label>${a.nome}</label><select id="fca-${key}">${ops.map(o => `<option value="${o}"${atribs[a.nome] === o ? ' selected' : ''}>${o}</option>`).join('')}</select></div>`;
+      const ops = (a.opcoes || '').split(',').map((x: any) => x.trim()).filter(Boolean);
+      return `<div class="form-group"><label>${a.nome}</label><select id="fca-${key}">${ops.map((o: any) => `<option value="${o}"${atribs[a.nome] === o ? ' selected' : ''}>${o}</option>`).join('')}</select></div>`;
     }
     return '';
   };
@@ -506,7 +506,7 @@ function _fichasSecAtributos(c, ca, cor, podEditar, isMestre) {
 }
 
 // ── Renderizar a ficha completa ───────────────────────────────
-async function renderFichaView(nome) {
+async function renderFichaView(nome: any) {
   const container = document.getElementById('fichas-view');
   if (!container) return;
 
@@ -553,7 +553,7 @@ async function renderFichaView(nome) {
 }
 
 // ── Refresh parcial: só o corpo da seção Atributos ────────────
-function fichasRefreshAtributos(nome) {
+function fichasRefreshAtributos(nome: any) {
   const body = document.getElementById('fichas-sec-atributos');
   if (!body) return;
   const c = RPG_DATA?.characters?.find(x => x.nome === nome);

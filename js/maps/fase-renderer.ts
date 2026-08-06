@@ -36,7 +36,7 @@ function faseDesmontarAtual() {
 // ════════════════════════════════════════════════════════════════════════════
 // MONTAGEM PRINCIPAL
 // ════════════════════════════════════════════════════════════════════════════
-async function faseRendererMount(container, mapaData) {
+async function faseRendererMount(container: any, mapaData: any) {
   faseDesmontarAtual();
   await _fasePixiEnsureLoaded();
 
@@ -171,7 +171,7 @@ async function faseRendererMount(container, mapaData) {
 // ════════════════════════════════════════════════════════════════════════════
 // CÂMERA
 // ════════════════════════════════════════════════════════════════════════════
-function _faseCameraUpdate(app, world, dt) {
+function _faseCameraUpdate(app: any, world: any, dt: any) {
   const screenW = app.renderer.width;
   const screenH = app.renderer.height;
 
@@ -215,7 +215,7 @@ function _faseCameraUpdate(app, world, dt) {
 // ════════════════════════════════════════════════════════════════════════════
 // RENDERIZAÇÃO DE ELEMENTOS
 // ════════════════════════════════════════════════════════════════════════════
-function _faseRenderParedes(layer, rd, mapaW, mapaH) {
+function _faseRenderParedes(layer: any, rd: any, mapaW: any, mapaH: any) {
   if (!rd.paredes?.length) return;
   const g = new PIXI.Graphics();
   for (const p of rd.paredes) {
@@ -227,7 +227,7 @@ function _faseRenderParedes(layer, rd, mapaW, mapaH) {
   layer._paredesGraphics = g;
 }
 
-function _faseRenderPortas(layer, rd, mapaW, mapaH) {
+function _faseRenderPortas(layer: any, rd: any, mapaW: any, mapaH: any) {
   if (!rd.portas?.length) return;
   for (const porta of rd.portas) {
     const c = _faseCriarPortaSprite(porta, mapaW, mapaH);
@@ -236,7 +236,7 @@ function _faseRenderPortas(layer, rd, mapaW, mapaH) {
   }
 }
 
-function _faseCriarPortaSprite(porta, mapaW, mapaH) {
+function _faseCriarPortaSprite(porta: any, mapaW: any, mapaH: any) {
   const c = new PIXI.Container();
   const g = new PIXI.Graphics();
   const cor = porta.aberta ? 0x5ee09a : (porta.trancada ? 0xe05050 : 0xf0cc6a);
@@ -263,17 +263,17 @@ function _faseCriarPortaSprite(porta, mapaW, mapaH) {
   return c;
 }
 
-function _faseClicarPorta(porta) {
+function _faseClicarPorta(porta: any) {
   const charNome = RPG_DATA?.linked || TOKEN_CTRL?.nomeSelecionado;
   usarPorta?.(MAPA_STATE.mapaAtualId, porta.id, charNome);
   // Re-render da porta
-  const layer = FASE_STATE.worldContainer?.children?.find(c => c._portaId);
+  const layer = FASE_STATE.worldContainer?.children?.find((c: any) => c._portaId);
   if (layer) {
     const mapaW = (RPG_DATA?.mapas?.find(l => l.mapa.map_id === FASE_STATE.faseAtualId)?.mapa?.largura_total || 20) * 64;
     const mapaH = (RPG_DATA?.mapas?.find(l => l.mapa.map_id === FASE_STATE.faseAtualId)?.mapa?.altura_total  || 15) * 64;
     const sprite = FASE_STATE.worldContainer.children[1]; // elemLayer
     if (sprite) {
-      const portaSprite = sprite.children.find(c => c._portaId === porta.id);
+      const portaSprite = sprite.children.find((c: any) => c._portaId === porta.id);
       if (portaSprite) {
         portaSprite.destroy();
         sprite.addChild(_faseCriarPortaSprite(porta, mapaW, mapaH));
@@ -282,7 +282,7 @@ function _faseClicarPorta(porta) {
   }
 }
 
-function _faseRenderBaus(layer, rd, mapaW, mapaH) {
+function _faseRenderBaus(layer: any, rd: any, mapaW: any, mapaH: any) {
   if (!rd.baus?.length) return;
   for (const bau of rd.baus) {
     const c = _faseCriarBauSprite(bau, mapaW, mapaH);
@@ -291,7 +291,7 @@ function _faseRenderBaus(layer, rd, mapaW, mapaH) {
   }
 }
 
-function _faseCriarBauSprite(bau, mapaW, mapaH) {
+function _faseCriarBauSprite(bau: any, mapaW: any, mapaH: any) {
   const c = new PIXI.Container();
   const g = new PIXI.Graphics();
   const cor = bau.aberto ? 0x7a5230 : (bau.trancado ? 0xe05050 : 0xc8a84b);
@@ -321,7 +321,7 @@ function _faseCriarBauSprite(bau, mapaW, mapaH) {
   return c;
 }
 
-function _faseAbrirBau(bau, sprite, mapaW, mapaH) {
+function _faseAbrirBau(bau: any, sprite: any, mapaW: any, mapaH: any) {
   if (bau.aberto) { mostrarToast('Baú já aberto', ''); return; }
   if (bau.trancado) {
     const charNome = RPG_DATA?.linked || TOKEN_CTRL?.nomeSelecionado;
@@ -342,7 +342,7 @@ function _faseAbrirBau(bau, sprite, mapaW, mapaH) {
   realtimeBroadcast?.('fase_bau_aberto', { mapa_id: FASE_STATE.faseAtualId, bau_id: bau.id });
 }
 
-function _faseRenderSpawnPoints(layer, rd, mapaW, mapaH) {
+function _faseRenderSpawnPoints(layer: any, rd: any, mapaW: any, mapaH: any) {
   const isMestre = RPG_DATA?.myRole === 'mestre';
   if (!isMestre || !rd.spawn_jogadores?.length) return;
   for (const sp of rd.spawn_jogadores) {
@@ -365,7 +365,7 @@ function _faseRenderSpawnPoints(layer, rd, mapaW, mapaH) {
 // ════════════════════════════════════════════════════════════════════════════
 // ENTIDADES
 // ════════════════════════════════════════════════════════════════════════════
-function _faseRenderEntidades(layer, rd, mapaW, mapaH, tiltY) {
+function _faseRenderEntidades(layer: any, rd: any, mapaW: any, mapaH: any, tiltY: any) {
   if (!rd.entidades?.length) return;
 
   for (const ent of rd.entidades) {
@@ -391,7 +391,7 @@ function _faseRenderEntidades(layer, rd, mapaW, mapaH, tiltY) {
   }
 }
 
-function _faseCriarEntidadeSprite(ent, tiltY) {
+function _faseCriarEntidadeSprite(ent: any, tiltY: any) {
   const c = new PIXI.Container();
   const cor = ent.tipo === 'boss' ? 0xdd3333 : (ent.tipo === 'npc' ? 0x5ee09a : 0xee7700);
 
@@ -411,7 +411,7 @@ function _faseCriarEntidadeSprite(ent, tiltY) {
   corpo.drawCircle(0, 0, 18);
 
   // Ícone de estado
-  const iconMap = { dormindo: 'z', desperto: '!', patrulhando: '→', perseguindo: '!!' };
+  const iconMap: Record<string, any> = { dormindo: 'z', desperto: '!', patrulhando: '→', perseguindo: '!!' };
   const icone = new PIXI.Text(iconMap[ent.estado] || '?', {
     fontSize: 10, fill: 0xffffff, fontWeight: 'bold'
   });
@@ -436,7 +436,7 @@ function _faseCriarEntidadeSprite(ent, tiltY) {
   return c;
 }
 
-function _faseClicarEntidade(entId) {
+function _faseClicarEntidade(entId: any) {
   if (RPG_DATA?.myRole !== 'mestre') return;
   const ent = FASE_STATE.entidades[entId];
   if (!ent) return;
@@ -450,9 +450,9 @@ function _faseClicarEntidade(entId) {
   }
 }
 
-function _faseAtualizarEntidadeSprite(ent) {
+function _faseAtualizarEntidadeSprite(ent: any) {
   if (!ent.sprite) return;
-  const iconMap = { dormindo: 'z', desperto: '!', patrulhando: '→', perseguindo: '!!', morto: '✕' };
+  const iconMap: Record<string, any> = { dormindo: 'z', desperto: '!', patrulhando: '→', perseguindo: '!!', morto: '✕' };
   const iconText = ent.sprite.children?.[2]; // icone é o 3º filho
   if (iconText && iconText instanceof PIXI.Text) {
     iconText.text = iconMap[ent.estado] || '?';
@@ -462,7 +462,7 @@ function _faseAtualizarEntidadeSprite(ent) {
 }
 
 // ── Loop de IA das entidades ──────────────────────────────────────────────
-function _faseEntidadesLoop(layer, rd, mapaW, mapaH, tiltY, dt) {
+function _faseEntidadesLoop(layer: any, rd: any, mapaW: any, mapaH: any, tiltY: any, dt: any) {
   if (!FASE_STATE.iaAtiva) return;
 
   const jogadores = Object.values<any>(FASE_STATE.jogadoresPos).filter(p => p?.worldX != null);
@@ -470,7 +470,7 @@ function _faseEntidadesLoop(layer, rd, mapaW, mapaH, tiltY, dt) {
   for (const [id, ent] of Object.entries<any>(FASE_STATE.entidades)) {
     if (ent.estado === 'morto') continue;
 
-    const enDef = rd.entidades?.find(e => e.id === id);
+    const enDef = rd.entidades?.find((e: any) => e.id === id);
     if (!enDef) continue;
 
     const aggroR = (enDef.aggro_radius  || 0.08) * mapaW;
@@ -517,7 +517,7 @@ function _faseEntidadesLoop(layer, rd, mapaW, mapaH, tiltY, dt) {
   }
 }
 
-function _fasePatrularStep(ent, enDef, mapaW, mapaH, speed, dt) {
+function _fasePatrularStep(ent: any, enDef: any, mapaW: any, mapaH: any, speed: any, dt: any) {
   const path = enDef.patrol_path;
   if (!path?.length) return;
   const alvo = path[ent._patrolIdx % path.length];
@@ -533,7 +533,7 @@ function _fasePatrularStep(ent, enDef, mapaW, mapaH, speed, dt) {
   ent.worldY += (dy / dist) * move;
 }
 
-function _fasePerseguirStep(ent, alvo, speed, dt) {
+function _fasePerseguirStep(ent: any, alvo: any, speed: any, dt: any) {
   const dx = alvo.worldX - ent.worldX;
   const dy = alvo.worldY - ent.worldY;
   const dist = Math.hypot(dx, dy);
@@ -543,8 +543,8 @@ function _fasePerseguirStep(ent, alvo, speed, dt) {
   ent.worldY += (dy / dist) * move;
 }
 
-let _faseCombateTimerAtivo = {};
-function _faseTriggerCombate(ent, enDef) {
+let _faseCombateTimerAtivo: Record<string, any> = {};
+function _faseTriggerCombate(ent: any, enDef: any) {
   if (_faseCombateTimerAtivo[ent.id]) return;
   _faseCombateTimerAtivo[ent.id] = true;
   ent.estado = 'timer_tatico';
@@ -565,7 +565,7 @@ function _faseTriggerCombate(ent, enDef) {
   _faseMostrarCombateTimer(ent, enDef, timerS);
 }
 
-function _faseMostrarCombateTimer(ent, enDef, timerS) {
+function _faseMostrarCombateTimer(ent: any, enDef: any, timerS: any) {
   const hud = document.getElementById('fase-combate-hud');
   if (!hud) return;
   hud.style.display = 'flex';
@@ -591,7 +591,7 @@ function _faseMostrarCombateTimer(ent, enDef, timerS) {
   ent._combateTimer = iv;
 }
 
-function _faseAceitarCombate(entId) {
+function _faseAceitarCombate(entId: any) {
   const ent    = FASE_STATE.entidades[entId];
   const entry  = (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === FASE_STATE.faseAtualId);
   const enDef  = entry?.mapa?.render_data?.entidades?.find(e => e.id === entId);
@@ -603,7 +603,7 @@ function _faseAceitarCombate(entId) {
   _faseIniciarCombateTatico(ent, enDef);
 }
 
-function _faseRecusarCombate(entId) {
+function _faseRecusarCombate(entId: any) {
   const ent = FASE_STATE.entidades[entId];
   if (!ent) return;
   if (ent._combateTimer) { clearInterval(ent._combateTimer); ent._combateTimer = null; }
@@ -613,7 +613,7 @@ function _faseRecusarCombate(entId) {
   mostrarToast('Recuou! Mantenha distância do inimigo.', '');
 }
 
-function _faseIniciarCombateTatico(ent, enDef) {
+function _faseIniciarCombateTatico(ent: any, enDef: any) {
   // Integrar com o sistema tático existente
   if (typeof iniciarBatalha === 'function') {
     const participantes = [
@@ -628,7 +628,7 @@ function _faseIniciarCombateTatico(ent, enDef) {
 // ════════════════════════════════════════════════════════════════════════════
 // CHUNK LOADING
 // ════════════════════════════════════════════════════════════════════════════
-function _faseChunksUpdate(bgLayer, elemLayer, world, mapaW, mapaH, rd) {
+function _faseChunksUpdate(bgLayer: any, elemLayer: any, world: any, mapaW: any, mapaH: any, rd: any) {
   // Determinar viewport em coordenadas do mundo
   if (!FASE_STATE.app) return;
   const app = FASE_STATE.app;
@@ -663,7 +663,7 @@ function _faseChunksUpdate(bgLayer, elemLayer, world, mapaW, mapaH, rd) {
 // ════════════════════════════════════════════════════════════════════════════
 // JOGADORES
 // ════════════════════════════════════════════════════════════════════════════
-function _faseInicializarJogadores(rd, mapaW, mapaH) {
+function _faseInicializarJogadores(rd: any, mapaW: any, mapaH: any) {
   const chars = (RPG_DATA?.characters || []).filter(c => {
     const ca = c.custom_attrs || {};
     return !['npc', 'criatura'].includes(ca.tipo_personagem) &&
@@ -688,13 +688,13 @@ function _faseInicializarJogadores(rd, mapaW, mapaH) {
 }
 
 // Atualizar posição de jogador (chamado do sistema de tokens/realtime)
-function faseAtualizarPosJogador(charNome, worldX, worldY) {
+function faseAtualizarPosJogador(charNome: any, worldX: any, worldY: any) {
   FASE_STATE.jogadoresPos[charNome] = { worldX, worldY };
 
   // Atualizar sprite do token se existir
   const tokenLayer = (FASE_STATE as any)._tokenLayer;
   if (!tokenLayer) return;
-  let tokenSprite = tokenLayer.children.find(c => c._charNome === charNome);
+  let tokenSprite = tokenLayer.children.find((c: any) => c._charNome === charNome);
   if (!tokenSprite) {
     tokenSprite = _faseCriarTokenSprite(charNome);
     tokenLayer.addChild(tokenSprite);
@@ -703,7 +703,7 @@ function faseAtualizarPosJogador(charNome, worldX, worldY) {
   tokenSprite.y = worldY;
 }
 
-function _faseCriarTokenSprite(charNome) {
+function _faseCriarTokenSprite(charNome: any) {
   const char = (RPG_DATA?.characters || []).find(c => c.nome === charNome);
   const c = new PIXI.Container();
   const g = new PIXI.Graphics();
@@ -727,17 +727,17 @@ function _faseCriarTokenSprite(charNome) {
 // ════════════════════════════════════════════════════════════════════════════
 // INPUT DE MOVIMENTO
 // ════════════════════════════════════════════════════════════════════════════
-function _faseMontarInputMovimento(app, world, mapaW, mapaH, rd) {
+function _faseMontarInputMovimento(app: any, world: any, mapaW: any, mapaH: any, rd: any) {
   // Pan manual para o mestre (drag)
   let _isPanning = false, _panStart = {x:0, y:0}, _panOrigin = {x:0, y:0};
 
-  app.view.addEventListener('pointerdown', e => {
+  app.view.addEventListener('pointerdown', (e: any) => {
     if (!FASE_STATE.modoMestre) return;
     _isPanning = true;
     _panStart  = { x: e.clientX, y: e.clientY };
     _panOrigin = { x: world.x, y: world.y };
   });
-  app.view.addEventListener('pointermove', e => {
+  app.view.addEventListener('pointermove', (e: any) => {
     if (!_isPanning) return;
     world.x = _panOrigin.x + (e.clientX - _panStart.x);
     world.y = _panOrigin.y + (e.clientY - _panStart.y);
@@ -749,7 +749,7 @@ function _faseMontarInputMovimento(app, world, mapaW, mapaH, rd) {
   app.view.addEventListener('pointercancel', _endPan);
 
   // Scroll zoom para mestre
-  app.view.addEventListener('wheel', e => {
+  app.view.addEventListener('wheel', (e: any) => {
     if (!FASE_STATE.modoMestre) return;
     e.preventDefault();
     const delta  = e.deltaY < 0 ? 1.1 : 0.91;
@@ -764,7 +764,7 @@ function _faseMontarInputMovimento(app, world, mapaW, mapaH, rd) {
   }, { passive: false });
 
   // Click no mapa para mover jogador vinculado (modo jogador)
-  app.view.addEventListener('pointerup', e => {
+  app.view.addEventListener('pointerup', (e: any) => {
     if (FASE_STATE.modoMestre) return;
     const myChar = RPG_DATA?.linked;
     if (!myChar) return;
@@ -786,7 +786,7 @@ function _faseMontarInputMovimento(app, world, mapaW, mapaH, rd) {
   });
 }
 
-function _faseColisaoParede(rd, wx, wy, mapaW, mapaH, radius = 12) {
+function _faseColisaoParede(rd: any, wx: any, wy: any, mapaW: any, mapaH: any, radius = 12) {
   if (!rd.paredes?.length) return false;
   for (const p of rd.paredes) {
     if (p.tipo === 'transparente') continue;
@@ -805,7 +805,7 @@ function _faseColisaoParede(rd, wx, wy, mapaW, mapaH, radius = 12) {
 // ════════════════════════════════════════════════════════════════════════════
 // HUD
 // ════════════════════════════════════════════════════════════════════════════
-function _faseMontarHUD(container, rd) {
+function _faseMontarHUD(container: any, rd: any) {
   // Remover HUD anterior se existir
   document.getElementById('fase-hud')?.remove();
 

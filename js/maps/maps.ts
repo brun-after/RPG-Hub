@@ -14,7 +14,7 @@ if (!window.TOKEN_CTRL) {
 }
 
 // ── TIPO: Mídia (gif, imagem, svg, iframe) ─────────────────────────────────
-function _animMedia(animacao, origem, alvo, resolve) {
+function _animMedia(animacao: any, origem: any, alvo: any, resolve: any) {
   const { tipo, url, svg, tamanho = 120, duracao = 1500, posicao = 'alvo' } = animacao;
 
   // Calcular posição do elemento
@@ -32,7 +32,7 @@ function _animMedia(animacao, origem, alvo, resolve) {
   wrap.style.cssText = `position:fixed;inset:0;pointer-events:none;z-index:10100;overflow:hidden`;
 
   // Elemento de mídia
-  let el;
+  let el: any;
   const sz = tamanho + 'px';
 
   if (tipo === 'gif' || tipo === 'imagem') {
@@ -89,7 +89,7 @@ function _animMedia(animacao, origem, alvo, resolve) {
     const startTs = performance.now();
     const cx2 = (origem.x + alvo.x) / 2;
     const cy2 = Math.min(origem.y, alvo.y) - 60;
-    function moveFrame(now) {
+    function moveFrame(now: any) {
       const t = Math.min((now - startTs) / duracao, 1);
       const bx = (1-t)*(1-t)*origem.x + 2*(1-t)*t*cx2 + t*t*alvo.x;
       const by = (1-t)*(1-t)*origem.y + 2*(1-t)*t*cy2 + t*t*alvo.y;
@@ -109,7 +109,7 @@ function _animMedia(animacao, origem, alvo, resolve) {
   }, duracao - 320);
 }
 
-function _animImpacto(ctx, pos, rgb, cor, icone) {
+function _animImpacto(ctx: any, pos: any, rgb: any, cor: any, icone: any) {
   let f = 0;
   function frame() {
     f++; const alpha=Math.max(0,1-f/10), raio=10+f*4;
@@ -160,7 +160,7 @@ function skAnimValidarDuracao() {
 }
 
 // ── Preview no modal de skill ──────────────────────────────────────────────
-var _maps_skAnimPreviewRaf = null;
+var _maps_skAnimPreviewRaf: any = null;
 
 // ── UI: mudar campos ao selecionar tipo de animação ──────────────────────
 function skAnimTipoChange() {
@@ -187,7 +187,7 @@ function skAnimTipoChange() {
     const urlLabel  = document.getElementById('sk-anim-url-label');
     const urlInput  = document.getElementById('sk-anim-url');
     const svgInput  = document.getElementById('sk-anim-svg-code');
-    const labels = { gif:'URL do GIF', imagem:'URL da Imagem', iframe:'URL do iFrame' };
+    const labels: Record<string, any> = { gif:'URL do GIF', imagem:'URL da Imagem', iframe:'URL do iFrame' };
     if (urlLabel) urlLabel.textContent = labels[tipo] || 'URL';
     if (urlInput)  urlInput.style.display  = tipo !== 'svg' ? '' : 'none';
     if (svgInput)  svgInput.style.display  = tipo === 'svg' ? '' : 'none';
@@ -238,7 +238,7 @@ function criativoAnimTipoChange() {
   if (cc) cc.style.display = isCanvas ? '' : 'none';
   if (cm) cm.style.display = isMidia  ? '' : 'none';
   if (isMidia) {
-    const labels = { gif:'URL do GIF', imagem:'URL da Imagem', iframe:'URL do iFrame' };
+    const labels: Record<string, any> = { gif:'URL do GIF', imagem:'URL da Imagem', iframe:'URL do iFrame' };
     const lbl = document.getElementById('criativo-anim-url-label');
     const url = document.getElementById('criativo-anim-url');
     const svg = document.getElementById('criativo-anim-svg-code');
@@ -258,7 +258,7 @@ function arAnimDnTipoChange() {
   if (cc) cc.style.display = isCanvas ? '' : 'none';
   if (cm) cm.style.display = isMidia  ? '' : 'none';
   if (isMidia) {
-    const labels = { gif:'URL do GIF', imagem:'URL da Imagem', iframe:'URL do iFrame' };
+    const labels: Record<string, any> = { gif:'URL do GIF', imagem:'URL da Imagem', iframe:'URL do iFrame' };
     const lbl = document.getElementById('ar-atk-dn-anim-url-label');
     const url = document.getElementById('ar-atk-dn-anim-url');
     const svg = document.getElementById('ar-atk-dn-anim-svg');
@@ -292,7 +292,7 @@ function skAnimPreviewPlay() {
   const start = performance.now();
   let lastRegen = 0, prevSegs = _animGerarZigzag(origem, alvo, 5);
 
-  function drawFrame(now) {
+  function drawFrame(now: any) {
     const t = Math.min((now - start) / dur, 1);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     // tokens
@@ -372,13 +372,13 @@ function atkConfirmarAtaque() {
 }
 
 // Wrapper que aplica efeito + recuperação imediata de atributo
-async function atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto) {
+async function atkAplicarEfeitoComRecuperacao(nomeAlvo: any, ef: any, contexto: any) {
   if (!ef) return;
   // Recuperação imediata de atributo — aplica direto sem registrar buff de turno
   if (ef.rec_atributo && ef.rec_modo === 'imediato') {
     const emArena = contexto === 'arena';
     const chars = emArena ? (AR?.chars || []) : (RPG_DATA?.characters || []);
-    const c: any = chars.find(x => x.nome === nomeAlvo);
+    const c: any = chars.find((x: any) => x.nome === nomeAlvo);
     if (c) {
       const grupos = parsearFormulaDano(ef.rec_formula || '0');
       const r = grupos ? rolarGrupos(grupos) : { total: parseInt(ef.rec_formula)||0 };
@@ -407,7 +407,7 @@ async function atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto) {
 }
 
 // ── Aplicar efeito bônus ao alvo ─────────────────────────────
-async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
+async function atkAplicarEfeito(nomeAlvo: any, efeitoConfig: any, contexto: any) {
   if (!efeitoConfig) return;
   // Invocação do catálogo: só funciona em modo aventura (depende de AVT_STATE/mapa).
   // Em arena/campanha clássica é ignorada com aviso, sem criar buff vazio.
@@ -469,7 +469,7 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
   // AC-05-G2: HP temporário — aplica diretamente sem criar buff
   if (efeitoConfig.hp_temp) {
     const c: any = contexto === 'arena'
-      ? AR.chars.find(x => x.nome === nomeAlvo)
+      ? AR.chars.find((x: any) => x.nome === nomeAlvo)
       : RPG_DATA?.characters?.find(x => x.nome === nomeAlvo);
     if (c) {
       if (!c.custom_attrs) c.custom_attrs = {};
@@ -486,10 +486,10 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
   // AC-05-G2: Remover debuff
   if (efeitoConfig.remover_debuff) {
     const c: any = contexto === 'arena'
-      ? AR.chars.find(x => x.nome === nomeAlvo)
+      ? AR.chars.find((x: any) => x.nome === nomeAlvo)
       : RPG_DATA?.characters?.find(x => x.nome === nomeAlvo);
     if (c && Array.isArray(c.buffs)) {
-      const idx = c.buffs.findIndex(b => b.tipo === 'debuff');
+      const idx = c.buffs.findIndex((b: any) => b.tipo === 'debuff');
       if (idx >= 0) {
         const removido = c.buffs[idx];
         c.buffs.splice(idx, 1);
@@ -572,7 +572,7 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
   if (buff.turnos_restantes <= 0) return;
 
   if (contexto === 'arena') {
-    const c: any = AR.chars.find(x => x.nome === nomeAlvo);
+    const c: any = AR.chars.find((x: any) => x.nome === nomeAlvo);
     if (!c) return;
     if (!Array.isArray(c.buffs)) c.buffs = [];
     c.buffs.push(buff);
@@ -603,9 +603,9 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
 // MECÂNICA DE ÁREA LIVRE (alvo_tipo:'area') — AoE posicionável
 // ═══════════════════════════════════════════════════════════════
 
-var _AOE_STATE = null; // { centroX, centroY, raioCell, dragging, dragOffX, dragOffY }
+var _AOE_STATE: any = null; // { centroX, centroY, raioCell, dragging, dragOffX, dragOffY }
 
-function atkIniciarModoArea(h) {
+function atkIniciarModoArea(h: any) {
   const raio = h.alcance_celulas ?? 2;
 
   // Mostrar instrução e botão confirmar no step 2, ocultar lista de alvos
@@ -634,7 +634,7 @@ function atkIniciarModoArea(h) {
   atkIrParaStep(2);
 }
 
-function _aoeRenderCircle(cx, cy, raioCell) {
+function _aoeRenderCircle(cx: any, cy: any, raioCell: any) {
   const tokensEl = document.getElementById('mapa-tokens');
   if (!tokensEl) return;
 
@@ -678,7 +678,7 @@ function mapaHideAoECircle__sombreado_17() {
 }
 
 // ── Ativar AoE para ação criativa declarada (não vem do modal de ataque) ────
-function atkAtivarAoECriativo(nomeChar) {
+function atkAtivarAoECriativo(nomeChar: any) {
   const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE?.mapaAtualId);
   const gridPx = entry?.mapa?.grid || 20;
   const raioCell = 3; // padrão 3 células
@@ -701,11 +701,11 @@ function atkAtivarAoECriativo(nomeChar) {
   abrirModalAcao(nomeChar);
 }
 
-function atkConfirmarAoECriativo(nomeChar) {
+function atkConfirmarAoECriativo(nomeChar: any) {
   if (!_AOE_STATE) return;
   // Coletar alvos atingidos pelo círculo
   const alvos = _aoeObterAlvosAtingidos?.() || [];
-  const alvosStr = alvos.map(a => a.nome || a).join(', ');
+  const alvosStr = alvos.map((a: any) => a.nome || a).join(', ');
   // Preencher o campo de área e continuar
   const areaAtk = document.getElementById('acao-nome-alvos-area-atk');
   const areaSup = document.getElementById('acao-nome-alvos-area-sup');
@@ -717,7 +717,7 @@ function atkConfirmarAoECriativo(nomeChar) {
   document.getElementById('acao-btn-enviar').style.display = 'flex';
 }
 
-function _aoeStartDrag(e) {
+function _aoeStartDrag(e: any) {
   if (!_AOE_STATE) return;
   e.preventDefault();
   e.stopPropagation();
@@ -728,7 +728,7 @@ function _aoeStartDrag(e) {
   el.addEventListener('pointerup', _aoeEndDrag);
 }
 
-function _aoeDrag(e) {
+function _aoeDrag(e: any) {
   if (!_AOE_STATE?.dragging) return;
   const wrap = document.getElementById('mapa-wrap');
   const bg   = document.getElementById('mapa-img');
@@ -744,7 +744,7 @@ function _aoeDrag(e) {
   _aoeAtualizarAlvos();
 }
 
-function _aoeEndDrag(e) {
+function _aoeEndDrag(e: any) {
   if (!_AOE_STATE) return;
   _AOE_STATE.dragging = false;
   const el = document.getElementById('atk-aoe-circle');
@@ -770,7 +770,7 @@ function _aoeAtualizarAlvos() {
 
   _aoeRemoverBadges();
   const tokensEl = document.getElementById('mapa-tokens');
-  const dentroArea = [];
+  const dentroArea: any = [];
 
   chars.forEach(c => {
     const pos = getPosicaoNoMapa(c, mapId);
@@ -807,10 +807,10 @@ function _aoeAtualizarAlvos() {
     if (dentroArea.length === 0) {
       prevEl.textContent = 'Nenhum personagem na área.';
     } else {
-      const ff  = dentroArea.filter(x => x.ehFogoAmigo);
-      const atk = dentroArea.filter(x => !x.ehFogoAmigo);
-      prevEl.innerHTML = (atk.length ? `⚔ ${atk.map(x=>x.nome).join(', ')}` : '') +
-        (ff.length ? `${atk.length?'<br>':''}⚠️ <span style="color:#f0cc6a">Fogo amigo: ${ff.map(x=>x.nome).join(', ')}</span>` : '');
+      const ff  = dentroArea.filter((x: any) => x.ehFogoAmigo);
+      const atk = dentroArea.filter((x: any) => !x.ehFogoAmigo);
+      prevEl.innerHTML = (atk.length ? `⚔ ${atk.map((x: any)=>x.nome).join(', ')}` : '') +
+        (ff.length ? `${atk.length?'<br>':''}⚠️ <span style="color:#f0cc6a">Fogo amigo: ${ff.map((x: any)=>x.nome).join(', ')}</span>` : '');
     }
   }
 
@@ -820,7 +820,7 @@ function _aoeAtualizarAlvos() {
 
 function atkConfirmarAoE() {
   if (!_AOE_STATE) return;
-  const alvos = (_AOE_STATE.alvosAtual || []).map(a => a.nome);
+  const alvos = (_AOE_STATE.alvosAtual || []).map((a: any) => a.nome);
   mapaHideAoECircle();
   if (!alvos.length) { mostrarToast('Nenhum personagem na área', 'erro'); return; }
   COMBATE._alvosAoE = alvos;
@@ -831,14 +831,14 @@ function atkConfirmarAoE() {
 // Animação aoeWarn definida em css/styles.css
 
 
-async function _atkInvocarPersonagem(skill, invocadorNome, contexto, critico) {
+async function _atkInvocarPersonagem(skill: any, invocadorNome: any, contexto: any, critico: any) {
   // Detectar config de invocação: campo direto (novo) ou via efeitos_bonus legacy
   let nomeInvocado = skill.invocar_nome;
   let duracao      = skill.invocar_duracao_turnos ?? 0;
 
   if (!nomeInvocado) {
     const ef = (Array.isArray(skill.efeitos_bonus) ? skill.efeitos_bonus : [])
-               .find(e => e.tipo === 'invocacao');
+               .find((e: any) => e.tipo === 'invocacao');
     if (!ef) return;
     nomeInvocado = ef.invocar_nome;
     duracao      = ef.invocar_duracao_turnos ?? 0;
@@ -864,7 +864,7 @@ async function _atkInvocarPersonagem(skill, invocadorNome, contexto, critico) {
 
   if (contexto === 'arena') {
     // Impedir dupla invocação do mesmo personagem pelo mesmo dono
-    const jaExiste = AR.chars.find(x =>
+    const jaExiste = AR.chars.find((x: any) =>
       x.nome === nomeInvocado &&
       x.custom_attrs?.invocado &&
       x.custom_attrs?.pet_dono === invocadorNome
@@ -925,18 +925,18 @@ async function _atkInvocarPersonagem(skill, invocadorNome, contexto, critico) {
 }
 
 // Verifica se uma skill é de invocação
-function _skEhInvocacao(h) {
+function _skEhInvocacao(h: any) {
   if (h.tipo_dano === 'invocacao') return true;
   if (h.invocar_nome) return true;
-  return (Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : []).some(e => e.tipo === 'invocacao');
+  return (Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : []).some((e: any) => e.tipo === 'invocacao');
 }
 
 
 // Retorna o dano já reduzido (ceil em cada etapa)
-function calcularDanoFinal(danoBruto, tipoDano, char, attrDefs, atacanteChar) {
+function calcularDanoFinal(danoBruto: any, tipoDano: any, char: any, attrDefs: any, atacanteChar: any) {
   if (!danoBruto || danoBruto <= 0) return 0;
   const atribs = char?.custom_attrs?.atributos || {};
-  const resistDefs = (attrDefs || []).filter(a => a.categoria === 'resistencia');
+  const resistDefs = (attrDefs || []).filter((a: any) => a.categoria === 'resistencia');
   
   let danoAtual = danoBruto;
 
@@ -1016,7 +1016,7 @@ function calcularDanoFinal(danoBruto, tipoDano, char, attrDefs, atacanteChar) {
 }
 
 // ── Obtém attrDefs do contexto correto ──────────────────────────
-function getAttrDefsParaDano(contexto) {
+function getAttrDefsParaDano(contexto: any) {
   if (contexto === 'arena') return (AR as any).attrDefs || RPG_DATA?.attrDefs || [];
   return RPG_DATA?.attrDefs || [];
 }
@@ -1031,7 +1031,7 @@ function getAttrDefsParaDano(contexto) {
  * @param {object} personagem - Personagem alvo
  * @returns {number} HP atual seguro
  */
-function obterHpAtualSeguro(personagem) {
+function obterHpAtualSeguro(personagem: any) {
   const hpMax = personagem.custom_attrs?.hp_max ?? 100;
   
   // Se hp_atual está definido (mesmo que seja 0), usar esse valor
@@ -1048,7 +1048,7 @@ function obterHpAtualSeguro(personagem) {
 // 💡 FASE 3 - OPT-01: Sistema de Resistências e Vulnerabilidades
 // ═══════════════════════════════════════════════════════════════
 
-function calcularDanoComResistencia(danoBase, tipoDano, alvo) {
+function calcularDanoComResistencia(danoBase: any, tipoDano: any, alvo: any) {
   if (!tipoDano) tipoDano = 'fisico';
   const resistencias = alvo.custom_attrs?.resistencias || {};
   const multiplicador = resistencias[tipoDano] ?? 1.0;
@@ -1071,7 +1071,7 @@ function calcularDanoComResistencia(danoBase, tipoDano, alvo) {
 // 💡 FASE 3 - OPT-02: Sistema de HP Temporário (Shields)
 // ═══════════════════════════════════════════════════════════════
 
-function aplicarDanoComHpTemporario(personagem, danoTotal) {
+function aplicarDanoComHpTemporario(personagem: any, danoTotal: any) {
   const hpTemp = personagem.custom_attrs?.hp_temporario || 0;
   const hpAtual = obterHpAtualSeguro(personagem);
   
@@ -1109,7 +1109,7 @@ function aplicarDanoComHpTemporario(personagem, danoTotal) {
  * @param {string} batalhaId - ID da batalha
  * @returns {Promise<object|null>} Estado da batalha
  */
-async function carregarEstadoBatalha(batalhaId) {
+async function carregarEstadoBatalha(batalhaId: any) {
   if (!batalhaId || !RPG_DATA?.rpgId) return null;
   
   try {
@@ -1157,7 +1157,7 @@ async function carregarEstadoBatalha(batalhaId) {
  * @param {string} batalhaId - ID da batalha
  * @returns {Promise<void>}
  */
-async function salvarEstadoBatalha__sombreado_local(batalhaId) { // sombreada pela declaração posterior neste arquivo (comportamento clássico: última vence)
+async function salvarEstadoBatalha__sombreado_local(batalhaId: any) { // sombreada pela declaração posterior neste arquivo (comportamento clássico: última vence)
   if (!batalhaId || !RPG_DATA?.rpgId) return;
   
   const batalha = MAPA_STATE.batalhas?.[batalhaId];
@@ -1186,17 +1186,17 @@ async function salvarEstadoBatalha__sombreado_local(batalhaId) { // sombreada pe
   }
 }
 
-async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
+async function atkAplicarDano(nomeAlvo: any, dano: any, contexto: any, tipoDano: any) {
   const attrDefs = getAttrDefsParaDano(contexto);
   const atacanteNome = COMBATE.atacanteNome;
   if (contexto === 'arena') {
-    const c: any = AR.chars.find(x => x.nome === nomeAlvo);
+    const c: any = AR.chars.find((x: any) => x.nome === nomeAlvo);
     if (!c) return;
-    if ((c.buffs || []).some(b => b.imune_dano && (b.imune_dano_turnos_restantes ?? 0) > 0)) {
+    if ((c.buffs || []).some((b: any) => b.imune_dano && (b.imune_dano_turnos_restantes ?? 0) > 0)) {
       mostrarToast(`🛡 ${nomeAlvo} é imune a dano!`, 'sucesso');
       return;
     }
-    const atacanteChar = atacanteNome ? AR.chars.find(x => x.nome === atacanteNome) : null;
+    const atacanteChar = atacanteNome ? AR.chars.find((x: any) => x.nome === atacanteNome) : null;
     const danoFinal = calcularDanoFinal(dano, tipoDano || 'fisico', c, attrDefs, atacanteChar);
     const hpMax = c.custom_attrs?.hp_max ?? 100;
     const novoHp = Math.max(0, (c.hp_atual ?? hpMax) - danoFinal);
@@ -1207,7 +1207,7 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
   } else {
     const c: any = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
     if (!c) return;
-    if ((c.buffs || []).some(b => b.imune_dano && (b.imune_dano_turnos_restantes ?? 0) > 0)) {
+    if ((c.buffs || []).some((b: any) => b.imune_dano && (b.imune_dano_turnos_restantes ?? 0) > 0)) {
       mostrarToast(`🛡 ${nomeAlvo} é imune a dano!`, 'sucesso');
       combateBroadcast('dano_bloqueado_imunidade', { nome: nomeAlvo });
       return;
@@ -1232,7 +1232,7 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
         st.dano[atacanteNome] += danoFinal;
       }
       // Dano recebido por alvo
-      const tipoAlvo = (bs => bs?.participantes?.find(p => p.nome === nomeAlvo)?.tipo)(_bsStats);
+      const tipoAlvo = (bs => bs?.participantes?.find((p: any) => p.nome === nomeAlvo)?.tipo)(_bsStats);
       if (tipoAlvo === 'npc' || tipoAlvo === 'inimigo') {
         if (!st.danoRecebidoNpc) st.danoRecebidoNpc = {};
         if (!st.danoRecebidoNpc[nomeAlvo]) st.danoRecebidoNpc[nomeAlvo] = 0;
@@ -1449,14 +1449,14 @@ async function atkEnviarSolicitacaoSkill() {
 }
 
 function renderAtaquesPendentes() {
-  const pendentes = ((AR.estado as any).ataques_pendentes || []).filter(a => a.status === 'pendente');
+  const pendentes = ((AR.estado as any).ataques_pendentes || []).filter((a: any) => a.status === 'pendente');
   const el = document.getElementById('ar-ataques-pendentes');
   if (!el) return;
   el.style.display = pendentes.length && RPG_DATA?.myRole === 'mestre' ? 'block' : 'none';
   if (!pendentes.length) { el.innerHTML = ''; return; }
   el.innerHTML = `
     <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;margin-bottom:8px">⚔ Ações Criativas Pendentes</div>
-    ${pendentes.map(a => `
+    ${pendentes.map((a: any) => `
       <div style="background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:12px;margin-bottom:8px">
         <div style="font-family:'Cinzel',serif;font-size:0.8rem;color:var(--destaque);margin-bottom:4px">${a.atacante} → ${a.alvo}</div>
         <div style="font-size:0.85rem;color:#b8a8a8;margin-bottom:10px;line-height:1.5">${a.descricao}</div>
@@ -1483,7 +1483,7 @@ function renderAtaquesPendentes() {
   `;
 }
 
-function atkRolarParaPendente(apId) {
+function atkRolarParaPendente(apId: any) {
   const qtd   = parseInt(document.getElementById('dano-ap-'  + apId)?.value  || '1');
   const faces = parseInt(document.getElementById('dado-ap-'  + apId)?.value  || '6');
   const result = rolarFormula({ qtd, faces, bonus: 0, tipo: 'dado' });
@@ -1495,8 +1495,8 @@ function atkRolarParaPendente(apId) {
   }
 }
 
-async function atkMestreAprovar(apId) {
-  const pendente = (AR.estado as any).ataques_pendentes?.find(a => a.id === apId);
+async function atkMestreAprovar(apId: any) {
+  const pendente = (AR.estado as any).ataques_pendentes?.find((a: any) => a.id === apId);
   if (!pendente) return;
   const resultEl = document.getElementById('resultado-ap-' + apId);
   const dano = parseInt(resultEl?.dataset.total || '0');
@@ -1509,8 +1509,8 @@ async function atkMestreAprovar(apId) {
   mostrarToast(`Ataque criativo de ${pendente.atacante} aprovado!`, 'sucesso');
 }
 
-async function atkMestreRejeitar(apId) {
-  const pendente = (AR.estado as any).ataques_pendentes?.find(a => a.id === apId);
+async function atkMestreRejeitar(apId: any) {
+  const pendente = (AR.estado as any).ataques_pendentes?.find((a: any) => a.id === apId);
   if (!pendente) return;
   pendente.status = 'rejeitado';
   arAddLog(`✕ Ação criativa de ${pendente.atacante} rejeitada pelo Mestre`);
@@ -1526,12 +1526,12 @@ async function atkMestreRejeitar(apId) {
 // ══════════════════════════════════════════════════════════════
 
 // ── Helper: parsear dados de DC guardados em formula_aprovada ──────────────
-function _parseDCData(formulaAprovada) {
+function _parseDCData(formulaAprovada: any) {
   if (!formulaAprovada || !String(formulaAprovada).startsWith('__DC__')) return null;
   try { return JSON.parse(String(formulaAprovada).slice(6)); } catch(e) { return null; }
 }
 
-async function criativoSalvar(apenasId) {
+async function criativoSalvar(apenasId: any) {
   const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
   if (!rpgId) return;
   const sbFn = AR.session ? arSb : sb;
@@ -1556,7 +1556,7 @@ async function criativoSalvar(apenasId) {
   } catch(e) {}
 }
 
-async function criativoInserir(pendente) {
+async function criativoInserir(pendente: any) {
   if (!RPG_DATA?.rpgId) return;
   try {
     await sb('criativos', {
@@ -1576,7 +1576,7 @@ async function criativoInserir(pendente) {
   } catch(e) {}
 }
 
-function criativoReceberLinhaRemota(rec) {
+function criativoReceberLinhaRemota(rec: any) {
   if (!rec || !rec.id) return;
   const c: any = {
     id:rec.id, atacante:rec.atacante, alvo:rec.alvo, descricao:rec.descricao,
@@ -1777,7 +1777,7 @@ function criativoRenderMestre() {
 }
 
 // AC-08-B10: Badge de Crítico Visível no Modal Fase 2
-function _adicionarBadgeCriticoModalFase2(c) {
+function _adicionarBadgeCriticoModalFase2(c: any) {
   const dc = c._dc;
   if (!dc || !dc.critico) return '';
   const natural = dc.natural_max;
@@ -1792,7 +1792,7 @@ function _adicionarBadgeCriticoModalFase2(c) {
        </div>`;
 }
 
-function abrirModalCriativoMestre(id) {
+function abrirModalCriativoMestre(id: any) {
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
   document.getElementById('criativo-mestre-id').value = id;
@@ -1877,7 +1877,7 @@ function abrirModalCriativoMestre(id) {
       const grupos = parsearFormulaDano(c.skill_formula);
       if (grupos) grupos.forEach(g => {
         if (g.tipo === 'dado') {
-          const ex = CRIATIVO_MESTRE_BUILDER.find(x => x.tipo === 'dado' && x.faces === g.faces);
+          const ex = CRIATIVO_MESTRE_BUILDER.find((x: any) => x.tipo === 'dado' && x.faces === g.faces);
           if (ex) ex.qtd += (g.qtd||1); else CRIATIVO_MESTRE_BUILDER.push({tipo:'dado',qtd:g.qtd||1,faces:g.faces});
         }
       });
@@ -1899,7 +1899,7 @@ function abrirModalCriativoMestre(id) {
     if (selAttr) {
       const attrDefsSource = RPG_DATA?.attrDefs || AR?.estado?.attrDefs || [];
       selAttr.innerHTML = '<option value="">— Nenhum —</option>' +
-        attrDefsSource.filter(a => a.tipo==='number'||!a.tipo||a.tipo==='text').map(a=>`<option value="${a.nome}">${a.nome}</option>`).join('');
+        attrDefsSource.filter((a: any) => a.tipo==='number'||!a.tipo||a.tipo==='text').map((a: any)=>`<option value="${a.nome}">${a.nome}</option>`).join('');
       selAttr.value = (isSkill && c.skill_atributo) ? c.skill_atributo : '';
     }
     const modPctEl = document.getElementById('criativo-mestre-mod-pct');
@@ -1926,7 +1926,7 @@ function abrirModalCriativoMestre(id) {
     // Reset animação
     const animTipoEl = document.getElementById('criativo-anim-tipo');
     if (animTipoEl) { animTipoEl.value = 'nenhuma'; criativoAnimTipoChange(); }
-    const _rId = (eid) => document.getElementById(eid);
+    const _rId = (eid: any) => document.getElementById(eid);
     if (_rId('criativo-anim-cor'))      _rId('criativo-anim-cor').value    = '#e74c3c';
     if (_rId('criativo-anim-icone'))    _rId('criativo-anim-icone').value  = '';
     if (_rId('criativo-anim-trilha'))   _rId('criativo-anim-trilha').checked = false;
@@ -1999,7 +1999,7 @@ function abrirModalCriativoMestre(id) {
 }
 
 // ── Helper: abre modal correto baseado no status do criativo ──────────────
-function _abrirModalAprovacaoPorStatus(id) {
+function _abrirModalAprovacaoPorStatus(id: any) {
   var c = CRIATIVOS_CAMP.find(function(x){ return x.id === id; });
   if (!c) return;
   // Fase 2 (dc já rolado, precisa montar dano): usa modal antigo
@@ -2029,7 +2029,7 @@ function criativoCustoAtributoMudou() {
   const previewEl = document.getElementById('criativo-custo-preview');
   if (!c || !atributo || !previewEl) return;
   const charList2 = RPG_DATA?.characters || AR?.chars || [];
-  const char = charList2.find(ch => ch.nome === c.atacante);
+  const char = charList2.find((ch: any) => ch.nome === c.atacante);
   const val = parseFloat(char?.custom_attrs?.atributos?.[atributo]) || 0;
   previewEl.textContent = `${c.atacante}: ${atributo} atual = ${val}`;
 }
@@ -2039,7 +2039,7 @@ function fecharModalCriativoMestre() {
 }
 
 // ── Painel de efeitos extras (buff/debuff/cura/HOT/DOT) na Fase 2 do criativo ─
-function _injetarCriativoExtrasPanel(c) {
+function _injetarCriativoExtrasPanel(c: any) {
   if (!c) return;
   const fase2 = document.getElementById('criativo-fase2');
   if (!fase2) return;
@@ -2171,7 +2171,7 @@ function _injetarCriativoExtrasPanel(c) {
 
 window._acaoPersonagemAtual = null;
 
-function abrirModalAcao(nomePersonagem) {
+function abrirModalAcao(nomePersonagem: any) {
   window._acaoPersonagemAtual = nomePersonagem;
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const nomeEl = document.getElementById('modal-acao-nome');
@@ -2202,7 +2202,7 @@ function fecharModalAcao() {
   document.getElementById('modal-acao-overlay').style.display = 'none';
 }
 
-function _acaoMostrarPainel(id) {
+function _acaoMostrarPainel(id: any) {
   ['modal-acao-raiz','modal-acao-criativa-panel','modal-acao-sub-combate','modal-acao-sub-itens'].forEach(function(p) {
     var el = document.getElementById(p);
     if (el) el.style.display = 'none';
@@ -2233,11 +2233,11 @@ function acaoMostrarCriativa() {
   if (desc) desc.value = '';
 }
 
-function acaoSelecionarTipo(tipo, btn) {
+function acaoSelecionarTipo(tipo: any, btn: any) {
   window._acaoTipoAtual = tipo;
   window._acaoAlvoTipoAtual = null;
   // Visual seleção
-  var cores = { ataque: '232,80,60', suporte: '94,224,154', narrativo: '126,200,240' };
+  var cores: Record<string, any> = { ataque: '232,80,60', suporte: '94,224,154', narrativo: '126,200,240' };
   document.querySelectorAll('.acao-tipo-btn').forEach(function(b) {
     var c = cores[b.dataset.tipo] || '200,168,75';
     b.style.background  = 'rgba('+c+',0.07)';
@@ -2270,7 +2270,7 @@ function acaoSelecionarTipo(tipo, btn) {
   ['acao-nome-alvo-ataque','acao-nome-alvos-area-atk','acao-nome-alvo-suporte','acao-nome-alvos-area-sup'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
 }
 
-function acaoSelecionarAlvo(alvoTipo, btn) {
+function acaoSelecionarAlvo(alvoTipo: any, btn: any) {
   window._acaoAlvoTipoAtual = alvoTipo;
   var tipo    = window._acaoTipoAtual;
   var nomeChar = window._acaoPersonagemAtual;
@@ -2290,7 +2290,7 @@ function acaoSelecionarAlvo(alvoTipo, btn) {
   });
 
   // Obter personagens disponíveis na batalha atual
-  function _getBattleChars(filtro) {
+  function _getBattleChars(filtro: any) {
     var bid = BATALHA_ATUAL_ID || null;
     var bs  = bid ? (MAPA_STATE?.batalhas?.[bid]) : null;
     var participantes = bs ? (bs.participantes || []) : [];
@@ -2301,16 +2301,16 @@ function acaoSelecionarAlvo(alvoTipo, btn) {
         .filter(function(ch){ return ch.active_map_id === mapaId; })
         .map(function(ch){ return { nome: ch.nome, tipo: 'aliado' }; });
     }
-    if (filtro === 'inimigo') return participantes.filter(function(p){ return p.tipo === 'inimigo' || p.tipo === 'npc'; });
-    if (filtro === 'aliado')  return participantes.filter(function(p){ return p.tipo !== 'inimigo' && p.tipo !== 'npc' && p.nome !== nomeChar; });
+    if (filtro === 'inimigo') return participantes.filter(function(p: any){ return p.tipo === 'inimigo' || p.tipo === 'npc'; });
+    if (filtro === 'aliado')  return participantes.filter(function(p: any){ return p.tipo !== 'inimigo' && p.tipo !== 'npc' && p.nome !== nomeChar; });
     return participantes;
   }
 
-  function _popularSelect(selId, chars, placeholder) {
+  function _popularSelect(selId: any, chars: any, placeholder: any) {
     var sel = document.getElementById(selId);
     if (!sel) return;
     sel.innerHTML = '<option value="">'+placeholder+'</option>' +
-      chars.map(function(p){ return '<option value="'+p.nome+'">'+p.nome+'</option>'; }).join('');
+      chars.map(function(p: any){ return '<option value="'+p.nome+'">'+p.nome+'</option>'; }).join('');
     sel.style.display = '';
   }
 
@@ -2319,7 +2319,7 @@ function acaoSelecionarAlvo(alvoTipo, btn) {
   } else if (tipo === 'ataque' && alvoTipo === 'area') {
     var areaInput = document.getElementById('acao-nome-alvos-area-atk');
     if (areaInput) {
-      areaInput.value = _getBattleChars('inimigo').map(function(p){ return p.nome; }).join(', ');
+      areaInput.value = _getBattleChars('inimigo').map(function(p: any){ return p.nome; }).join(', ');
       areaInput.style.display = '';
     }
   } else if (tipo === 'suporte' && alvoTipo === 'aliado') {
@@ -2327,7 +2327,7 @@ function acaoSelecionarAlvo(alvoTipo, btn) {
   } else if (tipo === 'suporte' && alvoTipo === 'area') {
     var areaSupInput = document.getElementById('acao-nome-alvos-area-sup');
     if (areaSupInput) {
-      areaSupInput.value = _getBattleChars('aliado').map(function(p){ return p.nome; }).join(', ');
+      areaSupInput.value = _getBattleChars('aliado').map(function(p: any){ return p.nome; }).join(', ');
       areaSupInput.style.display = '';
     }
   }
@@ -2370,22 +2370,22 @@ function modalAcaoItem() {
   const itensChar = (INV?.inventarios?.[charId] || []);
 
   // Filtrar consumíveis com quantidade > 0 e não equipados
-  const itensInv = itensChar.filter(i => {
+  const itensInv = itensChar.filter((i: any) => {
     if ((i.quantidade || 0) <= 0) return false;
     if (i.equipado) return false;
     // O item joined fica em i.item; fallback para INV.itemDefs
-    const def = i.item || INV?.itemDefs?.find(d => d.id === (i.item_catalog_id || i.item_def_id));
+    const def = i.item || INV?.itemDefs?.find((d: any) => d.id === (i.item_catalog_id || i.item_def_id));
     return def && (def.tipo === 'consumivel' || def.tipo === 'misc' || def.tipo === 'pocao' || def.tipo === 'poção');
   });
 
   if (!itensInv.length) {
     lista.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Nenhum item consumível no inventário</div>';
   } else {
-    lista.innerHTML = itensInv.map(invItem => {
-      const def = invItem.item || INV?.itemDefs?.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
+    lista.innerHTML = itensInv.map((invItem: any) => {
+      const def = invItem.item || INV?.itemDefs?.find((d: any) => d.id === (invItem.item_catalog_id || invItem.item_def_id));
       if (!def) return '';
       const efStr = Array.isArray(def.efeitos)
-        ? def.efeitos.map(ef => (typeof _efeitoLabel === 'function' ? _efeitoLabel(ef) : null) || ef.tipo).join(' · ')
+        ? def.efeitos.map((ef: any) => (typeof _efeitoLabel === 'function' ? _efeitoLabel(ef) : null) || ef.tipo).join(' · ')
         : (def.descricao || '');
       return `<div onclick="fecharModalAcao();abrirModalUsarItem('${invItem.id}','${nomeChar.replace(/'/g,"\\'")}')"
         style="padding:10px 12px;background:rgba(39,174,96,0.06);border:1px solid rgba(39,174,96,0.18);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:background 0.2s"
@@ -2402,10 +2402,10 @@ function modalAcaoItem() {
   document.getElementById('modal-acao-sub-itens').style.display = '';
 }
 
-function usarItemConsumivel(nomeChar, idx) {
+function usarItemConsumivel(nomeChar: any, idx: any) {
   const char = RPG_DATA?.characters?.find(c => c.nome === nomeChar);
   if (!char) return;
-  const itens = (char.custom_attrs?.itens || []).filter(it => it.consumivel || it.tipo === 'consumivel' || it.quantidade > 0);
+  const itens = (char.custom_attrs?.itens || []).filter((it: any) => it.consumivel || it.tipo === 'consumivel' || it.quantidade > 0);
   const item = itens[idx];
   if (!item) return;
   fecharModalAcao();
@@ -2522,7 +2522,7 @@ async function acaoEnviarPedidoCombate() {
 }
 
 // ─── Mestre: abrir modal para aprovar pedido de combate ─────────────────────
-function mestreAbrirModalCombatePedido(id) {
+function mestreAbrirModalCombatePedido(id: any) {
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
   document.getElementById('combate-pedido-id').value = id;
@@ -2544,7 +2544,7 @@ function mestreAbrirModalCombatePedido(id) {
     const hp = Number(ch.custom_attrs?.atributos?.HP ?? ch.custom_attrs?.hp ?? ch.custom_attrs?.['HP'] ?? 1);
     if (hp <= 0) return false;
     const jaEmBatalha = Object.values<any>(MAPA_STATE?.batalhas || {}).some(b =>
-      b.ativa && b.participantes?.some(p => p.nome === ch.nome)
+      b.ativa && b.participantes?.some((p: any) => p.nome === ch.nome)
     );
     return !jaEmBatalha;
   });
@@ -2579,7 +2579,7 @@ async function mestreAprovarCombatePedido() {
   const mapaId = document.getElementById('combate-pedido-mapa-id').value;
   const checkboxes = document.querySelectorAll('#combate-pedido-participantes input[type=checkbox]:checked');
   const participantesBase = Array.from(checkboxes).map(cb => ({
-    nome: cb.dataset.nome, tipo: cb.dataset.tipo, cor: cb.dataset.cor, iniciativa: null
+    nome: cb.dataset.nome, tipo: cb.dataset.tipo, cor: cb.dataset.cor, iniciativa: null as any
   })).filter(p => !(RPG_DATA?.characters||[]).find(x => x.nome === p.nome)?.custom_attrs?.eh_pet);
   if (participantesBase.length < 2) {
     mostrarToast('Selecione pelo menos 2 participantes para iniciar a batalha', 'erro');
@@ -2641,13 +2641,13 @@ function criativoCadastrarSkillToggle() {
   if (fields) fields.style.display = checked ? 'block' : 'none';
 }
 
-function criativoMestreBuilderAdd(faces) {
-  const ex = CRIATIVO_MESTRE_BUILDER.find(g => g.tipo === 'dado' && g.faces === faces);
+function criativoMestreBuilderAdd(faces: any) {
+  const ex = CRIATIVO_MESTRE_BUILDER.find((g: any) => g.tipo === 'dado' && g.faces === faces);
   if (ex) ex.qtd++; else CRIATIVO_MESTRE_BUILDER.push({ tipo: 'dado', qtd: 1, faces });
   criativoMestreBuilderAtualizar();
 }
-function criativoMestreBuilderRemove(faces) {
-  const idx = CRIATIVO_MESTRE_BUILDER.findIndex(g => g.tipo === 'dado' && g.faces === faces);
+function criativoMestreBuilderRemove(faces: any) {
+  const idx = CRIATIVO_MESTRE_BUILDER.findIndex((g: any) => g.tipo === 'dado' && g.faces === faces);
   if (idx < 0) return;
   CRIATIVO_MESTRE_BUILDER[idx].qtd--;
   if (CRIATIVO_MESTRE_BUILDER[idx].qtd <= 0) CRIATIVO_MESTRE_BUILDER.splice(idx, 1);
@@ -2659,7 +2659,7 @@ function criativoMestreBuilderAtualizar() {
   if (labelEl) labelEl.textContent = formula || '(sem dados base)';
   const chipsEl = document.getElementById('criativo-mestre-builder-chips');
   if (!chipsEl) return;
-  chipsEl.innerHTML = CRIATIVO_MESTRE_BUILDER.map(g => {
+  chipsEl.innerHTML = CRIATIVO_MESTRE_BUILDER.map((g: any) => {
     if (g.tipo !== 'dado') return '';
     return `<div style="display:flex;align-items:center;gap:3px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:20px;padding:2px 8px 2px 6px">
       <span style="font-family:'Cinzel',serif;font-size:0.82rem;color:#f0cc6a">${g.qtd}d${g.faces}</span>
@@ -2676,13 +2676,13 @@ function criativoMestreAtributoMudou() {
   const atributo = sel.value;
   if (!atributo) { previewEl.textContent = ''; return; }
   const charList = RPG_DATA?.characters || AR?.chars || [];
-  const char = charList.find(ch => ch.nome === c.atacante);
+  const char = charList.find((ch: any) => ch.nome === c.atacante);
   const val = char ? parseFloat(char.custom_attrs?.atributos?.[atributo] ?? 0) : 0;
   previewEl.textContent = `${c.atacante}: ${atributo} = ${val}`;
 }
 
 // ─── Helpers do modal mestre ─────────────────────────────────────────────────
-function criativoSelecionarDado(btn, faces) {
+function criativoSelecionarDado(btn: any, faces: any) {
   document.querySelectorAll('.dc-dado-btn').forEach(b => b.classList.remove('dc-dado-sel'));
   btn.classList.add('dc-dado-sel');
   criativoDCPreview();
@@ -2718,7 +2718,7 @@ function criativoDCPreview() {
 }
 
 // ─── Abre o modal de ataque como overlay (corrige CSS de modo inline anterior) ─
-function _criativoAbrirModalOverlay(c) {
+function _criativoAbrirModalOverlay(c: any) {
   // Esconder painel inline do mapa imediatamente para evitar duplicidade
   const painelMapa = document.getElementById('atk-criativo-aprovado-mapa');
   if (painelMapa) painelMapa.style.display = 'none';
@@ -2800,8 +2800,8 @@ async function criativoMestreConcluirFase1() {
 }
 
 // ─── Helper: labels por tipo de ação criativa ────────────────────────────────
-function crLabelAcao(tipo) {
-  return { ataque: '⚔ Dano', suporte: '✨ Efeito', narrativo: '📜 Ação' }[tipo] || '⚔ Dano';
+function crLabelAcao(tipo: any) {
+  return ({ ataque: '⚔ Dano', suporte: '✨ Efeito', narrativo: '📜 Ação' } as any)[tipo] || '⚔ Dano';
 }
 
 // ─── FASE 2: Mestre define dano (após jogador passar no DC) ──────────────────
@@ -2922,7 +2922,7 @@ async function criativoMestreDefinirDano() {
   // Alvos de área (campo texto separado por vírgula)
   const alvosAreaStr = document.getElementById('cx-alvos-area')?.value?.trim();
   if (alvosAreaStr) {
-    c._alvos_area = alvosAreaStr.split(',').map(a => a.trim()).filter(Boolean);
+    c._alvos_area = alvosAreaStr.split(',').map((a: any) => a.trim()).filter(Boolean);
   } else {
     c._alvos_area = null;
   }
@@ -3060,7 +3060,7 @@ async function criativoMestreRejeitar() {
 }
 
 // Rejeitar diretamente do card (sem abrir modal)
-async function criativoMestreRejeitarDireto(id) {
+async function criativoMestreRejeitarDireto(id: any) {
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
   
@@ -3130,7 +3130,7 @@ async function criativoMestreLimparTodas() {
 }
 
 // AC-10-B13: Reclassificar criativo narrativo como ataque (para mestre corrigir eh_ataque=false por engano)
-async function criativoReclassificar(id) {
+async function criativoReclassificar(id: any) {
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
   if (!confirm('Reclassificar como ataque mecânico? O mestre poderá definir dano agora.')) return;
@@ -3145,9 +3145,9 @@ async function criativoReclassificar(id) {
 
 // Chamado quando o estado remoto muda — atualiza a tela do jogador no step-pendente
 // Referência ao criativo pendente da notificação global
-var _criativoNotifId = null;
+var _criativoNotifId: any = null;
 
-function criativoNotifMostrar(tipo, titulo, msg, labelBotao) {
+function criativoNotifMostrar(tipo: any, titulo: any, msg: any, labelBotao: any) {
   // tipo: 'aprovado' | 'recusado' | 'nova-solicitacao'
   const bar = document.getElementById('criativo-notif-bar');
   if (!bar) return;
@@ -3242,7 +3242,7 @@ function _criativoHideAllPendente() {
   if (painelMapa) painelMapa.style.display = 'none';
 }
 
-function criativoAtualizarStepJogador(c) {
+function criativoAtualizarStepJogador(c: any) {
   const modalAtaque = document.getElementById('modal-ataque');
   const modalAberto = modalAtaque && modalAtaque.style.display !== 'none';
 
@@ -3390,9 +3390,9 @@ function criativoAtualizarStepJogador(c) {
 
 // -- Polling de fallback: garante que o jogador receba a aprovacao
 // mesmo se o realtime do Supabase nao disparar o evento UPDATE.
-var _criativoPollingTimer = null;
+var _criativoPollingTimer: any = null;
 
-function criativoIniciarPolling(id) {
+function criativoIniciarPolling(id: any) {
   criativoStopPolling();
   const rpgId = RPG_DATA?.rpgId || AR.session?.rpg_id;
   if (!rpgId) return;
@@ -3402,7 +3402,7 @@ function criativoIniciarPolling(id) {
   const INTERVALO = 3500;
   const MAX = 120; // Maior timeout para suportar o fluxo de 2 fases
   const STATUS_FINAIS = ['rejeitado','concluido','dc_rolado_narrativo','dc_rolado_falha'];
-  const STATUS_MUDOU = (s) => s !== 'pendente'; // Qualquer mudança interessa
+  const STATUS_MUDOU = (s: any) => s !== 'pendente'; // Qualquer mudança interessa
   _criativoPollingTimer = setInterval(async () => {
     tentativas++;
     if (tentativas > MAX || CRIATIVO_ID_ATUAL !== id) { criativoStopPolling(); return; }
@@ -3621,7 +3621,7 @@ async function criativoJogadorRolarDC() {
 }
 
 // AC-12-B14: Consequência Mecânica para Falha Crítica
-async function _aplicarConsequenciaFalhaCritica(criativoId, atacante, falhaCritica) {
+async function _aplicarConsequenciaFalhaCritica(criativoId: any, atacante: any, falhaCritica: any) {
   if (!falhaCritica) return;
   const consequencias = [
     { tipo: 'debuff_dano', nome: 'Erro Fatal', descricao: 'Seu golpe errou completamente, deixando você exposto', efeito: { mod_dano: -3, mod_dano_turnos: 2 } },
@@ -3650,7 +3650,7 @@ async function _aplicarConsequenciaFalhaCritica(criativoId, atacante, falhaCriti
 // 🎲 FUNÇÕES AUXILIARES PARA ANIMAÇÃO DE DC
 // ═══════════════════════════════════════════════════════════════
 
-function _dcMostrarModalRolagem(atacante, dado, dc) {
+function _dcMostrarModalRolagem(atacante: any, dado: any, dc: any) {
   // Criar ou reutilizar modal
   let modal = document.getElementById('modal-dc-rolagem');
   if (!modal) {
@@ -3700,7 +3700,7 @@ function _dcMostrarModalRolagem(atacante, dado, dc) {
   modal.style.display = 'flex';
 }
 
-function _dcMostrarResultado(resultado, dc, sucesso, critico, naturalMax, dado, falhaCritica) {
+function _dcMostrarResultado(resultado: any, dc: any, sucesso: any, critico: any, naturalMax: any, dado: any, falhaCritica: any) {
   const resultadoEl = document.getElementById('dc-resultado');
   const iconeEl = document.getElementById('dc-resultado-icone');
   const textoEl = document.getElementById('dc-resultado-texto');
@@ -3786,7 +3786,7 @@ function criativoJogadorRolarDano() {
     : 'inimigo';
 
   // AC-03-B6: Detectar se é cura (suporte com cura_imediata OU HOT nos extras ou formula de cura)
-  const ehCura = criativoTipo === 'suporte' && efeitosExtras.some(e => e.tipo === 'cura_imediata' || e.hot_formula);
+  const ehCura = criativoTipo === 'suporte' && efeitosExtras.some((e: any) => e.tipo === 'cura_imediata' || e.hot_formula);
   const tipoDanoFinal = criativoTipo === 'suporte' ? (ehCura ? 'cura' : 'suporte') : 'fisico';
 
   // Suporte a múltiplos alvos (área criativa)
@@ -3837,11 +3837,11 @@ function criativoJogadorRolarMapa() {
 }
 
 // ── Trigger de animacao de skill — flutua acima do token do atacante ────────
-var _atkAnimTriggerTimer = null;
+var _atkAnimTriggerTimer: any = null;
 var _atkAnimTriggerSeg   = 10;
 
 // ── Cálculo de crítico: ≥90% do valor máximo da fórmula (ceil) ──────────────
-function calcMaxFormula(grupos) {
+function calcMaxFormula(grupos: any) {
   if (!grupos || !grupos.length) return 0;
   let max = 0;
   for (const g of grupos) {
@@ -3850,15 +3850,15 @@ function calcMaxFormula(grupos) {
   }
   return max;
 }
-function calcCriticoThreshold(grupos) {
+function calcCriticoThreshold(grupos: any) {
   const max = calcMaxFormula(grupos);
   if (!max || max <= 0) return null;
   return Math.ceil(max * 0.9);
 }
 
-function _atkDarkenColor(hex, factor) {
+function _atkDarkenColor(hex: any, factor: any) {
   hex = (hex || '#4fa3d1').replace('#','');
-  if (hex.length === 3) hex = hex.split('').map(c=>c+c).join('');
+  if (hex.length === 3) hex = hex.split('').map((c: any)=>c+c).join('');
   let r = parseInt(hex.slice(0,2),16) || 0;
   let g = parseInt(hex.slice(2,4),16) || 0;
   let b = parseInt(hex.slice(4,6),16) || 0;
@@ -3879,16 +3879,16 @@ function _atkMostrarTrigger() {
   const h = COMBATE.habilidadeSel;
   const nomeAtaque = h?.habilidade || h?.nome || '⚔ Ataque';
   const danoTotal  = COMBATE.dadosRolados?.total ?? null;
-  const efeitos    = (h?.efeitos_bonus || []).map(e => e.nome).filter(Boolean).join(' · ');
+  const efeitos    = (h?.efeitos_bonus || []).map((e: any) => e.nome).filter(Boolean).join(' · ');
 
   // ── Detecção de crítico (≥90% do máximo dos DADOS, sem modificador de atributo) ─────────────
   const grupos = COMBATE._gruposFormula || parsearFormulaDano(h?.formula_dano);
   // Isolar apenas grupos de dado (excluir fixo/modifier) para threshold
-  const gruposDados = grupos ? grupos.filter(g => g.tipo === 'dado') : null;
+  const gruposDados = grupos ? grupos.filter((g: any) => g.tipo === 'dado') : null;
   const threshold = gruposDados?.length ? calcCriticoThreshold(gruposDados) : null;
   // Usar apenas a soma dos dados individuais (sem bonus/modifier)
   const somenteDados = COMBATE.dadosRolados?.dados
-    ? COMBATE.dadosRolados.dados.reduce((s,d) => s + d.valor, 0)
+    ? COMBATE.dadosRolados.dados.reduce((s: any,d: any) => s + d.valor, 0)
     : danoTotal;
   const ehCura = h?.tipo_dano === 'cura';
   const ehPositivo = ehCura || ['aliado','proprio','todos_aliados'].includes(h?.alvo_tipo);
@@ -3924,7 +3924,7 @@ function _atkMostrarTrigger() {
 
   // ── Cor de fundo (cor do personagem escurecida) ─────────────────
   const chars = COMBATE.contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
-  const char  = chars.find(c => c.nome === COMBATE.atacanteNome);
+  const char  = chars.find((c: any) => c.nome === COMBATE.atacanteNome);
   const cor   = char?.custom_attrs?.cor || char?.cor || '#4fa3d1';
   const bgEscuro = _atkDarkenColor(cor, 0.45);
   const box = document.getElementById('atk-anim-trigger-box');
@@ -4018,7 +4018,7 @@ function _atkOcultarTrigger() {
 }
 
 // ── Exibe o card de trigger para espectadores (somente visual, sem clique) ──
-function _atkMostrarTriggerRemoto(p) {
+function _atkMostrarTriggerRemoto(p: any) {
   const el = document.getElementById('atk-anim-trigger');
   if (!el) return;
 
@@ -4093,7 +4093,7 @@ function _atkMostrarCalcDano() {
     const tipoDefesa = _battleCfg.tipo_defesa || 'passiva';
     const temReacao = _battleCfg.usa_reacoes && !ehCura && (tipoDefesa === 'ativa' || tipoDefesa === 'mista');
 
-    const chipsHtml = dados.map(d => {
+    const chipsHtml = dados.map((d: any) => {
       const isCrit = d.valor === d.faces;
       return `<div style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:7px;background:${isCrit ? 'rgba(240,204,106,0.15)' : 'rgba(232,80,60,0.1)'};border:2px solid ${isCrit ? '#f0cc6a' : 'rgba(232,80,60,0.4)'};font-family:'Cinzel',serif;font-size:1rem;color:${isCrit ? '#f0cc6a' : '#e8604c'}" title="d${d.faces}">${d.valor}</div>`;
     }).join('');
@@ -4105,7 +4105,7 @@ function _atkMostrarCalcDano() {
     // Seção de reação — defesa ativa (roll d20 + habilidades reativas)
     const _alvoNome = COMBATE.alvoNome;
     const _habsReativas = temReacao && typeof atkGetHabilidadesCampanha === 'function'
-      ? (atkGetHabilidadesCampanha(_alvoNome) || []).filter(hb =>
+      ? (atkGetHabilidadesCampanha(_alvoNome) || []).filter((hb: any) =>
           hb.tipo_habilidade && hb.tipo_habilidade !== 'acao' &&
           (hb.gatilho_tipo === 'ser_atingido' || hb.gatilho_tipo === 'sofrer_dano' || !hb.gatilho_tipo)
         )
@@ -4220,11 +4220,11 @@ function _atkMostrarCalcDano() {
       // Habilidades reativas do alvo
       const habsEl = overlay.querySelector('#atk-reacao-habs');
       if (habsEl && _habsReativas.length) {
-        habsEl.innerHTML = _habsReativas.map(hb =>
+        habsEl.innerHTML = _habsReativas.map((hb: any) =>
           `<button onclick="window._atkReativaUsar('${(String(hb.id||'')).replace(/'/g,"\\'")}',this)" style="width:100%;padding:8px;background:rgba(93,173,226,0.08);border:1px solid rgba(93,173,226,0.25);border-radius:7px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;margin-bottom:5px;text-align:left">⚡ ${hb.habilidade||hb.nome||'?'} <span style="opacity:0.5;font-size:0.55rem">(${hb.tipo_habilidade})</span></button>`
         ).join('');
-        window._atkReativaUsar = (habId, btn) => {
-          const hb = _habsReativas.find(x => String(x.id) === String(habId));
+        window._atkReativaUsar = (habId: any, btn: any) => {
+          const hb = _habsReativas.find((x: any) => String(x.id) === String(habId));
           if (!hb) return;
           btn.disabled = true;
           btn.textContent = '✓ ' + (hb.habilidade||hb.nome) + ' ativada';
@@ -4273,10 +4273,10 @@ async function _atkTriggerAnimacao() {
 }
 
 // ── 18H: Habilidades de NPC ───────────────────────────────────
-function atkRenderHabilidadesNPC(habilidades) {
+function atkRenderHabilidadesNPC(habilidades: any) {
   const el = document.getElementById('ar-char-habilidades-lista');
   if (!el) return;
-  el.innerHTML = (habilidades || []).map((h, i) => `
+  el.innerHTML = (habilidades || []).map((h: any, i: any) => `
     <div style="background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.5);border-radius:6px;padding:8px 10px;font-size:0.82rem">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-family:'Cinzel',serif;color:#e8604c">${h.nome}</span>
@@ -4307,7 +4307,7 @@ function atkAdicionarHabilidadeNPC() {
   atkRenderHabilidadesNPC(NPC_HABILIDADES_TEMP);
 }
 
-function atkRemoverHabilidadeNPC(idx) {
+function atkRemoverHabilidadeNPC(idx: any) {
   NPC_HABILIDADES_TEMP.splice(idx, 1);
   atkRenderHabilidadesNPC(NPC_HABILIDADES_TEMP);
 }
@@ -4319,12 +4319,12 @@ function atkRemoverHabilidadeNPC(idx) {
 // ── MAPA: funções de hierarquia ───────────────────────────────
 
 // Retorna todos os mapas filhos diretos de um map_id
-function mapaFilhos(parentId) {
+function mapaFilhos(parentId: any) {
   return (RPG_DATA.mapas||[]).filter(l => l.mapa.parent_map_id === parentId);
 }
 
 // Retorna a zona de um mapa filho dentro do pai
-function mapaZonaNoParent(childMapId) {
+function mapaZonaNoParent(childMapId: any) {
   const parent = (RPG_DATA.mapas||[]).find(l =>
     (l.mapa.locais||[]).some(z => z.mapa_local_id === childMapId));
   if (!parent) return null;
@@ -4333,7 +4333,7 @@ function mapaZonaNoParent(childMapId) {
 
 // Projeta a posição (x,y) de um mapa filho para as coordenadas do pai
 // zona: { x, y, zona_w_percent, zona_h_percent } — centro e tamanho em %
-function projetarPosicaoNoParent(posX, posY, zona) {
+function projetarPosicaoNoParent(posX: any, posY: any, zona: any) {
   if (!zona) return null;
   const w = zona.zona_w_percent || zona.raio_percent || 8;
   const h = zona.zona_h_percent || (w * 0.75);
@@ -4346,7 +4346,7 @@ function projetarPosicaoNoParent(posX, posY, zona) {
 // Retorna a posição projetada de um personagem em qualquer mapa ancestral
 // Retorna null se o personagem não está nesse mapa nem em descendentes
 // ── 1.1 MIGRAÇÃO: normaliza posição do formato antigo {x,y}% para novo {col,row} ──
-function normalizarPosicao(pos, mapa) {
+function normalizarPosicao(pos: any, mapa: any) {
   if (!pos) return null;
   if (pos.col !== undefined && pos.row !== undefined) return pos; // já novo formato
   if (pos.x === undefined || pos.y === undefined) return null;
@@ -4359,7 +4359,7 @@ function normalizarPosicao(pos, mapa) {
 }
 
 // ── Helper: converte porcentagem % para célula {col,row} ──────────────────────
-function pctParaCelula(x, y, mapId) {
+function pctParaCelula(x: any, y: any, mapId: any) {
   const mapa = _getMapaById(mapId);
   const largura = mapa?.largura_total || 20;
   const altura  = mapa?.altura_total  || 20;
@@ -4370,22 +4370,22 @@ function pctParaCelula(x, y, mapId) {
 }
 
 // ── Helper: obter mapa pelo map_id ─────────────────────────────────────────
-function _getMapaById(mapId) {
+function _getMapaById(mapId: any) {
   return (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === mapId)?.mapa || null;
 }
 
 
 // ── 1.3 — helpers de imagem separados ────────────────────────────────────────
-function _imgToken(ca) {
+function _imgToken(ca: any) {
   // Delegado para token.js — mantido como alias de compatibilidade
   if (typeof tokenImgUrl === 'function') return tokenImgUrl({ custom_attrs: ca });
   return ca?.img_retrato || ca?.aparencia?.img_frente || ca?.aparencia?.composed_img || ca?.img || ca?.img_url || '';
 }
-function _imgFicha(ca) {
+function _imgFicha(ca: any) {
   return ca?.img_full || ca?.img || ca?.img_url || '';
 }
 
-function getPosicaoNoMapa(char, targetMapId) {
+function getPosicaoNoMapa(char: any, targetMapId: any) {
   // 🔧 FIX: Verificar se char existe antes de acessar propriedades
   if (!char) return null;
   
@@ -4399,7 +4399,7 @@ function getPosicaoNoMapa(char, targetMapId) {
   }
 
   // Verificar se está num mapa filho (recursivo)
-  function projetar(fromMapId) {
+  function projetar(fromMapId: any) {
     const zona = mapaZonaNoParent(fromMapId);
     if (!zona) return null;
     const parentEntry = (RPG_DATA.mapas||[]).find(l =>
@@ -4423,7 +4423,7 @@ function getPosicaoNoMapa(char, targetMapId) {
     return null;
   }
 
-  function projetar2(fromId, toId) {
+  function projetar2(fromId: any, toId: any) {
     if (fromId === toId) return (char.map_positions || {})[fromId] || null;
     const zona = mapaZonaNoParent(fromId);
     if (!zona) return null;
@@ -4440,7 +4440,7 @@ function getPosicaoNoMapa(char, targetMapId) {
   }
 
   // Verificar se activeId é descendente de targetMapId
-  function isDescendente(childId, ancestorId) {
+  function isDescendente(childId: any, ancestorId: any) {
     const zona = mapaZonaNoParent(childId);
     if (!zona) return false;
     const parentEntry = (RPG_DATA.mapas||[]).find(l =>
@@ -4458,7 +4458,7 @@ function getPosicaoNoMapa(char, targetMapId) {
 }
 
 // Setar posição ativa de um personagem (move para o mapa atual)
-async function setCharActiveMap(charNome, mapId, x, y) {
+async function setCharActiveMap(charNome: any, mapId: any, x: any, y: any) {
   const c = RPG_DATA.characters.find(ch => ch.nome === charNome);
   if (!c) return;
   if (!c.map_positions) c.map_positions = {};
@@ -4480,7 +4480,7 @@ async function setCharActiveMap(charNome, mapId, x, y) {
   } catch(e) {}
 }
 
-async function removeCharFromMap(charNome) {
+async function removeCharFromMap(charNome: any) {
   const c = RPG_DATA.characters.find(ch => ch.nome === charNome);
   if (!c) return;
   const mapaId = MAPA_STATE.mapaAtualId;
@@ -4500,7 +4500,7 @@ async function removeCharFromMap(charNome) {
 // Exclui um personagem do banco + estado local + re-render
 // isGenerico=true: confirmação mais rápida, usado direto do mapa
 // isGenerico=false: confirmação explícita, apenas dentro do edit
-async function excluirPersonagemCompleto(nome, isGenerico) {
+async function excluirPersonagemCompleto(nome: any, isGenerico: any) {
   // NPCs genéricos mortos em combate são excluídos automaticamente sem confirmação
   if (!isGenerico) {
     const msg = `Excluir permanentemente "${nome}"? Esta ação não pode ser desfeita.`;
@@ -4513,7 +4513,7 @@ async function excluirPersonagemCompleto(nome, isGenerico) {
   RPG_DATA.characters = (RPG_DATA.characters || []).filter(c => c.nome !== nome);
   // Remove de batalhas ativas
   Object.values<any>(MAPA_STATE.batalhas || {}).forEach(b => {
-    if (b.participantes) b.participantes = b.participantes.filter(p => p.nome !== nome);
+    if (b.participantes) b.participantes = b.participantes.filter((p: any) => p.nome !== nome);
     if (b.iniciativasRoladas) delete b.iniciativasRoladas[nome];
   });
   // Re-render
@@ -4531,11 +4531,11 @@ async function excluirPersonagemCompleto(nome, isGenerico) {
 }
 
 // Alias de conveniência usado no auto-delete por HP=0
-async function excluirNpcGenerico(nome) {
+async function excluirNpcGenerico(nome: any) {
   return excluirPersonagemCompleto(nome, true);
 }
 
-async function resetarHpNpcGenerico(nome) {
+async function resetarHpNpcGenerico(nome: any) {
   const c = (RPG_DATA.characters||[]).find(ch => ch.nome === nome);
   if (!c) return;
   const hpMax = c.custom_attrs?.hp_max ?? 30;
@@ -4545,7 +4545,7 @@ async function resetarHpNpcGenerico(nome) {
   mostrarToast(`${nome}: HP restaurado (${hpMax})`, '');
 }
 
-function ativarModoPlacement(localMapId, localMapNome, zonaW, zonaH) {
+function ativarModoPlacement(localMapId: any, localMapNome: any, zonaW: any, zonaH: any) {
   PLACEMENT_STATE = { localMapId, localMapNome, zonaW: zonaW||15, zonaH: zonaH||15 };
   const hint = document.getElementById('mapa-placement-hint');
   if (hint) { hint.style.display = 'flex'; hint.querySelector('span').textContent = `Clique no mapa para posicionar "${localMapNome}"`; }
@@ -4560,7 +4560,7 @@ function cancelarPlacement() {
   document.getElementById('mapa-wrap').classList.remove('placement-ativo');
 }
 
-async function confirmarPlacement(x, y) {
+async function confirmarPlacement(x: any, y: any) {
   if (!PLACEMENT_STATE) return;
   const { localMapId, localMapNome, zonaW, zonaH } = PLACEMENT_STATE;
   cancelarPlacement();
@@ -4616,13 +4616,13 @@ async function confirmarPlacement(x, y) {
 }
 
 // ── 14F: MAPAS — Zonas de transição ──────────────────────────
-function toggleMapaTool(modo) {
+function toggleMapaTool(modo: any) {
   const isActive = MAPA_STATE.toolMode === modo;
   MAPA_STATE.toolMode = isActive ? null : modo;
   // Atualizar botões
   document.querySelectorAll('.mapa-tool-btn').forEach(b => b.classList.remove('ativo'));
   if (MAPA_STATE.toolMode) {
-    const btnMap = { medicao: 'mapa-tool-med', zonas: 'mapa-tool-zonas', paredes: 'mapa-tool-paredes' };
+    const btnMap: Record<string, any> = { medicao: 'mapa-tool-med', zonas: 'mapa-tool-zonas', paredes: 'mapa-tool-paredes' };
     const btn = document.getElementById(btnMap[MAPA_STATE.toolMode] || '');
     if (btn) btn.classList.add('ativo');
   }
@@ -4647,7 +4647,7 @@ function toggleMapaTool(modo) {
   if (entry) mapaRenderTokens(entry.mapa);
 }
 
-function abrirModalZona(localId, x, y) {
+function abrirModalZona(localId: any, x: any, y: any) {
   const overlay = document.getElementById('modal-zona-overlay');
   document.getElementById('zona-pos-x').value = x || 50;
   document.getElementById('zona-pos-y').value = y || 50;
@@ -4720,7 +4720,7 @@ async function removerZona() {
 // ── DADOS ─────────────────────────────────────────────────────
 function renderDados(){
   const ativos = getDiceConfig(RPG_DATA.rpgId);
-  document.getElementById('dado-grid').innerHTML=ativos.map(d=>`<button class="dado-btn" onclick="selecionarDado(${d},this)"><svg class="dado-icone" viewBox="0 0 40 40" fill="none">${svgDado(d)}</svg><span class="dado-label">d${d}</span></button>`).join('');
+  document.getElementById('dado-grid').innerHTML=ativos.map((d: any)=>`<button class="dado-btn" onclick="selecionarDado(${d},this)"><svg class="dado-icone" viewBox="0 0 40 40" fill="none">${svgDado(d)}</svg><span class="dado-label">d${d}</span></button>`).join('');
 }
 function renderDiceConfig(){
   const rpgId=RPG_DATA.rpgId;
@@ -4735,12 +4735,12 @@ function renderDiceConfig(){
     </button>`;
   }).join('');
 }
-function toggleDadoCampanha(d){
+function toggleDadoCampanha(d: any){
   const rpgId=RPG_DATA.rpgId;
   let ativos=getDiceConfig(rpgId);
   if(ativos.includes(d)){
     if(ativos.length<=1){mostrarToast('Mínimo 1 dado ativo','erro');return;}
-    ativos=ativos.filter(x=>x!==d);
+    ativos=ativos.filter((x: any)=>x!==d);
   } else {
     ativos=[...ativos,d].sort((a,b)=>a-b);
   }
@@ -4748,8 +4748,8 @@ function toggleDadoCampanha(d){
   renderDiceConfig();
   renderDados();
 }
-function svgDado(d){const s=`stroke="var(--primario)" stroke-width="1.5"`,t=`fill="var(--primario)" font-size="10" font-family="Cinzel,serif"`;if(d===4)return`<polygon points="20,4 36,34 4,34" fill="none" ${s}/><text x="20" y="28" text-anchor="middle" ${t}>4</text>`;if(d===6)return`<rect x="6" y="6" width="28" height="28" rx="4" fill="none" ${s}/><text x="20" y="26" text-anchor="middle" ${t}>6</text>`;if(d===8)return`<polygon points="20,3 37,20 20,37 3,20" fill="none" ${s}/><text x="20" y="26" text-anchor="middle" ${t}>8</text>`;if(d===10)return`<polygon points="20,3 35,15 30,35 10,35 5,15" fill="none" ${s}/><text x="20" y="27" text-anchor="middle" ${t}>10</text>`;if(d===20)return`<polygon points="20,2 38,12 38,28 20,38 2,28 2,12" fill="none" ${s}/><text x="20" y="26" text-anchor="middle" ${t}>20</text>`;return`<circle cx="20" cy="20" r="17" fill="none" ${s}/><text x="20" y="25" text-anchor="middle" font-size="9" font-family="Cinzel,serif" fill="var(--primario)">100</text>`;}
-function selecionarDado(d,btn){DADO_SEL=d;document.querySelectorAll('.dado-btn').forEach(b=>b.classList.remove('selecionado'));btn.classList.add('selecionado');document.getElementById('resultado-tipo').textContent=`d${d} selecionado`;document.getElementById('resultado-critico').style.display='none';}
+function svgDado(d: any){const s=`stroke="var(--primario)" stroke-width="1.5"`,t=`fill="var(--primario)" font-size="10" font-family="Cinzel,serif"`;if(d===4)return`<polygon points="20,4 36,34 4,34" fill="none" ${s}/><text x="20" y="28" text-anchor="middle" ${t}>4</text>`;if(d===6)return`<rect x="6" y="6" width="28" height="28" rx="4" fill="none" ${s}/><text x="20" y="26" text-anchor="middle" ${t}>6</text>`;if(d===8)return`<polygon points="20,3 37,20 20,37 3,20" fill="none" ${s}/><text x="20" y="26" text-anchor="middle" ${t}>8</text>`;if(d===10)return`<polygon points="20,3 35,15 30,35 10,35 5,15" fill="none" ${s}/><text x="20" y="27" text-anchor="middle" ${t}>10</text>`;if(d===20)return`<polygon points="20,2 38,12 38,28 20,38 2,28 2,12" fill="none" ${s}/><text x="20" y="26" text-anchor="middle" ${t}>20</text>`;return`<circle cx="20" cy="20" r="17" fill="none" ${s}/><text x="20" y="25" text-anchor="middle" font-size="9" font-family="Cinzel,serif" fill="var(--primario)">100</text>`;}
+function selecionarDado(d: any,btn: any){DADO_SEL=d;document.querySelectorAll('.dado-btn').forEach(b=>b.classList.remove('selecionado'));btn.classList.add('selecionado');document.getElementById('resultado-tipo').textContent=`d${d} selecionado`;document.getElementById('resultado-critico').style.display='none';}
 function rolarDado(){
  if(!DADO_SEL){mostrarToast('Selecione um dado','erro');return;}
  const r=Math.floor(Math.random()*DADO_SEL)+1,nEl=document.getElementById('resultado-num'),cEl=document.getElementById('resultado-critico');
@@ -4841,7 +4841,7 @@ function renderMapasTab() {
   }
 }
 
-function selecionarMapa(mapId) {
+function selecionarMapa(mapId: any) {
   const mapas = RPG_DATA.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === mapId);
   if (!entry) return;
@@ -5077,7 +5077,7 @@ function renderMapaViewer() {
 }
 
 // mapaAplicarTransform3D removido — sem suporte isométrico
-function mapaAplicarTransform3D(wrapper, _opts?) {
+function mapaAplicarTransform3D(wrapper: any, _opts?: any) {
   if (!wrapper) return;
   wrapper.style.transform = '';
   wrapper.style.perspective = '';
@@ -5086,7 +5086,7 @@ function mapaAplicarTransform3D(wrapper, _opts?) {
 
 // Atualiza preview ao vivo e labels no modal de config 3D
 function mp3dAtualizar() {
-  const _get = id => parseFloat(document.getElementById(id)?.value ?? 0);
+  const _get = (id: any) => parseFloat(document.getElementById(id)?.value ?? 0);
   const rx = _get('mp3d-rx'), ry = _get('mp3d-ry'), rz = _get('mp3d-rz');
   const persp = _get('mp3d-persp'), ox = _get('mp3d-ox'), oy = _get('mp3d-oy'), sc = _get('mp3d-sc');
 
@@ -5144,8 +5144,8 @@ function mp3dAtualizar() {
 }
 
 // Presets rápidos de perspectiva
-function mapaPreset3D(preset) {
-  const sets = {
+function mapaPreset3D(preset: any) {
+  const sets: Record<string, any> = {
     flat:     { rx:0,   ry:0, rz:0,  persp:4000, ox:0, oy:0, sc:100 },
     dimetric: { rx:60,  ry:0, rz:45, persp:4000, ox:0, oy:0, sc:110 }, // Diablo 2:1 ~ 60° + 45° rot
     iso:      { rx:54,  ry:0, rz:45, persp:4000, ox:0, oy:0, sc:110 }, // arcsin(1/√3) ≈ 35.26° mas na css isso equivale a ~54°
@@ -5153,7 +5153,7 @@ function mapaPreset3D(preset) {
   };
   const s = sets[preset];
   if (!s) return;
-  const _set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const _set = (id: any, v: any) => { const el = document.getElementById(id); if (el) el.value = v; };
   _set('mp3d-rx', s.rx);   _set('mp3d-ry', s.ry);  _set('mp3d-rz', s.rz);
   _set('mp3d-persp', s.persp); _set('mp3d-ox', s.ox); _set('mp3d-oy', s.oy); _set('mp3d-sc', s.sc);
   mp3dAtualizar();
@@ -5161,7 +5161,7 @@ function mapaPreset3D(preset) {
 
 // ════════════════════════════════════════════════════════════════════════════
 
-function mapaDesenharGrade(m) {
+function mapaDesenharGrade(m: any) {
   const canvas = document.getElementById('mapa-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -5196,7 +5196,7 @@ function mapaDesenharGrade(m) {
   }
 }
 
-function mapaRenderTokens(m) {
+function mapaRenderTokens(m: any) {
   const tokensEl = document.getElementById('mapa-tokens');
   if (!tokensEl) return;
   // Remover aviso iso-legado se ainda existir no DOM
@@ -5207,11 +5207,11 @@ function mapaRenderTokens(m) {
   tokensEl.innerHTML = '';
 
   // ── helper: normaliza campo x/y aceitando tanto x quanto x_percent ──
-  const _localX = l => l.x ?? l.x_percent ?? 0;
-  const _localY = l => l.y ?? l.y_percent ?? 0;
+  const _localX = (l: any) => l.x ?? l.x_percent ?? 0;
+  const _localY = (l: any) => l.y ?? l.y_percent ?? 0;
 
   // ── helper: cria e appenda uma div de zona clicável ───────────────────
-  function _criarZonaDiv(nome, posX, posY, wPct, hPct, raiopx, mapaLocalId, localId, isTool) {
+  function _criarZonaDiv(nome: any, posX: any, posY: any, wPct: any, hPct: any, raiopx: any, mapaLocalId: any, localId: any, isTool: any) {
     const zona = document.createElement('div');
     zona.className = 'mapa-zona';
     const isLocalMap = !!mapaLocalId;
@@ -5242,7 +5242,7 @@ function mapaRenderTokens(m) {
 
   // ── 1. Zonas definidas em m.locais (criadas manualmente ou pelo schema) ─
   const poisJaCobertosPorLocal = new Set();
-  (m.locais || []).forEach(local => {
+  (m.locais || []).forEach((local: any) => {
     if (!local.mapa_local_id && MAPA_STATE.toolMode !== 'zonas') return;
     const posX  = _localX(local);
     const posY  = _localY(local);
@@ -5259,7 +5259,7 @@ function mapaRenderTokens(m) {
   const rd = m.render_data;
   if (rd && MAPA_STATE.toolMode !== 'zonas') {
     const mapas = RPG_DATA.mapas || [];
-    (rd.pontos_de_interesse || []).forEach(poi => {
+    (rd.pontos_de_interesse || []).forEach((poi: any) => {
       // Descobrir map_id destino: campo direto ou buscar por nome
       const mapaLocalId = poi.mapa_local_id
         || mapas.find(l => l.mapa.nome === poi.nome || l.mapa.nome === poi.destino)?.mapa?.map_id
@@ -5367,7 +5367,7 @@ function mapaRenderStatus() {
   const pcs  = chars.filter(c => (c.custom_attrs||{}).tipo_personagem !== 'npc');
   const npcs = chars.filter(c => (c.custom_attrs||{}).tipo_personagem === 'npc');
 
-  const renderCard = (c, isNpc) => {
+  const renderCard = (c: any, isNpc: any) => {
     const ca = c.custom_attrs || {};
     const nomeEsc = c.nome.replace(/'/g,"\\'");
     const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario-v)');
@@ -5539,7 +5539,7 @@ function abrirModalMapaConfig() {
 
   // ── Carregar configuração 3D ────────────────────────────────────────────
   const t3d = m.transform3d || m.render_data?.transform3d || {};
-  const _sv = (id, v, def) => { const el = document.getElementById(id); if (el) el.value = v ?? def; };
+  const _sv = (id: any, v: any, def: any) => { const el = document.getElementById(id); if (el) el.value = v ?? def; };
   _sv('mp3d-rx',   t3d.rx   ?? 0,    0);
   _sv('mp3d-ry',   t3d.ry   ?? 0,    0);
   _sv('mp3d-rz',   t3d.rz   ?? 0,    0);
@@ -5560,7 +5560,7 @@ function abrirModalMapaConfig() {
   });
 }
 
-function modalMapaPreviewImg(url) {
+function modalMapaPreviewImg(url: any) {
   const normalized = normalizeImgUrl(url);
   const prev = document.getElementById('modal-mapa-img-preview');
   const ph = document.getElementById('modal-mapa-img-placeholder');
@@ -5769,7 +5769,7 @@ async function salvarConfigMapa() {
 
   try {
     // Ler configuração 3D do modal
-    const _gv = id => { const el = document.getElementById(id); return el ? +el.value : null; };
+    const _gv = (id: any) => { const el = document.getElementById(id); return el ? +el.value : null; };
     const t3d = {
       rx:    _gv('mp3d-rx')    ?? 0,
       ry:    _gv('mp3d-ry')    ?? 0,
@@ -5833,7 +5833,7 @@ async function salvarConfigMapa() {
 // ═══════════════════════════════════════════════════════════════════════════
 var _TOKEN_MOVE_SID = Math.random().toString(36).slice(2);
 
-function tokenMoveBroadcast(payload) {
+function tokenMoveBroadcast(payload: any) {
   try {
     const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
     const ws    = AR.ws || realtimeWS;
@@ -5847,7 +5847,7 @@ function tokenMoveBroadcast(payload) {
   } catch(e) {}
 }
 
-function tokenMoveReceber(payload) {
+function tokenMoveReceber(payload: any) {
   if (!payload || payload.sid === _TOKEN_MOVE_SID) return;
   const { nome, x, y, contexto, mapId } = payload;
   if (contexto === 'campanha') {
@@ -5868,7 +5868,7 @@ function tokenMoveReceber(payload) {
     el.style.top  = ((_recvPos.row+0.5)/_recvH*100).toFixed(2)+'%';
     el.style.transform = 'translate(-50%,-50%)'; // 2.4 top-down
   } else if (contexto === 'arena') {
-    const c = AR?.chars?.find(ch => ch.nome === nome);
+    const c = AR?.chars?.find((ch: any) => ch.nome === nome);
     if (c) {
       if (!c.custom_attrs) c.custom_attrs = {};
       c.custom_attrs.pos = { x, y };
@@ -5896,32 +5896,32 @@ var FOG_STATE = {
   raio: 5,
 };
 
-function fogGetEstado(mapId, col, row) {
-  return (FOG_STATE.mapas[mapId] || {})[ col+'_'+row ] || 'oculta';
+function fogGetEstado(mapId: any, col: any, row: any) {
+  return ((FOG_STATE.mapas as any)[mapId] || {})[ col+'_'+row ] || 'oculta';
 }
 
-function fogSetEstado(mapId, col, row, estado) {
-  if (!FOG_STATE.mapas[mapId]) FOG_STATE.mapas[mapId] = {};
-  FOG_STATE.mapas[mapId][ col+'_'+row ] = estado;
+function fogSetEstado(mapId: any, col: any, row: any, estado: any) {
+  if (!(FOG_STATE.mapas as any)[mapId]) (FOG_STATE.mapas as any)[mapId] = {};
+  (FOG_STATE.mapas as any)[mapId][ col+'_'+row ] = estado;
 }
 
-function fogInicializar(mapId, mapa) {
+function fogInicializar(mapId: any, mapa: any) {
   // Só mapas táticos têm fog
   if (!mapaIsTatico(mapa)) return;
   // Se já inicializado, manter o estado salvo
-  if (FOG_STATE.mapas[mapId]) return;
-  FOG_STATE.mapas[mapId] = {};
+  if ((FOG_STATE.mapas as any)[mapId]) return;
+  (FOG_STATE.mapas as any)[mapId] = {};
   // Tudo começa oculto (estados ausentes = oculto, não precisa preencher)
 }
 
-function fogCarregarDoServidor(mapId, fogData) {
+function fogCarregarDoServidor(mapId: any, fogData: any) {
   if (fogData && typeof fogData === 'object') {
-    FOG_STATE.mapas[mapId] = fogData;
+    (FOG_STATE.mapas as any)[mapId] = fogData;
   }
 }
 
 // Revelar fog ao redor de um token (chamado via HUB_EVENTS 'token_moveu')
-function fogRevealAround(mapId, col, row, raio) {
+function fogRevealAround(mapId: any, col: any, row: any, raio: any) {
   const r = raio ?? FOG_STATE.raio;
   const mapa = _getMapaById(mapId);
   if (!mapa || !mapaIsTatico(mapa)) return false;
@@ -5953,7 +5953,7 @@ function fogRevealAround(mapId, col, row, raio) {
 }
 
 // Revelar retângulo de células (comando FOG: revelar A1:D5)
-function fogRevealRect(mapId, colA, rowA, colB, rowB) {
+function fogRevealRect(mapId: any, colA: any, rowA: any, colB: any, rowB: any) {
   const c1=Math.min(colA,colB), c2=Math.max(colA,colB);
   const r1=Math.min(rowA,rowB), r2=Math.max(rowA,rowB);
   for (let c=c1; c<=c2; c++) for (let r=r1; r<=r2; r++) {
@@ -5963,7 +5963,7 @@ function fogRevealRect(mapId, colA, rowA, colB, rowB) {
 }
 
 // Fog de guerra desativado — função mantida para compatibilidade
-function fogRenderizar(mapId) {
+function fogRenderizar(mapId: any) {
   const existing = document.getElementById('fog-canvas');
   if (existing) existing.remove();
   return; // fog desativado
@@ -6000,7 +6000,7 @@ function fogRenderizar(mapId) {
   // ── Passo 2: clarear áreas exploradas (reveladas pelo histórico) ─
   // Células com estado 'revelada' ficam 50 % visíveis (já visitadas)
   // Células 'visivel_agora' ficam 100 % visíveis via gradiente no passo 3
-  const fog = FOG_STATE.mapas[mapId] || {};
+  const fog = (FOG_STATE.mapas as any)[mapId] || {};
   ctx.globalCompositeOperation = 'destination-out';
   for (const [chave, estado] of Object.entries<any>(fog)) {
     if (estado === 'oculta') continue;
@@ -6043,11 +6043,11 @@ function fogRenderizar(mapId) {
 }
 
 // Salvar fog no banco (debounced, 3s)
-var _fogSaveTimer = null;
-function fogSalvarDebounced(rpgId, mapId) {
+var _fogSaveTimer: any = null;
+function fogSalvarDebounced(rpgId: any, mapId: any) {
   clearTimeout(_fogSaveTimer);
   _fogSaveTimer = setTimeout(async () => {
-    const fogData = FOG_STATE.mapas[mapId];
+    const fogData = (FOG_STATE.mapas as any)[mapId];
     if (!fogData) return;
     try {
       await sb(`mapas?rpg_id=eq.${encodeURIComponent(rpgId)}&map_id=eq.${encodeURIComponent(mapId)}`,
@@ -6065,7 +6065,7 @@ function fogSalvarDebounced(rpgId, mapId) {
 // ════════════════════════════════════════════════════════════════════════════
 var CAMERA_RAIO_MAX = 10; // células — configurável
 
-function cameraVerificarRaio(mapId, nomeCandidato, colDestino, rowDestino) {
+function cameraVerificarRaio(mapId: any, nomeCandidato: any, colDestino: any, rowDestino: any) {
   // Só aplica durante combate ou quando câmera automática está ativa
   if (MAPA_ZOOM.modo !== 'auto') return true;
   const mapa = _getMapaById(mapId);
@@ -6086,7 +6086,7 @@ function cameraVerificarRaio(mapId, nomeCandidato, colDestino, rowDestino) {
   return dist <= CAMERA_RAIO_MAX;
 }
 
-function cameraBloqueioFeedback(nome) {
+function cameraBloqueioFeedback(nome: any) {
   mostrarToast('🛑 Aguarde o grupo.', 'aviso');
   // Vibração mobile
   if (navigator.vibrate) navigator.vibrate(80);
@@ -6111,14 +6111,14 @@ function cameraBloqueioFeedback(nome) {
   `;
   document.head.appendChild(style);
 })();
-function mapaIniciarDrag(nome, el, e) {
+function mapaIniciarDrag(nome: any, el: any, e: any) {
   if (MAPA_STATE.toolMode === 'medicao') return;
 
   // Durante modo de ataque: bloquear movimento de qualquer token que não seja o atacante
   if (ATAQUE_MAPA_STATE.ativo && nome !== ATAQUE_MAPA_STATE.atacanteNome) {
     // Se for alvo disponível, interpretar como clique de seleção de alvo
     if (ATAQUE_MAPA_STATE.fase === 'alvos') {
-      const isAlvo = COMBATE._alvos.some(a => a.nome === nome);
+      const isAlvo = COMBATE._alvos.some((a: any) => a.nome === nome);
       if (isAlvo) {
         // O clique no token será tratado pelo listener 'click' normalmente
       } else {
@@ -6150,7 +6150,7 @@ function mapaIniciarDrag(nome, el, e) {
   el.addEventListener('pointerup', mapaFimDrag);
 }
 
-function mapaOnDrag(e) {
+function mapaOnDrag(e: any) {
   if (!MAPA_STATE.dragging) return;
   MAPA_STATE.tokenMoveu = true;
   const bg = document.getElementById('mapa-img');
@@ -6213,7 +6213,7 @@ function mapaOnDrag(e) {
   }, 400);
 }
 
-async function mapaFimDrag(e) {
+async function mapaFimDrag(e: any) {
   if (!MAPA_STATE.dragging) return;
   const nome = MAPA_STATE.dragging;
   MAPA_STATE.dragging = null;
@@ -6246,10 +6246,10 @@ async function mapaFimDrag(e) {
 }
 
 // ── POSICIONAR PERSONAGEM PELO BOTÃO 📌 ──────────────────────
-function mapaPosicionarChar(nome) {
+function mapaPosicionarChar(nome: any) {
   const wrap = document.getElementById('mapa-wrap');
   mostrarToast(`Toque no mapa para posicionar ${nome}`, '');
-  const onceClick = (e) => {
+  const onceClick = (e: any) => {
     const _bgR = document.getElementById('mapa-img').getBoundingClientRect();
     const x = Math.max(2, Math.min(98, (e.clientX - _bgR.left) / _bgR.width  * 100));
     const y = Math.max(2, Math.min(98, (e.clientY - _bgR.top)  / _bgR.height * 100));
@@ -6265,11 +6265,11 @@ function mapaPosicionarChar(nome) {
 }
 
 // ── TELEPORTAR PERSONAGEM (com raio máximo) ───────────────────
-function mapaTeleportarPersonagem(nome, maxCelulas) {
+function mapaTeleportarPersonagem(nome: any, maxCelulas: any) {
   const wrap = document.getElementById('mapa-wrap');
   if (!wrap) { mapaPosicionarChar(nome); return; }
   mostrarToast(`Clique no mapa para teleportar ${nome} (até ${maxCelulas || '∞'} células)`, '');
-  const onceClick = (e) => {
+  const onceClick = (e: any) => {
     wrap.removeEventListener('click', onceClick);
     const img = document.getElementById('mapa-img');
     if (!img) return;
@@ -6304,7 +6304,7 @@ function mapaTeleportarPersonagem(nome, maxCelulas) {
 }
 
 // ── MOVER ADJACENTE AO ALVO (Dash para o alvo) ───────────────
-async function mapaAdjacenteAlvo(atacanteNome, alvoNome) {
+async function mapaAdjacenteAlvo(atacanteNome: any, alvoNome: any) {
   const mapId = MAPA_STATE.mapaAtualId;
   const atk  = RPG_DATA?.characters?.find(c => c.nome === atacanteNome);
   const alvo = RPG_DATA?.characters?.find(c => c.nome === alvoNome);
@@ -6350,7 +6350,7 @@ async function mapaAdjacenteAlvo(atacanteNome, alvoNome) {
 }
 
 // ── MOVER TOKEN POR FORCED MOVEMENT (Empurrão/Puxão) ─────────
-async function mapaForcedMovement(movingNome, referenciaNome, direcao, distancia) {
+async function mapaForcedMovement(movingNome: any, referenciaNome: any, direcao: any, distancia: any) {
   const mapId = MAPA_STATE.mapaAtualId;
   const moving = RPG_DATA?.characters?.find(c => c.nome === movingNome);
   const ref    = RPG_DATA?.characters?.find(c => c.nome === referenciaNome);
@@ -6394,7 +6394,7 @@ async function mapaForcedMovement(movingNome, referenciaNome, direcao, distancia
 // ══════════════════════════════════════════════════════════════
 
 // ── CampaignBattleConfig ─────────────────────────────────────
-const BATTLE_CONFIG_DEFAULTS = {
+const BATTLE_CONFIG_DEFAULTS: Record<string, any> = {
   dnd5e:     { usa_reacoes: true,  sistema_reacao: 'dnd5e',     max_reacoes_por_rodada: 1, reacoes_podem_interromper: true,  passivas_automaticas: true,  notificar_passivas: false, tipo_defesa: 'passiva', defesa_consome_reacao: false, graus_de_sucesso: false, max_defesas_por_rodada: 1,           penalidade_defesa_extra: null },
   pf2e:      { usa_reacoes: true,  sistema_reacao: 'pf2e',      max_reacoes_por_rodada: 1, reacoes_podem_interromper: true,  passivas_automaticas: true,  notificar_passivas: false, tipo_defesa: 'passiva', defesa_consome_reacao: false, graus_de_sucesso: true,  max_defesas_por_rodada: 1,           penalidade_defesa_extra: null },
   pf1e:      { usa_reacoes: true,  sistema_reacao: 'pf1e',      max_reacoes_por_rodada: 3, reacoes_podem_interromper: true,  passivas_automaticas: true,  notificar_passivas: false, tipo_defesa: 'passiva', defesa_consome_reacao: false, graus_de_sucesso: false, max_defesas_por_rodada: 1,           penalidade_defesa_extra: null },
@@ -6409,7 +6409,7 @@ function getBattleConfig() {
     : BATTLE_CONFIG_DEFAULTS.dnd5e;
 }
 
-async function salvarBattleConfig(cfg) {
+async function salvarBattleConfig(cfg: any) {
   if (typeof CURRENT_RPG === 'undefined' || !CURRENT_RPG?.id) return;
   const tema = { ...(CURRENT_RPG.theme || {}), battle_config: cfg };
   await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}`,
@@ -6419,11 +6419,11 @@ async function salvarBattleConfig(cfg) {
 // ─────────────────────────────────────────────────────────────
 
 // ── UTILITÁRIOS ───────────────────────────────────────────────
-function batalhaNovaId(mapaId) {
+function batalhaNovaId(mapaId: any) {
   return `b_${mapaId}_${Date.now()}`;
 }
 
-function batalhaDoMapa(mapaId) {
+function batalhaDoMapa(mapaId: any) {
   return Object.values<any>(MAPA_STATE.batalhas).find(b => b.mapa_id === mapaId && b.ativa) || null;
 }
 
@@ -6434,34 +6434,34 @@ function batalhaBuscaMinhaAtiva() {
   return Object.values<any>(MAPA_STATE.batalhas).filter(b => {
     if (!b.ativa) return false;
     if (isMestre) return true;
-    return b.participantes?.some(p => p.nome === meuNome);
+    return b.participantes?.some((p: any) => p.nome === meuNome);
   });
 }
 
-function jogadorEstaOnline(nomePersonagem) {
+function jogadorEstaOnline(nomePersonagem: any) {
   // Verifica se o jogador com esse personagem vinculado está online (visto nos últimos 30s)
   const agora = Date.now();
   return CHAT.online.some(u => u.nick === nomePersonagem && (agora - u.ts) < 35000);
 }
 
-function personagemTemJogador(nomePersonagem) {
+function personagemTemJogador(nomePersonagem: any) {
   // Regular campaign: check RPG_DATA.membrosLinked
   if (RPG_DATA?.membrosLinked?.[nomePersonagem]) return true;
   // Adventure mode: check AVT_STATE.membros linked array
   if (typeof AVT_STATE !== 'undefined' && Array.isArray(AVT_STATE.membros)) {
-    return AVT_STATE.membros.some(m => m.linked === nomePersonagem);
+    return AVT_STATE.membros.some((m: any) => m.linked === nomePersonagem);
   }
   return false;
 }
 
-function mestreDeveJogarPor(participante) {
+function mestreDeveJogarPor(participante: any) {
   // O mestre deve jogar por um participante se:
   // 1. É um NPC, OU
   // 2. É um personagem sem jogador vinculado
   return participante.tipo === 'npc' || !personagemTemJogador(participante.nome);
 }
 
-function batalhaParticipantesDoMapa(mapaId) {
+function batalhaParticipantesDoMapa(mapaId: any) {
   // Apenas personagens com active_map_id EXATO neste mapa.
   // Tokens projetados de submapas filhos NÃO participam da batalha deste mapa —
   // eles só aparecem visualmente. A batalha deles é no mapa onde estão de fato.
@@ -6476,7 +6476,7 @@ function batalhaIdMinha() {
   const meuNome = RPG_DATA?.linked;
   if (!meuNome) return BATALHA_ATUAL_ID;
   const entrada = Object.entries<any>(MAPA_STATE.batalhas).find(([, b]) =>
-    b.ativa && b.participantes?.some(p => p.nome === meuNome)
+    b.ativa && b.participantes?.some((p: any) => p.nome === meuNome)
   );
   return entrada ? entrada[0] : null;
 }
@@ -6488,14 +6488,14 @@ function batalhaMinha() {
 }
 
 // ── Helper: retorna cooldowns ativos de uma batalha de campanha ──────────
-function getCooldownsBatalha(bid) {
+function getCooldownsBatalha(bid: any) {
   if (!bid) return {};
   const bs = MAPA_STATE.batalhas[bid];
   return (bs?.cooldowns && typeof bs.cooldowns === 'object') ? bs.cooldowns : {};
 }
 
 // ── PERSISTÊNCIA ─────────────────────────────────────────────
-async function salvarEstadoBatalha(bid) {
+async function salvarEstadoBatalha(bid: any) {
   const ids = bid ? [bid] : Object.keys(MAPA_STATE.batalhas);
   const rpgId = RPG_DATA.rpgId;
   try {
@@ -6518,7 +6518,7 @@ async function salvarEstadoBatalha(bid) {
   } catch(e) {}
 }
 
-async function criarBatalhaRemota(bid) {
+async function criarBatalhaRemota(bid: any) {
   const bs = MAPA_STATE.batalhas[bid];
   if (!bs) return;
   const rpgId = RPG_DATA.rpgId;
@@ -6541,7 +6541,7 @@ async function criarBatalhaRemota(bid) {
 }
 
 // ── REALTIME — receber linha da tabela batalhas ───────────────
-function batalhaReceberLinhaRemota(rec) {
+function batalhaReceberLinhaRemota(rec: any) {
   if (!rec || !rec.id) return;
   const bs = {
     id:rec.id, mapa_id:rec.mapa_id, mapa_nome:rec.mapa_nome,
@@ -6560,7 +6560,7 @@ function batalhaReceberLinhaRemota(rec) {
 }
 
 // ── REALTIME ─────────────────────────────────────────────────
-function batalhaReceberEstadoRemoto(raw) {
+function batalhaReceberEstadoRemoto(raw: any) {
   try {
     const bd = typeof raw === 'object' ? raw : JSON.parse(raw || '{}');
     if (!bd || typeof bd !== 'object') return;
@@ -6578,13 +6578,13 @@ function batalhaReceberEstadoRemoto(raw) {
 
       // Nova batalha que me inclui
       if (!anterior && bs.ativa) {
-        const meInclui = isMestre || bs.participantes?.some(p => p.nome === meuNome);
+        const meInclui = isMestre || bs.participantes?.some((p: any) => p.nome === meuNome);
         if (meInclui) mostrarToast(`⚔ Nova batalha em "${bs.mapa_nome || bs.mapa_id}"!`, '');
       }
 
       // Mudança de fase ou vez
       if (anterior && bs.ativa) {
-        const meInclui = isMestre || bs.participantes?.some(p => p.nome === meuNome);
+        const meInclui = isMestre || bs.participantes?.some((p: any) => p.nome === meuNome);
         if (!meInclui) return;
 
         if (anterior.fase !== 'combate' && bs.fase === 'combate') {
@@ -6645,7 +6645,7 @@ function batalhaReceberEstadoRemoto(raw) {
   } catch(e) {}
 }
 
-function _notificarVez(bs, bid) {
+function _notificarVez(bs: any, bid: any) {
   const atual = bs.participantes[bs.ordemAtual];
   if (!atual) return;
   const meuNome = RPG_DATA?.linked;
@@ -6675,7 +6675,7 @@ function _atualizarBadgeMesa() {
   const pendIniciativa = Object.values<any>(MAPA_STATE.batalhas).filter(b => {
     if (!b.ativa || (b.fase !== 'iniciativa' && b.fase !== 'empate')) return false;
     if (!meuNome) return false;
-    const participo = b.participantes?.some(p => p.nome === meuNome);
+    const participo = b.participantes?.some((p: any) => p.nome === meuNome);
     const jaRolei = b.iniciativasRoladas?.[meuNome] != null && !b.empatados?.includes(meuNome);
     return participo && !jaRolei;
   }).length;
@@ -6716,7 +6716,7 @@ function _atualizarSeletorBatalhas() {
   }).join('');
 }
 
-function batalhaAlternarPara(bid) {
+function batalhaAlternarPara(bid: any) {
   const b = MAPA_STATE.batalhas[bid];
   if (b?.mapa_id) {
     // Navegar ao mapa da batalha — selecionarMapa definirá BATALHA_ATUAL_ID automaticamente
@@ -6734,12 +6734,12 @@ function batalhaAlternarPara(bid) {
 // ════════════════════════════════════════════════════════════════════════════
 
 var SESSAO_ATUAL = {
-  nome: '', sistema: '', cenas: [], cenaAtualId: null,
+  nome: '', sistema: '', cenas: [] as any[], cenaAtualId: null as any,
   organograma: { nos: {} },
 };
 
 // ── 4.1 Parser do Pacote de Sessão ───────────────────────────────────────
-function _parseCoordenada(s) {
+function _parseCoordenada(s: any) {
   if (!s) return null;
   const m = String(s).trim().match(/^([A-Za-z]+)(\d+)$/);
   if (!m) return null;
@@ -6747,7 +6747,7 @@ function _parseCoordenada(s) {
   const row = parseInt(m[2]) - 1;
   return { col, row };
 }
-function _parseRetangulo(s) {
+function _parseRetangulo(s: any) {
   if (!s) return null;
   const partes = s.split(':');
   if (partes.length !== 2) return null;
@@ -6757,7 +6757,7 @@ function _parseRetangulo(s) {
   return { c1: p1.col, r1: p1.row, c2: p2.col, r2: p2.row };
 }
 
-function parsePacote(texto) {
+function parsePacote(texto: any) {
   const linhas = texto.split('\n');
   const resultado = [];
   let cenaAtual = null;
@@ -6771,7 +6771,7 @@ function parsePacote(texto) {
   return resultado;
 }
 
-function _parseLinha(raw, cenaAtual) {
+function _parseLinha(raw: any, cenaAtual: any) {
   if (/^SESS[ÃA]O:/i.test(raw)) {
     const m = raw.match(/^SESS[ÃA]O:\s*"?([^"|]+)"?/i);
     const nome = m?.[1]?.trim() || 'Sessão';
@@ -6787,7 +6787,7 @@ function _parseLinha(raw, cenaAtual) {
     const cena_id = 'cena_' + n;
     if (cenario) {
       const mapaExiste = (RPG_DATA?.mapas||[]).some(l => l.mapa.map_id === cenario);
-      if (!mapaExiste) return { status:'aviso', msg:"Cenário '" + cenario + "' não encontrado — cena criada sem mapa", acao:{ tipo:'cena', cena_id, cenario:null, condicao, musica } };
+      if (!mapaExiste) return { status:'aviso', msg:"Cenário '" + cenario + "' não encontrado — cena criada sem mapa", acao:{ tipo:'cena', cena_id, cenario:null as any, condicao, musica } };
     }
     return { status:'ok', acao:{ tipo:'cena', cena_id, cenario, condicao, musica } };
   }
@@ -6797,7 +6797,7 @@ function _parseLinha(raw, cenaAtual) {
   }
   if (/^SPAWN:/i.test(raw)) {
     const body = raw.replace(/^SPAWN:\s*/i,'');
-    const tokens = body.split('|').map(t => t.trim());
+    const tokens = body.split('|').map((t: any) => t.trim());
     const spawns = []; let temErro = false;
     for (const tok of tokens) {
       const m: any = tok.match(/^([\w\s]+)\s+([A-Za-z]+\d+)/);
@@ -6847,7 +6847,7 @@ function _parseLinha(raw, cenaAtual) {
   return { status:'aviso', msg:'Linha não reconhecida — ignorada', acao:null };
 }
 
-async function pacoteAplicar(resultado) {
+async function pacoteAplicar(resultado: any) {
   const mapId = MAPA_STATE?.mapaAtualId;
   for (const item of resultado) {
     if (item.status === 'erro' || !item.acao) continue;
@@ -6872,7 +6872,7 @@ async function pacoteAplicar(resultado) {
         break;
       case 'fog':
         if (a.modo === 'revelar_rect') fogRevealRect(mapId, a.rect.c1, a.rect.r1, a.rect.c2, a.rect.r2);
-        else if (a.modo === 'desativar') { FOG_STATE.mapas[mapId] = {}; fogRenderizar(mapId); }
+        else if (a.modo === 'desativar') { (FOG_STATE.mapas as any)[mapId] = {}; fogRenderizar(mapId); }
         else if (a.modo === 'gradual')   { fogInicializar(mapId, _getMapaById(mapId)); fogRenderizar(mapId); }
         break;
       case 'zona': {
@@ -6895,10 +6895,10 @@ async function pacoteAplicar(resultado) {
   sessionRenderPainel();
 }
 
-function pacoteMostrarConfirmacao(resultado) {
-  const ok = resultado.filter(r => r.status==='ok').length;
-  const av = resultado.filter(r => r.status==='aviso').length;
-  const er = resultado.filter(r => r.status==='erro').length;
+function pacoteMostrarConfirmacao(resultado: any) {
+  const ok = resultado.filter((r: any) => r.status==='ok').length;
+  const av = resultado.filter((r: any) => r.status==='aviso').length;
+  const er = resultado.filter((r: any) => r.status==='erro').length;
   let modal = document.getElementById('modal-pacote-confirmacao');
   if (!modal) {
     modal = document.createElement('div');
@@ -6909,7 +6909,7 @@ function pacoteMostrarConfirmacao(resultado) {
   }
   window._pacoteResultado = resultado;
   document.getElementById('pacote-resumo').innerHTML = '<span style="color:#5ee09a">✓ '+ok+' aplicadas</span> · <span style="color:#f0cc6a">⚠ '+av+' corrigidas</span> · <span style="color:#e74c3c">✗ '+er+' ignoradas</span>';
-  document.getElementById('pacote-linhas').innerHTML = resultado.map(r => {
+  document.getElementById('pacote-linhas').innerHTML = resultado.map((r: any) => {
     const cor  = r.status==='ok' ? '#5ee09a' : r.status==='aviso' ? '#f0cc6a' : '#e74c3c';
     const icon = r.status==='ok' ? '✓' : r.status==='aviso' ? '⚠' : '✗';
     return '<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:5px;border-left:2px solid '+cor+'"><span style="color:'+cor+';flex-shrink:0;font-size:0.75rem;margin-top:1px">'+icon+'</span><div style="flex:1;min-width:0"><div style="font-size:0.7rem;color:var(--texto);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.linha+'</div>'+(r.msg?'<div style="font-size:0.65rem;color:'+cor+';margin-top:1px">'+r.msg+'</div>':'')+'</div></div>';
@@ -6917,7 +6917,7 @@ function pacoteMostrarConfirmacao(resultado) {
   modal.style.display = 'flex';
 }
 
-window.processarPacoteSessao = function(texto) {
+window.processarPacoteSessao = function(texto: any) {
   if (!texto?.trim()) { mostrarToast('Cole o pacote de sessão primeiro', 'aviso'); return; }
   pacoteMostrarConfirmacao(parsePacote(texto));
 };
@@ -6931,13 +6931,13 @@ function sessionRenderPainel() {
     return;
   }
   el.innerHTML = SESSAO_ATUAL.cenas.map(cena => {
-    const corStatus = { disponivel:'rgba(79,163,209,0.4)', afetada:'rgba(200,168,75,0.5)', usada:'rgba(122,146,170,0.25)' }[cena.status]||'var(--borda)';
-    const labelStatus = { disponivel:'disponível', afetada:'⚠ afetada', usada:'usada' }[cena.status]||'';
+    const corStatus = ({ disponivel:'rgba(79,163,209,0.4)', afetada:'rgba(200,168,75,0.5)', usada:'rgba(122,146,170,0.25)' } as any)[cena.status]||'var(--borda)';
+    const labelStatus = ({ disponivel:'disponível', afetada:'⚠ afetada', usada:'usada' } as any)[cena.status]||'';
     return '<div style="border:1px solid '+corStatus+';border-radius:9px;padding:10px 12px;margin-bottom:6px;background:rgba(15,21,32,0.7);opacity:'+(cena.status==='usada'?'0.5':'1')+'"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">'+cena.id.replace('_',' ')+'</div><span style="font-size:0.6rem;color:'+corStatus.replace('0.4','0.8').replace('0.5','0.8').replace('0.25','0.5')+'">'+labelStatus+'</span></div>'+(cena.narracao?'<div style="font-size:0.72rem;color:var(--suave);font-style:italic;margin-bottom:6px">"'+cena.narracao.slice(0,80)+(cena.narracao.length>80?'…':'')+'…"</div>':'')+(cena.cenario?'<div style="font-size:0.65rem;color:rgba(79,163,209,0.7)">🗺 '+cena.cenario+'</div>':'')+(cena.afetada?'<div style="font-size:0.65rem;color:#f0cc6a;margin-top:4px">⚠ Afetada por mudanças na sessão</div>':'')+(cena.status!=='usada'?'<button onclick="sessionAtivarCena(\'' + cena.id + '\')" style="margin-top:8px;width:100%;padding:7px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:7px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">▶ Ativar cena</button>':'')+'</div>';
   }).join('');
 }
 
-async function sessionAtivarCena(cenaId) {
+async function sessionAtivarCena(cenaId: any) {
   const cena = SESSAO_ATUAL.cenas.find(c => c.id === cenaId);
   if (!cena) return;
   if (cena.afetada && !confirm('⚠ Esta cena foi afetada por mudanças. Ativar mesmo assim?')) return;
@@ -6953,17 +6953,17 @@ async function sessionAtivarCena(cenaId) {
 }
 
 // ── 4.3 Organograma narrativo ─────────────────────────────────────────────
-function orgAddNo(noId, label, requer, tem, conexoes) {
-  SESSAO_ATUAL.organograma.nos[noId] = { label:label||noId, requer:Array.isArray(requer)?requer:[], tem:Array.isArray(tem)?tem:[], conexoes:conexoes||{}, visitado:false };
+function orgAddNo(noId: any, label: any, requer: any, tem: any, conexoes: any) {
+  (SESSAO_ATUAL.organograma.nos as any)[noId] = { label:label||noId, requer:Array.isArray(requer)?requer:[], tem:Array.isArray(tem)?tem:[], conexoes:conexoes||{}, visitado:false };
 }
-function orgNavegar(saidaId) {
-  const noAtual = SESSAO_ATUAL.organograma.nos[SESSAO_ATUAL.cenaAtualId];
+function orgNavegar(saidaId: any) {
+  const noAtual = (SESSAO_ATUAL.organograma.nos as any)[SESSAO_ATUAL.cenaAtualId];
   if (!noAtual) return;
   const destino = noAtual.conexoes[saidaId];
   if (destino) { const cena = SESSAO_ATUAL.cenas.find(c => c.id === destino); if (cena) sessionAtivarCena(destino); noAtual.visitado = true; }
 }
 HUB_EVENTS.on('zona_ativada', ({ zona }) => {
-  const noAtual = SESSAO_ATUAL.organograma.nos[SESSAO_ATUAL.cenaAtualId];
+  const noAtual = (SESSAO_ATUAL.organograma.nos as any)[SESSAO_ATUAL.cenaAtualId];
   if (!noAtual) return;
   const destino = noAtual.conexoes[zona];
   if (destino) { mostrarToast('🚪 Transição para ' + destino, ''); sessionAtivarCena(destino); }
@@ -6982,14 +6982,14 @@ function bibliotecaCarregarDoLore() {
 }
 
 // ── 4.5 Geração aleatória ────────────────────────────────────────────────
-function gerarCenaAleatoria(sel) {
+function gerarCenaAleatoria(sel: any) {
   sel = sel || {};
   const estrutural = (sel.estruturais?.length) ? sel.estruturais[Math.floor(Math.random()*sel.estruturais.length)] : BIBLIOTECA_CENA.estruturais[Math.floor(Math.random()*BIBLIOTECA_CENA.estruturais.length)];
   const passagens  = sel.passagens?.length ? sel.passagens : [BIBLIOTECA_CENA.passagens[Math.floor(Math.random()*BIBLIOTECA_CENA.passagens.length)]];
   const zonasSel   = sel.zonas||[];
-  const extras     = []; const qtd = 1+Math.floor(Math.random()*2);
+  const extras: any     = []; const qtd = 1+Math.floor(Math.random()*2);
   for (let i=0; i<qtd; i++) { const z = BIBLIOTECA_CENA.zonas[Math.floor(Math.random()*BIBLIOTECA_CENA.zonas.length)]; if (!zonasSel.includes(z)&&!extras.includes(z)) extras.push(z); }
-  const novaCena = { id:'cena_gen_'+Date.now(), cenario:null, status:'disponivel', narracao:'', afetada:false, gerada:{ estrutural, passagens, zonas:[...zonasSel,...extras] }, comandos:[] };
+  const novaCena = { id:'cena_gen_'+Date.now(), cenario:null as any, status:'disponivel', narracao:'', afetada:false, gerada:{ estrutural, passagens, zonas:[...zonasSel,...extras] }, comandos:[] as any[] };
   SESSAO_ATUAL.cenas.push(novaCena); sessionRenderPainel(); return novaCena;
 }
 window.abrirModalGeracaoCena = function() {
@@ -7006,7 +7006,7 @@ window.abrirModalGeracaoCena = function() {
 };
 window._confirmarGeracaoCena = function() {
   const checks = document.querySelectorAll('#modal-gerar-cena input[type=checkbox]:checked');
-  const sel = {};
+  const sel: Record<string, any> = {};
   checks.forEach(cb => { const cat = cb.dataset.cat; if (!sel[cat]) sel[cat] = []; sel[cat].push(cb.value); });
   const cena = gerarCenaAleatoria(sel);
   document.getElementById('modal-gerar-cena').style.display = 'none';
@@ -7014,12 +7014,12 @@ window._confirmarGeracaoCena = function() {
 };
 
 // ── 4.6 Propagação de consequências ──────────────────────────────────────
-function sessaoMarcarCenasAfetadas(nomeElemento) {
+function sessaoMarcarCenasAfetadas(nomeElemento: any) {
   if (!nomeElemento) return;
   const nl = nomeElemento.toLowerCase();
   SESSAO_ATUAL.cenas.forEach(cena => {
     if (cena.status === 'usada') return;
-    if (cena.narracao?.toLowerCase().includes(nl) || (cena.gerada?.zonas||[]).some(z=>z.toLowerCase().includes(nl)) || cena.id.toLowerCase().includes(nl))
+    if (cena.narracao?.toLowerCase().includes(nl) || (cena.gerada?.zonas||[]).some((z: any)=>z.toLowerCase().includes(nl)) || cena.id.toLowerCase().includes(nl))
       cena.afetada = true;
   });
   sessionRenderPainel();
@@ -7030,7 +7030,7 @@ HUB_EVENTS.on('dano_aplicado', ({ alvo }) => {
 });
 
 // ── 4.7 Proxy BATALHA_ATUAL_ID ─────────────────────────────────────────
-var _batalhaAtualIdInterno = null;
+var _batalhaAtualIdInterno: any = null;
 Object.defineProperty(window, 'BATALHA_ATUAL_ID', {
   get() { return _batalhaAtualIdInterno; },
   set(v) {
@@ -7049,9 +7049,9 @@ Object.defineProperty(window, 'BATALHA_ATUAL_ID', {
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── 6.1 Piloto automático NPC ─────────────────────────────────────────────
-var NPC_PILOTO = {};
+var NPC_PILOTO: Record<string, any> = {};
 
-function npcTogglePiloto(nomeNpc) {
+function npcTogglePiloto(nomeNpc: any) {
   NPC_PILOTO[nomeNpc] = !NPC_PILOTO[nomeNpc];
   mostrarToast(NPC_PILOTO[nomeNpc] ? '🤖 '+nomeNpc+' em piloto automático' : '🎮 '+nomeNpc+' em controle manual', '');
   const tokenEl = document.querySelector('.mapa-token[data-nome="'+CSS.escape(nomeNpc)+'"]');
@@ -7063,7 +7063,7 @@ function npcTogglePiloto(nomeNpc) {
   }
 }
 
-async function npcExecutarTurnoAuto(nomeNpc) {
+async function npcExecutarTurnoAuto(nomeNpc: any) {
   const c = (RPG_DATA?.characters||[]).find(ch => ch.nome === nomeNpc);
   if (!c) return;
   const comportamento = c.custom_attrs?.comportamento || 'agressivo';
@@ -7074,29 +7074,29 @@ async function npcExecutarTurnoAuto(nomeNpc) {
   if (acao.atacar) { COMBATE.contexto='campanha'; COMBATE.atacanteNome=nomeNpc; COMBATE.habilidadeSel=acao.atacar.skill; COMBATE.alvoNome=acao.atacar.alvo; COMBATE._habilidades=atkGetHabilidadesCampanha(nomeNpc); COMBATE._alvos=[]; COMBATE._jaAplicado=false; await atkRolarDados?.(); }
 }
 
-async function _npcCalcAcao(nomeNpc, comportamento, mapId) {
+async function _npcCalcAcao(nomeNpc: any, comportamento: any, mapId: any) {
   const c = (RPG_DATA?.characters||[]).find(ch => ch.nome===nomeNpc); if (!c) return {};
   const ca=c.custom_attrs||{}; const pos=getPosicaoNoMapa(c,mapId); const hp=c.hp_atual??(ca.hp_max||100); const hpMax=ca.hp_max||100; const hpPct=hp/hpMax;
   const skills=atkGetHabilidadesCampanha(nomeNpc); const chars=RPG_DATA?.characters||[];
   const aliados  = chars.filter(x => { const ca2=x.custom_attrs||{}; return x.nome!==nomeNpc&&(ca2.tipo_personagem==='npc'||ca2.tipo==='npc')&&!ca2.morto&&x.active_map_id===mapId; });
   const inimigos = chars.filter(x => { const ca2=x.custom_attrs||{}; return ca2.tipo_personagem!=='npc'&&ca2.tipo!=='npc'&&!ca2.morto&&x.active_map_id===mapId; });
-  const _maisDano  = () => skills.filter(s=>s.alvo_tipo==='inimigo').sort((a,b)=>{ const dA=a.formula_dano?.match(/\d+d(\d+)/)?.[1]||0,dB=b.formula_dano?.match(/\d+d(\d+)/)?.[1]||0; return parseInt(dB)-parseInt(dA); })[0];
-  const _skillCura = () => skills.find(s=>s.alvo_tipo==='aliado'||s.tipo_dano==='cura');
-  const _dist      = alvoNome => atkDistanciaCelulas(nomeNpc, alvoNome);
-  const _maisProx  = lista => lista.reduce((b,x)=>{ const d=_dist(x.nome); return (d!==null&&(b===null||d<b.dist))?{char:x,dist:d}:b; }, null);
+  const _maisDano  = () => skills.filter((s: any)=>s.alvo_tipo==='inimigo').sort((a: any,b: any)=>{ const dA=a.formula_dano?.match(/\d+d(\d+)/)?.[1]||0,dB=b.formula_dano?.match(/\d+d(\d+)/)?.[1]||0; return parseInt(dB)-parseInt(dA); })[0];
+  const _skillCura = () => skills.find((s: any)=>s.alvo_tipo==='aliado'||s.tipo_dano==='cura');
+  const _dist      = (alvoNome: any) => atkDistanciaCelulas(nomeNpc, alvoNome);
+  const _maisProx  = (lista: any) => lista.reduce((b: any,x: any)=>{ const d=_dist(x.nome); return (d!==null&&(b===null||d<b.dist))?{char:x,dist:d}:b; }, null);
   const _fugir     = () => { const mp=_maisProx(inimigos); if(!mp) return null; const pi=getPosicaoNoMapa(mp.char,mapId); if(!pi||!pos) return null; return { dc:pos.col>pi.col?1:pos.col<pi.col?-1:0, dr:pos.row>pi.row?1:pos.row<pi.row?-1:0 }; };
-  const _emDir     = alvoNome => { const pa=getPosicaoNoMapa((chars.find(x=>x.nome===alvoNome)),mapId); if(!pos||!pa) return null; return { dc:pa.col>pos.col?1:pa.col<pos.col?-1:0, dr:pa.row>pos.row?1:pa.row<pos.row?-1:0 }; };
+  const _emDir     = (alvoNome: any) => { const pa=getPosicaoNoMapa((chars.find(x=>x.nome===alvoNome)),mapId); if(!pos||!pa) return null; return { dc:pa.col>pos.col?1:pa.col<pos.col?-1:0, dr:pa.row>pos.row?1:pa.row<pos.row?-1:0 }; };
   let alvoFixo=ca.alvo_fixo||null, moverPara=null, atacar=null;
   switch(comportamento) {
     case 'agressivo':{ const mp=_maisProx(inimigos); if(mp){const sk=_maisDano(); if(sk&&mp.dist<=(sk.alcance_celulas||1)){atacar={skill:sk,alvo:mp.char.nome};}else{moverPara=_emDir(mp.char.nome);}}} break;
     case 'defensivo':{ if(hpPct<0.4){moverPara=_fugir();}else{const mp=_maisProx(inimigos);if(mp){const sk=_maisDano();if(sk&&mp.dist<=(sk.alcance_celulas||1))atacar={skill:sk,alvo:mp.char.nome};}}} break;
     case 'suporte':  { const aMin=aliados.reduce((b,x)=>{const h=x.hp_atual??(x.custom_attrs?.hp_max||100),m=x.custom_attrs?.hp_max||100;return(!b||h/m<b.pct)?{char:x,pct:h/m}:b;},null); const sk=_skillCura(); if(aMin&&sk&&aMin.pct<0.7){const d=_dist(aMin.char.nome);if(d!==null&&d<=(sk.alcance_celulas||1)){atacar={skill:sk,alvo:aMin.char.nome};}else{moverPara=_emDir(aMin.char.nome);}}else{const mp=_maisProx(inimigos);if(mp){const sk2=_maisDano();if(sk2&&mp.dist<=(sk2.alcance_celulas||1))atacar={skill:sk2,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}}} break;
     case 'covarde':  { if(hpPct<0.6){moverPara=_fugir();}else{const mp=_maisProx(inimigos);if(mp&&mp.dist<=1){const sk=_maisDano();if(sk)atacar={skill:sk,alvo:mp.char.nome};}}} break;
-    case 'protetor': { const mp=_maisProx(inimigos); if(mp){const sk=skills.find(s=>s.alvo_tipo==='aliado')||_maisDano();if(sk&&mp.dist<=(sk.alcance_celulas||1)){atacar={skill:sk,alvo:mp.char.nome};}else{moverPara=_emDir(mp.char.nome);}}} break;
+    case 'protetor': { const mp=_maisProx(inimigos); if(mp){const sk=skills.find((s: any)=>s.alvo_tipo==='aliado')||_maisDano();if(sk&&mp.dist<=(sk.alcance_celulas||1)){atacar={skill:sk,alvo:mp.char.nome};}else{moverPara=_emDir(mp.char.nome);}}} break;
     case 'berserk':  { const mp=_maisProx(inimigos); if(mp){const sk=_maisDano();if(sk){if(mp.dist<=(sk.alcance_celulas||1))atacar={skill:sk,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}}} break;
-    case 'emboscador':{ const skR=skills.filter(s=>s.alvo_tipo==='inimigo'&&(s.alcance_celulas||1)>2).sort((a,b)=>(b.alcance_celulas||0)-(a.alcance_celulas||0))[0]; const mp=_maisProx(inimigos); if(mp&&skR){if(mp.dist<=skR.alcance_celulas)atacar={skill:skR,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}else if(mp&&mp.dist<=2){moverPara=_fugir();}} break;
+    case 'emboscador':{ const skR=skills.filter((s: any)=>s.alvo_tipo==='inimigo'&&(s.alcance_celulas||1)>2).sort((a: any,b: any)=>(b.alcance_celulas||0)-(a.alcance_celulas||0))[0]; const mp=_maisProx(inimigos); if(mp&&skR){if(mp.dist<=skR.alcance_celulas)atacar={skill:skR,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}else if(mp&&mp.dist<=2){moverPara=_fugir();}} break;
     case 'cacador':  { if(!alvoFixo){const ap=inimigos.reduce((b,x)=>{const h=x.hp_atual??100;return(!b||h<b.hp)?{char:x,hp:h}:b;},null);if(ap)alvoFixo=ap.char.nome;} if(alvoFixo){const d=_dist(alvoFixo);const sk=_maisDano();if(sk){if(d!==null&&d<=(sk.alcance_celulas||1))atacar={skill:sk,alvo:alvoFixo};else moverPara=_emDir(alvoFixo);}}} break;
-    case 'estrategista':{ const skC=skills.find(s=>s.alvo_tipo==='inimigo'&&s.efeitos_bonus?.some(e=>e.sem_movimento||e.sem_ataque)); const sk=_maisDano(); const mp=_maisProx(inimigos); if(mp){const skU=(skC&&!mp.char.buffs?.some(b=>b.sem_movimento))?skC:sk;if(skU&&mp.dist<=(skU.alcance_celulas||1))atacar={skill:skU,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}} break;
+    case 'estrategista':{ const skC=skills.find((s: any)=>s.alvo_tipo==='inimigo'&&s.efeitos_bonus?.some((e: any)=>e.sem_movimento||e.sem_ataque)); const sk=_maisDano(); const mp=_maisProx(inimigos); if(mp){const skU=(skC&&!mp.char.buffs?.some((b: any)=>b.sem_movimento))?skC:sk;if(skU&&mp.dist<=(skU.alcance_celulas||1))atacar={skill:skU,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}} break;
     default:{ const todos=['agressivo','defensivo','suporte','covarde','emboscador']; return _npcCalcAcao(nomeNpc,todos[Math.floor(Math.random()*todos.length)],mapId); }
   }
   return { moverPara, atacar };
@@ -7127,7 +7127,7 @@ window.confirmarUsarItem = async function() {
   if (!alvoChar) { mostrarToast('Alvo não encontrado', 'erro'); return; }
   await _aplicarEfeitosItem(def.efeitos||[], alvoChar.nome, nomeUsuario);
   await _consumirItem(invItem);
-  const efLabel = (def.efeitos||[]).map(e => _efeitoLabel(e)).filter(Boolean).join(', ');
+  const efLabel = (def.efeitos||[]).map((e: any) => _efeitoLabel(e)).filter(Boolean).join(', ');
   HUB_EVENTS.emit('item_usado', { personagem: nomeUsuario, item: def.nome, efeito: efLabel, aprovacao: 'auto' });
   fecharModalUsarItem();
 };
@@ -7139,12 +7139,12 @@ function renderItensPendentes6() {
   if (!wrap||!lista) return;
   if (RPG_DATA?.myRole !== 'mestre' || !INV.usosPendentes?.length) { wrap.style.display='none'; return; }
   wrap.style.display = 'block';
-  const bloqueantes = INV.usosPendentes.filter(u => { const def=INV.itemDefs?.find(d=>d.id===(u.item_def_id||u.item_catalog_id)); const ef=u.efeitos_snap||def?.efeitos||[]; return ef.some(e=>e.tipo==='dano'||e.tipo==='debuff'||e.tipo==='dot'); });
-  const aguardando  = INV.usosPendentes.filter(u => !bloqueantes.includes(u));
-  const _renderRaia = (label, cor, items) => {
+  const bloqueantes = INV.usosPendentes.filter((u: any) => { const def=INV.itemDefs?.find((d: any)=>d.id===(u.item_def_id||u.item_catalog_id)); const ef=u.efeitos_snap||def?.efeitos||[]; return ef.some((e: any)=>e.tipo==='dano'||e.tipo==='debuff'||e.tipo==='dot'); });
+  const aguardando  = INV.usosPendentes.filter((u: any) => !bloqueantes.includes(u));
+  const _renderRaia = (label: any, cor: any, items: any) => {
     if (!items.length) return '';
-    return '<div style="margin-bottom:10px"><div style="font-size:0.58rem;font-family:var(--fonte-d);color:'+cor+';text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;border-bottom:1px solid '+cor+'44;padding-bottom:3px">'+label+'</div>'+items.map(u=>{
-      const def=INV.itemDefs?.find(d=>d.id===(u.item_def_id||u.item_catalog_id));
+    return '<div style="margin-bottom:10px"><div style="font-size:0.58rem;font-family:var(--fonte-d);color:'+cor+';text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;border-bottom:1px solid '+cor+'44;padding-bottom:3px">'+label+'</div>'+items.map((u: any)=>{
+      const def=INV.itemDefs?.find((d: any)=>d.id===(u.item_def_id||u.item_catalog_id));
       const usadoPor=RPG_DATA?.characters?.find(c=>c.id===u.usado_por_id);
       const alvo=RPG_DATA?.characters?.find(c=>c.id===u.alvo_id);
       const efStr=(u.efeitos_snap||def?.efeitos||[]).map(_efeitoLabel).filter(Boolean).join(' · ');
@@ -7165,15 +7165,15 @@ window._executarDropNPC = async function(rpgId, npcNome, npcChar) {
     try { await sb('loot_pendente?rpg_id=eq.'+encodeURIComponent(rpgId)+'&origem_npc=eq.'+encodeURIComponent(npcNome)+'&saqueado=eq.false', { method:'PATCH', body:JSON.stringify({ posicao_col:posNpc.col, posicao_row:posNpc.row, mapa_id:mapId }) }); } catch(e) {}
   }
 };
-window.abrirModalLootToken = function(npcNome) {
+window.abrirModalLootToken = function(npcNome: any) {
   if (typeof abrirModalLoot === 'function') { abrirModalLoot(npcNome); return; }
   mostrarToast('💰 Saquear '+npcNome+' — abra a aba Tabelas para ver o loot', 'info');
 };
 
 // ── 6.5 Janela de reclamação de loot 15s ─────────────────────────────────
-var LOOT_RECLAMOS = {};
-function lootMostrarJanela(lootId, nomeItem, raridade) {
-  const corRar = ({comum:'#9aa8b8',incomum:'#5ee09a',raro:'#7ec8f0',epico:'#b07ef0',lendario:'#f0cc6a'})[raridade]||'#9aa8b8';
+var LOOT_RECLAMOS: Record<string, any> = {};
+function lootMostrarJanela(lootId: any, nomeItem: any, raridade: any) {
+  const corRar = ({comum:'#9aa8b8',incomum:'#5ee09a',raro:'#7ec8f0',epico:'#b07ef0',lendario:'#f0cc6a'} as any)[raridade]||'#9aa8b8';
   LOOT_RECLAMOS[lootId] = LOOT_RECLAMOS[lootId]||[];
   let card = document.getElementById('loot-janela-'+lootId);
   if (!card) { card=document.createElement('div'); card.id='loot-janela-'+lootId; card.style.cssText='position:fixed;top:80px;right:12px;z-index:9150;border:2px solid '+corRar+';border-radius:10px;background:rgba(10,15,25,0.96);padding:10px 12px;min-width:170px;box-shadow:0 8px 24px rgba(0,0,0,0.6)'; document.body.appendChild(card); }
@@ -7182,17 +7182,17 @@ function lootMostrarJanela(lootId, nomeItem, raridade) {
   const countdown = setInterval(() => { seg--; const t=document.getElementById('loot-timer-'+lootId); if(t) t.textContent=seg+'s'; if(seg<=0){clearInterval(countdown);lootResolverReclamo(lootId,nomeItem);} }, 1000);
   card._countdown = countdown;
 }
-window.lootReclamar = function(lootId) {
+window.lootReclamar = function(lootId: any) {
   const meu = RPG_DATA?.linked||'Jogador';
   if(!LOOT_RECLAMOS[lootId]) LOOT_RECLAMOS[lootId]=[];
   if(!LOOT_RECLAMOS[lootId].includes(meu)){ LOOT_RECLAMOS[lootId].push(meu); const el=document.getElementById('loot-reclamos-'+lootId); if(el) el.textContent='Interesse: '+LOOT_RECLAMOS[lootId].join(', '); mostrarToast('✋ Interesse registrado: '+meu,'ok'); }
 };
-function lootResolverReclamo(lootId, nomeItem) {
+function lootResolverReclamo(lootId: any, nomeItem: any) {
   const card = document.getElementById('loot-janela-'+lootId);
   const reclamos = LOOT_RECLAMOS[lootId]||[];
   if (!reclamos.length) { if(card){card.innerHTML='<div style="font-size:0.65rem;color:var(--suave);padding:4px">'+nomeItem+' disponível para saque livre</div>'; setTimeout(()=>card.remove(),4000);} }
   else if (reclamos.length===1) { if(card){card.innerHTML='<div style="font-size:0.65rem;color:#5ee09a;padding:4px">✓ '+nomeItem+' → '+reclamos[0]+'</div>'; setTimeout(()=>card.remove(),3000);} mostrarToast('✓ '+nomeItem+' distribuído para '+reclamos[0],'ok'); }
-  else { if(card){card.innerHTML='<div style="font-size:0.65rem;color:#f0cc6a;padding:4px 0;margin-bottom:6px">'+nomeItem+' — múltiplo interesse</div>'+reclamos.map(r=>'<div style="font-size:0.6rem;color:var(--suave)">'+r+'</div>').join('')+'<div style="font-size:0.58rem;color:rgba(200,168,75,0.6);margin-top:6px">Mestre decide quem recebe</div>';} notifAdicionar({tipo:'loot',prioridade:'media',titulo:'Loot disputado: '+nomeItem,descricao:reclamos.join(', ')+' têm interesse',acao:{label:'Distribuir',fn:()=>mostrarToast('Distribua o item manualmente via inventário','')}}); }
+  else { if(card){card.innerHTML='<div style="font-size:0.65rem;color:#f0cc6a;padding:4px 0;margin-bottom:6px">'+nomeItem+' — múltiplo interesse</div>'+reclamos.map((r: any)=>'<div style="font-size:0.6rem;color:var(--suave)">'+r+'</div>').join('')+'<div style="font-size:0.58rem;color:rgba(200,168,75,0.6);margin-top:6px">Mestre decide quem recebe</div>';} notifAdicionar({tipo:'loot',prioridade:'media',titulo:'Loot disputado: '+nomeItem,descricao:reclamos.join(', ')+' têm interesse',acao:{label:'Distribuir',fn:()=>mostrarToast('Distribua o item manualmente via inventário','')}}); }
 }
 
 // ── 6.6 Indicadores de buff/debuff no token ───────────────────────────────
@@ -7276,7 +7276,7 @@ window._invEquipar = async function(nomeChar, invItem, def) {
 };
 
 // ── 6.8 bloqueado_por_nivel dinâmico ─────────────────────────────────────
-function bloqueadoPorNivel(charNome, itemDef) {
+function bloqueadoPorNivel(charNome: any, itemDef: any) {
   const c = (RPG_DATA?.characters||[]).find(ch=>ch.nome===charNome); if (!c) return false;
   const nivel = c.nivel??c.custom_attrs?.nivel??c.custom_attrs?.atributos?.Nível??1;
   return parseInt(nivel) < parseInt(itemDef?.nivel_minimo_uso??itemDef?.nivel??1);
@@ -7285,7 +7285,7 @@ var _origRenderInvCompleto6 = window.renderInvCompleto;
 window.renderInvCompleto = function() {
   if (INV?.inventarios) {
     const charNome = INV.charAtivo;
-    if (charNome) { const charId=INV.charId; const insts=INV.inventarios[charId]||[]; for(const inst of insts){const it=inst.item||inst.item_catalog||{}; inst.bloqueado_por_nivel=bloqueadoPorNivel(charNome,it);} }
+    if (charNome) { const charId=INV.charId; const insts=(INV.inventarios as any)[charId]||[]; for(const inst of insts){const it=inst.item||inst.item_catalog||{}; inst.bloqueado_por_nivel=bloqueadoPorNivel(charNome,it);} }
   }
   return _origRenderInvCompleto6?.();
 };
@@ -7348,7 +7348,7 @@ function abrirModalIniciarBatalha() {
   // Excluir personagens que já estão em outra batalha ativa
   const chars = allCharsHere.filter(c => {
     const jaEmBatalha = Object.values<any>(MAPA_STATE.batalhas).some(b =>
-      b.ativa && b.mapa_id !== mapaId && b.participantes?.some(p => p.nome === c.nome)
+      b.ativa && b.mapa_id !== mapaId && b.participantes?.some((p: any) => p.nome === c.nome)
     );
     return !jaEmBatalha;
   });
@@ -7400,7 +7400,7 @@ async function confirmarIniciarBatalha() {
   const checkboxes = document.querySelectorAll('#ini-batalha-participantes input[type=checkbox]:checked');
   const participantesBase = Array.from(checkboxes).map(cb => ({
     nome: cb.dataset.nome, tipo: cb.dataset.tipo,
-    cor: cb.dataset.cor, iniciativa: null
+    cor: cb.dataset.cor, iniciativa: null as any
   })).filter(p => {
     // Pets não participam da fila de iniciativa — agem no turno do dono
     const c = (RPG_DATA?.characters||[]).find(x => x.nome === p.nome);
@@ -7422,7 +7422,7 @@ async function confirmarIniciarBatalha() {
   const mapaNome = mapaEntry?.mapa?.nome || mapaId;
   const bid = batalhaNovaId(mapaId);
 
-  const iniciativasRoladas = {};
+  const iniciativasRoladas: Record<string, any> = {};
   participantesBase.forEach(p => {
     if (p.tipo === 'npc') {
       // NPCs: iniciativa automática com bônus de custom_attrs
@@ -7438,7 +7438,7 @@ async function confirmarIniciarBatalha() {
 
   const cfg = getBattleConfig();
   const _maxDef = cfg.max_defesas_por_rodada === 'unlimited' ? 999 : (cfg.max_defesas_por_rodada || 1);
-  const recursos_participantes = {};
+  const recursos_participantes: Record<string, any> = {};
   participantesBase.forEach(p => {
     recursos_participantes[p.nome] = {
       reacao_disponivel: cfg.usa_reacoes,
@@ -7476,7 +7476,7 @@ function batalhaRenderFaseIniciativa() {
   const meuNome = RPG_DATA?.linked;
   const isMestre = RPG_DATA?.myRole === 'mestre';
 
-  lista.innerHTML = bs.participantes.map(p => {
+  lista.innerHTML = bs.participantes.map((p: any) => {
     const rolou = bs.iniciativasRoladas[p.nome] != null;
     const emEmpate = bs.empatados?.includes(p.nome);
     const valor = bs.iniciativasRoladas[p.nome];
@@ -7507,7 +7507,7 @@ function batalhaRenderFaseIniciativa() {
   // Botão global "Rolar Iniciativa" (para jogador com personagem vinculado que ainda não rolou)
   const btnRolar = document.getElementById('batalha-btn-rolar-iniciativa');
   if (btnRolar && bs) {
-    const euParticipo = bs.participantes.find(p => p.nome === meuNome);
+    const euParticipo = bs.participantes.find((p: any) => p.nome === meuNome);
     const jaRolei = euParticipo && bs.iniciativasRoladas[meuNome] != null && !bs.empatados?.includes(meuNome);
     // Mostrar botão global apenas para jogadores (não mestre): o mestre usa os botões inline
     btnRolar.style.display = (!isMestre && euParticipo && !jaRolei) ? '' : 'none';
@@ -7516,7 +7516,7 @@ function batalhaRenderFaseIniciativa() {
   }
 }
 
-function abrirModalIniciativa(nomePersonagem?) {
+function abrirModalIniciativa(nomePersonagem?: any) {
   // nomePersonagem: nome explícito (mestre rolando por NPC/personagem sem vínculo)
   // se omitido, usa o personagem vinculado ao jogador atual
   const nome = nomePersonagem || RPG_DATA?.linked;
@@ -7598,9 +7598,9 @@ async function iniciativaConfirmar() {
   if (!bs) return;
 
   bs.iniciativasRoladas[nomeAlvo] = INI_VALOR_ATUAL;
-  const p = bs.participantes.find(x => x.nome === nomeAlvo);
+  const p = bs.participantes.find((x: any) => x.nome === nomeAlvo);
   if (p) p.iniciativa = INI_VALOR_ATUAL;
-  bs.empatados = bs.empatados.filter(n => n !== nomeAlvo);
+  bs.empatados = bs.empatados.filter((n: any) => n !== nomeAlvo);
 
   batalhaRenderFaseIniciativa();
   // Broadcast instantâneo para todos os clientes verem a iniciativa em tempo real
@@ -7610,24 +7610,24 @@ async function iniciativaConfirmar() {
   if (RPG_DATA?.myRole === 'mestre') batalhaVerificarIniciativasCompletas(bid);
 }
 
-function batalhaVerificarIniciativasCompletas(bid) {
+function batalhaVerificarIniciativasCompletas(bid: any) {
   const bs = MAPA_STATE.batalhas[bid];
   if (!bs) return;
   const todosRolaram = bs.participantes.every(p => bs.iniciativasRoladas[p.nome] != null);
   if (!todosRolaram) return;
 
-  const grupos = {};
+  const grupos: Record<string, any> = {};
   bs.participantes.forEach(p => {
     const v = bs.iniciativasRoladas[p.nome];
     if (!grupos[v]) grupos[v] = [];
     grupos[v].push(p);
   });
-  const empatados = [];
-  Object.values<any>(grupos).forEach(grp => { if (grp.length > 1) grp.forEach(p => empatados.push(p.nome)); });
+  const empatados: any = [];
+  Object.values<any>(grupos).forEach(grp => { if (grp.length > 1) grp.forEach((p: any) => empatados.push(p.nome)); });
 
   if (empatados.length) {
     bs.empatados = empatados;
-    empatados.forEach(n => {
+    empatados.forEach((n: any) => {
       delete bs.iniciativasRoladas[n];
       const p = bs.participantes.find(x => x.nome === n);
       if (p) p.iniciativa = null;
@@ -7679,7 +7679,7 @@ function batalhaRenderOrdemStrip() {
   if (!strip || !bs) return;
   const isMestre = RPG_DATA?.myRole === 'mestre';
 
-  strip.innerHTML = bs.participantes.map((p, i) => {
+  strip.innerHTML = bs.participantes.map((p: any, i: any) => {
     const isAtual = i === bs.ordemAtual;
     const offline = personagemTemJogador(p.nome) && !mestreDeveJogarPor(p) && !jogadorEstaOnline(p.nome);
     const borda = isAtual ? `2px solid ${p.cor}` : '1px solid rgba(255,255,255,0.06)';
@@ -7770,14 +7770,14 @@ function batalhaRenderReordenarLista() {
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
   const lista = document.getElementById('batalha-reordenar-lista');
   if (!lista || !bs) return;
-  lista.innerHTML = bs.participantes.map((p, i) => {
+  lista.innerHTML = bs.participantes.map((p: any, i: any) => {
     const isAtual = i === bs.ordemAtual;
     return `<button onclick="batalhaDefinirVez(${i})"
       style="padding:4px 8px;background:${isAtual?`${p.cor}22`:'rgba(20,29,43,0.8)'};border:1px solid ${isAtual?p.cor:'var(--borda)'};border-radius:6px;color:${isAtual?p.cor:'var(--suave)'};font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">${p.nome}</button>`;
   }).join('');
 }
 
-async function batalhaDefinirVez(i) {
+async function batalhaDefinirVez(i: any) {
   if (RPG_DATA?.myRole !== 'mestre') return;
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
   if (!bs) return;
@@ -7819,7 +7819,7 @@ async function batalhaPassarVez() {
     if (isNpcAtual) {
       const petsDoNpc = typeof petGetPetsDoDono === 'function' ? petGetPetsDoDono(atual.nome, 'campanha') : [];
       if (petsDoNpc && petsDoNpc.length > 0) {
-        mostrarToast(`⚠ ${atual.nome} tem pet(s): ${petsDoNpc.map(p => p.nome).join(', ')} — não esqueça de acionar!`, 'aviso');
+        mostrarToast(`⚠ ${atual.nome} tem pet(s): ${petsDoNpc.map((p: any) => p.nome).join(', ')} — não esqueça de acionar!`, 'aviso');
       }
     }
   }
@@ -7941,7 +7941,7 @@ async function batalhaPassarVez() {
 }
 
 // ── Helper: verifica se um buff/debuff ainda está ativo ──────────────────────
-function _buffAtivo(b) {
+function _buffAtivo(b: any) {
   if (!b) return false;
   return (b.dot_turnos_restantes ?? 0) > 0
     || (b.hot_turnos_restantes ?? 0) > 0
@@ -7955,7 +7955,7 @@ function _buffAtivo(b) {
 }
 
 // ── Helper: log detalhado de expiração de efeito ─────────────────────────────
-function _logExpiracaoEfeito(b, nomePersonagem) {
+function _logExpiracaoEfeito(b: any, nomePersonagem: any) {
   const r = [];
   if (b.sem_movimento) r.push('imobilização removida');
   if (b.sem_ataque) r.push(
@@ -7973,7 +7973,7 @@ function _logExpiracaoEfeito(b, nomePersonagem) {
 }
 
 // ── Scanner de habilidades reativas ─────────────────────────────────────────────
-async function _batalhaProcessarEventoReativo(tipoEvento, ctx) {
+async function _batalhaProcessarEventoReativo(tipoEvento: any, ctx: any) {
   const cfg = getBattleConfig();
   if (!cfg.usa_reacoes) return;
   const bid = typeof BATALHA_ATUAL_ID !== 'undefined' ? BATALHA_ATUAL_ID : null;
@@ -8015,7 +8015,7 @@ async function _batalhaProcessarEventoReativo(tipoEvento, ctx) {
   for (const r of depois) await _mostrarDialogReacao(r, ctx, 'reaction');
 }
 
-function _mostrarDialogReacao(reativa, ctx, tipo) {
+function _mostrarDialogReacao(reativa: any, ctx: any, tipo: any) {
   return new Promise<any>(resolve => {
     const bid = typeof BATALHA_ATUAL_ID !== 'undefined' ? BATALHA_ATUAL_ID : null;
     const bs = bid ? MAPA_STATE.batalhas[bid] : null;
@@ -8268,7 +8268,7 @@ function batalhaAtacarVez() {
   abrirModalAtaque(atual.nome, 'campanha');
 }
 
-async function batalhaJogarPorOffline(nomeParticipante) {
+async function batalhaJogarPorOffline(nomeParticipante: any) {
   // Mestre assume o turno do jogador offline
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
   if (!bs || RPG_DATA?.myRole !== 'mestre') return;
@@ -8383,13 +8383,13 @@ function _verificarVitoriaBatalha() {
   if (!bs?.ativa || !bs.participantes?.length) return;
 
   // Verificar quais participantes ainda estão vivos
-  const vivos = bs.participantes.filter(p => {
+  const vivos = bs.participantes.filter((p: any) => {
     const c = RPG_DATA?.characters?.find(x => x.nome === p.nome);
     return !c?.custom_attrs?.morto;
   });
 
   // Vitória se todos os vivos forem jogadores (nenhum NPC/inimigo vivo)
-  const temInimigoVivo = vivos.some(p => p.tipo === 'npc');
+  const temInimigoVivo = vivos.some((p: any) => p.tipo === 'npc');
   if (temInimigoVivo) return;
 
   // Vitória confirmada — aguardar um frame para o toast de morte aparecer antes
@@ -8397,7 +8397,7 @@ function _verificarVitoriaBatalha() {
 }
 
 // ── TELA DE VITÓRIA ───────────────────────────────────────────
-function _mostrarTelaVitoria(bs) {
+function _mostrarTelaVitoria(bs: any) {
   if (!bs) return;
   const stats = bs.stats || {};
 
@@ -8438,11 +8438,11 @@ function _mostrarTelaVitoria(bs) {
   if (danoTotal > 0) linhas.push({ icon: '📊', label: 'Dano Total Causado', valor: `${danoTotal} de dano` });
 
   // Mortes inimigas
-  const mortos = bs.participantes.filter(p => {
+  const mortos = bs.participantes.filter((p: any) => {
     const c = RPG_DATA?.characters?.find(x => x.nome === p.nome);
     return (p.tipo === 'npc') && c?.custom_attrs?.morto;
   });
-  if (mortos.length) linhas.push({ icon: '💀', label: 'Inimigos Derrotados', valor: mortos.map(p => p.nome).join(', ') });
+  if (mortos.length) linhas.push({ icon: '💀', label: 'Inimigos Derrotados', valor: mortos.map((p: any) => p.nome).join(', ') });
 
   // Broadcast vitória para todos
   combateBroadcast('batalha_vitoria', { batalhaId: BATALHA_ATUAL_ID, stats, rounds });
@@ -8676,7 +8676,7 @@ function batalhaRenderDados() {
   if (!el) return;
   const ativos = getDiceConfig(RPG_DATA.rpgId);
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
-  el.innerHTML = ativos.map(d => {
+  el.innerHTML = ativos.map((d: any) => {
     const sel = bs?.dadoSel === d;
     return `<button class="batalha-dado-btn${sel?' ativo':''}" onclick="batalhaSelDado(${d},this)">
       <svg viewBox="0 0 40 40" fill="none" style="width:18px;height:18px">${svgDado(d)}</svg>d${d}
@@ -8684,7 +8684,7 @@ function batalhaRenderDados() {
   }).join('');
 }
 
-function batalhaSelDado(d, btn) {
+function batalhaSelDado(d: any, btn: any) {
   if (MAPA_STATE.batalhas[BATALHA_ATUAL_ID]) MAPA_STATE.batalhas[BATALHA_ATUAL_ID].dadoSel = d;
   document.querySelectorAll('.batalha-dado-btn').forEach(b => b.classList.remove('ativo'));
   btn.classList.add('ativo');
@@ -8725,7 +8725,7 @@ async function deletarMapaAtual() {
 
 
 // ── TOGGLE VISIBILIDADE NPC NO MAPA GERAL ────────────────────
-async function toggleNpcVisivelGeral(nome) {
+async function toggleNpcVisivelGeral(nome: any) {
   const c = RPG_DATA.characters.find(ch => ch.nome === nome);
   if (!c) return;
   const ca = c.custom_attrs || {};
@@ -8768,7 +8768,7 @@ document.addEventListener('keyup', (e) => {
   _TECLAS_ATIVAS.delete(e.key);
 });
 
-function _processarSetinhaMapa(e) {
+function _processarSetinhaMapa(e: any) {
   const setas = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
   if (!setas.includes(e.key)) return;
 
@@ -8807,7 +8807,7 @@ function _processarSetinhaMapa(e) {
   _moverTokenPorSeta(nomeToken, dc, dr);
 }
 
-async function _moverTokenPorSeta(nome, dc, dr) {
+async function _moverTokenPorSeta(nome: any, dc: any, dr: any) {
   const mapId = MAPA_STATE?.mapaAtualId;
   if (!mapId) return;
   const c = RPG_DATA?.characters?.find(ch => ch.nome === nome);
@@ -8941,7 +8941,7 @@ function _getTokenControleAtual() {
 // O dblclick do NPC (abrirModalImg) é do mestre — mantemos mas adicionamos
 // comportamento de assumir controle
 
-function _tokenCliqueSimples(nome) {
+function _tokenCliqueSimples(nome: any) {
   // ═══════════════════════════════════════════════════════════════
   // 🔧 FIX: Seleção de alvo para combate
   // Se modal de ataque está aberto, clicar em token seleciona como alvo
@@ -8951,7 +8951,7 @@ function _tokenCliqueSimples(nome) {
     // Verificar se há habilidade selecionada
     if (typeof COMBATE !== 'undefined' && COMBATE.habilidadeSel && COMBATE._alvos) {
       // Procurar índice do alvo na lista
-      const idx = COMBATE._alvos.findIndex(a => a.nome === nome);
+      const idx = COMBATE._alvos.findIndex((a: any) => a.nome === nome);
       if (idx !== -1) {
         console.log('[FIX] Selecionando alvo via clique no mapa:', nome);
         if (typeof atkSelecionarAlvo === 'function') {
@@ -8987,7 +8987,7 @@ function _tokenCliqueSimples(nome) {
   _ctxAtualizarPainelDesktop(nome);
 }
 
-function _ctxAtualizarPainelDesktop(nome) {
+function _ctxAtualizarPainelDesktop(nome: any) {
   if (isMobileLandscape()) return; // mobile usa zona direita
   // Atualizar painel de ações: desktop → mesa-acao-painel; mobile → ctx-sidebar
   // Ambos chamam _mesaRenderAcoes / sidebar render conforme disponibilidade
@@ -9018,7 +9018,7 @@ function _ctxAtualizarPainelDesktop(nome) {
     if (!visiveis.length) { sidebarWrap.style.display = 'none'; return; }
     sidebarWrap.style.display = 'block';
     sidebarLista.innerHTML = '';
-    visiveis.forEach(b => {
+    visiveis.forEach((b: any) => {
       const btn = document.createElement('button');
       btn.style.cssText = 'width:100%;padding:7px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:8px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left;transition:background .15s;line-height:1.3';
       btn.innerHTML = '<span style="display:block">'+b.label+'</span>'+(b.sublabel?'<span style="color:rgba(200,168,75,0.7);font-size:0.55rem">'+b.sublabel+'</span>':'');
@@ -9037,7 +9037,7 @@ function _ctxAtualizarPainelDesktop(nome) {
   }
 }
 
-function _tokenDuploClique(nome) {
+function _tokenDuploClique(nome: any) {
   const isMestre = RPG_DATA?.myRole === 'mestre';
   if (isMestre) {
     window.TOKEN_CTRL.nomeControle = nome;
@@ -9099,7 +9099,7 @@ document.addEventListener('keydown', (e) => {
 // 3.4 — SISTEMA DE PONTOS DE MOVIMENTO POR TURNO
 // ════════════════════════════════════════════════════════════════════════════
 
-function movCalcVelocidade(charNome) {
+function movCalcVelocidade(charNome: any) {
   const c = RPG_DATA?.characters?.find(ch => ch.nome === charNome);
   if (!c) return 4;
   const ca = c.custom_attrs || {};
@@ -9119,7 +9119,7 @@ function movCalcVelocidade(charNome) {
   return Math.max(0, base + bonus + modVel);
 }
 
-function movResetTurno(batalhaId, charNome) {
+function movResetTurno(batalhaId: any, charNome: any) {
   const bs = MAPA_STATE.batalhas[batalhaId];
   if (!bs) return;
   if (!bs.movimentoRestante) bs.movimentoRestante = {};
@@ -9128,14 +9128,14 @@ function movResetTurno(batalhaId, charNome) {
   bs.acaoRestante[charNome]      = 1;
 }
 
-function movGetRestante(batalhaId, charNome) {
+function movGetRestante(batalhaId: any, charNome: any) {
   const bs = MAPA_STATE.batalhas[batalhaId];
   if (!bs || !bs.movimentoRestante) return Infinity;
   const v = bs.movimentoRestante[charNome];
   return v === undefined ? movCalcVelocidade(charNome) : v;
 }
 
-function movConsumirAcao(batalhaId, charNome) {
+function movConsumirAcao(batalhaId: any, charNome: any) {
   const bs = MAPA_STATE.batalhas[batalhaId];
   if (!bs) return true;
   if (!bs.acaoRestante) bs.acaoRestante = {};
@@ -9148,7 +9148,7 @@ function movConsumirAcao(batalhaId, charNome) {
 }
 
 // 🔧 FIX: Função auxiliar para consumir movimento (usada por setas, drag, toque, etc)
-function movConsumirMovimento(batalhaId, charNome, quantidade = 1) {
+function movConsumirMovimento(batalhaId: any, charNome: any, quantidade = 1) {
   const bs = MAPA_STATE.batalhas[batalhaId];
   if (!bs) return true; // Fora de combate, permite movimento livre
   
@@ -9177,7 +9177,7 @@ function movConsumirMovimento(batalhaId, charNome, quantidade = 1) {
   return true;
 }
 
-function movAdicionarMovimento(batalhaId, charNome, quantidade) {
+function movAdicionarMovimento(batalhaId: any, charNome: any, quantidade: any) {
   const bs = MAPA_STATE?.batalhas?.[batalhaId];
   if (!bs || bs.fase !== 'combate') return;
   if (!bs.movimentoRestante) bs.movimentoRestante = {};
@@ -9209,8 +9209,8 @@ HUB_EVENTS.on('turno_avancou', ({ personagem, batalhaId }) => {
 // Emergem baseados na posição do token no mapa
 // ════════════════════════════════════════════════════════════════════════════
 
-function ctxGerarBotoes(charNome, mapId) {
-  const botoes = [];
+function ctxGerarBotoes(charNome: any, mapId: any) {
+  const botoes: any = [];
   
   // 🔧 FIX: Verificar se RPG_DATA está carregado
   if (!RPG_DATA || !RPG_DATA.characters) {
@@ -9323,7 +9323,7 @@ function ctxGerarBotoes(charNome, mapId) {
   }
 
   // ── 4. Ordenar e limitar ──────────────────────────────────────────────
-  botoes.sort((a, b) => (b.prioridade || 0) - (a.prioridade || 0));
+  botoes.sort((a: any, b: any) => (b.prioridade || 0) - (a.prioridade || 0));
   // ── Vol II v2.1: Botão Empurrar para inimigos adjacentes ──
   if (emCombate && (bs.acaoRestante?.[charNome] ?? 1) > 0) {
     const adj = chars.filter(ch => {
@@ -9341,14 +9341,14 @@ function ctxGerarBotoes(charNome, mapId) {
 }
 
 // Priorizar: max 3 visíveis, resto em "..."
-function ctxPriorizar(botoes) {
+function ctxPriorizar(botoes: any) {
   const visiveis = botoes.slice(0, 3);
   const ocultos  = botoes.slice(3);
   return { visiveis, ocultos };
 }
 
 // Executar ação contextual
-function ctxExecutarAcao(botao) {
+function ctxExecutarAcao(botao: any) {
   if (!botao || botao.desabilitado) return;
   const _charAtivo = window.TOKEN_CTRL?.nomeSelecionado || RPG_DATA?.linked;
   
@@ -9414,7 +9414,7 @@ function ctxExecutarAcao(botao) {
   }
 }
 // Renderizar botões contextuais para o painel de combate existente
-function ctxRenderizarPainelBotoes(charNome) {
+function ctxRenderizarPainelBotoes(charNome: any) {
   const mapId = MAPA_STATE?.mapaAtualId;
   if (!mapId) return;
   const botoes = ctxGerarBotoes(charNome, mapId);
@@ -9425,7 +9425,7 @@ function ctxRenderizarPainelBotoes(charNome) {
   if (!painel) return; // será renderizado pelo HTML existente
 
   painel.innerHTML = '';
-  visiveis.forEach(b => {
+  visiveis.forEach((b: any) => {
     const btn = document.createElement('button');
     btn.className = 'ctx-btn';
     btn.innerHTML = `<span class="ctx-btn-label">${b.label}</span>${b.sublabel ? `<span class="ctx-btn-sub">${b.sublabel}</span>` : ''}`;
@@ -9443,7 +9443,7 @@ function ctxRenderizarPainelBotoes(charNome) {
   }
 }
 
-function ctxMostrarOcultos(ocultos) {
+function ctxMostrarOcultos(ocultos: any) {
   // Grade expansível acima do painel
   let grade = document.getElementById('ctx-grade-ocultos');
   if (!grade) {
@@ -9467,7 +9467,7 @@ function ctxMostrarOcultos(ocultos) {
   
   grade.innerHTML = '';
   
-  ocultos.forEach(b => {
+  ocultos.forEach((b: any) => {
     const btn = document.createElement('button');
     // ✅ Estilos individuais para cada botão
     btn.style.padding = '8px 10px';
@@ -9498,7 +9498,7 @@ function ctxMostrarOcultos(ocultos) {
   }, 100);
 }
 
-function mapaClicarToken(nome) {
+function mapaClicarToken(nome: any) {
   // Modo medição: selecionar pontos
   if (MAPA_STATE.toolMode === 'medicao') {
     const c = RPG_DATA.characters.find(ch => ch.nome === nome);
@@ -9518,7 +9518,7 @@ function mapaClicarToken(nome) {
   }
   // Modo de ataque dinâmico: clicar em alvo disponível
   if (ATAQUE_MAPA_STATE.ativo && ATAQUE_MAPA_STATE.fase === 'alvos') {
-    const isAlvoValido = COMBATE._alvos.some(a => a.nome === nome);
+    const isAlvoValido = COMBATE._alvos.some((a: any) => a.nome === nome);
     if (isAlvoValido) {
       mapaAtaqueClicarAlvo(nome);
       return;
@@ -9542,7 +9542,7 @@ function fecharFichaNoMapa() {
   const sp = document.getElementById('ficha-sidebar-painel');
   if (sp) sp.style.display = 'none';
 }
-function abrirFichaNoMapa(nome) {
+function abrirFichaNoMapa(nome: any) {
   const c = RPG_DATA.characters.find(x => x.nome === nome);
   if (!c) return;
   const isMestre = RPG_DATA?.myRole === 'mestre';
@@ -9565,7 +9565,7 @@ function abrirFichaNoMapa(nome) {
 
   // Skills
   const skills = _skFiltrarPorChar(RPG_DATA.skills || [], nome);
-  const skHtml = skills.map(s => {
+  const skHtml = skills.map((s: any) => {
     const custoLabel = s.custo_tipo === 'movimento' ? '🏃 mov' : s.custo_tipo === 'nenhum' ? '—' : null;
     const metaRow = [
       s.formula_dano ? `<span style="font-size:0.78rem;color:var(--destaque)">🎲 ${s.formula_dano}</span>` : '',
@@ -9743,7 +9743,7 @@ function abrirFichaNoMapa(nome) {
       const botoes = ctxGerarBotoes(nome, mapId2);
       if (!botoes.length) return '';
       const { visiveis, ocultos } = ctxPriorizar(botoes);
-      const btnsHtml = visiveis.map(b =>
+      const btnsHtml = visiveis.map((b: any) =>
         '<button onclick="ctxExecutarAcao(' + JSON.stringify(b).replace(/'/g,"\'") + ');fecharFichaNoMapa()" ' +
         'style="flex:1;min-width:100px;padding:8px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:7px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left">' +
         b.label + (b.sublabel ? '<br><span style=\'font-size:0.52rem;color:rgba(200,168,75,0.7)\'>' + b.sublabel + '</span>' : '') +
@@ -9767,7 +9767,7 @@ function abrirFichaNoMapa(nome) {
   }
 }
 
-async function fichaToggleOcultarAtribs(nome) {
+async function fichaToggleOcultarAtribs(nome: any) {
   const c = RPG_DATA.characters.find(x => x.nome === nome);
   if (!c || !c.custom_attrs) return;
   const novoEstado = document.getElementById('ficha-toggle-ocultar')?.checked ?? false;
@@ -9843,7 +9843,7 @@ function limparMedicaoMapa() {
 }
 
 // ── NAVEGAÇÃO ENTRE MAPAS ─────────────────────────────────────
-function entrarMapaLocal(mapaLocalId) {
+function entrarMapaLocal(mapaLocalId: any) {
   // Encontrar a zona que liga o pai a este mapa local
   const parentEntry = (RPG_DATA.mapas||[]).find(l =>
     (l.mapa.locais||[]).some(z => z.mapa_local_id === mapaLocalId));
@@ -9919,7 +9919,7 @@ function renderConfig(){
  if (typeof cfgBattleInit === 'function') cfgBattleInit();
 }
 
-async function salvarPvpConfig(ativo) {
+async function salvarPvpConfig(ativo: any) {
   const tema = { ...(CURRENT_RPG.theme || {}), pvp_ativo: ativo };
   await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}`,
     { method: 'PATCH', body: JSON.stringify({ theme_json: tema }) }
@@ -9928,7 +9928,7 @@ async function salvarPvpConfig(ativo) {
   mostrarToast(ativo ? 'PvP habilitado!' : 'PvP desabilitado', 'sucesso');
 }
 
-async function salvarFogoAmigoConfig(ativo) {
+async function salvarFogoAmigoConfig(ativo: any) {
   const tema = { ...(CURRENT_RPG.theme || {}), fogo_amigo_ativo: ativo };
   await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}`,
     { method: 'PATCH', body: JSON.stringify({ theme_json: tema }) }
@@ -9965,8 +9965,8 @@ function cfgBattleSistemaChange() {
   }
 }
 
-function _cfgBattlePopularCampos(cfg) {
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el[el.type === 'checkbox' ? 'checked' : 'value'] = val ?? el.defaultValue; };
+function _cfgBattlePopularCampos(cfg: any) {
+  const set = (id: any, val: any) => { const el = document.getElementById(id); if (el) el[el.type === 'checkbox' ? 'checked' : 'value'] = val ?? el.defaultValue; };
   set('cfg-battle-max-reacoes',     cfg.max_reacoes_por_rodada ?? 1);
   set('cfg-battle-max-defesas',     cfg.max_defesas_por_rodada ?? 1);
   set('cfg-battle-tipo-defesa',     cfg.tipo_defesa || 'passiva');
@@ -9983,7 +9983,7 @@ async function cfgBattleSalvar() {
   const sistema = document.getElementById('cfg-battle-sistema')?.value || 'dnd5e';
   let cfg;
   if (sistema === 'custom') {
-    const g = (id) => document.getElementById(id);
+    const g = (id: any) => document.getElementById(id);
     cfg = {
       sistema_reacao:            sistema,
       usa_reacoes:               g('cfg-battle-usa-reacoes')?.checked ?? true,
@@ -10012,7 +10012,7 @@ async function renderCfgMembros() {
    const membros = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&select=player_id,nickname,role,linked,permissoes&order=role.asc,nickname.asc`);
    const myId = SESSION?.user?.id;
    const isMestreLocal = RPG_DATA.myRole === 'mestre';
-   el.innerHTML = (membros||[]).map(m => {
+   el.innerHTML = (membros||[]).map((m: any) => {
      const isSelf = m.player_id === myId;
      const isMestrem = m.role === 'mestre';
      const mEsc = (m.nickname||'').replace(/'/g,"\'");
@@ -10040,7 +10040,7 @@ async function renderCfgMembros() {
 }
 
 // ── MESTRE: Atribuir personagem a jogador ────────────────────
-function abrirModalAtribuirPersonagem(playerId, nickname) {
+function abrirModalAtribuirPersonagem(playerId: any, nickname: any) {
   const pcs = (RPG_DATA.characters||[]).filter(c => {
     const tipo = (c.custom_attrs||{}).tipo || 'jogador';
     return tipo === 'jogador';
@@ -10082,7 +10082,7 @@ function abrirModalAtribuirPersonagem(playerId, nickname) {
   document.body.appendChild(overlay);
 }
 
-async function atribuirPersonagemAMembro(playerId, nomePersonagem) {
+async function atribuirPersonagemAMembro(playerId: any, nomePersonagem: any) {
   try {
     await sb(
       `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`,
@@ -10129,7 +10129,7 @@ var PERMISSOES_CONFIG = [
   { key: 'ataque_criativo',  label: 'Usar Ataques Criativos',      padrao: true  },
 ];
 
-async function abrirModalPermissoes(playerId, nickname) {
+async function abrirModalPermissoes(playerId: any, nickname: any) {
   const membro = (await sb(
     `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}&select=permissoes`
   ))?.[0];
@@ -10158,8 +10158,8 @@ async function abrirModalPermissoes(playerId, nickname) {
   document.body.appendChild(overlay);
 }
 
-async function salvarPermissoes(playerId) {
-  const novas = {};
+async function salvarPermissoes(playerId: any) {
+  const novas: Record<string, any> = {};
   PERMISSOES_CONFIG.forEach(p => {
     novas[p.key] = document.getElementById('perm-' + p.key)?.checked ?? p.padrao;
   });
@@ -10172,7 +10172,7 @@ async function salvarPermissoes(playerId) {
   renderCfgMembros();
 }
 
-async function cfgRemoverMembro(playerId, nickname) {
+async function cfgRemoverMembro(playerId: any, nickname: any) {
  if (!confirm(`Remover ${nickname} da campanha?`)) return;
  await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`, { method: 'DELETE' });
  mostrarToast(`${nickname} removido`, 'sucesso');
@@ -10224,7 +10224,7 @@ function abrirModalVincularPersonagem() {
   document.body.appendChild(overlay);
 }
 
-async function vincularPersonagem(nomePersonagem) {
+async function vincularPersonagem(nomePersonagem: any) {
   if (!SESSION?.user?.id) return;
   try {
     await sb(
@@ -10271,7 +10271,7 @@ function renderCfgAttrDefs() {
  }).join('');
 }
 
-function abrirModalAttrDef(id) {
+function abrirModalAttrDef(id: any) {
  const overlay = document.getElementById('modal-attrdef-overlay');
  const tituloEl = document.getElementById('modal-attrdef-titulo');
  const btnRemover = document.getElementById('ad-btn-remover');
@@ -10347,7 +10347,7 @@ function attrDefCategoriaChange() {
 }
 
 // ── Status attr form helpers ──────────────────────────────────
-function _adStatusJsonToForm(jsonStr) {
+function _adStatusJsonToForm(jsonStr: any) {
   let base = '', mult = '', attr = '';
   if (jsonStr) {
     try {
@@ -10432,7 +10432,7 @@ function removerAttrDefModal() {
  removerAttrDef(id, nome);
 }
 
-async function removerAttrDef(id, nome) {
+async function removerAttrDef(id: any, nome: any) {
  try {
    await sb(`attr_defs?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
    RPG_DATA.attrDefs = (RPG_DATA.attrDefs || []).filter(a => a.id !== id);
@@ -10443,7 +10443,7 @@ async function removerAttrDef(id, nome) {
    if (CHAR_VIEW) renderCharView(CHAR_VIEW);
  } catch(e) { mostrarToast('Erro ao remover atributo', 'erro'); }
 }
-function selecionarOpcaoConfig(nome,el){CFG_CHAR=nome;document.querySelectorAll('.char-opcao').forEach(o=>o.classList.remove('selecionado'));el.classList.add('selecionado');}
+function selecionarOpcaoConfig(nome: any,el: any){CFG_CHAR=nome;document.querySelectorAll('.char-opcao').forEach(o=>o.classList.remove('selecionado'));el.classList.add('selecionado');}
 async function salvarConfig(){if(!CFG_CHAR){mostrarToast('Selecione um personagem','erro');return;}try{await saveMemberLinked(RPG_DATA.rpgId,CFG_CHAR);RPG_DATA.linked=CFG_CHAR;renderHeader();mostrarToast('Vínculo salvo!','sucesso');}catch(e){mostrarToast('Erro ao salvar','erro');}}
 async function confirmarDeleteRPG(){if(!CURRENT_RPG||CURRENT_RPG.id==='dual'){mostrarToast('DUAL não pode ser deletado','erro');return;}if(!confirm(`Deletar "${CURRENT_RPG.name}"?`))return;try{await deleteRPGData(CURRENT_RPG.id);mostrarToast('RPG deletado','sucesso');HUB_DATA.rpgs=HUB_DATA.rpgs.filter(r=>r.rpg_id!==CURRENT_RPG.id);setTimeout(voltarHub,800);}catch(e){mostrarToast(e.message||'Erro','erro');}}
 
@@ -10478,7 +10478,7 @@ HUB_EVENTS.on('turno_avancou', ({ personagem, rodada, batalhaId }) => {
 });
 
 // ── 4: Highlight de células de movimento ──
-var _highlightLayer = null;
+var _highlightLayer: any = null;
 var _highlightModoAtivo = false;
 
 function ctxHighlightToggle() {
@@ -10498,7 +10498,7 @@ function ctxHighlightToggle() {
   }
 }
 
-function ctxHighlightTurno(charNome) {
+function ctxHighlightTurno(charNome: any) {
   ctxHighlightLimpar();
   const bid = BATALHA_ATUAL_ID;
   if (!bid) return;
@@ -10525,7 +10525,7 @@ function ctxHighlightTurno(charNome) {
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3';
   celsMov.forEach(({c: col, r: row}) => {
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    rect.setAttribute('x', col); rect.setAttribute('y', row);
+    rect.setAttribute('x', col as any); rect.setAttribute('y', row as any);
     rect.setAttribute('width', ((1) as any) as any); rect.setAttribute('height', ((1) as any) as any);
     rect.setAttribute('fill', 'rgba(79,163,209,0.22)');
     rect.setAttribute('stroke', 'rgba(79,163,209,0.5)');
@@ -10534,7 +10534,7 @@ function ctxHighlightTurno(charNome) {
   });
   celsAtk.forEach(({c: col, r: row}) => {
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    rect.setAttribute('x', col); rect.setAttribute('y', row);
+    rect.setAttribute('x', col as any); rect.setAttribute('y', row as any);
     rect.setAttribute('width', ((1) as any) as any); rect.setAttribute('height', ((1) as any) as any);
     rect.setAttribute('fill', 'rgba(231,76,60,0.3)');
     rect.setAttribute('stroke', 'rgba(231,76,60,0.6)');
@@ -10551,7 +10551,7 @@ function ctxHighlightLimpar() {
   if (existing) existing.remove();
 }
 
-function _bfsCelulas(col, row, movMax, mapId, W, H) {
+function _bfsCelulas(col: any, row: any, movMax: any, mapId: any, W: any, H: any) {
   const visited = new Set();
   const queue   = [{ c: col, r: row, dist: 0 }];
   const result  = [];
@@ -10573,7 +10573,7 @@ function _bfsCelulas(col, row, movMax, mapId, W, H) {
   return result;
 }
 
-function _celulasComAlvo(col, row, alcance, mapId, W, H, charNome) {
+function _celulasComAlvo(col: any, row: any, alcance: any, mapId: any, W: any, H: any, charNome: any) {
   const result = [];
   for (let c = 0; c < W; c++) {
     for (let r = 0; r < H; r++) {
@@ -10590,7 +10590,7 @@ function _celulasComAlvo(col, row, alcance, mapId, W, H, charNome) {
 }
 
 // ── 8: Linha de Visão ──
-function losVerificar(mapId, col1, row1, col2, row2) {
+function losVerificar(mapId: any, col1: any, row1: any, col2: any, row2: any) {
   const mapa    = _getMapaById(mapId);
   const paredes = mapa?.render_data?.paredes || [];
   const ax = col1 + 0.5, ay = row1 + 0.5;
@@ -10601,7 +10601,7 @@ function losVerificar(mapId, col1, row1, col2, row2) {
   return true;
 }
 
-function _segIntersect(ax,ay,bx,by,cx,cy,dx,dy) {
+function _segIntersect(ax: any,ay: any,bx: any,by: any,cx: any,cy: any,dx: any,dy: any) {
   const d1x=bx-ax, d1y=by-ay, d2x=dx-cx, d2y=dy-cy;
   const cross = d1x*d2y - d1y*d2x;
   if (Math.abs(cross) < 1e-10) return false;
@@ -10611,18 +10611,18 @@ function _segIntersect(ax,ay,bx,by,cx,cy,dx,dy) {
 }
 
 // ── 9: Superfícies — render visual ──
-function superficieRenderizar(mapa, tokensEl) {
+function superficieRenderizar(mapa: any, tokensEl: any) {
   const W = mapa.largura_total || 20;
   const H = mapa.altura_total  || 20;
-  const CORES = {
+  const CORES: Record<string, any> = {
     fogo:     'rgba(231,76,60,0.35)',
     gelo:     'rgba(133,193,233,0.4)',
     oleo:     'rgba(100,80,20,0.4)',
     agua:     'rgba(52,152,219,0.35)',
     venenoso: 'rgba(46,204,113,0.35)'
   };
-  const sups = (mapa?.render_data?.objetos || []).filter(o => o.tipo === 'superficie');
-  sups.forEach(obj => {
+  const sups = (mapa?.render_data?.objetos || []).filter((o: any) => o.tipo === 'superficie');
+  sups.forEach((obj: any) => {
     const cel = document.createElement('div');
     cel.className = 'mapa-objeto-superficie';
     cel.style.cssText = [
@@ -10639,7 +10639,7 @@ function superficieRenderizar(mapa, tokensEl) {
 }
 
 // ── 9: Superfícies — efeito ao entrar ──
-function superficieVerificarEntrada(mapId, charNome, col, row) {
+function superficieVerificarEntrada(mapId: any, charNome: any, col: any, row: any) {
   const mapa = _getMapaById(mapId);
   const sups = (mapa?.render_data?.objetos || [])
     .filter(o => o.tipo === 'superficie' && o.col === col && o.row === row);
@@ -10670,7 +10670,7 @@ function superficieVerificarEntrada(mapId, charNome, col, row) {
 }
 
 // ── 10: Ataques de Oportunidade ──
-function verificarAtaqueOportunidade(mapId, nomeMovendo, colAntes, rowAntes, colDepois, rowDepois) {
+function verificarAtaqueOportunidade(mapId: any, nomeMovendo: any, colAntes: any, rowAntes: any, colDepois: any, rowDepois: any) {
   const bid = BATALHA_ATUAL_ID;
   if (!bid) return;
   const bs = MAPA_STATE.batalhas[bid];
@@ -10738,7 +10738,7 @@ async function batalhaConfirmarPosicionamento() {
 }
 
 // ── Preview AoE dinâmico ──
-function aoePreviewAtualizar(centroCol, centroRow, raio) {
+function aoePreviewAtualizar(centroCol: any, centroRow: any, raio: any) {
   document.querySelectorAll('.aoe-preview-badge').forEach(el => el.remove());
   if (!centroCol && centroCol !== 0) return;
   const mapId = MAPA_STATE.mapaAtualId;
@@ -10817,11 +10817,11 @@ function abrirModalNovoMapa() {
   overlay.style.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalNovoMapa(); };
   // Fechar com Escape
-  overlay._escHandler = (e) => { if (e.key === 'Escape') { fecharModalNovoMapa(); document.removeEventListener('keydown', overlay._escHandler); } };
+  overlay._escHandler = (e: any) => { if (e.key === 'Escape') { fecharModalNovoMapa(); document.removeEventListener('keydown', overlay._escHandler); } };
   document.addEventListener('keydown', overlay._escHandler);
 }
 
-function nmTipoChange(tipo) {
+function nmTipoChange(tipo: any) {
   const todosMaps = (RPG_DATA?.mapas || []);
   // Fase não tem mapa pai obrigatório; geral pode estar dentro de outro geral;
   // local pode estar dentro de qualquer mapa
@@ -10851,7 +10851,7 @@ function nmTipoChange(tipo) {
 }
 
 // Chamado quando o usuário muda o mapa pai no modal de criação
-function nmParentChange(paiId) {
+function nmParentChange(paiId: any) {
   const paiEntry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===paiId);
   const temDims  = paiEntry?.mapa?.largura_total && paiEntry?.mapa?.altura_total;
   document.getElementById('nm-fallback-pct').style.display = temDims ? 'none' : 'block';
@@ -10940,7 +10940,7 @@ async function criarNovoMapa() {
 
   const mapaObj = {
     map_id, nome, tipo, img_url, escala_val, escala_unit, grid,
-    locais: [],
+    locais: [] as any[],
     parent_map_id:   parentId,
     zona_w_percent:  zonaW,
     zona_h_percent:  zonaH,
@@ -10967,10 +10967,10 @@ async function criarNovoMapa() {
       largura_real:    largReal || null,
       altura_real:     altReal  || null,
       representar_pct: reprPct  || null,
-      locais:          [],
+      locais:          [] as any[],
       render_data:     tipo === 'fase'
-        ? { perspective: { tilt_y: 0.72, shadow_offset: 4 }, chunk_size: 512, paredes: [], portas: [], baus: [], itens_no_chao: [], spawn_jogadores: [], entidades: [] }
-        : { paredes: [], portas: [], objetos: [] },
+        ? { perspective: { tilt_y: 0.72, shadow_offset: 4 }, chunk_size: 512, paredes: [] as any[], portas: [] as any[], baus: [] as any[], itens_no_chao: [] as any[], spawn_jogadores: [] as any[], entidades: [] as any[] }
+        : ({ paredes: [], portas: [], objetos: [] } as any),
     };
 
     const resultado = await sb('mapas', {
@@ -11010,7 +11010,7 @@ async function criarNovoMapa() {
 }
 
 // ── PLACEMENT MODE: posicionar mapa local no geral ───────────
-let PLACEMENT_STATE = null;
+let PLACEMENT_STATE: any = null;
 
 /* =====================================================================
  *  maps-grid-core.js  —  VERSÃO ULTRA-DEFENSIVA COM THROTTLING
@@ -11053,8 +11053,8 @@ let PLACEMENT_STATE = null;
   }, 5000);
 
   // Debouncing helper
-  function debounce(fn, delay) {
-    let timeout;
+  function debounce(fn: any, delay: any) {
+    let timeout: any;
     return function() {
       const context = this;
       const args = arguments;
@@ -11067,11 +11067,11 @@ let PLACEMENT_STATE = null;
   // Estado interno
   // ───────────────────────────────────────────────────────────────────
   const GRID = window.__GRID_TACTICAL__ = {
-    hover:     null,
-    selectedToken: null,
-    moveCells: [],
-    attackCells: [],
-    measure:   { from:null, to:null },
+    hover:     null as any,
+    selectedToken: null as any,
+    moveCells: [] as any[],
+    attackCells: [] as any[],
+    measure:   { from:null as any, to:null as any },
     paint: {
       ativo: false,
       brush: 'dificil',
@@ -11102,35 +11102,35 @@ let PLACEMENT_STATE = null;
     return entry ? entry.mapa : null;
   }
 
-  function _gridDims(m, w, h) {
+  function _gridDims(m: any, w: any, h: any) {
     const cols = m.largura_total || 20;
     const rows = m.altura_total  || 20;
     return { cols, rows, cW: w / cols, cH: h / rows };
   }
 
-  function _pixelToCell(m, xPx, yPx, wPx, hPx) {
+  function _pixelToCell(m: any, xPx: any, yPx: any, wPx: any, hPx: any) {
     const { cols, rows, cW, cH } = _gridDims(m, wPx, hPx);
     const col = Math.max(0, Math.min(cols - 1, Math.floor(xPx / cW)));
     const row = Math.max(0, Math.min(rows - 1, Math.floor(yPx / cH)));
     return { col, row };
   }
 
-  function _cellCenterPx(m, col, row, wPx, hPx) {
+  function _cellCenterPx(m: any, col: any, row: any, wPx: any, hPx: any) {
     const { cW, cH } = _gridDims(m, wPx, hPx);
     return { x: (col + 0.5) * cW, y: (row + 0.5) * cH };
   }
 
-  function _chebyshev(a, b) {
+  function _chebyshev(a: any, b: any) {
     return Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row));
   }
 
   // ───────────────────────────────────────────────────────────────────
   // Acesso a paredes/portas/superfícies
   // ───────────────────────────────────────────────────────────────────
-  function _paredes(m)     { return Array.isArray(m && m.paredes)     ? m.paredes     : []; }
-  function _superficies(m) { return Array.isArray(m && m.superficies) ? m.superficies : []; }
+  function _paredes(m: any)     { return Array.isArray(m && m.paredes)     ? m.paredes     : []; }
+  function _superficies(m: any) { return Array.isArray(m && m.superficies) ? m.superficies : []; }
 
-  function _arestaBloqueada(m, a, b) {
+  function _arestaBloqueada(m: any, a: any, b: any) {
     const minC = Math.min(a.col, b.col), maxC = Math.max(a.col, b.col);
     const minR = Math.min(a.row, b.row), maxR = Math.max(a.row, b.row);
     const horizontal = (a.row === b.row);
@@ -11153,8 +11153,8 @@ let PLACEMENT_STATE = null;
     return false;
   }
 
-  function _custoEntrar(m, col, row) {
-    const sup = _superficies(m).find(s => s.col === col && s.row === row);
+  function _custoEntrar(m: any, col: any, row: any) {
+    const sup = _superficies(m).find((s: any) => s.col === col && s.row === row);
     if (!sup) return 1;
     if (sup.custoMov >= 99) return Infinity;
     return 1 + (sup.custoMov || 0);
@@ -11163,11 +11163,11 @@ let PLACEMENT_STATE = null;
   // ───────────────────────────────────────────────────────────────────
   // BFS / Dijkstra
   // ───────────────────────────────────────────────────────────────────
-  function _calcularMoveRange(m, origem, velocidade, opts?) {
+  function _calcularMoveRange(m: any, origem: any, velocidade: any, opts?: any) {
     opts = opts || {};
     const { cols, rows } = _gridDims(m, 1, 1);
     const visit = new Map();
-    const key = (c,r) => c + ',' + r;
+    const key = (c: any,r: any) => c + ',' + r;
     visit.set(key(origem.col, origem.row), 0);
     const heap = [{ col: origem.col, row: origem.row, g: 0 }];
     const out  = [];
@@ -11202,7 +11202,7 @@ let PLACEMENT_STATE = null;
     return out.filter(c => !(c.col === origem.col && c.row === origem.row));
   }
 
-  function _calcularAttackRange(m, origem, alcance) {
+  function _calcularAttackRange(m: any, origem: any, alcance: any) {
     const { cols, rows } = _gridDims(m, 1, 1);
     const out = [];
     for (let r = Math.max(0, origem.row - alcance); r <= Math.min(rows - 1, origem.row + alcance); r++) {
@@ -11271,7 +11271,7 @@ let PLACEMENT_STATE = null;
         let g = '';
         for (const s of _superficies(m)) {
           const x = s.col * cW, y = s.row * cH;
-          const def = GRID.BRUSHES[s.tipo] || { cor: s.cor || '#888', icon: s.icon || '', label: s.label || s.tipo };
+          const def = (GRID.BRUSHES as any)[s.tipo] || { cor: s.cor || '#888', icon: s.icon || '', label: s.label || s.tipo };
           const cor = s.cor || def.cor;
           g += '<rect x="'+x+'" y="'+y+'" width="'+cW+'" height="'+cH+'" fill="'+cor+'" fill-opacity="0.32" stroke="'+cor+'" stroke-opacity="0.55" stroke-width="1"/>';
           g += '<text x="'+(x+cW/2)+'" y="'+(y+cH/2+cH*0.18)+'" text-anchor="middle" font-size="'+(cH*0.55)+'" opacity="0.85">'+(s.icon||def.icon||'')+'</text>';
@@ -11393,7 +11393,7 @@ let PLACEMENT_STATE = null;
       layer.querySelectorAll('button[data-porta-id]').forEach(btn => {
         btn.onclick = function () {
           const id = btn.getAttribute('data-porta-id');
-          const porta = _paredes(m).find(p => String(p.id||'') === String(id));
+          const porta = _paredes(m).find((p: any) => String(p.id||'') === String(id));
           if (!porta) return;
           porta.aberta = !porta.aberta;
           if (GRID.selectedToken) gridTacticalShowMoveRange(GRID.selectedToken);
@@ -11474,12 +11474,12 @@ let PLACEMENT_STATE = null;
     }
   }
 
-  function _aplicarBrush(m, cell) {
+  function _aplicarBrush(m: any, cell: any) {
     if (!Array.isArray(m.superficies)) m.superficies = [];
     if (GRID.paint.brush === 'limpar') { _removerSuperficie(m, cell); return; }
-    const def = GRID.BRUSHES[GRID.paint.brush];
+    const def = (GRID.BRUSHES as any)[GRID.paint.brush];
     if (!def) return;
-    const i = m.superficies.findIndex(s => s.col === cell.col && s.row === cell.row);
+    const i = m.superficies.findIndex((s: any) => s.col === cell.col && s.row === cell.row);
     const novo = {
       id: (i >= 0 ? m.superficies[i].id : ('sup-' + Date.now() + '-' + Math.random().toString(36).slice(2,7))),
       col: cell.col, row: cell.row,
@@ -11490,16 +11490,16 @@ let PLACEMENT_STATE = null;
     if (i >= 0) m.superficies[i] = novo; else m.superficies.push(novo);
     _renderSvgLayer();
   }
-  function _removerSuperficie(m, cell) {
+  function _removerSuperficie(m: any, cell: any) {
     if (!Array.isArray(m.superficies)) return;
-    m.superficies = m.superficies.filter(s => !(s.col === cell.col && s.row === cell.row));
+    m.superficies = m.superficies.filter((s: any) => !(s.col === cell.col && s.row === cell.row));
     _renderSvgLayer();
   }
 
   // ───────────────────────────────────────────────────────────────────
   // API pública
   // ───────────────────────────────────────────────────────────────────
-  window.gridTacticalShowMoveRange = function (charNome, velocidadeOverride) {
+  window.gridTacticalShowMoveRange = function (charNome: any, velocidadeOverride: any) {
     const m = _mapaAtual();
     const char = (window.RPG_DATA && window.RPG_DATA.characters || []).find(c => c.nome === charNome);
     if (!m || !char) return;
@@ -11519,7 +11519,7 @@ let PLACEMENT_STATE = null;
     _renderSvgLayer();
   };
 
-  window.gridTacticalShowAttackRange = function (charNome, alcance) {
+  window.gridTacticalShowAttackRange = function (charNome: any, alcance: any) {
     const m = _mapaAtual();
     const char = (window.RPG_DATA && window.RPG_DATA.characters || []).find(c => c.nome === charNome);
     if (!m || !char) return;
@@ -11542,24 +11542,24 @@ let PLACEMENT_STATE = null;
     _renderSvgLayer();
   };
 
-  window.gridTacticalSetPaintBrush = function (brushKey, ativo) {
+  window.gridTacticalSetPaintBrush = function (brushKey: any, ativo: any) {
     GRID.paint.brush = brushKey || 'dificil';
     GRID.paint.ativo = (ativo !== false);
   };
 
-  window.gridTacticalMeasure = function (from, to) {
+  window.gridTacticalMeasure = function (from: any, to: any) {
     GRID.measure.from = from || null;
     GRID.measure.to   = to   || null;
     _renderSvgLayer();
   };
 
-  window.gridTacticalToggleFlag = function (key) {
+  window.gridTacticalToggleFlag = function (key: any) {
     if (!(key in GRID.flags)) return;
-    GRID.flags[key] = !GRID.flags[key];
+    (GRID.flags as any)[key] = !(GRID.flags as any)[key];
     _renderSvgLayer();
   };
 
-  window.gridTacticalSnapToken = function (charNome) {
+  window.gridTacticalSnapToken = function (charNome: any) {
     const m = _mapaAtual();
     const char = (window.RPG_DATA && window.RPG_DATA.characters || []).find(c => c.nome === charNome);
     if (!m || !char) return;

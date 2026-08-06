@@ -9,7 +9,7 @@
 // ── 18A: Parser de fórmula de dados ──────────────────────────
 // Suporta fórmulas multi-grupo: "2d6+1d8+3", "d20", "1d6+2", etc.
 // Retorna array de grupos: [{tipo:'dado',qtd,faces} | {tipo:'fixo',valor}]
-function parsearFormulaDano(formula) {
+function parsearFormulaDano(formula: any) {
   if (!formula || formula === '—') return null;
   const f = formula.toString().toLowerCase().replace(/\s/g, '');
   const grupos = [];
@@ -42,9 +42,9 @@ function parsearFormulaDano(formula) {
 }
 
 // Constrói string da fórmula a partir de grupos de builder
-function formulaDeGrupos(grupos) {
+function formulaDeGrupos(grupos: any) {
   if (!grupos || !grupos.length) return '—';
-  const agrupado = {};
+  const agrupado: Record<string, any> = {};
   let bonus = 0;
   for (const g of grupos) {
     if (g.tipo === 'dado') {
@@ -60,7 +60,7 @@ function formulaDeGrupos(grupos) {
 }
 
 // Rola todos os dados dos grupos, retorna lista de {faces, valor} para animação
-function rolarGrupos(grupos) {
+function rolarGrupos(grupos: any) {
   if (!grupos) return { total: 0, dados: [], bonus: 0 };
   const dados = [];
   let bonus = 0;
@@ -87,7 +87,7 @@ function rolarGrupos(grupos) {
 }
 
 // Wrapper de compatibilidade — aceita fórmula como array de grupos (novo) ou objeto simples (formato antigo)
-function rolarFormula(parsed) {
+function rolarFormula(parsed: any) {
   if (!parsed) return { total: 0, rolls: [], formula: '?' };
   // Formato novo: array [{tipo,qtd,faces}]; formato antigo: objeto simples {tipo,qtd,faces}
   if (Array.isArray(parsed)) {
@@ -103,13 +103,13 @@ function rolarFormula(parsed) {
 
 // ── Calcula o bônus fixo de atributo para uma habilidade ─────
 // Retorna inteiro (ceil de pct% do valor do atributo do atacante)
-function calcModAtributo__sombreado_9(habilidade, nomeAtacante, contexto) {
+function calcModAtributo__sombreado_9(habilidade: any, nomeAtacante: any, contexto: any) {
   const pct = habilidade.mod_atributo_pct;
   const atributo = habilidade.atributo_base;
   if (!pct || !atributo) return 0;
 
   const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
-  const char = chars.find(c => c.nome === nomeAtacante);
+  const char = chars.find((c: any) => c.nome === nomeAtacante);
   if (!char) return 0;
 
   const atrs = char.custom_attrs?.atributos || {};
@@ -127,7 +127,7 @@ function calcModAtributo__sombreado_9(habilidade, nomeAtacante, contexto) {
  * Decrementa todos os cooldowns ativos em 1 turno
  * @param {string} contexto - 'arena' ou 'campanha'
  */
-function decrementarCooldowns(contexto) {
+function decrementarCooldowns(contexto: any) {
   if (contexto === 'arena') {
     if (!AR.estado?.cooldowns) return;
     
@@ -168,7 +168,7 @@ function decrementarCooldowns(contexto) {
 /**
  * Avança o turno e decrementa cooldowns automaticamente
  */
-function avancarTurnoComCooldowns(contexto) {
+function avancarTurnoComCooldowns(contexto: any) {
   if (contexto === 'arena') {
     if (!AR.estado) AR.estado = {} as any;
     AR.estado.turno = (AR.estado.turno || 0) + 1;
@@ -197,7 +197,7 @@ function avancarTurnoComCooldowns(contexto) {
  * @param {string} formula - Fórmula de dano (ex: "2d6+3")
  * @returns {{min: number, max: number, media: number}}
  */
-function calcularRangeDano__sombreado_9(formula) {
+function calcularRangeDano__sombreado_9(formula: any) {
   const grupos = parsearFormulaDano(formula);
   if (!grupos) return { min: 0, max: 0, media: 0 };
   
@@ -232,7 +232,7 @@ const COMBATE_LOG: any = {
   eventos: [],
   maxEventos: 50,
   
-  adicionar(tipo, dados) {
+  adicionar(tipo: any, dados: any) {
     const evento = {
       id: Date.now() + '_' + Math.random().toString(36).slice(2, 5),
       timestamp: Date.now(),
@@ -262,7 +262,7 @@ const COMBATE_LOG: any = {
       return;
     }
     
-    container.innerHTML = this.eventos.slice().reverse().map(e => {
+    container.innerHTML = this.eventos.slice().reverse().map((e: any) => {
       const tempo = new Date(e.timestamp).toLocaleTimeString('pt-BR', { 
         hour: '2-digit', minute: '2-digit' 
       });
@@ -335,7 +335,7 @@ const COMBATE_LOG: any = {
 // 🐛 BUG-05 FIX: getCooldownsBatalha Seguro
 // ═══════════════════════════════════════════════════════════════
 
-function getCooldownsBatalhaSeguro__sombreado_9(batalhaId) {
+function getCooldownsBatalhaSeguro__sombreado_9(batalhaId: any) {
   if (!batalhaId) return {};
   
   const batalha = MAPA_STATE.batalhas?.[batalhaId];
@@ -362,7 +362,7 @@ function getCooldownsBatalhaSeguro__sombreado_9(batalhaId) {
  * @param {string[]} alvosAtaque - Lista de alvos do ataque
  * @returns {{aplicarEm: 'atacante'|'alvos', alvos: string[]}}
  */
-function determinarAlvoEfeito(efeito, habilidade, atacanteNome, alvosAtaque) {
+function determinarAlvoEfeito(efeito: any, habilidade: any, atacanteNome: any, alvosAtaque: any) {
   // 1. PRIORIDADE MÁXIMA: Campo explícito alvo_override
   if (efeito.alvo_override === 'usuario' || efeito.alvo === 'usuario') {
     return { aplicarEm: 'atacante', alvos: [atacanteNome] };
@@ -484,10 +484,10 @@ function resetarEstadoCombate() {
  * - d20 = 16-19 = Crítico (+50%, 1.5x)
  * - d20 = 20   = Crítico Total (+100%, 2x)
  */
-function calcularDanoCritico(danoBase, d20) {
+function calcularDanoCritico(danoBase: any, d20: any) {
   if (!d20 || d20 < 1 || d20 > 20) {
     console.warn('[Crítico] d20 inválido:', d20);
-    return { dano: danoBase, tipo: 'normal', multiplicador: 1, mensagem: null };
+    return { dano: danoBase, tipo: 'normal', multiplicador: 1, mensagem: null as any };
   }
 
   if (d20 <= 3) {
@@ -501,7 +501,7 @@ function calcularDanoCritico(danoBase, d20) {
   }
 
   if (d20 <= 12) {
-    return { dano: danoBase, tipo: 'normal', multiplicador: 1, mensagem: null, cor: null };
+    return { dano: danoBase, tipo: 'normal', multiplicador: 1, mensagem: null as any, cor: null as any };
   }
 
   if (d20 <= 15) {
@@ -538,10 +538,10 @@ function calcularDanoCritico(danoBase, d20) {
 }
 
 // Função legada para compatibilidade
-function verificarCritico(resultado) {
+function verificarCritico(resultado: any) {
   if (!resultado?.dados) return { critico: false, multiplicador: 1, tipo: null };
   
-  const d20 = resultado.dados.find(d => d.faces === 20)?.valor;
+  const d20 = resultado.dados.find((d: any) => d.faces === 20)?.valor;
   if (!d20) return { critico: false, multiplicador: 1, tipo: null };
   
   if (d20 < 2) return { critico: true, multiplicador: 0, tipo: 'erro' };
@@ -551,7 +551,7 @@ function verificarCritico(resultado) {
   return { critico: false, multiplicador: 1, tipo: null };
 }
 
-function aplicarCriticoAoDano(dano, criticoInfo) {
+function aplicarCriticoAoDano(dano: any, criticoInfo: any) {
   if (!criticoInfo.critico) return dano;
   
   if (criticoInfo.tipo === 'critico_menor') return Math.ceil(dano * 1.2);
@@ -567,7 +567,7 @@ console.log('[Combat] Sistema de críticos 2.0 carregado ✓');
 // 💡 FASE 3 - OPT-04: Som e Vibração
 // ═══════════════════════════════════════════════════════════════
 
-function mostrarAnimacaoCritico(tipo, atacante, danoBase, danoFinal) {
+function mostrarAnimacaoCritico(tipo: any, atacante: any, danoBase: any, danoFinal: any) {
   if (tipo === 'critico_maior') {
     // Crítico perfeito (20 natural)
     if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 100]);
@@ -675,7 +675,7 @@ let COMBATE: any = {
   _habilidades: [], _alvos: [],
   formulaBuilder: [], rolando: false,
 };
-let NPC_HABILIDADES_TEMP = [];
+let NPC_HABILIDADES_TEMP: any = [];
 
 // ── Estado do modo de ataque dinâmico no mapa (campanha) ─────
 let ATAQUE_MAPA_STATE: any = {
@@ -685,7 +685,7 @@ let ATAQUE_MAPA_STATE: any = {
 };
 
 // ── 18D: Abrir / fechar modal ────────────────────────────────
-function abrirModalAtaque__sombreado_9(atacanteNome, contexto = 'arena') {
+function abrirModalAtaque__sombreado_9(atacanteNome: any, contexto = 'arena') {
   if (!atacanteNome) { mostrarToast('Nenhum personagem selecionado', 'erro'); return; }
 
   // Verificar estado de batalha para jogadores
@@ -719,7 +719,7 @@ function abrirModalAtaque__sombreado_9(atacanteNome, contexto = 'arena') {
     ? atkGetHabilidadesArena(atacanteNome)
     : atkGetHabilidadesCampanha(atacanteNome);
   // BUG-FIX: ocultar habilidades reativas/passivas do modal de ataque ativo
-  const habilidades = habilidadesAll.filter(h => !h.tipo_habilidade || h.tipo_habilidade === 'acao');
+  const habilidades = habilidadesAll.filter((h: any) => !h.tipo_habilidade || h.tipo_habilidade === 'acao');
 
   COMBATE._habilidades = habilidades;
   // ✅ BUG-05 FIX: Usar função segura que sempre retorna objeto
@@ -728,7 +728,7 @@ function abrirModalAtaque__sombreado_9(atacanteNome, contexto = 'arena') {
     : getCooldownsBatalhaSeguro(BATALHA_ATUAL_ID);
 
   const lista = document.getElementById('atk-habilidades-lista');
-  lista.innerHTML = habilidades.map((h, i) => {
+  lista.innerHTML = habilidades.map((h: any, i: any) => {
     const cdRestante = cooldownsAtivos[h.id || h.habilidade || h.nome] || 0;
     const emCooldown = cdRestante > 0;
     const bloqueio   = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
@@ -745,8 +745,8 @@ function abrirModalAtaque__sombreado_9(atacanteNome, contexto = 'arena') {
       const range = calcularRangeDano(h.formula_dano);
       const modAttr = calcModAtributo(h, atacanteNome, contexto);
       const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
-      const atacanteChar = chars.find(c => c.nome === atacanteNome);
-      const boostAtivo = (atacanteChar?.buffs || []).reduce((s, b) => {
+      const atacanteChar = chars.find((c: any) => c.nome === atacanteNome);
+      const boostAtivo = (atacanteChar?.buffs || []).reduce((s: any, b: any) => {
         if ((b.boost_dano_turnos_restantes ?? 0) > 0) return s + (b.boost_dano || 0);
         return s;
       }, 0);
@@ -822,7 +822,7 @@ function abrirModalAtaque__sombreado_9(atacanteNome, contexto = 'arena') {
   // controla a aparência conforme o modo. Evita ghost nodes e listeners perdidos.
   modal._atkModo = null; // limpar modo anterior
 
-  function _setModalModo(modo) {
+  function _setModalModo(modo: any) {
     if (modal._atkModo === modo) return;
     modal._atkModo = modo;
     modal.dataset.atkModo = modo;
@@ -910,7 +910,7 @@ function abrirModalAtaque__sombreado_9(atacanteNome, contexto = 'arena') {
 }
 
 // ── Painel persistente de salvaguarda de morte ──────────────────
-function _mostrarPainelSalvaguarda(nome, resultado, d20, sucessos, falhas) {
+function _mostrarPainelSalvaguarda(nome: any, resultado: any, d20: any, sucessos: any, falhas: any) {
   const idPainel = 'death-save-painel-' + nome.replace(/\s+/g, '_');
   let el = document.getElementById(idPainel);
   if (!el) {
@@ -939,7 +939,7 @@ function _mostrarPainelSalvaguarda(nome, resultado, d20, sucessos, falhas) {
 }
 
 // ── GM: Estabilizar/Reviver/Matar personagem moribundo ──────────
-async function gmEstabilizarPersonagem(nome) {
+async function gmEstabilizarPersonagem(nome: any) {
   if (RPG_DATA?.myRole !== 'mestre') return;
   const c = (RPG_DATA?.characters || []).find(x => x.nome === nome);
   if (!c) return;
@@ -953,7 +953,7 @@ async function gmEstabilizarPersonagem(nome) {
   if (typeof abrirFichaNoMapa === 'function') abrirFichaNoMapa(nome);
 }
 
-async function gmReviverPersonagem(nome) {
+async function gmReviverPersonagem(nome: any) {
   if (RPG_DATA?.myRole !== 'mestre') return;
   const c = (RPG_DATA?.characters || []).find(x => x.nome === nome);
   if (!c) return;
@@ -969,7 +969,7 @@ async function gmReviverPersonagem(nome) {
   if (typeof abrirFichaNoMapa === 'function') abrirFichaNoMapa(nome);
 }
 
-async function gmMatarPersonagem(nome) {
+async function gmMatarPersonagem(nome: any) {
   if (RPG_DATA?.myRole !== 'mestre') return;
   const c = (RPG_DATA?.characters || []).find(x => x.nome === nome);
   if (!c) return;
@@ -1039,9 +1039,9 @@ function fecharModalAtaque__sombreado_9() {
 // ══════════════════════════════════════════════════════════════
 // ⚡ MODAL DE EFEITO CRÍTICO (mestre)
 // ══════════════════════════════════════════════════════════════
-let _criticoCtx = { alvos: [], ehPositivo: false, texto: '', contexto: 'campanha' };
+let _criticoCtx = { alvos: [] as any[], ehPositivo: false, texto: '', contexto: 'campanha' };
 
-function abrirModalCriticoMestre(alvos, ehPositivo, criticoTexto, contexto) {
+function abrirModalCriticoMestre(alvos: any, ehPositivo: any, criticoTexto: any, contexto: any) {
   _criticoCtx = { alvos: alvos || [], ehPositivo: !!ehPositivo, texto: criticoTexto || '', contexto: contexto || 'campanha' };
   const modal = document.getElementById('modal-critico-mestre');
   if (!modal) return;
@@ -1071,7 +1071,7 @@ function abrirModalCriticoMestre(alvos, ehPositivo, criticoTexto, contexto) {
   // Não faz sentido mostrar todos os personagens — o efeito crítico é sobre quem foi atingido
   const todosChars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
   const charsAlvo  = alvos.length
-    ? todosChars.filter(c => alvos.includes(c.nome))
+    ? todosChars.filter((c: any) => alvos.includes(c.nome))
     : todosChars; // fallback: se alvos vier vazio, mostra todos (não deve acontecer normalmente)
   const charsEl = document.getElementById('critico-modal-chars');
   // Se houver apenas 1 alvo, esconde a lista — não precisa de seleção, o efeito vai para ele
@@ -1079,13 +1079,13 @@ function abrirModalCriticoMestre(alvos, ehPositivo, criticoTexto, contexto) {
   if (charsAlvo.length <= 1) {
     charsEl.style.display = 'none';
     // Injetar checkbox oculto para que criticoMestreAplicar encontre via querySelectorAll
-    charsEl.innerHTML = charsAlvo.map(c =>
+    charsEl.innerHTML = charsAlvo.map((c: any) =>
       `<input type="checkbox" value="${c.nome}" checked style="display:none">`
     ).join('');
   } else {
     charsEl.style.display = '';
     // Todos pré-selecionados; mestre pode desmarcar se quiser excluir algum (ex: área parcial)
-    charsEl.innerHTML = charsAlvo.map(c => {
+    charsEl.innerHTML = charsAlvo.map((c: any) => {
       const isNpc = c.custom_attrs?.tipo_personagem === 'npc';
       const cor = c.custom_attrs?.cor || c.cor || '#4fa3d1';
       return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(10,6,2,0.5);border:1px solid rgba(40,25,5,0.6);border-radius:7px;cursor:pointer">
@@ -1117,7 +1117,7 @@ function criticoEfTipoChange() {
     const el = document.getElementById(`critico-ef-campos-${c}`);
     if (el) el.style.display = 'none';
   });
-  const mapa = { dot: 'dot', hot: 'hot', debuff_dano: 'dano', boost: 'boost', cura_imediata: 'cura', livre: 'livre' };
+  const mapa: Record<string, any> = { dot: 'dot', hot: 'hot', debuff_dano: 'dano', boost: 'boost', cura_imediata: 'cura', livre: 'livre' };
   const campo = mapa[tipo];
   if (campo) {
     const el = document.getElementById(`critico-ef-campos-${campo}`);
@@ -1263,7 +1263,7 @@ async function criticoMestreAplicar() {
 
 
 // ── Círculo de alcance visual no mapa ────────────────────────
-function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
+function mapaShowRangeCircle(atacanteNome: any, alcanceCelulas: any) {
   if (COMBATE.contexto !== 'campanha') return;
   const tokensEl = document.getElementById('mapa-tokens');
   if (!tokensEl) return;
@@ -1337,7 +1337,7 @@ function mapaHideRangeCircle__sombreado_9() {
 // O jogador pode mover o personagem a qualquer momento antes de confirmar.
 // ══════════════════════════════════════════════════════════════
 
-function mapaAtaqueIniciar(atacanteNome) {
+function mapaAtaqueIniciar(atacanteNome: any) {
   if (!atacanteNome) return;
 
   // Verificar turno (jogadores)
@@ -1373,7 +1373,7 @@ function mapaAtaqueIniciar(atacanteNome) {
   document.getElementById('modal-atk-atacante').textContent = atacanteNome;
 
   const habilidades = atkGetHabilidadesCampanha(atacanteNome)
-    .filter(h => !h.tipo_habilidade || h.tipo_habilidade === 'acao');
+    .filter((h: any) => !h.tipo_habilidade || h.tipo_habilidade === 'acao');
   COMBATE._habilidades = habilidades;
 
   ATAQUE_MAPA_STATE = { ativo: true, atacanteNome, fase: 'habilidades' };
@@ -1412,7 +1412,7 @@ function _mapaAtaqueRenderHabilidades() {
   const lista = document.getElementById('atk-mapa-habilidades-lista');
   if (!lista) return;
 
-  lista.innerHTML = habilidades.map((h, i) => {
+  lista.innerHTML = habilidades.map((h: any, i: any) => {
     const cdRestante = cooldownsAtivos[h.id || h.habilidade || h.nome] || 0;
     const emCooldown = cdRestante > 0;
     const bloqueio = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
@@ -1507,7 +1507,7 @@ function _mapaAtaqueRenderHabilidades() {
   }
 }
 
-function mapaAtaqueCriativoSetTipo(tipo, btn) {
+function mapaAtaqueCriativoSetTipo(tipo: any, btn: any) {
   CRIATIVO_TIPO = tipo;
   // Resetar estilos de todos os botões
   ['atk-mapa-criativo-btn-ataque','atk-mapa-criativo-btn-suporte','atk-mapa-criativo-btn-narrativo'].forEach(id => {
@@ -1573,7 +1573,7 @@ function mapaAtaqueSelecionarCriativo() {
   _mapaAtaqueDestacarAlvos();
 }
 
-function mapaAtaqueSelecionarHabilidade(idx) {
+function mapaAtaqueSelecionarHabilidade(idx: any) {
   const h = COMBATE._habilidades[idx];
   if (!h) return;
   COMBATE.habilidadeSel = h;
@@ -1614,7 +1614,7 @@ function mapaAtaqueSelecionarHabilidade(idx) {
       }
     }
     atkMontarSelecaoAlvo();
-    const aliados = atkListarAlvos().filter(a => !a.foraAlcance).map(a => a.nome);
+    const aliados = atkListarAlvos().filter((a: any) => !a.foraAlcance).map((a: any) => a.nome);
     aliados.push(COMBATE.atacanteNome);
     atkAplicarSkillSuporte(aliados);
     mapaAtaqueFechar();
@@ -1667,7 +1667,7 @@ function _mapaAtaqueRenderAlvos() {
   const lista = document.getElementById('atk-mapa-alvos-lista');
   if (!lista) return;
 
-  lista.innerHTML = alvos.map((a, i) => {
+  lista.innerHTML = alvos.map((a: any, i: any) => {
     const cor = a.cor || (ehBuff ? '#5ee09a' : '#7ec8f0');
     const foraAlcance = a.foraAlcance;
     const distLabel = a.distCelulas != null ? ` · ${a.distCelulas.toFixed(1)}c` : '';
@@ -1695,7 +1695,7 @@ function _mapaAtaqueDestacarAlvos() {
   const alvoTipo = COMBATE.habilidadeSel?.alvo_tipo || 'inimigo';
   const ehBuff = alvoTipo === 'aliado';
 
-  COMBATE._alvos.forEach(a => {
+  COMBATE._alvos.forEach((a: any) => {
     const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(a.nome)}"]`);
     if (!tokenEl) return;
     if (a.foraAlcance) {
@@ -1708,9 +1708,9 @@ function _mapaAtaqueDestacarAlvos() {
   });
 }
 
-function mapaAtaqueClicarAlvo(nomeAlvo) {
+function mapaAtaqueClicarAlvo(nomeAlvo: any) {
   const alvos = COMBATE._alvos;
-  const idx = alvos.findIndex(a => a.nome === nomeAlvo);
+  const idx = alvos.findIndex((a: any) => a.nome === nomeAlvo);
   if (idx < 0) return;
   const a = alvos[idx];
 
@@ -1769,7 +1769,7 @@ function mapaAtaqueClicarAlvo(nomeAlvo) {
   }
 
   if (h.alvo_tipo === 'todos_inimigos' || h.alvo_tipo === 'aoe') {
-    const todos = COMBATE._alvos.filter(x => !x.foraAlcance).map(x => x.nome);
+    const todos = COMBATE._alvos.filter((x: any) => !x.foraAlcance).map((x: any) => x.nome);
     if (COMBATE._estadoAtk === 'fora_combate' && RPG_DATA?.myRole !== 'mestre') {
       atkEnviarSolicitacaoSkill();
       ATAQUE_MAPA_STATE = { ativo: false };
@@ -1834,7 +1834,7 @@ function mapaAtaqueFechar() {
 }
 
 // ── Atualizar alvos disponíveis após mover personagem ─────────
-function _mapaAtaqueAtualizarAposMovimento(nomeMovido) {
+function _mapaAtaqueAtualizarAposMovimento(nomeMovido: any) {
   if (!ATAQUE_MAPA_STATE.ativo || ATAQUE_MAPA_STATE.fase !== 'alvos') return;
   if (nomeMovido !== ATAQUE_MAPA_STATE.atacanteNome) return;
   // Recalcular distâncias
@@ -1885,14 +1885,14 @@ function _mapaAdicionarBotaoAtaqueTurno() {
 // ── Sistema de Pet ────────────────────────────────────────────
 // Retorna habilidades do pet independente de como estão armazenadas
 // (criaturas usam custom_attrs.habilidades; jogadores/NPCs usam skills)
-function petGetHabilidadesPet(petNome, contexto) {
+function petGetHabilidadesPet(petNome: any, contexto: any) {
   const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
-  const c = chars.find(x => x.nome === petNome);
+  const c = chars.find((x: any) => x.nome === petNome);
   if (!c) return [];
   const ca = c.custom_attrs || {};
   // Criaturas e NPCs podem ter habilidades em custom_attrs.habilidades
   if (ca.habilidades?.length) {
-    return ca.habilidades.map(h => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0 }));
+    return ca.habilidades.map((h: any) => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0 }));
   }
   // Jogadores / personagens com ficha usam a tabela skills
   if (contexto === 'arena') return atkGetHabilidadesArena(petNome);
@@ -1900,24 +1900,24 @@ function petGetHabilidadesPet(petNome, contexto) {
 }
 
 // Retorna pets vinculados ao dono que possuem habilidades
-function petGetPetsDoDono(donoNome, contexto) {
+function petGetPetsDoDono(donoNome: any, contexto: any) {
   const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
-  return chars.filter(c => {
+  return chars.filter((c: any) => {
     const ca = c.custom_attrs || {};
     return ca.eh_pet === true && ca.pet_dono === donoNome;
   });
 }
 
 // Verifica se o dono está incapacitado (pet não pode agir)
-function petDonoEstaAtivo(donoNome, contexto, tipoDanoHabilidade?) {
+function petDonoEstaAtivo(donoNome: any, contexto: any, tipoDanoHabilidade?: any) {
   const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
-  const dono = chars.find(c => c.nome === donoNome);
+  const dono = chars.find((c: any) => c.nome === donoNome);
   if (!dono) return false;
   const hp = dono.hp_atual ?? (dono.custom_attrs?.hp_max ?? 100);
   if (hp <= 0) return false;
   // Verificar debuff sem_ataque
   const buffs = dono.buffs || [];
-  const bloqueado = buffs.some(b => b.sem_ataque && (b.sem_ataque_turnos_restantes ?? 0) > 0 && (b.sem_ataque_tipo || 'todos') === 'todos');
+  const bloqueado = buffs.some((b: any) => b.sem_ataque && (b.sem_ataque_turnos_restantes ?? 0) > 0 && (b.sem_ataque_tipo || 'todos') === 'todos');
   if (bloqueado) return false;
   // Verificar bloqueio de ataque específico por tipo
   if (tipoDanoHabilidade) {
@@ -1928,7 +1928,7 @@ function petDonoEstaAtivo(donoNome, contexto, tipoDanoHabilidade?) {
 }
 
 // Renderiza seção de pets no modal de ataque (step 1)
-function atkRenderizarSecaoPets(donoNome, contexto) {
+function atkRenderizarSecaoPets(donoNome: any, contexto: any) {
   const pets = petGetPetsDoDono(donoNome, contexto);
   const el = document.getElementById('atk-pets-section');
   if (!el) return;
@@ -1936,9 +1936,9 @@ function atkRenderizarSecaoPets(donoNome, contexto) {
   if (!pets.length) { el.style.display = 'none'; return; }
 
   const donoAtivo = petDonoEstaAtivo(donoNome, contexto);
-  const rows = pets.map(pet => {
+  const rows = pets.map((pet: any) => {
     const habilidades = petGetHabilidadesPet(pet.nome, contexto)
-      .filter(h => !h.tipo_habilidade || h.tipo_habilidade === 'acao');
+      .filter((h: any) => !h.tipo_habilidade || h.tipo_habilidade === 'acao');
     if (!habilidades.length) return '';
     const cor = pet.custom_attrs?.cor || '#7ec8f0';
     const hpAtual = pet.hp_atual ?? (pet.custom_attrs?.hp_max ?? 100);
@@ -1947,7 +1947,7 @@ function atkRenderizarSecaoPets(donoNome, contexto) {
     return `
       <div style="margin-bottom:8px;padding:10px;background:rgba(10,18,28,0.8);border:1px solid ${cor}22;border-left:2px solid ${cor};border-radius:8px;opacity:${incap||!donoAtivo?0.45:1}">
         <div style="font-family:'Cinzel',serif;font-size:0.72rem;color:${cor};margin-bottom:6px">🐾 ${pet.nome}${incap?' <span style="color:#e74c3c;font-size:0.65rem">[INCAPACITADO]</span>':''}</div>
-        ${habilidades.map((h, i) => {
+        ${habilidades.map((h: any, i: any) => {
           const bloqueio = atkVerificarBloqueioAtaque(pet.nome, h.tipo_dano);
           const donoAtivoParaTipo = petDonoEstaAtivo(donoNome, contexto, h.tipo_dano);
           const desabilitado = incap || !donoAtivoParaTipo || !!bloqueio;
@@ -1975,7 +1975,7 @@ function atkRenderizarSecaoPets(donoNome, contexto) {
 }
 
 // Inicia ataque do pet: injeta pet como atacante e vai para seleção de alvo
-function atkUsarAtaquePet(petNome, habilidadeIdx) {
+function atkUsarAtaquePet(petNome: any, habilidadeIdx: any) {
   const contexto = COMBATE.contexto;
   const habilidades = petGetHabilidadesPet(petNome, contexto);
   const h = habilidades[habilidadeIdx];
@@ -2005,16 +2005,16 @@ async function atkConfirmarAtaque__sombreado_9() {
   }
 }
 
-function atkGetHabilidadesArena(nome) {
-  const c = AR.chars.find(x => x.nome === nome);
-  const skills = (c?.custom_attrs?.habilidades || []).map(h => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0, efeitos_bonus: Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : [] }));
+function atkGetHabilidadesArena(nome: any) {
+  const c = AR.chars.find((x: any) => x.nome === nome);
+  const skills = (c?.custom_attrs?.habilidades || []).map((h: any) => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0, efeitos_bonus: Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : [] }));
 
   // ── Injetar efeitos desbloqueados por equipamentos visuais (igual à campanha) ──
   const equipVisuais = c?.custom_attrs?.aparencia?.equipamentos_visuais || [];
-  const comUnlock = equipVisuais.filter(eq => eq.unlock_efeitos && Array.isArray(eq.unlock_efeitos.efeitos) && eq.unlock_efeitos.efeitos.length);
+  const comUnlock = equipVisuais.filter((eq: any) => eq.unlock_efeitos && Array.isArray(eq.unlock_efeitos.efeitos) && eq.unlock_efeitos.efeitos.length);
   if (!comUnlock.length) return skills;
 
-  return skills.map(sk => {
+  return skills.map((sk: any) => {
     const extras = [];
     for (const eq of comUnlock) {
       const habs = eq.unlock_efeitos.habilidades || ['*'];
@@ -2027,8 +2027,8 @@ function atkGetHabilidadesArena(nome) {
   });
 }
 
-function atkGetHabilidadesCampanha(nome) {
-  const skills = _skFiltrarPorChar(RPG_DATA?.skills || [], nome).map(s => {
+function atkGetHabilidadesCampanha(nome: any) {
+  const skills = _skFiltrarPorChar(RPG_DATA?.skills || [], nome).map((s: any) => {
     let anim = s.animacao;
     if (typeof anim === 'string') { try { anim = JSON.parse(anim); } catch(e) { anim = null; } }
     if (anim && typeof anim !== 'object') anim = null;
@@ -2059,10 +2059,10 @@ function atkGetHabilidadesCampanha(nome) {
   // ── Injetar efeitos desbloqueados por equipamentos visuais ────────────────
   const c = RPG_DATA?.characters?.find(x => x.nome === nome);
   const equipVisuais = c?.custom_attrs?.aparencia?.equipamentos_visuais || [];
-  const comUnlock = equipVisuais.filter(eq => eq.unlock_efeitos && Array.isArray(eq.unlock_efeitos.efeitos) && eq.unlock_efeitos.efeitos.length);
+  const comUnlock = equipVisuais.filter((eq: any) => eq.unlock_efeitos && Array.isArray(eq.unlock_efeitos.efeitos) && eq.unlock_efeitos.efeitos.length);
   if (!comUnlock.length) return skills;
 
-  return skills.map(sk => {
+  return skills.map((sk: any) => {
     const extras = [];
     for (const eq of comUnlock) {
       const habs = eq.unlock_efeitos.habilidades || ['*'];
@@ -2076,7 +2076,7 @@ function atkGetHabilidadesCampanha(nome) {
 }
 
 // ── Builder de efeitos bônus (modal de habilidade) ───────────
-let SK_EFEITOS_TEMP = [];
+let SK_EFEITOS_TEMP: any = [];
 
 function skToggleDotFields()   { document.getElementById('sef-dot-fields').style.display   = document.getElementById('sef-dot-on').checked   ? 'block' : 'none'; }
 function skToggleHotFields()   { document.getElementById('sef-hot-fields').style.display   = document.getElementById('sef-hot-on').checked   ? 'block' : 'none'; }
@@ -2086,7 +2086,7 @@ function skToggleStunFields()  { document.getElementById('sef-stun-fields').styl
 function skToggleMovFields()   { document.getElementById('sef-mov-fields').style.display   = document.getElementById('sef-mov-on').checked   ? 'block' : 'none'; }
 function skToggleAtkFields()   { document.getElementById('sef-atk-fields').style.display   = document.getElementById('sef-atk-on').checked   ? 'block' : 'none'; }
 function skToggleDebFields()   { document.getElementById('sef-deb-fields').style.display   = document.getElementById('sef-deb-on').checked   ? 'block' : 'none'; }
-function skToggleSefFields(tipo) { const el = document.getElementById('sef-' + tipo + '-fields'); const cb = document.getElementById('sef-' + tipo + '-on'); if (el && cb) el.style.display = cb.checked ? 'block' : 'none'; }
+function skToggleSefFields(tipo: any) { const el = document.getElementById('sef-' + tipo + '-fields'); const cb = document.getElementById('sef-' + tipo + '-on'); if (el && cb) el.style.display = cb.checked ? 'block' : 'none'; }
 function skToggleNecroFields() { const el = document.getElementById('sef-necro-fields'); if (el) el.style.display = document.getElementById('sef-necro-on').checked ? 'block' : 'none'; }
 function skToggleRastroFields() {
   const p = document.getElementById('sef-rastro-persona-fields'); if (p) p.style.display = document.getElementById('sef-rastro-persona-on')?.checked ? 'block' : 'none';
@@ -2095,7 +2095,7 @@ function skToggleRastroFields() {
 
 function skAlvoTipoChange() {
   const v = document.getElementById('sk-alvo-tipo').value;
-  const dicas = {
+  const dicas: Record<string, any> = {
     inimigo:        'Ataca um inimigo — usa fórmula de dano e efeitos negativos.',
     proprio:        'Afeta apenas o próprio personagem — ideal para buffs pessoais.',
     aliado:         'Afeta um aliado dentro do alcance — usa efeitos positivos.',
@@ -2132,8 +2132,8 @@ function skTipoDanoChange() {
 // Handler para mostrar/ocultar campos do efeito atrasado por tipo
 function skDelayedTipoEfeitoChange() {
   const tipo = document.getElementById('sef-delayed-tipo-efeito')?.value || 'dano_aoe';
-  const show = id => { const el = document.getElementById(id); if(el) el.style.display = ''; };
-  const hide = id => { const el = document.getElementById(id); if(el) el.style.display = 'none'; };
+  const show = (id: any) => { const el = document.getElementById(id); if(el) el.style.display = ''; };
+  const hide = (id: any) => { const el = document.getElementById(id); if(el) el.style.display = 'none'; };
   hide('sef-delayed-dano-fields'); hide('sef-delayed-cura-fields');
   hide('sef-delayed-buff-fields'); hide('sef-delayed-mov-fields'); hide('sef-delayed-attr-fields');
   if (tipo === 'dano_aoe')  show('sef-delayed-dano-fields');
@@ -2202,7 +2202,7 @@ function skAbrirFormEfeito() {
   const _sefInvDurT = document.getElementById('sef-invocar-dur-turnos'); if (_sefInvDurT) _sefInvDurT.value = 3;
   skPopularInvocarLista();
   // Reset modificadores de ataque básico
-  const _setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const _setVal = (id: any, v: any) => { const el = document.getElementById(id); if (el) el.value = v; };
   _setVal('sef-abcd-ms', 500); _setVal('sef-abcd-extra', 1); _setVal('sef-abcd-turnos', 3);
   _setVal('sef-abdano-formula', ''); _setVal('sef-abdano-turnos', 3);
   _setVal('sef-abmulti-extra', 1); _setVal('sef-abmulti-turnos', 3);
@@ -2211,7 +2211,7 @@ function skAbrirFormEfeito() {
 }
 
 // Popula a lista de invocações selecionáveis a partir do catálogo (campanha + globais).
-function skPopularInvocarLista(selecionados?) {
+function skPopularInvocarLista(selecionados?: any) {
   const el = document.getElementById('sef-invocar-lista');
   if (!el) return;
   const sel = new Set(Array.isArray(selecionados) ? selecionados : []);
@@ -2415,7 +2415,7 @@ function skConfirmarEfeito() {
   document.getElementById('sk-efeito-form').style.display = 'none';
 }
 
-function skRemoverEfeito(idx) {
+function skRemoverEfeito(idx: any) {
   SK_EFEITOS_TEMP.splice(idx, 1);
   skRenderEfeitosLista();
 }
@@ -2423,7 +2423,7 @@ function skRemoverEfeito(idx) {
 function skAbrirPixiPersist() {
   if (typeof PIXI_STUDIO_STATE === 'undefined') return mostrarToast('Studio Pixi não carregado.', 'erro');
   if (typeof psCarregarLista === 'function' && !PIXI_STUDIO_STATE?.animacoes?.length) psCarregarLista();
-  psPickerAbrir((id, nome) => {
+  psPickerAbrir((id: any, nome: any) => {
     const idEl   = document.getElementById('sef-pixi-persist-id');
     const nomeEl = document.getElementById('sef-pixi-persist-nome');
     if (idEl)   idEl.value = id;
@@ -2441,7 +2441,7 @@ function skLimparPixiPersist() {
 function skRenderEfeitosLista() {
   const el = document.getElementById('sk-efeitos-lista');
   if (!el) return;
-  el.innerHTML = SK_EFEITOS_TEMP.map((ef, i) => {
+  el.innerHTML = SK_EFEITOS_TEMP.map((ef: any, i: any) => {
     const tags = [];
     // Identificador de self-efeito
     if (ef.alvo === 'usuario') tags.push({ txt: '👤 Usuário', cor: '#7ec8f0' });
@@ -2466,7 +2466,7 @@ function skRenderEfeitosLista() {
     if (ef.tipo === 'rastro_persona') tags.push({ txt: `🐾 Rastro Persona ${ef.rastro_formula}×${ef.duracao_turnos}t`, cor: '#5ee09a' });
     if (ef.tipo === 'rastro_anima')   tags.push({ txt: `✨ Rastro Anima ${ef.rastro_formula}×${ef.duracao_turnos}t`, cor: '#5ee09a' });
     if (ef.tipo === 'mover_usuario') {
-      const destLbl = { escolha_livre:'clique no mapa', adjacente_alvo:'adj. ao alvo', trocar_com_alvo:'troca c/ alvo' }[ef.mover_destino] || ef.mover_destino;
+      const destLbl = ({ escolha_livre:'clique no mapa', adjacente_alvo:'adj. ao alvo', trocar_com_alvo:'troca c/ alvo' } as any)[ef.mover_destino] || ef.mover_destino;
       tags.push({ txt: `🌀 Move usuário: ${destLbl}${ef.mover_destino === 'escolha_livre' ? ' ('+ef.mover_distancia+'cel)' : ''}`, cor: '#7ec8f0' });
     }
     if (ef.tipo === 'empurrao') {
@@ -2484,11 +2484,11 @@ function skRenderEfeitosLista() {
       tags.push({ txt: `🔮 Invoca ${qtdSel} (${modoLbl}, ${durLbl})`, cor: '#b07ef0' });
     }
     if (ef.animacao_persistente?.pixi_studio_id) {
-      const posLbl = { alvo:'alvo', atacante:'conjurador', meio:'centro' }[ef.animacao_persistente.posicao] || ef.animacao_persistente.posicao;
+      const posLbl = ({ alvo:'alvo', atacante:'conjurador', meio:'centro' } as any)[ef.animacao_persistente.posicao] || ef.animacao_persistente.posicao;
       tags.push({ txt: `✨ Anim. ${ef.animacao_persistente.pixi_studio_nome||'?'} (${posLbl})`, cor: '#7ec8f0' });
     }
     if (ef.efeito_atrasado) {
-      const tipoLbl = { dano_aoe:'💥 Dano AoE', cura_aoe:'💚 Cura AoE', buff_aoe:'✨ Buff AoE', movimento:'🏃 Mov', atributo:'⬆ Attr' }[ef.tipo_efeito_atrasado||'dano_aoe'] || '💥 Explosão';
+      const tipoLbl = ({ dano_aoe:'💥 Dano AoE', cura_aoe:'💚 Cura AoE', buff_aoe:'✨ Buff AoE', movimento:'🏃 Mov', atributo:'⬆ Attr' } as any)[ef.tipo_efeito_atrasado||'dano_aoe'] || '💥 Explosão';
       const descLbl = ef.formula_dano || ef.formula_cura || (ef.efeito_bonus_atrasado?.nome) || (ef.movimento_atrasado ? `+${ef.movimento_atrasado}cel` : '') || (ef.atributo_atrasado?.attr) || '?';
       tags.push({ txt: `${tipoLbl} em ${ef.delay_turnos}t (${descLbl} r${ef.alcance_celulas})`, cor: '#b07ef0' });
     }
@@ -2509,12 +2509,12 @@ function skRenderEfeitosLista() {
 }
 
 // ── Distância entre personagens no mapa atual ─────────────────
-function atkDistanciaCelulas(nomeA, nomeB, contexto?) {
+function atkDistanciaCelulas(nomeA: any, nomeB: any, contexto?: any) {
   // 1.2 — distância em células (Chebyshev: diagonal = 1 célula)
   const ctx = contexto || COMBATE?.contexto || 'campanha';
   const chars = ctx === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
-  const charA = chars.find(c => c.nome === nomeA);
-  const charB = chars.find(c => c.nome === nomeB);
+  const charA = chars.find((c: any) => c.nome === nomeA);
+  const charB = chars.find((c: any) => c.nome === nomeB);
   if (!charA || !charB) return null;
   
   const mapId = ctx === 'arena'
@@ -2563,9 +2563,9 @@ function atkDistanciaCelulas(nomeA, nomeB, contexto?) {
 }
 
 // ── Verifica se atacante está bloqueado de atacar ─────────────
-function atkVerificarBloqueioAtaque(nomeAtacante, tipoDanoHabilidade) {
+function atkVerificarBloqueioAtaque(nomeAtacante: any, tipoDanoHabilidade: any) {
   const chars = COMBATE.contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
-  const c = chars.find(x => x.nome === nomeAtacante);
+  const c = chars.find((x: any) => x.nome === nomeAtacante);
   if (!c) return null;
   const buffs = c.buffs || [];
   for (const b of buffs) {
@@ -2582,7 +2582,7 @@ function atkVerificarBloqueioAtaque(nomeAtacante, tipoDanoHabilidade) {
 }
 
 // ── 18E: Fluxo de combate ────────────────────────────────────
-function atkIrParaStep(n) {
+function atkIrParaStep(n: any) {
   COMBATE.step = n;
   ['atk-step-1','atk-step-2','atk-step-3','atk-step-pendente'].forEach(id => {
     const el = document.getElementById(id);
@@ -2593,7 +2593,7 @@ function atkIrParaStep(n) {
   if (el) el.style.display = 'block';
 }
 
-function atkVoltarStep(n) {
+function atkVoltarStep(n: any) {
   if (n === 1) {
     mapaHideRangeCircle();
     if (_AOE_STATE) mapaHideAoECircle();
@@ -2606,7 +2606,7 @@ function atkIrParaMapa() {
   fecharModalAtaque(); // fecharModalAtaque detecta _pendingTrigger e mostra o card flutuante
 }
 
-function atkSelecionarHabilidade(idx) {
+function atkSelecionarHabilidade(idx: any) {
   const h = COMBATE._habilidades[idx];
   COMBATE.habilidadeSel = h;
   const alvoTipo = h.alvo_tipo || 'inimigo';
@@ -2644,7 +2644,7 @@ function atkSelecionarHabilidade(idx) {
       }
     }
     atkMontarSelecaoAlvo();
-    const aliados = atkListarAlvos().filter(a => !a.foraAlcance).map(a => a.nome);
+    const aliados = atkListarAlvos().filter((a: any) => !a.foraAlcance).map((a: any) => a.nome);
     aliados.push(COMBATE.atacanteNome); // inclui o próprio
     atkAplicarSkillSuporte(aliados);
     return;
@@ -2667,7 +2667,7 @@ function atkSelecionarHabilidade(idx) {
 }
 
 // Aplica buff/suporte imediatamente a uma lista de alvos (sem dano)
-async function atkAplicarSkillSuporte(alvos) {
+async function atkAplicarSkillSuporte(alvos: any) {
   const h = COMBATE.habilidadeSel;
   const { atacanteNome, contexto } = COMBATE;
 
@@ -2713,7 +2713,7 @@ async function atkAplicarSkillSuporte(alvos) {
     // Mostrar modal de crítico para o mestre ajustar invocação (HP dobrado, colapso, etc.)
     const ehMestreInv = (contexto === 'arena' ? AR?.myRole : RPG_DATA?.myRole) === 'mestre';
     if (ehMestreInv && (h.critico_positivo || h.critico_negativo)) {
-      const nomeInv = h.invocar_nome || (Array.isArray(h.efeitos_bonus)?h.efeitos_bonus:[]).find(e=>e.tipo==='invocacao')?.invocar_nome;
+      const nomeInv = h.invocar_nome || (Array.isArray(h.efeitos_bonus)?h.efeitos_bonus:[]).find((e: any)=>e.tipo==='invocacao')?.invocar_nome;
       const alvosInv = nomeInv ? [nomeInv] : [atacanteNome];
       setTimeout(() => {
         if (h.critico_positivo) abrirModalCriticoMestre(alvosInv, true,  `[Invocação] ${h.critico_positivo}`, contexto);
@@ -2778,10 +2778,10 @@ async function atkAplicarSkillSuporte(alvos) {
   }
 }
 
-async function atkAplicarCura(nomeAlvo, cura, contexto) {
+async function atkAplicarCura(nomeAlvo: any, cura: any, contexto: any) {
   if (!cura) return;
   if (contexto === 'arena') {
-    const c = AR.chars.find(x => x.nome === nomeAlvo);
+    const c = AR.chars.find((x: any) => x.nome === nomeAlvo);
     if (!c) return;
     const hpMax = c.custom_attrs?.hp_max ?? 100;
     c.hp_atual = Math.min(hpMax, (c.hp_atual ?? hpMax) + cura);
@@ -2796,10 +2796,10 @@ async function atkAplicarCura(nomeAlvo, cura, contexto) {
   }
 }
 
-async function atkAplicarRecuperacaoAtributo(nomeAlvo, atributo, quantidade, contexto) {
+async function atkAplicarRecuperacaoAtributo(nomeAlvo: any, atributo: any, quantidade: any, contexto: any) {
   if (!atributo || !quantidade) return;
   const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
-  const c = chars.find(x => x.nome === nomeAlvo);
+  const c = chars.find((x: any) => x.nome === nomeAlvo);
   if (!c || !c.custom_attrs) return;
   if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
   const atual = parseFloat(c.custom_attrs.atributos[atributo]) || 0;
@@ -2821,7 +2821,7 @@ async function atkAplicarRecuperacaoAtributo(nomeAlvo, atributo, quantidade, con
 }
 
 // ── SISTEMA DE CUSTO DE RECURSO (Mana, Stamina, Ki, etc.) ────
-function parsearCustoRSV(custo_rsv) {
+function parsearCustoRSV(custo_rsv: any) {
   if (!custo_rsv) return null;
   const s = custo_rsv.trim();
   if (!s || /^passiv/i.test(s)) return null;
@@ -2830,11 +2830,11 @@ function parsearCustoRSV(custo_rsv) {
   return { quantidade: parseFloat(match[1]), atributo: match[2].trim() };
 }
 
-function verificarCustoSkill(atacanteNome, custo_rsv, contexto) {
+function verificarCustoSkill(atacanteNome: any, custo_rsv: any, contexto: any) {
   const parsed = parsearCustoRSV(custo_rsv);
   if (!parsed) return { ok: true };
   const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
-  const c = chars.find(x => x.nome === atacanteNome);
+  const c = chars.find((x: any) => x.nome === atacanteNome);
   const atual = parseFloat(c?.custom_attrs?.atributos?.[parsed.atributo]) || 0;
   if (atual < parsed.quantidade) {
     return { ok: false, atributo: parsed.atributo, custo: parsed.quantidade, atual };
@@ -2842,7 +2842,7 @@ function verificarCustoSkill(atacanteNome, custo_rsv, contexto) {
   return { ok: true, atributo: parsed.atributo, quantidade: parsed.quantidade };
 }
 
-async function descontarCustoSkill(atacanteNome, custo_rsv, contexto) {
+async function descontarCustoSkill(atacanteNome: any, custo_rsv: any, contexto: any) {
   const parsed = parsearCustoRSV(custo_rsv);
   if (!parsed) return;
   await atkAplicarRecuperacaoAtributo(atacanteNome, parsed.atributo, -parsed.quantidade, contexto);
@@ -2853,7 +2853,7 @@ async function descontarCustoSkill(atacanteNome, custo_rsv, contexto) {
 // 🎨 FUNÇÕES DE SELEÇÃO DE TIPO DE AÇÃO CRIATIVA
 // ═══════════════════════════════════════════════════════════════
 
-function criativoSetTipo(tipo) {
+function criativoSetTipo(tipo: any) {
   CRIATIVO_TIPO = tipo;
   
   // Atualizar botões visuais
@@ -2870,7 +2870,7 @@ function criativoSetTipo(tipo) {
   });
   
   // Destacar selecionado
-  const btnMap = { ataque: btnAtaque, suporte: btnSuporte, narrativo: btnNarrativo };
+  const btnMap: Record<string, any> = { ataque: btnAtaque, suporte: btnSuporte, narrativo: btnNarrativo };
   const btn = btnMap[tipo];
   if (btn) {
     btn.style.borderWidth = '2px';
@@ -2887,7 +2887,7 @@ function criativoSetTipo(tipo) {
   criativoSetAlvo(CRIATIVO_ALVO_TIPO);
 }
 
-function criativoSetAlvo(tipoAlvo) {
+function criativoSetAlvo(tipoAlvo: any) {
   CRIATIVO_ALVO_TIPO = tipoAlvo;
   
   // Atualizar botões visuais
@@ -2905,7 +2905,7 @@ function criativoSetAlvo(tipoAlvo) {
   });
   
   // Destacar selecionado
-  const btnMap = { unico: btnUnico, area: btnArea, proprio: btnProprio };
+  const btnMap: Record<string, any> = { unico: btnUnico, area: btnArea, proprio: btnProprio };
   const btn = btnMap[tipoAlvo];
   if (btn) {
     const cor = CRIATIVO_TIPO === 'ataque' ? 'rgba(232,80,60,0.5)' : 'rgba(94,224,154,0.5)';
@@ -3071,7 +3071,7 @@ function atkMontarSelecaoAlvo() {
 
   const alvos = atkListarAlvos();
   COMBATE._alvos = alvos;
-  document.getElementById('atk-alvos-lista').innerHTML = alvos.map((a, i) => {
+  document.getElementById('atk-alvos-lista').innerHTML = alvos.map((a: any, i: any) => {
     const cor = a.cor || (ehBuff ? '#5ee09a' : '#7ec8f0');
     const foraAlcance = a.foraAlcance;
     const distLabel = a.distCelulas != null ? ` · ${a.distCelulas.toFixed(1)}c` : '';
@@ -3101,13 +3101,13 @@ function atkListarAlvos() {
   const ffAtivo  = COMBATE.contexto === 'arena' || (CURRENT_RPG?.theme?.fogo_amigo_ativo === true);
 
   // Helper: retorna a faction efetiva de um personagem
-  const _getFaction = (c) => {
+  const _getFaction = (c: any) => {
     const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador';
     if (tipo === 'jogador') return 'jogador';
     return c.custom_attrs?.npc_faction || 'inimigo'; // padrão: inimigo
   };
   const atacanteChar = COMBATE.contexto === 'arena'
-    ? AR.chars.find(x => x.nome === meuNome)
+    ? AR.chars.find((x: any) => x.nome === meuNome)
     : (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
   const atacanteFaction = _getFaction(atacanteChar || {});
 
@@ -3115,7 +3115,7 @@ function atkListarAlvos() {
 
   if (COMBATE.contexto === 'arena') {
     lista = (AR.chars || [])
-      .filter(c => {
+      .filter((c: any) => {
         if (c.nome === meuNome) return ehBuff;
         const faction = _getFaction(c);
         const hpOk = (c.hp_atual ?? 100) > 0;
@@ -3132,7 +3132,7 @@ function atkListarAlvos() {
           return false;
         }
       })
-      .map(c => {
+      .map((c: any) => {
         const faction = _getFaction(c);
         const ehFogoAmigo = !ehBuff && (faction === 'aliado' || faction === 'jogador');
         return {
@@ -3150,7 +3150,7 @@ function atkListarAlvos() {
     const atacanteMapId = atacanteChar2?.active_map_id || null;
     const _bidAtk = batalhaIdMinha() || BATALHA_ATUAL_ID;
     const _bsAtk  = _bidAtk ? MAPA_STATE?.batalhas?.[_bidAtk] : null;
-    const _partBatalha = _bsAtk?.participantes?.map(p => p.nome) || null;
+    const _partBatalha = _bsAtk?.participantes?.map((p: any) => p.nome) || null;
     lista = (RPG_DATA?.characters || [])
       .filter(c => {
         if (_partBatalha && !_partBatalha.includes(c.nome)) return false;
@@ -3163,7 +3163,7 @@ function atkListarAlvos() {
         if (ehBuff) {
           // Buff: jogadores e NPCs aliados
           // AC-07-G3: Incluir pets cujo dono é aliado/jogador
-          const _isPetAliado = (chr) => {
+          const _isPetAliado = (chr: any) => {
             if (!chr.custom_attrs?.eh_pet) return false;
             const donoNome = chr.custom_attrs?.pet_dono;
             const dono = (RPG_DATA?.characters||[]).find(x => x.nome === donoNome);
@@ -3201,7 +3201,7 @@ function atkListarAlvos() {
   const alcance = h?.alcance_celulas ?? null;
   const mapaId  = MAPA_STATE?.mapaAtualId || null;
   return lista
-    .map(a => {
+    .map((a: any) => {
       const dist = atkDistanciaCelulas(meuNome, a.nome);
       if (alcance != null && mapaId && COMBATE.contexto !== 'arena') {
         const charA = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
@@ -3213,11 +3213,11 @@ function atkListarAlvos() {
       const foraAlcance = alcance != null && dist != null && dist > alcance;
       return { ...a, distCelulas: dist, foraAlcance };
     })
-    .sort((a, b) => (a.foraAlcance ? 1 : 0) - (b.foraAlcance ? 1 : 0));
+    .sort((a: any, b: any) => (a.foraAlcance ? 1 : 0) - (b.foraAlcance ? 1 : 0));
 }
 
 // ── Seleção de alvo → prepara step 3 ────────────────────────
-async function atkSelecionarAlvo(idx) {
+async function atkSelecionarAlvo(idx: any) {
   const a = COMBATE._alvos[idx];
   COMBATE.alvoNome = a.nome;
   const h = COMBATE.habilidadeSel;
@@ -3243,7 +3243,7 @@ async function atkSelecionarAlvo(idx) {
     return;
   }
   if (alvoTipo === 'todos_inimigos' || alvoTipo === 'aoe') {
-    const todos = COMBATE._alvos.filter(x => !x.foraAlcance).map(x => x.nome);
+    const todos = COMBATE._alvos.filter((x: any) => !x.foraAlcance).map((x: any) => x.nome);
     // Fora de combate: ainda enviar para aprovação (AoE)
     if (COMBATE._estadoAtk === 'fora_combate' && RPG_DATA?.myRole !== 'mestre') {
       atkEnviarSolicitacaoSkill(); return;
@@ -3267,7 +3267,7 @@ async function atkSelecionarAlvo(idx) {
   atkIrParaStep(3);
 }
 
-async function atkAplicarAoEInimigos(alvos) {
+async function atkAplicarAoEInimigos(alvos: any) {
   const { atacanteNome, habilidadeSel: h, contexto } = COMBATE;
   // Aguarda o jogador rolar os dados (abre step 3 com multi-alvo pendente)
   COMBATE._alvosAoE = alvos;
@@ -3292,7 +3292,7 @@ function atkPrepararStep3() {
 
   // ── Calcular boost_dano e mod_dano ativos do atacante ────────────────
   const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
-  const atacanteChar = chars.find(x => x.nome === atacanteNome);
+  const atacanteChar = chars.find((x: any) => x.nome === atacanteNome);
   let boostAtacante = 0, modDanoAtacante = 0;
   for (const b of (atacanteChar?.buffs || [])) {
     if ((b.boost_dano ?? 0) !== 0 && (b.boost_dano_turnos_restantes ?? 0) > 0) {
@@ -3377,15 +3377,15 @@ function atkPrepararStep3() {
 }
 
 // ── Builder de dados (sem fórmula no DB) ────────────────────
-function atkAdicionarDado(faces) {
-  const existente = COMBATE.formulaBuilder.find(g => g.tipo === 'dado' && g.faces === faces);
+function atkAdicionarDado(faces: any) {
+  const existente = COMBATE.formulaBuilder.find((g: any) => g.tipo === 'dado' && g.faces === faces);
   if (existente) existente.qtd++;
   else COMBATE.formulaBuilder.push({ tipo: 'dado', qtd: 1, faces });
   atkAtualizarBuilder();
 }
 
-function atkRemoverDado(faces) {
-  const idx = COMBATE.formulaBuilder.findIndex(g => g.tipo === 'dado' && g.faces === faces);
+function atkRemoverDado(faces: any) {
+  const idx = COMBATE.formulaBuilder.findIndex((g: any) => g.tipo === 'dado' && g.faces === faces);
   if (idx < 0) return;
   COMBATE.formulaBuilder[idx].qtd--;
   if (COMBATE.formulaBuilder[idx].qtd <= 0) COMBATE.formulaBuilder.splice(idx, 1);
@@ -3407,7 +3407,7 @@ function atkAtualizarBuilder() {
   // Chips dos dados selecionados
   const chipsEl = document.getElementById('atk-builder-chips');
   if (chipsEl) {
-    chipsEl.innerHTML = COMBATE.formulaBuilder.map(g => {
+    chipsEl.innerHTML = COMBATE.formulaBuilder.map((g: any) => {
       if (g.tipo !== 'dado') return '';
       return `<div style="display:flex;align-items:center;gap:4px;background:rgba(232,80,60,0.12);border:1px solid rgba(232,80,60,0.3);border-radius:20px;padding:3px 10px 3px 6px">
         <span style="font-family:'Cinzel',serif;font-size:0.85rem;color:#e8604c">${g.qtd}d${g.faces}</span>
@@ -3473,7 +3473,7 @@ async function atkRolarDados() {
         elapsed += 60;
         if (elapsed >= 320) {
           clearInterval(iv);
-          chip.textContent    = dado.valor;
+          (chip as any).textContent    = dado.valor;
           const isCrit        = dado.valor === dado.faces;
           chip.style.borderColor = isCrit ? '#f0cc6a' : 'rgba(232,80,60,0.4)';
           chip.style.background  = isCrit ? 'rgba(240,204,106,0.15)' : 'rgba(232,80,60,0.08)';
@@ -3734,7 +3734,7 @@ async function _atkAplicarDanoFinal() {
     }
   }
   const formulaUsada = h.formula_dano || formulaDeGrupos(COMBATE.formulaBuilder) || '';
-  const efeitosStr = efeitos.map(e => e.nome).join(', ');
+  const efeitosStr = efeitos.map((e: any) => e.nome).join(', ');
   const icone = ehCura ? '💚' : (h.tipo_dano === 'suporte' || h.tipo_dano === 'buff') ? '✨' : '⚔';
   const labelAcao = ehCura ? 'cura' : (h.tipo_dano === 'buff' || h.tipo_dano === 'suporte') ? 'buff' : 'dano';
   const logVerbo = ehCura ? 'curou' : (h.tipo_dano === 'buff' || h.tipo_dano === 'suporte') ? 'aplicou' : 'causou';
@@ -3854,7 +3854,7 @@ async function _atkAplicarDanoFinal() {
 // ════════════════════════════════════════════════════════════════════════════
 // VOL II v2.1 — EMPURRAR / ARREMESSAR
 // ════════════════════════════════════════════════════════════════════════════
-async function acaoEmpurrar(atacanteNome, alvoNome, batalhaId) {
+async function acaoEmpurrar(atacanteNome: any, alvoNome: any, batalhaId: any) {
   const atk  = (RPG_DATA?.characters||[]).find(c => c.nome === atacanteNome);
   const alvo = (RPG_DATA?.characters||[]).find(c => c.nome === alvoNome);
   if (!atk || !alvo) return;
@@ -4010,7 +4010,7 @@ window.batalhaReceberEstadoRemoto = function(estadoBatalha) {
   // (batalhaReceberLinhaRemota já faz isso, esta é redundância para compatibilidade)
 };
 
-(window as any).animReceberBroadcast = function(payload) {
+(window as any).animReceberBroadcast = function(payload: any) {
   console.log('[Realtime] Animação de ataque recebida:', payload);
   
   // Executar animação de ataque se a função existir
@@ -4503,15 +4503,15 @@ console.log('[Combat] Todos os handlers de broadcast registrados ✓');
 // REALTIME: Handlers para inventário, moedas e itens
 // ═══════════════════════════════════════════════════════════════
 
-window.inventarioReceberAtualização = function(rec, ev) {
+window.inventarioReceberAtualização = function(rec: any, ev: any) {
   console.log('[Realtime Inventario] Atualização:', rec.id, ev);
   
   // Atualizar cache local se existir
   if (window.INVENTARIO_CACHE) {
     if (ev === 'DELETE') {
-      window.INVENTARIO_CACHE = INVENTARIO_CACHE.filter(i => i.id !== rec.id);
+      window.INVENTARIO_CACHE = INVENTARIO_CACHE.filter((i: any) => i.id !== rec.id);
     } else {
-      const idx = INVENTARIO_CACHE.findIndex(i => i.id === rec.id);
+      const idx = INVENTARIO_CACHE.findIndex((i: any) => i.id === rec.id);
       if (idx >= 0) INVENTARIO_CACHE[idx] = rec;
       else INVENTARIO_CACHE.push(rec);
     }
@@ -4531,15 +4531,15 @@ window.inventarioReceberAtualização = function(rec, ev) {
   }
 };
 
-window.moedasReceberAtualização = function(rec, ev) {
+window.moedasReceberAtualização = function(rec: any, ev: any) {
   console.log('[Realtime Moedas] Atualização:', rec);
   
   // Atualizar cache local
   if (window.MOEDAS_CACHE) {
     if (ev === 'DELETE') {
-      window.MOEDAS_CACHE = MOEDAS_CACHE.filter(m => m.id !== rec.id);
+      window.MOEDAS_CACHE = MOEDAS_CACHE.filter((m: any) => m.id !== rec.id);
     } else {
-      const idx = MOEDAS_CACHE.findIndex(m => m.id === rec.id);
+      const idx = MOEDAS_CACHE.findIndex((m: any) => m.id === rec.id);
       if (idx >= 0) MOEDAS_CACHE[idx] = rec;
       else MOEDAS_CACHE.push(rec);
     }
@@ -4555,15 +4555,15 @@ window.moedasReceberAtualização = function(rec, ev) {
   }
 };
 
-window.lootReceberAtualização = function(rec, ev) {
+window.lootReceberAtualização = function(rec: any, ev: any) {
   console.log('[Realtime Loot] Atualização:', rec);
   
   // Atualizar cache de loot pendente
   if (window.LOOT_CACHE) {
     if (ev === 'DELETE' || rec.saqueado) {
-      window.LOOT_CACHE = LOOT_CACHE.filter(l => l.id !== rec.id);
+      window.LOOT_CACHE = LOOT_CACHE.filter((l: any) => l.id !== rec.id);
     } else {
-      const idx = LOOT_CACHE.findIndex(l => l.id === rec.id);
+      const idx = LOOT_CACHE.findIndex((l: any) => l.id === rec.id);
       if (idx >= 0) LOOT_CACHE[idx] = rec;
       else LOOT_CACHE.push(rec);
     }
@@ -4579,15 +4579,15 @@ window.lootReceberAtualização = function(rec, ev) {
   }
 };
 
-window.mercadoReceberAtualização = function(rec, ev) {
+window.mercadoReceberAtualização = function(rec: any, ev: any) {
   console.log('[Realtime Mercado] Atualização:', rec);
   
   // Atualizar cache do mercado
   if (window.MERCADO_CACHE) {
     if (ev === 'DELETE') {
-      window.MERCADO_CACHE = MERCADO_CACHE.filter(m => m.id !== rec.id);
+      window.MERCADO_CACHE = MERCADO_CACHE.filter((m: any) => m.id !== rec.id);
     } else {
-      const idx = MERCADO_CACHE.findIndex(m => m.id === rec.id);
+      const idx = MERCADO_CACHE.findIndex((m: any) => m.id === rec.id);
       if (idx >= 0) MERCADO_CACHE[idx] = rec;
       else MERCADO_CACHE.push(rec);
     }
@@ -4599,15 +4599,15 @@ window.mercadoReceberAtualização = function(rec, ev) {
   }
 };
 
-window.tradesReceberAtualização = function(rec, ev) {
+window.tradesReceberAtualização = function(rec: any, ev: any) {
   console.log('[Realtime Trades] Atualização:', rec);
   
   // Atualizar cache de trades
   if (window.TRADES_CACHE) {
     if (ev === 'DELETE') {
-      window.TRADES_CACHE = TRADES_CACHE.filter(t => t.id !== rec.id);
+      window.TRADES_CACHE = TRADES_CACHE.filter((t: any) => t.id !== rec.id);
     } else {
-      const idx = TRADES_CACHE.findIndex(t => t.id === rec.id);
+      const idx = TRADES_CACHE.findIndex((t: any) => t.id === rec.id);
       if (idx >= 0) TRADES_CACHE[idx] = rec;
       else TRADES_CACHE.push(rec);
     }
@@ -4623,15 +4623,15 @@ window.tradesReceberAtualização = function(rec, ev) {
   }
 };
 
-window.itemCatalogReceberAtualização = function(rec, ev) {
+window.itemCatalogReceberAtualização = function(rec: any, ev: any) {
   console.log('[Realtime Item Catalog] Atualização:', rec);
   
   // Atualizar cache global de itens
   if (window.ITEMS_CATALOG) {
     if (ev === 'DELETE') {
-      window.ITEMS_CATALOG = ITEMS_CATALOG.filter(i => i.id !== rec.id);
+      window.ITEMS_CATALOG = ITEMS_CATALOG.filter((i: any) => i.id !== rec.id);
     } else {
-      const idx = ITEMS_CATALOG.findIndex(i => i.id === rec.id);
+      const idx = ITEMS_CATALOG.findIndex((i: any) => i.id === rec.id);
       if (idx >= 0) ITEMS_CATALOG[idx] = rec;
       else ITEMS_CATALOG.push(rec);
     }
@@ -4832,7 +4832,7 @@ console.log('[Combat] Função batalhaJogarPorOffline registrada ✓');
 // ═══════════════════════════════════════════════════════════════
 
 // Timer global para auto-avanço de turno
-let _timerAutoAvanco = null;
+let _timerAutoAvanco: any = null;
 
 async function _finalizarAtaqueCampanha__sombreado_9() {
   console.log('[Finalizar Ataque] Ataque finalizado em campanha');

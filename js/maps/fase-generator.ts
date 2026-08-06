@@ -6,7 +6,7 @@
 function faseGenGetApiKey() {
   return localStorage.getItem('animgen_claude_key') || '';
 }
-function faseGenSetApiKey(val) {
+function faseGenSetApiKey(val: any) {
   localStorage.setItem('animgen_claude_key', val.trim());
 }
 
@@ -85,7 +85,7 @@ SCHEMA REFERENCE — return exactly this structure:
 }
 
 // ── Chamada à API Claude Vision ────────────────────────────────────────────
-async function _faseGenApiCall(imageBase64, mimeType) {
+async function _faseGenApiCall(imageBase64: any, mimeType: any) {
   const key = faseGenGetApiKey();
   if (!key) throw new Error('Chave Claude API não configurada');
 
@@ -123,7 +123,7 @@ async function _faseGenApiCall(imageBase64, mimeType) {
 }
 
 // ── Converter arquivo para base64 ──────────────────────────────────────────
-function _faseFileToBase64(file) {
+function _faseFileToBase64(file: any) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => {
@@ -136,13 +136,13 @@ function _faseFileToBase64(file) {
 }
 
 // ── Gerar coordenadas via Claude Vision ────────────────────────────────────
-async function faseGenFromImage(file) {
+async function faseGenFromImage(file: any) {
   const { b64, mimeType }: any = await _faseFileToBase64(file);
   return await _faseGenApiCall(b64, mimeType);
 }
 
 // ── Validar e normalizar JSON importado ────────────────────────────────────
-function faseGenValidarJSON(raw) {
+function faseGenValidarJSON(raw: any) {
   if (typeof raw === 'string') {
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('JSON inválido: não encontrou objeto { }');
@@ -150,12 +150,12 @@ function faseGenValidarJSON(raw) {
   }
   const defaults = {
     perspective:     { tilt_y: 0.72, shadow_offset: 4 },
-    paredes:         [],
-    portas:          [],
-    baus:            [],
-    itens_no_chao:   [],
-    spawn_jogadores: [],
-    entidades:       []
+    paredes:         [] as any[],
+    portas:          [] as any[],
+    baus:            [] as any[],
+    itens_no_chao:   [] as any[],
+    spawn_jogadores: [] as any[],
+    entidades:       [] as any[]
   };
   return Object.assign({}, defaults, raw);
 }
@@ -165,12 +165,12 @@ function faseGenValidarJSON(raw) {
 // ════════════════════════════════════════════════════════════════════════════
 
 // Estado temporário do modal
-let _faseGenModalData = null;   // render_data em edição
-let _faseGenImgFile   = null;   // arquivo de imagem selecionado
-let _faseGenMapId     = null;   // map_id em edição (null = novo mapa via fase-renderer)
+let _faseGenModalData: any = null;   // render_data em edição
+let _faseGenImgFile: any   = null;   // arquivo de imagem selecionado
+let _faseGenMapId: any     = null;   // map_id em edição (null = novo mapa via fase-renderer)
 
 // ── Abrir modal de configuração de fase ────────────────────────────────────
-function abrirModalFaseConfig(mapId) {
+function abrirModalFaseConfig(mapId: any) {
   _faseGenMapId = mapId || null;
   const entry = mapId ? (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === mapId) : null;
   const mapa: any  = entry?.mapa || {};
@@ -207,7 +207,7 @@ function fecharModalFaseConfig() {
 }
 
 // ── Preview de imagem ──────────────────────────────────────────────────────
-function _faseGenAtualizarPreview(url) {
+function _faseGenAtualizarPreview(url: any) {
   const prev = document.getElementById('fase-img-preview');
   const placeholder = document.getElementById('fase-img-placeholder');
   if (!prev || !placeholder) return;
@@ -221,7 +221,7 @@ function _faseGenAtualizarPreview(url) {
   }
 }
 
-function faseGenHandleImageSelect(input) {
+function faseGenHandleImageSelect(input: any) {
   const file = input?.files?.[0];
   if (!file) return;
   _faseGenImgFile = file;
@@ -232,7 +232,7 @@ function faseGenHandleImageSelect(input) {
 }
 
 // ── Tilt slider ────────────────────────────────────────────────────────────
-function faseGenTiltChange(val) {
+function faseGenTiltChange(val: any) {
   const v = parseInt(val);
   const el = document.getElementById('fase-tilt-val');
   if (el) el.textContent = v + '%';
@@ -242,7 +242,7 @@ function faseGenTiltChange(val) {
 // ── Copiar prompt de imagem ────────────────────────────────────────────────
 function faseGenCopiarPromptImagem() {
   const elementos = (document.getElementById('fase-elementos-input')?.value || '')
-    .split(',').map(s => s.trim()).filter(Boolean);
+    .split(',').map((s: any) => s.trim()).filter(Boolean);
   const estilo = document.getElementById('fase-estilo-input')?.value || 'pixel art fantasy dungeon';
   const tilt   = parseInt(document.getElementById('fase-tilt-slider')?.value || '72');
   const prompt = FASE_IMG_PROMPT_TEMPLATE({ estilo, tilt, elementos });
@@ -279,7 +279,7 @@ async function faseGenGerarCoordenadas() {
 }
 
 // Gera catálogo de itens temáticos e popula os baús do mapa
-async function _faseGenGerarCatalogoEPopularBaus(estilo, rd, apiKey) {
+async function _faseGenGerarCatalogoEPopularBaus(estilo: any, rd: any, apiKey: any) {
   const numBaus = (rd.baus || []).length;
   if (!numBaus && !(rd.entidades || []).length) return;
 
@@ -357,7 +357,7 @@ Return ONLY a JSON array (no markdown), with each item having:
     // Popular baús com itens do catálogo gerado
     const chestItems = savedIds.filter(i => i.chest_item);
     if (rd.baus) {
-      rd.baus.forEach((bau, idx) => {
+      rd.baus.forEach((bau: any, idx: any) => {
         const item = chestItems[idx % chestItems.length];
         if (item) {
           bau.loot_itens = [{ item_catalog_id: item.id, nome: item.nome, quantidade: 1 }];
@@ -367,7 +367,7 @@ Return ONLY a JSON array (no markdown), with each item having:
 
     // Atualizar catálogo em memória no AVT_STATE se disponível
     if (typeof AVT_STATE !== 'undefined') {
-      const catalog = await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate`).catch(()=>[]);
+      const catalog = await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate`).catch((): any[] => []);
       AVT_STATE.itemCatalog = catalog || [];
     }
 
@@ -414,7 +414,7 @@ function _faseGenRenderEditorJSON() {
   ta.value = JSON.stringify(_faseGenModalData, null, 2);
 }
 
-function faseGenJSONEditado(val) {
+function faseGenJSONEditado(val: any) {
   try {
     _faseGenModalData = JSON.parse(val);
     document.getElementById('fase-json-err').textContent = '';
@@ -506,7 +506,7 @@ function faseGenAdicionarEntidade() {
 }
 
 // ── Exportar combate para IA (chamado do sistema de batalha) ──────────────
-async function faseExportarCombate(batalhaId) {
+async function faseExportarCombate(batalhaId: any) {
   const b = MAPA_STATE.batalhas?.[batalhaId];
   if (!b) return null;
 

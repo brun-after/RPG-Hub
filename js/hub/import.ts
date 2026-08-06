@@ -4,10 +4,10 @@
 
 // ── IMPORT ────────────────────────────────────────────────────
 let IMPORT_MODE='novo';
-const PLABELS={novo:{completo:'Gerar arquivo completo com IA (Novo RPG)',config:'Gerar seção Config (Novo RPG)',characters:'Gerar seção Personagens (Novo RPG)',skills:'Gerar seção Habilidades (Novo RPG)',lore:'Gerar seção Lore (Novo RPG)',attr_defs:'Gerar seção Atributos (Novo RPG)',attr_grupos:'Gerar Mapeamento de Atributos (Novo RPG)',vocab_tematico:'Gerar Vocabulário Temático (Novo RPG)',item_catalog:'Gerar Catálogo de Itens (Novo RPG)',inventario:'Gerar Inventários Iniciais (Novo RPG)'},atualizar:{completo:'Gerar arquivo completo com IA (Atualizar)',config:'Gerar seção Config (Atualizar)',characters:'Gerar seção Personagens (Atualizar)',skills:'Gerar seção Habilidades (Atualizar)',lore:'Gerar seção Lore (Atualizar)',attr_defs:'Gerar seção Atributos (Atualizar)',attr_grupos:'Gerar Mapeamento de Atributos (Atualizar)',vocab_tematico:'Gerar Vocabulário Temático (Atualizar)',item_catalog:'Gerar Catálogo de Itens (Atualizar)',inventario:'Gerar Inventários Iniciais (Atualizar)'}};
+const PLABELS: Record<string, any> = {novo:{completo:'Gerar arquivo completo com IA (Novo RPG)',config:'Gerar seção Config (Novo RPG)',characters:'Gerar seção Personagens (Novo RPG)',skills:'Gerar seção Habilidades (Novo RPG)',lore:'Gerar seção Lore (Novo RPG)',attr_defs:'Gerar seção Atributos (Novo RPG)',attr_grupos:'Gerar Mapeamento de Atributos (Novo RPG)',vocab_tematico:'Gerar Vocabulário Temático (Novo RPG)',item_catalog:'Gerar Catálogo de Itens (Novo RPG)',inventario:'Gerar Inventários Iniciais (Novo RPG)'},atualizar:{completo:'Gerar arquivo completo com IA (Atualizar)',config:'Gerar seção Config (Atualizar)',characters:'Gerar seção Personagens (Atualizar)',skills:'Gerar seção Habilidades (Atualizar)',lore:'Gerar seção Lore (Atualizar)',attr_defs:'Gerar seção Atributos (Atualizar)',attr_grupos:'Gerar Mapeamento de Atributos (Atualizar)',vocab_tematico:'Gerar Vocabulário Temático (Atualizar)',item_catalog:'Gerar Catálogo de Itens (Atualizar)',inventario:'Gerar Inventários Iniciais (Atualizar)'}};
 
 
-function setImportMode(mode){
+function setImportMode(mode: any){
  IMPORT_MODE=mode;const isAt=mode==='atualizar';
  document.getElementById('import-title').textContent=isAt?'Atualizar RPG':'Importar Novo RPG';
  document.getElementById('rpg-update-selector').style.display=isAt?'block':'none';
@@ -65,10 +65,10 @@ function fecharPixiStudio(){
 }
 
 
-function lerCSV(tipo,input){const f=input.files[0];if(!f)return;const st=document.getElementById('status-'+tipo),rd=new FileReader();rd.onload=e=>{try{const p=parseCSV(e.target.result);p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));IMPORT_CSVS[tipo]=p;st.textContent=`✓ ${p.length} linha(s)`;st.className='import-status ok';st.style.display='block';}catch(err){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
+function lerCSV(tipo: any,input: any){const f=input.files[0];if(!f)return;const st=document.getElementById('status-'+tipo),rd=new FileReader();rd.onload=e=>{try{const p=parseCSV(e.target.result);p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));IMPORT_CSVS[tipo]=p;st.textContent=`✓ ${p.length} linha(s)`;st.className='import-status ok';st.style.display='block';}catch(err){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
 
 // Lê CSV colado como texto
-function lerCSVPaste(tipo, texto) {
+function lerCSVPaste(tipo: any, texto: any) {
   const st = document.getElementById('status-' + tipo);
   if (!texto || !texto.trim()) { IMPORT_CSVS[tipo] = null; if(st){st.style.display='none';} return; }
   try {
@@ -82,10 +82,10 @@ function lerCSVPaste(tipo, texto) {
   }
 }
 
-function lerAllInOne(input){const f=input.files[0];if(!f)return;const st=document.getElementById('status-allinone'),rd=new FileReader();rd.onload=e=>{try{const secs=parseMultiSection(e.target.result);const ns=Object.keys(secs);if(!ns.length)throw new Error('Nenhuma seção encontrada.');ns.forEach(s=>IMPORT_CSVS[s]=secs[s]);st.textContent=`✓ ${ns.length} seção(ões): ${ns.join(', ')}`;st.className='import-status ok';st.style.display='block';}catch(err){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
+function lerAllInOne(input: any){const f=input.files[0];if(!f)return;const st=document.getElementById('status-allinone'),rd=new FileReader();rd.onload=e=>{try{const secs=parseMultiSection(e.target.result);const ns=Object.keys(secs);if(!ns.length)throw new Error('Nenhuma seção encontrada.');ns.forEach(s=>IMPORT_CSVS[s]=secs[s]);st.textContent=`✓ ${ns.length} seção(ões): ${ns.join(', ')}`;st.className='import-status ok';st.style.display='block';}catch(err){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
 
 // Lê CSV all-in-one colado como texto
-function lerAllInOnePaste(texto) {
+function lerAllInOnePaste(texto: any) {
   const st = document.getElementById('status-allinone');
   if (!texto || !texto.trim()) { if(st) st.style.display='none'; return; }
   try {
@@ -100,7 +100,7 @@ function lerAllInOnePaste(texto) {
 }
 
 // Lê JSON de mapas via input de arquivo
-function lerMapasJSONFile(input) {
+function lerMapasJSONFile(input: any) {
   const file = input.files[0];
   if (!file) return;
   const st = document.getElementById('status-mapas');
@@ -112,24 +112,24 @@ function lerMapasJSONFile(input) {
 }
 
 // Lê JSON de mapas via texto colado
-function lerMapasJSONPaste(texto) {
+function lerMapasJSONPaste(texto: any) {
   const st = document.getElementById('status-mapas');
   if (!texto || !texto.trim()) { _mapasImportJSON = null; if(st) st.style.display='none'; return; }
   _processarMapasJSONTexto(texto, st);
 }
 
-function _processarMapasJSONTexto(texto, st) {
+function _processarMapasJSONTexto(texto: any, st: any) {
   try {
     const raw = texto.replace(/^```[a-z]*\n?/,'').replace(/```$/,'').trim();
     const data = JSON.parse(raw);
     const arr = Array.isArray(data) ? data : (data.mapas ? data.mapas : [data]);
     if (!arr.length || !arr[0].map_id) throw new Error('JSON inválido: cada mapa precisa de map_id');
 
-    const comSvg    = arr.filter(m => m.svg && m.svg.includes('<svg')).length;
-    const comConfig = arr.filter(m => m.largura_total || m.escala_val).length;
+    const comSvg    = arr.filter((m: any) => m.svg && m.svg.includes('<svg')).length;
+    const comConfig = arr.filter((m: any) => m.largura_total || m.escala_val).length;
     _mapasImportJSON = arr;
 
-    const labels = arr.map(m => {
+    const labels = arr.map((m: any) => {
       const tipoIcon = m.tipo === 'geral' ? '🌍' : '🏰';
       const dims = m.largura_total ? ` ${m.largura_total}×${m.altura_total}cél` : '';
       return `${tipoIcon} ${m.nome||m.map_id}${dims}`;
@@ -153,7 +153,7 @@ function _processarMapasJSONTexto(texto, st) {
 async function importarSoMapas() {
   const rpgId = document.getElementById('mapas-rpg-select').value;
   const st = document.getElementById('status-mapas');
-  const mostrarSt = (msg, tipo) => {
+  const mostrarSt = (msg: any, tipo: any) => {
     if (st) { st.innerHTML = `<span style="color:var(--${tipo==='ok'?'sucesso':'perigo'})">${msg}</span>`; st.style.display='block'; }
   };
   if (!rpgId) { mostrarSt('✗ Selecione um RPG antes de importar', 'err'); return; }
@@ -166,7 +166,7 @@ async function importarSoMapas() {
     if (RPG_DATA?.rpgId === rpgId) {
       try {
         const mapasRaw = await sb(`mapas?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,rpg_id,map_id,nome,escala_val,escala_unit,grid,parent_map_id,tipo,zona_x,zona_y,zona_w_percent,zona_h_percent,largura_total,altura_total,largura_real,altura_real,representar_pct,locais,render_data&order=id`);
-        RPG_DATA.mapas = (mapasRaw||[]).map(m=>({
+        RPG_DATA.mapas = (mapasRaw||[]).map((m: any)=>({
           id: m.id, rpg_id: rpgId,
           mapa:{map_id:m.map_id,nome:m.nome,img_url:'',escala_val:m.escala_val??1.5,escala_unit:m.escala_unit||'m',grid:m.grid??20,parent_map_id:m.parent_map_id||null,tipo:m.tipo||'geral',zona_x:m.zona_x,zona_y:m.zona_y,zona_w_percent:m.zona_w_percent,zona_h_percent:m.zona_h_percent,largura_total:m.largura_total||null,altura_total:m.altura_total||null,largura_real:m.largura_real||null,altura_real:m.altura_real||null,representar_pct:m.representar_pct??100,locais:Array.isArray(m.locais)?m.locais:[],render_data:m.render_data||null}
         }));
@@ -182,8 +182,8 @@ async function importarSoMapas() {
   }
 }
 
-function parseMultiSection(text){const res={},lines=text.split(/\r?\n/);let cur=null,buf=[];const flush=()=>{if(cur&&buf.length>1){const p=parseCSV(buf.join('\n'));p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));res[cur]=p;}};lines.forEach(l=>{const m=l.match(/^#SECTION:([\w-]+)/i);if(m){flush();cur=m[1];buf=[];}else if(!l.startsWith('#')&&l.trim())buf.push(l);});flush();return res;}
-function parseCSV(text){
+function parseMultiSection(text: any){const res: Record<string, any> = {},lines=text.split(/\r?\n/);let cur: any=null,buf: any[]=[];const flush=()=>{if(cur&&buf.length>1){const p=parseCSV(buf.join('\n'));p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));res[cur]=p;}};lines.forEach((l: any)=>{const m=l.match(/^#SECTION:([\w-]+)/i);if(m){flush();cur=m[1];buf=[];}else if(!l.startsWith('#')&&l.trim())buf.push(l);});flush();return res;}
+function parseCSV(text: any){
   const ls=text.trim().split(/\r?\n/);
   if(!ls.length)return[];
   const h=parseCSVLine(ls[0]);
@@ -196,13 +196,13 @@ function parseCSV(text){
     if(v.length < h.length){
       console.warn(`[parseCSV] Linha ${ri+1} tem ${v.length} campo(s) mas o cabeçalho tem ${h.length}. Campos faltando serão strings vazias. Verifique colunas: ${h.slice(v.length).join(', ')}`);
     }
-    const o={};
+    const o: Record<string, any> = {};
     h.forEach((k,i)=>o[k.trim()]=(v[i]||'').trim());
     rows.push(o);
   }
   return rows;
 }
-function parseCSVLine(line){
+function parseCSVLine(line: any){
   const r=[];let cur='',inQ=false;
   for(let i=0;i<line.length;i++){
     const ch=line[i];
@@ -240,7 +240,7 @@ async function enviarImport(){
 }
 
 
-function showSt(id,msg,tipo){const el=document.getElementById(id);el.textContent=msg;el.className='import-status '+tipo;el.style.display='block';}
+function showSt(id: any,msg: any,tipo: any){const el=document.getElementById(id);el.textContent=msg;el.className='import-status '+tipo;el.style.display='block';}
 
 
 
@@ -248,7 +248,7 @@ function showSt(id,msg,tipo){const el=document.getElementById(id);el.textContent
 
 // ── SPECS TÉCNICOS — alinhados ao SQL atual ───────────────────
 // Tabelas: rpg_registry, characters, skills, lore, attr_defs, mapas
-const SPECS={
+const SPECS: Record<string, any> = {
 
 // ─── #SECTION:config ──────────────────────────────────────────
 // Salvo em: rpg_registry.theme_json (buildTheme)
@@ -1536,11 +1536,11 @@ Regras absolutas:
 // ══════════════════════════════════════════════════════════════
 
 // ── Alias de compatibilidade: lerMapasJSON() delega para lerMapasJSONFile() ─────────────────────
-let _mapasImportJSON = null;
-function lerMapasJSON(input) { lerMapasJSONFile(input); }
+let _mapasImportJSON: any = null;
+function lerMapasJSON(input: any) { lerMapasJSONFile(input); }
 
 // ── Importa mapas JSON dentro do importRPG (upsert) ─────────────────────
-async function importarMapasJSON(rpgId, mapas) {
+async function importarMapasJSON(rpgId: any, mapas: any) {
   for (const m of mapas) {
     // ── Suporte a SVG embutido (formato antigo SVG+JSON) ──
     let img_url = m.img_url || '';
@@ -1670,7 +1670,7 @@ function copiarPromptMapaMesaSVG() {
 async function importarMapasMesaPaste() {
   const paste = (document.getElementById('ia-mapa-mesa-paste')?.value || '').trim();
   const st = document.getElementById('ia-mapa-mesa-status');
-  const showSt = (msg, tipo) => {
+  const showSt = (msg: any, tipo: any) => {
     if (!st) return;
     st.style.display = 'block';
     st.style.color = tipo === 'ok' ? 'var(--sucesso)' : 'var(--perigo)';
@@ -1693,7 +1693,7 @@ async function importarMapasMesaPaste() {
     await importarMapasJSON(RPG_DATA.rpgId, arr);
     // Recarregar mapas em memória
     const mapasRaw = await sb(`mapas?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&select=id,rpg_id,map_id,nome,escala_val,escala_unit,grid,parent_map_id,tipo,zona_x,zona_y,zona_w_percent,zona_h_percent,largura_total,altura_total,largura_real,altura_real,representar_pct,locais,render_data&order=id`);
-    RPG_DATA.mapas = (mapasRaw || []).map(m => ({
+    RPG_DATA.mapas = (mapasRaw || []).map((m: any) => ({
       mapa: { map_id: m.map_id, nome: m.nome, img_url: '', escala_val: m.escala_val ?? 1.5, escala_unit: m.escala_unit || 'm', grid: m.grid ?? 20, parent_map_id: m.parent_map_id || null, tipo: m.tipo || 'geral', zona_x: m.zona_x, zona_y: m.zona_y, zona_w_percent: m.zona_w_percent, zona_h_percent: m.zona_h_percent, largura_total: m.largura_total || null, altura_total: m.altura_total || null, largura_real: m.largura_real || null, altura_real: m.altura_real || null, representar_pct: m.representar_pct ?? 100, locais: Array.isArray(m.locais) ? m.locais : [], render_data: m.render_data || null }
     }));
     showSt(`✓ ${arr.length} mapa(s) importado(s)! Adicione a imagem depois via edição do mapa.`, 'ok');
@@ -1706,9 +1706,9 @@ async function importarMapasMesaPaste() {
 }
 
 // ── Gera prompt de config de mapas (sem SVG) ─────────────────────
-function gerarPromptMapasConfig(contexto, mapasExistentes) {
+function gerarPromptMapasConfig(contexto: any, mapasExistentes: any) {
   const listaMapas = (mapasExistentes || []).length
-    ? (mapasExistentes).map(l => {
+    ? (mapasExistentes).map((l: any) => {
         const tipo = l.mapa.tipo === 'geral' ? '🌍 GERAL' : '🏰 LOCAL';
         const dims = l.mapa.largura_total ? ` (${l.mapa.largura_total}×${l.mapa.altura_total} cél, ${l.mapa.escala_val}${l.mapa.escala_unit}/cél)` : '';
         return `  • ${tipo} "${l.mapa.nome}" [${l.mapa.map_id}]${dims}`;
@@ -1738,7 +1738,7 @@ ${SPEC_MAPAS_CONFIG}`;
 // Chamado por renderMapaViewer quando render_data existe e img_url é vazio
 // ══════════════════════════════════════════════════════════════
 
-function mapaRenderCanvas(m) {
+function mapaRenderCanvas(m: any) {
   const rd = m.render_data;
   if (!rd) return false;
 
@@ -1765,7 +1765,7 @@ function mapaRenderCanvas(m) {
   const _colsPOI = Math.ceil(W / _TS_POI);
   const _rowsPOI = Math.ceil(H / _TS_POI);
   const _ICONS_CIDADE = new Set(['🏰','🏯','🏙','🌆','🌇','🏘','🏚','🏛','🕌','⛪','🏟']);
-  (rd.pontos_de_interesse || []).forEach(p => {
+  (rd.pontos_de_interesse || []).forEach((p: any) => {
     const px = (p.x_percent / 100) * W;
     const py = (p.y_percent / 100) * H;
     const isCidade = _ICONS_CIDADE.has(p.icone) || p.tipo === 'cidade' || p.tipo === 'vila' || p.tipo === 'aldeia' || p.tipo === 'capital';
@@ -1809,7 +1809,7 @@ function mapaRenderCanvas(m) {
   });
 
   // Saídas
-  (rd.saidas || []).forEach(s => {
+  (rd.saidas || []).forEach((s: any) => {
     const x = (s.x_percent / 100) * W;
     const y = (s.y_percent / 100) * H;
     ctx.save();
@@ -1829,7 +1829,7 @@ function mapaRenderCanvas(m) {
 }
 
 // ── CIDADE ───────────────────────────────────────────────────
-function _renderCidade(ctx, rd, W, H) {
+function _renderCidade(ctx: any, rd: any, W: any, H: any) {
   const TS = 6;
   const cols = Math.ceil(W / TS), rows = Math.ceil(H / TS);
   const tileType = new Uint8Array(cols * rows);
@@ -1839,22 +1839,22 @@ function _renderCidade(ctx, rd, W, H) {
   const edificios = rd.edificios || [];
   const muros = rd.muros || [];
   for (let i = 0; i < tileType.length; i++) tileType[i] = 1;
-  (rd.pracas || []).forEach(p => {
+  (rd.pracas || []).forEach((p: any) => {
     const px1=(p.x/100)*W, py1=(p.y/100)*H, pw=(p.w/100)*W, ph=(p.h/100)*H;
     const tx1=Math.floor(px1/TS), ty1=Math.floor(py1/TS), tx2=Math.ceil((px1+pw)/TS), ty2=Math.ceil((py1+ph)/TS);
     for(let ty=ty1;ty<ty2;ty++) for(let tx=tx1;tx<tx2;tx++) if(tx>=0&&ty>=0&&tx<cols&&ty<rows) tileType[ty*cols+tx]=4;
   });
-  quarteiroes.forEach((q,qi) => {
+  quarteiroes.forEach((q: any,qi: any) => {
     const px1=(q.x/100)*W, py1=(q.y/100)*H, pw=(q.w/100)*W, ph=(q.h/100)*H;
     const tx1=Math.floor(px1/TS), ty1=Math.floor(py1/TS), tx2=Math.ceil((px1+pw)/TS), ty2=Math.ceil((py1+ph)/TS);
     for(let ty=ty1;ty<ty2;ty++) for(let tx=tx1;tx<tx2;tx++) if(tx>=0&&ty>=0&&tx<cols&&ty<rows){tileType[ty*cols+tx]=2;tileRoom[ty*cols+tx]=qi;}
   });
-  edificios.forEach((e,ei) => {
+  edificios.forEach((e: any,ei: any) => {
     const px1=(e.x/100)*W, py1=(e.y/100)*H, pw=(e.w/100)*W, ph=(e.h/100)*H;
     const tx1=Math.floor(px1/TS), ty1=Math.floor(py1/TS), tx2=Math.ceil((px1+pw)/TS), ty2=Math.ceil((py1+ph)/TS);
     for(let ty=ty1;ty<ty2;ty++) for(let tx=tx1;tx<tx2;tx++) if(tx>=0&&ty>=0&&tx<cols&&ty<rows){tileType[ty*cols+tx]=3;tileRoom[ty*cols+tx]=1000+ei;}
   });
-  muros.forEach(m => {
+  muros.forEach((m: any) => {
     const x1=(m.de[0]/100)*W, y1=(m.de[1]/100)*H, x2=(m.para[0]/100)*W, y2=(m.para[1]/100)*H;
     const len=Math.sqrt((x2-x1)**2+(y2-y1)**2), steps=Math.ceil(len/(TS*0.5));
     for(let s=0;s<=steps;s++){
@@ -1865,9 +1865,9 @@ function _renderCidade(ctx, rd, W, H) {
       }
     }
   });
-  const TIPOS_COR={residencial:{r:60,g:48,b:32},comercial:{r:75,g:58,b:30},nobre:{r:65,g:55,b:40},militar:{r:45,g:50,b:45},religioso:{r:55,g:55,b:65},porto:{r:35,g:48,b:60},pobre:{r:48,g:40,b:28}};
-  const qRgbs=quarteiroes.map(q=>q.cor?_hex2rgb(q.cor):(TIPOS_COR[q.tipo]||{r:58,g:46,b:30}));
-  const eRgbs=edificios.map(e=>e.cor?_hex2rgb(e.cor):{r:80,g:65,b:42});
+  const TIPOS_COR: Record<string, any> = {residencial:{r:60,g:48,b:32},comercial:{r:75,g:58,b:30},nobre:{r:65,g:55,b:40},militar:{r:45,g:50,b:45},religioso:{r:55,g:55,b:65},porto:{r:35,g:48,b:60},pobre:{r:48,g:40,b:28}};
+  const qRgbs=quarteiroes.map((q: any)=>q.cor?_hex2rgb(q.cor):(TIPOS_COR[q.tipo]||{r:58,g:46,b:30}));
+  const eRgbs=edificios.map((e: any)=>e.cor?_hex2rgb(e.cor):{r:80,g:65,b:42});
   for(let ty=0;ty<rows;ty++){
     for(let tx=0;tx<cols;tx++){
       const tipo=tileType[ty*cols+tx], px=tx*TS, py=ty*TS;
@@ -1880,7 +1880,7 @@ function _renderCidade(ctx, rd, W, H) {
       else if(tipo===3){const idx=ri-1000, c=idx>=0&&idx<eRgbs.length?eRgbs[idx]:{r:80,g:65,b:42};_drawTile(ctx,px,py,TS,c.r,c.g,c.b,n,1);}
     }
   }
-  ruas.forEach(r => {
+  ruas.forEach((r: any) => {
     const x1=(r.de[0]/100)*W, y1=(r.de[1]/100)*H, x2=(r.para[0]/100)*W, y2=(r.para[1]/100)*H;
     const len=Math.sqrt((x2-x1)**2+(y2-y1)**2), steps=Math.ceil(len/(TS*0.4));
     const larg=Math.max(1,Math.round((r.largura||3)*0.5)), ang=Math.atan2(y2-y1,x2-x1)+Math.PI/2;
@@ -1894,13 +1894,13 @@ function _renderCidade(ctx, rd, W, H) {
       }
     }
   });
-  quarteiroes.forEach(q => {
+  quarteiroes.forEach((q: any) => {
     const cx=((q.x+q.w/2)/100)*W, cy=((q.y+q.h/2)/100)*H;
     ctx.save();ctx.font='8px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.shadowColor='rgba(0,0,0,0.95)';ctx.shadowBlur=4;ctx.fillStyle='rgba(240,220,180,0.8)';
     ctx.fillText(q.nome,cx,cy);ctx.restore();
   });
-  edificios.forEach(e => {
+  edificios.forEach((e: any) => {
     const cx=((e.x+e.w/2)/100)*W, cy=((e.y+e.h/2)/100)*H;
     ctx.save();
     if(e.icone){ctx.font='10px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor='rgba(0,0,0,0.95)';ctx.shadowBlur=4;ctx.fillText(e.icone,cx,cy-5);}
@@ -1915,13 +1915,13 @@ function _renderCidade(ctx, rd, W, H) {
 // ══════════════════════════════════════════════════════════════
 
 // Hash determinístico (sem Math.random — tiles consistentes entre renders)
-function _th(x, y) {
+function _th(x: any, y: any) {
   let h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return h - Math.floor(h);
 }
 
 // Ruído bilinear suavizado
-function _tnoise(x, y) {
+function _tnoise(x: any, y: any) {
   const xi = Math.floor(x), yi = Math.floor(y);
   const xf = x - xi, yf = y - yi;
   const a = _th(xi,yi), b = _th(xi+1,yi), c = _th(xi,yi+1), d = _th(xi+1,yi+1);
@@ -1930,14 +1930,14 @@ function _tnoise(x, y) {
 }
 
 // Converter hex para {r,g,b}
-function _hex2rgb(hex) {
+function _hex2rgb(hex: any) {
   const h = hex.replace('#','');
-  const n = parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h, 16);
+  const n = parseInt(h.length===3 ? h.split('').map((c: any)=>c+c).join('') : h, 16);
   return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
 }
 
 // Desenhar um tile com variação de noise
-function _drawTile(ctx, px, py, ts, r, g, b, noiseVal, alpha) {
+function _drawTile(ctx: any, px: any, py: any, ts: any, r: any, g: any, b: any, noiseVal: any, alpha: any) {
   const v = 0.82 + noiseVal * 0.36;
   const ri = Math.min(255, Math.max(0, Math.round(r * v)));
   const gi = Math.min(255, Math.max(0, Math.round(g * v)));
@@ -1949,7 +1949,7 @@ function _drawTile(ctx, px, py, ts, r, g, b, noiseVal, alpha) {
 }
 
 // ── GERAL / ÁREA ABERTA — Voronoi tile biomes ─────────────────
-function _renderBiomasTile(ctx, rd, W, H) {
+function _renderBiomasTile(ctx: any, rd: any, W: any, H: any) {
   const TS = 8; // tamanho do tile em px
   const biomas = rd.biomas || [];
   if (!biomas.length) {
@@ -1959,7 +1959,7 @@ function _renderBiomasTile(ctx, rd, W, H) {
   }
 
   // Centro de cada bioma com perturbação para bordas orgânicas
-  const centros = biomas.map(b => {
+  const centros = biomas.map((b: any) => {
     const cx = ((b.x + b.w / 2) / 100) * W;
     const cy = ((b.y + b.h / 2) / 100) * H;
     const c  = _hex2rgb(b.cor || '#2a5018');
@@ -1982,7 +1982,7 @@ function _renderBiomasTile(ctx, rd, W, H) {
       const pertY = (_th(tx * 2.9, ty * 8.7) - 0.5) * TS * 2.5;
       const pwx = wx + pertX, pwy = wy + pertY;
       let best = -1, bestDist = Infinity;
-      centros.forEach((c, i) => {
+      centros.forEach((c: any, i: any) => {
         const dx = pwx - c.cx, dy = pwy - c.cy;
         const dist = dx*dx + dy*dy;
         if (dist < bestDist) { bestDist = dist; best = i; }
@@ -2012,7 +2012,7 @@ function _renderBiomasTile(ctx, rd, W, H) {
   }
 
   // Estradas como faixa de tiles terra
-  (rd.estradas || []).forEach(e => {
+  (rd.estradas || []).forEach((e: any) => {
     const x1=(e.de[0]/100)*W, y1=(e.de[1]/100)*H;
     const x2=(e.para[0]/100)*W, y2=(e.para[1]/100)*H;
     const len=Math.sqrt((x2-x1)**2+(y2-y1)**2);
@@ -2031,7 +2031,7 @@ function _renderBiomasTile(ctx, rd, W, H) {
   });
 
   // Rios como faixa azul
-  (rd.rios || []).forEach(r => {
+  (rd.rios || []).forEach((r: any) => {
     const x1=(r.de[0]/100)*W, y1=(r.de[1]/100)*H;
     const x2=(r.para[0]/100)*W, y2=(r.para[1]/100)*H;
     const len=Math.sqrt((x2-x1)**2+(y2-y1)**2);
@@ -2049,7 +2049,7 @@ function _renderBiomasTile(ctx, rd, W, H) {
   });
 
   // Labels dos biomas
-  centros.forEach(c => {
+  centros.forEach((c: any) => {
     ctx.save();
     ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -2060,16 +2060,16 @@ function _renderBiomasTile(ctx, rd, W, H) {
   });
 }
 
-function _renderGeral(ctx, rd, W, H) {
+function _renderGeral(ctx: any, rd: any, W: any, H: any) {
   _renderBiomasTile(ctx, rd, W, H);
 }
 
-function _renderAreaAberta(ctx, rd, W, H) {
+function _renderAreaAberta(ctx: any, rd: any, W: any, H: any) {
   _renderBiomasTile(ctx, rd, W, H);
 }
 
 // ── DUNGEON — tiles de pedra, piso por sala, corredores ───────
-function _renderDungeon(ctx, rd, W, H) {
+function _renderDungeon(ctx: any, rd: any, W: any, H: any) {
   const TS = 8;
   const comodos = rd.comodos || [];
 
@@ -2085,22 +2085,22 @@ function _renderDungeon(ctx, rd, W, H) {
 
   if (!comodos.length) return;
 
-  const xs  = comodos.map(c => c.x), ys  = comodos.map(c => c.y);
-  const x2s = comodos.map(c => c.x + c.w), y2s = comodos.map(c => c.y + c.h);
+  const xs  = comodos.map((c: any) => c.x), ys  = comodos.map((c: any) => c.y);
+  const x2s = comodos.map((c: any) => c.x + c.w), y2s = comodos.map((c: any) => c.y + c.h);
   const minX = Math.min(...xs), minY = Math.min(...ys);
   const maxX = Math.max(...x2s), maxY = Math.max(...y2s);
   const MARGIN = 24;
   const sc = Math.min((W - MARGIN*2) / (maxX - minX || 1), (H - MARGIN*2) / (maxY - minY || 1));
   const offX = MARGIN + ((W - MARGIN*2) - (maxX - minX) * sc) / 2;
   const offY = MARGIN + ((H - MARGIN*2) - (maxY - minY) * sc) / 2;
-  const toX = x => offX + (x - minX) * sc;
-  const toY = y => offY + (y - minY) * sc;
+  const toX = (x: any) => offX + (x - minX) * sc;
+  const toY = (y: any) => offY + (y - minY) * sc;
 
   // Mapa de tipos de tile
   const tileType = new Uint8Array(cols * rows); // 0=pedra, 1=piso, 2=corredor
   const tileColor = new Array(cols * rows).fill(null);
 
-  comodos.forEach(c => {
+  comodos.forEach((c: any) => {
     const tipo = c.tipo === 'corredor' ? 2 : 1;
     const cor  = c.cor ? _hex2rgb(c.cor) : null;
     const tx1 = Math.floor(toX(c.x)   / TS);
@@ -2161,7 +2161,7 @@ function _renderDungeon(ctx, rd, W, H) {
   }
 
   // Labels dos cômodos
-  comodos.forEach(c => {
+  comodos.forEach((c: any) => {
     const cx = toX(c.x + c.w/2), cy = toY(c.y + c.h/2);
     const rw = c.w * sc, rh = c.h * sc;
     if (rw < 16 || rh < 10) return;
@@ -2176,7 +2176,7 @@ function _renderDungeon(ctx, rd, W, H) {
 }
 
 // ── EDIFÍCIO — tiles de tijolo, pisos por cômodo ──────────────
-function _renderEdificio(ctx, rd, W, H) {
+function _renderEdificio(ctx: any, rd: any, W: any, H: any) {
   const TS = 8;
   const comodos = rd.comodos || [];
 
@@ -2192,21 +2192,21 @@ function _renderEdificio(ctx, rd, W, H) {
 
   if (!comodos.length) return;
 
-  const xs  = comodos.map(c => c.x), ys  = comodos.map(c => c.y);
-  const x2s = comodos.map(c => c.x + c.w), y2s = comodos.map(c => c.y + c.h);
+  const xs  = comodos.map((c: any) => c.x), ys  = comodos.map((c: any) => c.y);
+  const x2s = comodos.map((c: any) => c.x + c.w), y2s = comodos.map((c: any) => c.y + c.h);
   const minX = Math.min(...xs), minY = Math.min(...ys);
   const maxX = Math.max(...x2s), maxY = Math.max(...y2s);
   const MARGIN = 20;
   const sc = Math.min((W - MARGIN*2) / (maxX - minX || 1), (H - MARGIN*2) / (maxY - minY || 1));
   const offX = MARGIN + ((W - MARGIN*2) - (maxX - minX) * sc) / 2;
   const offY = MARGIN + ((H - MARGIN*2) - (maxY - minY) * sc) / 2;
-  const toX = x => offX + (x - minX) * sc;
-  const toY = y => offY + (y - minY) * sc;
+  const toX = (x: any) => offX + (x - minX) * sc;
+  const toY = (y: any) => offY + (y - minY) * sc;
 
   const tileType  = new Uint8Array(cols * rows); // 0=exterior, 1=parede, 2=piso
   const tileColor = new Array(cols * rows).fill(null);
 
-  comodos.forEach(c => {
+  comodos.forEach((c: any) => {
     const cor = c.cor ? _hex2rgb(c.cor) : null;
     const tx1 = Math.floor(toX(c.x)       / TS);
     const ty1 = Math.floor(toY(c.y)       / TS);
@@ -2252,7 +2252,7 @@ function _renderEdificio(ctx, rd, W, H) {
   }
 
   // Labels dos cômodos
-  comodos.forEach(c => {
+  comodos.forEach((c: any) => {
     const cx = toX(c.x + c.w/2), cy = toY(c.y + c.h/2);
     const rw = c.w * sc, rh = c.h * sc;
     if (rw < 16 || rh < 10) return;
@@ -2268,7 +2268,7 @@ function _renderEdificio(ctx, rd, W, H) {
 
 
 
-function _roundRect(ctx, x, y, w, h, r) {
+function _roundRect(ctx: any, x: any, y: any, w: any, h: any, r: any) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
@@ -2368,7 +2368,7 @@ Câmera ortográfica com rotação Z 45° + inclinação X ~60°. Sem ponto de f
   reforçando a sensação 3D do Diablo sem quebrar a projeção paralela
 • NUNCA use perspectiva cônica (ponto de fuga único) — câmera ortográfica pura`;
 
-function gerarPromptMapasSVGInicio(contexto) {
+function gerarPromptMapasSVGInicio(contexto: any) {
   return `Você vai gerar os mapas iniciais de uma campanha de RPG para o sistema RPG Hub.
 Os mapas são SVGs embutidos num JSON — sem biomas pré-definidos, liberdade total de criação visual.
 
@@ -2398,9 +2398,9 @@ gráfica — gradientes, texturas, filtros, sombras. Siga o tom da campanha.
 ${SCHEMA_MAPA_SVG}`;
 }
 
-function gerarPromptMapasSVGAtualizacao(contexto, mapasExistentes) {
+function gerarPromptMapasSVGAtualizacao(contexto: any, mapasExistentes: any) {
   const listaMapas = mapasExistentes.length
-    ? mapasExistentes.map(l => {
+    ? mapasExistentes.map((l: any) => {
         const tipo = mapaGetTipo(l.mapa);
         const icon = tipo === 'tatico' ? '🗺 TÁTICO' : '🌍 MUNDO';
         return `  • ${icon} "${l.mapa.nome}" [${l.mapa.map_id}] (tipo: ${tipo})`;
@@ -2501,7 +2501,7 @@ window.copiarPromptPacoteSessao = function() {
   else fbCopy(texto, ()=>mostrarToast('📋 Prompt copiado!','ok'));
 };
 
-function copiarPromptSecao(secao){
+function copiarPromptSecao(secao: any){
  const isAt = IMPORT_MODE === 'atualizar';
  let texto;
  if (secao === 'completo') {
@@ -2538,12 +2538,12 @@ function copiarPromptSecao(secao){
  if (navigator.clipboard) navigator.clipboard.writeText(texto).then(copiar).catch(() => fbCopy(texto, copiar));
  else fbCopy(texto, copiar);
 }
-function fbCopy(t,cb){const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);if(cb)cb();}
+function fbCopy(t: any,cb: any){const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);if(cb)cb();}
 
 
 // ── UTILS ─────────────────────────────────────────────────────
-function salvarNav(screen, id=null){ try{ localStorage.setItem('rpghub_nav', JSON.stringify({screen,id})); }catch(e){} }
-function salvarAba(rpgId, aba){ try{ localStorage.setItem('rpghub_tab_'+rpgId, aba); }catch(e){} }
+function salvarNav(screen: any, id: any=null){ try{ localStorage.setItem('rpghub_nav', JSON.stringify({screen,id})); }catch(e){} }
+function salvarAba(rpgId: any, aba: any){ try{ localStorage.setItem('rpghub_tab_'+rpgId, aba); }catch(e){} }
 // ════════════════════════════════════════════════════════════════════
 // LAYOUT 2-COLUNAS DO MAPA — sidebar scrollável + mapa fixo
 // O CSS (#mapa-area-esq / #mapa-sidebar) faz o layout;
@@ -2674,7 +2674,7 @@ function _ctxSidebarLimpar() {
   if (p) p.innerHTML = '';
 }
 
-function abrirAba(id,btn){
+function abrirAba(id: any,btn: any){
   // Redirects: old tabs now unified in 'fichas'
   if (id === 'personagem' || id === 'atributos') {
     const fichasBtn = document.querySelector('.tab-btn[onclick*="fichas"]');
@@ -2698,7 +2698,7 @@ function abrirAba(id,btn){
   }
   if(RPG_DATA?.rpgId) salvarAba(RPG_DATA.rpgId, id);
 }
-function mostrarToast(msg,tipo?,_dur?){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(tipo||'');t.classList.add('visivel');setTimeout(()=>t.classList.remove('visivel'),2400);}
+function mostrarToast(msg: any,tipo?: any,_dur?: any){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(tipo||'');t.classList.add('visivel');setTimeout(()=>t.classList.remove('visivel'),2400);}
 
 if ('serviceWorker' in navigator) {
    window.addEventListener('load', () => {

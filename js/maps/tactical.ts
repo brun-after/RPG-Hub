@@ -11,12 +11,12 @@
 
 // ── Estado do editor de paredes/portas ───────────────────────────────────
 const WALLS_STATE = {
-  primeroPonto: null,   // snap point – aguardando 2º clique no modo parede
+  primeroPonto: null as any,   // snap point – aguardando 2º clique no modo parede
   configAtual: { cor: '#7ec8f0', largura: 3 },  // config aplicada à próxima parede
 };
 
 // ── Verificar se existe parede bloqueando o caminho col/row → col+dc/row+dr
-function paredeBloqueiaMovimento(mapId, colAtual, rowAtual, dc, dr) {
+function paredeBloqueiaMovimento(mapId: any, colAtual: any, rowAtual: any, dc: any, dr: any) {
   const mapa = _getMapaById(mapId);
   if (!mapa?.render_data?.paredes?.length) return false;
   const colDest = colAtual + dc;
@@ -45,7 +45,7 @@ function paredeBloqueiaMovimento(mapId, colAtual, rowAtual, dc, dr) {
 }
 
 // ── Verificar se há porta adjacente ao personagem ─────────────────────────
-function portaAdjacenteAo(mapId, col, row) {
+function portaAdjacenteAo(mapId: any, col: any, row: any) {
   const mapa = _getMapaById(mapId);
   if (!mapa?.render_data?.portas?.length) return null;
   return mapa.render_data.portas.find(p =>
@@ -54,7 +54,7 @@ function portaAdjacenteAo(mapId, col, row) {
 }
 
 // ── Ação de usar porta (toggle aberta/fechada + transição de mapa) ────────
-async function usarPorta(mapId, portaId, charNome?) {
+async function usarPorta(mapId: any, portaId: any, charNome?: any) {
   const mapa = _getMapaById(mapId);
   if (!mapa?.render_data?.portas) return;
   const porta = mapa.render_data.portas.find(p => p.id === portaId);
@@ -86,7 +86,7 @@ async function usarPorta(mapId, portaId, charNome?) {
   }
 }
 
-async function _portaTransportarChar(charNome, porta) {
+async function _portaTransportarChar(charNome: any, porta: any) {
   const char = (RPG_DATA?.characters||[]).find(c => c.nome === charNome);
   if (!char) return;
   if (!char.map_positions) char.map_positions = {};
@@ -121,15 +121,15 @@ async function _portaTransportarChar(charNome, porta) {
   }
 }
 
-function _charTemChave(charNome, mapId, chavePalavra) {
+function _charTemChave(charNome: any, mapId: any, chavePalavra: any) {
   if (!charNome) return false;
   const char = (RPG_DATA?.characters||[]).find(c => c.nome === charNome);
   const chaves = char?.custom_attrs?.chaves_coletadas || char?.custom_attrs?.chaves || [];
-  return chaves.some(k => (typeof k === 'string' ? k : k?.chave_palavra) === chavePalavra);
+  return chaves.some((k: any) => (typeof k === 'string' ? k : k?.chave_palavra) === chavePalavra);
 }
 
 // ── Renderizar paredes e portas no SVG do mapa ───────────────────────────
-function paredePorRenderizar(m) {
+function paredePorRenderizar(m: any) {
   const svg = document.getElementById('mapa-dist-svg');
   if (!svg) return;
 
@@ -148,7 +148,7 @@ function paredePorRenderizar(m) {
   const cH = H / rows;
 
   // Renderizar paredes
-  (rd.paredes || []).forEach(p => {
+  (rd.paredes || []).forEach((p: any) => {
     // Converter células para pixels
     let x1, y1, x2, y2;
     if (p.tipo === 'v') {
@@ -169,8 +169,8 @@ function paredePorRenderizar(m) {
       y2 = ((p.row2 ?? 0) + 0.5) * cH;
     }
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('x1', x1 as any); line.setAttribute('y1', y1 as any);
+    line.setAttribute('x2', x2 as any); line.setAttribute('y2', y2 as any);
     line.setAttribute('stroke', p.cor || '#7ec8f0');
     line.setAttribute('stroke-width', String(p.largura || 3));
     line.setAttribute('stroke-linecap', 'round');
@@ -188,7 +188,7 @@ function paredePorRenderizar(m) {
   });
 
   // Renderizar portas
-  (rd.portas || []).forEach(porta => {
+  (rd.portas || []).forEach((porta: any) => {
     const cx = ((porta.col ?? 0) + 0.5) * cW;
     const cy = ((porta.row ?? 0) + 0.5) * cH;
     const r = Math.min(cW, cH) * 0.35;
@@ -230,7 +230,7 @@ function paredePorRenderizar(m) {
 }
 
 // ── Snap de clique para borda de célula ──────────────────────────────────
-function _snapParede(xPx, yPx, canvas, mapa) {
+function _snapParede(xPx: any, yPx: any, canvas: any, mapa: any) {
   const cols = mapa.largura_total || 20;
   const rows = mapa.altura_total  || 20;
   const rect = canvas.getBoundingClientRect();
@@ -253,7 +253,7 @@ function _snapParede(xPx, yPx, canvas, mapa) {
 }
 
 // ── Gerar lista de segmentos entre dois pontos snap ───────────────────────
-function _gerarSegmentos(p1, p2) {
+function _gerarSegmentos(p1: any, p2: any) {
   const segs = [];
   if (p1.tipo === 'v' && p2.tipo === 'v' && p1.col === p2.col) {
     const r0 = Math.min(p1.row, p2.row), r1 = Math.max(p1.row, p2.row);
@@ -268,7 +268,7 @@ function _gerarSegmentos(p1, p2) {
 }
 
 // ── Adicionar parede (click no mapa em modo paredes) ─────────────────────
-function paredAdicionarPonto(xPx, yPx) {
+function paredAdicionarPonto(xPx: any, yPx: any) {
   const mapId = MAPA_STATE?.mapaAtualId;
   const mapa  = _getMapaById(mapId);
   if (!mapa) return;
@@ -305,7 +305,7 @@ function paredAdicionarPonto(xPx, yPx) {
   salvarRenderData(entry?.id, mapa.render_data);
 }
 
-function paredRemover(mapId, paredId) {
+function paredRemover(mapId: any, paredId: any) {
   const mapa = _getMapaById(mapId);
   if (!mapa?.render_data?.paredes) return;
   mapa.render_data.paredes = mapa.render_data.paredes.filter(p => p.id !== paredId);
@@ -315,7 +315,7 @@ function paredRemover(mapId, paredId) {
   salvarRenderData(entry?.id, mapa.render_data);
 }
 
-function portaAdicionar(col, row) {
+function portaAdicionar(col: any, row: any) {
   const mapId = MAPA_STATE?.mapaAtualId;
   const mapa = _getMapaById(mapId);
   if (!mapa) return;
@@ -345,7 +345,7 @@ function portaAdicionar(col, row) {
   salvarRenderData(entry?.id, mapa.render_data);
 }
 
-function portaEditar(mapId, portaId) {
+function portaEditar(mapId: any, portaId: any) {
   const mapa = _getMapaById(mapId);
   const porta = mapa?.render_data?.portas?.find(p => p.id === portaId);
   if (!porta) return;
@@ -362,7 +362,7 @@ function portaEditar(mapId, portaId) {
   salvarRenderData(entry?.id, mapa.render_data);
 }
 
-async function salvarRenderData(entryId, renderData) {
+async function salvarRenderData(entryId: any, renderData: any) {
   if (!entryId || !CURRENT_RPG) return;
   try {
     await sb('mapas?id=eq.' + entryId, {
@@ -413,7 +413,7 @@ window.ctxExecutarAcao = window.ctxExecutarAcao; // ensure global
 // ════════════════════════════════════════════════════════════════════════════
 
 const CENARIO_STATE = {
-  placement: null,  // {tipo, config} — aguardando clique no mapa
+  placement: null as any,  // {tipo, config} — aguardando clique no mapa
   tabAtiva: 'porta',
 };
 
@@ -439,7 +439,7 @@ function fecharPainelCenario() {
   }
 }
 
-function cenarioTab(tipo, btn) {
+function cenarioTab(tipo: any, btn: any) {
   CENARIO_STATE.tabAtiva = tipo;
   document.querySelectorAll('.cenario-tab').forEach(t => t.style.display = 'none');
   document.querySelectorAll('.cenario-tab-btn').forEach(b => {
@@ -464,8 +464,8 @@ async function cenarioBuscarItem() {
   const q = document.getElementById('cen-bau-item-busca').value.trim().toLowerCase();
   const lista = document.getElementById('cen-bau-item-lista');
   if (!q) { lista.innerHTML = ''; return; }
-  const defs = (INV?.itemDefs || []).filter(d => d.nome.toLowerCase().includes(q)).slice(0, 8);
-  lista.innerHTML = defs.map(d =>
+  const defs = (INV?.itemDefs || []).filter((d: any) => d.nome.toLowerCase().includes(q)).slice(0, 8);
+  lista.innerHTML = defs.map((d: any) =>
     `<div onclick="cenarioSelecionarItem('${d.id.toString().replace(/'/g,"\'")}','${d.nome.replace(/'/g,"\'")}','${d.icone||'📦'}')"
       style="padding:6px 10px;background:rgba(20,29,43,0.8);border:1px solid var(--borda);border-radius:6px;cursor:pointer;font-size:0.75rem;display:flex;align-items:center;gap:8px"
       onmouseover="this.style.borderColor='rgba(176,126,240,0.4)'" onmouseout="this.style.borderColor='var(--borda)'">
@@ -475,7 +475,7 @@ async function cenarioBuscarItem() {
   ).join('');
 }
 
-function cenarioSelecionarItem(id, nome, icone) {
+function cenarioSelecionarItem(id: any, nome: any, icone: any) {
   document.getElementById('cen-bau-item-id').value = id;
   document.getElementById('cen-bau-item-sel').textContent = icone + ' ' + nome + ' selecionado';
   document.getElementById('cen-bau-item-lista').innerHTML = '';
@@ -483,7 +483,7 @@ function cenarioSelecionarItem(id, nome, icone) {
 }
 
 // ── Ativar modo placement: aguarda clique no mapa ─────────────────────────
-function cenarioAtivarPlacement(tipo) {
+function cenarioAtivarPlacement(tipo: any) {
   // Coletar config do formulário
   let config: any = { tipo };
   if (tipo === 'porta') {
@@ -536,7 +536,7 @@ function cenarioAtivarPlacement(tipo) {
 }
 
 // ── Processar clique no mapa durante placement ────────────────────────────
-function cenarioHandleMapaClick(e, wrap) {
+function cenarioHandleMapaClick(e: any, wrap: any) {
   if (MAPA_STATE.toolMode !== 'cenario_placement') return false;
   const cfg = CENARIO_STATE.placement;
   if (!cfg) return false;
@@ -605,7 +605,7 @@ function cenarioRenderObjetos() {
   ].join('');
 }
 
-function cenarioRemoverObjeto(id) {
+function cenarioRemoverObjeto(id: any) {
   const mapId = MAPA_STATE?.mapaAtualId;
   const mapa = _getMapaById(mapId);
   if (!mapa?.render_data?.objetos) return;
@@ -618,13 +618,13 @@ function cenarioRemoverObjeto(id) {
 }
 
 // ── Adicionar item a baú existente ────────────────────────────────────────
-function cenarioAbrirBauEditor(bauId) {
+function cenarioAbrirBauEditor(bauId: any) {
   const mapa = _getMapaById(MAPA_STATE?.mapaAtualId);
   const bau = mapa?.render_data?.objetos?.find(o => o.id === bauId);
   if (!bau) return;
   const nome = prompt('Adicionar item ao bau: ' + bau.nome + ' (nome exato do catalogo):', '');
   if (!nome) return;
-  const def = (INV?.itemDefs||[]).find(d => d.nome.toLowerCase() === nome.trim().toLowerCase());
+  const def = (INV?.itemDefs||[]).find((d: any) => d.nome.toLowerCase() === nome.trim().toLowerCase());
   if (!def) { mostrarToast('Item não encontrado no catálogo', 'erro'); return; }
   if (!bau.loot_itens) bau.loot_itens = [];
   bau.loot_itens.push({ item_id: def.id, nome: def.nome, icone: def.icone||'📦', qtd: 1 });
@@ -636,7 +636,7 @@ function cenarioAbrirBauEditor(bauId) {
 }
 
 // ── Renderizar objetos do cenário no mapa ─────────────────────────────────
-function cenarioRenderObjetos_mapa(m) {
+function cenarioRenderObjetos_mapa(m: any) {
   const tokensEl = document.getElementById('mapa-tokens');
   if (!tokensEl) return;
   // Remover elementos anteriores
@@ -651,7 +651,7 @@ function cenarioRenderObjetos_mapa(m) {
   const cW = W / cols;
   const cH = H / rows;
 
-  objetos.forEach(o => {
+  objetos.forEach((o: any) => {
     if (o.coletada || o.aberto) return; // sumir após interação
     const el = document.createElement('div');
     el.className = 'cenario-obj mapa-token';
@@ -679,7 +679,7 @@ function cenarioRenderObjetos_mapa(m) {
 }
 
 // ── Interação com objeto de cenário ───────────────────────────────────────
-function cenarioInteragirObjeto(obj, mapId) {
+function cenarioInteragirObjeto(obj: any, mapId: any) {
   const mapa = _getMapaById(mapId);
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const charNome = TOKEN_CTRL.nomeSelecionado || RPG_DATA?.linked;
@@ -701,13 +701,13 @@ function cenarioInteragirObjeto(obj, mapId) {
   }
 }
 
-function _cenarioSalvarObj(mapa, entry) {
+function _cenarioSalvarObj(mapa: any, entry: any) {
   if (entry) entry.mapa.render_data = mapa.render_data;
   mapaRenderTokens(mapa);
   salvarRenderData(entry?.id, mapa.render_data);
 }
 
-function cenarioAbrirPorta(porta, mapId, charNome, mapa) {
+function cenarioAbrirPorta(porta: any, mapId: any, charNome: any, mapa: any) {
   const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (porta.trancada && !porta.aberta) {
     // Verificar se o personagem tem a chave
@@ -726,7 +726,7 @@ function cenarioAbrirPorta(porta, mapId, charNome, mapa) {
   _cenarioSalvarObj(mapa, entry);
 }
 
-function cenarioPegarChave(chave, mapId, charNome, mapa) {
+function cenarioPegarChave(chave: any, mapId: any, charNome: any, mapa: any) {
   if (chave.coletada) { mostrarToast('🗝 Esta chave já foi coletada', ''); return; }
   const char = RPG_DATA?.characters?.find(c => c.nome === charNome);
   if (!char) return;
@@ -749,7 +749,7 @@ function cenarioPegarChave(chave, mapId, charNome, mapa) {
   }
 }
 
-async function cenarioAbrirBau(bau, mapId, charNome, mapa) {
+async function cenarioAbrirBau(bau: any, mapId: any, charNome: any, mapa: any) {
   const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (bau.aberto) { mostrarToast('📭 ' + bau.nome + ' já foi aberto', ''); return; }
   if (bau.trancado) {
@@ -809,7 +809,7 @@ async function cenarioAbrirBau(bau, mapId, charNome, mapa) {
 }
 
 // ── Hook: objetos bloqueiam movimento (obstáculos) ────────────────────────
-function cenarioObstaculoBloqueiaMovimento(mapId, colDest, rowDest) {
+function cenarioObstaculoBloqueiaMovimento(mapId: any, colDest: any, rowDest: any) {
   const mapa = _getMapaById(mapId);
   const objetos = mapa?.render_data?.objetos || [];
   return objetos.some(o => {
@@ -872,11 +872,11 @@ window.ctxExecutarAcao = function(botao) {
 //                                  aberto? }
 // ════════════════════════════════════════════════════════════════════════════
 const CENA_ED = {
-  ferramenta: null,
-  primeroPonto: null,
-  mapa: null,
-  undoStack: [],
-  cfgBauItens: [],  // itens selecionados para o baú em configuração
+  ferramenta: null as any,
+  primeroPonto: null as any,
+  mapa: null as any,
+  undoStack: [] as any[],
+  cfgBauItens: [] as any[],  // itens selecionados para o baú em configuração
 };
 
 function abrirEditorCena() {
@@ -900,11 +900,11 @@ function fecharEditorCena() {
   document.getElementById('modal-cena-overlay').style.display = 'none';
 }
 
-function cenaSetFerramenta(f) {
+function cenaSetFerramenta(f: any) {
   CENA_ED.ferramenta = f;
   CENA_ED.primeroPonto = null;
   _cenaBotoesAtualizar();
-  const instrucoes = {
+  const instrucoes: Record<string, any> = {
     parede: '🧱 Clique no 1º ponto, depois no 2º para criar segmento de parede',
     porta: '🚪 Clique em uma célula para posicionar a porta',
     porta_trancada: '🔒 Clique em uma célula para posicionar a porta trancada',
@@ -947,7 +947,7 @@ function cenaRenderizarCanvas() {
   cenaRenderizarSVG();
 }
 
-function cenaGrade(ctx, m, W, H) {
+function cenaGrade(ctx: any, m: any, W: any, H: any) {
   const cols = m.largura_total || 20;
   const rows = m.altura_total  || 20;
   const cW = W/cols, cH = H/rows;
@@ -971,35 +971,35 @@ function cenaRenderizarSVG() {
   const rd = m.render_data || {};
 
   // Paredes
-  (rd.paredes||[]).forEach(p => {
+  (rd.paredes||[]).forEach((p: any) => {
     let x1,y1,x2,y2;
     if (p.tipo === 'v') { x1=x2=p.col*cW; y1=p.row*cH; y2=(p.row+1)*cH; }
     else if (p.tipo === 'h') { y1=y2=p.row*cH; x1=p.col*cW; x2=(p.col+1)*cW; }
     else { x1=(p.col1+.5)*cW; y1=(p.row1+.5)*cH; x2=(p.col2+.5)*cW; y2=(p.row2+.5)*cH; }
     const line = _cenaSvgEl('line',{x1,y1,x2,y2,stroke:'#7ec8f0','stroke-width':4,'stroke-linecap':'round',opacity:.9});
     line.style.cursor='pointer';
-    line.addEventListener('click', e => { e.stopPropagation(); if(CENA_ED.ferramenta==='remover') cenaRemoverParede(p.id); });
+    line.addEventListener('click', (e: any) => { e.stopPropagation(); if(CENA_ED.ferramenta==='remover') cenaRemoverParede(p.id); });
     svg.appendChild(line);
     // Hit area mais larga
     const hit = _cenaSvgEl('line',{x1,y1,x2,y2,stroke:'transparent','stroke-width':12});
     hit.style.cursor='pointer';
-    hit.addEventListener('click', e => { e.stopPropagation(); if(CENA_ED.ferramenta==='remover') cenaRemoverParede(p.id); });
+    hit.addEventListener('click', (e: any) => { e.stopPropagation(); if(CENA_ED.ferramenta==='remover') cenaRemoverParede(p.id); });
     svg.appendChild(hit);
   });
 
   // Portas e objetos
-  const renderObj = (cx,cy,emoji,cor,id,tipo) => {
+  const renderObj = (cx: any,cy: any,emoji: any,cor: any,id: any,tipo: any) => {
     const r = Math.min(cW,cH)*0.38;
     const circ = _cenaSvgEl('circle',{cx,cy,r,fill:cor,'stroke':'rgba(255,255,255,0.2)','stroke-width':1.5});
     const txt = _cenaSvgEl('text',{x:cx,y:cy+5,'text-anchor':'middle','font-size':Math.round(r*1.4)});
     txt.textContent = emoji;
     circ.style.cursor='pointer'; txt.style.cursor='pointer';
-    const handler = e => { e.stopPropagation(); if(CENA_ED.ferramenta==='remover') cenaRemoverObj(id,tipo); };
+    const handler = (e: any) => { e.stopPropagation(); if(CENA_ED.ferramenta==='remover') cenaRemoverObj(id,tipo); };
     circ.addEventListener('click',handler); txt.addEventListener('click',handler);
     svg.appendChild(circ); svg.appendChild(txt);
   };
 
-  (rd.portas||[]).forEach(p => {
+  (rd.portas||[]).forEach((p: any) => {
     const cx=(p.col+.5)*cW, cy=(p.row+.5)*cH;
     const emoji = p.trancada ? '🔒' : p.aberta ? '🚪' : '🚪';
     const cor = p.trancada ? 'rgba(192,57,43,0.35)' : 'rgba(200,168,75,0.25)';
@@ -1010,10 +1010,10 @@ function cenaRenderizarSVG() {
     svg.appendChild(lbl);
   });
 
-  (rd.objetos||[]).forEach(o => {
+  (rd.objetos||[]).forEach((o: any) => {
     const cx=(o.col+.5)*cW, cy=(o.row+.5)*cH;
-    const emap = { chave:'🗝', blocker:'🪨', bau: o.aberto?'🪣':'📦' };
-    const cmap = { chave:'rgba(200,168,75,0.25)', blocker:'rgba(50,50,70,0.6)', bau:'rgba(200,168,75,0.2)' };
+    const emap: Record<string, any> = { chave:'🗝', blocker:'🪨', bau: o.aberto?'🪣':'📦' };
+    const cmap: Record<string, any> = { chave:'rgba(200,168,75,0.25)', blocker:'rgba(50,50,70,0.6)', bau:'rgba(200,168,75,0.2)' };
     renderObj(cx,cy,emap[o.tipo]||'❓',cmap[o.tipo]||'rgba(50,50,70,.4)',o.id,'objeto');
     const lbl = _cenaSvgEl('text',{x:cx,y:cy+cH*.42,'text-anchor':'middle','font-size':Math.max(8,cH*.18),fill:'rgba(255,255,255,.45)'});
     lbl.textContent = o.nome||o.tipo;
@@ -1035,7 +1035,7 @@ function cenaRenderizarSVG() {
   }
 }
 
-function _cenaSvgEl(tag, attrs) {
+function _cenaSvgEl(tag: any, attrs: any) {
   const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
   Object.entries<any>(attrs).forEach(([k,v]) => el.setAttribute(k, v));
   return el;
@@ -1053,7 +1053,7 @@ function _cenaSvgEl(tag, attrs) {
   });
 })();
 
-function _cenaHandleClick(e) {
+function _cenaHandleClick(e: any) {
   const f = CENA_ED.ferramenta;
   if (!f || !CENA_ED.mapa) return;
   const {col,row} = _cenaCoordsFromEvent(e);
@@ -1108,7 +1108,7 @@ function _cenaHandleClick(e) {
   }
 }
 
-function _cenaCoordsFromEvent(e) {
+function _cenaCoordsFromEvent(e: any) {
   const area = document.getElementById('cena-mapa-area');
   const canvas = document.getElementById('cena-canvas');
   const rect = area.getBoundingClientRect();
@@ -1121,17 +1121,17 @@ function _cenaCoordsFromEvent(e) {
 }
 
 // ── Remover ────────────────────────────────────────────────────────────────
-function cenaRemoverParede(id) {
+function cenaRemoverParede(id: any) {
   const rd = CENA_ED.mapa?.render_data;
   if (!rd) return;
-  rd.paredes = rd.paredes.filter(p=>p.id!==id);
+  rd.paredes = rd.paredes.filter((p: any)=>p.id!==id);
   cenaRenderizarSVG();
 }
-function cenaRemoverObj(id, tipo) {
+function cenaRemoverObj(id: any, tipo: any) {
   const rd = CENA_ED.mapa?.render_data;
   if (!rd) return;
-  if (tipo==='porta') rd.portas = rd.portas.filter(p=>p.id!==id);
-  else rd.objetos = rd.objetos.filter(o=>o.id!==id);
+  if (tipo==='porta') rd.portas = rd.portas.filter((p: any)=>p.id!==id);
+  else rd.objetos = rd.objetos.filter((o: any)=>o.id!==id);
   cenaRenderizarSVG();
 }
 
@@ -1163,7 +1163,7 @@ function cfgChaveConfirmar() {
 }
 
 // ── Configurar Baú ────────────────────────────────────────────────────────
-function cfgBauTab(tab) {
+function cfgBauTab(tab: any) {
   document.getElementById('cfg-bau-sec-itens').style.display = tab==='itens'?'block':'none';
   document.getElementById('cfg-bau-sec-loot').style.display  = tab==='loot' ?'block':'none';
   document.getElementById('cfg-bau-tab-itens').style.background = tab==='itens'?'rgba(200,168,75,0.15)':'transparent';
@@ -1176,9 +1176,9 @@ function cfgBauRenderLista() {
   const busca = document.getElementById('cfg-bau-busca')?.value.toLowerCase()||'';
   const lista = document.getElementById('cfg-bau-lista-itens');
   if (!lista) return;
-  const defs = (INV?.itemDefs||[]).filter(d => (d.tipo==='consumivel'||d.tipo==='misc'||d.tipo==='equipamento') &&
+  const defs = (INV?.itemDefs||[]).filter((d: any) => (d.tipo==='consumivel'||d.tipo==='misc'||d.tipo==='equipamento') &&
     d.nome.toLowerCase().includes(busca));
-  lista.innerHTML = defs.slice(0,30).map(d => {
+  lista.innerHTML = defs.slice(0,30).map((d: any) => {
     const sel = CENA_ED.cfgBauItens.some(i=>i.defId===d.id);
     return `<div onclick="cfgBauToggleItem('${d.id}','${d.nome.replace(/'/g,"\\'")}','${d.icone||'📦'}')" style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:6px;border:1px solid ${sel?'rgba(200,168,75,0.5)':'var(--borda)'};background:${sel?'rgba(200,168,75,0.08)':'transparent'};cursor:pointer">
       <span style="font-size:1.1rem">${d.icone||'📦'}</span>
@@ -1188,7 +1188,7 @@ function cfgBauRenderLista() {
   }).join('');
 }
 
-function cfgBauToggleItem(defId, nome, icone) {
+function cfgBauToggleItem(defId: any, nome: any, icone: any) {
   const idx = CENA_ED.cfgBauItens.findIndex(i=>i.defId===defId);
   if (idx>=0) CENA_ED.cfgBauItens.splice(idx,1);
   else CENA_ED.cfgBauItens.push({defId,nome,icone,quantidade:1});
@@ -1216,7 +1216,7 @@ function cfgBauConfirmar() {
   const isLoot = document.getElementById('cfg-bau-sec-loot').style.display==='block';
   const id = document.getElementById('cfg-bau-id').value || 'bau_'+Date.now();
   const rd = CENA_ED.mapa.render_data;
-  const existing = rd.objetos.findIndex(o=>o.id===id);
+  const existing = rd.objetos.findIndex((o: any)=>o.id===id);
   const obj = {
     id, col, row, tipo:'bau', nome, aberto:false,
     itens: isLoot ? null : JSON.parse(JSON.stringify(CENA_ED.cfgBauItens)),
@@ -1258,9 +1258,9 @@ document.addEventListener('keydown', e => {
     if (!last) return;
     const rd = CENA_ED.mapa?.render_data;
     if (!rd) return;
-    if (last.tipo==='add_parede') rd.paredes = rd.paredes.filter(p=>p.id!==last.id);
-    else if (last.tipo==='add_porta') rd.portas = rd.portas.filter(p=>p.id!==last.id);
-    else if (last.tipo==='add_obj') rd.objetos = rd.objetos.filter(o=>o.id!==last.id);
+    if (last.tipo==='add_parede') rd.paredes = rd.paredes.filter((p: any)=>p.id!==last.id);
+    else if (last.tipo==='add_porta') rd.portas = rd.portas.filter((p: any)=>p.id!==last.id);
+    else if (last.tipo==='add_obj') rd.objetos = rd.objetos.filter((o: any)=>o.id!==last.id);
     cenaRenderizarSVG();
   }
 });
@@ -1273,7 +1273,7 @@ paredePorRenderizar = function(m) {
   _renderizarObjetosNoMapa(m);
 };
 
-function _renderizarObjetosNoMapa(m) {
+function _renderizarObjetosNoMapa(m: any) {
   const svg = document.getElementById('mapa-dist-svg');
   if (!svg) return;
   svg.querySelectorAll('.mapa-objeto').forEach(el=>el.remove());
@@ -1285,10 +1285,10 @@ function _renderizarObjetosNoMapa(m) {
   const cols = m.largura_total||20, rows = m.altura_total||20;
   const cW = W/cols, cH = H/rows;
 
-  (rd.objetos||[]).forEach(o => {
+  (rd.objetos||[]).forEach((o: any) => {
     const cx = (o.col+.5)*cW, cy = (o.row+.5)*cH;
-    const emap = {chave:'🗝',blocker:'🪨',bau:o.aberto?'🪣':'📦'};
-    const cmap = {chave:'rgba(200,168,75,0.2)',blocker:'rgba(40,40,60,0.7)',bau:'rgba(200,168,75,0.15)'};
+    const emap: Record<string, any> = {chave:'🗝',blocker:'🪨',bau:o.aberto?'🪣':'📦'};
+    const cmap: Record<string, any> = {chave:'rgba(200,168,75,0.2)',blocker:'rgba(40,40,60,0.7)',bau:'rgba(200,168,75,0.15)'};
     const r = Math.min(cW,cH)*.38;
     const g = document.createElementNS('http://www.w3.org/2000/svg','g');
     g.classList.add('mapa-objeto');
@@ -1310,7 +1310,7 @@ function _renderizarObjetosNoMapa(m) {
 }
 
 // ── Clicar num objeto durante sessão ─────────────────────────────────────
-function _objetoClicar(mapId, objId) {
+function _objetoClicar(mapId: any, objId: any) {
   const mapa = _getMapaById(mapId);
   const o = mapa?.render_data?.objetos?.find(x=>x.id===objId);
   if (!o) return;
@@ -1324,7 +1324,7 @@ function _objetoClicar(mapId, objId) {
 }
 
 // ── Chaves ──────────────────────────────────────────────────────────────
-function _coletarChave(mapId, keyId, charNome) {
+function _coletarChave(mapId: any, keyId: any, charNome: any) {
   const mapa = _getMapaById(mapId);
   const key = mapa?.render_data?.objetos?.find(o=>o.id===keyId);
   if (!key || key.tipo!=='chave') return;
@@ -1346,9 +1346,9 @@ function _coletarChave(mapId, keyId, charNome) {
 }
 
 // Verificar se personagem tem a chave para uma porta
-function charTemChave(charNome, chave_palavra) {
+function charTemChave(charNome: any, chave_palavra: any) {
   const char = RPG_DATA?.characters?.find(c=>c.nome===charNome);
-  return (char?.custom_attrs?.chaves||[]).some(k=>k.chave_palavra===chave_palavra);
+  return (char?.custom_attrs?.chaves||[]).some((k: any)=>k.chave_palavra===chave_palavra);
 }
 
 // ── Sobrescrever usarPorta para suporte a trancadas ───────────────────────
@@ -1458,7 +1458,7 @@ window.ctxExecutarAcao = function(botao) {
 window.ctxExecutarAcao=window.ctxExecutarAcao;
 
 // ── Baú ──────────────────────────────────────────────────────────────────
-function _abrirBauModal(mapId, bauId, charNome) {
+function _abrirBauModal(mapId: any, bauId: any, charNome: any) {
   const mapa=_getMapaById(mapId);
   const bau=mapa?.render_data?.objetos?.find(o=>o.id===bauId);
   if(!bau||bau.tipo!=='bau') return;
@@ -1473,7 +1473,7 @@ function _abrirBauModal(mapId, bauId, charNome) {
   } else {
     const itens=bau.itens||[];
     descHtml=itens.length
-      ?itens.map(it=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:5px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,.2)"><span style="font-size:1rem">${it.icone||'📦'}</span><span style="font-family:var(--fonte-d);font-size:.7rem;flex:1">${it.nome}</span><span style="color:var(--suave)">×${it.quantidade}</span></div>`).join('')
+      ?itens.map((it: any)=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:5px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,.2)"><span style="font-size:1rem">${it.icone||'📦'}</span><span style="font-family:var(--fonte-d);font-size:.7rem;flex:1">${it.nome}</span><span style="color:var(--suave)">×${it.quantidade}</span></div>`).join('')
       :'<div style="color:var(--suave);font-style:italic;font-size:.78rem">Baú vazio</div>';
   }
   document.getElementById('abrir-bau-conteudo').innerHTML=descHtml;
@@ -1494,7 +1494,7 @@ async function abrirBauConfirmar() {
   const char=RPG_DATA?.characters?.find(c=>c.nome===charNome);
   if(char && !bau.loot_aleatorio && bau.itens?.length) {
     for(const it of bau.itens) {
-      const def=(INV?.itemDefs||[]).find(d=>d.id===it.defId||d.nome===it.nome);
+      const def=(INV?.itemDefs||[]).find((d: any)=>d.id===it.defId||d.nome===it.nome);
       if(def && typeof adicionarItemInventario==='function') {
         await adicionarItemInventario(char.id,def.id,it.quantidade).catch(()=>{});
       }
@@ -1502,7 +1502,7 @@ async function abrirBauConfirmar() {
     mostrarToast('📦 Itens do baú adicionados ao inventário de '+charNome,'ok');
   } else if(bau.loot_aleatorio) {
     // Gerar loot aleatório
-    const defs=(INV?.itemDefs||[]).filter(d=>_rarPeso(d.raridade)>= _rarPeso(bau.raridade||'comum'));
+    const defs=(INV?.itemDefs||[]).filter((d: any)=>_rarPeso(d.raridade)>= _rarPeso(bau.raridade||'comum'));
     const qtd=bau.loot_qtd||2;
     for(let i=0;i<qtd&&defs.length;i++){
       const def=defs[Math.floor(Math.random()*defs.length)];
@@ -1518,10 +1518,10 @@ async function abrirBauConfirmar() {
   document.getElementById('modal-abrir-bau').style.display='none';
 }
 
-function _rarPeso(r){return {comum:1,incomum:2,raro:3,épico:4,lendário:5}[r]||1;}
+function _rarPeso(r: any){return ({comum:1,incomum:2,raro:3,épico:4,lendário:5} as any)[r]||1;}
 
 // ── Atacar Porta Destrutível ─────────────────────────────────────────
-function _abrirModalAtacarPorta(mapId, portaId, charNome) {
+function _abrirModalAtacarPorta(mapId: any, portaId: any, charNome: any) {
   const mapa=_getMapaById(mapId);
   const porta=mapa?.render_data?.portas?.find(p=>p.id===portaId);
   if(!porta||!porta.destrutivel) return;
@@ -1530,7 +1530,7 @@ function _abrirModalAtacarPorta(mapId, portaId, charNome) {
   const char=RPG_DATA?.characters?.find(c=>c.nome===charNome);
   if(!char) return;
   
-  const habilidades = atkGetHabilidadesCampanha(charNome).filter(h => h.formula_dano);
+  const habilidades = atkGetHabilidadesCampanha(charNome).filter((h: any) => h.formula_dano);
   
   if(!habilidades.length) {
     mostrarToast('Você não tem habilidades de dano para quebrar a porta','erro');
@@ -1551,7 +1551,7 @@ function _abrirModalAtacarPorta(mapId, portaId, charNome) {
       </div>
       <div style="font-size:0.75rem;color:var(--suave);margin-bottom:12px">Escolha uma habilidade de ataque:</div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        ${habilidades.map(h => `
+        ${habilidades.map((h: any) => `
           <button onclick="_aplicarDanoPorta('${mapId}','${portaId}','${charNome}',${JSON.stringify(h).replace(/"/g,'&quot;')})" 
             style="padding:10px 14px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:8px;color:#e8604c;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-align:left">
             ${h.nome} <span style="float:right;color:#f0cc6a;font-size:0.62rem">${h.formula_dano}</span>
@@ -1563,7 +1563,7 @@ function _abrirModalAtacarPorta(mapId, portaId, charNome) {
   document.body.appendChild(modal);
 }
 
-async function _aplicarDanoPorta(mapId, portaId, charNome, habilidade) {
+async function _aplicarDanoPorta(mapId: any, portaId: any, charNome: any, habilidade: any) {
   const mapa=_getMapaById(mapId);
   const porta=mapa?.render_data?.portas?.find(p=>p.id===portaId);
   if(!porta) return;
@@ -1599,7 +1599,7 @@ async function _aplicarDanoPorta(mapId, portaId, charNome, habilidade) {
 }
 
 // ── Atacar Obstáculo Destrutível ─────────────────────────────────────
-function _abrirModalAtacarObstaculo(mapId, obstaculoId, charNome) {
+function _abrirModalAtacarObstaculo(mapId: any, obstaculoId: any, charNome: any) {
   const mapa=_getMapaById(mapId);
   const obs=mapa?.render_data?.objetos?.find(o=>o.id===obstaculoId);
   if(!obs||obs.tipo!=='obstaculo'||!obs.destrutivel) return;
@@ -1608,7 +1608,7 @@ function _abrirModalAtacarObstaculo(mapId, obstaculoId, charNome) {
   const char=RPG_DATA?.characters?.find(c=>c.nome===charNome);
   if(!char) return;
   
-  const habilidades = atkGetHabilidadesCampanha(charNome).filter(h => h.formula_dano);
+  const habilidades = atkGetHabilidadesCampanha(charNome).filter((h: any) => h.formula_dano);
   
   if(!habilidades.length) {
     mostrarToast('Você não tem habilidades de dano para quebrar o obstáculo','erro');
@@ -1629,7 +1629,7 @@ function _abrirModalAtacarObstaculo(mapId, obstaculoId, charNome) {
       </div>
       <div style="font-size:0.75rem;color:var(--suave);margin-bottom:12px">Escolha uma habilidade de ataque:</div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        ${habilidades.map(h => `
+        ${habilidades.map((h: any) => `
           <button onclick="_aplicarDanoObstaculo('${mapId}','${obstaculoId}','${charNome}',${JSON.stringify(h).replace(/"/g,'&quot;')})" 
             style="padding:10px 14px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:8px;color:#e8604c;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-align:left">
             ${h.nome} <span style="float:right;color:#f0cc6a;font-size:0.62rem">${h.formula_dano}</span>
@@ -1641,7 +1641,7 @@ function _abrirModalAtacarObstaculo(mapId, obstaculoId, charNome) {
   document.body.appendChild(modal);
 }
 
-async function _aplicarDanoObstaculo(mapId, obstaculoId, charNome, habilidade) {
+async function _aplicarDanoObstaculo(mapId: any, obstaculoId: any, charNome: any, habilidade: any) {
   const mapa=_getMapaById(mapId);
   const obs=mapa?.render_data?.objetos?.find(o=>o.id===obstaculoId);
   if(!obs) return;
@@ -1678,7 +1678,7 @@ async function _aplicarDanoObstaculo(mapId, obstaculoId, charNome, habilidade) {
 }
 
 // Função helper para calcular dano
-function calcularDanoHabilidade(hab, char) {
+function calcularDanoHabilidade(hab: any, char: any) {
   if(!hab.formula_dano) return 0;
   
   try {
@@ -1806,7 +1806,7 @@ function cenarioPortaPopularMapas() {
 window.cenarioPortaPopularMapas = cenarioPortaPopularMapas;
 
 // ── Trocar aba do modal de cenário ────────────────────────────────
-function trocarAbaCenario(aba) {
+function trocarAbaCenario(aba: any) {
   // Ocultar todas as abas
   document.querySelectorAll('.cenario-tab').forEach(tab => tab.style.display = 'none');
   // Mostrar aba selecionada
@@ -1816,7 +1816,7 @@ function trocarAbaCenario(aba) {
   // Atualizar botões de navegação
   document.querySelectorAll('.cenario-nav-btn').forEach(btn => {
     if (btn.dataset.tab === aba) {
-      const cores = {
+      const cores: Record<string, any> = {
         porta: { bg: 'rgba(176,126,240,0.12)', border: 'rgba(176,126,240,0.35)', color: '#b07ef0' },
         chave: { bg: 'rgba(200,168,75,0.12)', border: 'rgba(200,168,75,0.35)', color: '#c8a84b' },
         bau: { bg: 'rgba(39,174,96,0.12)', border: 'rgba(39,174,96,0.35)', color: '#5ee09a' },
@@ -1853,8 +1853,8 @@ function atualizarResumoObjetosCenario() {
   }
   
   const html = objetos.map(obj => {
-    const icones = { porta: '🚪', chave: '🗝', bau: '💰', obstaculo: '🪨' };
-    const cores = { porta: '#b07ef0', chave: '#c8a84b', bau: '#5ee09a', obstaculo: '#e74c3c' };
+    const icones: Record<string, any> = { porta: '🚪', chave: '🗝', bau: '💰', obstaculo: '🪨' };
+    const cores: Record<string, any> = { porta: '#b07ef0', chave: '#c8a84b', bau: '#5ee09a', obstaculo: '#e74c3c' };
     const icone = obj.icone || icones[obj.tipo] || '📍';
     const cor = cores[obj.tipo] || '#7a92aa';
     return `<div style="padding:6px 8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:6px;display:flex;align-items:center;gap:8px;font-size:0.72rem">
@@ -1868,9 +1868,9 @@ function atualizarResumoObjetosCenario() {
 }
 
 // ── Integração modal de cenário com editor canvas ─────────────────
-let CANVAS_CONTEXT = null; // 'canvas' quando usado no editor canvas
+let CANVAS_CONTEXT: any = null; // 'canvas' quando usado no editor canvas
 
-function abrirModalCenarioNoCanvas(tipo) {
+function abrirModalCenarioNoCanvas(tipo: any) {
   CANVAS_CONTEXT = 'canvas';
   
   // Abrir modal
@@ -1878,7 +1878,7 @@ function abrirModalCenarioNoCanvas(tipo) {
   if (modalOverlay) modalOverlay.style.display = 'flex';
   
   // Mapear tipo para aba correta
-  const mapa = {
+  const mapa: Record<string, any> = {
     porta: 'porta',
     chave: 'chave',
     bau: 'bau',
@@ -1913,7 +1913,7 @@ window.cenarioAtivarPlacement = function(tipo) {
     mostrarToast('📍 Clique no canvas para posicionar', '');
     
     // Adicionar listener temporário
-    const handleClick = function(e) {
+    const handleClick = function(e: any) {
       const { x, y } = window.nmceCoords(e, canvas);
       const { col, row } = window._nmceSnapCelula(x, y, canvas);
       
@@ -2017,7 +2017,7 @@ window.cenarioAtivarPlacement = function(tipo) {
   }
 };
 
-function coletarDadosFormularioCenario(tipo) {
+function coletarDadosFormularioCenario(tipo: any) {
   const dados: any = {};
   
   if (tipo === 'porta') {
@@ -2070,7 +2070,7 @@ function coletarDadosFormularioCenario(tipo) {
   return dados;
 }
 
-function adicionarObjetoAoCanvas(tipo, col, row, dados) {
+function adicionarObjetoAoCanvas(tipo: any, col: any, row: any, dados: any) {
   if (!window.nmCE || !window.nmCE.renderData) {
     mostrarToast('Editor canvas não inicializado', 'erro');
     return;
@@ -2155,7 +2155,7 @@ function adicionarObjetoAoCanvas(tipo, col, row, dados) {
 }
 
 // ── EDIÇÃO DE OBJETOS CLICADOS ─────────────────────────────────────
-function editarObjetoCanvas(tipo, index) {
+function editarObjetoCanvas(tipo: any, index: any) {
   let obj;
   let tipoModal;
   

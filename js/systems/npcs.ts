@@ -28,8 +28,8 @@ function abrirModalNpcGenerico() {
           if (a.tipo === 'text')    return `<div class="form-group" style="grid-column:span 3"><label style="font-size:0.65rem">${a.nome}</label><input type="text" id="ng-attr-${key}" value=""></div>`;
           if (a.tipo === 'boolean') return `<div class="form-group"><label style="font-size:0.65rem">${a.nome}</label><select id="ng-attr-${key}"><option value="false">Não</option><option value="true">Sim</option></select></div>`;
           if (a.tipo === 'select') {
-            const ops = (a.opcoes||'').split(',').map(x=>x.trim()).filter(Boolean);
-            return `<div class="form-group"><label style="font-size:0.65rem">${a.nome}</label><select id="ng-attr-${key}">${ops.map(o=>`<option value="${o}">${o}</option>`).join('')}</select></div>`;
+            const ops = (a.opcoes||'').split(',').map((x: any)=>x.trim()).filter(Boolean);
+            return `<div class="form-group"><label style="font-size:0.65rem">${a.nome}</label><select id="ng-attr-${key}">${ops.map((o: any)=>`<option value="${o}">${o}</option>`).join('')}</select></div>`;
           }
           return '';
         }).join('')
@@ -59,7 +59,7 @@ async function criarNpcGenerico() {
 
   // Coletar atributos básicos preenchidos
   const basicos = (RPG_DATA.attrDefs || []).filter(a => (a.categoria || 'basico') === 'basico');
-  const atributosBase = {};
+  const atributosBase: Record<string, any> = {};
   basicos.forEach(a => {
     const key = a.nome.replace(/[^a-z0-9]/gi,'_');
     const el  = document.getElementById('ng-attr-' + key);
@@ -132,9 +132,9 @@ async function criarNpcGenerico() {
 }
 
 // Posicionar NPCs criados um a um no mapa por clique
-let NPC_PLACEMENT_QUEUE = [];
+let NPC_PLACEMENT_QUEUE: any = [];
 
-function npcGenericoIniciarPlacement(nomes) {
+function npcGenericoIniciarPlacement(nomes: any) {
   NPC_PLACEMENT_QUEUE = [...nomes];
   npcGenericoProximoPlacement();
 }
@@ -152,7 +152,7 @@ function npcGenericoProximoPlacement() {
   mostrarToast('Clique no mapa: ' + nome + ' (' + restante + ' restante' + (restante>1?'s':'') + ')', '');
   const wrap = document.getElementById('mapa-wrap');
   wrap.classList.add('placement-ativo');
-  const handler = (e) => {
+  const handler = (e: any) => {
     if (e.target.closest('.mapa-token') || e.target.closest('.mapa-zona')) return;
     const rect = wrap.getBoundingClientRect();
     let x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width  * 100));

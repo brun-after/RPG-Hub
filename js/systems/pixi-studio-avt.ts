@@ -3,7 +3,7 @@
 // Depends on: aventura.js (_avtPixiParticleAnim, _avtEnsurePixiParticles,
 //              _avtProcTextures, AVT_STATE), pixi-studio.js (PIXI_STUDIO_STATE)
 
-var _PS_AVT_ACTIVE    = [];  // { timerId, cleanup } — efeitos ativos (follow + one-shots)
+var _PS_AVT_ACTIVE: any    = [];  // { timerId, cleanup } — efeitos ativos (follow + one-shots)
 var _PS_PERSISTENT    = new Map();  // key -> { cleanup } for duration-bound persistent animations
 
 // Reference positions matching pixi-studio.js PS_ATAC_REF / PS_ALVO_REF
@@ -46,14 +46,14 @@ function _psAvtAcquireApp() {
 
 // Registra um efeito one-shot no rastreio global, para que avtPixiCleanupAll consiga
 // destruí-lo em teardown (troca de fase/saída) mesmo antes do timer de fim disparar.
-function _psAvtTrack(cleanup, durMs) {
-  const entry = { cleanup: null, timerId: null };
+function _psAvtTrack(cleanup: any, durMs: any) {
+  const entry = { cleanup: null as any, timerId: null as any };
   let done = false;
   entry.cleanup = () => {
     if (done) return; done = true;
     clearTimeout(entry.timerId);
     try { cleanup(); } catch (_) {}
-    _PS_AVT_ACTIVE = _PS_AVT_ACTIVE.filter(e => e !== entry);
+    _PS_AVT_ACTIVE = _PS_AVT_ACTIVE.filter((e: any) => e !== entry);
   };
   entry.timerId = setTimeout(entry.cleanup, durMs);
   _PS_AVT_ACTIVE.push(entry);
@@ -62,7 +62,7 @@ function _psAvtTrack(cleanup, durMs) {
 
 // Textura com tolerância a URL quebrada: nunca lança; em erro de carga, remove a
 // entrada envenenada do cache global do PIXI (permite retry num uso futuro).
-function _psAvtTexFrom(url) {
+function _psAvtTexFrom(url: any) {
   try {
     const tex = PIXI.Texture.from(url);
     if (tex && tex.baseTexture && !tex.baseTexture.valid) {
@@ -76,7 +76,7 @@ function _psAvtTexFrom(url) {
 }
 
 // ── Transform studio-space coordinates to adventure screen-space ─────────────
-function _psStudioToScreen(px, py, atacScr, alvoScr) {
+function _psStudioToScreen(px: any, py: any, atacScr: any, alvoScr: any) {
   const dx_s = _PS_ALVO_REF.x - _PS_ATAC_REF.x;  // 320
   const dy_s = _PS_ALVO_REF.y - _PS_ATAC_REF.y;  // -60
   const dx_a = alvoScr.x - atacScr.x;
@@ -106,7 +106,7 @@ function _psStudioToScreen(px, py, atacScr, alvoScr) {
 //   zFrac  : 0..1+  fraction of token height (feet=0, top=1); overrides z when set
 //   pose   : 'upright' | 'floor' | 'leaning'  billboard up / lie on the floor / tilted
 const _PS_CHEST_FRAC = 0.62;   // peitoral ≈ 62% da altura do token (pés=0, topo=1)
-const _PS_Z_FRAC = { ground: 0, chest: _PS_CHEST_FRAC, top: 0.95, float: 0.5 };
+const _PS_Z_FRAC: Record<string, any> = { ground: 0, chest: _PS_CHEST_FRAC, top: 0.95, float: 0.5 };
 const _PS_LEAN = 0.55;         // fração da contra-transformação aplicada na pose 'leaning'
 
 // True when iso VFX projection is active (overlay lives inside the CSS-transformed wrap).
@@ -132,13 +132,13 @@ function _avtVfxAutoScale() {
   return s;
 }
 // Combined VFX scale: auto base × per-animation override (cfg.iso_scale, default 1).
-function _avtVfxScale(cfg) {
+function _avtVfxScale(cfg: any) {
   const mult = (cfg && typeof cfg.iso_scale === 'number') ? cfg.iso_scale : 1;
   return _avtVfxAutoScale() * mult;
 }
 
 // Normalize a raw anchor config, falling back to a legacy source keyword.
-function _psNormAnchor(anchorCfg, fallbackSource?) {
+function _psNormAnchor(anchorCfg: any, fallbackSource?: any) {
   const a = anchorCfg || {};
   return {
     source: a.source || fallbackSource || 'target',
@@ -150,12 +150,12 @@ function _psNormAnchor(anchorCfg, fallbackSource?) {
   };
 }
 // Map a source keyword → entity (mid handled by the caller).
-function _psSourceEnt(source, casterEnt, targetEnt) {
+function _psSourceEnt(source: any, casterEnt: any, targetEnt: any) {
   if (source === 'caster') return casterEnt || targetEnt;
   return targetEnt || casterEnt;   // 'target'/'area'/default
 }
 // Canvas-space planar anchor: cell center + cell offset + corner spot (ground plane).
-function _psPlanarAnchor(ent, a) {
+function _psPlanarAnchor(ent: any, a: any) {
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera?.zoom || 1));
   const live = (typeof _avtEntViva === 'function') ? _avtEntViva(ent) : ent;
   const gx = (live.renderX ?? live.x ?? 0) + (a.cell?.dx || 0);
@@ -172,7 +172,7 @@ function _psPlanarAnchor(ent, a) {
   return { x, y };
 }
 // Vertical lift in SCREEN px from z/zFrac. Only meaningful when billboard is on; 0 otherwise.
-function _psAnchorLift(a) {
+function _psAnchorLift(a: any) {
   if (!_avtVfxBillboardOn()) return 0;
   let frac;
   if (typeof a.zFrac === 'number') frac = a.zFrac;
@@ -181,7 +181,7 @@ function _psAnchorLift(a) {
   return frac * _avtVfxTokenPx();
 }
 // Shared resolver: anchor config + entities → { x, y, lift, pose }.  x/y in canvas coords.
-function _avtResolveAnchor(anchorCfg, casterEnt, targetEnt, fallbackSource) {
+function _avtResolveAnchor(anchorCfg: any, casterEnt: any, targetEnt: any, fallbackSource: any) {
   const a = _psNormAnchor(anchorCfg, fallbackSource);
   let planar;
   if (a.source === 'mid') {
@@ -202,15 +202,15 @@ function _avtResolveAnchor(anchorCfg, casterEnt, targetEnt, fallbackSource) {
 // off, pose 'floor') — nesses casos o CSS já projeta as coords cruas e projetar aqui
 // dobraria a transformação. Offsets decorativos (keyframes, layer.offset, lift) NÃO
 // passam por aqui: devem ler como pixels de tela.
-function _avtVfxSpanFns(pose, pivot) {
+function _avtVfxSpanFns(pose: any, pivot: any) {
   const bb = _avtVfxBillboardOn() && pose !== 'floor'
     && typeof _avtIsoDeltaToScreen === 'function';
-  if (!bb) return { bb: false, pt: (p) => p, delta: (dx, dy) => ({ x: dx, y: dy }) };
+  if (!bb) return { bb: false, pt: (p: any) => p, delta: (dx: any, dy: any) => ({ x: dx, y: dy }) };
   return {
     bb: true,
-    pt: (p) => { const d = _avtIsoDeltaToScreen(p.x - pivot.x, p.y - pivot.y);
+    pt: (p: any) => { const d = _avtIsoDeltaToScreen(p.x - pivot.x, p.y - pivot.y);
                  return { x: pivot.x + d.x, y: pivot.y + d.y }; },
-    delta: (dx, dy) => _avtIsoDeltaToScreen(dx, dy),
+    delta: (dx: any, dy: any) => _avtIsoDeltaToScreen(dx, dy),
   };
 }
 
@@ -219,7 +219,7 @@ function _avtVfxSpanFns(pose, pivot) {
 // coords (same coords as top-down). In iso+billboard the content is counter-transformed
 // around `anchor` so it appears upright, and lifted by `lift` screen px (chest height).
 // pose:'floor' skips the billboard so content lies in the (CSS-skewed) ground plane.
-function _avtVfxRoot(stage, pose, anchor, lift) {
+function _avtVfxRoot(stage: any, pose: any, anchor: any, lift: any) {
   const billboard = _avtVfxBillboardOn() && pose !== 'floor';
   if (!billboard) {
     // top-down, billboard off, or floor pose: content rendered in place. A non-floor
@@ -255,7 +255,7 @@ function _avtVfxRoot(stage, pose, anchor, lift) {
 // Tracked variant of _avtVfxRoot for follow/persistent effects: the pivot moves with the
 // entity each frame. Returns { content, update(scr, lift) }. Add objects to `content` using
 // absolute canvas coords; call update() per frame with the tracked screen position.
-function _avtVfxTrackedRoot(stage, pose) {
+function _avtVfxTrackedRoot(stage: any, pose: any) {
   const billboard = _avtVfxBillboardOn() && pose !== 'floor';
   if (!billboard) {
     const c = new PIXI.Container();
@@ -273,14 +273,14 @@ function _avtVfxTrackedRoot(stage, pose) {
   stage.addChild(bb);
   return {
     content,
-    update: (scr, lift) => { bb.pivot.set(scr.x, scr.y); bb.position.set(scr.x, scr.y); content.position.set(0, -(lift || 0)); },
+    update: (scr: any, lift: any) => { bb.pivot.set(scr.x, scr.y); bb.position.set(scr.x, scr.y); content.position.set(0, -(lift || 0)); },
   };
 }
 
 // Draw a clawed-hand silhouette into a Graphics, sized ~r, reaching UP (fingertips at -y,
 // wrist at +y), origin at the palm center. Issued between the caller's beginFill/endFill so it
 // fills + strokes like other shapes. Shared by the runtime and the studio preview.
-function _psHandPath(g, r) {
+function _psHandPath(g: any, r: any) {
   const palmW = r * 1.1, palmH = r * 1.05;
   // palm
   g.drawRoundedRect(-palmW / 2, -palmH * 0.1, palmW, palmH, r * 0.32);
@@ -300,7 +300,7 @@ function _psHandPath(g, r) {
 
 // Draw a beam (glow + bright core + tip flare) from A to B in the Graphics' local space.
 // `len` (0..1) controls how far the beam currently extends from A toward B.
-function _psBeamPath(g, A, B, thick, color, alpha, len, hexInt) {
+function _psBeamPath(g: any, A: any, B: any, thick: any, color: any, alpha: any, len: any, hexInt: any) {
   const bx = A.x + (B.x - A.x) * len, by = A.y + (B.y - A.y) * len;
   const col = hexInt(color || '#ffffff');
   g.lineStyle(thick * 2.4, col, alpha * 0.25); g.moveTo(A.x, A.y); g.lineTo(bx, by);   // outer glow
@@ -310,7 +310,7 @@ function _psBeamPath(g, A, B, thick, color, alpha, len, hexInt) {
 }
 
 // ── Convert Studio config_json layers → AVT particle config format ─────────
-function _psToAvtConfig(cfg) {
+function _psToAvtConfig(cfg: any) {
   if (!cfg) return null;
   const low = cfg.quality === 'baixo';   // mobile/low quality: lighter particles, no bloom/trails
   const avt = {
@@ -323,7 +323,7 @@ function _psToAvtConfig(cfg) {
     iso_scale:     (typeof cfg.iso_scale === 'number') ? cfg.iso_scale : undefined,
     iso_lift_frac: (typeof cfg.iso_lift_frac === 'number') ? cfg.iso_lift_frac : undefined,
     anchor:        cfg.anchor || undefined,
-    layers: [],
+    layers: [] as any[],
   };
   const layers = cfg.layers || [];
   for (const l of layers) {
@@ -364,7 +364,7 @@ function _psToAvtConfig(cfg) {
 // Falhas/IDs inexistentes entram num cache negativo de 30s — sem ele, cada uso da
 // skill re-batia na rede pelo mesmo ID quebrado.
 const _PS_CFG_FAIL = new Map(); // animId -> ts da falha
-async function _psAvtLoadCfg(animId) {
+async function _psAvtLoadCfg(animId: any) {
   if (!animId) return null;
   const failTs = _PS_CFG_FAIL.get(animId);
   if (failTs && Date.now() - failTs < 30000) return null;
@@ -392,19 +392,19 @@ async function _psAvtLoadCfg(animId) {
 // e os callers que agendam animação de morte são síncronos. Quando o cfg já está
 // no cache de 30s, devolve o mesmo delay que _psAvtProjectile retornaria; sem
 // cache devolve null (desconhecido) e o caller usa 0 como hoje.
-function avtPixiGetAnimDelaySync(animId) {
+function avtPixiGetAnimDelaySync(animId: any) {
   const cache = (typeof PIXI_STUDIO_STATE !== 'undefined') ? PIXI_STUDIO_STATE._animCache : null;
   const cfg = cache && animId ? cache[animId] : null;
   if (!cfg) return null;
   if ((cfg.behavior || 'one-shot') !== 'projectile') return 0;
-  const hasSpawnPath = (cfg.layers || []).some(l => l.tipo === 'emitter' && l.spawn_path?.length);
+  const hasSpawnPath = (cfg.layers || []).some((l: any) => l.tipo === 'emitter' && l.spawn_path?.length);
   if (hasSpawnPath || (cfg.travel?.path && cfg.travel.path !== 'linear'))
     return cfg.duracao_ms || cfg.duration || 1000; // espelha _psAvtProjectile (spawn_path/curvo)
   return cfg.behavior_config?.projectile_speed_ms || 500; // espelha o caminho linear
 }
 
 // ── Build screen coordinates from entity (mirrors _avtPlaySkillAnim) ───────
-function _psAvtToScreen(ent) {
+function _psAvtToScreen(ent: any) {
   const canvas = AVT_STATE.canvas;
   if (!canvas) return { x: canvas ? canvas.width / 2 : 400, y: canvas ? canvas.height / 2 : 300 };
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
@@ -419,7 +419,7 @@ function _psAvtToScreen(ent) {
 // A projectile must always fly from the caster token's CURRENT position to the
 // target token's CURRENT position — never to a stale point captured at fire time.
 // Falls back to the frozen screen coords when no live entity is available.
-function _psAvtLiveEnds(casterEnt, targetEnt, fbA, fbB) {
+function _psAvtLiveEnds(casterEnt: any, targetEnt: any, fbA: any, fbB: any) {
   return {
     atac: casterEnt ? _psAvtToScreen(casterEnt) : fbA,
     alvo: targetEnt ? _psAvtToScreen(targetEnt) : fbB,
@@ -427,7 +427,7 @@ function _psAvtLiveEnds(casterEnt, targetEnt, fbA, fbB) {
 }
 
 // ── Interpolate keyframes at time t ───────────────────────────────────────
-function _psAvtInterpKf(kfs, t) {
+function _psAvtInterpKf(kfs: any, t: any) {
   if (!kfs || !kfs.length) return null;
   if (t <= kfs[0].t) return Object.assign({}, kfs[0]);
   if (t >= kfs[kfs.length - 1].t) return Object.assign({}, kfs[kfs.length - 1]);
@@ -437,7 +437,7 @@ function _psAvtInterpKf(kfs, t) {
       // Apply per-keyframe easing (owned by the outgoing keyframe). Default linear.
       const f = (typeof window !== 'undefined' && window._psEase)
         ? window._psEase(kfs[i].ease || 'linear', fRaw) : fRaw;
-      const lerp = (a, b) => a + (b - a) * f;
+      const lerp = (a: any, b: any) => a + (b - a) * f;
       return {
         x:        lerp(kfs[i].x        ?? 0, kfs[i + 1].x        ?? 0),
         y:        lerp(kfs[i].y        ?? 0, kfs[i + 1].y        ?? 0),
@@ -455,8 +455,8 @@ function _psAvtInterpKf(kfs, t) {
 //           other        → sprite anchors at the layer anchor + keyframe offsets
 // In iso each layer is wrapped in a pose-aware root (upright/floor) and lifted to its
 // configured height (chest by default); sizes are auto-scaled for the graphics mode.
-async function _psAvtRenderSprites(cfg, startScr, endScr, behavior, casterEnt, targetEnt) {
-  const spriteLayers = (cfg.layers || []).filter(l => l.visivel && l.tipo === 'sprite' && l.texture_url);
+async function _psAvtRenderSprites(cfg: any, startScr: any, endScr: any, behavior: any, casterEnt: any, targetEnt: any) {
+  const spriteLayers = (cfg.layers || []).filter((l: any) => l.visivel && l.tipo === 'sprite' && l.texture_url);
   if (!spriteLayers.length) return;
 
   await _avtEnsurePixiParticles();
@@ -471,7 +471,7 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior, casterEnt, t
   if (!acq) return;
   const app = acq.app;
 
-  const bmMap = {
+  const bmMap: Record<string, any> = {
     add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN,
     multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL,
   };
@@ -479,7 +479,7 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior, casterEnt, t
   const isProjectile = behavior === 'projectile';
   const midScr = { x: (startScr.x + endScr.x) / 2, y: (startScr.y + endScr.y) / 2 };
 
-  const sprites = [];
+  const sprites: any = [];
   for (const l of spriteLayers) {
     try {
       // Anchor: trajectory pivots at the travel midpoint; otherwise the layer's own anchor.
@@ -562,7 +562,7 @@ async function _psAvtRenderSprites(cfg, startScr, endScr, behavior, casterEnt, t
 }
 
 // Generic keyframe interpolation (handles shape/light fields + easing)
-function _psAvtInterpGeneric(kfs, t) {
+function _psAvtInterpGeneric(kfs: any, t: any) {
   if (!kfs || !kfs.length) return null;
   const s = [...kfs].sort((a, b) => a.t - b.t);
   if (t <= s[0].t) return Object.assign({}, s[0]);
@@ -571,7 +571,7 @@ function _psAvtInterpGeneric(kfs, t) {
   for (let i = 0; i < s.length - 1; i++) { if (t >= s[i].t && t <= s[i + 1].t) { lo = s[i]; hi = s[i + 1]; break; } }
   let f = (hi.t - lo.t) ? (t - lo.t) / (hi.t - lo.t) : 0;
   if (typeof window !== 'undefined' && window._psEase) f = window._psEase(lo.ease || 'linear', f);
-  const out = {};
+  const out: Record<string, any> = {};
   new Set([...Object.keys(lo), ...Object.keys(hi)]).forEach(k => {
     if (k === 't' || k === 'ease') return;
     const a = lo[k], b = hi[k];
@@ -581,8 +581,8 @@ function _psAvtInterpGeneric(kfs, t) {
 }
 
 // ── Render shape + light layers in combat (parity with the studio preview) ────
-async function _psAvtRenderShapes(cfg, startScr, endScr, behavior, casterEnt, targetEnt) {
-  const layers = (cfg.layers || []).filter(l => l.visivel && (l.tipo === 'shape' || l.tipo === 'light'));
+async function _psAvtRenderShapes(cfg: any, startScr: any, endScr: any, behavior: any, casterEnt: any, targetEnt: any) {
+  const layers = (cfg.layers || []).filter((l: any) => l.visivel && (l.tipo === 'shape' || l.tipo === 'light'));
   if (!layers.length) return;
   await _avtEnsurePixiParticles();
   if (typeof PIXI === 'undefined') return;
@@ -595,11 +595,11 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior, casterEnt, ta
   if (!acq) return;
   const app = acq.app;
 
-  const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
-  const hexInt = (c) => { if (typeof c === 'number') return c; const n = parseInt(String(c).replace('#', ''), 16); return isNaN(n) ? 0xffffff : n; };
+  const bm: Record<string, any> = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
+  const hexInt = (c: any) => { if (typeof c === 'number') return c; const n = parseInt(String(c).replace('#', ''), 16); return isNaN(n) ? 0xffffff : n; };
   const isProj = behavior === 'projectile';
   const midScr = { x: (startScr.x + endScr.x) / 2, y: (startScr.y + endScr.y) / 2 };
-  const items = [];
+  const items: any = [];
   for (const l of layers) {
     const anchor = _psAvtLayerAnchor(l, startScr, endScr, casterEnt, targetEnt);
     const pivot = isProj ? midScr : { x: anchor.x, y: anchor.y };
@@ -680,7 +680,7 @@ async function _psAvtRenderShapes(cfg, startScr, endScr, behavior, casterEnt, ta
 // Resolve a layer's effective anchor → { x, y, lift, pose }.
 // Prefers the new per-layer `anchor` model; otherwise falls back to legacy
 // `posicao_override` (screen point) plus the default chest lift in iso.
-function _psAvtLayerAnchor(layer, atacScr, alvoScr, casterEnt, targetEnt) {
+function _psAvtLayerAnchor(layer: any, atacScr: any, alvoScr: any, casterEnt: any, targetEnt: any) {
   if (layer && layer.anchor) {
     const fb = layer.posicao_override === 'atacante' ? 'caster'
              : layer.posicao_override === 'meio'     ? 'mid' : 'target';
@@ -695,10 +695,10 @@ function _psAvtLayerAnchor(layer, atacScr, alvoScr, casterEnt, targetEnt) {
 }
 
 // Scale an emitter config (v2 list-style or v5 behaviors) by `s` in screen space.
-function _avtScaleEmitterCfg(cfg, s) {
+function _avtScaleEmitterCfg(cfg: any, s: any) {
   if (!cfg || !(s > 0) || s === 1) return cfg;
   let c; try { c = JSON.parse(JSON.stringify(cfg)); } catch (_) { return cfg; }
-  const scaleList = (o) => { if (o && Array.isArray(o.list)) o.list.forEach(p => { if (typeof p.value === 'number') p.value *= s; }); };
+  const scaleList = (o: any) => { if (o && Array.isArray(o.list)) o.list.forEach((p: any) => { if (typeof p.value === 'number') p.value *= s; }); };
   // v2 list-style
   if (c.scale) scaleList(c.scale);
   if (c.speed) { if (typeof c.speed.start === 'number') c.speed.start *= s; if (typeof c.speed.end === 'number') c.speed.end *= s; }
@@ -722,8 +722,8 @@ function _avtScaleEmitterCfg(cfg, s) {
 // ── Render emitter layers following their recorded spawn_path ─────────────────
 // Uses a similarity transform to map studio-space → screen-space. Each layer is wrapped
 // in a pose-aware iso root (upright/floor) and lifted to its configured height.
-async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targetEnt) {
-  const layers = (cfg.layers || []).filter(l => l.emitter);
+async function _psAvtRenderWithSpawnPath(cfg: any, atacScr: any, alvoScr: any, casterEnt: any, targetEnt: any) {
+  const layers = (cfg.layers || []).filter((l: any) => l.emitter);
   if (!layers.length) return;
 
   await _avtEnsurePixiParticles();
@@ -736,9 +736,9 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
   // chromatic aberration) so the scene-level look matches the legacy pipeline.
   if (typeof _avtEnsurePixiFilter === 'function') {
     const filterTypes = new Set();
-    const collectF = o => { if (Array.isArray(o && o.filters)) o.filters.forEach(f => f && f.type && filterTypes.add(f.type)); };
+    const collectF = (o: any) => { if (Array.isArray(o && o.filters)) o.filters.forEach((f: any) => f && f.type && filterTypes.add(f.type)); };
     collectF(cfg); layers.forEach(collectF);
-    layers.forEach(l => { if (l.glow) filterTypes.add('glow'); });
+    layers.forEach((l: any) => { if (l.glow) filterTypes.add('glow'); });
     if (cfg.lighting && cfg.lighting.bloom) filterTypes.add('bloom');
     if (cfg.camera && cfg.camera.chromaticAberration) filterTypes.add('rgbsplit');
     try { await Promise.all([...filterTypes].map(t => _avtEnsurePixiFilter(t))); } catch (_) {}
@@ -786,12 +786,12 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
   if (typeof _avtBuildPixiFilters === 'function') sceneFilters.push(..._avtBuildPixiFilters(cfg.filters, sceneRoot));
   if (sceneFilters.length) sceneRoot.filters = sceneFilters;
 
-  const bm = {
+  const bm: Record<string, any> = {
     add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN,
     multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL,
   };
 
-  const emitters = [];
+  const emitters: any = [];
   for (const l of layers) {
     const anchor = _psAvtLayerAnchor(l, atacScr, alvoScr, casterEnt, targetEnt);
     // spawn_path spans both tokens → pivot at the travel midpoint; static → the layer anchor.
@@ -889,7 +889,7 @@ async function _psAvtRenderWithSpawnPath(cfg, atacScr, alvoScr, casterEnt, targe
 
 // ── Main public entry point ────────────────────────────────────────────────
 // Returns: delay in ms (travel time for projectile behavior, else 0)
-async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
+async function avtPixiPlayAnimation(animId: any, atacanteEnt: any, alvoEnt: any, isAreaMode: any) {
   const cfg = await _psAvtLoadCfg(animId);
   if (!cfg || !cfg.layers || !cfg.layers.length) return 0;
 
@@ -912,8 +912,8 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
 
   // Separate layers with per-layer behavior_override (follow-caster/follow-target) from the rest
   const FOLLOW_OVR = ['follow-caster', 'follow-target', 'channel'];
-  const overrideLayers = (cfg.layers || []).filter(l => l.visivel && l.behavior_override && FOLLOW_OVR.includes(l.behavior_override));
-  const mainLayers     = (cfg.layers || []).filter(l => !(l.behavior_override && FOLLOW_OVR.includes(l.behavior_override)));
+  const overrideLayers = (cfg.layers || []).filter((l: any) => l.visivel && l.behavior_override && FOLLOW_OVR.includes(l.behavior_override));
+  const mainLayers     = (cfg.layers || []).filter((l: any) => !(l.behavior_override && FOLLOW_OVR.includes(l.behavior_override)));
   // Render per-layer follow overrides immediately
   for (const ol of overrideLayers) {
     const singleCfg = Object.assign({}, cfg, { layers: [ol] });
@@ -922,7 +922,7 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
   }
   // Use filtered config for main rendering when there are overrides
   const mainCfg = overrideLayers.length ? Object.assign({}, cfg, { layers: mainLayers }) : cfg;
-  if (!mainLayers.filter(l => l.visivel).length && behavior !== 'chain') return 0;
+  if (!mainLayers.filter((l: any) => l.visivel).length && behavior !== 'chain') return 0;
 
   switch (behavior) {
     case 'projectile':
@@ -943,9 +943,9 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
       // "Origem da animação" is honored. The legacy pipeline is kept only for the global
       // MOTION modes (trajetoria/espiral/raio/area/retorno) and phase envelopes, which the
       // anchor renderer has no concept of; for those the motion overrides the static origin.
-      const emitterLayers = (mainCfg.layers || []).filter(l => l.visivel && l.tipo === 'emitter' && l.emitter);
-      const hasPath    = emitterLayers.some(l => l.spawn_path?.length);
-      const anyAnchor  = emitterLayers.some(l => l.anchor);
+      const emitterLayers = (mainCfg.layers || []).filter((l: any) => l.visivel && l.tipo === 'emitter' && l.emitter);
+      const hasPath    = emitterLayers.some((l: any) => l.spawn_path?.length);
+      const anyAnchor  = emitterLayers.some((l: any) => l.anchor);
       const legacyMotion = isAreaMode || ['trajetoria', 'espiral', 'raio', 'retorno', 'area'].includes(posicao);
       const hasPhases  = !!(cfg.phases || cfg.cast || cfg.travel || cfg.impact);
       const useAnchorRenderer = hasPath || (anyAnchor && !legacyMotion && !hasPhases);
@@ -965,7 +965,7 @@ async function avtPixiPlayAnimation(animId, atacanteEnt, alvoEnt, isAreaMode) {
 }
 
 // ── Compute a point along a travel path between two screen points ──────────
-function _psAvtPathPos(path, atac, alvo, t) {
+function _psAvtPathPos(path: any, atac: any, alvo: any, t: any) {
   const x = atac.x + (alvo.x - atac.x) * t;
   const y = atac.y + (alvo.y - atac.y) * t;
   if (path === 'arc' || path === 'spiral') {
@@ -984,8 +984,8 @@ function _psAvtPathPos(path, atac, alvo, t) {
 }
 
 // ── Emitter projectile that follows a travel path (arc/spiral/homing) ──────
-async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt, atacanteEnt) {
-  const layers = (cfg.layers || []).filter(l => l.visivel && l.tipo === 'emitter' && l.emitter);
+async function _psAvtRenderTravel(cfg: any, atacScr: any, alvoScr: any, path: any, alvoEnt: any, atacanteEnt: any) {
+  const layers = (cfg.layers || []).filter((l: any) => l.visivel && l.tipo === 'emitter' && l.emitter);
   if (!layers.length) return;
   await _avtEnsurePixiParticles();
   if (typeof PIXI === 'undefined') return;
@@ -999,8 +999,8 @@ async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt, atacante
   if (!acq) return;
   const app = acq.app;
 
-  const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
-  const emitters = [];
+  const bm: Record<string, any> = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
+  const emitters: any = [];
   for (const l of layers) {
     const anchor = _psAvtLayerAnchor(l, atacScr, alvoScr, atacanteEnt, alvoEnt);
     // O root billboarda no midpoint do trajeto — o span do layer usa o MESMO pivô.
@@ -1056,8 +1056,8 @@ async function _psAvtRenderTravel(cfg, atacScr, alvoScr, path, alvoEnt, atacante
 }
 
 // ── Projectile: emitter travels from caster to target ─────────────────────
-function _psAvtProjectile(cfg, atacScr, alvoScr, alvoEnt, atacanteEnt) {
-  const hasSpawnPath = (cfg.layers || []).some(l => l.tipo === 'emitter' && l.spawn_path?.length);
+function _psAvtProjectile(cfg: any, atacScr: any, alvoScr: any, alvoEnt: any, atacanteEnt: any) {
+  const hasSpawnPath = (cfg.layers || []).some((l: any) => l.tipo === 'emitter' && l.spawn_path?.length);
 
   // If any emitter layer has a recorded spawn_path, respect it exactly
   if (hasSpawnPath) {
@@ -1105,7 +1105,7 @@ function _psAvtProjectile(cfg, atacScr, alvoScr, alvoEnt, atacanteEnt) {
 }
 
 // ── Follow: emitter tracks an entity's screen position each frame ──────────
-function _psAvtFollow(cfg, targetEnt, durMs) {
+function _psAvtFollow(cfg: any, targetEnt: any, durMs: any) {
   if (!targetEnt || typeof PIXI === 'undefined') {
     // Fallback: just play at current position
     const scr = _psAvtToScreen(targetEnt);
@@ -1130,8 +1130,8 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
     const tracked = _avtVfxTrackedRoot(app.stage, _followPose);
     const worldRoot = tracked.content;
 
-    const emitters = [];
-    const bm = {
+    const emitters: any = [];
+    const bm: Record<string, any> = {
       add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN,
       multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL,
     };
@@ -1218,7 +1218,7 @@ function _psAvtFollow(cfg, targetEnt, durMs) {
 }
 
 // ── Chain behavior: play sequence of animations ────────────────────────────
-function _psAvtChain(cfg, atacanteEnt, alvoEnt, isAreaMode) {
+function _psAvtChain(cfg: any, atacanteEnt: any, alvoEnt: any, isAreaMode: any) {
   const seq = cfg.behavior_config?.sequence || [];
   let delay = 0;
   for (const step of seq) {
@@ -1234,7 +1234,7 @@ function _psAvtChain(cfg, atacanteEnt, alvoEnt, isAreaMode) {
 // Used for status effects that last multiple turns (HoT, DoT, Atravessar, etc.)
 // key: unique string (e.g. "entId_efeitoNome") to identify this animation
 // posicao: 'alvo' | 'atacante' | 'meio' — which entity to follow
-async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
+async function avtPixiPlayPersistent(animId: any, alvoEnt: any, casterEnt: any, posicao: any, key: any) {
   avtPixiStopPersistent(key);  // stop any existing animation for this key
 
   const cfg = await _psAvtLoadCfg(animId);
@@ -1258,11 +1258,11 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
   const _persistLift = _psAnchorLift(_psNormAnchor(cfg.anchor));
   const tracked = _avtVfxTrackedRoot(app.stage, _persistPose);
   const worldRoot = tracked.content;
-  const bm = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
-  const hexInt = (c) => { if (typeof c === 'number') return c; const n = parseInt(String(c).replace('#',''),16); return isNaN(n)?0xffffff:n; };
+  const bm: Record<string, any> = { add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY, normal: PIXI.BLEND_MODES.NORMAL };
+  const hexInt = (c: any) => { if (typeof c === 'number') return c; const n = parseInt(String(c).replace('#',''),16); return isNaN(n)?0xffffff:n; };
 
   // Resolve which entity each layer should track
-  const _resolveLayerEnt = (l) => {
+  const _resolveLayerEnt = (l: any) => {
     const ov = l.behavior_override;
     if (ov === 'follow-caster' || ov === 'channel') return casterEnt || alvoEnt;
     if (ov === 'follow-target') return alvoEnt || casterEnt;
@@ -1271,7 +1271,7 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
 
   const cycleDurMs = cfg.duracao_ms || cfg.duration || 1000;
   const startScr = _psAvtToScreen(primaryEnt);
-  const emitters = [];
+  const emitters: any = [];
 
   for (const l of (cfg.layers || [])) {
     if (!l.visivel) continue;
@@ -1412,7 +1412,7 @@ async function avtPixiPlayPersistent(animId, alvoEnt, casterEnt, posicao, key) {
   _PS_PERSISTENT.set(key, { cleanup });
 }
 
-function avtPixiStopPersistent(key) {
+function avtPixiStopPersistent(key: any) {
   const entry = _PS_PERSISTENT.get(key);
   if (entry) { entry.cleanup(); }
 }

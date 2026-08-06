@@ -206,7 +206,7 @@ function _mesaAjustarMapa() {
 window._mesaAjustarMapa = _mesaAjustarMapa;
 
 // ── Toolbar bottom: revelar por proximidade; painel esq via documento ──
-function _mesaToolbarSetup(mapaWrap) {
+function _mesaToolbarSetup(mapaWrap: any) {
   if (mapaWrap._toolbarSetup) return;
   mapaWrap._toolbarSetup = true;
 
@@ -214,7 +214,7 @@ function _mesaToolbarSetup(mapaWrap) {
   let _toolbarVisible = false;
 
   // Toolbar: listener restrito ao mapa-wrap (toolbar fica dentro dele)
-  mapaWrap.addEventListener('mousemove', e => {
+  mapaWrap.addEventListener('mousemove', (e: any) => {
     const rect = mapaWrap.getBoundingClientRect();
     const fromBottom = rect.bottom - e.clientY;
     const toolbar = document.getElementById('mapa-toolbar');
@@ -265,7 +265,7 @@ function _mesaToolbarSetup(mapaWrap) {
 }
 
 // ── Pin / unpin de painéis ────────────────────────────────────────────────
-function mesaPinToggle(lado) {
+function mesaPinToggle(lado: any) {
   const panelId = lado === 'esq' ? 'mesa-col-esq' : 'mesa-col-dir';
   const pinBtnId = 'mesa-pin-' + lado;
   const panel = document.getElementById(panelId);
@@ -281,10 +281,10 @@ function mesaPinToggle(lado) {
 }
 
 // ── HUD draggable ─────────────────────────────────────────────────────────
-function _mesaHudDraggableInit(hud) {
-  let dragging = false, startX, startY, origLeft, origTop;
+function _mesaHudDraggableInit(hud: any) {
+  let dragging = false, startX: any, startY: any, origLeft: any, origTop: any;
 
-  hud.addEventListener('mousedown', e => {
+  hud.addEventListener('mousedown', (e: any) => {
     if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
     dragging = true;
     hud.classList.add('dragging');
@@ -327,7 +327,7 @@ function _mesaHudAutoPositionar() {
   if (!mapaWrap || !mapaImg) return;
 
   // Encontrar token do personagem ativo
-  const token = (MAPA_STATE.tokens || []).find(t => t.nome === atual.nome);
+  const token = (MAPA_STATE.tokens || []).find((t: any) => t.nome === atual.nome);
   if (!token || token.cx == null) return;
 
   const wrapRect = mapaWrap.getBoundingClientRect();
@@ -366,7 +366,7 @@ function _mesaHudAutoPositionar() {
 }());
 
 // ── Toggle de painéis flutuantes ──────────────────────────────────────────
-function mesaTogglePainel(lado) {
+function mesaTogglePainel(lado: any) {
   const id    = lado === 'esq' ? 'mesa-col-esq' : 'mesa-col-dir';
   const btnId = lado === 'esq' ? 'mesa-toggle-esq' : 'mesa-toggle-dir';
   const el    = document.getElementById(id);
@@ -406,7 +406,7 @@ function _mesaRenderCombatHud() {
 
   if (bs.fase === 'iniciativa' || bs.fase === 'empate') {
     const jaRolei  = meuChar && bs.iniciativasRoladas?.[meuChar] != null;
-    const pendentes = bs.participantes?.filter(p => bs.iniciativasRoladas?.[p.nome] == null) || [];
+    const pendentes = bs.participantes?.filter((p: any) => bs.iniciativasRoladas?.[p.nome] == null) || [];
     hud.innerHTML =
       '<div class="mhud-round">🎲 Iniciativa' + (bs.fase === 'empate' ? ' — Desempate' : '') + '</div>' +
       '<div class="mhud-sep"></div>' +
@@ -471,7 +471,7 @@ function _mesaRenderIniciativa() {
   if (!el) return;
   const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
   if (!bs?.participantes?.length) { el.innerHTML = '<div style="font-size:0.62rem;color:var(--suave);font-style:italic;padding:4px 0">Sem batalha ativa</div>'; return; }
-  el.innerHTML = bs.participantes.map((p,i) => {
+  el.innerHTML = bs.participantes.map((p: any,i: any) => {
     const isAtual = i === bs.ordemAtual;
     const nomeEnc = encodeURIComponent(p.nome);
     return '<div onclick="selecionarAlvoLista(\'' + nomeEnc + '\')" style="padding:4px 7px;border-radius:6px;border:1px solid '+(isAtual?p.cor+'88':'var(--borda)')+';background:'+(isAtual?p.cor+'18':'transparent')+';display:flex;align-items:center;gap:6px;margin-bottom:3px;cursor:pointer;transition:all 0.2s" onmouseover="this.style.background=\''+(p.cor||'#7ec8f0')+'22\'" onmouseout="this.style.background=\''+(isAtual?p.cor+'18':'transparent')+'\'"><div style="width:7px;height:7px;border-radius:50%;background:'+p.cor+';flex-shrink:0"></div><span style="font-size:0.65rem;font-family:var(--fonte-d);color:'+(isAtual?p.cor:'var(--suave)')+';flex:1">'+p.nome+'</span>'+(isAtual?'<span style="font-size:0.6rem;color:var(--destaque)">▶</span>':'')+'</div>';
@@ -492,11 +492,11 @@ function _mesaRenderAcoes() {
 
   if (bs && (bs.fase === 'iniciativa' || bs.fase === 'empate')) {
     const jaRolei = meuChar && bs.iniciativasRoladas?.[meuChar] != null;
-    const pendentes = bs.participantes?.filter(p => bs.iniciativasRoladas?.[p.nome] == null) || [];
+    const pendentes = bs.participantes?.filter((p: any) => bs.iniciativasRoladas?.[p.nome] == null) || [];
     sections.push(
       '<div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--destaque);margin-bottom:6px">' +
       (bs.fase === 'empate' ? '⚠ Empate — re-role' : '🎲 Iniciativa') + '</div>' +
-      bs.participantes.map(p => {
+      bs.participantes.map((p: any) => {
         const val = bs.iniciativasRoladas?.[p.nome];
         return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">' +
           '<div style="width:8px;height:8px;border-radius:50%;background:' + (p.cor||'#7ec8f0') + ';flex-shrink:0"></div>' +
@@ -555,7 +555,7 @@ function _mesaRenderAcoes() {
         const { visiveis, ocultos } = typeof ctxPriorizar === 'function' ? ctxPriorizar(botoes) : { visiveis: botoes, ocultos: [] };
         sections.push('<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">⚡ Ações posicionais</div>' +
           '<div style="display:flex;flex-direction:column;gap:3px">' +
-          visiveis.map(b =>
+          visiveis.map((b: any) =>
             '<button onclick="ctxExecutarAcao(' + JSON.stringify(b).replace(/"/g,"'") + ')" style="padding:6px 9px;background:rgba(79,163,209,0.07);border:1px solid rgba(79,163,209,0.2);border-radius:7px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-align:left">' +
             b.label + '</button>'
           ).join('') +
@@ -571,11 +571,11 @@ function _mesaRenderAcoes() {
     }
     const charAtivo = window.TOKEN_CTRL?.nomeSelecionado || meuChar;
     if (charAtivo && mapId && typeof ctxGerarBotoes === 'function') {
-      const botoes = ctxGerarBotoes(charAtivo, mapId).filter(b => b.acao !== 'usar_skill');
+      const botoes = ctxGerarBotoes(charAtivo, mapId).filter((b: any) => b.acao !== 'usar_skill');
       if (botoes.length) {
         const { visiveis, ocultos } = typeof ctxPriorizar === 'function' ? ctxPriorizar(botoes) : { visiveis: botoes, ocultos: [] };
         sections.push('<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">⚡ Interações</div>' +
-          visiveis.map(b =>
+          visiveis.map((b: any) =>
             '<button onclick="ctxExecutarAcao(' + JSON.stringify(b).replace(/"/g,"'") + ')" style="width:100%;padding:7px 10px;background:rgba(79,163,209,0.07);border:1px solid rgba(79,163,209,0.2);border-radius:8px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left;margin-bottom:3px">' +
             b.label + '</button>'
           ).join('') +
@@ -596,8 +596,8 @@ function _mesaRenderAcoes() {
     }
     if (bs) {
       const _cfg = typeof getBattleConfig === 'function' ? getBattleConfig() : { sistema_reacao: 'dnd5e', usa_reacoes: false };
-      const _sysLabel = { dnd5e: 'D&D 5e', pf2e: 'PF2e', pf1e: 'PF1e', narrativo: 'Narrativo', custom: 'Custom', desativado: 'Desativado' };
-      const _defLabel = { passiva: 'Passiva', ativa: 'Ativa', mista: 'Mista' };
+      const _sysLabel: Record<string, any> = { dnd5e: 'D&D 5e', pf2e: 'PF2e', pf1e: 'PF1e', narrativo: 'Narrativo', custom: 'Custom', desativado: 'Desativado' };
+      const _defLabel: Record<string, string> = { passiva: 'Passiva', ativa: 'Ativa', mista: 'Mista' };
       let _recHtml = '';
       if (_cfg.usa_reacoes && bs.recursos_participantes && Object.keys(bs.recursos_participantes).length) {
         _recHtml = '<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">' +
@@ -643,7 +643,7 @@ function _mesaRenderAcoes() {
 }
 
 
-function _mesaAtacarHab(btn) {
+function _mesaAtacarHab(btn: any) {
   const charNome = decodeURIComponent(btn.dataset.char || '');
   const h = JSON.parse(decodeURIComponent(btn.dataset.hab || '{}'));
   if (!charNome || !h.id) return;
@@ -671,9 +671,9 @@ HUB_EVENTS.on('token_selecionado', () => { _mesaRenderAcoes?.(); _mesaRenderComb
 HUB_EVENTS.on('batalha_atualizada', () => { _mesaRenderAcoes?.(); _mesaRenderCombatHud?.(); _mesaRenderIniciativa?.(); });
 
 // ── 5.2 Feed da mesa ──────────────────────────────────────────────────────
-const FEED_MESA = { entradas: [], maxEntradas: 200 };
+const FEED_MESA = { entradas: [] as any[], maxEntradas: 200 };
 
-function feedAdicionarEntrada(texto, tipo, personagem?) {
+function feedAdicionarEntrada(texto: any, tipo: any, personagem?: any) {
   FEED_MESA.entradas.unshift({ ts: Date.now(), texto, tipo: tipo||'info', personagem: personagem||null });
   if (FEED_MESA.entradas.length > FEED_MESA.maxEntradas) FEED_MESA.entradas = FEED_MESA.entradas.slice(0, FEED_MESA.maxEntradas);
   feedRenderizar();
@@ -682,7 +682,7 @@ function feedAdicionarEntrada(texto, tipo, personagem?) {
 function feedRenderizar() {
   const el = document.getElementById('mesa-feed-lista');
   if (!el) return;
-  const corTipo = { dano:'#e74c3c', cura:'#5ee09a', turno:'#f0cc6a', movimento:'#7ec8f0', item:'#b07ef0', cena:'#c8a84b', info:'rgba(255,255,255,0.4)' };
+  const corTipo: Record<string, any> = { dano:'#e74c3c', cura:'#5ee09a', turno:'#f0cc6a', movimento:'#7ec8f0', item:'#b07ef0', cena:'#c8a84b', info:'rgba(255,255,255,0.4)' };
   el.innerHTML = FEED_MESA.entradas.slice(0,40).map(e => {
     const cor  = corTipo[e.tipo]||corTipo.info;
     const hora = new Date(e.ts).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
@@ -709,7 +709,7 @@ function barraContextoInicializar() {
   document.body.appendChild(barra);
 }
 
-function barraContextoAtualizar(personagem) {
+function barraContextoAtualizar(personagem: any) {
   const barra = document.getElementById('barra-contexto-mestre');
   if (!barra || RPG_DATA?.myRole !== 'mestre') return;
   barra.style.display = 'flex';
@@ -734,9 +734,9 @@ HUB_EVENTS.on('turno_avancou', ({ personagem }) => {
 });
 
 // ── 5.4 Painel de notificações ────────────────────────────────────────────
-const NOTIFICACOES = { fila: [] };
+const NOTIFICACOES = { fila: [] as any[] };
 
-function notifAdicionar(_notif) { const { tipo, prioridade, titulo, descricao, acao, dados } = _notif;
+function notifAdicionar(_notif: any) { const { tipo, prioridade, titulo, descricao, acao, dados } = _notif;
   const notif: any = { id:'notif_'+Date.now()+'_'+Math.random().toString(36).slice(2,5), tipo:tipo||'info', prioridade:prioridade||'media', titulo:titulo||'', descricao:descricao||'', acao:acao||null, dados:dados||{}, ts:Date.now() };
   if (notif.prioridade === 'baixa') {
     const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
@@ -755,7 +755,7 @@ function notifRenderizar() {
   }
   const visiveis = NOTIFICACOES.fila.filter(n => !n._adiada && !n._resolvida);
   if (!visiveis.length) { painel.innerHTML = ''; return; }
-  const corP = { alta:'#e74c3c', media:'#f0cc6a', baixa:'rgba(122,146,170,0.7)' };
+  const corP: Record<string, any> = { alta:'#e74c3c', media:'#f0cc6a', baixa:'rgba(122,146,170,0.7)' };
   painel.innerHTML = visiveis.slice(0,5).map(n => {
     const cor = corP[n.prioridade]||'var(--borda)';
     const pulso = n.prioridade==='alta'?'animation:notifPulso 1.2s ease-in-out infinite;':'';
@@ -763,9 +763,9 @@ function notifRenderizar() {
   }).join('');
 }
 
-window.notifDismiss  = id => { const n=NOTIFICACOES.fila.find(x=>x.id===id); if(n) n._resolvida=true; notifRenderizar(); };
-window.notifExpandir = id => { const n=NOTIFICACOES.fila.find(x=>x.id===id); if(n?.acao) notifExecutar(id); };
-window.notifExecutar = id => { const n=NOTIFICACOES.fila.find(x=>x.id===id); if(!n?.acao) return; if(typeof n.acao.fn==='function') n.acao.fn(n.dados); n._resolvida=true; notifRenderizar(); };
+window.notifDismiss  = (id: any) => { const n=NOTIFICACOES.fila.find(x=>x.id===id); if(n) n._resolvida=true; notifRenderizar(); };
+window.notifExpandir = (id: any) => { const n=NOTIFICACOES.fila.find(x=>x.id===id); if(n?.acao) notifExecutar(id); };
+window.notifExecutar = (id: any) => { const n=NOTIFICACOES.fila.find(x=>x.id===id); if(!n?.acao) return; if(typeof n.acao.fn==='function') n.acao.fn(n.dados); n._resolvida=true; notifRenderizar(); };
 
 HUB_EVENTS.on('turno_avancou', () => { NOTIFICACOES.fila.forEach(n => { if(n._adiada) n._adiada=false; }); notifRenderizar(); });
 (function(){ const s=document.createElement('style'); s.textContent='@keyframes notifPulso{0%,100%{box-shadow:0 0 0 0 rgba(231,76,60,0.4)}50%{box-shadow:0 0 0 6px rgba(231,76,60,0)}}'; document.head.appendChild(s); })();
@@ -784,7 +784,7 @@ window.combateBroadcast = function(tipo, dados) {
   }
 };
 
-async function entrarRPG(rpgId){
+async function entrarRPG(rpgId: any){
  salvarNav('rpg', rpgId);
  MAPA_STATE.mapaAtualId = null;
  MAPA_STATE.mapaGeralId = null;
@@ -851,9 +851,9 @@ window.entrarRPG = async function(rpgId) {
   }, 800);
 };
 
-function aplicarTema(rpg){
+function aplicarTema(rpg: any){
  const t=rpg.theme||{}, root=document.documentElement;
- const s=(k,v,d)=>root.style.setProperty(k,t[v]||d);
+ const s=(k: any,v: any,d: any)=>root.style.setProperty(k,t[v]||d);
  s('--preto','preto','#080c10');s('--escuro','escuro','#0f1520');s('--painel','painel','#141d2b');
  s('--borda','borda','#1e2d42');s('--cinza','cinza','#2a3a50');s('--texto','texto','#c8d8e8');
  s('--suave','suave','#7a92aa');s('--primario','primario','#4fa3d1');s('--primario-v','primario_v','#7ec8f0');
@@ -870,7 +870,7 @@ function aplicarTema(rpg){
 
 let LOADING_START=0;
 
-function mostrarLoading(rpg){
+function mostrarLoading(rpg: any){
  LOADING_START=Date.now();
  document.getElementById('hub').style.display='none';
  if (rpg.theme && rpg.theme.animation_css) injectCustomCSS(rpg.id, rpg.theme.animation_css);
@@ -937,7 +937,7 @@ function ocultarLoading(){
  },delay);
 }
 
-function mostrarApp(rpg){
+function mostrarApp(rpg: any){
  document.getElementById('app-logo').textContent=rpg.name;
  document.getElementById('app').classList.add('visible');
  document.getElementById('btn-delete-rpg').style.display=rpg.id==='dual'?'none':'block';
@@ -958,7 +958,7 @@ function voltarHub(){
  document.body.style.background='';
 }
 
-window.selecionarAlvoLista = function(nomeEncodado) {
+window.selecionarAlvoLista = function(nomeEncodado: any) {
   const nome = decodeURIComponent(nomeEncodado);
   if (!window.TOKEN_CTRL) window.TOKEN_CTRL = {};
   window.TOKEN_CTRL.nomeSelecionado = nome;
@@ -992,8 +992,8 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 // Estado do trigger flutuante
 let _TRIGGER_CARD_STATE = {
   visible: false,
-  countdown: null,
-  timerInterval: null
+  countdown: null as any,
+  timerInterval: null as any
 };
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1001,7 +1001,7 @@ let _TRIGGER_CARD_STATE = {
 // ══════════════════════════════════════════════════════════════════════════
 
 // v2.5 - 16/04/2026: Sistema de animação instantânea para modal inline
-async function _mesaDispararAnimacao(atacanteNome, alvoNome, animacao) {
+async function _mesaDispararAnimacao(atacanteNome: any, alvoNome: any, animacao: any) {
   if (!animacao || animacao.tipo === 'nenhuma') return;
   
   // Obter posições dos tokens
@@ -1050,7 +1050,7 @@ async function _mesaDispararAnimacao(atacanteNome, alvoNome, animacao) {
   await new Promise(resolve => setTimeout(resolve, 300));
 }
 
-function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
+function _mesaRenderAtaqueInline(atacanteNome: any, habilidades: any) {
   // Estado local do ataque inline
   if (!window._MESA_ATK_STATE) {
     window._MESA_ATK_STATE = {
@@ -1072,8 +1072,8 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
       '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">⚔ Escolha a habilidade</div>' +
       '<div style="font-size:0.68rem;color:#7a6060;margin-bottom:4px">💡 Use teclas 1-9 para selecionar rapidamente</div>' +
       habilidades
-        .filter(h => !h.tipo_habilidade || h.tipo_habilidade === 'acao')
-        .slice(0, 9).map((h, idx) => {
+        .filter((h: any) => !h.tipo_habilidade || h.tipo_habilidade === 'acao')
+        .slice(0, 9).map((h: any, idx: any) => {
         const cd = cooldowns[h.id] || 0;
         const bloqueio = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
         const disabled = cd > 0 || !!bloqueio;
@@ -1142,7 +1142,7 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
           const hpMax = pet.custom_attrs?.hp_max ?? 100;
           const incap = hpAtual <= 0;
           
-          const habsHtml = habilidades.filter(h => !h.tipo_habilidade || h.tipo_habilidade === 'acao').map((h, i) => {
+          const habsHtml = habilidades.filter((h: any) => !h.tipo_habilidade || h.tipo_habilidade === 'acao').map((h: any, i: any) => {
             const bloqueio = typeof atkVerificarBloqueioAtaque === 'function' ? atkVerificarBloqueioAtaque(pet.nome, h.tipo_dano) : null;
             const donoAtivoParaTipo = _mesaPetDonoEstaAtivo(atacanteNome, h.tipo_dano);
             const desabilitado = incap || !donoAtivoParaTipo || !!bloqueio;
@@ -1358,7 +1358,7 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
 // 3. FUNÇÕES DE NAVEGAÇÃO DO ATAQUE INLINE
 // ══════════════════════════════════════════════════════════════════════════
 
-window._mesaAtaqueInlineSelecionarHab = function(idx, habilidade) {
+window._mesaAtaqueInlineSelecionarHab = function(idx: any, habilidade: any) {
   const state = window._MESA_ATK_STATE;
   state.step = 2;
   state.habilidadeSel = habilidade;
@@ -1368,7 +1368,7 @@ window._mesaAtaqueInlineSelecionarHab = function(idx, habilidade) {
   if (state._fromMobile && typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
 };
 
-window._mesaAtaqueInlineSelecionarAlvo = function(alvoNome) {
+window._mesaAtaqueInlineSelecionarAlvo = function(alvoNome: any) {
   const state = window._MESA_ATK_STATE;
   const h = state.habilidadeSel;
 
@@ -1445,7 +1445,7 @@ window._mesaAtaqueInlineVoltar = function() {
 };
 
 // v2.6 - 16/04/2026: Iniciar ataque usando pet/montaria
-window._mesaAtaquePet = function(petNome, habilidadeIdx) {
+window._mesaAtaquePet = function(petNome: any, habilidadeIdx: any) {
   const state = window._MESA_ATK_STATE;
   const habilidades = _mesaPetGetHabilidades(petNome);
   const h = habilidades[habilidadeIdx];
@@ -1491,7 +1491,7 @@ window._mesaAtaqueInlineRolar = async function() {
     if (matches.length > 0) {
       // Simular 5 frames de "rolagem" antes do resultado real
       for (let i = 0; i < 5; i++) {
-        const valoresSimulados = matches.map(dice => {
+        const valoresSimulados = matches.map((dice: any) => {
           const [qtd, faces] = dice.split('d').map(Number);
           const rolls = Array.from({length: qtd}, () => Math.floor(Math.random() * faces) + 1);
           return rolls.join('+');
@@ -1615,7 +1615,7 @@ window._mesaAtaqueInlineConfirmar = async function() {
 // ══════════════════════════════════════════════════════════════════════════
 
 // v2.6 - 16/04/2026: Sistema completo de faction e fogo amigo
-function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
+function _mesaAtaqueInlineGetAlvos(atacanteNome: any, habilidade: any) {
   const state = window._MESA_ATK_STATE;
   const h = habilidade;
   const alvoTipo = h?.alvo_tipo || 'inimigo';
@@ -1627,7 +1627,7 @@ function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
   const nomeParaDistancia = state?._ehAtaquePet ? state._petAtacante : atacanteNome;
   
   // Helper: retorna a faction efetiva de um personagem
-  const _getFaction = (c) => {
+  const _getFaction = (c: any) => {
     const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador';
     if (tipo === 'jogador') return 'jogador';
     return c.custom_attrs?.npc_faction || 'inimigo';
@@ -1639,7 +1639,7 @@ function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
   // Buscar participantes da batalha
   const _bidAtk = BATALHA_ATUAL_ID;
   const _bsAtk = _bidAtk ? MAPA_STATE?.batalhas?.[_bidAtk] : null;
-  const _partBatalha = _bsAtk?.participantes?.map(p => p.nome) || null;
+  const _partBatalha = _bsAtk?.participantes?.map((p: any) => p.nome) || null;
   
   let lista = (RPG_DATA?.characters || [])
     .filter(c => {
@@ -1659,7 +1659,7 @@ function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
 
       if (ehBuff) {
         // Buff: jogadores e NPCs aliados
-        const _isPetAliado = (chr) => {
+        const _isPetAliado = (chr: any) => {
           if (!chr.custom_attrs?.eh_pet) return false;
           const donoNome = chr.custom_attrs?.pet_dono;
           const dono = (RPG_DATA?.characters||[]).find(x => x.nome === donoNome);
@@ -1690,7 +1690,7 @@ function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
         fogoAmigoForte: ehFogoAmigoForte,
         hp: c.hp_atual ?? (c.custom_attrs?.hp_max??100),
         hpMax: c.custom_attrs?.hp_max??100,
-        distancia: null
+        distancia: null as any
       };
     });
   
@@ -1698,9 +1698,9 @@ function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
   const alcance = h?.alcance_celulas ?? null;
   if (_bsAtk?.participantes) {
     // v2.6: Usar pet para calcular distância se for ataque de pet
-    const atacantePart = _bsAtk.participantes.find(p => p.nome === nomeParaDistancia);
+    const atacantePart = _bsAtk.participantes.find((p: any) => p.nome === nomeParaDistancia);
     lista = lista.map(a => {
-      const alvoPart = _bsAtk.participantes.find(p => p.nome === a.nome);
+      const alvoPart = _bsAtk.participantes.find((p: any) => p.nome === a.nome);
       const dist = _calcularDistanciaSegura(atacantePart, alvoPart);
       const foraAlcance = alcance != null && dist != null && dist > alcance;
       return { ...a, distCelulas: dist, foraAlcance };
@@ -1716,13 +1716,13 @@ function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
 // ══════════════════════════════════════════════════════════════════════════
 // v2.6 - 16/04/2026: Sistema completo de pets/montarias
 
-function _mesaPetGetHabilidades(petNome) {
+function _mesaPetGetHabilidades(petNome: any) {
   const chars = RPG_DATA?.characters || [];
   const c = chars.find(x => x.nome === petNome);
   if (!c) return [];
   const ca = c.custom_attrs || {};
   if (ca.habilidades?.length) {
-    return ca.habilidades.map(h => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0 }));
+    return ca.habilidades.map((h: any) => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0 }));
   }
   // Jogadores com ficha usam atkGetHabilidadesCampanha
   if (typeof atkGetHabilidadesCampanha === 'function') {
@@ -1731,7 +1731,7 @@ function _mesaPetGetHabilidades(petNome) {
   return [];
 }
 
-function _mesaPetGetPetsDoDono(donoNome) {
+function _mesaPetGetPetsDoDono(donoNome: any) {
   const chars = RPG_DATA?.characters || [];
   return chars.filter(c => {
     const ca = c.custom_attrs || {};
@@ -1739,7 +1739,7 @@ function _mesaPetGetPetsDoDono(donoNome) {
   });
 }
 
-function _mesaPetDonoEstaAtivo(donoNome, tipoDanoHabilidade?) {
+function _mesaPetDonoEstaAtivo(donoNome: any, tipoDanoHabilidade?: any) {
   const chars = RPG_DATA?.characters || [];
   const dono = chars.find(c => c.nome === donoNome);
   if (!dono) return false;
@@ -1764,7 +1764,7 @@ function _mesaPetDonoEstaAtivo(donoNome, tipoDanoHabilidade?) {
 // 5. CÁLCULOS E UTILITÁRIOS
 // ══════════════════════════════════════════════════════════════════════════
 
-function _calcularDistanciaSegura(token1, token2) {
+function _calcularDistanciaSegura(token1: any, token2: any) {
   if (!token1 || !token2) return null;
   
   const pos1 = token1.posicao || token1.pos || token1.position || token1.celula;
@@ -1783,7 +1783,7 @@ function _calcularDistanciaSegura(token1, token2) {
   return Math.max(dx, dy);
 }
 
-function calcularRangeDano(formula) {
+function calcularRangeDano(formula: any) {
   if (!formula || formula === '—') return { min: 0, max: 0 };
   
   const match = formula.match(/(\d+)d(\d+)/);
@@ -1798,13 +1798,13 @@ function calcularRangeDano(formula) {
   };
 }
 
-function calcModAtributo(habilidade, nomeAtacante, contexto) {
+function calcModAtributo(habilidade: any, nomeAtacante: any, contexto: any) {
   const pct = habilidade.mod_atributo_pct;
   const atributo = habilidade.atributo_base;
   if (!pct || !atributo) return 0;
 
   const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
-  const char = chars.find(c => c.nome === nomeAtacante);
+  const char = chars.find((c: any) => c.nome === nomeAtacante);
   if (!char) return 0;
 
   const atrs = char.custom_attrs?.atributos || {};
@@ -1815,9 +1815,9 @@ function calcModAtributo(habilidade, nomeAtacante, contexto) {
 }
 
 // v2.4 - 16/04/2026: Adicionada detecção e aplicação de críticos (d20: 1=erro, 18-19=menor, 20=maior)
-function rolarFormulaDano(formula, habilidade, charNome, contexto) {
+function rolarFormulaDano(formula: any, habilidade: any, charNome: any, contexto: any) {
   const match = formula.match(/(\d+)d(\d+)([+-]\d+)?/);
-  if (!match) return { total: 0, detalhes: 'Fórmula inválida', rolls: [], dados: [] };
+  if (!match) return { total: 0, detalhes: 'Fórmula inválida', rolls: [] as any[], dados: [] as any[] };
   
   const qtd = parseInt(match[1]);
   const faces = parseInt(match[2]);
@@ -1873,7 +1873,7 @@ function rolarFormulaDano(formula, habilidade, charNome, contexto) {
   };
 }
 
-function getCooldownsBatalhaSeguro(batalhaId) {
+function getCooldownsBatalhaSeguro(batalhaId: any) {
   if (typeof getCooldownsBatalha === 'function') {
     return getCooldownsBatalha(batalhaId) || {};
   }
@@ -1884,9 +1884,9 @@ function getCooldownsBatalhaSeguro(batalhaId) {
 // 6. VISUALIZAÇÃO DE ALCANCE NO MAPA
 // ══════════════════════════════════════════════════════════════════════════
 
-function _mesaShowRangeCircle(atacanteNome, alcance) {
+function _mesaShowRangeCircle(atacanteNome: any, alcance: any) {
   const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
-  const atacante = bs?.participantes?.find(p => p.nome === atacanteNome);
+  const atacante = bs?.participantes?.find((p: any) => p.nome === atacanteNome);
   
   if (!atacante) return;
   
@@ -1944,7 +1944,7 @@ function mapaHideRangeCircle() {
   if (circle) circle.remove();
 }
 
-function mapaShowAoECircle(centerPos, radius) {
+function mapaShowAoECircle(centerPos: any, radius: any) {
   const grid = document.getElementById('mapa-grid');
   if (!grid) return;
   
@@ -2076,7 +2076,7 @@ window._atkTriggerCancelar = function() {
 // 8. VERIFICAÇÃO DE ESTADO DE BATALHA PARA JOGADORES
 // ══════════════════════════════════════════════════════════════════════════
 
-function _estadoBatalhaJogador(nomePersonagem) {
+function _estadoBatalhaJogador(nomePersonagem: any) {
   // Se não há batalha ativa, está fora de combate
   if (!BATALHA_ATUAL_ID || !MAPA_STATE?.batalhas?.[BATALHA_ATUAL_ID]) {
     return 'fora_combate';
@@ -2090,7 +2090,7 @@ function _estadoBatalhaJogador(nomePersonagem) {
   }
   
   // Verificar se o personagem está na batalha
-  const indexPersonagem = bs.participantes.findIndex(p => p.nome === nomePersonagem);
+  const indexPersonagem = bs.participantes.findIndex((p: any) => p.nome === nomePersonagem);
   if (indexPersonagem === -1) {
     return 'fora_combate';
   }
@@ -2108,7 +2108,7 @@ function _estadoBatalhaJogador(nomePersonagem) {
 // 9. ABERTURA E FECHAMENTO DO MODAL
 // ══════════════════════════════════════════════════════════════════════════
 
-function abrirModalAtaque(atacanteNome, contexto = 'arena') {
+function abrirModalAtaque(atacanteNome: any, contexto = 'arena') {
   if (!atacanteNome) {
     mostrarToast('Nenhum personagem selecionado', 'erro');
     return;
@@ -2158,7 +2158,7 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     : getCooldownsBatalhaSeguro(BATALHA_ATUAL_ID);
 
   const lista = document.getElementById('atk-habilidades-lista');
-  lista.innerHTML = habilidades.map((h, i) => {
+  lista.innerHTML = habilidades.map((h: any, i: any) => {
     const cdRestante = cooldownsAtivos[h.id] || 0;
     const emCooldown = cdRestante > 0;
     const bloqueio = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
@@ -2260,7 +2260,7 @@ if (criatDesc) criatDesc.value = '';
 
   modal._atkModo = null;
 
-  function _setModalModo(modo) {
+  function _setModalModo(modo: any) {
     if (modal._atkModo === modo) return;
     modal._atkModo = modo;
     modal.dataset.atkModo = modo;
@@ -2521,7 +2521,7 @@ window._debugEstadoBatalha = function() {
 // 12. MODO DE ATAQUE DINÂMICO NO MAPA
 // ══════════════════════════════════════════════════════════════════════════
 
-function ativarModoAtaqueMapa(atacanteNome) {
+function ativarModoAtaqueMapa(atacanteNome: any) {
   ATAQUE_MAPA_STATE = {
     ativo: true,
     atacanteNome: atacanteNome,
@@ -2578,14 +2578,14 @@ function desativarModoAtaqueMapa() {
   });
 }
 
-function _marcarAlvosDisponiveis(atacanteNome) {
+function _marcarAlvosDisponiveis(atacanteNome: any) {
   const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
   if (!bs || !bs.participantes) return;
   
-  const atacante = bs.participantes.find(p => p.nome === atacanteNome);
+  const atacante = bs.participantes.find((p: any) => p.nome === atacanteNome);
   if (!atacante) return;
   
-  bs.participantes.forEach(p => {
+  bs.participantes.forEach((p: any) => {
     if (p.nome === atacanteNome) return;
     
     const token = document.querySelector(`.mapa-token[data-nome="${p.nome}"]`);

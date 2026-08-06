@@ -7,7 +7,7 @@
 window._animCtrlMap = window._animCtrlMap || {};
 
 // ── Resolução de URL de imagem ────────────────────────────────────────────────
-function tokenImgUrl(char) {
+function tokenImgUrl(char: any) {
   const ca = char.custom_attrs || {};
   return ca.img_retrato
     || ca.aparencia?.img_frente
@@ -18,11 +18,11 @@ function tokenImgUrl(char) {
 }
 
 // ── Overlays de tint (cor/blend sobre imagem) ─────────────────────────────────
-function tokenTintOverlayHtml(tints) {
+function tokenTintOverlayHtml(tints: any) {
   if (!tints || !tints.length) return '';
   return tints
-    .filter(t => t && t.cor && (t.opacidade ?? 0) > 0)
-    .map(t => {
+    .filter((t: any) => t && t.cor && (t.opacidade ?? 0) > 0)
+    .map((t: any) => {
       const modo = t.modo || 'multiply';
       const op   = Math.min(1, Math.max(0, t.opacidade ?? 0.4));
       return `<div style="position:absolute;inset:0;background:${t.cor};opacity:${op};mix-blend-mode:${modo};pointer-events:none;border-radius:inherit"></div>`;
@@ -31,15 +31,15 @@ function tokenTintOverlayHtml(tints) {
 }
 
 // ── Overlays de equipamento visual sobre o token ──────────────────────────────
-function tokenEquipOverlayHtml(equips, tw, th, camadaFiltro) {
+function tokenEquipOverlayHtml(equips: any, tw: any, th: any, camadaFiltro: any) {
   if (!equips || !equips.length) return '';
   return equips
-    .filter(eq =>
+    .filter((eq: any) =>
       eq.visivel !== false
       && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
       && (!camadaFiltro || (camadaFiltro === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
     )
-    .map(eq => {
+    .map((eq: any) => {
       const xPct    = eq.x     != null ? eq.x     : 50;
       const yPct    = eq.y     != null ? eq.y     : 30;
       const escala  = (eq.escala != null ? eq.escala : 100) / 100;
@@ -51,7 +51,7 @@ function tokenEquipOverlayHtml(equips, tw, th, camadaFiltro) {
       const top  = Math.round((yPct / 100) * th - eqH / 2);
       const zIdx = eq.camada === 'atras' ? 0 : 5;
       const _warp = eq.warpCorners && typeof _aeqComputeMatrix3d === 'function'
-        ? _aeqComputeMatrix3d(eqW, eqH, eq.warpCorners.map(c => ({ x: c.x * eqW, y: c.y * eqH })))
+        ? _aeqComputeMatrix3d(eqW, eqH, eq.warpCorners.map((c: any) => ({ x: c.x * eqW, y: c.y * eqH })))
         : null;
       const _tfParts = (_warp && _warp !== 'none')
         ? [_warp]
@@ -74,7 +74,7 @@ function tokenEquipOverlayHtml(equips, tw, th, camadaFiltro) {
 }
 
 // ── Parse de cor para {r,g,b} ─────────────────────────────────────────────────
-function _tokParseCorRgb(cor) {
+function _tokParseCorRgb(cor: any) {
   const hex = (cor || '').replace(/^var\([^)]+\)$/, '#4fa3d1').replace('#', '');
   if (/^[0-9a-f]{6}$/i.test(hex)) {
     return {
@@ -87,7 +87,7 @@ function _tokParseCorRgb(cor) {
 }
 
 // ── Div de glow (radial-gradient) ─────────────────────────────────────────────
-function _tokGlowDiv(rgb, w, h, shape) {
+function _tokGlowDiv(rgb: any, w: any, h: any, shape: any) {
   const { r, g, b } = rgb;
   const s = shape || 'ellipse';
   return `<div class="mapa-token-glow" style="width:${w};height:${h};left:50%;top:50%;background:radial-gradient(${s},rgba(${r},${g},${b},0.55) 0%,rgba(${r},${g},${b},0.2) 50%,transparent 75%);box-shadow:0 0 14px 4px rgba(${r},${g},${b},0.4)"></div>`;
@@ -96,7 +96,7 @@ function _tokGlowDiv(rgb, w, h, shape) {
 // ── Estado de HP — overlay e classe CSS ──────────────────────────────────────
 // Para tokens animados: usa overlay mix-blend-mode (não quebra WebGL).
 // Para tokens estáticos: retorna filterValue para aplicar no elemento pai.
-function _tokHpState(char, isAnimado) {
+function _tokHpState(char: any, isAnimado: any) {
   const ca        = char.custom_attrs || {};
   const morto     = !!ca.morto;
   const moribundo = !!ca.moribundo;
@@ -151,10 +151,10 @@ function _tokMortoHtml() {
 }
 
 // ── Badges (NPC, projetado, vinculado) ────────────────────────────────────────
-function _tokBadges(char, isNpc, isProjected) {
+function _tokBadges(char: any, isNpc: any, isProjected: any) {
   const ca = char.custom_attrs || {};
   const npcFaction   = ca.npc_faction || 'inimigo';
-  const factionColor = { inimigo: '#e8604c', neutro: '#c8a84b', aliado: '#5ee09a' }[npcFaction] || '#e8604c';
+  const factionColor = ({ inimigo: '#e8604c', neutro: '#c8a84b', aliado: '#5ee09a' } as any)[npcFaction] || '#e8604c';
   const npcBadge = isNpc
     ? `<div title="NPC ${npcFaction}" style="position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;background:${factionColor};border:1px solid rgba(5,2,8,0.9);pointer-events:none"></div>`
     : '';
@@ -170,7 +170,7 @@ function _tokBadges(char, isNpc, isProjected) {
 
 // ── Sentinel HTML — inner HTML do token animado/imagem ────────────────────────
 // Retorna string HTML ou null. Equivale ao antigo apmodTokenSVG().
-function tokenBuildSentinel(char) {
+function tokenBuildSentinel(char: any) {
   const ca = char.custom_attrs || {};
   const ap = ca.aparencia;
   if (!ap) return null;
@@ -205,7 +205,7 @@ function tokenBuildSentinel(char) {
 // ── Construção do HTML interno completo do token ──────────────────────────────
 // opts: { isNpc, isProjected, tamanhoFator }
 // Retorna { html, isAnimado, cssClass }
-function tokenBuildHtml(char, opts) {
+function tokenBuildHtml(char: any, opts: any) {
   const isNpc       = !!(opts && opts.isNpc);
   const isProjected = !!(opts && opts.isProjected);
   const fator       = (opts && opts.tamanhoFator) ? opts.tamanhoFator : 1.0;
@@ -217,7 +217,7 @@ function tokenBuildHtml(char, opts) {
   const npcFaction   = isNpc ? (ca.npc_faction || 'inimigo') : null;
   const suprimirTint = isNpc && npcFaction === 'inimigo';
 
-  const _avtEnt    = isNpc && window.AVT_STATE?.entidades?.find(e => e.nome === char.nome);
+  const _avtEnt    = isNpc && window.AVT_STATE?.entidades?.find((e: any) => e.nome === char.nome);
   const isPursuing = !!(_avtEnt && window.AVT_STATE?.npcTimers?.[_avtEnt.id]?.isPursuing);
 
   const isAnimado     = ca.aparencia?.modo === 'animado';
@@ -383,14 +383,14 @@ function _tokRPGData() {
   try { return (typeof RPG_DATA !== 'undefined' && RPG_DATA) ? RPG_DATA : (window.RPG_DATA || null); }
   catch(e) { return window.RPG_DATA || null; }
 }
-function tokenFindChar(charNome) {
+function tokenFindChar(charNome: any) {
   if (!charNome) return null;
   return (_tokRPGData()?.characters || [])
     .find(c => c.nome === charNome || c.name === charNome) || null;
 }
 
 // ── Resolver nome do personagem a partir de nó DOM ────────────────────────────
-function tokenCharNameFromNode(node) {
+function tokenCharNameFromNode(node: any) {
   return node?.dataset?.char
     || node?.dataset?.nome
     || node?.getAttribute?.('data-char')
@@ -403,7 +403,7 @@ function tokenCharNameFromNode(node) {
 // ── Preparar nó de montagem para canvas animado ───────────────────────────────
 // Retorna o elemento .animado-token-mount existente ou recém-criado.
 // Retorna null se o personagem não tem dados animados.
-function tokenPrepareMountNode(node) {
+function tokenPrepareMountNode(node: any) {
   if (!node || node.nodeType !== 1) return null;
   if (node.matches?.('.animado-token-mount')) return node;
 
@@ -447,7 +447,7 @@ function tokenPrepareMountNode(node) {
 }
 
 // ── Montar PixiJS em um elemento mount específico ────────────────────────────
-function tokenMountAnimado(mountEl, charOrName) {
+function tokenMountAnimado(mountEl: any, charOrName: any) {
   const char   = typeof charOrName === 'object' ? charOrName : tokenFindChar(charOrName);
   const animado = char?.custom_attrs?.aparencia?.animado;
   if (!animado?.parts || !Object.keys(animado.parts).length) return null;
@@ -476,7 +476,7 @@ function tokenDestroyAll() {
 // ── Agendar montagem com debounce (requestAnimationFrame) ────────────────────
 let _tokMountScheduled = false;
 let _tokMountForceNext = false;
-function _tokScheduleMount(force) {
+function _tokScheduleMount(force: any) {
   _tokMountForceNext = _tokMountForceNext || !!force;
   if (_tokMountScheduled) return;
   _tokMountScheduled = true;
@@ -489,7 +489,7 @@ function _tokScheduleMount(force) {
 }
 
 // ── Montar todos os tokens animados não-montados no DOM ───────────────────────
-function tokenMountAll(opts) {
+function tokenMountAll(opts: any) {
   const force = !!(opts && opts.force);
   const seen  = new WeakSet();
 
@@ -533,13 +533,13 @@ function tokenMountAll(opts) {
 
 // ── Renderizar tokens de personagens no mapa ──────────────────────────────────
 // Substitui o loop chars.forEach dentro de mapaRenderTokens() em maps.js.
-function tokenRenderizarNoMapa(tokensEl, chars, mapId, mapaObj) {
+function tokenRenderizarNoMapa(tokensEl: any, chars: any, mapId: any, mapaObj: any) {
   const _gridW = mapaObj?.largura_total || 20;
   const _gridH = mapaObj?.altura_total  || 20;
   const mapasTipo = (_tokRPGData()?.mapas || [])
     .find(l => l.mapa.map_id === mapId)?.mapa?.tipo || 'geral';
 
-  (chars || []).forEach(c => {
+  (chars || []).forEach((c: any) => {
     const pos = typeof getPosicaoNoMapa === 'function' ? getPosicaoNoMapa(c, mapId) : null;
     if (!pos) return;
 
@@ -599,10 +599,10 @@ function tokenRenderizarNoMapa(tokensEl, chars, mapId, mapaObj) {
 // Aplicados uma vez, envelopam as funções de drag/combat para disparar animações.
 function _tokAplicarPatches() {
   const _tokFacingDir = window._tokFacingDir || (window._tokFacingDir = {});
-  const _tokDragStartX = {};
+  const _tokDragStartX: Record<string, any> = {};
   const _tokLastPos    = window._tokLastPos  || (window._tokLastPos  = {});
 
-  function _tokSetFacing(nome, dir) {
+  function _tokSetFacing(nome: any, dir: any) {
     if (!dir || _tokFacingDir[nome] === dir) return;
     _tokFacingDir[nome] = dir;
     window._animCtrlMap?.[nome]?.setFacing?.(dir);

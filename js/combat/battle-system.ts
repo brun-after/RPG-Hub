@@ -5,7 +5,7 @@
 
 // ─── DEFAULTS POR SISTEMA ────────────────────────────────────────────────────
 // Prefixed to avoid collision with _BS_DEFAULTS declared in maps.js
-const _BS_DEFAULTS = {
+const _BS_DEFAULTS: Record<string, any> = {
   dnd5e: {
     usa_reacoes: true,
     sistema_reacao: 'dnd5e',
@@ -99,7 +99,7 @@ const DEBUG_MODE = false; // Mude para true para ativar logs detalhados
 
 // ─── CONTROLADOR PRINCIPAL ────────────────────────────────────────────────────
 const BATTLE_SYSTEM = {
-  _fila: [],
+  _fila: [] as any[],
   _processando: false,
   _pendingReactions: {},
 
@@ -112,7 +112,7 @@ const BATTLE_SYSTEM = {
     return { ...defaults, ...cfg };
   },
 
-  async setConfig(cfg) {
+  async setConfig(cfg: any) {
     if (!window.CURRENT_RPG) return;
     if (!CURRENT_RPG.theme) CURRENT_RPG.theme = {};
     CURRENT_RPG.theme.battle_config = cfg;
@@ -130,7 +130,7 @@ const BATTLE_SYSTEM = {
   },
 
   // ── Recursos do participante ─────────────────────────────────────────────
-  getRecursos(nomeChar) {
+  getRecursos(nomeChar: any) {
     if (!BATALHA_ATUAL_ID) return null;
     const bs = MAPA_STATE.batalhas?.[BATALHA_ATUAL_ID];
     if (!bs) return null;
@@ -147,7 +147,7 @@ const BATTLE_SYSTEM = {
     return bs.recursos_participantes[nomeChar];
   },
 
-  consumirReacao(nomeChar) {
+  consumirReacao(nomeChar: any) {
     const rec = this.getRecursos(nomeChar);
     if (!rec?.reacao_disponivel) return false;
     rec.reacao_disponivel = false;
@@ -158,7 +158,7 @@ const BATTLE_SYSTEM = {
   },
 
   // Aplica cooldown de uma habilidade reativa na batalha atual
-  _aplicarCooldownReativa(hab) {
+  _aplicarCooldownReativa(hab: any) {
     if (!BATALHA_ATUAL_ID) return;
     const cdKey = hab?.id || hab?.nome || hab?.habilidade;
     if (!cdKey) return;
@@ -173,7 +173,7 @@ const BATTLE_SYSTEM = {
     }
   },
 
-  _estaEmCooldown(hab) {
+  _estaEmCooldown(hab: any) {
     if (!BATALHA_ATUAL_ID) return false;
     const cdKey = hab?.id || hab?.nome || hab?.habilidade;
     if (!cdKey) return false;
@@ -181,7 +181,7 @@ const BATTLE_SYSTEM = {
     return !!(bs?.cooldowns && bs.cooldowns[cdKey] > 0);
   },
 
-  recuperarRecursosTurno(nomeChar) {
+  recuperarRecursosTurno(nomeChar: any) {
     const rec = this.getRecursos(nomeChar);
     if (!rec) return;
     const cfg = this.getConfig();
@@ -194,7 +194,7 @@ const BATTLE_SYSTEM = {
   },
 
   // ── Dispatch de evento ───────────────────────────────────────────────────
-  async dispatchEvento(tipoEvento, dados: any = {}) {
+  async dispatchEvento(tipoEvento: any, dados: any = {}) {
     if (!BATALHA_ATUAL_ID) return;
     const cfg = this.getConfig();
     if (!cfg.usa_reacoes) return;
@@ -235,17 +235,17 @@ const BATTLE_SYSTEM = {
     this._processando = false;
   },
 
-  async _resolverEvento(evento) {
+  async _resolverEvento(evento: any) {
     const cfg = this.getConfig();
     const habs = this._detectarGatilhos(evento);
 
-    const _tipo = h => h.tipo_habilidade || h.tipo_reativa || '';
-    const _momento = h => h.momento || h.momento_reativa || 'after';
-    const _auto = h => h.auto_trigger ?? h.auto_reativa ?? false;
-    const passivas    = habs.filter(h => _tipo(h) === 'passive' || _auto(h));
-    const manuais     = habs.filter(h => _tipo(h) !== 'passive' && !_auto(h));
-    const interrupcoes = manuais.filter(h => _momento(h) === 'before' && _tipo(h) === 'interrupt');
-    const posEvento    = manuais.filter(h => !(_momento(h) === 'before' && _tipo(h) === 'interrupt'));
+    const _tipo = (h: any) => h.tipo_habilidade || h.tipo_reativa || '';
+    const _momento = (h: any) => h.momento || h.momento_reativa || 'after';
+    const _auto = (h: any) => h.auto_trigger ?? h.auto_reativa ?? false;
+    const passivas    = habs.filter((h: any) => _tipo(h) === 'passive' || _auto(h));
+    const manuais     = habs.filter((h: any) => _tipo(h) !== 'passive' && !_auto(h));
+    const interrupcoes = manuais.filter((h: any) => _momento(h) === 'before' && _tipo(h) === 'interrupt');
+    const posEvento    = manuais.filter((h: any) => !(_momento(h) === 'before' && _tipo(h) === 'interrupt'));
 
     // Passivas automáticas
     if (cfg.passivas_automaticas) {
@@ -276,7 +276,7 @@ const BATTLE_SYSTEM = {
   },
 
   // ── Contexto de personagem por tipo de evento ───────────────────────────
-  _getContextoPersonagem(evento) {
+  _getContextoPersonagem(evento: any) {
     const d = evento.dados || {};
     let contexto = null;
     
@@ -327,7 +327,7 @@ const BATTLE_SYSTEM = {
   },
 
   // ── Detecção de gatilhos ─────────────────────────────────────────────────
-  _detectarGatilhos(evento) {
+  _detectarGatilhos(evento: any) {
     const participantes = this._getParticipantes();
     const contextChar = this._getContextoPersonagem(evento);
     const skills = RPG_DATA?.skills || [];
@@ -423,12 +423,12 @@ const BATTLE_SYSTEM = {
   _getParticipantes() {
     const bs = MAPA_STATE.batalhas?.[BATALHA_ATUAL_ID];
     return (bs?.participantes || [])
-      .map(p => (typeof p === 'string' ? p : p?.nome))
+      .map((p: any) => (typeof p === 'string' ? p : p?.nome))
       .filter(Boolean);
   },
 
   // ── Executar passiva ─────────────────────────────────────────────────────
-  async _executarPassiva(hab, evento) {
+  async _executarPassiva(hab: any, evento: any) {
     const dono = hab._dono;
     if (!dono) return;
     if (typeof window.atkAplicarEfeitoPassiva === 'function') {
@@ -448,7 +448,7 @@ const BATTLE_SYSTEM = {
   },
 
   // ── Solicitar reação manual ──────────────────────────────────────────────
-  async _solicitarReacao(hab, evento) {
+  async _solicitarReacao(hab: any, evento: any) {
     const dono = hab._dono;
     if (!dono) return false;
     
@@ -505,7 +505,7 @@ const BATTLE_SYSTEM = {
     });
   },
 
-  confirmarReacao(reacaoId, aceita) {
+  confirmarReacao(reacaoId: any, aceita: any) {
     const pending = this._pendingReactions[reacaoId];
     if (!pending) return;
     clearTimeout(pending.timer);
@@ -520,7 +520,7 @@ const BATTLE_SYSTEM = {
   },
 
   // ── Executar reação ──────────────────────────────────────────────────────
-  async _executarReacao(hab, evento) {
+  async _executarReacao(hab: any, evento: any) {
     const dono = hab._dono;
     if (typeof window.atkAplicarEfeitoPassiva === 'function') {
       await window.atkAplicarEfeitoPassiva(hab, dono, evento);
@@ -542,8 +542,8 @@ const BATTLE_SYSTEM = {
     }
   },
 
-  _logEvento(evento) {
-    const labels = {
+  _logEvento(evento: any) {
+    const labels: Record<string, any> = {
       ser_atacado: '🎯 Ser Atacado',
       ser_atingido: '⚔️ Atingido',
       sofrer_dano: '💥 Dano Recebido',
@@ -564,7 +564,7 @@ const BATTLE_SYSTEM = {
   },
 
   // ─── DEFESA ATIVA ────────────────────────────────────────────────────────
-  async resolverDefesaAtiva(nomeAlvo, resultadoAtacante, tipoAtaque) {
+  async resolverDefesaAtiva(nomeAlvo: any, resultadoAtacante: any, tipoAtaque: any) {
     const cfg = this.getConfig();
     if (cfg.tipo_defesa === 'passiva') return null;
 
@@ -603,7 +603,7 @@ const BATTLE_SYSTEM = {
     });
   },
 
-  confirmarDefesa(defesaId, aceita, resultadoDefesa) {
+  confirmarDefesa(defesaId: any, aceita: any, resultadoDefesa: any) {
     const pending = this._pendingReactions[defesaId];
     if (!pending || pending.tipo !== 'defesa') return;
     clearTimeout(pending.timer);
@@ -621,7 +621,7 @@ const BATTLE_SYSTEM = {
   },
 
   // ─── GRAUS DE SUCESSO ────────────────────────────────────────────────────
-  calcularGrauSucesso(resultado, limiar, natural = null) {
+  calcularGrauSucesso(resultado: any, limiar: any, natural: any = null) {
     const cfg = this.getConfig();
     if (!cfg.graus_de_sucesso) return null;
 
@@ -640,20 +640,20 @@ const BATTLE_SYSTEM = {
 
 // ─── FUNÇÕES GLOBAIS DE INTEGRAÇÃO ───────────────────────────────────────────
 
-function battleDispatchEvento(tipo, dados = {}) {
+function battleDispatchEvento(tipo: any, dados = {}) {
   BATTLE_SYSTEM.dispatchEvento(tipo, dados).catch(e =>
     console.error('[BattleSystem] Erro no evento', tipo, e)
   );
 }
 
-function battleRecuperarRecursosTurno(nomeChar) {
+function battleRecuperarRecursosTurno(nomeChar: any) {
   BATTLE_SYSTEM.recuperarRecursosTurno(nomeChar);
   battleDispatchEvento('inicio_turno_proprio', { personagem: nomeChar });
 }
 
 // ─── HANDLERS REALTIME ──────────────────────────────────────────────────────
 
-window.batalhaReceberSolicitacaoReacao = function(payload) {
+window.batalhaReceberSolicitacaoReacao = function(payload: any) {
   const { reacaoId, habilidade, gatilho, dono, timeout_ms, contexto } = payload;
   const meuChar = RPG_DATA?.linked;
   if (meuChar !== dono && RPG_DATA?.myRole !== 'mestre') return;
@@ -662,7 +662,7 @@ window.batalhaReceberSolicitacaoReacao = function(payload) {
   }
 };
 
-window.batalhaReceberSolicitacaoDefesa = function(payload) {
+window.batalhaReceberSolicitacaoDefesa = function(payload: any) {
   const { defesaId, alvo, resultadoAtacante, tipoAtaque, penalidade, slotsRestantes, timeout_ms } = payload;
   const meuChar = RPG_DATA?.linked;
   if (meuChar !== alvo && RPG_DATA?.myRole !== 'mestre') return;
@@ -671,20 +671,20 @@ window.batalhaReceberSolicitacaoDefesa = function(payload) {
   }
 };
 
-window.batalhaReceberConfirmacaoReacao = function(payload) {
+window.batalhaReceberConfirmacaoReacao = function(payload: any) {
   const { reacaoId, aceita } = payload;
   BATTLE_SYSTEM.confirmarReacao(reacaoId, aceita);
 };
 
-window.batalhaReceberReacaoExecutada = function(payload) {
+window.batalhaReceberReacaoExecutada = function(payload: any) {
   if (typeof mostrarToast === 'function') {
     mostrarToast(`⚡ ${payload.personagem}: ${payload.habilidade}`, 'ok');
   }
 };
 
-window.batalhaReceberDefesaResolvida = function(payload) {
+window.batalhaReceberDefesaResolvida = function(payload: any) {
   const { defesaId, tipoDefesa, resultado, d20 } = payload;
-  const pending = BATTLE_SYSTEM._pendingReactions[defesaId];
+  const pending = (BATTLE_SYSTEM._pendingReactions as any)[defesaId];
   if (pending) {
     BATTLE_SYSTEM.confirmarDefesa(defesaId, true, { tipo: tipoDefesa, resultado, d20 });
   }
@@ -693,7 +693,7 @@ window.batalhaReceberDefesaResolvida = function(payload) {
 // ─── IMPLEMENTAÇÃO DE EFEITOS PASSIVOS COM ANIMAÇÃO ──────────────────────────
 // Sobrescreve o stub padrão com uma implementação completa que roda animações
 if (typeof window.atkAplicarEfeitoPassiva === 'undefined') {
-  window.atkAplicarEfeitoPassiva = async function(hab, dono, evento) {
+  window.atkAplicarEfeitoPassiva = async function(hab: any, dono: any, evento: any) {
     const animacao = hab.animacao;
     
     // Se a habilidade tem animação configurada, rodar a animação
@@ -725,7 +725,7 @@ if (typeof window.atkAplicarEfeitoPassiva === 'undefined') {
           const ctx = COMBATE?.contexto || (BATALHA_ATUAL_ID ? 'campanha' : 'arena');
           
           // Função auxiliar para resolver token (similar a resolverTokenEl)
-          const _resolverToken = (nome, contexto) => {
+          const _resolverToken = (nome: any, contexto: any) => {
             if (!nome) return null;
             const esc = CSS.escape(nome);
             if (contexto === 'arena') {

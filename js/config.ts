@@ -77,24 +77,24 @@ function _isMobile() {
     /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-function _charSizeKey(nome) {
+function _charSizeKey(nome: any) {
   const rpgId = window.RPG_DATA?.rpgId || 'default';
   return `rpghub_charsize_${rpgId}_${nome}`;
 }
 
-function _getMobileSize(nome) {
+function _getMobileSize(nome: any) {
   try {
     const v = localStorage.getItem(_charSizeKey(nome));
     return v !== null ? parseFloat(v) : null;
   } catch { return null; }
 }
 
-function _setMobileSize(nome, val) {
+function _setMobileSize(nome: any, val: any) {
   try { localStorage.setItem(_charSizeKey(nome), String(val)); } catch {}
 }
 
 // Função global para obter tamanho efetivo respeitando dispositivo
-window._getCharTamanhoEfetivo = function (nome, ca) {
+window._getCharTamanhoEfetivo = function (nome: any, ca: any) {
   if (_isMobile()) {
     const cached = _getMobileSize(nome);
     if (cached !== null) return Math.max(0.4, cached);

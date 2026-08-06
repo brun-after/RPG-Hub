@@ -2,7 +2,7 @@
 // 15+ curated animation configs in Studio Pixi format (version 2)
 // Each entry is a full config_json ready to load into the editor or play in-game
 
-var PIXI_STUDIO_PRESETS = {
+var PIXI_STUDIO_PRESETS: any = {
 
   fogo_nova: {
     version: 2, behavior: 'one-shot', duracao_ms: 900, posicao: 'alvo',
@@ -11,7 +11,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.12 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Núcleo', visivel: true, z: 3, blendMode: 'add',
-        texture: 'spark', texture_url: null,
+        texture: 'spark', texture_url: null as any,
         glow: { distance: 10, outerStrength: 1.4, color: '#ff8842' },
         emitter: {
           alpha: { list: [{ value: 0.9, time: 0 }, { value: 0, time: 1 }] },
@@ -21,7 +21,7 @@ var PIXI_STUDIO_PRESETS = {
           acceleration: { x: 0, y: -50 }, startRotation: { min: 0, max: 360 }, rotationSpeed: { min: -180, max: 180 },
           lifetime: { min: 0.3, max: 0.6 }, frequency: 0.006, emitterLifetime: 0.28,
           maxParticles: 90, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 5 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
       { id: 'l1', tipo: 'emitter', nome: 'Fagulhas', visivel: true, z: 4, blendMode: 'add',
         texture: 'ember', texture_url: null, glow: null,
         emitter: {
@@ -42,7 +42,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.08 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Cristais', visivel: true, z: 3, blendMode: 'add',
-        texture: 'spark', texture_url: null,
+        texture: 'spark', texture_url: null as any,
         glow: { distance: 10, outerStrength: 1.3, color: '#9fd9ff' },
         emitter: {
           alpha: { list: [{ value: 0.9, time: 0 }, { value: 0, time: 1 }] },
@@ -51,7 +51,7 @@ var PIXI_STUDIO_PRESETS = {
           speed: { start: 240, end: 60 }, startRotation: { min: 0, max: 360 },
           lifetime: { min: 0.3, max: 0.6 }, frequency: 0.008, emitterLifetime: 0.3,
           maxParticles: 70, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 6 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
       { id: 'l1', tipo: 'emitter', nome: 'Anel de Choque', visivel: true, z: 4, blendMode: 'add',
         texture: 'ring', texture_url: null, glow: null,
         emitter: {
@@ -71,7 +71,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.18 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Descarga', visivel: true, z: 3, blendMode: 'add',
-        texture: 'streak', texture_url: null,
+        texture: 'streak', texture_url: null as any,
         glow: { distance: 12, outerStrength: 1.6, color: '#cfe4ff' },
         emitter: {
           alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] },
@@ -80,7 +80,7 @@ var PIXI_STUDIO_PRESETS = {
           speed: { start: 120, end: 20 },
           lifetime: { min: 0.18, max: 0.35 }, frequency: 0.005, emitterLifetime: 0.3,
           maxParticles: 60, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 3 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
       { id: 'l1', tipo: 'emitter', nome: 'Centelhas', visivel: true, z: 4, blendMode: 'add',
         texture: 'spark', texture_url: null, glow: null,
         emitter: {
@@ -111,7 +111,7 @@ var PIXI_STUDIO_PRESETS = {
           maxParticles: 30, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 12 }
         }, keyframes: [] },
       { id: 'l1', tipo: 'emitter', nome: 'Bolhas', visivel: true, z: 3, blendMode: 'add',
-        texture: 'spark', texture_url: null,
+        texture: 'spark', texture_url: null as any,
         glow: { distance: 6, outerStrength: 1.0, color: '#80ff40' },
         emitter: {
           alpha: { list: [{ value: 0.8, time: 0 }, { value: 0, time: 1 }] },
@@ -120,7 +120,7 @@ var PIXI_STUDIO_PRESETS = {
           speed: { start: 60, end: 10 }, startRotation: { min: 0, max: 360 },
           lifetime: { min: 0.4, max: 0.7 }, frequency: 0.025, emitterLifetime: 0.7,
           maxParticles: 35, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 8 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
     ],
   },
 
@@ -131,7 +131,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.05 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Luz Divina', visivel: true, z: 3, blendMode: 'add',
-        texture: 'spark', texture_url: null,
+        texture: 'spark', texture_url: null as any,
         glow: { distance: 14, outerStrength: 1.6, color: '#ffe18a' },
         emitter: {
           alpha: { list: [{ value: 0.95, time: 0 }, { value: 0, time: 1 }] },
@@ -140,7 +140,7 @@ var PIXI_STUDIO_PRESETS = {
           speed: { start: 160, end: 30 }, startRotation: { min: 0, max: 360 },
           lifetime: { min: 0.45, max: 0.9 }, frequency: 0.01, emitterLifetime: 0.5,
           maxParticles: 90, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 8 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
       { id: 'l1', tipo: 'emitter', nome: 'Runas', visivel: true, z: 4, blendMode: 'add',
         texture: 'rune', texture_url: null, glow: null,
         emitter: {
@@ -161,14 +161,14 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.25 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Sombra', visivel: true, z: 2, blendMode: 'multiply',
-        texture: 'smoke', texture_url: null, glow: null,
+        texture: 'smoke', texture_url: null as any, glow: null as any,
         emitter: {
           alpha: { list: [{ value: 0, time: 0 }, { value: 0.75, time: 0.5 }, { value: 0, time: 1 }] },
           scale: { list: [{ value: 0.2, time: 0 }, { value: 1.6, time: 1 }] },
           color: { list: [{ value: '4a1a6a', time: 0 }, { value: '0a0014', time: 1 }] },
           speed: { start: 90, end: 18 }, lifetime: { min: 0.7, max: 1.0 }, frequency: 0.014,
           emitterLifetime: 0.5, maxParticles: 40, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 10 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
       { id: 'l1', tipo: 'emitter', nome: 'Maldição', visivel: true, z: 4, blendMode: 'add',
         texture: 'ember', texture_url: null,
         glow: { distance: 8, outerStrength: 1.2, color: '#a020f0' },
@@ -190,7 +190,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.05 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Lâminas', visivel: true, z: 3, blendMode: 'add',
-        texture: 'streak', texture_url: null,
+        texture: 'streak', texture_url: null as any,
         glow: { distance: 8, outerStrength: 1.2, color: '#c0f0d0' },
         emitter: {
           alpha: { list: [{ value: 0.9, time: 0 }, { value: 0, time: 1 }] },
@@ -199,7 +199,7 @@ var PIXI_STUDIO_PRESETS = {
           speed: { start: 350, end: 80 }, startRotation: { min: 0, max: 360 }, rotationSpeed: { min: -200, max: 200 },
           lifetime: { min: 0.2, max: 0.45 }, frequency: 0.01, emitterLifetime: 0.25,
           maxParticles: 35, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 5 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
     ],
   },
 
@@ -210,7 +210,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.15 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Detritos', visivel: true, z: 3, blendMode: 'normal',
-        texture: 'smoke', texture_url: null, glow: null,
+        texture: 'smoke', texture_url: null as any, glow: null as any,
         emitter: {
           alpha: { list: [{ value: 0.85, time: 0 }, { value: 0, time: 1 }] },
           scale: { list: [{ value: 0.6, time: 0 }, { value: 0.15, time: 1 }] },
@@ -218,7 +218,7 @@ var PIXI_STUDIO_PRESETS = {
           speed: { start: 120, end: 20 }, acceleration: { x: 0, y: 200 },
           lifetime: { min: 0.5, max: 0.9 }, frequency: 0.01, emitterLifetime: 0.4,
           maxParticles: 50, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 15 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
       { id: 'l1', tipo: 'emitter', nome: 'Poeira', visivel: true, z: 2, blendMode: 'normal',
         texture: 'smoke', texture_url: null, glow: null,
         emitter: {
@@ -239,7 +239,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.1 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Gotas', visivel: true, z: 3, blendMode: 'normal',
-        texture: 'spark', texture_url: null, glow: null,
+        texture: 'spark', texture_url: null as any, glow: null as any,
         emitter: {
           alpha: { list: [{ value: 1, time: 0 }, { value: 0.8, time: 0.7 }, { value: 0, time: 1 }] },
           scale: { list: [{ value: 0.3, time: 0 }, { value: 0.06, time: 1 }] },
@@ -248,7 +248,7 @@ var PIXI_STUDIO_PRESETS = {
           startRotation: { min: 0, max: 360 },
           lifetime: { min: 0.3, max: 0.55 }, frequency: 0.008, emitterLifetime: 0.25,
           maxParticles: 60, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 5 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
     ],
   },
 
@@ -259,7 +259,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.2 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Fumaça', visivel: true, z: 3, blendMode: 'multiply',
-        texture: 'smoke', texture_url: null, glow: null,
+        texture: 'smoke', texture_url: null as any, glow: null as any,
         emitter: {
           alpha: { list: [{ value: 0, time: 0 }, { value: 0.65, time: 0.25 }, { value: 0, time: 1 }] },
           scale: { list: [{ value: 0.3, time: 0 }, { value: 2.2, time: 1 }] },
@@ -267,7 +267,7 @@ var PIXI_STUDIO_PRESETS = {
           speed: { start: 30, end: 5 }, acceleration: { x: 0, y: -20 }, startRotation: { min: 0, max: 360 },
           lifetime: { min: 1.0, max: 1.5 }, frequency: 0.02, emitterLifetime: 0.7,
           maxParticles: 25, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 10 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
     ],
   },
 
@@ -278,7 +278,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.07 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Faíscas', visivel: true, z: 3, blendMode: 'add',
-        texture: 'star', texture_url: null,
+        texture: 'star', texture_url: null as any,
         glow: { distance: 8, outerStrength: 1.1, color: '#d0a0ff' },
         emitter: {
           alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] },
@@ -287,7 +287,7 @@ var PIXI_STUDIO_PRESETS = {
           speed: { start: 180, end: 30 }, startRotation: { min: 0, max: 360 }, rotationSpeed: { min: -120, max: 120 },
           lifetime: { min: 0.3, max: 0.6 }, frequency: 0.01, emitterLifetime: 0.35,
           maxParticles: 45, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 6 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
     ],
   },
 
@@ -298,7 +298,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Partículas de Cura', visivel: true, z: 3, blendMode: 'add',
-        texture: 'spark', texture_url: null,
+        texture: 'spark', texture_url: null as any,
         glow: { distance: 12, outerStrength: 1.5, color: '#40ffb0' },
         emitter: {
           alpha: { list: [{ value: 0.8, time: 0 }, { value: 0, time: 1 }] },
@@ -307,7 +307,7 @@ var PIXI_STUDIO_PRESETS = {
           speed: { start: 80, end: 10 }, acceleration: { x: 0, y: -30 }, startRotation: { min: 0, max: 360 },
           lifetime: { min: 0.5, max: 1.0 }, frequency: 0.012, emitterLifetime: 0.6,
           maxParticles: 60, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 10 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
       { id: 'l1', tipo: 'emitter', nome: 'Brilho', visivel: true, z: 2, blendMode: 'add',
         texture: 'glow', texture_url: null, glow: null,
         emitter: {
@@ -327,7 +327,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.1 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Anéis', visivel: true, z: 3, blendMode: 'add',
-        texture: 'ring', texture_url: null,
+        texture: 'ring', texture_url: null as any,
         glow: { distance: 12, outerStrength: 1.4, color: '#a0c8ff' },
         emitter: {
           alpha: { list: [{ value: 0.9, time: 0 }, { value: 0, time: 1 }] },
@@ -335,7 +335,7 @@ var PIXI_STUDIO_PRESETS = {
           color: { list: [{ value: 'e0f0ff', time: 0 }, { value: '2060ff', time: 1 }] },
           speed: { start: 0, end: 0 },
           lifetime: { min: 0.35, max: 0.45 }, frequency: 0.1, emitterLifetime: 0.4, maxParticles: 4, spawnType: 'point'
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
       { id: 'l1', tipo: 'emitter', nome: 'Portal', visivel: true, z: 2, blendMode: 'add',
         texture: 'spark', texture_url: null, glow: null,
         emitter: {
@@ -356,7 +356,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.15 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Expansão', visivel: true, z: 4, blendMode: 'add',
-        texture: 'ring', texture_url: null,
+        texture: 'ring', texture_url: null as any,
         glow: { distance: 10, outerStrength: 1.3, color: '#ffc840' },
         emitter: {
           alpha: { list: [{ value: 0.85, time: 0 }, { value: 0, time: 1 }] },
@@ -364,7 +364,7 @@ var PIXI_STUDIO_PRESETS = {
           color: { list: [{ value: 'ffffff', time: 0 }, { value: 'ffa020', time: 0.5 }, { value: 'a05010', time: 1 }] },
           speed: { start: 0, end: 0 },
           lifetime: { min: 0.5, max: 0.6 }, frequency: 0.25, emitterLifetime: 0.15, maxParticles: 2, spawnType: 'point'
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
       { id: 'l1', tipo: 'emitter', nome: 'Debris', visivel: true, z: 3, blendMode: 'add',
         texture: 'spark', texture_url: null, glow: null,
         emitter: {
@@ -387,7 +387,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.1 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Núcleo do Feixe', visivel: true, z: 3, blendMode: 'add',
-        texture: 'streak', texture_url: null,
+        texture: 'streak', texture_url: null as any,
         glow: { distance: 14, outerStrength: 2.0, color: '#ff8040' },
         emitter: {
           alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] },
@@ -396,7 +396,7 @@ var PIXI_STUDIO_PRESETS = {
           speed: { start: 80, end: 10 }, startRotation: { min: 0, max: 360 },
           lifetime: { min: 0.15, max: 0.3 }, frequency: 0.004, emitterLifetime: 0.5,
           maxParticles: 50, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 3 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
     ],
   },
 
@@ -407,7 +407,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.06 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Lança Arcana', visivel: true, z: 3, blendMode: 'add',
-        texture: 'spark', texture_url: null,
+        texture: 'spark', texture_url: null as any,
         glow: { distance: 6, outerStrength: 1.0, color: '#a978ff' },
         emitter: {
           alpha: { list: [{ value: 0.8, time: 0 }, { value: 0, time: 1 }] },
@@ -416,7 +416,7 @@ var PIXI_STUDIO_PRESETS = {
           speed: { start: 90, end: 20 }, startRotation: { min: 0, max: 360 },
           lifetime: { min: 0.25, max: 0.45 }, frequency: 0.015, emitterLifetime: 0.3,
           maxParticles: 25, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 4 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
     ],
   },
 
@@ -427,7 +427,7 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l0', tipo: 'emitter', nome: 'Aura', visivel: true, z: 2, blendMode: 'add',
-        texture: 'spark', texture_url: null,
+        texture: 'spark', texture_url: null as any,
         glow: { distance: 10, outerStrength: 1.2, color: '#c8a84b' },
         emitter: {
           alpha: { list: [{ value: 0.6, time: 0 }, { value: 0, time: 1 }] },
@@ -436,7 +436,7 @@ var PIXI_STUDIO_PRESETS = {
           speed: { start: 50, end: 5 }, startRotation: { min: 0, max: 360 },
           lifetime: { min: 0.6, max: 1.2 }, frequency: 0.03, emitterLifetime: -1,
           maxParticles: 30, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 18 }
-        }, keyframes: [] },
+        }, keyframes: [] as any[] },
     ],
   },
 
@@ -448,12 +448,12 @@ var PIXI_STUDIO_PRESETS = {
     lighting: { bloom: { threshold: 0.5, intensity: 1.1, quality: 6 }, tone: 'filmic' },
     background: { darken: 0.12 }, audio: { cast: 'fire_cast', impact: 'fire_burst', volume: 0.8 }, global: false,
     layers: [
-      { id: 'l0', tipo: 'emitter', nome: 'Núcleo', visivel: true, z: 3, blendMode: 'add', texture: 'ember', texture_url: null,
+      { id: 'l0', tipo: 'emitter', nome: 'Núcleo', visivel: true, z: 3, blendMode: 'add', texture: 'ember', texture_url: null as any,
         glow: { distance: 14, outerStrength: 1.8, innerStrength: 0, color: '#ff8a2a' }, trail: { length: 14, fade: 0.7 },
         emitter: { alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.7, time: 0 }, { value: 0.1, time: 1 }] },
           color: { list: [{ value: 'fff1c2', time: 0 }, { value: 'ff6a1c', time: 1 }] }, speed: { start: 60, end: 10 },
           startRotation: { min: 0, max: 360 }, lifetime: { min: 0.3, max: 0.6 }, frequency: 0.006, emitterLifetime: -1, maxParticles: 120,
-          spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 6 } }, keyframes: [] },
+          spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 6 } }, keyframes: [] as any[] },
       { id: 'l1', tipo: 'emitter', nome: 'Fagulhas', visivel: true, z: 4, blendMode: 'add', texture: 'spark', texture_url: null, glow: null,
         emitter: { alpha: { list: [{ value: 0.9, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.3, time: 0 }, { value: 0.02, time: 1 }] },
           color: { list: [{ value: 'ffe6a0', time: 0 }, { value: 'ff7a1c', time: 1 }] }, speed: { start: 160, end: 30 }, acceleration: { x: 0, y: 120 },
@@ -470,11 +470,11 @@ var PIXI_STUDIO_PRESETS = {
     lighting: { bloom: { threshold: 0.55, intensity: 1.0, quality: 5 }, tone: 'filmic' },
     background: { darken: 0.08 }, audio: { cast: 'magic_cast', impact: 'magic_hit', volume: 0.75 }, global: false,
     layers: [
-      { id: 'l0', tipo: 'emitter', nome: 'Feixe', visivel: true, z: 3, blendMode: 'add', texture: 'streak', texture_url: null,
+      { id: 'l0', tipo: 'emitter', nome: 'Feixe', visivel: true, z: 3, blendMode: 'add', texture: 'streak', texture_url: null as any,
         glow: { distance: 12, outerStrength: 1.6, innerStrength: 0, color: '#9fe6ff' }, trail: { length: 12, fade: 0.72 },
         emitter: { alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.55, time: 0 }, { value: 0.08, time: 1 }] },
           color: { list: [{ value: 'ffffff', time: 0 }, { value: '7fd0ff', time: 1 }] }, speed: { start: 40, end: 5 },
-          lifetime: { min: 0.25, max: 0.5 }, frequency: 0.006, emitterLifetime: -1, maxParticles: 90, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 3 } }, keyframes: [] },
+          lifetime: { min: 0.25, max: 0.5 }, frequency: 0.006, emitterLifetime: -1, maxParticles: 90, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 3 } }, keyframes: [] as any[] },
       { id: 'l1', tipo: 'emitter', nome: 'Estrelas', visivel: true, z: 4, blendMode: 'add', texture: 'sparkle', texture_url: null, tint: '#bfefff',
         emitter: { alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.25, time: 0 }, { value: 0.02, time: 1 }] },
           color: { list: [{ value: 'ffffff', time: 0 }, { value: 'a8e6ff', time: 1 }] }, speed: { start: 120, end: 20 }, startRotation: { min: 0, max: 360 },
@@ -491,11 +491,11 @@ var PIXI_STUDIO_PRESETS = {
     layers: [
       { id: 'l0', tipo: 'light', nome: 'Clarão', visivel: true, z: 1, blendMode: 'add', color: '#fff0c0',
         keyframes: [{ t: 0, x: 0, y: 0, radius: 30, alpha: 0, color: '#ffffff' }, { t: 0.14, x: 0, y: 0, radius: 180, alpha: 1, color: '#fff0c0', ease: 'easeOutCubic' }, { t: 1, x: 0, y: 0, radius: 110, alpha: 0, color: '#ffd47a' }] },
-      { id: 'l1', tipo: 'emitter', nome: 'Raios', visivel: true, z: 3, blendMode: 'add', texture: 'spark', texture_url: null,
+      { id: 'l1', tipo: 'emitter', nome: 'Raios', visivel: true, z: 3, blendMode: 'add', texture: 'spark', texture_url: null as any,
         glow: { distance: 12, outerStrength: 1.5, innerStrength: 0, color: '#ffe08a' },
         emitter: { alpha: { list: [{ value: 1, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.6, time: 0 }, { value: 0.05, time: 1 }] },
           color: { list: [{ value: 'ffffff', time: 0 }, { value: 'ffcf66', time: 1 }] }, speed: { start: 320, end: 60 },
-          lifetime: { min: 0.3, max: 0.55 }, frequency: 0.006, emitterLifetime: 0.25, maxParticles: 80, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 6 } }, keyframes: [] },
+          lifetime: { min: 0.3, max: 0.55 }, frequency: 0.006, emitterLifetime: 0.25, maxParticles: 80, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 6 } }, keyframes: [] as any[] },
       { id: 'l2', tipo: 'shape', nome: 'Anel', visivel: true, z: 4, blendMode: 'add', shape_type: 'circle',
         keyframes: [{ t: 0, radius: 8, stroke_color: '#fff3c0', stroke_alpha: 1, stroke_width: 4, fill_alpha: 0, ease: 'easeOutCubic' }, { t: 1, radius: 120, stroke_color: '#ffcf66', stroke_alpha: 0, stroke_width: 1, fill_alpha: 0 }] },
     ],
@@ -507,11 +507,11 @@ var PIXI_STUDIO_PRESETS = {
     lighting: { bloom: { threshold: 0.55, intensity: 0.9, quality: 5 }, tone: 'filmic' },
     background: { darken: 0.2 }, audio: { cast: 'dark_whoosh', impact: 'dark_impact', volume: 0.75 }, global: false,
     layers: [
-      { id: 'l0', tipo: 'emitter', nome: 'Vórtex', visivel: true, z: 3, blendMode: 'add', texture: 'swirl', texture_url: null,
+      { id: 'l0', tipo: 'emitter', nome: 'Vórtex', visivel: true, z: 3, blendMode: 'add', texture: 'swirl', texture_url: null as any,
         glow: { distance: 12, outerStrength: 1.4, innerStrength: 0, color: '#a020f0' }, trail: { length: 10, fade: 0.78 },
         emitter: { alpha: { list: [{ value: 0.9, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.4, time: 0 }, { value: 0.05, time: 1 }] },
           color: { list: [{ value: 'd9a0ff', time: 0 }, { value: '4a1070', time: 1 }] }, speed: { start: 30, end: 120 }, rotationSpeed: { min: 180, max: 320 },
-          startRotation: { min: 0, max: 360 }, lifetime: { min: 0.5, max: 0.9 }, frequency: 0.01, emitterLifetime: -1, maxParticles: 70, spawnType: 'ring', spawnCircle: { x: 0, y: 0, r: 40 } }, keyframes: [] },
+          startRotation: { min: 0, max: 360 }, lifetime: { min: 0.5, max: 0.9 }, frequency: 0.01, emitterLifetime: -1, maxParticles: 70, spawnType: 'ring', spawnCircle: { x: 0, y: 0, r: 40 } }, keyframes: [] as any[] },
     ],
   },
 
@@ -522,11 +522,11 @@ var PIXI_STUDIO_PRESETS = {
     background: { darken: 0.14 }, filters: [{ type: 'rgbsplit', rx: -4, ry: 0, bx: 4, by: 0 }],
     audio: { cast: 'magic_charge', impact: 'magic_hit', volume: 0.75 }, global: false,
     layers: [
-      { id: 'l0', tipo: 'emitter', nome: 'Chuva', visivel: true, z: 3, blendMode: 'add', texture: 'shard', texture_url: null,
+      { id: 'l0', tipo: 'emitter', nome: 'Chuva', visivel: true, z: 3, blendMode: 'add', texture: 'shard', texture_url: null as any,
         glow: { distance: 8, outerStrength: 1.2, innerStrength: 0, color: '#8ab4ff' },
         emitter: { alpha: { list: [{ value: 0.9, time: 0 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.35, time: 0 }, { value: 0.1, time: 1 }] },
           color: { list: [{ value: 'd6e6ff', time: 0 }, { value: '6a8cff', time: 1 }] }, speed: { start: 260, end: 200 }, acceleration: { x: 0, y: 300 },
-          startRotation: { min: 80, max: 100 }, lifetime: { min: 0.5, max: 0.9 }, frequency: 0.01, emitterLifetime: 0.9, maxParticles: 80, spawnType: 'rect', spawnRect: { x: -120, y: -90, w: 240, h: 20 } }, keyframes: [] },
+          startRotation: { min: 80, max: 100 }, lifetime: { min: 0.5, max: 0.9 }, frequency: 0.01, emitterLifetime: 0.9, maxParticles: 80, spawnType: 'rect', spawnRect: { x: -120, y: -90, w: 240, h: 20 } }, keyframes: [] as any[] },
     ],
   },
 
@@ -536,11 +536,11 @@ var PIXI_STUDIO_PRESETS = {
     lighting: { bloom: { threshold: 0.6, intensity: 0.8, quality: 5 }, tone: 'filmic' },
     background: { darken: 0 }, audio: { cast: 'heal_chime', impact: 'heal_glow', volume: 0.7 }, global: false,
     layers: [
-      { id: 'l0', tipo: 'emitter', nome: 'Fagulhas', visivel: true, z: 3, blendMode: 'add', texture: 'sparkle', texture_url: null,
+      { id: 'l0', tipo: 'emitter', nome: 'Fagulhas', visivel: true, z: 3, blendMode: 'add', texture: 'sparkle', texture_url: null as any,
         glow: { distance: 10, outerStrength: 1.3, innerStrength: 0, color: '#8fffa8' }, trail: { length: 6, fade: 0.8 },
         emitter: { alpha: { list: [{ value: 0, time: 0 }, { value: 0.9, time: 0.2 }, { value: 0, time: 1 }] }, scale: { list: [{ value: 0.1, time: 0 }, { value: 0.28, time: 0.5 }, { value: 0.04, time: 1 }] },
           color: { list: [{ value: 'eaffe0', time: 0 }, { value: '6fe89a', time: 1 }] }, speed: { start: 30, end: 80 }, acceleration: { x: 0, y: -120 },
-          startRotation: { min: 250, max: 290 }, lifetime: { min: 0.7, max: 1.2 }, frequency: 0.02, emitterLifetime: -1, maxParticles: 50, spawnType: 'circle', spawnCircle: { x: 0, y: 20, r: 22 } }, keyframes: [] },
+          startRotation: { min: 250, max: 290 }, lifetime: { min: 0.7, max: 1.2 }, frequency: 0.02, emitterLifetime: -1, maxParticles: 50, spawnType: 'circle', spawnCircle: { x: 0, y: 20, r: 22 } }, keyframes: [] as any[] },
       { id: 'l1', tipo: 'light', nome: 'Aura', visivel: true, z: 2, blendMode: 'add', color: '#9fffb0',
         keyframes: [{ t: 0, x: 0, y: 0, radius: 30, alpha: 0, color: '#d0ffd8' }, { t: 0.3, x: 0, y: 0, radius: 90, alpha: 0.6, color: '#9fffb0', ease: 'easeOutQuad' }, { t: 1, x: 0, y: 0, radius: 70, alpha: 0, color: '#6fe89a' }] },
     ],
@@ -574,7 +574,7 @@ var PIXI_STUDIO_PRESETS = {
           { t: 0.6,  radius: 14, len: 1,    stroke_color: '#ff9a3c', stroke_alpha: 1 },
           { t: 1,    radius: 5,  len: 1,    stroke_color: '#ff7a1c', stroke_alpha: 0 } ] },
       // 3) fagulhas correndo ao longo do feixe
-      { id: 'l2', tipo: 'emitter', nome: 'Fagulhas', visivel: true, z: 5, blendMode: 'add', texture: 'streak', texture_url: null,
+      { id: 'l2', tipo: 'emitter', nome: 'Fagulhas', visivel: true, z: 5, blendMode: 'add', texture: 'streak', texture_url: null as any,
         glow: { distance: 12, outerStrength: 1.6, color: '#ffb060' },
         anchor: { source: 'caster', z: 'chest', pose: 'upright' },
         spawn_path: [{ x: -150, y: 0, t: 0 }, { x: 150, y: 0, t: 1 }],
@@ -584,7 +584,7 @@ var PIXI_STUDIO_PRESETS = {
           color: { list: [{ value: 'fff4d0', time: 0 }, { value: 'ff7a1c', time: 1 }] },
           speed: { start: 70, end: 20 }, lifetime: { min: 0.18, max: 0.36 }, frequency: 0.005,
           emitterLifetime: -1, maxParticles: 120, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 5 } },
-        start_t: 0.42, end_t: 1, keyframes: [] },
+        start_t: 0.42, end_t: 1, keyframes: [] as any[] },
       // 4) flash de impacto no alvo
       { id: 'l3', tipo: 'shape', nome: 'Impacto', visivel: true, z: 6, blendMode: 'add', shape_type: 'circle',
         anchor: { source: 'target', spot: 'center', z: 'chest', pose: 'upright' }, start_t: 0.5, end_t: 1,
@@ -610,7 +610,7 @@ var PIXI_STUDIO_PRESETS = {
           { t: 0,   radius: 6,  stroke_color: '#a878ff', stroke_alpha: 0, stroke_width: 2, fill_alpha: 0 },
           { t: 0.2, radius: 34, stroke_color: '#c8a8ff', stroke_alpha: 1, stroke_width: 3, fill_alpha: 0.08, ease: 'easeOutQuad' },
           { t: 1,   radius: 34, stroke_color: '#7a4cff', stroke_alpha: 0.5, stroke_width: 1, fill_alpha: 0 } ] },
-      { id: 'l1', tipo: 'emitter', nome: 'Projétil', visivel: true, z: 4, blendMode: 'add', texture: 'spark', texture_url: null,
+      { id: 'l1', tipo: 'emitter', nome: 'Projétil', visivel: true, z: 4, blendMode: 'add', texture: 'spark', texture_url: null as any,
         glow: { distance: 12, outerStrength: 1.6, color: '#c060ff' },
         anchor: { source: 'caster', z: 'chest', pose: 'upright' },
         spawn_path: [{ x: -150, y: 0, t: 0 }, { x: 150, y: 0, t: 1 }],
@@ -620,7 +620,7 @@ var PIXI_STUDIO_PRESETS = {
           color: { list: [{ value: 'ffffff', time: 0 }, { value: 'b060ff', time: 1 }] },
           speed: { start: 70, end: 20 }, acceleration: { x: 0, y: 0 }, lifetime: { min: 0.2, max: 0.4 },
           frequency: 0.006, emitterLifetime: -1, maxParticles: 90, spawnType: 'circle', spawnCircle: { x: 0, y: 0, r: 4 } },
-        start_t: 0.25, end_t: 0.95, keyframes: [] },
+        start_t: 0.25, end_t: 0.95, keyframes: [] as any[] },
       { id: 'l2', tipo: 'shape', nome: 'Impacto', visivel: true, z: 5, blendMode: 'add', shape_type: 'circle',
         anchor: { source: 'target', spot: 'center', z: 'chest', pose: 'upright' }, start_t: 0.7, end_t: 1,
         keyframes: [
@@ -640,7 +640,7 @@ var PIXI_STUDIO_PRESETS = {
     iso_lift_frac: 0.0,
     layers: [
       // poeira/detritos subindo da base
-      { id: 'l0', tipo: 'emitter', nome: 'Poeira', visivel: true, z: 3, blendMode: 'normal', texture: 'smoke', texture_url: null,
+      { id: 'l0', tipo: 'emitter', nome: 'Poeira', visivel: true, z: 3, blendMode: 'normal', texture: 'smoke', texture_url: null as any,
         anchor: { source: 'target', spot: 'center', z: 'ground', pose: 'upright' },
         spawn_path: [{ x: 150, y: 0, t: 0 }, { x: 150, y: 0, t: 1 }],
         emitter: {
@@ -649,7 +649,7 @@ var PIXI_STUDIO_PRESETS = {
           color: { list: [{ value: '8a6a44', time: 0 }, { value: '2a1f14', time: 1 }] },
           speed: { start: 130, end: 20 }, acceleration: { x: 0, y: -50 }, lifetime: { min: 0.4, max: 0.9 },
           frequency: 0.012, emitterLifetime: -1, maxParticles: 70, spawnType: 'rect', spawnRect: { x: -26, y: -4, w: 52, h: 8 } },
-        start_t: 0, end_t: 0.65, keyframes: [] },
+        start_t: 0, end_t: 0.65, keyframes: [] as any[] },
       // a mão: sobe do chão, fecha e desce batendo
       { id: 'l1', tipo: 'shape', nome: 'Mão', visivel: true, z: 4, blendMode: 'normal', shape_type: 'hand',
         anchor: { source: 'target', spot: 'center', z: 'ground', pose: 'upright' },
@@ -672,7 +672,7 @@ var PIXI_STUDIO_PRESETS = {
 };
 
 // Display metadata for the presets library (nome PT-BR + categoria)
-var PIXI_STUDIO_PRESET_META = {
+var PIXI_STUDIO_PRESET_META: any = {
   fogo_nova:        { nome: 'Fogo — Nova',          categoria: 'Fogo',    cor: '#ff8842' },
   gelo_estilhaco:   { nome: 'Gelo — Estilhaço',      categoria: 'Gelo',    cor: '#7fc8ff' },
   raio_cadeia:      { nome: 'Raio — Cadeia',          categoria: 'Raio',    cor: '#cfe4ff' },

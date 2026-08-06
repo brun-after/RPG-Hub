@@ -35,7 +35,7 @@ REGRAS:
 - knee_l_y / knee_r_y: Y do joelho de cada perna (deve estar entre waist_y e 1.0).
 - pivot_*: ponto de rotação relativo ao bbox da parte (x,y entre 0 e 1). Cabeça gira pela nuca (y≈0.85). Braços e pernas giram pelo topo (y≈0.1).`;
 
-const ANIM_EQUIP_PROMPT_TPL = (slot) => `You are a 2D equipment artist for a fantasy RPG game. Analyze this equipment image and generate a flat 2D cartoon SVG sprite.
+const ANIM_EQUIP_PROMPT_TPL = (slot: any) => `You are a 2D equipment artist for a fantasy RPG game. Analyze this equipment image and generate a flat 2D cartoon SVG sprite.
 
 Return ONLY valid JSON (no markdown):
 {
@@ -204,7 +204,7 @@ const ANIM_DEFAULTS = {
   }
 };
 
-const ANIM_SKELETON = {
+const ANIM_SKELETON: Record<string, any> = {
   root:        {offset:[0,0],       children:['torso']},
   torso:       {parent:'root',      offset:[0,-22],    children:['head','arm_upper_l','arm_upper_r','leg_upper_l','leg_upper_r']},
   head:        {parent:'torso',     offset:[0,-40]},
@@ -218,16 +218,16 @@ const ANIM_SKELETON = {
   leg_lower_r: {parent:'leg_upper_r',offset:[0,20]}
 };
 
-const _ANIM_PART_ZINDEX = {
+const _ANIM_PART_ZINDEX: Record<string, any> = {
   arm_lower_l: 2, arm_upper_l: 3, leg_lower_l: 4, leg_upper_l: 4,
   leg_lower_r: 5, leg_upper_r: 5, torso: 6, arm_upper_r: 7, arm_lower_r: 7, head: 9
 };
 
-function _animBoneParentName(boneId) {
+function _animBoneParentName(boneId: any) {
   return ANIM_SKELETON[boneId]?.parent || 'root';
 }
 
-function _buildBboxFromLines(raw) {
+function _buildBboxFromLines(raw: any) {
   // Clamp all values to valid ranges, preventing negative bbox dimensions
   const hy2 = Math.min(Math.max(+(raw.head_y2  ?? 0.22), 0.05), 0.45);
   const wy  = Math.min(Math.max(+(raw.waist_y  ?? 0.55), hy2 + 0.10), 0.90);
@@ -258,13 +258,13 @@ function animGenGetApiKey() {
   return localStorage.getItem('animgen_claude_key') || '';
 }
 
-function animGenSetApiKey(key) {
+function animGenSetApiKey(key: any) {
   localStorage.setItem('animgen_claude_key', (key || '').trim());
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function animGenFileToBase64(file) {
+async function animGenFileToBase64(file: any) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => {
@@ -276,7 +276,7 @@ async function animGenFileToBase64(file) {
   });
 }
 
-async function animGenFileToDataUrl(file) {
+async function animGenFileToDataUrl(file: any) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => resolve(e.target.result);
@@ -285,7 +285,7 @@ async function animGenFileToDataUrl(file) {
   });
 }
 
-async function _animCropPartFromImage(imageFile, bbox, targetW, targetH) {
+async function _animCropPartFromImage(imageFile: any, bbox: any, targetW: any, targetH: any) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(imageFile);
     const img = new Image();
@@ -314,7 +314,7 @@ async function _animCropPartFromImage(imageFile, bbox, targetW, targetH) {
   });
 }
 
-async function _animGenApiCall(messages) {
+async function _animGenApiCall(messages: any) {
   const key = animGenGetApiKey();
   if (!key) throw new Error('Chave Claude API não configurada. Insira sua chave na aba 🎬 Animado.');
 
@@ -352,7 +352,7 @@ async function _animGenApiCall(messages) {
 
 // ── Entry points ─────────────────────────────────────────────────────────────
 
-async function animGenFromImage(imageFile) {
+async function animGenFromImage(imageFile: any) {
   const { data, mimeType }: any = await animGenFileToBase64(imageFile);
 
   const lines = await _animGenApiCall([{
@@ -368,8 +368,8 @@ async function animGenFromImage(imageFile) {
   // Single full-image crop — all bones share this texture, masked to their regions
   const fullTex = await _animCropPartFromImage(imageFile, { x: 0, y: 0, w: 1, h: 1 }, CANVAS_W, CANVAS_H);
 
-  const bboxes = _buildBboxFromLines(lines);
-  const pivotMap = {
+  const bboxes: any = _buildBboxFromLines(lines);
+  const pivotMap: Record<string, any> = {
     head:        lines.pivot_head        || { x: 0.5,  y: 0.87 },
     torso:       { x: 0.5, y: 0.47 },
     arm_upper_l: lines.pivot_shoulder_l  || { x: 0.85, y: 0.1  },
@@ -404,13 +404,13 @@ async function animGenFromImage(imageFile) {
     skeleton:        ANIM_SKELETON,
     animations:      ANIM_DEFAULTS,
     equipment_slots: {
-      weapon_r: null, shield: null, helmet: null,
-      chest_armor: null, cape: null, boot_l: null, boot_r: null, glove_r: null
+      weapon_r: null as any, shield: null as any, helmet: null as any,
+      chest_armor: null as any, cape: null as any, boot_l: null as any, boot_r: null as any, glove_r: null as any
     }
   };
 }
 
-async function animGenEquipFromImage(imageFile, slot) {
+async function animGenEquipFromImage(imageFile: any, slot: any) {
   const { data, mimeType }: any = await animGenFileToBase64(imageFile);
 
   const result = await _animGenApiCall([{
@@ -433,7 +433,7 @@ async function animGenEquipFromImage(imageFile, slot) {
 
 // ── UI Handlers ───────────────────────────────────────────────────────────────
 
-function animGenHandleImageSelect(input) {
+function animGenHandleImageSelect(input: any) {
   const file = input.files?.[0];
   if (!file) return;
   window._animGenSelectedFile = file;
@@ -484,7 +484,7 @@ async function animGenHandleGenerate() {
   }
 }
 
-async function animGenHandleEquipImage(slot, input) {
+async function animGenHandleEquipImage(slot: any, input: any) {
   const file = input.files?.[0];
   if (!file) return;
 
@@ -521,7 +521,7 @@ async function animGenHandleEquipImage(slot, input) {
   }
 }
 
-function animGenSetPreviewAnim(animName) {
+function animGenSetPreviewAnim(animName: any) {
   if (!window._apmodAnimTabCtrl) return;
   window._apmodAnimTabCtrl.setAnimation(animName);
 
@@ -531,7 +531,7 @@ function animGenSetPreviewAnim(animName) {
     b.style.borderColor = 'var(--borda)';
     b.style.color = 'var(--suave)';
   });
-  const labels = { idle: '⏸ Idle', walk: '🚶 Caminhar', attack: '⚔ Atacar' };
+  const labels: Record<string, any> = { idle: '⏸ Idle', walk: '🚶 Caminhar', attack: '⚔ Atacar' };
   const activeText = labels[animName];
   document.querySelectorAll('.animgen-anim-btn').forEach(b => {
     if (b.textContent.trim() === activeText) {
@@ -555,7 +555,7 @@ function animGenCopiarPromptPersonagem() {
   });
 }
 
-function animGenCopiarPromptEquip(slot) {
+function animGenCopiarPromptEquip(slot: any) {
   const prompt = ANIM_EQUIP_PROMPT_TPL(slot);
   navigator.clipboard.writeText(prompt).then(() => {
     mostrarToast('Prompt de equipamento copiado!', 'ok');
@@ -600,8 +600,8 @@ async function animGenImportarJSON() {
       }
       const CANVAS_W = 120, CANVAS_H = 180;
       const fullTex = await _animCropPartFromImage(window._animGenSelectedFile, { x:0, y:0, w:1, h:1 }, CANVAS_W, CANVAS_H);
-      const bboxes  = _buildBboxFromLines(parsed);
-      const pivotMap = {
+      const bboxes: any  = _buildBboxFromLines(parsed);
+      const pivotMap: Record<string, any> = {
         head:        parsed.pivot_head        || { x: 0.5,  y: 0.87 },
         arm_upper_l: parsed.pivot_shoulder_l  || { x: 0.85, y: 0.1  },
         arm_lower_l: parsed.pivot_elbow_l     || { x: 0.85, y: 0.08 },
@@ -681,13 +681,13 @@ function animGenToggleImport() {
   if (btn) btn.textContent = open ? '📥 Importar de IA Externa' : '▲ Fechar Importação';
 }
 
-function animGenToggleEquipImport(slot) {
+function animGenToggleEquipImport(slot: any) {
   const wrap = document.getElementById(`animgen-equip-import-wrap-${slot}`);
   if (!wrap) return;
   wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
 }
 
-function animGenImportarEquipJSON(slot) {
+function animGenImportarEquipJSON(slot: any) {
   const ta = document.getElementById(`animgen-import-equip-json-${slot}`);
   if (!ta || !ta.value.trim()) { mostrarToast('Cole o JSON do equipamento', 'aviso'); return; }
 
@@ -727,7 +727,7 @@ function animGenImportarEquipJSON(slot) {
 
 // ── Tab HTML ──────────────────────────────────────────────────────────────────
 
-function _apmodTabAnimado(aparencia) {
+function _apmodTabAnimado(aparencia: any) {
   const animado = aparencia.animado || {};
   const hasData = !!(animado.parts && Object.keys(animado.parts).length);
   const savedKey = animGenGetApiKey();

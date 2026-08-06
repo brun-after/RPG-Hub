@@ -7,7 +7,7 @@
     const _origIniciarApp: any = window.iniciarApp;
     
     if (typeof _origIniciarApp === 'function') {
-      (window as any).iniciarApp = async function(rpgId) {
+      (window as any).iniciarApp = async function(rpgId: any) {
         try {
           const result = await _origIniciarApp(rpgId);
           // Normalizar render_data de todos os mapas após carregamento

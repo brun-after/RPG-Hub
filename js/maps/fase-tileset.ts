@@ -10,7 +10,7 @@
 // row 2 = canto_SO, parede_S, canto_SE, bau,         [canto_int_SO]
 // row 3 = porta,    piso_3,   parede_int, porta_fase,[canto_int_SE] (se rows >= 4)
 // row 4 = piso_4,   piso_5,   objeto_2,   objeto_3               (se rows >= 5)
-function _faseTilesetBlocosCanonicos(cols, rows) {
+function _faseTilesetBlocosCanonicos(cols: any, rows: any) {
   cols = cols || 4; rows = rows || 4;
   const b: any = {
     canto_NO: 'bloco_0_0', parede_N: 'bloco_1_0', canto_NE: 'bloco_2_0', piso_1: 'bloco_3_0',
@@ -30,7 +30,7 @@ function _faseTilesetBlocosCanonicos(cols, rows) {
 }
 
 // ── Prompt 1 — Geração de imagem do tileset ──────────────────────────────────
-function faseTilesetImgPromptTemplate(opts) {
+function faseTilesetImgPromptTemplate(opts: any) {
   const estilo = opts.estilo || 'pixel art fantasy dungeon';
   const cols   = Math.min(10, Math.max(4, opts.cols || 4));
   const rows   = Math.min(10, Math.max(4, opts.rows || 4));
@@ -118,7 +118,7 @@ OUTPUT: Uma única imagem plana (sem camadas), sem rótulos, sem UI, sem bordas 
 }
 
 // ── Prompt 2 — Coordenadas + layout completo da dungeon ──────────────────────
-function faseTilesetLayoutPromptTemplate(opts) {
+function faseTilesetLayoutPromptTemplate(opts: any) {
   const cols      = Math.min(10, Math.max(4, opts.cols || 4));
   const rows      = Math.min(10, Math.max(4, opts.rows || 4));
   const descricao = opts.descricao || 'a dungeon with several rooms connected by corridors';
@@ -227,7 +227,7 @@ IMPORTANTE: Retorne APENAS o JSON. O array "tiles" deve ter EXATAMENTE ${altura}
 }
 
 // ── Prompt unificado para IA externa (personagens + dungeon + tileset) ────────
-function _avtPromptCampanhaExterna(opts) {
+function _avtPromptCampanhaExterna(opts: any) {
   const cols = Math.min(10, Math.max(4, opts.cols || 4));
   const rows = Math.min(10, Math.max(4, opts.rows || 4));
 
@@ -348,7 +348,7 @@ DIRETRIZES ARTÍSTICAS DE LEVEL DESIGN:
 }
 
 // ── Validação do JSON da campanha externa (personagens + tileset) ─────────────
-function _avtValidarJSONCampanhaExterna(raw) {
+function _avtValidarJSONCampanhaExterna(raw: any) {
   if (typeof raw === 'string') {
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('JSON inválido: não encontrou objeto { }');
@@ -418,7 +418,7 @@ function _avtCopiarPromptImagemExterna() {
 }
 
 // ── UI: selecionar imagem (modo ia_externa — usa IDs distintos) ───────────────
-function _avtExtHandleImageSelect(input) {
+function _avtExtHandleImageSelect(input: any) {
   const file = input?.files?.[0];
   if (!file) return;
   (AVT_STATE._criando as any)._tilesetImgFile = file;
@@ -431,7 +431,7 @@ function _avtExtHandleImageSelect(input) {
 }
 
 // ── UI: colar JSON da campanha externa ────────────────────────────────────────
-function _avtExtHandleJSONPaste(val) {
+function _avtExtHandleJSONPaste(val: any) {
   const status = document.getElementById('avt-ext-json-status');
   if (!val.trim()) { if (status) status.textContent = ''; return; }
   try {
@@ -454,7 +454,7 @@ function _avtExtHandleJSONPaste(val) {
 }
 
 // ── Validação do JSON combinado ───────────────────────────────────────────────
-function faseTilesetValidarJSON(raw) {
+function faseTilesetValidarJSON(raw: any) {
   if (typeof raw === 'string') {
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('JSON inválido: não encontrou objeto { }');
@@ -490,7 +490,7 @@ function faseTilesetValidarJSON(raw) {
 }
 
 // Converte mapa do tileset em dungeon_data compatível com o engine
-function faseTilesetToDungeonData(config) {
+function faseTilesetToDungeonData(config: any) {
   const m = config.mapa;
   if (!m?.tiles) return null;
   const h = m.tiles.length;
@@ -502,12 +502,12 @@ function faseTilesetToDungeonData(config) {
     _inimigosJson:  m.inimigos    || [],
     _spawnJogadores: m.spawn_jogadores || [],
     tileset_config:  config,      // embedded
-    tileset_img_url: null         // preenchido após upload
+    tileset_img_url: null as any         // preenchido após upload
   };
 }
 
 // ── Estado do módulo ──────────────────────────────────────────────────────────
-let _tilesetImgFile = null;
+let _tilesetImgFile: any = null;
 
 // ── UI: copiar prompt de imagem ───────────────────────────────────────────────
 function faseTilesetCopiarPromptImagem() {
@@ -536,7 +536,7 @@ function faseTilesetCopiarPromptLayout() {
 }
 
 // ── UI: selecionar imagem ─────────────────────────────────────────────────────
-function faseTilesetHandleImageSelect(input) {
+function faseTilesetHandleImageSelect(input: any) {
   const file = input?.files?.[0];
   if (!file) return;
   _tilesetImgFile = file;
@@ -582,7 +582,7 @@ function faseTilesetTrocarImagem() {
 }
 
 // ── UI: colar JSON de layout ──────────────────────────────────────────────────
-function faseTilesetHandleJSONPaste(val) {
+function faseTilesetHandleJSONPaste(val: any) {
   const status = document.getElementById('avt-tileset-json-status');
   if (!val.trim()) { if (status) status.textContent = ''; return; }
   try {
@@ -601,7 +601,7 @@ function faseTilesetHandleJSONPaste(val) {
 }
 
 // ── Carregar tileset e pré-cortar blocos ──────────────────────────────────────
-async function _avtCarregarTileset(imgUrl, config) {
+async function _avtCarregarTileset(imgUrl: any, config: any) {
   const img = new Image();
   img.crossOrigin = 'anonymous';
   await new Promise((res, rej) => {
@@ -617,7 +617,7 @@ async function _avtCarregarTileset(imgUrl, config) {
   const imgW = img.naturalWidth, imgH = img.naturalHeight;
   const sw = (imgW - sep * (cols + 1)) / cols;
   const sh = (imgH - sep * (rows + 1)) / rows;
-  const textures = {};
+  const textures: Record<string, any> = {};
 
   for (const [semanticKey, blocoRef] of Object.entries<any>(config.blocos || {})) {
     const match = String(blocoRef).match(/^bloco_(\d+)_(\d+)$/);
@@ -647,7 +647,7 @@ async function _avtCarregarTileset(imgUrl, config) {
 
 // ── Hash pseudo-aleatório por posição (sem padrão diagonal) ──────────────────
 // LCG avalanche — mesma semente → mesmo resultado, sem artefatos visíveis
-function _tileRng(x, y) {
+function _tileRng(x: any, y: any) {
   let s = (Math.imul(x, 374761393) + Math.imul(y, 1103515245) + 12345) | 0;
   s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
   s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
@@ -662,7 +662,7 @@ function _tileRng(x, y) {
 // Canto EXTERNO (convexo): dois cardinais adjacentes são piso, diagonal entre eles é parede
 // Canto INTERNO (côncavo): dois cardinais adjacentes são piso, diagonal entre eles também é piso
 //   → ocorre nas junções corredor→sala onde o piso "dobra" ao redor da parede
-function _avtTipoParede(N, S, E, W, NE, NW, SE, SW, blocos) {
+function _avtTipoParede(N: any, S: any, E: any, W: any, NE: any, NW: any, SE: any, SW: any, blocos: any) {
   if (N && S && E && W) return 'piso_1';    // cercada por piso → tratar como piso
 
   // Cantos externos (convexos) — diagonal oposto aos cardinais livres é parede
@@ -701,14 +701,14 @@ const _AVT_CHAVES_PAREDE = new Set([
 ]);
 
 // Classifica uma célula (chave string OU número AVT_T) como parede sólida.
-function _avtChaveEhParede(cell) {
+function _avtChaveEhParede(cell: any) {
   if (cell === null || cell === undefined) return true;            // void = sólido
   if (typeof cell === 'number') return cell === AVT_T.PAREDE;      // 0 = parede
   return _AVT_CHAVES_PAREDE.has(cell) || cell === 'parede';        // 'parede' legado
 }
 
 // ── Verificar se tile é passável (para colisão) ───────────────────────────────
-function _avtTilePassavel(x, y, dungeon) {
+function _avtTilePassavel(x: any, y: any, dungeon: any) {
   const t = dungeon.tiles[y]?.[x];
   if (t === null || t === undefined) return false;
   if (typeof t === 'number') return t === AVT_T.PISO || t === AVT_T.SAIDA;
@@ -717,12 +717,12 @@ function _avtTilePassavel(x, y, dungeon) {
 }
 
 // ── Autotile para grids binários legados (0/1) ────────────────────────────────
-function _avtGetTileSemanticKey(x, y, dungeon) {
-  const tileAt = (tx, ty) => dungeon.tiles[ty]?.[tx] === AVT_T.PISO;
+function _avtGetTileSemanticKey(x: any, y: any, dungeon: any) {
+  const tileAt = (tx: any, ty: any) => dungeon.tiles[ty]?.[tx] === AVT_T.PISO;
   const here = dungeon.tiles[y]?.[x];
 
   if (here === AVT_T.PISO) {
-    if (dungeon._chestPositions?.some(p => p.x === x && p.y === y)) return 'bau';
+    if (dungeon._chestPositions?.some((p: any) => p.x === x && p.y === y)) return 'bau';
     const rng    = _tileRng(x, y);
     const config = (AVT_STATE as any)._tilesetConfig;
     const varCh  = config?.regras?.piso_variacao_chance ?? 0.15;
@@ -744,8 +744,8 @@ function _avtGetTileSemanticKey(x, y, dungeon) {
 // ── Normalização de grid: recalcula tiles de parede a partir dos vizinhos reais ─
 // Recebe qualquer grid (strings semânticas OU binário 0/1).
 // Preserva tiles de piso/especiais; recalcula apenas tiles de parede/canto.
-function _avtNormalizarTilesParedes(tiles) {
-  const ehPiso = (x, y) => {
+function _avtNormalizarTilesParedes(tiles: any) {
+  const ehPiso = (x: any, y: any) => {
     const t = tiles[y]?.[x];
     if (t === null || t === undefined) return false;
     if (typeof t === 'number') return t === 1;
@@ -789,13 +789,13 @@ function _avtNormalizarTilesParedes(tiles) {
 }
 
 // ── PixiJS: carregar tileset (modo fase-renderer) ─────────────────────────────
-async function _faseTilesetCarregar(rd) {
+async function _faseTilesetCarregar(rd: any) {
   const config = rd.tileset_config;
   const imgUrl = rd.tileset_img_url;
   if (!config || !imgUrl) return;
 
   const url = (typeof normalizeImgUrl === 'function') ? normalizeImgUrl(imgUrl) : imgUrl;
-  const base = await PIXI.Assets.load(url).catch(() => null);
+  const base = await PIXI.Assets.load(url).catch((): any => null);
   if (!base) return;
 
   const bt   = base.baseTexture || base;
@@ -806,7 +806,7 @@ async function _faseTilesetCarregar(rd) {
   const sw = (bt.width  - sep * (cols + 1)) / cols;
   const sh = (bt.height - sep * (rows + 1)) / rows;
 
-  const textures = {};
+  const textures: Record<string, any> = {};
   for (const [semanticKey, blocoRef] of Object.entries<any>(config.blocos || {})) {
     const match = String(blocoRef).match(/^bloco_(\d+)_(\d+)$/);
     if (!match) continue;
@@ -826,7 +826,7 @@ async function _faseTilesetCarregar(rd) {
 }
 
 // ── PixiJS: renderizar grade de tiles com tileset ────────────────────────────
-function _faseRenderDungeonTiles(layer, rd) {
+function _faseRenderDungeonTiles(layer: any, rd: any) {
   const dungeon = rd.dungeon_data || rd.tileset_config?.mapa;
   if (!dungeon?.tiles) return;
   const textures = FASE_STATE?._tilesetTextures;

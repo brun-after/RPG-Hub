@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 let AUTH_MODE = 'login';
-let HCAPTCHA_WIDGET_ID = null;
+let HCAPTCHA_WIDGET_ID: any = null;
 
 // Inicializa o widget hCaptcha quando a API estiver pronta
 function onHcaptchaLoad() {
@@ -22,7 +22,7 @@ function onHcaptchaLoad() {
 // nesse caso o stub inline do index.html marca a flag e a inicialização acontece aqui.
 if (window._hcaptchaApiPronta) { try { onHcaptchaLoad(); } catch (e) { console.error('[auth] hCaptcha init:', e); } }
 
-function authTab(modo) {
+function authTab(modo: any) {
   AUTH_MODE = modo;
   const isLogin = modo === 'login';
   document.getElementById('auth-tab-login').style.background    = isLogin ? 'var(--primario)' : 'transparent';
@@ -38,12 +38,12 @@ function authTab(modo) {
   if (HCAPTCHA_WIDGET_ID !== null) hcaptcha.reset(HCAPTCHA_WIDGET_ID);
 }
 
-function authErro(msg) {
+function authErro(msg: any) {
   const el = document.getElementById('auth-erro');
   el.textContent = msg; el.style.display = msg ? 'block' : 'none';
 }
 
-function authSucesso(msg) {
+function authSucesso(msg: any) {
   const el = document.getElementById('auth-sucesso');
   el.textContent = msg; el.style.display = msg ? 'block' : 'none';
 }
@@ -92,7 +92,7 @@ async function authSubmit() {
   }
 }
 
-async function authCadastrar(email, senha, nickname, nomeReal = '') {
+async function authCadastrar(email: any, senha: any, nickname: any, nomeReal = '') {
   const captchaToken = hcaptcha.getResponse(HCAPTCHA_WIDGET_ID);
   if (!captchaToken) { authErro('Por favor, complete o desafio de segurança.'); return; }
   const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
@@ -117,7 +117,7 @@ async function authCadastrar(email, senha, nickname, nomeReal = '') {
   authErro('');
 }
 
-async function authEntrar(email, senha) {
+async function authEntrar(email: any, senha: any) {
   const captchaToken = hcaptcha.getResponse(HCAPTCHA_WIDGET_ID);
   if (!captchaToken) { authErro('Por favor, complete o desafio de segurança.'); return; }
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
@@ -240,7 +240,7 @@ async function authVerificarConfirmacaoEmail() {
   return true;
 }
 
-function authExibirFormNovaSenha(tokenRecuperacao) {
+function authExibirFormNovaSenha(tokenRecuperacao: any) {
   document.getElementById('hub').style.display       = 'none';
   document.getElementById('tela-auth').style.display = 'flex';
   const overlay = document.createElement('div');
@@ -267,7 +267,7 @@ function authExibirFormNovaSenha(tokenRecuperacao) {
   setTimeout(() => document.getElementById('nova-senha-input')?.focus(), 100);
 }
 
-async function authSalvarNovaSenha(tokenRecuperacao) {
+async function authSalvarNovaSenha(tokenRecuperacao: any) {
   const nova  = document.getElementById('nova-senha-input').value;
   const conf  = document.getElementById('nova-senha-conf').value;
   const msgEl = document.getElementById('nova-senha-msg');
@@ -306,7 +306,7 @@ async function authSalvarNovaSenha(tokenRecuperacao) {
 }
 
 // ── TRADUÇÕES DE ERRO ─────────────────────────────────────────
-function traduzirErroAuth(msg) {
+function traduzirErroAuth(msg: any) {
   if (!msg) return 'Erro desconhecido';
   const m = msg.toLowerCase();
   if (m.includes('already registered') || m.includes('user already exists'))
@@ -418,13 +418,13 @@ async function iniciarApp() {
 
 
 // ── HUB ───────────────────────────────────────────────────────
-function renderRPGList(rpgs){
+function renderRPGList(rpgs: any){
  const list=document.getElementById('rpg-list');
  if(!rpgs||!rpgs.length){list.innerHTML='<div style="text-align:center;padding:30px;color:#7a92aa;font-style:italic">Nenhuma campanha. Importe um RPG.</div>';return;}
 
  // Separar campanhas normais de arenas e aventuras
- const campanhas=[], arenas=[];
- rpgs.forEach(r=>{
+ const campanhas: any[]=[], arenas: any=[];
+ rpgs.forEach((r: any)=>{
    const t = r.theme_json || {};
    if(r.is_arena===true) arenas.push({r,t});
    else if(r.is_aventura===true || t.is_aventura===true) { /* aventuras rendered by aventura.js */ }
@@ -457,7 +457,7 @@ function renderRPGList(rpgs){
  // Arenas encontradas na lista — exibir como cards especiais de arena
  if(arenas.length){
    html+=`<div class="hub-section-title" style="color:rgba(232,80,60,0.55);margin-top:28px">Arenas salvas</div>`;
-   html+=arenas.map(({r,t})=>{
+   html+=arenas.map(({r,t}: any)=>{
      const bn=t.batalha_num||1;
      const rid=r.rpg_id.replace(/'/g,"\\'");
      return `<div class="rpg-card" onclick="entrarArenaFromHub('${rid}')" style="--card-accent:#e8604c;background:rgba(24,8,8,0.7);border-color:rgba(232,80,60,0.2)">
@@ -481,7 +481,7 @@ function renderRPGList(rpgs){
  list.innerHTML=html;
 }
 
-async function entrarArenaFromHub(rpgId){
+async function entrarArenaFromHub(rpgId: any){
  // Abre o hub de arena e entra direto na sessão
  document.getElementById('hub').style.display='none';
  document.getElementById('arena-hub').style.display='block';

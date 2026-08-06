@@ -5,8 +5,8 @@
 
 
 let HUB_DATA: { rpgs: RpgRegistryRow[] }={rpgs:[]}, RPG_DATA: RpgData | null=null, CURRENT_RPG: any=null;
-let DADO_SEL=null, FICHAS_VIEW=null, CHAR_VIEW=null, ATTR_VIEW=null, CFG_CHAR=null;
-let HISTORICO=[], USER_ID=null, realtimeWS=null;
+let DADO_SEL: any=null, FICHAS_VIEW: any=null, CHAR_VIEW: any=null, ATTR_VIEW: any=null, CFG_CHAR: any=null;
+let HISTORICO: any[]=[], USER_ID: any=null, realtimeWS: any=null;
 let SESSION: SessaoAuth | null=null; // {access_token, user:{id,email}} — preenchido por iniciarApp() após login bem-sucedido
 
 // ── Ação Criativa ────────────────────────────────────────────────
@@ -22,28 +22,28 @@ const CHAT: ChatState = {
   online:   [],
   _presenceInterval: null,
 };
-let INI_VALOR_ATUAL = null;
-let INI_NOME_ATUAL = null;
-let CRIATIVO_ID_ATUAL = null;
+let INI_VALOR_ATUAL: any = null;
+let INI_NOME_ATUAL: any = null;
+let CRIATIVO_ID_ATUAL: any = null;
 let CRIATIVOS_CAMP: CriativoCampanha[] = []; // ataques criativos da campanha (sincronizados via rpg_registry)
-let CRIATIVO_MESTRE_BUILDER = []; // builder de dados do modal do mestre
-let BATALHA_ATUAL_ID = null; // id da batalha sendo visualizada no mapa atual
+let CRIATIVO_MESTRE_BUILDER: any = []; // builder de dados do modal do mestre
+let BATALHA_ATUAL_ID: any = null; // id da batalha sendo visualizada no mapa atual
 
 // ── Vínculo skill↔character por UUID ─────────────────────────
 // Retorna o UUID do personagem a partir do nome (ou null).
-function _skCharId(nome) {
+function _skCharId(nome: any) {
   if (!nome) return null;
   const c = (RPG_DATA?.characters || []).find(x => x.nome === nome);
   return c?.id || null;
 }
 // Filtra skills pelo UUID do personagem, com fallback gracioso para
 // registros antigos que só possuem o campo "personagem" (nome).
-function _skFiltrarPorChar(skills, nome) {
+function _skFiltrarPorChar(skills: any, nome: any) {
   const cid = _skCharId(nome);
-  if (cid) return skills.filter(s => s.character_id === cid || (!s.character_id && s.personagem === nome));
-  return skills.filter(s => s.personagem === nome);
+  if (cid) return skills.filter((s: any) => s.character_id === cid || (!s.character_id && s.personagem === nome));
+  return skills.filter((s: any) => s.personagem === nome);
 }
-let _skModalCharId = null; // UUID do personagem no modal de skill aberto
+let _skModalCharId: any = null; // UUID do personagem no modal de skill aberto
 let MAPA_STATE: MapaState = {
   mapaAtualId:null, mapaGeralId:null, toolMode:null, medicaoAtiva:null, dragging:null, dragTimer:null,
   batalhas: {}, // { [batalha_id]: objetoBatalha }
@@ -52,7 +52,7 @@ let MAPA_STATE: MapaState = {
 };
 
 // ── Zoom/Pan do mapa da campanha ──────────────────────────────
-let MAPA_ZOOM = { zoom:1, panX:0, panY:0, _inited:false, _keyInited:false, _resizeInited:false, locked:true, activeChar:null, modo:'auto', _autoRafId:null };
+let MAPA_ZOOM = { zoom:1, panX:0, panY:0, _inited:false, _keyInited:false, _resizeInited:false, locked:true, activeChar:null as any, modo:'auto', _autoRafId:null as any };
 
 function mapaZoomApply() {
   const img = document.getElementById('mapa-img');
@@ -77,15 +77,15 @@ function mapaZoomApply() {
 // 2.1 — Aliases de tipo de mapa: 'geral'→'mundo', 'local'→'tatico'
 // Retrocompatível: código antigo continua funcionando
 // ════════════════════════════════════════════════════════════════════════════
-function mapaGetTipo(mapa) {
+function mapaGetTipo(mapa: any) {
   const t = mapa?.tipo || 'mundo';
   if (t === 'geral') return 'mundo';
   if (t === 'local') return 'tatico';
   return t; // 'mundo', 'tatico', 'fase' já no novo formato
 }
-function mapaIsMundo(mapa)  { return mapaGetTipo(mapa) === 'mundo'; }
-function mapaIsTatico(mapa) { return mapaGetTipo(mapa) === 'tatico'; }
-function mapaIsFase(mapa)   { return mapaGetTipo(mapa) === 'fase'; }
+function mapaIsMundo(mapa: any)  { return mapaGetTipo(mapa) === 'mundo'; }
+function mapaIsTatico(mapa: any) { return mapaGetTipo(mapa) === 'tatico'; }
+function mapaIsFase(mapa: any)   { return mapaGetTipo(mapa) === 'fase'; }
 
 // ── Estado global do mapa de fase ────────────────────────────────────────────
 let FASE_STATE: FaseState = {
@@ -131,7 +131,7 @@ function mapaToggleModoCamera() {
   if (MAPA_ZOOM.modo === 'auto') _cameraAutoLoop();
 }
 
-function _cameraCalcCentroide(mapId) {
+function _cameraCalcCentroide(mapId: any) {
   const chars = RPG_DATA?.characters || [];
   const jogadores = chars.filter(c => {
     const ca = c.custom_attrs || {};
@@ -230,7 +230,7 @@ function mapaZoomManualGuard() {
 
 
 // ── Tamanho individual de personagem no mapa ────────────────────────────────
-function mapaCharSizeAtivar(nome) {
+function mapaCharSizeAtivar(nome: any) {
   const c = RPG_DATA?.characters?.find(x => x.nome === nome); if (!c) return;
   const ca = c.custom_attrs || {};
   const tam = ca.aparencia?.tamanho || 1.0;
@@ -256,7 +256,7 @@ function mapaCharSizeAtivar(nome) {
   
   hud.style.display = 'flex';
 }
-function mapaCharSizeSlide(v) {
+function mapaCharSizeSlide(v: any) {
   const val = parseFloat(v);
   const valEl = document.getElementById('mapa-char-size-val');
   if (valEl) valEl.textContent = Math.round(val * 100) + '%';
@@ -280,7 +280,7 @@ function mapaCharSizeSlide(v) {
   }
 }
 
-function mapaCharSizeStep(delta) {
+function mapaCharSizeStep(delta: any) {
   const slider = document.getElementById('mapa-char-size-slider') as HTMLInputElement; if (!slider) return;
   slider.blur(); // Prevent keyboard on mobile
   const v = Math.max(0.4, Math.min(5, parseFloat(slider.value) + delta));
@@ -338,7 +338,7 @@ function mapaCharSizeFechar() {
   if (hud) hud.style.display = 'none';
 }
 
-function mapaZoomSet(z, pivotX, pivotY) {
+function mapaZoomSet(z: any, pivotX: any, pivotY: any) {
   const oldZoom = MAPA_ZOOM.zoom;
   const newZoom = Math.max(0.05, Math.min(20, z));
   if (pivotX != null && pivotY != null) {
@@ -402,7 +402,7 @@ function mapaZoomInit() {
   const _panIsMobile = () => navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
   const _panDeadzone = () => _panIsMobile() ? 3 : 6;
 
-  let _isPanning = false, _panPointerId = null, _panSX = 0, _panSY = 0, _panOX = 0, _panOY = 0;
+  let _isPanning = false, _panPointerId: any = null, _panSX = 0, _panSY = 0, _panOX = 0, _panOY = 0;
   let _panThresholdMet = false;
   wrap.addEventListener('pointerdown', (e: any) => {
     if (e.target.closest('#mapa-zoom-hud')) return;
@@ -429,7 +429,7 @@ function mapaZoomInit() {
     MAPA_ZOOM.panY = _panOY + dy;
     mapaZoomApply();
   });
-  const _endPan = (e) => {
+  const _endPan = (e: any) => {
     if (e.pointerId !== _panPointerId) return;
     _isPanning = false; _panPointerId = null;
     wrap.style.cursor = MAPA_ZOOM.locked ? 'default' : 'grab';
@@ -471,7 +471,7 @@ function mapaZoomInit() {
   }
 }
 
-function normalizeImgUrl(url) {
+function normalizeImgUrl(url: any) {
   if (!url) return url;
   url = url.trim();
   // Extrair ID do Google Drive de qualquer variante de link:
@@ -483,8 +483,8 @@ function normalizeImgUrl(url) {
   return url;
 }
 const TIPOS_DADO=[4,6,8,10,20,100];
-function getDiceConfig(rpgId){ try{ const s=localStorage.getItem('rpghub_dice_'+rpgId); return s?JSON.parse(s):TIPOS_DADO; }catch(e){ return TIPOS_DADO; } }
-function setDiceConfig(rpgId,arr){ try{ localStorage.setItem('rpghub_dice_'+rpgId,JSON.stringify(arr)); }catch(e){} }
+function getDiceConfig(rpgId: any){ try{ const s=localStorage.getItem('rpghub_dice_'+rpgId); return s?JSON.parse(s):TIPOS_DADO; }catch(e){ return TIPOS_DADO; } }
+function setDiceConfig(rpgId: any,arr: any){ try{ localStorage.setItem('rpghub_dice_'+rpgId,JSON.stringify(arr)); }catch(e){} }
 const IMPORT_CSVS: any={};
 const COR_MAP={primario:'var(--primario-v)',perigo:'#e74c3c',sucesso:'#5ee09a',especial:'#b07ef0',destaque:'var(--destaque-v)',suave:'var(--suave)'};
 

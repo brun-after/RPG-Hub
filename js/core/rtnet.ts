@@ -18,8 +18,8 @@ window.RTNet = (() => {
 
   // ── ESTADO INTERNO ─────────────────────────────────────────────
   const _s = {
-    rpgId:    null,
-    userId:   null,
+    rpgId:    null as any,
+    userId:   null as any,
     initialized: false,
     joinedAt: 0,            // ms epoch — minha entrada
     paused:   false,
@@ -32,25 +32,25 @@ window.RTNet = (() => {
     peerJoinTs:  new Map<string, number>(),                  // ms epoch reportado pelo peer
 
     // Host
-    hostId:      null,
+    hostId:      null as any,
     _isHost:     false,
-    hostCbs:     [],
+    hostCbs:     [] as any[],
     lastHostHb:  0,
 
     // Timers
-    snapshotTimer:    null,
-    heartbeatTimer:   null,
-    stateTickTimer:   null,
-    _hostDeadTimer:   null,
-    _candidateTimer:  null,
-    _soloHostTimer:   null,
-    periodicSyncTimer:null,
+    snapshotTimer:    null as any,
+    heartbeatTimer:   null as any,
+    stateTickTimer:   null as any,
+    _hostDeadTimer:   null as any,
+    _candidateTimer:  null as any,
+    _soloHostTimer:   null as any,
+    periodicSyncTimer:null as any,
 
     // Event handlers
     handlers: new Map<string, Set<(payload: any) => void>>(),
 
     // Snapshot
-    snapshotProvider: null,
+    snapshotProvider: null as any,
 
     // Transport
     mode: 'supabase', // 'p2p' | 'mixed' | 'supabase'
@@ -59,22 +59,22 @@ window.RTNet = (() => {
     _candidates: new Map<string, number>(),                  // userId → joinTs
 
     // Voluntary host election
-    _volunteers:    [],     // { userId, ts } — candidatos ao host (modo voluntário)
-    _volunteerTimer: null,  // timer de janela de coleta de volunteers
+    _volunteers:    [] as any[],     // { userId, ts } — candidatos ao host (modo voluntário)
+    _volunteerTimer: null as any,  // timer de janela de coleta de volunteers
 
     // Peer leave callbacks
-    _peerLeaveCallbacks: [],
+    _peerLeaveCallbacks: [] as any[],
 
     // Telemetria (AVT_PERF): contadores de mensagens e RTT ao host
     _stats: { in: 0, out: 0, rtt: -1 },
-    _pingTimer: null,
+    _pingTimer: null as any,
   };
 
   // TURN opcional via env (Vite): VITE_TURN_URL / VITE_TURN_USER / VITE_TURN_PASS.
   // Sem TURN, peers atrás de NAT simétrico caem silenciosamente para o fallback Supabase.
   const _ICE_ENV = (() => { try { return (import.meta as any).env || {}; } catch(_) { return {}; } })();
   function _iceServers() {
-    const servers: any[] = [{ urls: 'stun:stun.l.google.com:19302' }];
+    const servers: any = [{ urls: 'stun:stun.l.google.com:19302' }];
     if (_ICE_ENV.VITE_TURN_URL) {
       servers.push({
         urls: _ICE_ENV.VITE_TURN_URL,
@@ -193,14 +193,14 @@ window.RTNet = (() => {
     }
   }
 
-  function _log(...a)  { try { console.log('[RTNet]',  ...a); } catch(_) {} }
-  function _warn(...a) { try { console.warn('[RTNet]', ...a); } catch(_) {} }
+  function _log(...a: any[])  { try { console.log('[RTNet]',  ...a); } catch(_) {} }
+  function _warn(...a: any[]) { try { console.warn('[RTNet]', ...a); } catch(_) {} }
 
   function _webRTCOk() { return typeof RTCPeerConnection !== 'undefined'; }
 
   // ── DISPATCH ────────────────────────────────────────────────────
 
-  function _dispatch(tipo, payload) {
+  function _dispatch(tipo: any, payload: any) {
     _s._stats.in++;
     // Heartbeat do host via DataChannel — resetar watchdog de host morto
     if (tipo === 'avt_host_heartbeat') {
@@ -216,7 +216,7 @@ window.RTNet = (() => {
 
     const fnName = AVT_HANDLER_MAP[tipo];
     if (fnName) {
-      const fn = window[fnName];
+      const fn = (window as any)[fnName];
       if (typeof fn === 'function') { try { (fn as any)(payload); } catch(e) { _warn('global handler:', fnName, e); } }
       else {
         try {
@@ -231,12 +231,12 @@ window.RTNet = (() => {
 
   // ── SINALIZAÇÃO (via Supabase Realtime existente) ───────────────
 
-  function _signal(tipo, payload) {
+  function _signal(tipo: any, payload: any) {
     if (typeof realtimeBroadcast !== 'function') return;
     try { realtimeBroadcast('rtnet_' + tipo, { ...payload, _from: _s.userId }); } catch(e) { _warn('signal falhou:', tipo, e); }
   }
 
-  function _handleSignaling(tipo, payload) {
+  function _handleSignaling(tipo: any, payload: any) {
     if (!_s.initialized) return;
     if (!payload) return;
     const from = payload._from;
@@ -277,7 +277,7 @@ window.RTNet = (() => {
 
   // ── WEBRTC ──────────────────────────────────────────────────────
 
-  async function _connectTo(peerId) {
+  async function _connectTo(peerId: any) {
     if (_s.peers.has(peerId) || _s.connectingTo.has(peerId)) return;
     _s.connectingTo.add(peerId);
     _log('iniciando conexão WebRTC com', peerId);
@@ -312,7 +312,7 @@ window.RTNet = (() => {
     }
   }
 
-  async function _onOffer(fromId, payload) {
+  async function _onOffer(fromId: any, payload: any) {
     if (_s.peers.has(fromId)) return;
     _log('recebendo offer de', fromId);
 
@@ -342,22 +342,22 @@ window.RTNet = (() => {
     _signal('peer_answer', { target_id: fromId, sdp: answer });
   }
 
-  async function _onAnswer(fromId, payload) {
+  async function _onAnswer(fromId: any, payload: any) {
     const pc = _s.peers.get(fromId);
     if (!pc) return;
     try { await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp)); } catch(e) { _warn('setRemote:', e); }
   }
 
-  async function _onIce(fromId, payload) {
+  async function _onIce(fromId: any, payload: any) {
     const pc = _s.peers.get(fromId);
     if (!pc) return;
     try { await pc.addIceCandidate(new RTCIceCandidate(payload.candidate)); } catch(e) { _warn('addIce:', e); }
   }
 
-  function _bindChannel(ch, peerId, kind) {
+  function _bindChannel(ch: any, peerId: any, kind: any) {
     ch.onopen  = () => { _log(`DataChannel ${kind} aberto com`, peerId); _updateMode(); };
     ch.onclose = () => { _cleanPeer(peerId); };
-    ch.onmessage = e => {
+    ch.onmessage = (e: any) => {
       try {
         const msg = JSON.parse(e.data);
         if (msg && msg.tipo) {
@@ -374,7 +374,7 @@ window.RTNet = (() => {
 
   // [RELAY] Reenvia um frame já serializado a todos os peers abertos exceto o remetente.
   // Usa o mapa de canais conforme a confiabilidade do evento.
-  function _relayFanout(frame, tipo, exceptPeerId) {
+  function _relayFanout(frame: any, tipo: any, exceptPeerId: any) {
     const o: Partial<AvtEventSpec> = EVENT_OPTS[tipo] || {};
     const chMap = o.reliable !== false ? _s.channels : _s.fastChannels;
     for (const [pid, ch] of chMap.entries()) {
@@ -383,7 +383,7 @@ window.RTNet = (() => {
     }
   }
 
-  function _cleanPeer(peerId) {
+  function _cleanPeer(peerId: any) {
     // peerId IS the userId in this mesh — notify before cleaning
     if (_s.peers.has(peerId) && _s._peerLeaveCallbacks.length) {
       _s._peerLeaveCallbacks.forEach(fn => { try { fn(peerId); } catch(_) {} });
@@ -504,7 +504,7 @@ window.RTNet = (() => {
     }
   }
 
-  function _onAnnounce(fromId, payload) {
+  function _onAnnounce(fromId: any, payload: any) {
     const ts = typeof payload.joinTs === 'number' ? payload.joinTs : Date.now();
     _s.peerJoinTs.set(fromId, ts);
     if (payload.isHostCandidate) {
@@ -549,7 +549,7 @@ window.RTNet = (() => {
     _startSnapshotTimer();
   }
 
-  function _onHostElected(hostId) {
+  function _onHostElected(hostId: any) {
     if (_s.hostId === hostId) return;
     _log('host eleito:', hostId);
     const wasHost = _s._isHost;
@@ -574,7 +574,7 @@ window.RTNet = (() => {
 
   // ── TRANSFERÊNCIA MANUAL DE HOST ────────────────────────────────
 
-  function _onHostTransferOffer(fromId, payload) {
+  function _onHostTransferOffer(fromId: any, payload: any) {
     // Apenas aceita se vier do host atual
     if (fromId !== _s.hostId) { _warn('host_transfer ignorado — origem não é host:', fromId); return; }
     _log('recebido pedido de host_transfer de', fromId);
@@ -583,7 +583,7 @@ window.RTNet = (() => {
     _onHostElected(_s.userId);
   }
 
-  function _onHostTransferAck(newHostId, oldHostId) {
+  function _onHostTransferAck(newHostId: any, oldHostId: any) {
     if (!newHostId) return;
     _log('host transfer ack:', oldHostId, '→', newHostId);
     _onHostElected(newHostId);
@@ -650,7 +650,7 @@ window.RTNet = (() => {
     _s._stats.rtt = -1;
   }
 
-  function _onPing(payload) {
+  function _onPing(payload: any) {
     // Só o host responde (via Supabase o ping chega a todos os peers)
     if (!_s._isHost || !payload || !payload.from || payload.from === _s.userId) return;
     const pong = { to: payload.from, t: payload.t };
@@ -663,7 +663,7 @@ window.RTNet = (() => {
     }
   }
 
-  function _onPong(payload) {
+  function _onPong(payload: any) {
     if (!payload || payload.to !== _s.userId || typeof payload.t !== 'number') return;
     _s._stats.rtt = Math.max(0, Math.round(performance.now() - payload.t));
   }
@@ -700,7 +700,7 @@ window.RTNet = (() => {
     _saveSnapshot();
   }
 
-  let _lastSnapshotJson = null;
+  let _lastSnapshotJson: any = null;
   let _lastSnapshotTs   = 0;
   async function _saveSnapshot() {
     if (!_s._isHost || !_s.snapshotProvider) return;
@@ -722,7 +722,7 @@ window.RTNet = (() => {
     } catch(e) { _warn('saveSnapshot:', e); }
   }
 
-  async function _pushSnapshotTo(peerId) {
+  async function _pushSnapshotTo(peerId: any) {
     if (!_s.snapshotProvider) return;
     try {
       const snapshot = _s.snapshotProvider();
@@ -730,7 +730,7 @@ window.RTNet = (() => {
     } catch(e) { _warn('pushSnapshot:', e); }
   }
 
-  function _applySnapshot(snapshot) {
+  function _applySnapshot(snapshot: any) {
     if (!snapshot) return;
     _log('aplicando snapshot do host');
     try {
@@ -808,7 +808,7 @@ window.RTNet = (() => {
   }
 
   // Unicast direcionado (jogador → host)
-  function _sendToHost(tipo, payload) {
+  function _sendToHost(tipo: any, payload: any) {
     if (!_s.hostId) return;
     if (_s._isHost) { _dispatch(tipo, payload); return; }
     const ch = _s.channels.get(_s.hostId);
@@ -826,7 +826,7 @@ window.RTNet = (() => {
   function _updateTransportIndicator() {
     const el = document.getElementById('avt-p2p-indicator');
     if (!el) return;
-    const map = { p2p: ['🟢', 'P2P ativo'], mixed: ['🟡', 'P2P parcial'], supabase: ['🔴', 'Supabase (fallback)'] };
+    const map: Record<string, any> = { p2p: ['🟢', 'P2P ativo'], mixed: ['🟡', 'P2P parcial'], supabase: ['🔴', 'Supabase (fallback)'] };
     const [icon, title] = map[_s.mode] || ['🔴', 'Supabase'];
     const degradado = _s.mode !== 'p2p' && _s.peerJoinTs.size > 0;
     el.textContent = icon;
@@ -886,7 +886,7 @@ window.RTNet = (() => {
     get mode()        { return _s.mode; },
     get hostId()      { return _s.hostId; },
 
-    async init({ rpgId, userId, isAventura = true }) {
+    async init({ rpgId, userId, isAventura = true }: any) {
       if (_s.initialized) this.shutdown();
       _s.rpgId       = rpgId;
       _s.userId      = userId;
@@ -979,7 +979,7 @@ window.RTNet = (() => {
       if (pi) pi.style.display = 'none';
     },
 
-    broadcast(tipo, payload, opts) {
+    broadcast(tipo: any, payload: any, opts: any) {
       if (!_s.initialized) {
         if (typeof realtimeBroadcast === 'function') realtimeBroadcast(tipo, payload);
         return;
@@ -987,7 +987,7 @@ window.RTNet = (() => {
       _broadcast(tipo, payload, opts);
     },
 
-    broadcastP2POnly(tipo, payload, opts) {
+    broadcastP2POnly(tipo: any, payload: any, opts: any) {
       if (!_s.initialized || _s.mode === 'supabase') return;
       const defaults = EVENT_OPTS[tipo] || { persist: 'never', reliable: true };
       const o = { ...defaults, ...opts };
@@ -998,17 +998,17 @@ window.RTNet = (() => {
       }
     },
 
-    sendToHost(tipo, payload) {
+    sendToHost(tipo: any, payload: any) {
       if (!_s.initialized) return;
       _sendToHost(tipo, payload);
     },
 
-    on(tipo, handler) {
+    on(tipo: any, handler: any) {
       if (!_s.handlers.has(tipo)) _s.handlers.set(tipo, new Set());
       _s.handlers.get(tipo).add(handler);
     },
 
-    off(tipo, handler) { _s.handlers.get(tipo)?.delete(handler); },
+    off(tipo: any, handler: any) { _s.handlers.get(tipo)?.delete(handler); },
 
     isHost()    { return _s._isHost; },
     isPaused()  { return !!_s.paused; },
@@ -1029,8 +1029,8 @@ window.RTNet = (() => {
 
     // Handlers de ping/pong para o caminho de fallback Supabase (o caminho P2P
     // é interceptado em _dispatch antes do lookup global).
-    _onPing(payload) { _onPing(payload); },
-    _onPong(payload) { _onPong(payload); },
+    _onPing(payload: any) { _onPing(payload); },
+    _onPong(payload: any) { _onPong(payload); },
 
     listarPeers() {
       const out = [];
@@ -1063,7 +1063,7 @@ window.RTNet = (() => {
     // Expõe mapa de joinTs dos peers para listagem na sala de espera
     _peerJoinTs() { return _s.peerJoinTs; },
 
-    transferirHost(targetUserId) {
+    transferirHost(targetUserId: any) {
       if (!_s._isHost) { _warn('transferirHost: só o host pode transferir'); return false; }
       if (!targetUserId || targetUserId === _s.userId) return false;
       _log('transferindo host para', targetUserId);
@@ -1071,12 +1071,12 @@ window.RTNet = (() => {
       return true;
     },
 
-    onHostChange(cb) {
+    onHostChange(cb: any) {
       _s.hostCbs.push(cb);
       return () => { _s.hostCbs = _s.hostCbs.filter(c => c !== cb); };
     },
 
-    onPeerLeave(fn) {
+    onPeerLeave(fn: any) {
       _s._peerLeaveCallbacks.push(fn);
       return () => { _s._peerLeaveCallbacks = _s._peerLeaveCallbacks.filter(c => c !== fn); };
     },
@@ -1095,7 +1095,7 @@ window.RTNet = (() => {
       if (banner) banner.style.display = 'none';
     },
 
-    registrarSnapshotProvider(fn) { _s.snapshotProvider = fn; },
+    registrarSnapshotProvider(fn: any) { _s.snapshotProvider = fn; },
 
     async requisitarSnapshot() {
       if (!_s.hostId || _s._isHost) return;
@@ -1103,12 +1103,12 @@ window.RTNet = (() => {
       _signal('snapshot_request', { target_id: _s.hostId });
     },
 
-    async persistirImediato(rpcName, args) {
+    async persistirImediato(rpcName: any, args: any) {
       if (!_s._isHost) return;
       try { if (typeof sbRpc === 'function') await sbRpc(rpcName, args); } catch(e) { _warn('persistirImediato:', rpcName, e); }
     },
 
-    _handleSignaling(tipo, payload) { _handleSignaling(tipo, payload); },
+    _handleSignaling(tipo: any, payload: any) { _handleSignaling(tipo, payload); },
     _onSignalingReconnect() { _onSignalingReconnect(); },
     _signalingActive: false,
   };

@@ -14,7 +14,7 @@
   // transform:translate(-50%,-50%) do wrapper do token.
 
   // ── Helper: clonar token em posição fixed para animações de movimento ────
-  function _clonarToken(el) {
+  function _clonarToken(el: any) {
     const clone = el.cloneNode(true);
     const r = el.getBoundingClientRect();
     clone.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;pointer-events:none;z-index:10200;margin:0;transform:none`;
@@ -22,11 +22,11 @@
     return { clone, r };
   }
 
-  const GSAP_PRESETS = {
+  const GSAP_PRESETS: Record<string, any> = {
 
     // ── Efeitos sobre o token (inner circle) ────────────────────────────
 
-    impacto_shake(el, cfg) {
+    impacto_shake(el: any, cfg: any) {
       const dist = 8 * (cfg.intensidade || 1);
       return gsap.timeline()
         .to(el, { x: -dist, duration: 0.05, ease: 'none' })
@@ -38,7 +38,7 @@
         .to(el, { filter: 'none', duration: 0.25 }, 0.08);
     },
 
-    impacto_escala(el, cfg) {
+    impacto_escala(el: any, cfg: any) {
       const s = 1 + 0.35 * (cfg.intensidade || 1);
       return gsap.timeline()
         .to(el, { scaleX: s, scaleY: s, duration: 0.1, ease: 'power2.out' })
@@ -47,7 +47,7 @@
         .to(el, { filter: 'none', duration: 0.3 }, 0.15);
     },
 
-    aura_pulso(el, cfg) {
+    aura_pulso(el: any, cfg: any) {
       const reps = Math.round(3 * (cfg.intensidade || 1));
       return gsap.timeline()
         .to(el, {
@@ -59,7 +59,7 @@
         .to(el, { filter: 'none', scaleX: 1, scaleY: 1, duration: 0.2 });
     },
 
-    critico_espiral(el, cfg) {
+    critico_espiral(el: any, cfg: any) {
       const s = 1 + 0.5 * (cfg.intensidade || 1);
       return gsap.timeline()
         .to(el, { rotation: 180, scaleX: s, scaleY: s, duration: 0.35, ease: 'power2.in' })
@@ -68,7 +68,7 @@
         .to(el, { filter: 'none', duration: 0.3 }, 0.4);
     },
 
-    cura_flutuante(el, cfg) {
+    cura_flutuante(el: any, cfg: any) {
       const dist = 12 * (cfg.intensidade || 1);
       return gsap.timeline()
         .to(el, {
@@ -81,7 +81,7 @@
 
     // ── Movimento do token (usa clone em posição fixed) ──────────────────
 
-    lancamento(atacEl, alvoEl, cfg) {
+    lancamento(atacEl: any, alvoEl: any, cfg: any) {
       const { clone, r: ra } = _clonarToken(atacEl);
       const rb = alvoEl.getBoundingClientRect();
       const dur = (cfg.duracao || 600) / 1000;
@@ -96,7 +96,7 @@
         .add(() => clone.remove());
     },
 
-    token_dash(atacEl, alvoEl, cfg) {
+    token_dash(atacEl: any, alvoEl: any, cfg: any) {
       const { clone, r: ra } = _clonarToken(atacEl);
       const rb = alvoEl.getBoundingClientRect();
       const dur = (cfg.duracao || 550) / 1000;
@@ -129,7 +129,7 @@
         .add(() => clone.remove());
     },
 
-    token_teleport(atacEl, alvoEl, cfg) {
+    token_teleport(atacEl: any, alvoEl: any, cfg: any) {
       const inner = atacEl.querySelector('.mapa-token-circle') || atacEl;
       const rb = alvoEl.getBoundingClientRect();
       const dur = (cfg.duracao || 600) / 1000;
@@ -154,7 +154,7 @@
         .add(() => { flash.remove(); gsap.set(inner, { clearProps: 'transform,filter,opacity' }); });
     },
 
-    token_arremesso_volta(atacEl, alvoEl, cfg) {
+    token_arremesso_volta(atacEl: any, alvoEl: any, cfg: any) {
       const { clone, r: ra } = _clonarToken(atacEl);
       const rb = alvoEl.getBoundingClientRect();
       const dur = (cfg.duracao || 700) / 1000;
@@ -181,7 +181,7 @@
         .add(() => clone.remove());
     },
 
-    token_recuo(alvoEl, cfg) {
+    token_recuo(alvoEl: any, cfg: any) {
       const inner = alvoEl.querySelector('.mapa-token-circle') || alvoEl;
       const dist = 22 * (cfg.intensidade || 1);
       const dur = (cfg.duracao || 400) / 1000;
@@ -199,7 +199,7 @@
     // Use junto com efeito mover_usuario nos efeitos_bonus da skill.
     // O sistema de efeitos re-renderiza o token na nova posição após a animação.
 
-    dash_avanco(atacEl, alvoEl, cfg) {
+    dash_avanco(atacEl: any, alvoEl: any, cfg: any) {
       const { clone, r: ra } = _clonarToken(atacEl);
       const rb = alvoEl.getBoundingClientRect();
       const dur = (cfg.duracao || 450) / 1000;
@@ -231,7 +231,7 @@
         });
     },
 
-    teleporte_saida(atacEl, _alvoEl, cfg) {
+    teleporte_saida(atacEl: any, _alvoEl: any, cfg: any) {
       const inner = atacEl.querySelector('.mapa-token-circle') || atacEl;
       const dur = (cfg.duracao || 400) / 1000;
       const cor = cfg.cor || '#9b59b6';
@@ -260,7 +260,7 @@
   const PRESETS_MOVIMENTO = new Set(['lancamento','token_dash','token_teleport','token_arremesso_volta','token_recuo','dash_avanco','teleporte_saida']);
 
   // ── Executor GSAP ─────────────────────────────────────────────────────────
-  function _animGSAP(animacao, atacEl, alvoEl) {
+  function _animGSAP(animacao: any, atacEl: any, alvoEl: any) {
     if (typeof gsap === 'undefined') {
       console.warn('[AnimGSAP] GSAP não carregado.');
       return Promise.resolve();
@@ -270,9 +270,9 @@
     const preset = cfg.preset || 'impacto_shake';
     const alvoEf = cfg.alvo_efeito || 'alvo';
 
-    const innerEl = el => el?.querySelector('.mapa-token-circle') || el;
+    const innerEl = (el: any) => el?.querySelector('.mapa-token-circle') || el;
 
-    let tl;
+    let tl: any;
 
     if (PRESETS_MOVIMENTO.has(preset)) {
       const fn = GSAP_PRESETS[preset];
@@ -323,24 +323,24 @@
   }
 
   // ── Renderer Esquelético Procedural ──────────────────────────────────────
-  function _renderEsqueleticoEmCanvas(cfg, canvas, posX, posY, durMs) {
+  function _renderEsqueleticoEmCanvas(cfg: any, canvas: any, posX: any, posY: any, durMs: any) {
     const skel = cfg.skeleton;
     if (!skel) return Promise.resolve();
     const escala = cfg.escala || 1.0;
     const ctx = canvas.getContext('2d');
 
-    const bonesMap = {};
-    (skel.bones || []).forEach(b => { bonesMap[b.id] = { ...b, children: [] }; });
-    (skel.bones || []).forEach(b => {
+    const bonesMap: Record<string, any> = {};
+    (skel.bones || []).forEach((b: any) => { bonesMap[b.id] = { ...b, children: [] }; });
+    (skel.bones || []).forEach((b: any) => {
       if (b.parent && bonesMap[b.parent]) bonesMap[b.parent].children.push(b.id);
     });
 
-    const tracksMap = {};
-    (skel.tracks || []).forEach(tr => { tracksMap[tr.bone] = tr.keyframes || []; });
+    const tracksMap: Record<string, any> = {};
+    (skel.tracks || []).forEach((tr: any) => { tracksMap[tr.bone] = tr.keyframes || []; });
 
-    function lerp(a, b, t) { return a + (b - a) * t; }
+    function lerp(a: any, b: any, t: any) { return a + (b - a) * t; }
 
-    function applyEasing(f, easing) {
+    function applyEasing(f: any, easing: any) {
       switch (easing) {
         case 'easeIn':    return f * f;
         case 'easeOut':   return f * (2 - f);
@@ -360,7 +360,7 @@
       }
     }
 
-    function interpolar(keyframes, t, prop, def) {
+    function interpolar(keyframes: any, t: any, prop: any, def: any) {
       if (!keyframes.length) return def;
       if (t <= keyframes[0].t) return keyframes[0][prop] !== undefined ? keyframes[0][prop] : def;
       if (t >= keyframes[keyframes.length - 1].t) {
@@ -381,7 +381,7 @@
       return def;
     }
 
-    function calcWorld(boneId, t, parentWorldAngle, parentWorldX, parentWorldY) {
+    function calcWorld(boneId: any, t: any, parentWorldAngle: any, parentWorldX: any, parentWorldY: any) {
       const bone = bonesMap[boneId];
       if (!bone) return;
       const kfs = tracksMap[boneId] || [];
@@ -397,10 +397,10 @@
       bone._alpha = slotAlpha; bone._scaleX = slotScaleX; bone._scaleY = slotScaleY;
       bone._tipX = worldX + Math.sin(rad) * (bone.length || 0) * escala;
       bone._tipY = worldY - Math.cos(rad) * (bone.length || 0) * escala;
-      (bone.children || []).forEach(cid => calcWorld(cid, t, worldAngle, worldX, worldY));
+      (bone.children || []).forEach((cid: any) => calcWorld(cid, t, worldAngle, worldX, worldY));
     }
 
-    function drawSlot(slot) {
+    function drawSlot(slot: any) {
       const bone = bonesMap[slot.bone];
       if (!bone) return;
       const d = slot.draw || {};
@@ -442,16 +442,16 @@
 
     return new Promise<void>(resolve => {
       const start = performance.now();
-      let raf;
+      let raf: any;
       let done = false;
 
-      function frame(now) {
+      function frame(now: any) {
         const elapsed = now - start;
         const t = Math.min(elapsed / durMs, 1);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         (skel.bones || [])
-          .filter(b => !b.parent || !bonesMap[b.parent])
-          .forEach(b => calcWorld(b.id, t, 0, posX, posY));
+          .filter((b: any) => !b.parent || !bonesMap[b.parent])
+          .forEach((b: any) => calcWorld(b.id, t, 0, posX, posY));
         (skel.slots || []).forEach(drawSlot);
         if (elapsed < durMs && !done) {
           raf = requestAnimationFrame(frame);
@@ -468,7 +468,7 @@
     });
   }
 
-  function _animEsqueletico(cfg, posX, posY, durMs) {
+  function _animEsqueletico(cfg: any, posX: any, posY: any, durMs: any) {
     const skel = cfg.skeleton;
     if (!skel) return Promise.resolve();
     const canvas = document.createElement('canvas');
@@ -483,7 +483,7 @@
   window._esqPreviewRender = _renderEsqueleticoEmCanvas;
 
   // ── Executor Pixi Spine ───────────────────────────────────────────────────
-  async function _animPixiSpine(animacao, origem, alvo) {
+  async function _animPixiSpine(animacao: any, origem: any, alvo: any) {
     const cfg = animacao.spine_config || {};
 
     // Calcular posição de exibição
@@ -522,7 +522,7 @@
     const animName = cfg.animation_name || 'animation';
 
     return new Promise<void>(resolve => {
-      let app;
+      let app: any;
       try {
         app = new PIXI.Application({
           backgroundAlpha: 0,
@@ -549,14 +549,14 @@
           spine.y = y;
           spine.scale.set(escala);
           app.stage.addChild(spine);
-          const trackNames = spine.state.data.skeletonData.animations.map(a => a.name);
+          const trackNames = spine.state.data.skeletonData.animations.map((a: any) => a.name);
           const nameToPlay = trackNames.includes(animName) ? animName : trackNames[0];
           if (nameToPlay) spine.state.setAnimation(0, nameToPlay, false);
         } catch(e) {
           console.warn('[AnimSpine] Erro ao criar/iniciar Spine:', e);
         }
         setTimeout(destruir, durMs);
-      }).catch(e => {
+      }).catch((e: any) => {
         console.warn('[AnimSpine] Erro ao carregar assets Spine:', e);
         destruir();
       });
@@ -564,7 +564,7 @@
   }
 
   // Resolve áudio da animação: usa configurado ou auto-detecta pelo tipo/dano
-  function _resolveAnimAudio(animacao) {
+  function _resolveAnimAudio(animacao: any) {
     if (animacao?.audio?.cast || animacao?.audio?.impact) return animacao.audio || {};
     if (typeof AudioManager === 'undefined') return {};
     return AudioManager.getSkillSfx(
@@ -589,7 +589,7 @@
 
       if (tipo === GSAP_TYPE || tipo === SPINE_TYPE || tipo === COMBO_TYPE || tipo === COMBO_TOTAL_TYPE) {
         return new Promise<void>(resolve => {
-          const c = el => {
+          const c = (el: any) => {
             if (typeof _animCentro === 'function') return _animCentro(el);
             const r = el.getBoundingClientRect();
             return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -627,7 +627,7 @@
         _animGSAP(animacao, atacEl, alvoEl).catch(() => {});
       }
       if (animacao?.spine_config) {
-        const c = el => {
+        const c = (el: any) => {
           if (typeof _animCentro === 'function') return _animCentro(el);
           const r = el.getBoundingClientRect();
           return { x: r.left + r.width / 2, y: r.top + r.height / 2 };

@@ -6,16 +6,16 @@
 // Map creation moved to: js/maps/maps.js
 
 // ── SKILL FORMULA BUILDER ────────────────────────────────────
-let SK_FB = [];
+let SK_FB: any = [];
 
-function skFBAdicionarDado(faces) {
-  const ex = SK_FB.find(g => g.tipo === 'dado' && g.faces === faces);
+function skFBAdicionarDado(faces: any) {
+  const ex = SK_FB.find((g: any) => g.tipo === 'dado' && g.faces === faces);
   if (ex) ex.qtd++;
   else SK_FB.push({ tipo: 'dado', faces, qtd: 1 });
   skFBAtualizarUI();
 }
-function skFBRemoverDado(faces) {
-  const idx = SK_FB.findIndex(g => g.tipo === 'dado' && g.faces === faces);
+function skFBRemoverDado(faces: any) {
+  const idx = SK_FB.findIndex((g: any) => g.tipo === 'dado' && g.faces === faces);
   if (idx < 0) return;
   SK_FB[idx].qtd--;
   if (SK_FB[idx].qtd <= 0) SK_FB.splice(idx, 1);
@@ -33,7 +33,7 @@ function skFBConfirmarBonus() {
   const inp = document.getElementById('sk-bonus-input');
   const val = parseInt(inp?.value || '0');
   if (val) {
-    const ex = SK_FB.find(g => g.tipo === 'bonus');
+    const ex = SK_FB.find((g: any) => g.tipo === 'bonus');
     if (ex) ex.valor += val;
     else SK_FB.push({ tipo: 'bonus', valor: val });
     skFBAtualizarUI();
@@ -55,13 +55,13 @@ function skFBAtualizarUI() {
   const range = document.getElementById('sk-fb-range');
   const formula = typeof formulaDeGrupos === 'function'
     ? formulaDeGrupos(SK_FB)
-    : SK_FB.map(g => g.tipo === 'dado' ? g.qtd+'d'+g.faces : (g.valor>=0?'+':'')+g.valor).join('');
+    : SK_FB.map((g: any) => g.tipo === 'dado' ? g.qtd+'d'+g.faces : (g.valor>=0?'+':'')+g.valor).join('');
   if (hid)  hid.value = formula;
   if (prev) prev.textContent = formula || '—';
   if (range) {
     if (SK_FB.length) {
       let mn = 0, mx = 0, med = 0;
-      SK_FB.forEach(g => {
+      SK_FB.forEach((g: any) => {
         if (g.tipo === 'dado') {
           mn  += g.qtd * 1;
           mx  += g.qtd * g.faces;
@@ -76,7 +76,7 @@ function skFBAtualizarUI() {
     }
   }
   if (!chips) return;
-  chips.innerHTML = SK_FB.map(g => {
+  chips.innerHTML = SK_FB.map((g: any) => {
     if (g.tipo === 'dado') return '<div style="display:flex;align-items:center;gap:3px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:20px;padding:2px 9px 2px 7px">'
       +'<span style="font-family:var(--fonte-d);font-size:0.82rem;color:#f0cc6a">'+g.qtd+'d'+g.faces+'</span>'
       +'<button type="button" onclick="skFBRemoverDado('+g.faces+')" style="background:none;border:none;color:#f0cc6a88;cursor:pointer;font-size:1rem;padding:0 0 0 2px;line-height:1">−</button></div>';
@@ -85,7 +85,7 @@ function skFBAtualizarUI() {
       +'<button type="button" onclick="SK_FB=SK_FB.filter(function(x){return x.tipo!==\'bonus\';});skFBAtualizarUI()" style="background:none;border:none;color:#7ec8f088;cursor:pointer;font-size:1rem;padding:0 0 0 2px;line-height:1">−</button></div>';
   }).join('');
 }
-function skFBCarregarFormula(formula) {
+function skFBCarregarFormula(formula: any) {
   SK_FB = [];
   if (!formula) { skFBAtualizarUI(); return; }
   const partes = formula.replace(/ /g,'').split(/(?=[+\-])/);
@@ -101,13 +101,13 @@ function skPopularAtributos() {
   if (!sel) return;
   const atual = sel.value;
   const defs = RPG_DATA?.attrDefs || [];
-  const catLabel = {basico:'🔷',especial:'✨',status:'📊',resistencia:'🛡'};
+  const catLabel: Record<string, any> = {basico:'🔷',especial:'✨',status:'📊',resistencia:'🛡'};
   // Atributos liberados pelo mestre para escala de skills (padrão: só Inteligência).
   // Configurável no painel Balanceamento → level_config.skill_scaling_attrs.
   const _lc = (typeof AVT_STATE !== 'undefined' && AVT_STATE?.rpg?.theme_json?.level_config)
             || RPG_DATA?.rpg?.theme_json?.level_config || {};
   const liberados = _lc.skill_scaling_attrs;
-  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  const _norm = (s: any) => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
   const permitidos = (Array.isArray(liberados) && liberados.length) ? liberados : ['Inteligência'];
   const permitidosNorm = new Set(permitidos.map(_norm));
   // Filtra atributos numéricos pelos liberados; sempre preserva o valor já salvo (atual),
@@ -121,7 +121,7 @@ function skPopularAtributos() {
 }
 
 // ── 14C: SKILLS ───────────────────────────────────────────────
-function abrirModalSkill(skillId, personagemNome) {
+function abrirModalSkill(skillId: any, personagemNome: any) {
   const overlay = document.getElementById('modal-skill-overlay');
   document.getElementById('modal-skill-id').value = skillId || '';
   if (skillId) {
@@ -147,8 +147,8 @@ function abrirModalSkill(skillId, personagemNome) {
     skRenderEfeitosLista();
     // Tipo dano + campos de invocação
     skTipoDanoChange();
-    const invNome = s.invocar_nome || (SK_EFEITOS_TEMP.find(e=>e.tipo==='invocacao')?.invocar_nome || '');
-    const invDur  = s.invocar_duracao_turnos ?? (SK_EFEITOS_TEMP.find(e=>e.tipo==='invocacao')?.invocar_duracao_turnos ?? 0);
+    const invNome = s.invocar_nome || (SK_EFEITOS_TEMP.find((e: any)=>e.tipo==='invocacao')?.invocar_nome || '');
+    const invDur  = s.invocar_duracao_turnos ?? (SK_EFEITOS_TEMP.find((e: any)=>e.tipo==='invocacao')?.invocar_duracao_turnos ?? 0);
     const invNomeEl = document.getElementById('sk-invocar-nome');
     const invDurEl  = document.getElementById('sk-invocar-duracao');
     if (invNomeEl) invNomeEl.value = invNome;
@@ -316,12 +316,12 @@ function fecharModalSkill() {
 // ── Modo "Ataque Básico" do modal de skill ───────────────────
 // Reaproveita o modal completo de habilidade (animação rica, áudio, efeitos)
 // para configurar o ataque básico, salvando em custom_attrs.ataque_basico.
-function _skAplicarModoAtaqueBasico(on) {
+function _skAplicarModoAtaqueBasico(on: any) {
   document.querySelectorAll('#modal-skill-overlay .sk-only-section').forEach(el => {
     if (on) { if (el.dataset._abPrev === undefined) el.dataset._abPrev = el.style.display || ''; el.style.display = 'none'; }
     else if (el.dataset._abPrev !== undefined) { el.style.display = el.dataset._abPrev; delete el.dataset._abPrev; }
   });
-  const _relabel = (id, txt) => {
+  const _relabel = (id: any, txt: any) => {
     const el = document.getElementById(id); if (!el) return;
     if (on) { if (el.dataset._abPrev === undefined) el.dataset._abPrev = el.textContent; el.textContent = txt; }
     else if (el.dataset._abPrev !== undefined) { el.textContent = el.dataset._abPrev; delete el.dataset._abPrev; }
@@ -332,10 +332,10 @@ function _skAplicarModoAtaqueBasico(on) {
   if (_multEl) _multEl.step = on ? '0.1' : '';
 }
 
-function abrirModalSkillAtaqueBasico(entId) {
+function abrirModalSkillAtaqueBasico(entId: any) {
   if (typeof AVT_STATE === 'undefined') return;
-  const ent = AVT_STATE.entidades.find(e => e.id === entId);
-  const dbChar = ent ? AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome) : null;
+  const ent = AVT_STATE.entidades.find((e: any) => e.id === entId);
+  const dbChar = ent ? AVT_STATE.chars.find((c: any) => c.id === ent.dbId || c.nome === ent.nome) : null;
   if (!dbChar) { if (typeof mostrarToast === 'function') mostrarToast('Personagem não encontrado', 'erro'); return; }
   window._skAtaqueBasicoMode = { entId, dbCharId: dbChar.id, nome: ent.nome };
   const ab = dbChar.custom_attrs?.ataque_basico || {};
@@ -375,7 +375,7 @@ window.abrirModalSkillAtaqueBasico = abrirModalSkillAtaqueBasico;
 async function _skSalvarAtaqueBasicoRico() {
   const mode = window._skAtaqueBasicoMode;
   if (!mode) return;
-  const dbChar = AVT_STATE.chars.find(c => c.id === mode.dbCharId);
+  const dbChar = AVT_STATE.chars.find((c: any) => c.id === mode.dbCharId);
   if (!dbChar) { mostrarToast('Personagem não encontrado', 'erro'); return; }
   const nome = document.getElementById('sk-habilidade').value.trim() || 'Ataque básico';
   const _animRes = skLerAnimacaoDoForm();
@@ -383,7 +383,7 @@ async function _skSalvarAtaqueBasicoRico() {
   const _multRaw = document.getElementById('sk-mod-atributo-pct').value;
   const _cdRaw   = document.getElementById('sk-cooldown').value;
   const _alcRaw  = document.getElementById('sk-alcance').value;
-  const ab = {
+  const ab: Record<string, any> = {
     nome,
     descricao:        document.getElementById('sk-efeito').value.trim() || undefined,
     formula_dano:     document.getElementById('sk-formula').value.trim() || '1d8',
@@ -411,7 +411,7 @@ async function _skSalvarAtaqueBasicoRico() {
 }
 
 // Popula os campos de animação + áudio do modal a partir de um objeto `anim`.
-function skPreencherAnimacaoNoForm(anim) {
+function skPreencherAnimacaoNoForm(anim: any) {
   anim = anim || {};
   const psId = document.getElementById('sk-pixi-studio-id');
   const psNome = document.getElementById('sk-pixi-studio-nome');
@@ -664,7 +664,7 @@ async function salvarSkill() {
     mostrarToast('Habilidade salva!', 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar habilidade', 'erro'); }
 }
-async function removerSkill(skillId, nome, personagem) {
+async function removerSkill(skillId: any, nome: any, personagem: any) {
   if (!podeEditarPersonagem(personagem)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }
   if (!confirm(`Remover habilidade "${nome}"?`)) return;
   try {
@@ -689,8 +689,8 @@ function skToggleAudioSection() {
 function _skPopularSelectSfx() {
   if (typeof AudioManager === 'undefined') return;
   const categorias = ['ataque','impacto','magia','elemento','cura','ambiente'];
-  const rotulosCat = { ataque:'Ataques', impacto:'Impactos', magia:'Magia', elemento:'Elementais', cura:'Cura/Suporte', ambiente:'Ambiente' };
-  const buildOptions = sel => {
+  const rotulosCat: Record<string, any> = { ataque:'Ataques', impacto:'Impactos', magia:'Magia', elemento:'Elementais', cura:'Cura/Suporte', ambiente:'Ambiente' };
+  const buildOptions = (sel: any) => {
     if (!sel) return;
     const atual = sel.value;
     while (sel.options.length > 1) sel.remove(1);
@@ -699,7 +699,7 @@ function _skPopularSelectSfx() {
       if (!items.length) return;
       const grp = document.createElement('optgroup');
       grp.label = rotulosCat[cat] || cat;
-      items.forEach(({ id, label }) => {
+      items.forEach(({ id, label }: any) => {
         const opt = document.createElement('option');
         opt.value = id; opt.textContent = label;
         grp.appendChild(opt);
@@ -725,7 +725,7 @@ function _skAtualizarAutoSfx() {
   if (impactAutoEl) impactAutoEl.textContent = sfx.impact ? `Auto: ${AudioManager.getSfxLabel(sfx.impact)}` : '';
 }
 
-function skTestarSfx(tipo) {
+function skTestarSfx(tipo: any) {
   if (typeof AudioManager === 'undefined') { mostrarToast('AudioManager não disponível', 'aviso'); return; }
   const urlEl = document.getElementById(`sk-audio-${tipo}-url`);
   const selEl = document.getElementById(`sk-audio-${tipo}-sel`);
@@ -747,7 +747,7 @@ function skTestarSfx(tipo) {
 
 // ─── CAMPOS DE HABILIDADE REATIVA ────────────────────────────────────────────
 
-function _skCarregarCamposReativos(s) {
+function _skCarregarCamposReativos(s: any) {
   const tipoEl    = document.getElementById('sk-tipo-reativa');
   const extra     = document.getElementById('sk-reativa-extra');
   const gatilhoEl = document.getElementById('sk-gatilho-tipo');
@@ -828,7 +828,7 @@ async function skEscolherPixiStudio() {
   if (typeof psCarregarLista === 'function') {
     try { await psCarregarLista(); } catch (_) {}
   }
-  psPickerAbrir((id, nome) => {
+  psPickerAbrir((id: any, nome: any) => {
     const idEl   = document.getElementById('sk-pixi-studio-id');
     const nomeEl = document.getElementById('sk-pixi-studio-nome');
     if (idEl)   idEl.value = id;

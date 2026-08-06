@@ -67,16 +67,16 @@ async function uploadToStorage(file: File, folder = 'misc'): Promise<string> {
 async function getAllRPGs(): Promise<RpgRegistryRow[] | null>{ return await sb<RpgRegistryRow[]>('rpg_registry?select=*,owner_id&order=name'); }
 
 
-async function getRPGData(rpgId){
+async function getRPGData(rpgId: any){
  // Retorno instantâneo — sem nenhuma query de rede.
  // Todo carregamento real é feito por _carregarProgressivo() depois que o app já está visível.
- return{rpgId,characters:[],skills:[],lore:[],mapas:[],attrDefs:[],linked:null,membrosLinked:{},_carregandoProgressivo:true};
+ return{rpgId,characters:[] as any[],skills:[] as any[],lore:[] as any[],mapas:[] as any[],attrDefs:[] as any[],linked:null as any,membrosLinked:{},_carregandoProgressivo:true};
 }
 
 // ── CARREGAMENTO PROGRESSIVO ─────────────────────────────────
-async function _carregarProgressivo(rpgId) {
+async function _carregarProgressivo(rpgId: any) {
  const e=encodeURIComponent(rpgId);
- function _setStatus(txt) {
+ function _setStatus(txt: any) {
    const el=document.getElementById('rpg-load-status');
    if(el){ el.textContent=txt; el.style.opacity='1'; el.style.display='flex'; }
  }
@@ -86,17 +86,17 @@ async function _carregarProgressivo(rpgId) {
  try {
    const uid=SESSION?.user?.id;
    const [attrDefs,batalhasRows,atributosMapeados,memberRows]=await Promise.all([
-     sb<AttrDefRow[]>(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`).catch(()=>[]),
-     sb<BatalhaRow[]>(`batalhas?rpg_id=eq.${e}&ativa=eq.true&select=*`).catch(()=>[]),
-     sb<AtributosGrupoRow[]>(`atributos_grupos?rpg_id=eq.${e}&select=*&order=nome_customizado`).catch(()=>[]),
-     uid?sb<Pick<RpgMemberRow, 'linked'>[]>(`rpg_members?rpg_id=eq.${e}&player_id=eq.${encodeURIComponent(uid)}&select=linked`).catch(()=>[]):[],
+     sb<AttrDefRow[]>(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`).catch((): any[] => []),
+     sb<BatalhaRow[]>(`batalhas?rpg_id=eq.${e}&ativa=eq.true&select=*`).catch((): any[] => []),
+     sb<AtributosGrupoRow[]>(`atributos_grupos?rpg_id=eq.${e}&select=*&order=nome_customizado`).catch((): any[] => []),
+     uid?sb<Pick<RpgMemberRow, 'linked'>[]>(`rpg_members?rpg_id=eq.${e}&player_id=eq.${encodeURIComponent(uid)}&select=linked`).catch((): any[] => []):[],
    ]);
    RPG_DATA.attrDefs=attrDefs||[];
    if(atributosMapeados && typeof ATTR_MAPPING_CACHE !== 'undefined') ATTR_MAPPING_CACHE[rpgId]=atributosMapeados;
    const myLinked=memberRows?.[0]?.linked;
    if(myLinked) RPG_DATA.linked=myLinked;
    if(batalhasRows&&batalhasRows.length){
-     const bd={};
+     const bd: Record<string, any> = {};
      batalhasRows.forEach(b=>{
        bd[b.id]={id:b.id,mapa_id:b.mapa_id,mapa_nome:b.mapa_nome,ativa:b.ativa,pausada:b.pausada,turnoRound:b.turno_round,fase:b.fase,participantes:Array.isArray(b.participantes)?b.participantes:[],ordemAtual:b.ordem_atual,iniciativasRoladas:(b.iniciativas_roladas&&typeof b.iniciativas_roladas==='object')?b.iniciativas_roladas:{},empatados:Array.isArray(b.empatados)?b.empatados:[],dadoSel:b.dado_sel||null,cooldowns:(b.cooldowns&&typeof b.cooldowns==='object')?b.cooldowns:{},recursos_participantes:(b.recursos_participantes&&typeof b.recursos_participantes==='object')?b.recursos_participantes:{}};
      });
@@ -159,9 +159,9 @@ async function _carregarProgressivo(rpgId) {
  // Fase 3: Skills + Lore + Criativos
  try {
    const [skills,lore,criativos]=await Promise.all([
-     sb<SkillRow[]>(`skills?rpg_id=eq.${e}&select=*&order=id`).catch(()=>[]),
-     sb<LoreRow[]>(`lore?rpg_id=eq.${e}&select=*&order=id`).catch(()=>[]),
-     sb<CriativoRow[]>(`criativos?rpg_id=eq.${e}&status=in.(pendente,aprovado_dc,dc_rolado_sucesso,dc_rolado_narrativo,dc_rolado_falha,aprovado_aguardando_rolagem)&select=*`).catch(()=>[]),
+     sb<SkillRow[]>(`skills?rpg_id=eq.${e}&select=*&order=id`).catch((): any[] => []),
+     sb<LoreRow[]>(`lore?rpg_id=eq.${e}&select=*&order=id`).catch((): any[] => []),
+     sb<CriativoRow[]>(`criativos?rpg_id=eq.${e}&status=in.(pendente,aprovado_dc,dc_rolado_sucesso,dc_rolado_narrativo,dc_rolado_falha,aprovado_aguardando_rolagem)&select=*`).catch((): any[] => []),
    ]);
    (skills||[]).forEach(s=>{
      if(typeof s.animacao==='string'){try{s.animacao=JSON.parse(s.animacao);}catch(ex){s.animacao=null;}}
@@ -186,8 +186,8 @@ async function _carregarProgressivo(rpgId) {
  // Fase 4: Imagens dos mapas (não-bloqueante)
  setTimeout(async ()=>{
    try {
-     const mapasImg=await sb(`mapas?rpg_id=eq.${e}&select=map_id,img_url&order=id`).catch(()=>[]);
-     (mapasImg||[]).forEach(m=>{
+     const mapasImg=await sb(`mapas?rpg_id=eq.${e}&select=map_id,img_url&order=id`).catch((): any[] => []);
+     (mapasImg||[]).forEach((m: any)=>{
        const entry=RPG_DATA.mapas.find(l=>l.mapa.map_id===m.map_id);
        if(entry && m.img_url) entry.mapa.img_url=m.img_url;
      });
@@ -200,7 +200,7 @@ async function _carregarProgressivo(rpgId) {
 }
 
 // ── ESCRITA ───────────────────────────────────────────────────
-async function saveCharacterStats(rpgId,charNameOrId,stats){
+async function saveCharacterStats(rpgId: any,charNameOrId: any,stats: any){
  const body: any = {};
  if(stats.hp_atual!==undefined)body.hp_atual=stats.hp_atual;
  if(stats.custom_attrs!==undefined)body.custom_attrs=stats.custom_attrs; // jsonb
@@ -233,21 +233,21 @@ async function saveCharacterStats(rpgId,charNameOrId,stats){
 }
 
 
-async function saveMemberLinked(rpgId,charName){
+async function saveMemberLinked(rpgId: any,charName: any){
  if(!SESSION?.user?.id){mostrarToast('Faça login para vincular personagem','erro');return;}
  await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${SESSION.user.id}`,
    {method:'PATCH',body:JSON.stringify({linked:charName})});
 }
 
 
-async function deleteRPGData(rpgId){
+async function deleteRPGData(rpgId: any){
  if(rpgId==='dual')throw new Error('DUAL não pode ser deletado.');
  await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'DELETE'});
 }
 
 
 // ── IMPORT / UPDATE ───────────────────────────────────────────
-function buildLevelConfig(cfg){
+function buildLevelConfig(cfg: any){
  const lc: any = {};
  if(cfg.nivel_maximo)           lc.nivel_maximo=parseInt(cfg.nivel_maximo)||20;
  if(cfg.hp_base)                lc.hp_base=parseInt(cfg.hp_base)||100;
@@ -265,7 +265,7 @@ function buildLevelConfig(cfg){
 
 // Calcula hp_max de um personagem usando atributos (se configurado)
 // BUG-08 FIX: parâmetro nivel adicionado (default 1 para retrocompatibilidade)
-function calcularHpMaxComAtributos(lc, charAtributos, hpMaxExplicito, nivel = 1) {
+function calcularHpMaxComAtributos(lc: any, charAtributos: any, hpMaxExplicito: any, nivel = 1) {
   if (hpMaxExplicito) return hpMaxExplicito; // HP explícito tem prioridade
   const base       = lc?.hp_base       || 100;
   const perNivel   = lc?.hp_por_nivel  || 0;
@@ -279,7 +279,7 @@ function calcularHpMaxComAtributos(lc, charAtributos, hpMaxExplicito, nivel = 1)
   return base + nivelBonus;
 }
 
-function buildTheme(cfg){
+function buildTheme(cfg: any){
  const level_config=buildLevelConfig(cfg);
  return{
    preto:cfg.theme_preto||'#080c10',
@@ -310,9 +310,9 @@ function buildTheme(cfg){
 
 
 
-async function insertSection(rpgId,section,rows,levelConfig){
- const P=[];
- if(section==='characters') rows.forEach(c=>{
+async function insertSection(rpgId: any,section: any,rows: any,levelConfig: any){
+ const P: any[]=[];
+ if(section==='characters') rows.forEach((c: any)=>{
    // ── Pular linhas sem nome (garante robustez contra linhas vazias/malformadas) ──
    if(!c.nome||!c.nome.trim())return;
 
@@ -353,12 +353,12 @@ async function insertSection(rpgId,section,rows,levelConfig){
  });
  if(section==='skills'){
     // Resolver character_id: buscar os personagens recém-inseridos para montar mapa nome→uuid
-    let _charMapInsert = {};
+    let _charMapInsert: Record<string, any> = {};
     try {
       const _charsIns = await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome`);
-      (_charsIns||[]).forEach(c => { _charMapInsert[c.nome] = c.id; });
+      (_charsIns||[]).forEach((c: any) => { _charMapInsert[c.nome] = c.id; });
     } catch(e) {}
-    rows.forEach(s=>{
+    rows.forEach((s: any)=>{
     let efeitosBonus = null;
     if(s.efeitos_bonus_json){ try{ efeitosBonus = JSON.parse(s.efeitos_bonus_json); }catch(e){} }
     let skAnimacao = null;
@@ -382,8 +382,8 @@ async function insertSection(rpgId,section,rows,levelConfig){
       animacao:skAnimacao||null,
     })}));
   });}
- if(section==='lore')      rows.forEach(l=>P.push(sb('lore',{method:'POST',body:JSON.stringify({rpg_id:rpgId,secao:l.secao||'mundo',titulo:l.titulo||'',conteudo:l.conteudo||''})})));
- if(section==='mapas')     rows.forEach(m=>P.push(sb('mapas',{method:'POST',body:JSON.stringify({
+ if(section==='lore')      rows.forEach((l: any)=>P.push(sb('lore',{method:'POST',body:JSON.stringify({rpg_id:rpgId,secao:l.secao||'mundo',titulo:l.titulo||'',conteudo:l.conteudo||''})})));
+ if(section==='mapas')     rows.forEach((m: any)=>P.push(sb('mapas',{method:'POST',body:JSON.stringify({
    rpg_id:rpgId, map_id:m.map_id, nome:m.nome, tipo:m.tipo||'geral',
    img_url:m.img_url||'', escala_val:+m.escala_val||1,
    escala_unit:m.escala_unit||'m', grid:+m.grid||20,
@@ -391,8 +391,8 @@ async function insertSection(rpgId,section,rows,levelConfig){
    locais: m.locais ? (typeof m.locais==='string'?JSON.parse(m.locais):m.locais) : [],
    render_data: m.render_data ? (typeof m.render_data==='string'?JSON.parse(m.render_data):m.render_data) : null,
  })})));
- if(section==='attr_defs') rows.forEach(a=>P.push(sb('attr_defs',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:a.nome||a.label||a.attr_key,tipo:a.tipo||'text',opcoes:a.opcoes||null,ordem:+a.ordem||1,categoria:a.categoria||'basico'})})));
- if(section==='item_catalog') rows.forEach(item=>{
+ if(section==='attr_defs') rows.forEach((a: any)=>P.push(sb('attr_defs',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:a.nome||a.label||a.attr_key,tipo:a.tipo||'text',opcoes:a.opcoes||null,ordem:+a.ordem||1,categoria:a.categoria||'basico'})})));
+ if(section==='item_catalog') rows.forEach((item: any)=>{
    let efeitos=null;
    if(item.efeitos_json){try{efeitos=typeof item.efeitos_json==='string'?JSON.parse(item.efeitos_json):item.efeitos_json;}catch(e){}}
    let atributos_bonus=null;
@@ -421,10 +421,10 @@ async function insertSection(rpgId,section,rows,levelConfig){
  });
  if(section==='inventario'){
    // Resolver character_id e item_catalog_id por nome
-   let _charMapInv={},_itemMapInv={};
-   try{const _ci=await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome`);(_ci||[]).forEach(c=>{_charMapInv[c.nome]=c.id;});}catch(e){}
-   try{const _ii=await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome`);(_ii||[]).forEach(i=>{_itemMapInv[i.nome]=i.id;});}catch(e){}
-   rows.forEach(inv=>{
+   let _charMapInv: Record<string, any> = {},_itemMapInv: Record<string, any>={};
+   try{const _ci=await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome`);(_ci||[]).forEach((c: any)=>{_charMapInv[c.nome]=c.id;});}catch(e){}
+   try{const _ii=await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome`);(_ii||[]).forEach((i: any)=>{_itemMapInv[i.nome]=i.id;});}catch(e){}
+   rows.forEach((inv: any)=>{
      const charId=_charMapInv[inv.personagem];
      const itemId=_itemMapInv[inv.item];
      if(!charId||!itemId)return; // skip inválidos
@@ -473,10 +473,10 @@ async function importRPG(payload: any, mapasJSON: any=null): Promise<string>{
  }
  // A4: Importar mapeamento de atributos
  if(payload.attr_grupos&&payload.attr_grupos.length){
-   const rows=payload.attr_grupos.filter(r=>r.nome_customizado&&r.grupo_base);
+   const rows=payload.attr_grupos.filter((r: any)=>r.nome_customizado&&r.grupo_base);
    const validGrupos=['forca','destreza','constituicao','inteligencia'];
-   const upserts=rows.filter(r=>validGrupos.includes(r.grupo_base.toLowerCase().trim()))
-     .map(r=>({rpg_id:rpgId,nome_customizado:r.nome_customizado.trim(),nome_customizado_norm:r.nome_customizado.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''),grupo_base:r.grupo_base.toLowerCase().trim()}));
+   const upserts=rows.filter((r: any)=>validGrupos.includes(r.grupo_base.toLowerCase().trim()))
+     .map((r: any)=>({rpg_id:rpgId,nome_customizado:r.nome_customizado.trim(),nome_customizado_norm:r.nome_customizado.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''),grupo_base:r.grupo_base.toLowerCase().trim()}));
    if(upserts.length){
      await sb('atributos_grupos',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},body:JSON.stringify(upserts)});
      // Atualizar cache local se RPG_DATA estiver carregado
@@ -486,8 +486,8 @@ async function importRPG(payload: any, mapasJSON: any=null): Promise<string>{
  // A4: Importar vocabulário temático
  if(payload.vocab_tematico&&payload.vocab_tematico.length){
    const validTipos=['prefixo_material','adjetivo_qualidade','nome_origem'];
-   const upserts=payload.vocab_tematico.filter(r=>r.tipo&&r.valor&&validTipos.includes(r.tipo.trim()))
-     .map(r=>({rpg_id:rpgId,tipo:r.tipo.trim(),valor:r.valor.trim()}));
+   const upserts=payload.vocab_tematico.filter((r: any)=>r.tipo&&r.valor&&validTipos.includes(r.tipo.trim()))
+     .map((r: any)=>({rpg_id:rpgId,tipo:r.tipo.trim(),valor:r.valor.trim()}));
    if(upserts.length){
      await sb('vocabulario_tematico',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},body:JSON.stringify(upserts)});
    }
@@ -514,7 +514,7 @@ async function updateRPG(rpgId: string, payload: any): Promise<string[]>{
      })});
    }
    else{
-     const TABLE_MAP={characters:'characters',skills:'skills',lore:'lore',attr_defs:'attr_defs',item_catalog:'item_catalog',inventario:'inventario'};
+     const TABLE_MAP: Record<string, any> = {characters:'characters',skills:'skills',lore:'lore',attr_defs:'attr_defs',item_catalog:'item_catalog',inventario:'inventario'};
      const tbl=TABLE_MAP[sec];
      if(tbl){
        await sb(`${tbl}?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'DELETE'});
@@ -544,7 +544,7 @@ try { window.sbRpc = sbRpc; } catch(_) {}
 // string usam a tabela avt_session_state (chave text, sem FK) — ver
 // docs/migration_avt_session_state.sql. Sem a migração aplicada, as chamadas
 // falham e o chamador (RTNet) tolera o erro (resync segue só via peer snapshot).
-function _isUuidId(id) {
+function _isUuidId(id: any) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''));
 }
 
@@ -555,7 +555,7 @@ async function sessionStateGet(rpgId: string): Promise<(RpgSessionStateRow | Avt
   return sb<AvtSessionStateRow[]>(`avt_session_state?session_key=eq.${encodeURIComponent(rpgId)}&select=*`);
 }
 
-async function sessionStateUpdate(rpgId, snapshot) {
+async function sessionStateUpdate(rpgId: any, snapshot: any) {
   if (_isUuidId(rpgId)) {
     return sbRpc('update_session_snapshot', { p_rpg_id: rpgId, p_snapshot: snapshot });
   }
@@ -566,7 +566,7 @@ try { window.sessionStateGet    = sessionStateGet;    } catch(_) {}
 try { window.sessionStateUpdate = sessionStateUpdate; } catch(_) {}
 
 // ── PATCH v9: helper sessionData ─────────────────────────────────────────
-async function salvarSessionData(rpgId, userId, patch) {
+async function salvarSessionData(rpgId: any, userId: any, patch: any) {
   if (!rpgId || !userId || !patch) return null;
   try {
     const row = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${encodeURIComponent(userId)}&select=session_data`);
@@ -595,7 +595,7 @@ async function sfxBibliotecaCarregar() {
   } catch(e) { try { console.warn('[SFX]', e); } catch(_) {} return []; }
 }
 
-async function sfxBibliotecaSalvar(biblioteca) {
+async function sfxBibliotecaSalvar(biblioteca: any) {
   if (!SESSION?.access_token) throw new Error('Não autenticado');
   const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     method: 'PUT',

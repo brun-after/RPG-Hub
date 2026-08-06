@@ -8,7 +8,7 @@
 // ══════════════════════════════════════════════════════════════
 
 
-function injectCustomCSS(rpgId, css) {
+function injectCustomCSS(rpgId: any, css: any) {
   if (!css) return;
   const styleId = `custom-anim-${rpgId}`;
   let style = document.getElementById(styleId);
@@ -21,13 +21,13 @@ function injectCustomCSS(rpgId, css) {
 }
 
 
-function processCustomSVG(svg, color1, color2) {
+function processCustomSVG(svg: any, color1: any, color2: any) {
   if (!svg) return null;
   return svg.replace(/#COLOR1/g, color1).replace(/#COLOR2/g, color2);
 }
 
 
-function getCardIconSVG(tipo, c1, c2, customSVG) {
+function getCardIconSVG(tipo: any, c1: any, c2: any, customSVG: any) {
   // Se tem SVG customizado, usa ele
   if (customSVG) {
     const processed = processCustomSVG(customSVG, c1, c2);
@@ -45,7 +45,7 @@ function getCardIconSVG(tipo, c1, c2, customSVG) {
 }
 
 
-function getLoadingAnimSVG(tipo, customSVG) {
+function getLoadingAnimSVG(tipo: any, customSVG: any) {
   // Se tem SVG customizado, usa ele
   if (customSVG) {
     return `<div class="anim-${tipo}">${customSVG}</div>`;

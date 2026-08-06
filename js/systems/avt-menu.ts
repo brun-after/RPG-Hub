@@ -5,9 +5,9 @@
 // ESTADO DO MÓDULO
 // ─────────────────────────────────────────────────────────────────────────────
 var AVT_MENU_STATE = {
-  rpgId: null,
-  sessionData: null,
-  _saveTimer: null,
+  rpgId: null as any,
+  sessionData: null as any,
+  _saveTimer: null as any,
   configAba: 'menu',
 };
 
@@ -15,7 +15,7 @@ var AVT_MENU_STATE = {
 // GRÁFICOS — preferência individual, localStorage
 // ─────────────────────────────────────────────────────────────────────────────
 
-var AVT_GRAFICOS = {
+var AVT_GRAFICOS: Record<string, any> = {
   ativo: false, nivel: 1, isoAtivo: false, isoTeclado: false, isoMobile: false, analogico: false,
   // Refinamentos da visão isométrica (ligados por padrão; individualmente desativáveis).
   bilbordes: true,    // personagens/labels "em pé" (contra-transformação afim)
@@ -43,7 +43,7 @@ const _AVT_GRAFICOS_KEY = 'rpghub_avt_graficos';
 // ── PRESETS DE QUALIDADE ─────────────────────────────────────────────────────
 // Cada preset seta em lote os toggles que custam frame time. "baixo" corta os
 // custos por-frame (atmosfera, y-sort, pernas, CSS contínuo, luz GPU).
-const _AVT_QUALIDADE_PRESETS = {
+const _AVT_QUALIDADE_PRESETS: Record<string, any> = {
   baixo: { ativo: false, atmosfera: false, profundidade: false, pernas: false,
            polimento: false, cssFx: false, luzGpu: false },
   medio: { atmosfera: true, profundidade: true, pernas: true,
@@ -52,7 +52,7 @@ const _AVT_QUALIDADE_PRESETS = {
            polimento: true, cssFx: true, luzGpu: true },
 };
 
-function _avtGraficosPreset(nome, opts) {
+function _avtGraficosPreset(nome: any, opts: any) {
   const p = _AVT_QUALIDADE_PRESETS[nome];
   if (!p) return;
   Object.assign(AVT_GRAFICOS, p);
@@ -118,7 +118,7 @@ var _ISO_ANGLE_X = _ISO_BASE_ANGLE_X;
 var _ISO_SCALE   = _ISO_BASE_SCALE;
 const _ISO_OVERSIZE = 1.8; // fator de aumento do wrap p/ cobrir os cantos do viewport
 // Coeficientes da contra-transformação de billboard, cacheados (ver _avtIsoParamsAtualizar).
-var _ISO_BB = null;
+var _ISO_BB: any = null;
 
 // Recalcula ângulo/escala efetivos. Com "profundidade" ativa usa 60° (squash ~0.5 →
 // diamante 2:1) e compensa a escala para preservar a extensão vertical na tela.
@@ -297,7 +297,7 @@ function _avtIsoSizeWrap() {
 window._avtIsoSizeWrap = _avtIsoSizeWrap;
 
 // Inversa analítica do CSS transform afim: tela → canvas (sem perspective, logo afim exata)
-function _avtIsoScreenToCanvas(clientX, clientY) {
+function _avtIsoScreenToCanvas(clientX: any, clientY: any) {
   const wrap = document.getElementById('avt-mapa-wrap');
   if (!wrap) return { x: clientX, y: clientY };
   let ox = 0, oy = 0, el = wrap;
@@ -314,7 +314,7 @@ function _avtIsoScreenToCanvas(clientX, clientY) {
 }
 
 // Inversa para deltas de pan (offset cancela, só transforma a direção)
-function _avtIsoDeltaToCanvas(dx, dy) {
+function _avtIsoDeltaToCanvas(dx: any, dy: any) {
   const k    = _ISO_SCALE / Math.SQRT2;
   const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
   return { x: (dx + dy / cosX) / (2 * k), y: (dy / cosX - dx) / (2 * k) };
@@ -326,7 +326,7 @@ function _avtIsoDeltaToCanvas(dx, dy) {
 // derivado do trajeto precisa virar `pivô + M·(P − pivô)` para cair sobre o token
 // projetado. Offsets decorativos (lift, keyframes, anéis, wobble) ficam crus de
 // propósito — devem ler como pixels de tela "em pé".
-function _avtIsoDeltaToScreen(dx, dy) {
+function _avtIsoDeltaToScreen(dx: any, dy: any) {
   const k    = _ISO_SCALE / Math.SQRT2;
   const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
   return { x: (dx - dy) * k, y: (dx + dy) * k * cosX };
@@ -337,7 +337,7 @@ window._avtIsoDeltaToScreen = _avtIsoDeltaToScreen;
 // PAI não-transformado do wrap. Usada para posicionar a camada de VFX (que fica FORA da
 // transformação 3D) sobre o tile/profundidade corretos. Como a transform usa origin
 // center e o pai é não-transformado, o centro do wrap = centro do pai.
-function _avtIsoCanvasToScreen(canvasX, canvasY) {
+function _avtIsoCanvasToScreen(canvasX: any, canvasY: any) {
   const wrap = document.getElementById('avt-mapa-wrap');
   if (!wrap) return { x: canvasX, y: canvasY };
   const cw = wrap.offsetWidth, ch = wrap.offsetHeight;
@@ -356,7 +356,7 @@ window._avtIsoCanvasToScreen = _avtIsoCanvasToScreen;
 // aparecer "em pé"/sem distorção na tela, mantendo os pés plantados no tile. O chamador
 // envolve o desenho com ctx.save()/ctx.restore(). Usa os MESMOS k/cosX da projeção de
 // clique, então acompanha o ângulo 2:1 automaticamente.
-function _avtIsoBillboardAplicar(ctx, pivotX, pivotY) {
+function _avtIsoBillboardAplicar(ctx: any, pivotX: any, pivotY: any) {
   // Lê os coeficientes cacheados (recalcula sob demanda se ainda não populados).
   if (!_ISO_BB) _avtIsoParamsAtualizar();
   const { inv2k, inv2kCos } = _ISO_BB;
@@ -368,7 +368,7 @@ function _avtIsoBillboardAplicar(ctx, pivotX, pivotY) {
 }
 window._avtIsoBillboardAplicar = _avtIsoBillboardAplicar;
 
-function _avtGraficosIsoToggle(ativo) {
+function _avtGraficosIsoToggle(ativo: any) {
   AVT_GRAFICOS.isoAtivo = ativo;
   _avtGraficosSalvar();
   _avtGraficosIsoAplicar();
@@ -382,7 +382,7 @@ function _avtGraficosIsoToggle(ativo) {
 // ── Refinamentos da visão isométrica (preferência individual) ─────────────────
 // Toggle genérico para bilbordes/atmosfera/profundidade/polimento. Apenas atualiza a
 // flag e reaplica a transform iso (o loop de render lê as flags a cada frame).
-function _avtGraficosRefinoToggle(chave, ativo) {
+function _avtGraficosRefinoToggle(chave: any, ativo: any) {
   AVT_GRAFICOS[chave] = !!ativo;
   AVT_GRAFICOS.preset = null; // ajuste manual → sai do preset em lote
   _avtGraficosSalvar();
@@ -409,14 +409,14 @@ function _avtIsoRefinosAtualizarUI() {
 }
 
 // ── Controles isométricos (preferência individual) ───────────────────────────
-function _avtGraficosTecladoToggle(ativo) {
+function _avtGraficosTecladoToggle(ativo: any) {
   AVT_GRAFICOS.isoTeclado = ativo;
   _avtGraficosSalvar();
   const chk = document.getElementById('avt-cfg-iso-teclado');
   if (chk) chk.checked = ativo;
 }
 
-function _avtGraficosMobileToggle(ativo) {
+function _avtGraficosMobileToggle(ativo: any) {
   AVT_GRAFICOS.isoMobile = ativo;
   _avtGraficosSalvar();
   _avtGraficosControlesAplicar();
@@ -441,7 +441,7 @@ function _avtGraficosControlesAplicar() {
   if (showAnalogico) _avtAnalogicoIniciar();
 }
 
-function _avtGraficosAnalogicoToggle(ativo) {
+function _avtGraficosAnalogicoToggle(ativo: any) {
   AVT_GRAFICOS.analogico = !!ativo;
   _avtGraficosSalvar();
   _avtGraficosControlesAplicar();
@@ -468,11 +468,11 @@ function _avtAnalogicoIniciar() {
   const _mapNormal = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
   const _mapIso    = [[1,-1],[1,0],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
 
-  function _dirGrid(sector) {
+  function _dirGrid(sector: any) {
     return (AVT_GRAFICOS?.isoAtivo ? _mapIso : _mapNormal)[sector];
   }
 
-  function _mover(ex, ey) {
+  function _mover(ex: any, ey: any) {
     const rect = outer.getBoundingClientRect();
     let x = ex - (rect.left + rect.width  / 2);
     let y = ey - (rect.top  + rect.height / 2);
@@ -587,14 +587,14 @@ function _avtGraficosAtualizarUI() {
   });
 }
 
-function _avtGraficosToggle(ativo) {
+function _avtGraficosToggle(ativo: any) {
   AVT_GRAFICOS.ativo = ativo;
   _avtGraficosSalvar();
   _avtGraficosAplicar();
   _avtGraficosAtualizarUI();
 }
 
-function _avtGraficosNivel(n) {
+function _avtGraficosNivel(n: any) {
   AVT_GRAFICOS.nivel = n;
   _avtGraficosSalvar();
   _avtGraficosAplicar();
@@ -762,7 +762,7 @@ window._avtIsoDeltaToCanvas      = _avtIsoDeltaToCanvas;
 // ENTRADA PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function avtMenuAbrir(rpgId) {
+async function avtMenuAbrir(rpgId: any) {
   try {
     mostrarLoading('Carregando dungeon…');
     await _avtCarregarDados(rpgId);
@@ -809,7 +809,7 @@ async function avtMenuAbrir(rpgId) {
 }
 window.avtMenuAbrir = avtMenuAbrir;
 
-function _avtMenuFallback(rpgId) {
+function _avtMenuFallback(rpgId: any) {
   mostrarLoading('Carregando dungeon…');
   _avtMostrarAventuraScreen();
   _avtIniciarRTNet(rpgId, _avtIniciarCanvas);
@@ -944,7 +944,7 @@ function _avtMenuRenderBotoes() {
   `).join('');
 }
 
-function _hexToRgb(hex) {
+function _hexToRgb(hex: any) {
   if (!hex || hex.length < 4) return '122,146,170';
   const h = hex.replace('#', '');
   const r = parseInt(h.length === 3 ? h[0]+h[0] : h.slice(0,2), 16);
@@ -957,7 +957,7 @@ function _hexToRgb(hex) {
 // PAINEL DESLIZANTE (sub-telas)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _avtMenuAbrirPanel(html, titulo) {
+function _avtMenuAbrirPanel(html: any, titulo: any) {
   const panel = document.getElementById('avt-menu-panel');
   if (!panel) return;
   panel.innerHTML = `
@@ -986,7 +986,7 @@ function _avtMenuAbrirJogar() {
 }
 window._avtMenuAbrirJogar = _avtMenuAbrirJogar;
 
-function _avtMenuEntrarJogar(charNome) {
+function _avtMenuEntrarJogar(charNome: any) {
   _avtMenuEntrarJogo({ charNome, faseId: 'principal' });
 }
 window._avtMenuEntrarJogar = _avtMenuEntrarJogar;
@@ -1009,7 +1009,7 @@ function _avtMenuAbrirContinuar() {
 }
 window._avtMenuAbrirContinuar = _avtMenuAbrirContinuar;
 
-function _avtMenuEntrarContinuarComChar(charNome) {
+function _avtMenuEntrarContinuarComChar(charNome: any) {
   const lastFase = (AVT_MENU_STATE.sessionData || {}).last_fase_id || 'principal';
   _avtMenuEntrarJogo({ charNome, faseId: lastFase });
 }
@@ -1046,7 +1046,7 @@ function _avtMenuAbrirFaseJogador() {
 function _avtMenuAbrirFaseMestre() {
   const extras = AVT_STATE.rpg?.theme_json?.fases_extras || [];
 
-  const lockIcon = lt => lt === 'chave' ? '🔑' : lt === 'combate' ? '⚔' : '🔓';
+  const lockIcon = (lt: any) => lt === 'chave' ? '🔑' : lt === 'combate' ? '⚔' : '🔓';
 
   const html = `
     <div style="display:flex;flex-direction:column;gap:10px">
@@ -1065,7 +1065,7 @@ function _avtMenuAbrirFaseMestre() {
           style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.6rem;padding:4px 10px;cursor:pointer">▶ Jogar</button>
       </div>
 
-      ${extras.map(f => `
+      ${extras.map((f: any) => `
         <div style="display:flex;align-items:center;gap:8px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.12);border-radius:8px;padding:10px 12px">
           <div style="flex:1;min-width:0">
             <div style="font-family:var(--fonte-d);font-size:0.75rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lockIcon(f.porta?.lock_type)} ${f.nome||f.id}</div>
@@ -1106,10 +1106,10 @@ function _avtMenuNovaFaseComRefresh() {
 }
 window._avtMenuNovaFaseComRefresh = _avtMenuNovaFaseComRefresh;
 
-async function _avtMenuRemoverFaseComRefresh(faseId) {
+async function _avtMenuRemoverFaseComRefresh(faseId: any) {
   if (!confirm('Remover esta fase permanentemente?')) return;
   const theme = AVT_STATE.rpg.theme_json;
-  theme.fases_extras = (theme.fases_extras || []).filter(f => f.id !== faseId);
+  theme.fases_extras = (theme.fases_extras || []).filter((f: any) => f.id !== faseId);
   try {
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_MENU_STATE.rpgId)}`,
       { method: 'PATCH', body: JSON.stringify({ theme_json: theme }) });
@@ -1121,9 +1121,9 @@ async function _avtMenuRemoverFaseComRefresh(faseId) {
 }
 window._avtMenuRemoverFaseComRefresh = _avtMenuRemoverFaseComRefresh;
 
-function _avtMenuEditarFase(faseId) {
+function _avtMenuEditarFase(faseId: any) {
   const extras = AVT_STATE.rpg?.theme_json?.fases_extras || [];
-  const f = extras.find(x => x.id === faseId);
+  const f = extras.find((x: any) => x.id === faseId);
   if (!f) return;
 
   const lockTypes = [
@@ -1188,7 +1188,7 @@ function _avtMenuEditarFase(faseId) {
           const portas = f.dungeon_data?._portasInternas;
           if (!f.dungeon_data) return `<div style="font-size:0.62rem;color:#7a92aa;font-style:italic">Entre na fase uma vez para gerar o mapa antes de editar portas internas.</div>`;
           let h = '';
-          (portas || []).forEach((p, i) => {
+          (portas || []).forEach((p: any, i: any) => {
             h += `<div style="display:flex;gap:5px;align-items:center;margin-bottom:5px">
               <input id="avt-pi-nome-${i}" value="${(p.nome||('Porta '+(p.numero??i+2))).replace(/"/g,'&quot;')}" placeholder="Nome"
                 style="flex:1;min-width:50px;background:rgba(255,255,255,0.04);border:1px solid rgba(168,120,255,0.25);border-radius:5px;color:#c8b8e8;font-size:0.66rem;padding:5px 7px;box-sizing:border-box">
@@ -1225,7 +1225,7 @@ function _avtMenuEditarFase(faseId) {
 }
 window._avtMenuEditarFase = _avtMenuEditarFase;
 
-function _avtMenuSetEditFaseLock(lockType) {
+function _avtMenuSetEditFaseLock(lockType: any) {
   window._avtEditFaseLockAtual = lockType;
   ['livre','chave','combate'].forEach(lt => {
     const btn = document.getElementById(`avt-edit-fase-lock-${lt}`);
@@ -1239,7 +1239,7 @@ function _avtMenuSetEditFaseLock(lockType) {
 window._avtMenuSetEditFaseLock = _avtMenuSetEditFaseLock;
 
 // Lê as portas internas atualmente nos inputs do editor para o array da fase.
-function _avtMenuLerPortasInternasEditor(fase) {
+function _avtMenuLerPortasInternasEditor(fase: any) {
   if (!fase?.dungeon_data) return;
   const arr = [];
   for (let i = 0; ; i++) {
@@ -1256,8 +1256,8 @@ function _avtMenuLerPortasInternasEditor(fase) {
   fase.dungeon_data._portasInternas = arr;
 }
 
-function _avtMenuAddPortaInterna(faseId) {
-  const fase = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === faseId);
+function _avtMenuAddPortaInterna(faseId: any) {
+  const fase = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find((f: any) => f.id === faseId);
   if (!fase?.dungeon_data) { mostrarToast('Entre na fase uma vez para gerar o mapa.', 'aviso'); return; }
   _avtMenuLerPortasInternasEditor(fase);
   if (!Array.isArray(fase.dungeon_data._portasInternas)) fase.dungeon_data._portasInternas = [];
@@ -1267,13 +1267,13 @@ function _avtMenuAddPortaInterna(faseId) {
 }
 window._avtMenuAddPortaInterna = _avtMenuAddPortaInterna;
 
-function _avtMenuRemovePortaInterna(faseId, idx) {
-  const fase = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === faseId);
+function _avtMenuRemovePortaInterna(faseId: any, idx: any) {
+  const fase = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find((f: any) => f.id === faseId);
   if (!fase?.dungeon_data) return;
   _avtMenuLerPortasInternasEditor(fase);
   (fase.dungeon_data._portasInternas || []).splice(idx, 1);
   // Renumerar de 2 em diante
-  (fase.dungeon_data._portasInternas || []).forEach((p, i) => {
+  (fase.dungeon_data._portasInternas || []).forEach((p: any, i: any) => {
     const oldName = p.nome, defName = 'Porta ' + (p.numero ?? i+2);
     p.numero = i + 2;
     if (!oldName || oldName === defName) p.nome = 'Porta ' + p.numero;
@@ -1282,7 +1282,7 @@ function _avtMenuRemovePortaInterna(faseId, idx) {
 }
 window._avtMenuRemovePortaInterna = _avtMenuRemovePortaInterna;
 
-async function _avtMenuSalvarEditarFase(faseId) {
+async function _avtMenuSalvarEditarFase(faseId: any) {
   const nome = document.getElementById('avt-edit-fase-nome')?.value?.trim();
   const col  = parseInt(document.getElementById('avt-edit-fase-col')?.value || '0', 10);
   const row  = parseInt(document.getElementById('avt-edit-fase-row')?.value || '0', 10);
@@ -1293,7 +1293,7 @@ async function _avtMenuSalvarEditarFase(faseId) {
   if (!nome) { mostrarToast('Nome obrigatório', 'aviso'); return; }
 
   const theme = AVT_STATE.rpg.theme_json;
-  const fase = (theme.fases_extras || []).find(f => f.id === faseId);
+  const fase = (theme.fases_extras || []).find((f: any) => f.id === faseId);
   if (!fase) return;
 
   fase.nome = nome;
@@ -1314,12 +1314,12 @@ async function _avtMenuSalvarEditarFase(faseId) {
 }
 window._avtMenuSalvarEditarFase = _avtMenuSalvarEditarFase;
 
-function _avtMenuSelecionarFase(faseId) {
+function _avtMenuSelecionarFase(faseId: any) {
   _avtMenuAbrirPanel(_avtMenuHtmlSeletorChar('_avtMenuEntrarFaseComChar', faseId), 'Selecionar Personagem');
 }
 window._avtMenuSelecionarFase = _avtMenuSelecionarFase;
 
-function _avtMenuEntrarFaseComChar(charNome, faseId) {
+function _avtMenuEntrarFaseComChar(charNome: any, faseId: any) {
   _avtMenuEntrarJogo({ charNome, faseId });
 }
 window._avtMenuEntrarFaseComChar = _avtMenuEntrarFaseComChar;
@@ -1327,7 +1327,7 @@ window._avtMenuEntrarFaseComChar = _avtMenuEntrarFaseComChar;
 function _avtMenuListarFases() {
   const fases = [{ id: 'principal', nome: '🏰 Fase Principal' }];
   const extras = AVT_STATE.rpg?.theme_json?.fases_extras || [];
-  extras.forEach(f => fases.push({ id: f.id, nome: f.nome || f.id }));
+  extras.forEach((f: any) => fases.push({ id: f.id, nome: f.nome || f.id }));
   return fases;
 }
 
@@ -1339,7 +1339,7 @@ function _avtMenuAbrirPersonagem() {
   const chars = _avtMenuCharsVisiveis();
   const html = `
     <div style="display:flex;flex-direction:column;gap:10px">
-      ${chars.map(ch => {
+      ${chars.map((ch: any) => {
         const ca = ch.custom_attrs || {};
         const cor = ca.cor || '#4fa3d1';
         return `
@@ -1360,11 +1360,11 @@ function _avtMenuAbrirPersonagem() {
 }
 window._avtMenuAbrirPersonagem = _avtMenuAbrirPersonagem;
 
-function _avtMenuEditarChar(charId, charNome) {
+function _avtMenuEditarChar(charId: any, charNome: any) {
   // Injeta entidade stub para o editor de personagem funcionar fora do jogo
   const tempId = 'menu-temp-' + charId;
-  if (!AVT_STATE.entidades.find(e => e.id === tempId)) {
-    const dbChar = (AVT_STATE.chars || []).find(c => c.id === charId) || {};
+  if (!AVT_STATE.entidades.find((e: any) => e.id === tempId)) {
+    const dbChar = (AVT_STATE.chars || []).find((c: any) => c.id === charId) || {};
     const ca = dbChar.custom_attrs || {};
     AVT_STATE.entidades.push({
       id: tempId, dbId: charId, nome: charNome, tipo: 'jogador',
@@ -1420,7 +1420,7 @@ function _avtMenuAbrirConfig() {
 }
 window._avtMenuAbrirConfig = _avtMenuAbrirConfig;
 
-function _avtMenuAbrirConfigMestre(aba) {
+function _avtMenuAbrirConfigMestre(aba: any) {
   AVT_MENU_STATE.configAba = aba;
   const abas = [
     { id: 'menu',          label: '🖼 Menu' },
@@ -1459,7 +1459,7 @@ function _avtMenuAbrirConfigMestre(aba) {
 }
 window._avtMenuAbrirConfigMestre = _avtMenuAbrirConfigMestre;
 
-function _avtMenuConfigConteudoAba(aba) {
+function _avtMenuConfigConteudoAba(aba: any) {
   if (aba === 'menu') {
     const t = AVT_STATE.rpg?.theme_json || {};
     return `
@@ -1547,7 +1547,7 @@ function _avtMenuHtmlConfigJogador() {
             <label style="display:block;font-size:0.62rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">${ctx}</label>
             <select id="avt-cfg-track-${ctx}" style="width:100%;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.68rem;padding:5px 8px">
               <option value="">— padrão —</option>
-              ${tracks.map(tr => `<option value="${tr.url}" ${sel===tr.url?'selected':''}>${tr.label}</option>`).join('')}
+              ${tracks.map((tr: any) => `<option value="${tr.url}" ${sel===tr.url?'selected':''}>${tr.label}</option>`).join('')}
             </select>
           </div>
         `;
@@ -1650,7 +1650,7 @@ function _avtMenuBindColorPicker() {
   }, 50);
 }
 
-function _avtMenuSelecionarMusicaMode(modo) {
+function _avtMenuSelecionarMusicaMode(modo: any) {
   const sd = AVT_MENU_STATE.sessionData || {};
   sd.music_pref = sd.music_pref || {};
   sd.music_pref.mode = modo;
@@ -1667,7 +1667,7 @@ function _avtMenuSelecionarMusicaMode(modo) {
 }
 window._avtMenuSelecionarMusicaMode = _avtMenuSelecionarMusicaMode;
 
-function _avtMenuSetMobilePref(chave, valor) {
+function _avtMenuSetMobilePref(chave: any, valor: any) {
   const sd = AVT_MENU_STATE.sessionData || {};
   sd.mobile_pref = sd.mobile_pref || {};
   sd.mobile_pref[chave] = valor;
@@ -1808,7 +1808,7 @@ window._avtMenuAbrirPixiStudio = _avtMenuAbrirPixiStudio;
 // ENTRAR NO JOGO
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function _avtMenuEntrarJogo({ charNome, faseId }) {
+async function _avtMenuEntrarJogo({ charNome, faseId }: any) {
   try {
     const rpgId = AVT_MENU_STATE.rpgId;
     if (!rpgId) { mostrarToast('Sem aventura carregada', 'erro'); return; }
@@ -1879,15 +1879,15 @@ window._avtMenuEntrarJogo = _avtMenuEntrarJogo;
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _avtMenuCharsVisiveis() {
-  const allChars = (AVT_STATE.chars || []).filter(c => (c.custom_attrs?.tipo || 'jogador') === 'jogador');
+  const allChars = (AVT_STATE.chars || []).filter((c: any) => (c.custom_attrs?.tipo || 'jogador') === 'jogador');
   if (AVT_STATE.isMestre) return allChars;
   const uid = SESSION?.user?.id;
-  const linked = (AVT_STATE.membros || []).filter(m => m.player_id === uid).map(m => m.linked).filter(Boolean);
-  if (linked.length > 0) return allChars.filter(c => linked.includes(c.nome));
+  const linked = (AVT_STATE.membros || []).filter((m: any) => m.player_id === uid).map((m: any) => m.linked).filter(Boolean);
+  if (linked.length > 0) return allChars.filter((c: any) => linked.includes(c.nome));
   return allChars; // sem vinculação: mostra todos
 }
 
-function _avtMenuHtmlSeletorChar(fnCallback, extraParam?) {
+function _avtMenuHtmlSeletorChar(fnCallback: any, extraParam?: any) {
   const chars = _avtMenuCharsVisiveis();
   if (chars.length === 0) {
     return '<p style="color:#7a92aa;font-size:0.72rem">Nenhum personagem disponível. Crie um na opção Personagem.</p>';
@@ -1895,7 +1895,7 @@ function _avtMenuHtmlSeletorChar(fnCallback, extraParam?) {
   const extraArg = extraParam ? `,'${extraParam}'` : '';
   return `
     <div style="display:flex;flex-direction:column;gap:8px">
-      ${chars.map(ch => {
+      ${chars.map((ch: any) => {
         const ca = ch.custom_attrs || {};
         const cor = ca.cor || '#4fa3d1';
         return `
@@ -1919,7 +1919,7 @@ function _avtMenuHtmlSeletorChar(fnCallback, extraParam?) {
 // PERSISTÊNCIA (session_data via rpg_members)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function _avtMenuCarregarSessionData(rpgId) {
+async function _avtMenuCarregarSessionData(rpgId: any) {
   const uid = SESSION?.user?.id;
   if (!uid) return {};
   try {
@@ -1930,7 +1930,7 @@ async function _avtMenuCarregarSessionData(rpgId) {
   } catch(_) { return {}; }
 }
 
-async function _avtMenuSalvarSessionData(patch) {
+async function _avtMenuSalvarSessionData(patch: any) {
   const uid   = SESSION?.user?.id;
   const rpgId = AVT_MENU_STATE.rpgId;
   if (!uid || !rpgId) return;
@@ -1951,7 +1951,7 @@ window._avtMenuSalvarSessionData = _avtMenuSalvarSessionData;
 
 // Handler global para avt_fase_mudou — DESATIVADO: trocar de fase é local e não deve
 // arrastar outros jogadores nem forçá-los a uma sala de espera (isolamento por fase).
-window.avtReceberFaseMudou = function(_payload) { /* no-op: fases são por jogador */ };
+window.avtReceberFaseMudou = function(_payload: any) { /* no-op: fases são por jogador */ };
 
 // Presença leve: registra em que fase cada jogador está (apenas informativo).
 function _avtMenuBindFaseMudouHandler() {
@@ -1959,7 +1959,7 @@ function _avtMenuBindFaseMudouHandler() {
     setTimeout(_avtMenuBindFaseMudouHandler, 600);
     return;
   }
-  RTNet.on('avt_fase_presenca', (payload) => {
+  RTNet.on('avt_fase_presenca', (payload: any) => {
     try {
       if (!payload?.nome) return;
       if (typeof AVT_STATE !== 'undefined') {

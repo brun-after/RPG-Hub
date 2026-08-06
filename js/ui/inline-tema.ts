@@ -1,7 +1,7 @@
 (function() {
   var BTN_KEY = 'rpghub_tema_padrao';
 
-  var VARS_CLARO = {
+  var VARS_CLARO: Record<string, any> = {
     '--preto':'#f2f4f7','--escuro':'#e8eaef','--painel':'#dde0e8',
     '--borda':'#c0c5d0','--cinza':'#d0d4dd','--texto':'#141820',
     '--suave':'#4e5568','--primario':'#1a5fa8','--primario-v':'#1255a0',
@@ -49,7 +49,7 @@
   function _gerarCSS() {
     var P = 'body.tema-padrao';
     /* Mapeia cada cor inline escura → equivalente claro */
-    var bgHex = {
+    var bgHex: Record<string, any> = {
       '#080c10':'#f2f4f7','#050810':'#f2f4f7','#050208':'#f2f4f7',
       '#07090f':'#f2f4f7','#0a0f18':'#e8eaef','#0a0e18':'#e8eaef',
       '#0f1520':'#e8eaef','#0d1525':'#e8eaef','#111d2e':'#dde0e8',
@@ -58,7 +58,7 @@
       '#2a3a50':'#d0d4dd','#243650':'#d0d4dd',
       '#1a0e0e':'#e8eaef','#0f0a0a':'#e8eaef','#080606':'#e8eaef'
     };
-    var bgRgba = {
+    var bgRgba: Record<string, any> = {
       'rgba(10,15,24,':'rgba(237,228,208,',
       'rgba(10,14,22,':'rgba(237,228,208,',
       'rgba(10,15,25,':'rgba(237,228,208,',
@@ -73,7 +73,7 @@
       'rgba(8,12,16,':'rgba(245,239,226,',
       'rgba(30,45,66,':'rgba(208,196,168,'
     };
-    var txtHex = {
+    var txtHex: Record<string, any> = {
       '#c8d8e8':'#1c1408','#7ec8f0':'#1255a0','#7a92aa':'#5c4a2a',
       '#f0cc6a':'#8a6800','#c8a84b':'#7a5c00','#5ee09a':'#1a7a40',
       '#b07ef0':'#5a1a9e','#9a8888':'#6b5a3a','#7a6060':'#6b5a3a',
@@ -204,7 +204,7 @@
     return css;
   }
 
-  function _atualizarBotao(ativo) {
+  function _atualizarBotao(ativo: any) {
     var btn = document.getElementById('btn-tema-padrao');
     if (!btn) return;
     btn.textContent = ativo ? '🌙' : '☀️';
@@ -214,7 +214,7 @@
     btn.style.background  = ativo ? 'rgba(26,95,168,0.08)' : '';
   }
 
-  function _aplicar(ativo) {
+  function _aplicar(ativo: any) {
     document.body.classList.toggle('tema-padrao', ativo);
     if (ativo) {
       _aplicarVars();

@@ -5,7 +5,7 @@
 window._animCtrlMap = window._animCtrlMap || {};
 
 // ── Bone definitions ─────────────────────────────────────────────────────────
-const _ANIM_BONE_CFG = {
+const _ANIM_BONE_CFG: Record<string, any> = {
   torso:        { parentOffset: [0, -22],   imgW: 30, imgH: 46, pivot: [0.5, 0.47], children: ['head','arm_upper_l','arm_upper_r','leg_upper_l','leg_upper_r'] },
   head:         { parentOffset: [0, -38],   imgW: 30, imgH: 30, pivot: [0.5, 0.87], children: [] },
   arm_upper_l:  { parentOffset: [-20, -22], imgW: 14, imgH: 22, pivot: [0.5, 0.09], children: ['arm_lower_l'] },
@@ -24,7 +24,7 @@ const _DRAW_FRONT = ['leg_lower_r', 'leg_upper_r', 'torso', 'arm_upper_r', 'arm_
 const _ANIM_DRAW_ORDER = [..._DRAW_BACK, ..._DRAW_FRONT];
 
 // Slot de equipamento para cada bone
-const _EQUIP_ATTACH = {
+const _EQUIP_ATTACH: Record<string, any> = {
   arm_lower_r: 'weapon_r',
   arm_lower_l: 'shield',
   head:        'helmet',
@@ -44,7 +44,7 @@ function _pixiEnsureLoaded() {
 }
 
 // ── SVG → PIXI.Texture ───────────────────────────────────────────────────────
-function _svgToTexture(svgStr, w, h) {
+function _svgToTexture(svgStr: any, w: any, h: any) {
   return new Promise((resolve) => {
     if (!svgStr) { resolve(null); return; }
 
@@ -78,11 +78,11 @@ function _svgToTexture(svgStr, w, h) {
 // próxima Texture.from() devolve esse objeto morto → sprite invisível.
 // Esta função detecta o estado degradado e força recriação. Resolve sempre
 // (com timeout) para impedir hang da pipeline de mount.
-function _safeTextureFrom(url) {
+function _safeTextureFrom(url: any) {
   return new Promise(resolve => {
     if (!url) { resolve(null); return; }
     let done = false;
-    const finish = (tex) => { if (done) return; done = true; resolve(tex || null); };
+    const finish = (tex: any) => { if (done) return; done = true; resolve(tex || null); };
 
     try {
       // Data URLs são gratuitas de recriar. Como destroy() de outras
@@ -123,7 +123,7 @@ function _safeTextureFrom(url) {
 }
 
 // ── Preload all textures ─────────────────────────────────────────────────────
-async function _preloadTextures(animadoData) {
+async function _preloadTextures(animadoData: any) {
   const cache    = new Map();
   const parts    = animadoData.parts || {};
   const equips   = animadoData.equipment_slots || {};
@@ -169,7 +169,7 @@ async function _preloadTextures(animadoData) {
 }
 
 // ── Keyframe Interpolation ───────────────────────────────────────────────────
-function _animLerp(track, t, duration) {
+function _animLerp(track: any, t: any, duration: any) {
   if (!track || !track.length) return {};
   const tMod = t % duration;
   let before = track[0], after = track[track.length - 1];
@@ -180,7 +180,7 @@ function _animLerp(track, t, duration) {
   }
   const span  = after.t - before.t;
   const alpha = span > 0 ? (tMod - before.t) / span : 0;
-  const lerp  = (a, b) => a + (b - a) * alpha;
+  const lerp  = (a: any, b: any) => a + (b - a) * alpha;
   return {
     rotation: lerp(before.rotation ?? 0, after.rotation ?? 0),
     x_offset: lerp(before.x_offset ?? 0, after.x_offset ?? 0),
@@ -190,8 +190,8 @@ function _animLerp(track, t, duration) {
 }
 
 // ── Forward Kinematics ───────────────────────────────────────────────────────
-function _animComputeTransforms(rootX, rootY, animTf, boneTransforms) {
-  function walk(boneId, parentX, parentY, parentRot) {
+function _animComputeTransforms(rootX: any, rootY: any, animTf: any, boneTransforms: any) {
+  function walk(boneId: any, parentX: any, parentY: any, parentRot: any) {
     const bc = _ANIM_BONE_CFG[boneId];
     if (!bc) return;
     const anim = animTf[boneId] || {};
@@ -202,13 +202,13 @@ function _animComputeTransforms(rootX, rootY, animTf, boneTransforms) {
     const worldY   = parentY + sin * dx + cos * dy;
     const worldRot = parentRot + (anim.rotation || 0) * Math.PI / 180;
     boneTransforms.set(boneId, { x: worldX, y: worldY, rot: worldRot });
-    (bc.children || []).forEach(childId => walk(childId, worldX, worldY, worldRot));
+    (bc.children || []).forEach((childId: any) => walk(childId, worldX, worldY, worldRot));
   }
   walk('torso', rootX, rootY - 22, 0);
 }
 
 // ── Build PixiJS scene (v1 / v2-crop) ───────────────────────────────────────
-function _buildScene(app, texCache) {
+function _buildScene(app: any, texCache: any) {
   const sprites      = new Map();
   const equipSprites = new Map();
 
@@ -217,7 +217,7 @@ function _buildScene(app, texCache) {
   flipContainer.position.set(_NATIVE_W / 2, _NATIVE_H / 2);
   app.stage.addChild(flipContainer);
 
-  function addBone(boneId) {
+  function addBone(boneId: any) {
     const tex    = texCache.get(boneId);
     const sprite = tex ? new PIXI.Sprite(tex) : null;
     if (sprite) flipContainer.addChild(sprite);
@@ -243,7 +243,7 @@ function _buildScene(app, texCache) {
 }
 
 // ── Position sprites for one frame (v1 / v2-crop) ───────────────────────────
-function _updateSprites(sprites, equipSprites, boneTransforms, animadoData) {
+function _updateSprites(sprites: any, equipSprites: any, boneTransforms: any, animadoData: any) {
   for (const boneId of _ANIM_DRAW_ORDER) {
     const tf     = boneTransforms.get(boneId);
     const sprite = sprites.get(boneId);
@@ -282,7 +282,7 @@ function _updateSprites(sprites, equipSprites, boneTransforms, animadoData) {
 }
 
 // ── Build PixiJS scene (v2 full-image) ──────────────────────────────────────
-function _buildSceneV2(app, texCache, animadoData) {
+function _buildSceneV2(app: any, texCache: any, animadoData: any) {
   const fullTex        = texCache.get('_full');
   const boneContainers = new Map();
   const equipSprites   = new Map();
@@ -313,7 +313,7 @@ function _buildSceneV2(app, texCache, animadoData) {
 
   const MASK_OVERLAP = 5;
 
-  function addBone(boneId) {
+  function addBone(boneId: any) {
     const partData = animadoData.parts?.[boneId];
     const rest     = restTf.get(boneId);
     if (!partData?.bbox || !rest) return;
@@ -364,7 +364,7 @@ function _buildSceneV2(app, texCache, animadoData) {
   return { boneContainers, equipSprites, flipContainer };
 }
 
-function _updateContainersV2(boneContainers, equipSprites, boneTransforms, animadoData) {
+function _updateContainersV2(boneContainers: any, equipSprites: any, boneTransforms: any, animadoData: any) {
   for (const boneId of _ANIM_DRAW_ORDER) {
     const container = boneContainers.get(boneId);
     const tf        = boneTransforms.get(boneId);
@@ -393,7 +393,7 @@ function _updateContainersV2(boneContainers, equipSprites, boneTransforms, anima
 //
 // O PIXI app é criado no tamanho nativo de bones (120×180). O canvas é
 // CSS-escalado para o tamanho de exibição (displayWidth × displayHeight).
-function animRendererMount(container, animadoData, opts: any = {}) {
+function animRendererMount(container: any, animadoData: any, opts: any = {}) {
   const cssW = opts.displayWidth  || (opts as any).width  || _NATIVE_W;
   const cssH = opts.displayHeight || (opts as any).height || _NATIVE_H;
 
@@ -417,11 +417,11 @@ function animRendererMount(container, animadoData, opts: any = {}) {
     img.src = (opts as any).fallbackSrc;
   }
 
-  let _app            = null;
+  let _app: any            = null;
   let _sprites        = new Map();
   let _eSprites       = new Map();
-  let _baseSprite     = null;
-  let _flipContainer  = null;
+  let _baseSprite: any     = null;
+  let _flipContainer: any  = null;
   let _facingDir      = 'left';
   let _paused         = false;
   let _destroyed      = false;
@@ -433,7 +433,7 @@ function animRendererMount(container, animadoData, opts: any = {}) {
     play()  { _paused = false; if (_app) _app.ticker.start(); },
     pause() { _paused = true;  if (_app) _app.ticker.stop();  },
 
-    setAnimation(name) {
+    setAnimation(name: any) {
       const animDef = animadoData.animations?.[name];
       if (!animDef) return;
       _currentAnim = name;
@@ -449,7 +449,7 @@ function animRendererMount(container, animadoData, opts: any = {}) {
       }
     },
 
-    setFacing(dir) {
+    setFacing(dir: any) {
       if (!dir || _facingDir === dir) return;
       _facingDir = dir;
       if (_flipContainer) {
@@ -457,7 +457,7 @@ function animRendererMount(container, animadoData, opts: any = {}) {
       }
     },
 
-    setEquipment(slot, equipData) {
+    setEquipment(slot: any, equipData: any) {
       if (!animadoData.equipment_slots) animadoData.equipment_slots = {};
       animadoData.equipment_slots[slot] = equipData;
       if (!_app) return;
@@ -576,7 +576,7 @@ function animRendererMount(container, animadoData, opts: any = {}) {
 
         const elapsed = performance.now() - _startTime;
         const animDef = animadoData.animations?.[_currentAnim];
-        const animTf  = {};
+        const animTf: Record<string, any> = {};
 
         if (animDef) {
           const duration = animDef.duration || 2000;
@@ -601,7 +601,7 @@ function animRendererMount(container, animadoData, opts: any = {}) {
 
       if (_paused) _app.ticker.stop();
     });
-  }).catch(err => {
+  }).catch((err: any) => {
     console.error('[AnimRenderer] Falha ao inicializar PixiJS:', err);
     if (!_destroyed && (opts as any).fallbackSrc) {
       container.innerHTML = '';
@@ -616,7 +616,7 @@ function animRendererMount(container, animadoData, opts: any = {}) {
 }
 
 // ── Static Frame ─────────────────────────────────────────────────────────────
-async function animRendererStaticFrame(animadoData, width, height, animName, t) {
+async function animRendererStaticFrame(animadoData: any, width: any, height: any, animName: any, t: any) {
   await _pixiEnsureLoaded();
 
   const W = width  || _NATIVE_W;
@@ -649,7 +649,7 @@ async function animRendererStaticFrame(animadoData, width, height, animName, t) 
   const animDef  = animadoData.animations?.[animName || 'idle'];
   const duration = animDef?.duration || 2000;
   const tVal     = t ?? 500;
-  const animTf   = {};
+  const animTf: Record<string, any> = {};
 
   for (const [boneId, track] of Object.entries<any>(animDef?.tracks || {})) {
     animTf[boneId] = _animLerp(track, tVal, duration);
@@ -678,7 +678,7 @@ async function animRendererStaticFrame(animadoData, width, height, animName, t) 
 }
 
 // ── Update Equipment Live ─────────────────────────────────────────────────────
-function animRendererUpdateEquipment(ctrl, slot, equipData) {
+function animRendererUpdateEquipment(ctrl: any, slot: any, equipData: any) {
   if (!ctrl) return;
   ctrl.setEquipment(slot, equipData);
 }

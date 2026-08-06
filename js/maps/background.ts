@@ -23,10 +23,10 @@ if (typeof _limparNotifCreativo === 'undefined') {
 // ══════════════════════════════════════════════════════════════
 
 let _nmBgTab = 'url';
-let _nmUploadDataUrl = null;
-let _nmSvgDataUrl   = null;
+let _nmUploadDataUrl: any = null;
+let _nmSvgDataUrl: any   = null;
 
-function nmBgTab(tab) {
+function nmBgTab(tab: any) {
   _nmBgTab = tab;
   const tabs   = ['url','upload','svg','canvas'];
   const labels = { url:'🔗 URL', upload:'📂 Arquivo', svg:'✨ SVG/IA', canvas:'🎨 Pintar' };
@@ -147,7 +147,7 @@ function _nmceRestaurarCanvas() {
 
 
 // — URL preview —
-function nmBgUrlPreview(val) {
+function nmBgUrlPreview(val: any) {
   const img = document.getElementById('nm-img-preview');
   if (!img) return;
   const url = normalizeImgUrl(val);
@@ -156,7 +156,7 @@ function nmBgUrlPreview(val) {
 }
 
 // — Upload —
-async function nmBgUpload(input) {
+async function nmBgUpload(input: any) {
   const file = input?.files?.[0]; if (!file) return;
   try {
     mostrarToast('Enviando mapa…', 'info');
@@ -243,7 +243,7 @@ Para MAPA GERAL (top-down):
 Retorne APENAS o código SVG, começando com <svg e terminando com </svg>,
 sem markdown, sem explicação, sem texto antes ou depois.`;
 
-function nmBgSvgPreview(val) {
+function nmBgSvgPreview(val: any) {
   const warn = document.getElementById('nm-svg-warn');
   const prevWrap = document.getElementById('nm-svg-preview-wrap');
   const prev = document.getElementById('nm-svg-preview');
@@ -375,12 +375,12 @@ const nmCE = {
   tool: 'pincel', drawing: false,
   lastX: 0, lastY: 0,
   startX: 0, startY: 0,
-  history: [],          // snapshots ImageData para undo
-  _snapshot: null,      // snapshot no início do shape
-  _uploadDataUrl: null, // imagem de referência de fundo
+  history: [] as any[],          // snapshots ImageData para undo
+  _snapshot: null as any,      // snapshot no início do shape
+  _uploadDataUrl: null as any, // imagem de referência de fundo
   // ── Cenário (paredes/portas/objetos) ──
-  wallFirstSnap: null,  // primeiro ponto de snap de parede
-  renderData: { paredes: [], portas: [], objetos: [] }, // dados do cenário
+  wallFirstSnap: null as any,  // primeiro ponto de snap de parede
+  renderData: { paredes: [] as any[], portas: [] as any[], objetos: [] as any[] }, // dados do cenário
 };
 
 function nmceInit() {
@@ -409,7 +409,7 @@ function nmceBgRender() {
   }
 }
 
-function nmceBgLoad(input) {
+function nmceBgLoad(input: any) {
   const file = input?.files?.[0];
   if (!file) return;
   const reader = new FileReader();
@@ -431,7 +431,7 @@ function nmceBgLoad(input) {
   reader.readAsDataURL(file);
 }
 
-function nmceSetTool(t) {
+function nmceSetTool(t: any) {
   nmCE.tool = t;
   nmCE.wallFirstSnap = null; // reset wall first point on tool change
   const drawTools = ['pincel','borracha','fill','linha','rect','circulo'];
@@ -466,7 +466,7 @@ function nmceSetTool(t) {
   });
 
   // Fullscreen hint
-  const hints = { parede: '🧱 Parede — clique em 2 bordas do grid', porta: '🚪 Porta — clique numa célula', objeto: '🪨 Obstáculo — clique numa célula', bau: '📦 Baú — clique numa célula' };
+  const hints: Record<string, any> = { parede: '🧱 Parede — clique em 2 bordas do grid', porta: '🚪 Porta — clique numa célula', objeto: '🪨 Obstáculo — clique numa célula', bau: '📦 Baú — clique numa célula' };
   if (fsBar) {
     fsBar.style.display = isScene ? 'flex' : 'none';
     const hintEl = document.getElementById('nmce-fs-cenario-hint');
@@ -478,7 +478,7 @@ function nmceSetTool(t) {
   if (snap) snap.style.display = 'none';
 }
 
-function nmcePickColor(hex) {
+function nmcePickColor(hex: any) {
   const inp = document.getElementById('nmce-cor');
   if (inp) inp.value = hex;
   const inpFs = document.getElementById('nmce-cor-fs');
@@ -516,7 +516,7 @@ function nmceExport() {
 }
 
 // Coordenadas relativas ao canvas
-function nmceCoords(e, c) {
+function nmceCoords(e: any, c: any) {
   const r = c.getBoundingClientRect();
   const scaleX = c.width  / r.width;
   const scaleY = c.height / r.height;
@@ -524,7 +524,7 @@ function nmceCoords(e, c) {
   return { x: (src.clientX - r.left) * scaleX, y: (src.clientY - r.top) * scaleY };
 }
 
-function nmceDown(e) {
+function nmceDown(e: any) {
   const c = document.getElementById('nmce-canvas');
   if (!c) return;
   const { x, y } = nmceCoords(e, c);
@@ -561,7 +561,7 @@ function nmceDown(e) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-function nmceMove(e) {
+function nmceMove(e: any) {
   // Show wall snap indicator even when not drawing
   if (nmCE.tool === 'parede') {
     const c = document.getElementById('nmce-canvas');
@@ -616,7 +616,7 @@ function nmceMove(e) {
   nmCE.lastX = x; nmCE.lastY = y;
 }
 
-function nmceUp(e) {
+function nmceUp(e: any) {
   if (!nmCE.drawing) return;
   nmCE.drawing = false;
   const c = document.getElementById('nmce-canvas');
@@ -644,11 +644,11 @@ function nmceUp(e) {
 }
 
 // Touch
-function nmceTDown(e) { e.preventDefault(); nmceDown(e); }
-function nmceTMove(e) { e.preventDefault(); nmceMove(e); }
+function nmceTDown(e: any) { e.preventDefault(); nmceDown(e); }
+function nmceTMove(e: any) { e.preventDefault(); nmceMove(e); }
 
 // Flood fill (BFS, pixel a pixel)
-function nmceFill(ctx, startX, startY, hexColor) {
+function nmceFill(ctx: any, startX: any, startY: any, hexColor: any) {
   const c = ctx.canvas;
   const imgData = ctx.getImageData(0, 0, c.width, c.height);
   const data = imgData.data;
@@ -658,8 +658,8 @@ function nmceFill(ctx, startX, startY, hexColor) {
   if (tR===fill[0] && tG===fill[1] && tB===fill[2] && tA===255) return;
   const queue = [[startX, startY]];
   const visited = new Uint8Array(c.width * c.height);
-  const match = (i) => data[i]===tR && data[i+1]===tG && data[i+2]===tB && data[i+3]===tA;
-  const set = (i) => { data[i]=fill[0]; data[i+1]=fill[1]; data[i+2]=fill[2]; data[i+3]=255; };
+  const match = (i: any) => data[i]===tR && data[i+1]===tG && data[i+2]===tB && data[i+3]===tA;
+  const set = (i: any) => { data[i]=fill[0]; data[i+1]=fill[1]; data[i+2]=fill[2]; data[i+3]=255; };
   let iter = 0;
   while (queue.length && iter++ < 200000) {
     const [cx, cy] = queue.pop();
@@ -674,7 +674,7 @@ function nmceFill(ctx, startX, startY, hexColor) {
   }
   ctx.putImageData(imgData, 0, 0);
 }
-function _nmceHex2rgb(hex) {
+function _nmceHex2rgb(hex: any) {
   const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return r ? [parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)] : [0,0,0];
 }
@@ -686,7 +686,7 @@ function _nmceHex2rgb(hex) {
 // Desenha grade de losangos isométricos 2:1 (ratio padrão)
 // ══════════════════════════════════════════════════════════════
 
-function _drawIsoGrid(ctx, W, H, grid, color) {
+function _drawIsoGrid(ctx: any, W: any, H: any, grid: any, color: any) {
   const ch = grid;
   ctx.save();
   ctx.strokeStyle = color || 'rgba(126,200,240,0.13)';

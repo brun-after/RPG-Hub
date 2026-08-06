@@ -3,7 +3,7 @@
 // Descanso Curto: recupera HP parcial + reseta cooldowns de recarga curta
 // Descanso Longo: recupera tudo
 
-async function descansoExecutar(tipo, nomePersonagem) {
+async function descansoExecutar(tipo: any, nomePersonagem: any) {
   const c = (RPG_DATA?.characters||[]).find(x => x.nome === nomePersonagem);
   if (!c) return;
 
@@ -73,7 +73,7 @@ async function descansoExecutar(tipo, nomePersonagem) {
   if (typeof mapaRenderStatus === 'function') mapaRenderStatus();
 }
 
-async function descansoGrupo(tipo) {
+async function descansoGrupo(tipo: any) {
   const pcs = (RPG_DATA?.characters||[]).filter(c =>
     c.custom_attrs?.tipo_personagem !== 'npc' &&
     c.custom_attrs?.tipo !== 'npc' &&

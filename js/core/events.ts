@@ -4,14 +4,14 @@
 // This file contains: temPermissao(), podeEditarPersonagem(), _estadoBatalhaJogador()
 
 // ── PERMISSÕES — funções auxiliares ──────────────────────────
-function temPermissao(chave) {
+function temPermissao(chave: any) {
   if (RPG_DATA?.myRole === 'mestre') return true;
   const perm = RPG_DATA?.myPermissoes || {};
   const padrao = (PERMISSOES_CONFIG?.find(p => p.key === chave)?.padrao) ?? false;
   return perm[chave] !== undefined ? perm[chave] : padrao;
 }
 
-function podeEditarPersonagem(nomePersonagem) {
+function podeEditarPersonagem(nomePersonagem: any) {
   if (RPG_DATA?.myRole === 'mestre') return true;
   return RPG_DATA?.linked === nomePersonagem;
 }
@@ -20,7 +20,7 @@ function podeEditarPersonagem(nomePersonagem) {
 // 'livre'       → mestre, ou em batalha ativa e é o turno do personagem
 // 'fora_combate'→ jogador, sem batalha ativa
 // 'outro_turno' → jogador, batalha ativa mas não é o turno dele
-function _estadoBatalhaJogador__sombreado_6(nomePersonagem) {
+function _estadoBatalhaJogador__sombreado_6(nomePersonagem: any) {
   // ── Arena mode: usar AR.iniciativa em vez de BATALHA_ATUAL_ID ──
   if (typeof AR !== 'undefined' && AR && AR.session) {
     if (AR.myRole === 'mestre') return 'livre';
@@ -36,7 +36,7 @@ function _estadoBatalhaJogador__sombreado_6(nomePersonagem) {
   // Isso garante que o jogador responde à sua batalha mesmo que BATALHA_ATUAL_ID
   // esteja apontando para outra batalha (ex: mestre navegou para outro mapa).
   const bs: any = Object.values(MAPA_STATE.batalhas).find((b: any) =>
-    b.ativa && b.participantes?.some(p => p.nome === nomePersonagem)
+    b.ativa && b.participantes?.some((p: any) => p.nome === nomePersonagem)
   );
   if (!bs) return 'fora_combate';
   if (bs.fase === 'iniciativa' || bs.fase === 'empate') return 'outro_turno';

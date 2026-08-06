@@ -7,7 +7,7 @@
 // TUTORIAL DE NAVEGAÇÃO
 // ══════════════════════════════════════════════════════════════
 
-var TUTORIAL_STEPS = {
+var TUTORIAL_STEPS: Record<string, any> = {
   lore: {
     titulo: 'Lore — Conhecimento do Mundo',
     passos: [
@@ -73,11 +73,11 @@ var TUTORIAL_STEPS = {
 };
 
 // Estado do tutorial por campanha
-var _TUTORIAL_ABA = null;
+var _TUTORIAL_ABA: any = null;
 var _TUTORIAL_PASSO = 0;
-var _TUTORIAL_PASSOS = [];
+var _TUTORIAL_PASSOS: any = [];
 
-function tutorialGetState(rpgId) {
+function tutorialGetState(rpgId: any) {
   try {
     const raw = localStorage.getItem('rpghub_tutorial_' + rpgId);
     if (raw) return JSON.parse(raw);
@@ -85,7 +85,7 @@ function tutorialGetState(rpgId) {
   return { ativo: true, passos_vistos: {} }; // ativo por padrão
 }
 
-function tutorialSetState(rpgId, state) {
+function tutorialSetState(rpgId: any, state: any) {
   try { localStorage.setItem('rpghub_tutorial_' + rpgId, JSON.stringify(state)); } catch(e) {}
 }
 
@@ -95,7 +95,7 @@ function tutorialIsAtivo() {
   return st.ativo !== false;
 }
 
-function tutorialMostrar(aba) {
+function tutorialMostrar(aba: any) {
   if (!tutorialIsAtivo()) return;
   const cfg = TUTORIAL_STEPS[aba];
   if (!cfg) return;
@@ -124,7 +124,7 @@ function _tutorialAtualizarUI() {
   document.getElementById('tutorial-texto').textContent = passo.txt;
 
   // Dots de progresso
-  document.getElementById('tutorial-prog-dots').innerHTML = _TUTORIAL_PASSOS.map((_,i) =>
+  document.getElementById('tutorial-prog-dots').innerHTML = _TUTORIAL_PASSOS.map((_: any,i: any) =>
     `<div class="tutorial-prog-dot ${i === _TUTORIAL_PASSO ? 'ativo' : ''}"></div>`
   ).join('');
 
@@ -172,7 +172,7 @@ function tutorialPularTudo() {
   _fecharDialogTutorial();
 }
 
-function tutorialDesativarPermanente(checked) {
+function tutorialDesativarPermanente(checked: any) {
   if (!checked) return;
   // Desativa o tutorial permanentemente para esta campanha
   if (RPG_DATA?.rpgId) {
@@ -189,7 +189,7 @@ function _fecharDialogTutorial() {
 }
 
 // Toggle nas configurações
-function tutorialToggle(ativo) {
+function tutorialToggle(ativo: any) {
   if (!RPG_DATA?.rpgId) return;
   const st = tutorialGetState(RPG_DATA.rpgId);
   st.ativo = ativo;
@@ -230,7 +230,7 @@ function tutorialReiniciar() {
   window.abrirAba = function(aba, btn) {
     origAba && origAba.call(this, aba, btn);
     // Mapear nomes de aba para chaves do tutorial
-    const mapaAbas = {
+    const mapaAbas: Record<string, any> = {
       lore: 'lore',
       personagem: 'personagem',
       atributos: 'atributos',

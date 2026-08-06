@@ -6,21 +6,21 @@
 // ═══════════════════════════════════════════════════════════════
 
 // ── Estado global ────────────────────────────────────────────
-const INV = {
-  itemDefs:   [],   // item_defs carregados do banco
-  inventario: [],   // inventario carregado do banco (todos chars do rpg)
-  tabelas:    [],   // tabelas do rpg
-  usosPendentes: [], // item_usos status=pendente
+const INV: any = {
+  itemDefs:   [] as any[],   // item_defs carregados do banco
+  inventario: [] as any[],   // inventario carregado do banco (todos chars do rpg)
+  tabelas:    [] as any[],   // tabelas do rpg
+  usosPendentes: [] as any[], // item_usos status=pendente
   // Campos do sistema de inventário individual
-  catalogo:    [],   // item_catalog da campanha
+  catalogo:    [] as any[],   // item_catalog da campanha
   inventarios: {},   // characterId → [instâncias com item_catalog join]
   carregado:   {},   // characterId → bool
-  charAtivo:   null, // nome do personagem aberto
-  charId:      null  // id do personagem aberto
+  charAtivo:   null as any, // nome do personagem aberto
+  charId:      null as any  // id do personagem aberto
 };
 
 // Mapa de slot → label amigável e emoji
-const SLOTS_LABELS = {
+const SLOTS_LABELS: Record<string, any> = {
   cabeca: { label:'Cabeça', icon:'🪖' },
   corpo:  { label:'Corpo',  icon:'🥋' },
   maos:   { label:'Mãos',   icon:'🧤' },
@@ -34,7 +34,7 @@ const SLOTS_LABELS = {
 };
 
 // ── Carregamento de dados ────────────────────────────────────
-async function invCarregarDados(rpgId) {
+async function invCarregarDados(rpgId: any) {
   try {
     const e = encodeURIComponent(rpgId);
     const [defs, tabelas, usos] = await Promise.all([
@@ -51,24 +51,24 @@ async function invCarregarDados(rpgId) {
   } catch(e) { console.warn('[INV] Erro ao carregar:', e); }
 }
 
-async function _invCarregarImagensItens(rpgId) {
+async function _invCarregarImagensItens(rpgId: any) {
   try {
     const e = encodeURIComponent(rpgId);
     const imgs = await sb(`item_catalog?rpg_id=eq.${e}&select=id,img_url&img_url=not.is.null`);
     if (imgs && imgs.length) {
-      imgs.forEach(row => {
-        const def = INV.itemDefs.find(d => d.id === row.id);
+      imgs.forEach((row: any) => {
+        const def = INV.itemDefs.find((d: any) => d.id === row.id);
         if (def && row.img_url) def.img_url = row.img_url;
       });
     }
   } catch(e) { /* silently ignore */ }
 }
 
-async function invCarregarInventarioChar(charId) {
+async function invCarregarInventarioChar(charId: any) {
   try {
     const rows = await sb(`inventario?character_id=eq.${encodeURIComponent(charId)}&order=id`);
     // Mesclar com o cache global (remover entradas antigas deste char e adicionar novas)
-    INV.inventario = INV.inventario.filter(i => i.character_id !== charId);
+    INV.inventario = INV.inventario.filter((i: any) => i.character_id !== charId);
     INV.inventario.push(...(rows || []));
     return rows || [];
   } catch(e) { return []; }
@@ -76,7 +76,7 @@ async function invCarregarInventarioChar(charId) {
 
 // Sincroniza alterações (custom_attrs e/ou inventário) para as cópias do mesmo
 // personagem em outras aventuras (linhagem). Resolve o char por nome ou id.
-async function _invSyncLinhagem(charRef, opts = {}) {
+async function _invSyncLinhagem(charRef: any, opts = {}) {
   try {
     if (typeof window._avtSyncLinhagem !== 'function') return;
     const chars = RPG_DATA?.characters || [];
@@ -97,7 +97,7 @@ async function invCarregarTodosInventarios() {
         if (rows) {
           INV.inventario.push(...rows);
           // Guardar no cache por personagem também
-          INV.inventarios[char.id] = rows;
+          (INV.inventarios as any)[char.id] = rows;
         }
       }
     }
@@ -153,11 +153,11 @@ function renderTabelasTab() {
   const tabelasDiv = document.getElementById('tabelas-lista');
   if (!tabelasDiv) return;
 
-  const tabelas = INV.tabelas.filter(t => isMestre || t.visivel);
+  const tabelas = INV.tabelas.filter((t: any) => isMestre || t.visivel);
   if (!tabelas.length) {
     tabelasDiv.innerHTML = `<div style="text-align:center;padding:30px;color:var(--suave);font-style:italic;font-size:0.9rem">Nenhuma tabela${isMestre ? ' — crie a primeira com + Tabela' : ' disponível ainda.'}</div>`;
   } else {
-    tabelasDiv.innerHTML = tabelas.map(t => {
+    tabelasDiv.innerHTML = tabelas.map((t: any) => {
       const colunas = Array.isArray(t.colunas) ? t.colunas : [];
       const linhas  = Array.isArray(t.linhas)  ? t.linhas  : [];
       const ocultaClass = !t.visivel ? ' tbl-oculta' : '';
@@ -170,9 +170,9 @@ function renderTabelasTab() {
       const tableHtml = colunas.length ? `
         <div style="overflow-x:auto">
           <table class="tbl-table">
-            <thead><tr>${colunas.map(c => `<th>${c.label||c.key}</th>`).join('')}</tr></thead>
+            <thead><tr>${colunas.map((c: any) => `<th>${c.label||c.key}</th>`).join('')}</tr></thead>
             <tbody>
-              ${linhas.length ? linhas.map(l => `<tr>${colunas.map(c => `<td>${l[c.key] ?? ''}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${colunas.length}" style="color:var(--suave);font-style:italic;text-align:center">Sem dados</td></tr>`}
+              ${linhas.length ? linhas.map((l: any) => `<tr>${colunas.map((c: any) => `<td>${l[c.key] ?? ''}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${colunas.length}" style="color:var(--suave);font-style:italic;text-align:center">Sem dados</td></tr>`}
             </tbody>
           </table>
         </div>` : '<div style="color:var(--suave);font-style:italic;font-size:0.8rem">Tabela sem colunas definidas.</div>';
@@ -197,12 +197,12 @@ function renderTabelasTab() {
   }
   itemsDiv.innerHTML = `
     <div class="card-titulo" style="margin-bottom:10px">⚗ Catálogo de Itens</div>
-    ${defs.map(d => {
+    ${defs.map((d: any) => {
       const efeitos = Array.isArray(d.efeitos) ? d.efeitos : [];
       const bonusSrc = (d.atributos_bonus && typeof d.atributos_bonus === 'object') ? d.atributos_bonus
                      : (d.bonus_attrs   && typeof d.bonus_attrs   === 'object') ? d.bonus_attrs : {};
-      const rarCor = {comum:'var(--suave)',incomum:'#5ee09a',raro:'#7ec8f0',épico:'#b07ef0',lendário:'#f0cc6a'}[d.raridade] || 'var(--suave)';
-      const efStr = efeitos.map(ef => _efeitoLabel(ef)).filter(Boolean).join(' · ');
+      const rarCor = ({comum:'var(--suave)',incomum:'#5ee09a',raro:'#7ec8f0',épico:'#b07ef0',lendário:'#f0cc6a'} as any)[d.raridade] || 'var(--suave)';
+      const efStr = efeitos.map((ef: any) => _efeitoLabel(ef)).filter(Boolean).join(' · ');
       const bonStr = Object.entries<any>(bonusSrc).map(([k,v]) => `${k} ${v>0?'+':''}${v}`).join(', ');
       const mestreAcoes = isMestre ? `
         <div style="display:flex;gap:4px;flex-shrink:0">
@@ -230,7 +230,7 @@ function renderTabelasTab() {
     }).join('')}`;
 }
 
-function _efeitoLabel(ef) {
+function _efeitoLabel(ef: any) {
   if (!ef) return '';
   switch(ef.tipo) {
     case 'hp':       return `❤ HP ${ef.valor>0?'+':''}${ef.valor}`;
@@ -257,8 +257,8 @@ function renderItensPendentes() {
   if (!wrap || !lista) return;
   if (RPG_DATA?.myRole !== 'mestre' || !INV.usosPendentes.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
-  lista.innerHTML = INV.usosPendentes.map(u => {
-    const def = INV.itemDefs.find(d => d.id === u.item_def_id || d.id === u.item_catalog_id);
+  lista.innerHTML = INV.usosPendentes.map((u: any) => {
+    const def = INV.itemDefs.find((d: any) => d.id === u.item_def_id || d.id === u.item_catalog_id);
     const usadoPor = RPG_DATA?.characters?.find(c => c.id === u.usado_por_id);
     const alvo     = RPG_DATA?.characters?.find(c => c.id === u.alvo_id);
     return `<div class="item-uso-pendente">
@@ -279,7 +279,7 @@ function renderItensPendentes() {
 // INVENTÁRIO NA FICHA DO PERSONAGEM
 // ═══════════════════════════════════════════════════════════════
 
-async function renderInventarioChar(nome) {
+async function renderInventarioChar(nome: any) {
   const c = RPG_DATA?.characters?.find(x => x.nome === nome);
   if (!c) return;
 
@@ -289,14 +289,14 @@ async function renderInventarioChar(nome) {
 
   // Carregar inventário deste personagem
   await invCarregarInventarioChar(c.id);
-  const invChar = INV.inventario.filter(i => i.character_id === c.id);
+  const invChar = INV.inventario.filter((i: any) => i.character_id === c.id);
 
-  const equipamentos = invChar.filter(i => {
-    const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
+  const equipamentos = invChar.filter((i: any) => {
+    const def = INV.itemDefs.find((d: any) => d.id === (i.item_catalog_id || i.item_def_id));
     return def?.tipo === 'equipamento';
   });
-  const consumiveis = invChar.filter(i => {
-    const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
+  const consumiveis = invChar.filter((i: any) => {
+    const def = INV.itemDefs.find((d: any) => d.id === (i.item_catalog_id || i.item_def_id));
     return def?.tipo === 'consumivel' || def?.tipo === 'misc';
   });
 
@@ -304,9 +304,9 @@ async function renderInventarioChar(nome) {
 
   // ── Montar seção de slots de equipamento ─────────────────────
   const slotsHtml = Object.entries<any>(SLOTS_LABELS).map(([slotKey, slotMeta]) => {
-    const invItem = equipamentos.find(i => i.slot_equipado === slotKey && i.equipado);
+    const invItem = equipamentos.find((i: any) => i.slot_equipado === slotKey && i.equipado);
     if (invItem) {
-      const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
+      const def = INV.itemDefs.find((d: any) => d.id === (invItem.item_catalog_id || invItem.item_def_id));
       const bonusSrc = def?.atributos_bonus || def?.bonus_attrs || {};
       const bonus = Object.entries<any>(bonusSrc).map(([k, v]) => `${k}${v > 0 ? '+' : ''}${v}`).join(' ');
       const imgSrc = def?.img_url || '';
@@ -320,11 +320,11 @@ async function renderInventarioChar(nome) {
         ${bonus ? `<div class="inv-slot-bonus">${bonus}</div>` : ''}
       </div>`;
     }
-    const itemNaoEquipado = equipamentos.find(i => {
-      const def2 = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
+    const itemNaoEquipado = equipamentos.find((i: any) => {
+      const def2 = INV.itemDefs.find((d: any) => d.id === (i.item_catalog_id || i.item_def_id));
       return !i.equipado && (def2?.slot_padrao === slotKey || def2?.slot === slotKey);
     });
-    const defNE = itemNaoEquipado ? INV.itemDefs.find(d => d.id === (itemNaoEquipado.item_catalog_id || itemNaoEquipado.item_def_id)) : null;
+    const defNE = itemNaoEquipado ? INV.itemDefs.find((d: any) => d.id === (itemNaoEquipado.item_catalog_id || itemNaoEquipado.item_def_id)) : null;
     return `<div class="inv-slot" style="${itemNaoEquipado ? 'border-color:rgba(200,168,75,0.15);' : ''}opacity:${itemNaoEquipado ? '0.75' : '0.35'}" ${itemNaoEquipado ? `onclick="invToggleEquip('${nomeSafe}',${itemNaoEquipado.id})" title="Equipar: ${defNE?.nome || '?'}"` : ''}>
       <div class="inv-slot-label">${slotMeta.label}</div>
       <div class="inv-slot-icon" style="opacity:0.4">${slotMeta.icon}</div>
@@ -333,12 +333,12 @@ async function renderInventarioChar(nome) {
   }).join('');
 
   // ── Montar seção de consumíveis ───────────────────────────────
-  const consHtml = consumiveis.length ? consumiveis.map(i => {
-    const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
+  const consHtml = consumiveis.length ? consumiveis.map((i: any) => {
+    const def = INV.itemDefs.find((d: any) => d.id === (i.item_catalog_id || i.item_def_id));
     if (!def) return '';
     const efeitos = Array.isArray(def.efeitos) ? def.efeitos : [];
-    const efStr = efeitos.map(ef => _efeitoLabel(ef)).filter(Boolean).join(' · ');
-    const nocivo = efeitos.some(e => e.tipo === 'dano' || e.tipo === 'debuff');
+    const efStr = efeitos.map((ef: any) => _efeitoLabel(ef)).filter(Boolean).join(' · ');
+    const nocivo = efeitos.some((e: any) => e.tipo === 'dano' || e.tipo === 'debuff');
     const semQtd = i.quantidade <= 0;
     const qtdBaixa = !semQtd && i.quantidade <= 2;
     const btnClass = `inv-usar-btn${nocivo ? ' inv-nocivo-btn' : ''}`;
@@ -405,13 +405,13 @@ async function renderInventarioChar(nome) {
 
 // ── Equipar / Desequipar ─────────────────────────────────────
 let _invEquipando = false; // guard against double-click freeze
-async function invToggleEquip(nomeChar, invId) {
+async function invToggleEquip(nomeChar: any, invId: any) {
   if (_invEquipando) return;
   _invEquipando = true;
   try {
-  const invItem = INV.inventario.find(i => i.id === invId);
+  const invItem = INV.inventario.find((i: any) => i.id === invId);
   if (!invItem) { _invEquipando = false; return; }
-  const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
+  const def = INV.itemDefs.find((d: any) => d.id === (invItem.item_catalog_id || invItem.item_def_id));
   if (!def || def.tipo !== 'equipamento') { _invEquipando = false; return; }
   const c = RPG_DATA?.characters?.find(x => x.nome === nomeChar);
   if (!c) { _invEquipando = false; return; }
@@ -431,12 +431,12 @@ async function invToggleEquip(nomeChar, invId) {
       mostrarToast('⚔ Equipar: ' + diffStr, '', 2500);
     }
     // Verificar se o slot já está ocupado por outro item
-    const slotOcupado = INV.inventario.find(i =>
+    const slotOcupado = INV.inventario.find((i: any) =>
       i.character_id === c.id && i.equipado && i.slot_equipado === slotDef && i.id !== invId
     );
     if (slotOcupado) {
       // Desequipar o anterior primeiro
-      await _invDesequipar(nomeChar, slotOcupado, INV.itemDefs.find(d => d.id === (slotOcupado.item_catalog_id || slotOcupado.item_def_id)));
+      await _invDesequipar(nomeChar, slotOcupado, INV.itemDefs.find((d: any) => d.id === (slotOcupado.item_catalog_id || slotOcupado.item_def_id)));
     }
     await _invEquipar(nomeChar, invItem, def);
   } else {
@@ -447,7 +447,7 @@ async function invToggleEquip(nomeChar, invId) {
   } finally { _invEquipando = false; }
 }
 
-async function _invEquipar(nomeChar, invItem, def) {
+async function _invEquipar(nomeChar: any, invItem: any, def: any) {
   const c = RPG_DATA?.characters?.find(x => x.nome === nomeChar);
   if (!c) return;
   const ca = c.custom_attrs || {};
@@ -457,7 +457,7 @@ async function _invEquipar(nomeChar, invItem, def) {
   const bonus = def.atributos_bonus || def.bonus_attrs || {};
   const slotDef = def.slot_padrao || def.slot;
   // BUG FIX #2: calcular snapshot do delta real (suporte a % e absoluto)
-  const snapshot = {};
+  const snapshot: Record<string, any> = {};
   Object.entries<any>(bonus).forEach(([attr, val]) => {
     const atual = parseFloat(ca.atributos[attr]) || 0;
     let delta;
@@ -499,7 +499,7 @@ async function _invEquipar(nomeChar, invItem, def) {
   } catch(e) { mostrarToast('Erro ao equipar', 'erro'); }
 }
 
-async function _invDesequipar(nomeChar, invItem, def) {
+async function _invDesequipar(nomeChar: any, invItem: any, def: any) {
   const c = RPG_DATA?.characters?.find(x => x.nome === nomeChar);
   if (!c) return;
   const ca = c.custom_attrs || {};
@@ -552,9 +552,9 @@ async function _invDesequipar(nomeChar, invItem, def) {
 // USAR ITEM (CONSUMÍVEL)
 // ═══════════════════════════════════════════════════════════════
 
-let _usarItemCtx = null; // { invItem, def, nomeUsuario }
+let _usarItemCtx: any = null; // { invItem, def, nomeUsuario }
 
-async function abrirModalUsarItem(invId, nomeUsuario) {
+async function abrirModalUsarItem(invId: any, nomeUsuario: any) {
   // Garantir que todos os inventários estão carregados
   if (!INV.inventario || INV.inventario.length === 0) {
     await invCarregarTodosInventarios();
@@ -563,10 +563,10 @@ async function abrirModalUsarItem(invId, nomeUsuario) {
   const id = typeof invId === 'string' ? parseInt(invId) : invId;
   // ... resto do código
   
-  const invItem = INV.inventario.find(i => i.id === id);
+  const invItem = INV.inventario.find((i: any) => i.id === id);
   if (!invItem) return;
   
-  const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
+  const def = INV.itemDefs.find((d: any) => d.id === (invItem.item_catalog_id || invItem.item_def_id));
   if (!def) return;
 
   _usarItemCtx = { invItem, def, nomeUsuario };
@@ -578,7 +578,7 @@ async function abrirModalUsarItem(invId, nomeUsuario) {
 
   const efeitos = Array.isArray(def.efeitos) ? def.efeitos : [];
   document.getElementById('usar-item-efeitos').innerHTML = efeitos.length
-    ? efeitos.map(ef => `<div>• ${_efeitoLabel(ef)}</div>`).join('')
+    ? efeitos.map((ef: any) => `<div>• ${_efeitoLabel(ef)}</div>`).join('')
     : '<span style="color:var(--suave);font-style:italic">Nenhum efeito definido</span>';
 
   const precisaAprovacao = !def.alvo || def.requer_aprovacao;
@@ -644,7 +644,7 @@ async function abrirModalUsarItem(invId, nomeUsuario) {
   document.getElementById('modal-usar-item-overlay').style.display = 'flex';
 }
 
-function selecionarAlvoItem(alvoId, alvoNome, btn) {
+function selecionarAlvoItem(alvoId: any, alvoNome: any, btn: any) {
   document.getElementById('usar-item-alvo-sel').value = alvoId;
   document.querySelectorAll('#usar-item-alvos-lista button').forEach(b => {
     b.style.background = 'rgba(30,45,66,0.6)';
@@ -709,10 +709,10 @@ async function confirmarUsarItem() {
   fecharModalUsarItem();
 }
 
-async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
+async function _aplicarEfeitosItem(efeitos: any, alvoNome: any, usuarioNome: any) {
   const emArena = !!(typeof AR !== 'undefined' && AR?.session);
   const chars = emArena ? (AR?.chars || []) : (RPG_DATA?.characters || []);
-  const alvo = chars.find(c => c.nome === alvoNome);
+  const alvo = chars.find((c: any) => c.nome === alvoNome);
   if (!alvo) return;
   const ca = alvo.custom_attrs || {};
   if (!ca.atributos) ca.atributos = {};
@@ -775,7 +775,7 @@ async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
         break;
       case 'remover_debuff':
         if (Array.isArray(alvo.buffs)) {
-          alvo.buffs = alvo.buffs.filter(b => b.nome !== ef.debuff);
+          alvo.buffs = alvo.buffs.filter((b: any) => b.nome !== ef.debuff);
           toastMsgs.push(`🌟 ${ef.debuff || 'Debuff'} removido`);
         }
         break;
@@ -857,7 +857,7 @@ async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
       case 'invocar': {
         if (!ef.invocacao_id) break;
         if (!Array.isArray(ca.invocacoes)) ca.invocacoes = [];
-        const _jaTemInv = ca.invocacoes.some(i => i.invocacao_id === ef.invocacao_id);
+        const _jaTemInv = ca.invocacoes.some((i: any) => i.invocacao_id === ef.invocacao_id);
         if (_jaTemInv) { toastMsgs.push(`🔮 ${alvoNome} já possui esta invocação`); break; }
         ca.invocacoes.push({ invocacao_id: ef.invocacao_id, origem: 'item', item_id: ef._item_id || null });
         alvo.custom_attrs = ca;
@@ -890,7 +890,7 @@ async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
   } else { renderArenaPersonagens?.(); renderArenaEntidades?.(); }
 }
 
-async function _consumirItem(invItem) {
+async function _consumirItem(invItem: any) {
   const novaQtd = (invItem.quantidade || 1) - 1;
   invItem.quantidade = novaQtd;
   const charId = invItem.character_id;
@@ -899,27 +899,27 @@ async function _consumirItem(invItem) {
     try {
       await sb(`inventario?id=eq.${invItem.id}`, { method:'DELETE' });
       // BUG FIX #4: sincronizar AMBOS os caches
-      INV.inventario = INV.inventario.filter(i => i.id !== invItem.id);
-      if (charId && INV.inventarios[charId]) {
-        INV.inventarios[charId] = INV.inventarios[charId].filter(i => i.id !== invItem.id);
+      INV.inventario = INV.inventario.filter((i: any) => i.id !== invItem.id);
+      if (charId && (INV.inventarios as any)[charId]) {
+        (INV.inventarios as any)[charId] = (INV.inventarios as any)[charId].filter((i: any) => i.id !== invItem.id);
       }
     } catch(e) {}
   } else {
     await sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ quantidade: novaQtd }) });
     // BUG FIX #4: atualizar quantidade em INV.inventarios também
-    if (charId && INV.inventarios[charId]) {
-      const idx = INV.inventarios[charId].findIndex(i => i.id === invItem.id);
-      if (idx >= 0) INV.inventarios[charId][idx].quantidade = novaQtd;
+    if (charId && (INV.inventarios as any)[charId]) {
+      const idx = (INV.inventarios as any)[charId].findIndex((i: any) => i.id === invItem.id);
+      if (idx >= 0) (INV.inventarios as any)[charId][idx].quantidade = novaQtd;
     }
   }
   if (charId) _invSyncLinhagem(charId, { inventario: true });
 }
 
 // ── Aprovações (mestre) ───────────────────────────────────────
-async function aprovarUsoItem(usoId) {
-  const uso = INV.usosPendentes.find(u => u.id === usoId);
+async function aprovarUsoItem(usoId: any) {
+  const uso = INV.usosPendentes.find((u: any) => u.id === usoId);
   if (!uso) return;
-  const def = INV.itemDefs.find(d => d.id === (uso.item_def_id || uso.item_catalog_id));
+  const def = INV.itemDefs.find((d: any) => d.id === (uso.item_def_id || uso.item_catalog_id));
   const usuarioChar = RPG_DATA?.characters?.find(c => c.id === uso.usado_por_id);
   const alvoChar    = RPG_DATA?.characters?.find(c => c.id === uso.alvo_id);
 
@@ -929,18 +929,18 @@ async function aprovarUsoItem(usoId) {
   await _aplicarEfeitosItem(efeitos, alvoNome, usuarioChar?.nome);
 
   // Consumir o item
-  const invItem = INV.inventario.find(i => i.id === uso.inventario_id);
+  const invItem = INV.inventario.find((i: any) => i.id === uso.inventario_id);
   if (invItem) await _consumirItem(invItem);
 
   await sb(`item_usos?id=eq.${usoId}`, { method:'PATCH', body: JSON.stringify({ status:'aplicado', resolvido_em: new Date().toISOString() }) });
-  INV.usosPendentes = INV.usosPendentes.filter(u => u.id !== usoId);
+  INV.usosPendentes = INV.usosPendentes.filter((u: any) => u.id !== usoId);
   renderItensPendentes();
   mostrarToast(`✓ Uso de ${def?.nome||'item'} aprovado e aplicado`, 'sucesso');
 }
 
-async function rejeitarUsoItem(usoId) {
+async function rejeitarUsoItem(usoId: any) {
   await sb(`item_usos?id=eq.${usoId}`, { method:'PATCH', body: JSON.stringify({ status:'rejeitado', resolvido_em: new Date().toISOString() }) });
-  INV.usosPendentes = INV.usosPendentes.filter(u => u.id !== usoId);
+  INV.usosPendentes = INV.usosPendentes.filter((u: any) => u.id !== usoId);
   renderItensPendentes();
   mostrarToast('✕ Uso rejeitado', '');
 }
@@ -949,10 +949,10 @@ async function rejeitarUsoItem(usoId) {
 // MODAL: ADICIONAR AO INVENTÁRIO
 // ═══════════════════════════════════════════════════════════════
 
-let _addInvCharId = null;
-let _addInvCharNome = null;
+let _addInvCharId: any = null;
+let _addInvCharNome: any = null;
 
-function abrirModalAddInv(nome, charId) {
+function abrirModalAddInv(nome: any, charId: any) {
   _addInvCharId = charId;
   _addInvCharNome = nome;
   document.getElementById('add-inv-char-nome').textContent = nome;
@@ -969,10 +969,10 @@ function fecharModalAddInv() {
 function renderAddInvLista() {
   const busca = document.getElementById('add-inv-busca').value.toLowerCase();
   const lista = document.getElementById('add-inv-lista');
-  const defs = INV.itemDefs.filter(d => !busca || d.nome.toLowerCase().includes(busca) || (d.descricao||'').toLowerCase().includes(busca));
+  const defs = INV.itemDefs.filter((d: any) => !busca || d.nome.toLowerCase().includes(busca) || (d.descricao||'').toLowerCase().includes(busca));
   if (!defs.length) { lista.innerHTML = `<div style="color:var(--suave);font-style:italic;text-align:center;padding:10px">Nenhum item encontrado</div>`; return; }
-  lista.innerHTML = defs.map(d => {
-    const rarCor = {comum:'var(--suave)',incomum:'#5ee09a',raro:'#7ec8f0',épico:'#b07ef0',lendário:'#f0cc6a'}[d.raridade]||'var(--suave)';
+  lista.innerHTML = defs.map((d: any) => {
+    const rarCor = ({comum:'var(--suave)',incomum:'#5ee09a',raro:'#7ec8f0',épico:'#b07ef0',lendário:'#f0cc6a'} as any)[d.raridade]||'var(--suave)';
     return `<div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--escuro);border:1px solid var(--borda);border-radius:8px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor='rgba(200,168,75,0.3)'" onmouseleave="this.style.borderColor='var(--borda)'" onclick="adicionarAoInventario(${d.id})">
       <span style="font-size:1.4rem">${d.icone||'📦'}</span>
       <div style="flex:1;min-width:0">
@@ -984,12 +984,12 @@ function renderAddInvLista() {
   }).join('');
 }
 
-async function adicionarAoInventario(itemDefId) {
+async function adicionarAoInventario(itemDefId: any) {
   if (!_addInvCharId) return;
-  const def = INV.itemDefs.find(d => d.id === itemDefId);
+  const def = INV.itemDefs.find((d: any) => d.id === itemDefId);
   try {
     // Verificar se já existe no inventário (consumíveis podem acumular, equipamentos não)
-    const existing = INV.inventario.find(i => i.character_id === _addInvCharId && (i.item_catalog_id === itemDefId || i.item_def_id === itemDefId));
+    const existing = INV.inventario.find((i: any) => i.character_id === _addInvCharId && (i.item_catalog_id === itemDefId || i.item_def_id === itemDefId));
     if (existing && def?.tipo === 'consumivel') {
       // Incrementar quantidade
       existing.quantidade++;
@@ -1018,10 +1018,10 @@ async function adicionarAoInventario(itemDefId) {
 // MODAL: CRIAR/EDITAR ITEM (MESTRE)
 // ═══════════════════════════════════════════════════════════════
 
-let _itemDefEfeitos = [];
-let _itemDefBonus = {};
+let _itemDefEfeitos: any = [];
+let _itemDefBonus: Record<string, any> = {};
 
-function abrirModalItemDef(id) {
+function abrirModalItemDef(id: any) {
   _itemDefEfeitos = [];
   _itemDefBonus = {};
   document.getElementById('idef-id-edit').value = id || '';
@@ -1033,7 +1033,7 @@ function abrirModalItemDef(id) {
   if (imgGroup) imgGroup.style.display = isMestre ? '' : 'none';
 
   if (id) {
-    const def = INV.itemDefs.find(d => d.id === id);
+    const def = INV.itemDefs.find((d: any) => d.id === id);
     if (!def) return;
     document.getElementById('modal-itemdef-titulo').textContent = '⚗ Editar Item';
     document.getElementById('idef-nome').value = def.nome || '';
@@ -1111,13 +1111,13 @@ function abrirModalItemDef(id) {
   document.getElementById('modal-itemdef-overlay').style.display = 'flex';
 }
 
-function _idefUpdateImgPreview(src) {
+function _idefUpdateImgPreview(src: any) {
   const el = document.getElementById('idef-img-preview');
   if (!el) return;
   el.innerHTML = src ? `<img src="${src}" loading="lazy" style="width:100%;height:100%;object-fit:contain" onerror="this.style.display='none'">` : '📦';
 }
 
-async function idefUploadImg(input) {
+async function idefUploadImg(input: any) {
   const file = input.files[0]; if (!file) return;
   try {
     mostrarToast('Enviando imagem…', 'info');
@@ -1172,7 +1172,7 @@ function _idefColetarEfeitosSimples() {
     if (alvo === 'todos_aliados') alvo = 'aliado'; // compatibilidade
     efeitos.push({ tipo: 'hp', valor: val, duracao_turnos: hot ? turnos : 0, hot: !!hot });
     if (alvo === 'aliado' && document.getElementById('idef-cura-alvo')?.value === 'todos_aliados') {
-      efeitos[0].area = true;
+      (efeitos[0] as any).area = true;
     }
   } else if (cat === 'recurso') {
     const nome = document.getElementById('idef-rec-nome')?.value?.trim() || 'Mana';
@@ -1220,7 +1220,7 @@ function itemDefAddEfeito() {
 }
 
 function _renderItemDefEfeitos() {
-  document.getElementById('idef-efeitos-lista').innerHTML = _itemDefEfeitos.map((ef, i) => `
+  document.getElementById('idef-efeitos-lista').innerHTML = _itemDefEfeitos.map((ef: any, i: any) => `
     <div style="display:flex;gap:5px;align-items:center;background:rgba(123,47,190,0.06);border:1px solid rgba(123,47,190,0.15);border-radius:6px;padding:6px 8px">
       <select onchange="_itemDefEfeitoChange(${i},'tipo',this.value)" style="background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem;padding:3px 5px">
         <option value="hp"${ef.tipo==='hp'?' selected':''}>❤ HP</option>
@@ -1243,8 +1243,8 @@ function _renderItemDefEfeitos() {
     </div>`).join('');
 }
 
-function _itemDefEfeitoChange(idx, key, val) { _itemDefEfeitos[idx][key] = val; }
-function _itemDefEfeitoRemover(idx) { _itemDefEfeitos.splice(idx,1); _renderItemDefEfeitos(); }
+function _itemDefEfeitoChange(idx: any, key: any, val: any) { _itemDefEfeitos[idx][key] = val; }
+function _itemDefEfeitoRemover(idx: any) { _itemDefEfeitos.splice(idx,1); _renderItemDefEfeitos(); }
 
 function itemDefAddBonus() {
   const attrs = RPG_DATA?.attrDefs || [];
@@ -1263,18 +1263,18 @@ function _renderItemDefBonus() {
     </div>`).join('');
 }
 
-function _itemDefBonusChaveChange(idx, novaChave) {
+function _itemDefBonusChaveChange(idx: any, novaChave: any) {
   const entries = Object.entries<any>(_itemDefBonus);
   const oldKey = entries[idx][0];
   const val = _itemDefBonus[oldKey];
   delete _itemDefBonus[oldKey];
   _itemDefBonus[novaChave] = val;
 }
-function _itemDefBonusValChange(idx, val) {
+function _itemDefBonusValChange(idx: any, val: any) {
   const key = Object.keys(_itemDefBonus)[idx];
   _itemDefBonus[key] = val;
 }
-function _itemDefBonusRemover(idx) {
+function _itemDefBonusRemover(idx: any) {
   const key = Object.keys(_itemDefBonus)[idx];
   delete _itemDefBonus[key];
   _renderItemDefBonus();
@@ -1298,7 +1298,7 @@ async function salvarItemDef() {
     if (apEl) apEl.checked = !!col.requer_aprovacao;
   }
 
-  const bonusClean = {};
+  const bonusClean: Record<string, any> = {};
   Object.entries<any>(_itemDefBonus).forEach(([k, v]) => {
     const chave = k.replace(/_\d+$/, '');
     if (chave) bonusClean[chave] = v;
@@ -1313,7 +1313,7 @@ async function salvarItemDef() {
     raridade: document.getElementById('idef-raridade').value,
     visual_config: (function() {
       const r = document.getElementById('idef-raridade').value;
-      const map = { comum:{cor:'#7a92aa',brilho:false}, incomum:{cor:'#5ee09a',brilho:false}, raro:{cor:'#7ec8f0',brilho:true}, épico:{cor:'#b07ef0',brilho:true}, lendário:{cor:'#f0cc6a',brilho:true} };
+      const map: Record<string, any> = { comum:{cor:'#7a92aa',brilho:false}, incomum:{cor:'#5ee09a',brilho:false}, raro:{cor:'#7ec8f0',brilho:true}, épico:{cor:'#b07ef0',brilho:true}, lendário:{cor:'#f0cc6a',brilho:true} };
       return map[r] ? map[r] : {cor:'#7a92aa',brilho:false};
     })(),
     valor_base: parseFloat(document.getElementById('idef-valor').value) || null,
@@ -1332,7 +1332,7 @@ async function salvarItemDef() {
   try {
     if (id) {
       await sb(`item_catalog?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(body) });
-      const idx = INV.itemDefs.findIndex(d => d.id === +id);
+      const idx = INV.itemDefs.findIndex((d: any) => d.id === +id);
       if (idx >= 0) INV.itemDefs[idx] = { ...INV.itemDefs[idx], ...body, id:+id };
     } else {
       const [row] = await sb('item_catalog', { method:'POST', headers:{'Prefer':'return=representation'}, body: JSON.stringify(body) });
@@ -1344,12 +1344,12 @@ async function salvarItemDef() {
   } catch(e) { mostrarToast('Erro ao salvar item', 'erro'); }
 }
 
-async function deletarItemDef(id) {
+async function deletarItemDef(id: any) {
   if (!confirm('Excluir este item do catálogo? Isso também remove do inventário de todos.')) return;
   try {
     await sb(`item_catalog?id=eq.${id}`, { method:'DELETE' });
-    INV.itemDefs = INV.itemDefs.filter(d => d.id !== id);
-    INV.inventario = INV.inventario.filter(i => i.item_catalog_id !== id && i.item_def_id !== id);
+    INV.itemDefs = INV.itemDefs.filter((d: any) => d.id !== id);
+    INV.inventario = INV.inventario.filter((i: any) => i.item_catalog_id !== id && i.item_def_id !== id);
     renderTabelasTab();
     mostrarToast('Item excluído', '');
   } catch(e) { mostrarToast('Erro ao excluir', 'erro'); }
@@ -1359,16 +1359,16 @@ async function deletarItemDef(id) {
 // MODAL: CRIAR/EDITAR TABELA
 // ═══════════════════════════════════════════════════════════════
 
-let _tabelaColunasEdit = [];
-let _tabelaLinhasEdit  = [];
+let _tabelaColunasEdit: any = [];
+let _tabelaLinhasEdit: any  = [];
 
-function abrirModalTabela(id) {
+function abrirModalTabela(id: any) {
   _tabelaColunasEdit = [];
   _tabelaLinhasEdit  = [];
   document.getElementById('tab-id-edit').value = id || '';
 
   if (id) {
-    const t = INV.tabelas.find(x => x.id === id);
+    const t = INV.tabelas.find((x: any) => x.id === id);
     if (!t) return;
     document.getElementById('modal-tabela-titulo').textContent = '📋 Editar Tabela';
     document.getElementById('tab-nome').value = t.nome || '';
@@ -1399,38 +1399,38 @@ function tabelaAdicionarColuna() {
 }
 
 function _renderTabelaColunas() {
-  document.getElementById('tab-colunas-lista').innerHTML = _tabelaColunasEdit.map((c, i) => `
+  document.getElementById('tab-colunas-lista').innerHTML = _tabelaColunasEdit.map((c: any, i: any) => `
     <div style="display:flex;gap:5px;align-items:center">
       <input type="text" value="${c.label}" placeholder="Nome da coluna" onchange="_tabelaColunaLabel(${i},this.value)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;padding:5px 7px">
       <button onclick="_tabelaRemoverColuna(${i})" style="background:none;border:none;color:rgba(192,57,43,0.5);cursor:pointer;font-size:0.9rem">✕</button>
     </div>`).join('');
 }
 
-function _tabelaColunaLabel(idx, val) {
+function _tabelaColunaLabel(idx: any, val: any) {
   _tabelaColunasEdit[idx].label = val;
   _tabelaColunasEdit[idx].key   = val.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'') || 'col'+idx;
 }
-function _tabelaRemoverColuna(idx) { _tabelaColunasEdit.splice(idx,1); _renderTabelaColunas(); _renderTabelaLinhas(); }
+function _tabelaRemoverColuna(idx: any) { _tabelaColunasEdit.splice(idx,1); _renderTabelaColunas(); _renderTabelaLinhas(); }
 
 function tabelaAdicionarLinha() {
-  const linha = {};
-  _tabelaColunasEdit.forEach(c => linha[c.key] = '');
+  const linha: Record<string, any> = {};
+  _tabelaColunasEdit.forEach((c: any) => linha[c.key] = '');
   _tabelaLinhasEdit.push(linha);
   _renderTabelaLinhas();
 }
 
 function _renderTabelaLinhas() {
   document.getElementById('tab-linhas-lista').innerHTML = _tabelaLinhasEdit.length
-    ? _tabelaLinhasEdit.map((l, li) => `
+    ? _tabelaLinhasEdit.map((l: any, li: any) => `
       <div style="display:flex;gap:4px;align-items:center;padding:5px 0;border-bottom:1px solid rgba(30,45,66,0.4)">
-        ${_tabelaColunasEdit.map(c => `<input type="text" value="${(l[c.key]||'').replace(/"/g,'&quot;')}" placeholder="${c.label}" onchange="_tabelaLinhaVal(${li},'${c.key}',this.value)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.75rem;padding:4px 6px;min-width:40px">`).join('')}
+        ${_tabelaColunasEdit.map((c: any) => `<input type="text" value="${(l[c.key]||'').replace(/"/g,'&quot;')}" placeholder="${c.label}" onchange="_tabelaLinhaVal(${li},'${c.key}',this.value)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.75rem;padding:4px 6px;min-width:40px">`).join('')}
         <button onclick="_tabelaRemoverLinha(${li})" style="background:none;border:none;color:rgba(192,57,43,0.4);cursor:pointer;font-size:0.85rem;flex-shrink:0">✕</button>
       </div>`).join('')
     : `<div style="color:var(--suave);font-style:italic;font-size:0.78rem;text-align:center;padding:8px">${_tabelaColunasEdit.length ? 'Adicione linhas com + Linha' : 'Crie colunas primeiro'}</div>`;
 }
 
-function _tabelaLinhaVal(li, key, val) { _tabelaLinhasEdit[li][key] = val; }
-function _tabelaRemoverLinha(li)       { _tabelaLinhasEdit.splice(li,1); _renderTabelaLinhas(); }
+function _tabelaLinhaVal(li: any, key: any, val: any) { _tabelaLinhasEdit[li][key] = val; }
+function _tabelaRemoverLinha(li: any)       { _tabelaLinhasEdit.splice(li,1); _renderTabelaLinhas(); }
 
 async function salvarTabela() {
   const nome = document.getElementById('tab-nome').value.trim();
@@ -1448,7 +1448,7 @@ async function salvarTabela() {
   try {
     if (id) {
       await sb(`tabelas?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(body) });
-      const idx = INV.tabelas.findIndex(t => t.id === +id);
+      const idx = INV.tabelas.findIndex((t: any) => t.id === +id);
       if (idx >= 0) INV.tabelas[idx] = { ...INV.tabelas[idx], ...body, id:+id };
     } else {
       const [row] = await sb('tabelas', { method:'POST', headers:{'Prefer':'return=representation'}, body: JSON.stringify(body) });
@@ -1460,20 +1460,20 @@ async function salvarTabela() {
   } catch(e) { mostrarToast('Erro ao salvar tabela', 'erro'); }
 }
 
-async function deletarTabela(id) {
+async function deletarTabela(id: any) {
   if (!confirm('Excluir esta tabela?')) return;
   try {
     await sb(`tabelas?id=eq.${id}`, { method:'DELETE' });
-    INV.tabelas = INV.tabelas.filter(t => t.id !== id);
+    INV.tabelas = INV.tabelas.filter((t: any) => t.id !== id);
     renderTabelasTab();
     mostrarToast('Tabela excluída', '');
   } catch(e) { mostrarToast('Erro ao excluir tabela', 'erro'); }
 }
 
-async function toggleVisibilidadeTabela(id, visivel) {
+async function toggleVisibilidadeTabela(id: any, visivel: any) {
   try {
     await sb(`tabelas?id=eq.${id}`, { method:'PATCH', body: JSON.stringify({ visivel }) });
-    const t = INV.tabelas.find(x => x.id === id);
+    const t = INV.tabelas.find((x: any) => x.id === id);
     if (t) t.visivel = visivel;
     renderTabelasTab();
   } catch(e) { mostrarToast('Erro', 'erro'); }
@@ -1518,19 +1518,19 @@ async function toggleVisibilidadeTabela(id, visivel) {
 // ESTADO DO WIZARD DE CRIAÇÃO
 // ─────────────────────────────────────────────────────────────
 let CRIAR_STATE = {
-  nivel: null,
+  nivel: null as any,
   etapaIdx: 0,
-  etapas: [],
+  etapas: [] as any[],
   dados: {
     nome: '', rpg_id: '', descricao: '', cor: '#c8a84b', cor2: '#4fa3d1', icone: 'flame',
-    attrDefs: [],
-    personagens: [],
-    habilidades: [],
-    lore: [],
+    attrDefs: [] as any[],
+    personagens: [] as any[],
+    habilidades: [] as any[],
+    lore: [] as any[],
   }
 };
 
-const CRIAR_NIVEIS = {
+const CRIAR_NIVEIS: Record<string, any> = {
   basico:       { etapas: ['nivel','identidade','atributos','personagens','habilidades','mecanicas','revisar'], label:'Básico', cor:'#7ec8f0' },
   intermediario:{ etapas: ['nivel','identidade','atributos','personagens','habilidades','lore','mecanicas','revisar'], label:'Intermediário', cor:'#f0cc6a' },
   detalhado:    { etapas: ['nivel','identidade','atributos','personagens','habilidades','lore','mecanicas','revisar'], label:'Detalhado', cor:'#b07ef0' },
@@ -1580,7 +1580,7 @@ function fecharCriarCampanha() {
 // ─────────────────────────────────────────────────────────────
 // NAVEGAÇÃO
 // ─────────────────────────────────────────────────────────────
-function criarNavegar(dir) {
+function criarNavegar(dir: any) {
   if (dir > 0) {
     if (!criarValidarEtapa()) return;
     criarSalvarEtapa();
@@ -1626,7 +1626,7 @@ function criarSalvarEtapa() {
   if (etapa === 'mecanicas') criarSalvarMecanicas();
 }
 
-function gerarRpgId(nome) {
+function gerarRpgId(nome: any) {
   return nome.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'').slice(0,32) + '_' + Date.now().toString(36);
 }
 
@@ -1653,7 +1653,7 @@ function criarRenderEtapa() {
   btnNext.onclick = isLast ? criarSubmit : () => criarNavegar(1);
 
   // Render por etapa
-  const fns = {
+  const fns: Record<string, any> = {
     nivel: criarRenderNivel,
     identidade: criarRenderIdentidade,
     atributos: criarRenderAtributos,
@@ -1668,7 +1668,7 @@ function criarRenderEtapa() {
 }
 
 // ── ETAPA: NÍVEL ──────────────────────────────────────────────
-function criarRenderNivel(body) {
+function criarRenderNivel(body: any) {
   document.getElementById('criar-titulo-header').textContent = 'Nova Campanha';
   body.innerHTML = `
     <div class="etapa-titulo">Escolha o nível de criação</div>
@@ -1709,7 +1709,7 @@ function criarRenderNivel(body) {
   `;
 }
 
-function criarSelecionarNivel(nivel) {
+function criarSelecionarNivel(nivel: any) {
   CRIAR_STATE.nivel = nivel;
   CRIAR_STATE.etapas = [...CRIAR_NIVEIS[nivel].etapas];
   // Inicializar attrDefs com preset básico se ainda vazio
@@ -1720,7 +1720,7 @@ function criarSelecionarNivel(nivel) {
 }
 
 // ── ETAPA: IDENTIDADE ─────────────────────────────────────────
-function criarRenderIdentidade(body) {
+function criarRenderIdentidade(body: any) {
   document.getElementById('criar-titulo-header').textContent = 'Identidade';
   const d: any = CRIAR_STATE.dados;
   body.innerHTML = `
@@ -1765,12 +1765,12 @@ function criarRenderIdentidade(body) {
   `;
 }
 
-function criarAutoId(nome) {
+function criarAutoId(nome: any) {
   const el = document.getElementById('criar-id');
   if (el) el.value = nome.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'').slice(0,32);
 }
 
-function criarSetCor(cor) {
+function criarSetCor(cor: any) {
   CRIAR_STATE.dados.cor = cor;
   document.getElementById('criar-cor').value = cor;
   document.querySelectorAll('.cor-preset').forEach(el => {
@@ -1778,14 +1778,14 @@ function criarSetCor(cor) {
   });
 }
 
-function criarSetIcone(key, el) {
+function criarSetIcone(key: any, el: any) {
   CRIAR_STATE.dados.icone = key;
   document.querySelectorAll('.icone-btn').forEach(b => b.classList.remove('ativo'));
   el.classList.add('ativo');
 }
 
 // ── ETAPA: ATRIBUTOS ──────────────────────────────────────────
-function criarRenderAtributos(body) {
+function criarRenderAtributos(body: any) {
   document.getElementById('criar-titulo-header').textContent = 'Atributos';
   const nivel = CRIAR_STATE.nivel;
   const d: any = CRIAR_STATE.dados;
@@ -1831,7 +1831,7 @@ function criarRenderAtributos(body) {
   `;
 }
 
-function _renderAttrsList(cat) {
+function _renderAttrsList(cat: any) {
   const attrs = CRIAR_STATE.dados.attrDefs.filter(a => a.categoria === cat);
   if (!attrs.length) return `<div style="color:rgba(122,146,170,0.5);font-size:0.78rem;font-style:italic;padding:6px 0">Nenhum atributo nesta categoria.</div>`;
   return attrs.map((a, gi) => {
@@ -1843,7 +1843,7 @@ function _renderAttrsList(cat) {
   }).join('');
 }
 
-function criarAplicarPreset(idx) {
+function criarAplicarPreset(idx: any) {
   const preset = ATTR_PRESETS[idx];
   // Remove atributos básicos anteriores
   CRIAR_STATE.dados.attrDefs = CRIAR_STATE.dados.attrDefs.filter(a => a.categoria !== 'basico');
@@ -1853,7 +1853,7 @@ function criarAplicarPreset(idx) {
   mostrarToast(`Preset "${preset.nome}" aplicado`, 'sucesso');
 }
 
-function criarAddAttr(cat) {
+function criarAddAttr(cat: any) {
   const maxOrdem = CRIAR_STATE.dados.attrDefs.filter(a=>a.categoria===cat).length;
   CRIAR_STATE.dados.attrDefs.push({ nome: '', categoria: cat, tipo: 'number', ordem: maxOrdem + 1 });
   criarRenderAtributos(document.getElementById('criar-body'));
@@ -1870,7 +1870,7 @@ function criarAddResistencia() {
   mostrarToast('Armadura básica adicionada. Você pode editar depois nas configurações.', '');
 }
 
-function criarRemoverAttr(idx) {
+function criarRemoverAttr(idx: any) {
   CRIAR_STATE.dados.attrDefs.splice(idx, 1);
   criarRenderAtributos(document.getElementById('criar-body'));
 }
@@ -1882,25 +1882,25 @@ function criarSalvarAtributos() {
 }
 
 // ── ETAPA: PERSONAGENS ────────────────────────────────────────
-function criarRenderPersonagens(body) {
+function criarRenderPersonagens(body: any) {
   document.getElementById('criar-titulo-header').textContent = 'Personagens';
   const d: any = CRIAR_STATE.dados;
-  const attrs = d.attrDefs.filter(a => a.categoria === 'basico' || a.categoria === 'status');
+  const attrs = d.attrDefs.filter((a: any) => a.categoria === 'basico' || a.categoria === 'status');
 
   body.innerHTML = `
     <div class="etapa-titulo">Personagens</div>
     <div class="etapa-desc">Adicione os personagens jogadores e NPCs importantes. Você pode incluir mais personagens depois.</div>
     <div id="criar-chars-lista">
-      ${d.personagens.map((p,i) => _renderCharCard(p, i, attrs)).join('')}
+      ${d.personagens.map((p: any,i: any) => _renderCharCard(p, i, attrs)).join('')}
     </div>
     <button class="add-item-btn" onclick="criarAddPersonagem()">＋ Adicionar Personagem</button>
     ${!d.personagens.length ? `<div style="text-align:center;padding:20px;color:#7a92aa;font-size:0.82rem;font-style:italic">Nenhum personagem ainda.<br>Clique em + para adicionar.</div>` : ''}
   `;
 }
 
-function _renderCharCard(p, i, attrs) {
+function _renderCharCard(p: any, i: any, attrs: any) {
   const cor = p.cor || '#4fa3d1';
-  const atribsCampos = (attrs || []).map(a => `
+  const atribsCampos = (attrs || []).map((a: any) => `
     <div class="criar-attr-item">
       <label>${a.nome}</label>
       <input type="number" value="${(p.atributos||{})[a.nome]||''}" placeholder="0" onchange="CRIAR_STATE.dados.personagens[${i}].atributos=CRIAR_STATE.dados.personagens[${i}].atributos||{};CRIAR_STATE.dados.personagens[${i}].atributos['${a.nome}']=+this.value" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#c8d8e8;font-size:0.9rem;text-align:center;width:100%">
@@ -1950,7 +1950,7 @@ function criarAddPersonagem() {
   }, 80);
 }
 
-function criarRemoverPersonagem(i) {
+function criarRemoverPersonagem(i: any) {
   CRIAR_STATE.dados.personagens.splice(i, 1);
   criarRenderPersonagens(document.getElementById('criar-body'));
 }
@@ -1960,11 +1960,11 @@ function criarSalvarPersonagens() {
 }
 
 // ── ETAPA: HABILIDADES ────────────────────────────────────────
-function criarRenderHabilidades(body) {
+function criarRenderHabilidades(body: any) {
   document.getElementById('criar-titulo-header').textContent = 'Habilidades';
   const nivel = CRIAR_STATE.nivel;
   const d: any = CRIAR_STATE.dados;
-  const chars = d.personagens.filter(p => p.nome);
+  const chars = d.personagens.filter((p: any) => p.nome);
   const mostrarAvancado = nivel === 'intermediario' || nivel === 'detalhado';
   const mostrarFormula = nivel === 'detalhado';
 
@@ -1973,7 +1973,7 @@ function criarRenderHabilidades(body) {
     <div class="etapa-desc">Adicione habilidades e poderes dos personagens. Você pode adicionar mais depois dentro da campanha.</div>
     ${!chars.length ? `<div style="padding:16px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:8px;font-size:0.82rem;color:#c8a84b;margin-bottom:12px">⚠ Adicione personagens na etapa anterior para poder vincular habilidades.</div>` : ''}
     <div id="criar-skills-lista">
-      ${d.habilidades.map((h,i) => _renderSkillCard(h, i, chars, mostrarAvancado, mostrarFormula)).join('')}
+      ${d.habilidades.map((h: any,i: any) => _renderSkillCard(h, i, chars, mostrarAvancado, mostrarFormula)).join('')}
     </div>
     <button class="add-item-btn" onclick="criarAddHabilidade()">＋ Adicionar Habilidade</button>
     <div style="margin-top:16px;padding:12px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.1);border-radius:8px;font-size:0.78rem;color:#7a92aa;line-height:1.5">
@@ -1982,7 +1982,7 @@ function criarRenderHabilidades(body) {
   `;
 }
 
-function _renderSkillCard(h, i, chars, mostrarAvancado, mostrarFormula) {
+function _renderSkillCard(h: any, i: any, chars: any, mostrarAvancado: any, mostrarFormula: any) {
   return `<div class="criar-skill-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div style="font-family:'Cinzel',serif;font-size:0.72rem;color:#7ec8f0">${h.habilidade||'Nova habilidade'}</div>
@@ -1997,7 +1997,7 @@ function _renderSkillCard(h, i, chars, mostrarAvancado, mostrarFormula) {
         <label>Personagem</label>
         <select onchange="CRIAR_STATE.dados.habilidades[${i}].personagem=this.value" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#c8d8e8;font-size:0.82rem;width:100%">
           <option value="">Todos</option>
-          ${chars.map(c=>`<option value="${c.nome}" ${h.personagem===c.nome?'selected':''}>${c.nome}</option>`).join('')}
+          ${chars.map((c: any)=>`<option value="${c.nome}" ${h.personagem===c.nome?'selected':''}>${c.nome}</option>`).join('')}
         </select>
       </div>
     </div>
@@ -2047,7 +2047,7 @@ function criarAddHabilidade() {
   }, 60);
 }
 
-function criarRemoverHabilidade(i) {
+function criarRemoverHabilidade(i: any) {
   CRIAR_STATE.dados.habilidades.splice(i, 1);
   criarRenderHabilidades(document.getElementById('criar-body'));
 }
@@ -2055,7 +2055,7 @@ function criarRemoverHabilidade(i) {
 function criarSalvarHabilidades() { /* atualizado via onchange */ }
 
 // ── ETAPA: LORE ───────────────────────────────────────────────
-function criarRenderLore(body) {
+function criarRenderLore(body: any) {
   document.getElementById('criar-titulo-header').textContent = 'Lore';
   const d: any = CRIAR_STATE.dados;
   const loreCategs = ['mundo','magia','sociedade','história','facções','regras'];
@@ -2063,7 +2063,7 @@ function criarRenderLore(body) {
     <div class="etapa-titulo">Lore do Mundo</div>
     <div class="etapa-desc">Registre informações sobre o mundo da campanha: lugares, facções, história, magia. Isso fica disponível para todos os jogadores.</div>
     <div id="criar-lore-lista">
-      ${d.lore.map((l,i) => _renderLoreCard(l, i, loreCategs)).join('')}
+      ${d.lore.map((l: any,i: any) => _renderLoreCard(l, i, loreCategs)).join('')}
     </div>
     <button class="add-item-btn" onclick="criarAddLore()">＋ Adicionar entrada de Lore</button>
     <div style="margin-top:16px;padding:12px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.1);border-radius:8px;font-size:0.78rem;color:#7a92aa;line-height:1.5">
@@ -2072,12 +2072,12 @@ function criarRenderLore(body) {
   `;
 }
 
-function _renderLoreCard(l, i, categs) {
+function _renderLoreCard(l: any, i: any, categs: any) {
   return `<div class="criar-lore-card">
     <div style="display:flex;gap:8px;margin-bottom:8px">
       <input type="text" value="${l.titulo}" placeholder="Título" onchange="CRIAR_STATE.dados.lore[${i}].titulo=this.value" style="flex:1;background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#f0cc6a;font-size:0.88rem">
       <select onchange="CRIAR_STATE.dados.lore[${i}].secao=this.value" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#c8d8e8;font-size:0.8rem">
-        ${categs.map(c=>`<option value="${c}" ${l.secao===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`).join('')}
+        ${categs.map((c: any)=>`<option value="${c}" ${l.secao===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`).join('')}
       </select>
       <button onclick="criarRemoverLore(${i})" style="background:none;border:none;color:rgba(192,57,43,0.45);cursor:pointer;font-size:1rem">✕</button>
     </div>
@@ -2094,7 +2094,7 @@ function criarAddLore() {
   }, 60);
 }
 
-function criarRemoverLore(i) {
+function criarRemoverLore(i: any) {
   CRIAR_STATE.dados.lore.splice(i, 1);
   criarRenderLore(document.getElementById('criar-body'));
 }
@@ -2103,12 +2103,12 @@ function criarSalvarLore() { /* atualizado via onchange */ }
 
 
 // ── ETAPA: MECÂNICAS ──────────────────────────────────────────
-function criarRenderMecanicas(body) {
+function criarRenderMecanicas(body: any) {
   document.getElementById('criar-titulo-header').textContent = 'Mecânicas';
   const d: any = CRIAR_STATE.dados;
   const m = (d as any).mecanicas || {};
   const attrDefs = d.attrDefs || [];
-  const attrNumericos = attrDefs.filter(a => a.tipo === 'number' || !a.tipo);
+  const attrNumericos = attrDefs.filter((a: any) => a.tipo === 'number' || !a.tipo);
 
   body.innerHTML = `
     <div class="etapa-titulo">Mecânicas de Jogo</div>
@@ -2172,7 +2172,7 @@ function criarRenderMecanicas(body) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
         <select class="criar-input" id="mec-hp-attr" style="font-size:0.8rem">
           <option value="">— nenhum —</option>
-          ${attrNumericos.map(a => `<option value="${a.nome}" ${m.hp_attr===a.nome?'selected':''}>${a.nome}</option>`).join('')}
+          ${attrNumericos.map((a: any) => `<option value="${a.nome}" ${m.hp_attr===a.nome?'selected':''}>${a.nome}</option>`).join('')}
         </select>
         <div>
           <input type="number" class="criar-input" id="mec-hp-mult" min="0" max="20" step="0.5" value="${m.hp_attr_mult ?? ''}" placeholder="Multiplicador (ex: 3)">
@@ -2191,7 +2191,7 @@ function criarRenderMecanicas(body) {
   `;
 
   // Marcar botão do modo turno selecionado
-  window.criarSetModoTurno = function(exclusivo) {
+  window.criarSetModoTurno = function(exclusivo: any) {
     if (!(CRIAR_STATE.dados as any).mecanicas) (CRIAR_STATE.dados as any).mecanicas = {};
     (CRIAR_STATE.dados as any).mecanicas.turno_modo_exclusivo = exclusivo;
     document.querySelectorAll('#criar-body .nivel-card').forEach((c, i) => {
@@ -2203,8 +2203,8 @@ function criarRenderMecanicas(body) {
 function criarSalvarMecanicas() {
   if (!(CRIAR_STATE.dados as any).mecanicas) (CRIAR_STATE.dados as any).mecanicas = {};
   const m = (CRIAR_STATE.dados as any).mecanicas;
-  const _n = (id, def) => { const v = parseInt(document.getElementById(id)?.value); return isNaN(v) ? def : v; };
-  const _f = (id, def) => { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? def : v; };
+  const _n = (id: any, def: any) => { const v = parseInt(document.getElementById(id)?.value); return isNaN(v) ? def : v; };
+  const _f = (id: any, def: any) => { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? def : v; };
   m.velocidade_base       = _n('mec-vel-base', 4);
   m.velocidade_fator      = _n('mec-vel-fator', 4);
   m.hp_base               = _n('mec-hp-base', 100);
@@ -2218,11 +2218,11 @@ function criarSalvarMecanicas() {
 }
 
 // ── ETAPA: REVISAR ────────────────────────────────────────────
-function criarRenderRevisar(body) {
+function criarRenderRevisar(body: any) {
   document.getElementById('criar-titulo-header').textContent = 'Revisar';
   const d: any = CRIAR_STATE.dados;
   const nivel = CRIAR_STATE.nivel;
-  const nivelLabel = { basico:'📘 Básico', intermediario:'📗 Intermediário', detalhado:'📕 Detalhado' }[nivel];
+  const nivelLabel = ({ basico:'📘 Básico', intermediario:'📗 Intermediário', detalhado:'📕 Detalhado' } as any)[nivel];
   const cor = d.cor || '#c8a84b';
 
   body.innerHTML = `
@@ -2238,26 +2238,26 @@ function criarRenderRevisar(body) {
     </div>
 
     <div class="revisar-section">
-      <div class="revisar-title">Atributos (${d.attrDefs.filter(a=>a.nome).length})</div>
-      ${d.attrDefs.filter(a=>a.nome).slice(0,8).map(a=>`<div class="revisar-item"><span class="revisar-item-icon" style="font-size:0.75rem">${a.categoria==='status'?'📊':a.categoria==='resistencia'?'🛡':a.categoria==='especial'?'✨':'🔷'}</span>${a.nome}</div>`).join('')}
-      ${d.attrDefs.filter(a=>a.nome).length > 8 ? `<div style="font-size:0.72rem;color:#7a92aa;padding:4px 0">…e mais ${d.attrDefs.length-8}</div>` : ''}
+      <div class="revisar-title">Atributos (${d.attrDefs.filter((a: any)=>a.nome).length})</div>
+      ${d.attrDefs.filter((a: any)=>a.nome).slice(0,8).map((a: any)=>`<div class="revisar-item"><span class="revisar-item-icon" style="font-size:0.75rem">${a.categoria==='status'?'📊':a.categoria==='resistencia'?'🛡':a.categoria==='especial'?'✨':'🔷'}</span>${a.nome}</div>`).join('')}
+      ${d.attrDefs.filter((a: any)=>a.nome).length > 8 ? `<div style="font-size:0.72rem;color:#7a92aa;padding:4px 0">…e mais ${d.attrDefs.length-8}</div>` : ''}
     </div>
 
     <div class="revisar-section">
-      <div class="revisar-title">Personagens (${d.personagens.filter(p=>p.nome).length})</div>
-      ${d.personagens.filter(p=>p.nome).map(p=>`<div class="revisar-item"><span class="revisar-item-icon">⚔</span><span style="color:${p.cor||'#4fa3d1'}">${p.nome}</span> <span style="color:#7a92aa;font-size:0.78rem">${p.tipo}</span></div>`).join('') || '<div class="revisar-item"><span class="revisar-item-icon" style="color:#e74c3c">!</span><span style="color:#e74c3c">Nenhum personagem</span></div>'}
+      <div class="revisar-title">Personagens (${d.personagens.filter((p: any)=>p.nome).length})</div>
+      ${d.personagens.filter((p: any)=>p.nome).map((p: any)=>`<div class="revisar-item"><span class="revisar-item-icon">⚔</span><span style="color:${p.cor||'#4fa3d1'}">${p.nome}</span> <span style="color:#7a92aa;font-size:0.78rem">${p.tipo}</span></div>`).join('') || '<div class="revisar-item"><span class="revisar-item-icon" style="color:#e74c3c">!</span><span style="color:#e74c3c">Nenhum personagem</span></div>'}
     </div>
 
-    ${d.habilidades.filter(h=>h.habilidade).length ? `
+    ${d.habilidades.filter((h: any)=>h.habilidade).length ? `
     <div class="revisar-section">
-      <div class="revisar-title">Habilidades (${d.habilidades.filter(h=>h.habilidade).length})</div>
-      ${d.habilidades.filter(h=>h.habilidade).slice(0,6).map(h=>`<div class="revisar-item"><span class="revisar-item-icon">✧</span>${h.habilidade} ${h.personagem?`<span style="color:#7a92aa;font-size:0.78rem">(${h.personagem})</span>`:''}</div>`).join('')}
+      <div class="revisar-title">Habilidades (${d.habilidades.filter((h: any)=>h.habilidade).length})</div>
+      ${d.habilidades.filter((h: any)=>h.habilidade).slice(0,6).map((h: any)=>`<div class="revisar-item"><span class="revisar-item-icon">✧</span>${h.habilidade} ${h.personagem?`<span style="color:#7a92aa;font-size:0.78rem">(${h.personagem})</span>`:''}</div>`).join('')}
     </div>` : ''}
 
-    ${d.lore.filter(l=>l.titulo).length ? `
+    ${d.lore.filter((l: any)=>l.titulo).length ? `
     <div class="revisar-section">
-      <div class="revisar-title">Lore (${d.lore.filter(l=>l.titulo).length} entradas)</div>
-      ${d.lore.filter(l=>l.titulo).slice(0,4).map(l=>`<div class="revisar-item"><span class="revisar-item-icon">📖</span>${l.titulo}</div>`).join('')}
+      <div class="revisar-title">Lore (${d.lore.filter((l: any)=>l.titulo).length} entradas)</div>
+      ${d.lore.filter((l: any)=>l.titulo).slice(0,4).map((l: any)=>`<div class="revisar-item"><span class="revisar-item-icon">📖</span>${l.titulo}</div>`).join('')}
     </div>` : ''}
 
     <div style="margin-top:8px;padding:14px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:10px;font-size:0.82rem;color:#c8d8e8;line-height:1.6">
@@ -2271,7 +2271,7 @@ function criarRenderRevisar(body) {
 async function criarSubmit() {
   const d: any = CRIAR_STATE.dados;
   if (!d.nome.trim()) { mostrarToast('Nome é obrigatório', 'aviso'); return; }
-  if (!d.personagens.filter(p=>p.nome).length) { mostrarToast('Adicione ao menos 1 personagem', 'aviso'); return; }
+  if (!d.personagens.filter((p: any)=>p.nome).length) { mostrarToast('Adicione ao menos 1 personagem', 'aviso'); return; }
 
   const btn = document.getElementById('criar-btn-next');
   btn.disabled = true; btn.textContent = '⏳ Criando…';
@@ -2303,7 +2303,7 @@ async function criarSubmit() {
         turno_modo_exclusivo:  d.mecanicas?.turno_modo_exclusivo ? 'true' : '',
         pontos_attr_por_nivel: d.mecanicas?.pontos_attr_por_nivel ?? '',
       }],
-      characters: d.personagens.filter(p => p.nome).map((p,i) => ({
+      characters: d.personagens.filter((p: any) => p.nome).map((p: any,i: any) => ({
         nome: p.nome,
         tipo: p.tipo || 'jogador',
         cor: p.cor || '#4fa3d1',
@@ -2311,7 +2311,7 @@ async function criarSubmit() {
         atributos_json: JSON.stringify(p.atributos || {}),
         nivel: 1, xp: 0,
       })),
-      skills: d.habilidades.filter(h => h.habilidade).map(h => ({
+      skills: d.habilidades.filter((h: any) => h.habilidade).map((h: any) => ({
         personagem: h.personagem || '',
         habilidade: h.habilidade,
         efeito: h.efeito || '',
@@ -2321,12 +2321,12 @@ async function criarSubmit() {
         tipo_dano: h.tipo_dano || 'fisico',
         alvo_tipo: 'inimigo',
       })),
-      lore: d.lore.filter(l => l.titulo).map(l => ({
+      lore: d.lore.filter((l: any) => l.titulo).map((l: any) => ({
         secao: l.secao || 'mundo',
         titulo: l.titulo,
         conteudo: l.conteudo || '',
       })),
-      attr_defs: d.attrDefs.filter(a => a.nome).map((a,i) => ({
+      attr_defs: d.attrDefs.filter((a: any) => a.nome).map((a: any,i: any) => ({
         nome: a.nome,
         tipo: a.tipo || 'number',
         categoria: a.categoria || 'basico',
