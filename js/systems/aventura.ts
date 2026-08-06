@@ -16398,7 +16398,7 @@ function _avtRecuperarPorMovimento(jogador, celulas) {
 // inventory.js funcionem em adventure mode. Retorna função de restauração.
 function _avtPatchRpgData() {
   const prev = window.RPG_DATA;
-  window.RPG_DATA = {
+  window.RPG_DATA = {   // shadow parcial por design (restaurado ao sair do adventure mode)
     rpgId:      AVT_STATE.rpgId,
     characters: AVT_STATE.chars,
     skills:     AVT_STATE.skills || [],
@@ -16406,7 +16406,7 @@ function _avtPatchRpgData() {
     myRole:     _avtSouMestre() ? 'mestre' : 'jogador',
     linked:     AVT_STATE.myCharNome,
     config:     AVT_STATE.rpg?.theme_json || {},
-  };
+  } as any;
   return () => { window.RPG_DATA = prev; };
 }
 

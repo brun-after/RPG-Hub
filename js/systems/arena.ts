@@ -1773,7 +1773,7 @@ function arCriarMeuPersonagem() {
 function arAbrirAparencia(nome) {
   const c = AR.chars.find(x => x.nome === nome);
   if (!c) return;
-  if (!window.RPG_DATA) window.RPG_DATA = {};
+  if (!window.RPG_DATA) window.RPG_DATA = {} as any;   // stub mínimo da arena, preenchido em seguida
   if (!RPG_DATA.characters) RPG_DATA.characters = [];
   const existeIdx = RPG_DATA.characters.findIndex(x => x.nome === nome);
   const fakeChar = { ...c, custom_attrs: { ...(c.custom_attrs||{}) } };
