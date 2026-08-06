@@ -127,7 +127,7 @@ function _renderMappingGrid(rpgId, attrDefs) {
   const grid = document.getElementById('cfg-atrmapping-grid');
   const mapeados = new Set((ATTR_MAPPING_CACHE[rpgId]||[]).map(x=>_normalizarAttr(x.nome_customizado)));
   let html = '';
-  for (const [grupo, info] of Object.entries(GRUPO_INFO)) {
+  for (const [grupo, info] of Object.entries<any>(GRUPO_INFO)) {
     const chips = getAtributosPorGrupo(rpgId, grupo);
     const naoMapeados = attrDefs.filter(a => !mapeados.has(_normalizarAttr(a.nome)) || chips.some(c=>_normalizarAttr(c)===_normalizarAttr(a.nome)));
     const opcoes = attrDefs.filter(a => !mapeados.has(_normalizarAttr(a.nome)) || chips.some(c=>_normalizarAttr(c)===_normalizarAttr(a.nome)));
@@ -187,7 +187,7 @@ if (typeof _origAbrirTab === 'function') {
   };
 } else {
   document.addEventListener('click', e => {
-    const btn = e.target.closest('[onclick*="config"]') || e.target.closest('[data-tab="config"]');
+    const btn = (e.target as any).closest('[onclick*="config"]') || (e.target as any).closest('[data-tab="config"]');
     if (btn) setTimeout(renderAttrMappingUI, 200);
   });
 }
@@ -195,15 +195,15 @@ if (typeof _origAbrirTab === 'function') {
 
 /* [migração-esm] accessors globais */
 Object.defineProperty(globalThis, "GRUPOS_VALIDOS", { configurable: true, get: () => GRUPOS_VALIDOS });
-Object.defineProperty(globalThis, "_normalizarAttr", { configurable: true, get: () => _normalizarAttr, set: (__v) => { _normalizarAttr = __v; } });
-Object.defineProperty(globalThis, "carregarMapeamento", { configurable: true, get: () => carregarMapeamento, set: (__v) => { carregarMapeamento = __v; } });
-Object.defineProperty(globalThis, "salvarMapeamento", { configurable: true, get: () => salvarMapeamento, set: (__v) => { salvarMapeamento = __v; } });
-Object.defineProperty(globalThis, "removerMapeamento", { configurable: true, get: () => removerMapeamento, set: (__v) => { removerMapeamento = __v; } });
-Object.defineProperty(globalThis, "getGrupoDeAtributo", { configurable: true, get: () => getGrupoDeAtributo, set: (__v) => { getGrupoDeAtributo = __v; } });
-Object.defineProperty(globalThis, "getAtributosPorGrupo", { configurable: true, get: () => getAtributosPorGrupo, set: (__v) => { getAtributosPorGrupo = __v; } });
+Object.defineProperty(globalThis, "_normalizarAttr", { configurable: true, writable: true, value: _normalizarAttr });
+Object.defineProperty(globalThis, "carregarMapeamento", { configurable: true, writable: true, value: carregarMapeamento });
+Object.defineProperty(globalThis, "salvarMapeamento", { configurable: true, writable: true, value: salvarMapeamento });
+Object.defineProperty(globalThis, "removerMapeamento", { configurable: true, writable: true, value: removerMapeamento });
+Object.defineProperty(globalThis, "getGrupoDeAtributo", { configurable: true, writable: true, value: getGrupoDeAtributo });
+Object.defineProperty(globalThis, "getAtributosPorGrupo", { configurable: true, writable: true, value: getAtributosPorGrupo });
 Object.defineProperty(globalThis, "GRUPO_INFO", { configurable: true, get: () => GRUPO_INFO });
-Object.defineProperty(globalThis, "renderAttrMappingUI", { configurable: true, get: () => renderAttrMappingUI, set: (__v) => { renderAttrMappingUI = __v; } });
-Object.defineProperty(globalThis, "_renderMappingGrid", { configurable: true, get: () => _renderMappingGrid, set: (__v) => { _renderMappingGrid = __v; } });
-Object.defineProperty(globalThis, "atrMappingAdicionar", { configurable: true, get: () => atrMappingAdicionar, set: (__v) => { atrMappingAdicionar = __v; } });
-Object.defineProperty(globalThis, "atrMappingRemover", { configurable: true, get: () => atrMappingRemover, set: (__v) => { atrMappingRemover = __v; } });
+Object.defineProperty(globalThis, "renderAttrMappingUI", { configurable: true, writable: true, value: renderAttrMappingUI });
+Object.defineProperty(globalThis, "_renderMappingGrid", { configurable: true, writable: true, value: _renderMappingGrid });
+Object.defineProperty(globalThis, "atrMappingAdicionar", { configurable: true, writable: true, value: atrMappingAdicionar });
+Object.defineProperty(globalThis, "atrMappingRemover", { configurable: true, writable: true, value: atrMappingRemover });
 Object.defineProperty(globalThis, "_origAbrirTab", { configurable: true, get: () => _origAbrirTab });

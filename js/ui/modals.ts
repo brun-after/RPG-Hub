@@ -496,6 +496,7 @@
 
   // ── Motor Canvas 2D com Sakuga Features ──────────────────────────────
   class PixiParticleEngine {
+    [key: string]: any;
     constructor(canvas, config, emitterPos) {
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
@@ -2535,15 +2536,15 @@ JSON:`;
     // Pixi JSON: para combo_total mostra o objeto unificado completo
     let jsonParaExibir;
     if (anim.tipo === 'combo_total') {
-      const unified = {};
-      if (anim.pixi_config) unified.pixi_config = anim.pixi_config;
-      if (anim.gsap_config) unified.gsap_config = anim.gsap_config;
+      const unified: any = {};
+      if (anim.pixi_config) (unified as any).pixi_config = anim.pixi_config;
+      if (anim.gsap_config) (unified as any).gsap_config = anim.gsap_config;
       if (anim.spine_config) unified.spine_config = anim.spine_config;
       jsonParaExibir = Object.keys(unified).length ? JSON.stringify(unified, null, 2) : '';
     } else if (anim.gsap_config || anim.spine_config) {
-      const obj = {};
-      if (anim.pixi_config) obj.pixi_config = anim.pixi_config;
-      if (anim.gsap_config)  obj.gsap_config  = anim.gsap_config;
+      const obj: any = {};
+      if (anim.pixi_config) (obj as any).pixi_config = anim.pixi_config;
+      if (anim.gsap_config)  (obj as any).gsap_config  = anim.gsap_config;
       if (anim.spine_config) obj.spine_config = anim.spine_config;
       jsonParaExibir = JSON.stringify(obj, null, 2);
     } else {

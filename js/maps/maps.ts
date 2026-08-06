@@ -1017,7 +1017,7 @@ function calcularDanoFinal(danoBruto, tipoDano, char, attrDefs, atacanteChar) {
 
 // ── Obtém attrDefs do contexto correto ──────────────────────────
 function getAttrDefsParaDano(contexto) {
-  if (contexto === 'arena') return AR.attrDefs || RPG_DATA?.attrDefs || [];
+  if (contexto === 'arena') return (AR as any).attrDefs || RPG_DATA?.attrDefs || [];
   return RPG_DATA?.attrDefs || [];
 }
 
@@ -1449,7 +1449,7 @@ async function atkEnviarSolicitacaoSkill() {
 }
 
 function renderAtaquesPendentes() {
-  const pendentes = (AR.estado.ataques_pendentes || []).filter(a => a.status === 'pendente');
+  const pendentes = ((AR.estado as any).ataques_pendentes || []).filter(a => a.status === 'pendente');
   const el = document.getElementById('ar-ataques-pendentes');
   if (!el) return;
   el.style.display = pendentes.length && RPG_DATA?.myRole === 'mestre' ? 'block' : 'none';
@@ -1496,7 +1496,7 @@ function atkRolarParaPendente(apId) {
 }
 
 async function atkMestreAprovar(apId) {
-  const pendente = AR.estado.ataques_pendentes?.find(a => a.id === apId);
+  const pendente = (AR.estado as any).ataques_pendentes?.find(a => a.id === apId);
   if (!pendente) return;
   const resultEl = document.getElementById('resultado-ap-' + apId);
   const dano = parseInt(resultEl?.dataset.total || '0');
@@ -1510,7 +1510,7 @@ async function atkMestreAprovar(apId) {
 }
 
 async function atkMestreRejeitar(apId) {
-  const pendente = AR.estado.ataques_pendentes?.find(a => a.id === apId);
+  const pendente = (AR.estado as any).ataques_pendentes?.find(a => a.id === apId);
   if (!pendente) return;
   pendente.status = 'rejeitado';
   arAddLog(`✕ Ação criativa de ${pendente.atacante} rejeitada pelo Mestre`);

@@ -55,7 +55,10 @@ declare global {
   var TOKEN_CTRL: any;
   var TRADES_CACHE: any;
   var _aoeObterAlvosAtingidos: any;
+  var _avtIrParaFase: any;
+  var _avtNpcSyncShutdown: any;
   var _dataUrlToBlob: any;
+  var _isMestre: any;
   var _mesaAtaqueInlineConfirmar: any;
   var _mesaAtaqueInlineRolar: any;
   var abrirModalLoot: any;
@@ -70,6 +73,7 @@ declare global {
   var atualizarTradesUI: any;
   var battleStateBroadcast: any;
   var cenaRenderizarObjetos: any;
+  var chatEnviarNarrador: any;
   var executarAnimacaoAtaque: any;
   var executarAnimacaoDados: any;
   var gridTacticalShowMoveRange: any;
@@ -94,6 +98,8 @@ declare global {
   var renderMoedas: any;
   var renderPersonagens: any;
   var renderTrades: any;
+  var selecionado: any;
   var setCooldownBatalha: any;
+  var skAnimPixiPosicaoChange: any;
   // [migração-ts:auto-globals:fim]
 }

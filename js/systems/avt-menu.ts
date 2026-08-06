@@ -299,7 +299,7 @@ function _avtIsoScreenToCanvas(clientX, clientY) {
   const wrap = document.getElementById('avt-mapa-wrap');
   if (!wrap) return { x: clientX, y: clientY };
   let ox = 0, oy = 0, el = wrap;
-  while (el) { ox += el.offsetLeft; oy += el.offsetTop; el = el.offsetParent; }
+  while (el) { ox += el.offsetLeft; oy += el.offsetTop; el = el.offsetParent as any; }
   const cw = wrap.offsetWidth, ch = wrap.offsetHeight;
   const dx = clientX - (ox + cw / 2);
   const dy = clientY - (oy + ch / 2);
@@ -476,10 +476,10 @@ function _avtAnalogicoIniciar() {
     if (typeof avtDpad === 'function') avtDpad(dx, dy);
   }
 
-  outer.addEventListener('pointerdown', e => {
+  outer.addEventListener('pointerdown', (e: any) => {
     _active = true; outer.setPointerCapture(e.pointerId); _mover(e.clientX, e.clientY);
   });
-  outer.addEventListener('pointermove', e => { if (_active) _mover(e.clientX, e.clientY); });
+  outer.addEventListener('pointermove', (e: any) => { if (_active) _mover(e.clientX, e.clientY); });
   ['pointerup', 'pointercancel'].forEach(ev => outer.addEventListener(ev, () => {
     _active = false; _lastSector = -1;
     knob.style.transform = '';
@@ -720,7 +720,7 @@ function _avtMenuHtmlGraficos() {
       <label id="avt-cfg-iso-${chave}-row" style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:9px 10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:8px;opacity:${op}">
         <input type="checkbox" id="avt-cfg-iso-${chave}" ${dis}
                style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
-               ${g[chave] ? 'checked' : ''}
+               ${g[chave as any] ? 'checked' : ''}
                onchange="_avtGraficosRefinoToggle('${chave}', this.checked)">
         <div>
           <div style="font-family:var(--fonte-d);font-size:0.8rem;color:var(--texto,#c8d8e8)">${titulo}</div>
@@ -1872,7 +1872,7 @@ function _avtMenuCharsVisiveis() {
   return allChars; // sem vinculação: mostra todos
 }
 
-function _avtMenuHtmlSeletorChar(fnCallback, extraParam) {
+function _avtMenuHtmlSeletorChar(fnCallback, extraParam?) {
   const chars = _avtMenuCharsVisiveis();
   if (chars.length === 0) {
     return '<p style="color:#7a92aa;font-size:0.72rem">Nenhum personagem disponível. Crie um na opção Personagem.</p>';
@@ -1973,80 +1973,80 @@ Object.defineProperty(globalThis, "_ISO_ANGLE_X", { configurable: true, get: () 
 Object.defineProperty(globalThis, "_ISO_SCALE", { configurable: true, get: () => _ISO_SCALE, set: (__v) => { _ISO_SCALE = __v; } });
 Object.defineProperty(globalThis, "_ISO_OVERSIZE", { configurable: true, get: () => _ISO_OVERSIZE });
 Object.defineProperty(globalThis, "_ISO_BB", { configurable: true, get: () => _ISO_BB, set: (__v) => { _ISO_BB = __v; } });
-Object.defineProperty(globalThis, "_avtIsoParamsAtualizar", { configurable: true, get: () => _avtIsoParamsAtualizar, set: (__v) => { _avtIsoParamsAtualizar = __v; } });
-Object.defineProperty(globalThis, "_avtVfxOverlayResolution", { configurable: true, get: () => _avtVfxOverlayResolution, set: (__v) => { _avtVfxOverlayResolution = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosCarregar", { configurable: true, get: () => _avtGraficosCarregar, set: (__v) => { _avtGraficosCarregar = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosSalvar", { configurable: true, get: () => _avtGraficosSalvar, set: (__v) => { _avtGraficosSalvar = __v; } });
-Object.defineProperty(globalThis, "_avtGarantirFiltros3D", { configurable: true, get: () => _avtGarantirFiltros3D, set: (__v) => { _avtGarantirFiltros3D = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosIsoAplicar", { configurable: true, get: () => _avtGraficosIsoAplicar, set: (__v) => { _avtGraficosIsoAplicar = __v; } });
-Object.defineProperty(globalThis, "_avtAtmosferaAplicar", { configurable: true, get: () => _avtAtmosferaAplicar, set: (__v) => { _avtAtmosferaAplicar = __v; } });
-Object.defineProperty(globalThis, "_avtIsoLayoutAplicar", { configurable: true, get: () => _avtIsoLayoutAplicar, set: (__v) => { _avtIsoLayoutAplicar = __v; } });
+Object.defineProperty(globalThis, "_avtIsoParamsAtualizar", { configurable: true, writable: true, value: _avtIsoParamsAtualizar });
+Object.defineProperty(globalThis, "_avtVfxOverlayResolution", { configurable: true, writable: true, value: _avtVfxOverlayResolution });
+Object.defineProperty(globalThis, "_avtGraficosCarregar", { configurable: true, writable: true, value: _avtGraficosCarregar });
+Object.defineProperty(globalThis, "_avtGraficosSalvar", { configurable: true, writable: true, value: _avtGraficosSalvar });
+Object.defineProperty(globalThis, "_avtGarantirFiltros3D", { configurable: true, writable: true, value: _avtGarantirFiltros3D });
+Object.defineProperty(globalThis, "_avtGraficosIsoAplicar", { configurable: true, writable: true, value: _avtGraficosIsoAplicar });
+Object.defineProperty(globalThis, "_avtAtmosferaAplicar", { configurable: true, writable: true, value: _avtAtmosferaAplicar });
+Object.defineProperty(globalThis, "_avtIsoLayoutAplicar", { configurable: true, writable: true, value: _avtIsoLayoutAplicar });
 Object.defineProperty(globalThis, "_avtIsoResizing", { configurable: true, get: () => _avtIsoResizing, set: (__v) => { _avtIsoResizing = __v; } });
-Object.defineProperty(globalThis, "_avtIsoSizeWrap", { configurable: true, get: () => _avtIsoSizeWrap, set: (__v) => { _avtIsoSizeWrap = __v; } });
-Object.defineProperty(globalThis, "_avtIsoScreenToCanvas", { configurable: true, get: () => _avtIsoScreenToCanvas, set: (__v) => { _avtIsoScreenToCanvas = __v; } });
-Object.defineProperty(globalThis, "_avtIsoDeltaToCanvas", { configurable: true, get: () => _avtIsoDeltaToCanvas, set: (__v) => { _avtIsoDeltaToCanvas = __v; } });
-Object.defineProperty(globalThis, "_avtIsoCanvasToScreen", { configurable: true, get: () => _avtIsoCanvasToScreen, set: (__v) => { _avtIsoCanvasToScreen = __v; } });
-Object.defineProperty(globalThis, "_avtIsoBillboardAplicar", { configurable: true, get: () => _avtIsoBillboardAplicar, set: (__v) => { _avtIsoBillboardAplicar = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosIsoToggle", { configurable: true, get: () => _avtGraficosIsoToggle, set: (__v) => { _avtGraficosIsoToggle = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosRefinoToggle", { configurable: true, get: () => _avtGraficosRefinoToggle, set: (__v) => { _avtGraficosRefinoToggle = __v; } });
-Object.defineProperty(globalThis, "_avtIsoRefinosAtualizarUI", { configurable: true, get: () => _avtIsoRefinosAtualizarUI, set: (__v) => { _avtIsoRefinosAtualizarUI = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosTecladoToggle", { configurable: true, get: () => _avtGraficosTecladoToggle, set: (__v) => { _avtGraficosTecladoToggle = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosMobileToggle", { configurable: true, get: () => _avtGraficosMobileToggle, set: (__v) => { _avtGraficosMobileToggle = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosControlesAplicar", { configurable: true, get: () => _avtGraficosControlesAplicar, set: (__v) => { _avtGraficosControlesAplicar = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosAnalogicoToggle", { configurable: true, get: () => _avtGraficosAnalogicoToggle, set: (__v) => { _avtGraficosAnalogicoToggle = __v; } });
+Object.defineProperty(globalThis, "_avtIsoSizeWrap", { configurable: true, writable: true, value: _avtIsoSizeWrap });
+Object.defineProperty(globalThis, "_avtIsoScreenToCanvas", { configurable: true, writable: true, value: _avtIsoScreenToCanvas });
+Object.defineProperty(globalThis, "_avtIsoDeltaToCanvas", { configurable: true, writable: true, value: _avtIsoDeltaToCanvas });
+Object.defineProperty(globalThis, "_avtIsoCanvasToScreen", { configurable: true, writable: true, value: _avtIsoCanvasToScreen });
+Object.defineProperty(globalThis, "_avtIsoBillboardAplicar", { configurable: true, writable: true, value: _avtIsoBillboardAplicar });
+Object.defineProperty(globalThis, "_avtGraficosIsoToggle", { configurable: true, writable: true, value: _avtGraficosIsoToggle });
+Object.defineProperty(globalThis, "_avtGraficosRefinoToggle", { configurable: true, writable: true, value: _avtGraficosRefinoToggle });
+Object.defineProperty(globalThis, "_avtIsoRefinosAtualizarUI", { configurable: true, writable: true, value: _avtIsoRefinosAtualizarUI });
+Object.defineProperty(globalThis, "_avtGraficosTecladoToggle", { configurable: true, writable: true, value: _avtGraficosTecladoToggle });
+Object.defineProperty(globalThis, "_avtGraficosMobileToggle", { configurable: true, writable: true, value: _avtGraficosMobileToggle });
+Object.defineProperty(globalThis, "_avtGraficosControlesAplicar", { configurable: true, writable: true, value: _avtGraficosControlesAplicar });
+Object.defineProperty(globalThis, "_avtGraficosAnalogicoToggle", { configurable: true, writable: true, value: _avtGraficosAnalogicoToggle });
 Object.defineProperty(globalThis, "_avtAnalogicoIniciado", { configurable: true, get: () => _avtAnalogicoIniciado, set: (__v) => { _avtAnalogicoIniciado = __v; } });
-Object.defineProperty(globalThis, "_avtAnalogicoIniciar", { configurable: true, get: () => _avtAnalogicoIniciar, set: (__v) => { _avtAnalogicoIniciar = __v; } });
-Object.defineProperty(globalThis, "_avtControlesAtualizarUI", { configurable: true, get: () => _avtControlesAtualizarUI, set: (__v) => { _avtControlesAtualizarUI = __v; } });
-Object.defineProperty(globalThis, "_avtMenuHtmlControles", { configurable: true, get: () => _avtMenuHtmlControles, set: (__v) => { _avtMenuHtmlControles = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosAplicar", { configurable: true, get: () => _avtGraficosAplicar, set: (__v) => { _avtGraficosAplicar = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosAtualizarUI", { configurable: true, get: () => _avtGraficosAtualizarUI, set: (__v) => { _avtGraficosAtualizarUI = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosToggle", { configurable: true, get: () => _avtGraficosToggle, set: (__v) => { _avtGraficosToggle = __v; } });
-Object.defineProperty(globalThis, "_avtGraficosNivel", { configurable: true, get: () => _avtGraficosNivel, set: (__v) => { _avtGraficosNivel = __v; } });
-Object.defineProperty(globalThis, "_avtMenuHtmlGraficos", { configurable: true, get: () => _avtMenuHtmlGraficos, set: (__v) => { _avtMenuHtmlGraficos = __v; } });
-Object.defineProperty(globalThis, "avtMenuAbrir", { configurable: true, get: () => avtMenuAbrir, set: (__v) => { avtMenuAbrir = __v; } });
-Object.defineProperty(globalThis, "_avtMenuFallback", { configurable: true, get: () => _avtMenuFallback, set: (__v) => { _avtMenuFallback = __v; } });
-Object.defineProperty(globalThis, "sairAventura", { configurable: true, get: () => sairAventura, set: (__v) => { sairAventura = __v; } });
-Object.defineProperty(globalThis, "voltarAoMenuDeJogo", { configurable: true, get: () => voltarAoMenuDeJogo, set: (__v) => { voltarAoMenuDeJogo = __v; } });
-Object.defineProperty(globalThis, "_avtMenuRenderBotoes", { configurable: true, get: () => _avtMenuRenderBotoes, set: (__v) => { _avtMenuRenderBotoes = __v; } });
-Object.defineProperty(globalThis, "_hexToRgb", { configurable: true, get: () => _hexToRgb, set: (__v) => { _hexToRgb = __v; } });
-Object.defineProperty(globalThis, "_avtMenuAbrirPanel", { configurable: true, get: () => _avtMenuAbrirPanel, set: (__v) => { _avtMenuAbrirPanel = __v; } });
-Object.defineProperty(globalThis, "_avtMenuFecharPanel", { configurable: true, get: () => _avtMenuFecharPanel, set: (__v) => { _avtMenuFecharPanel = __v; } });
-Object.defineProperty(globalThis, "_avtMenuAbrirJogar", { configurable: true, get: () => _avtMenuAbrirJogar, set: (__v) => { _avtMenuAbrirJogar = __v; } });
-Object.defineProperty(globalThis, "_avtMenuEntrarJogar", { configurable: true, get: () => _avtMenuEntrarJogar, set: (__v) => { _avtMenuEntrarJogar = __v; } });
-Object.defineProperty(globalThis, "_avtMenuAbrirContinuar", { configurable: true, get: () => _avtMenuAbrirContinuar, set: (__v) => { _avtMenuAbrirContinuar = __v; } });
-Object.defineProperty(globalThis, "_avtMenuEntrarContinuarComChar", { configurable: true, get: () => _avtMenuEntrarContinuarComChar, set: (__v) => { _avtMenuEntrarContinuarComChar = __v; } });
-Object.defineProperty(globalThis, "_avtMenuAbrirFase", { configurable: true, get: () => _avtMenuAbrirFase, set: (__v) => { _avtMenuAbrirFase = __v; } });
-Object.defineProperty(globalThis, "_avtMenuAbrirFaseJogador", { configurable: true, get: () => _avtMenuAbrirFaseJogador, set: (__v) => { _avtMenuAbrirFaseJogador = __v; } });
-Object.defineProperty(globalThis, "_avtMenuAbrirFaseMestre", { configurable: true, get: () => _avtMenuAbrirFaseMestre, set: (__v) => { _avtMenuAbrirFaseMestre = __v; } });
-Object.defineProperty(globalThis, "_avtMenuNovaFaseComRefresh", { configurable: true, get: () => _avtMenuNovaFaseComRefresh, set: (__v) => { _avtMenuNovaFaseComRefresh = __v; } });
-Object.defineProperty(globalThis, "_avtMenuRemoverFaseComRefresh", { configurable: true, get: () => _avtMenuRemoverFaseComRefresh, set: (__v) => { _avtMenuRemoverFaseComRefresh = __v; } });
-Object.defineProperty(globalThis, "_avtMenuEditarFase", { configurable: true, get: () => _avtMenuEditarFase, set: (__v) => { _avtMenuEditarFase = __v; } });
-Object.defineProperty(globalThis, "_avtMenuSetEditFaseLock", { configurable: true, get: () => _avtMenuSetEditFaseLock, set: (__v) => { _avtMenuSetEditFaseLock = __v; } });
-Object.defineProperty(globalThis, "_avtMenuLerPortasInternasEditor", { configurable: true, get: () => _avtMenuLerPortasInternasEditor, set: (__v) => { _avtMenuLerPortasInternasEditor = __v; } });
-Object.defineProperty(globalThis, "_avtMenuAddPortaInterna", { configurable: true, get: () => _avtMenuAddPortaInterna, set: (__v) => { _avtMenuAddPortaInterna = __v; } });
-Object.defineProperty(globalThis, "_avtMenuRemovePortaInterna", { configurable: true, get: () => _avtMenuRemovePortaInterna, set: (__v) => { _avtMenuRemovePortaInterna = __v; } });
-Object.defineProperty(globalThis, "_avtMenuSalvarEditarFase", { configurable: true, get: () => _avtMenuSalvarEditarFase, set: (__v) => { _avtMenuSalvarEditarFase = __v; } });
-Object.defineProperty(globalThis, "_avtMenuSelecionarFase", { configurable: true, get: () => _avtMenuSelecionarFase, set: (__v) => { _avtMenuSelecionarFase = __v; } });
-Object.defineProperty(globalThis, "_avtMenuEntrarFaseComChar", { configurable: true, get: () => _avtMenuEntrarFaseComChar, set: (__v) => { _avtMenuEntrarFaseComChar = __v; } });
-Object.defineProperty(globalThis, "_avtMenuListarFases", { configurable: true, get: () => _avtMenuListarFases, set: (__v) => { _avtMenuListarFases = __v; } });
-Object.defineProperty(globalThis, "_avtMenuAbrirPersonagem", { configurable: true, get: () => _avtMenuAbrirPersonagem, set: (__v) => { _avtMenuAbrirPersonagem = __v; } });
-Object.defineProperty(globalThis, "_avtMenuEditarChar", { configurable: true, get: () => _avtMenuEditarChar, set: (__v) => { _avtMenuEditarChar = __v; } });
-Object.defineProperty(globalThis, "_avtMenuCriarPersonagem", { configurable: true, get: () => _avtMenuCriarPersonagem, set: (__v) => { _avtMenuCriarPersonagem = __v; } });
-Object.defineProperty(globalThis, "_avtMenuAbrirConfig", { configurable: true, get: () => _avtMenuAbrirConfig, set: (__v) => { _avtMenuAbrirConfig = __v; } });
-Object.defineProperty(globalThis, "_avtMenuAbrirConfigMestre", { configurable: true, get: () => _avtMenuAbrirConfigMestre, set: (__v) => { _avtMenuAbrirConfigMestre = __v; } });
-Object.defineProperty(globalThis, "_avtMenuConfigConteudoAba", { configurable: true, get: () => _avtMenuConfigConteudoAba, set: (__v) => { _avtMenuConfigConteudoAba = __v; } });
-Object.defineProperty(globalThis, "_avtMenuHtmlConfigJogador", { configurable: true, get: () => _avtMenuHtmlConfigJogador, set: (__v) => { _avtMenuHtmlConfigJogador = __v; } });
-Object.defineProperty(globalThis, "_avtMenuBindColorPicker", { configurable: true, get: () => _avtMenuBindColorPicker, set: (__v) => { _avtMenuBindColorPicker = __v; } });
-Object.defineProperty(globalThis, "_avtMenuSelecionarMusicaMode", { configurable: true, get: () => _avtMenuSelecionarMusicaMode, set: (__v) => { _avtMenuSelecionarMusicaMode = __v; } });
-Object.defineProperty(globalThis, "_avtMenuSetMobilePref", { configurable: true, get: () => _avtMenuSetMobilePref, set: (__v) => { _avtMenuSetMobilePref = __v; } });
-Object.defineProperty(globalThis, "_avtMenuSalvarConfigMestre", { configurable: true, get: () => _avtMenuSalvarConfigMestre, set: (__v) => { _avtMenuSalvarConfigMestre = __v; } });
-Object.defineProperty(globalThis, "_avtMenuSalvarConfigJogador", { configurable: true, get: () => _avtMenuSalvarConfigJogador, set: (__v) => { _avtMenuSalvarConfigJogador = __v; } });
-Object.defineProperty(globalThis, "_avtMenuUploadImagem", { configurable: true, get: () => _avtMenuUploadImagem, set: (__v) => { _avtMenuUploadImagem = __v; } });
-Object.defineProperty(globalThis, "_avtMenuAbrirGuia", { configurable: true, get: () => _avtMenuAbrirGuia, set: (__v) => { _avtMenuAbrirGuia = __v; } });
-Object.defineProperty(globalThis, "_avtMenuAbrirPixiStudio", { configurable: true, get: () => _avtMenuAbrirPixiStudio, set: (__v) => { _avtMenuAbrirPixiStudio = __v; } });
-Object.defineProperty(globalThis, "_avtMenuEntrarJogo", { configurable: true, get: () => _avtMenuEntrarJogo, set: (__v) => { _avtMenuEntrarJogo = __v; } });
-Object.defineProperty(globalThis, "_avtMenuCharsVisiveis", { configurable: true, get: () => _avtMenuCharsVisiveis, set: (__v) => { _avtMenuCharsVisiveis = __v; } });
-Object.defineProperty(globalThis, "_avtMenuHtmlSeletorChar", { configurable: true, get: () => _avtMenuHtmlSeletorChar, set: (__v) => { _avtMenuHtmlSeletorChar = __v; } });
-Object.defineProperty(globalThis, "_avtMenuCarregarSessionData", { configurable: true, get: () => _avtMenuCarregarSessionData, set: (__v) => { _avtMenuCarregarSessionData = __v; } });
-Object.defineProperty(globalThis, "_avtMenuSalvarSessionData", { configurable: true, get: () => _avtMenuSalvarSessionData, set: (__v) => { _avtMenuSalvarSessionData = __v; } });
-Object.defineProperty(globalThis, "_avtMenuBindFaseMudouHandler", { configurable: true, get: () => _avtMenuBindFaseMudouHandler, set: (__v) => { _avtMenuBindFaseMudouHandler = __v; } });
+Object.defineProperty(globalThis, "_avtAnalogicoIniciar", { configurable: true, writable: true, value: _avtAnalogicoIniciar });
+Object.defineProperty(globalThis, "_avtControlesAtualizarUI", { configurable: true, writable: true, value: _avtControlesAtualizarUI });
+Object.defineProperty(globalThis, "_avtMenuHtmlControles", { configurable: true, writable: true, value: _avtMenuHtmlControles });
+Object.defineProperty(globalThis, "_avtGraficosAplicar", { configurable: true, writable: true, value: _avtGraficosAplicar });
+Object.defineProperty(globalThis, "_avtGraficosAtualizarUI", { configurable: true, writable: true, value: _avtGraficosAtualizarUI });
+Object.defineProperty(globalThis, "_avtGraficosToggle", { configurable: true, writable: true, value: _avtGraficosToggle });
+Object.defineProperty(globalThis, "_avtGraficosNivel", { configurable: true, writable: true, value: _avtGraficosNivel });
+Object.defineProperty(globalThis, "_avtMenuHtmlGraficos", { configurable: true, writable: true, value: _avtMenuHtmlGraficos });
+Object.defineProperty(globalThis, "avtMenuAbrir", { configurable: true, writable: true, value: avtMenuAbrir });
+Object.defineProperty(globalThis, "_avtMenuFallback", { configurable: true, writable: true, value: _avtMenuFallback });
+Object.defineProperty(globalThis, "sairAventura", { configurable: true, writable: true, value: sairAventura });
+Object.defineProperty(globalThis, "voltarAoMenuDeJogo", { configurable: true, writable: true, value: voltarAoMenuDeJogo });
+Object.defineProperty(globalThis, "_avtMenuRenderBotoes", { configurable: true, writable: true, value: _avtMenuRenderBotoes });
+Object.defineProperty(globalThis, "_hexToRgb", { configurable: true, writable: true, value: _hexToRgb });
+Object.defineProperty(globalThis, "_avtMenuAbrirPanel", { configurable: true, writable: true, value: _avtMenuAbrirPanel });
+Object.defineProperty(globalThis, "_avtMenuFecharPanel", { configurable: true, writable: true, value: _avtMenuFecharPanel });
+Object.defineProperty(globalThis, "_avtMenuAbrirJogar", { configurable: true, writable: true, value: _avtMenuAbrirJogar });
+Object.defineProperty(globalThis, "_avtMenuEntrarJogar", { configurable: true, writable: true, value: _avtMenuEntrarJogar });
+Object.defineProperty(globalThis, "_avtMenuAbrirContinuar", { configurable: true, writable: true, value: _avtMenuAbrirContinuar });
+Object.defineProperty(globalThis, "_avtMenuEntrarContinuarComChar", { configurable: true, writable: true, value: _avtMenuEntrarContinuarComChar });
+Object.defineProperty(globalThis, "_avtMenuAbrirFase", { configurable: true, writable: true, value: _avtMenuAbrirFase });
+Object.defineProperty(globalThis, "_avtMenuAbrirFaseJogador", { configurable: true, writable: true, value: _avtMenuAbrirFaseJogador });
+Object.defineProperty(globalThis, "_avtMenuAbrirFaseMestre", { configurable: true, writable: true, value: _avtMenuAbrirFaseMestre });
+Object.defineProperty(globalThis, "_avtMenuNovaFaseComRefresh", { configurable: true, writable: true, value: _avtMenuNovaFaseComRefresh });
+Object.defineProperty(globalThis, "_avtMenuRemoverFaseComRefresh", { configurable: true, writable: true, value: _avtMenuRemoverFaseComRefresh });
+Object.defineProperty(globalThis, "_avtMenuEditarFase", { configurable: true, writable: true, value: _avtMenuEditarFase });
+Object.defineProperty(globalThis, "_avtMenuSetEditFaseLock", { configurable: true, writable: true, value: _avtMenuSetEditFaseLock });
+Object.defineProperty(globalThis, "_avtMenuLerPortasInternasEditor", { configurable: true, writable: true, value: _avtMenuLerPortasInternasEditor });
+Object.defineProperty(globalThis, "_avtMenuAddPortaInterna", { configurable: true, writable: true, value: _avtMenuAddPortaInterna });
+Object.defineProperty(globalThis, "_avtMenuRemovePortaInterna", { configurable: true, writable: true, value: _avtMenuRemovePortaInterna });
+Object.defineProperty(globalThis, "_avtMenuSalvarEditarFase", { configurable: true, writable: true, value: _avtMenuSalvarEditarFase });
+Object.defineProperty(globalThis, "_avtMenuSelecionarFase", { configurable: true, writable: true, value: _avtMenuSelecionarFase });
+Object.defineProperty(globalThis, "_avtMenuEntrarFaseComChar", { configurable: true, writable: true, value: _avtMenuEntrarFaseComChar });
+Object.defineProperty(globalThis, "_avtMenuListarFases", { configurable: true, writable: true, value: _avtMenuListarFases });
+Object.defineProperty(globalThis, "_avtMenuAbrirPersonagem", { configurable: true, writable: true, value: _avtMenuAbrirPersonagem });
+Object.defineProperty(globalThis, "_avtMenuEditarChar", { configurable: true, writable: true, value: _avtMenuEditarChar });
+Object.defineProperty(globalThis, "_avtMenuCriarPersonagem", { configurable: true, writable: true, value: _avtMenuCriarPersonagem });
+Object.defineProperty(globalThis, "_avtMenuAbrirConfig", { configurable: true, writable: true, value: _avtMenuAbrirConfig });
+Object.defineProperty(globalThis, "_avtMenuAbrirConfigMestre", { configurable: true, writable: true, value: _avtMenuAbrirConfigMestre });
+Object.defineProperty(globalThis, "_avtMenuConfigConteudoAba", { configurable: true, writable: true, value: _avtMenuConfigConteudoAba });
+Object.defineProperty(globalThis, "_avtMenuHtmlConfigJogador", { configurable: true, writable: true, value: _avtMenuHtmlConfigJogador });
+Object.defineProperty(globalThis, "_avtMenuBindColorPicker", { configurable: true, writable: true, value: _avtMenuBindColorPicker });
+Object.defineProperty(globalThis, "_avtMenuSelecionarMusicaMode", { configurable: true, writable: true, value: _avtMenuSelecionarMusicaMode });
+Object.defineProperty(globalThis, "_avtMenuSetMobilePref", { configurable: true, writable: true, value: _avtMenuSetMobilePref });
+Object.defineProperty(globalThis, "_avtMenuSalvarConfigMestre", { configurable: true, writable: true, value: _avtMenuSalvarConfigMestre });
+Object.defineProperty(globalThis, "_avtMenuSalvarConfigJogador", { configurable: true, writable: true, value: _avtMenuSalvarConfigJogador });
+Object.defineProperty(globalThis, "_avtMenuUploadImagem", { configurable: true, writable: true, value: _avtMenuUploadImagem });
+Object.defineProperty(globalThis, "_avtMenuAbrirGuia", { configurable: true, writable: true, value: _avtMenuAbrirGuia });
+Object.defineProperty(globalThis, "_avtMenuAbrirPixiStudio", { configurable: true, writable: true, value: _avtMenuAbrirPixiStudio });
+Object.defineProperty(globalThis, "_avtMenuEntrarJogo", { configurable: true, writable: true, value: _avtMenuEntrarJogo });
+Object.defineProperty(globalThis, "_avtMenuCharsVisiveis", { configurable: true, writable: true, value: _avtMenuCharsVisiveis });
+Object.defineProperty(globalThis, "_avtMenuHtmlSeletorChar", { configurable: true, writable: true, value: _avtMenuHtmlSeletorChar });
+Object.defineProperty(globalThis, "_avtMenuCarregarSessionData", { configurable: true, writable: true, value: _avtMenuCarregarSessionData });
+Object.defineProperty(globalThis, "_avtMenuSalvarSessionData", { configurable: true, writable: true, value: _avtMenuSalvarSessionData });
+Object.defineProperty(globalThis, "_avtMenuBindFaseMudouHandler", { configurable: true, writable: true, value: _avtMenuBindFaseMudouHandler });

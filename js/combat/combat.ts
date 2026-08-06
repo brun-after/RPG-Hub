@@ -131,7 +131,7 @@ function decrementarCooldowns(contexto) {
   if (contexto === 'arena') {
     if (!AR.estado?.cooldowns) return;
     
-    const cooldowns = AR.estado.cooldowns;
+    const cooldowns = (AR.estado as any).cooldowns;
     for (const habilidadeId in cooldowns) {
       if (cooldowns[habilidadeId] > 0) {
         cooldowns[habilidadeId]--;
@@ -2692,8 +2692,8 @@ async function atkAplicarSkillSuporte(alvos) {
     const _cdKeyInv = h.id || h.habilidade || h.nome;
     if (_cdKeyInv && (h.cooldown_turnos || 0) > 0) {
       if (contexto === 'arena') {
-        if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
-        AR.estado.cooldowns[_cdKeyInv] = h.cooldown_turnos;
+        if (!AR.estado.cooldowns) (AR.estado as any).cooldowns = {};
+        (AR.estado as any).cooldowns[_cdKeyInv] = h.cooldown_turnos;
       } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
         const _bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
         if (_bs) {
@@ -2748,8 +2748,8 @@ async function atkAplicarSkillSuporte(alvos) {
   const _cdKey = h.id || h.habilidade || h.nome;
   if (_cdKey && (h.cooldown_turnos || 0) > 0) {
     if (contexto === 'arena') {
-      if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
-      AR.estado.cooldowns[_cdKey] = h.cooldown_turnos;
+      if (!AR.estado.cooldowns) (AR.estado as any).cooldowns = {};
+      (AR.estado as any).cooldowns[_cdKey] = h.cooldown_turnos;
     } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
       const _bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
       if (_bs) {
@@ -3722,8 +3722,8 @@ async function _atkAplicarDanoFinal() {
   const _cdKeyDano = h.id || h.habilidade || h.nome;
   if (_cdKeyDano && (h.cooldown_turnos || 0) > 0) {
     if (contexto === 'arena') {
-      if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
-      AR.estado.cooldowns[_cdKeyDano] = h.cooldown_turnos;
+      if (!AR.estado.cooldowns) (AR.estado as any).cooldowns = {};
+      (AR.estado as any).cooldowns[_cdKeyDano] = h.cooldown_turnos;
     } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
       const _bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
       if (_bs) {

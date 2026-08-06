@@ -42,9 +42,9 @@ async function descansoExecutar(tipo, nomePersonagem) {
     // Resetar atributos de recurso ao máximo
     const atribs = ca.atributos || {};
     (RPG_DATA?.attrDefs || []).forEach(def => {
-      let cfg2 = {};
+      let cfg2: any = {};
       try { cfg2 = JSON.parse(def.opcoes || '{}'); } catch(e) {}
-      if (cfg2.e_recurso && cfg2.max_attr) {
+      if (cfg2.e_recurso && (cfg2 as any).max_attr) {
         atribs[def.nome] = parseFloat(atribs[cfg2.max_attr] || 0);
       }
     });
@@ -98,5 +98,5 @@ async function descansoGrupo(tipo) {
 }
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "descansoExecutar", { configurable: true, get: () => descansoExecutar, set: (__v) => { descansoExecutar = __v; } });
-Object.defineProperty(globalThis, "descansoGrupo", { configurable: true, get: () => descansoGrupo, set: (__v) => { descansoGrupo = __v; } });
+Object.defineProperty(globalThis, "descansoExecutar", { configurable: true, writable: true, value: descansoExecutar });
+Object.defineProperty(globalThis, "descansoGrupo", { configurable: true, writable: true, value: descansoGrupo });
