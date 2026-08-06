@@ -1350,7 +1350,28 @@ window._avtBulkAparState = window._avtBulkAparState || {};
 // DB HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function _avtSb<T = any>(path: string, opts?: any): Promise<T | null> { return sb<T>(path, opts); }
+async function _avtSb<T = any>(path: string, opts?: any): Promise<T | null> {
+  // Choke point anti-posição-stale: qualquer PATCH de characters que carregue
+  // custom_attrs ganha avt_x/avt_y da entidade viva. Vários writers (seed de
+  // Mana, consumo de recurso, editor) clonam custom_attrs antigo e, gravando
+  // depois do flush, persistiam a posição de minutos atrás — no próximo login
+  // o spawn (que prioriza avt_x/avt_y) devolvia o personagem ao lugar errado.
+  try {
+    if (opts?.method === 'PATCH' && typeof path === 'string' && path.startsWith('characters?id=eq.') && typeof opts.body === 'string') {
+      const body = JSON.parse(opts.body);
+      const ca = body?.custom_attrs;
+      if (ca && typeof ca === 'object' && typeof AVT_STATE !== 'undefined') {
+        const charId = decodeURIComponent(path.slice('characters?id=eq.'.length).split('&')[0]);
+        const ent = (AVT_STATE.entidades || []).find((e: any) => e.tipo === 'jogador' && e.dbId === charId);
+        if (ent && Number.isFinite(ent.x) && Number.isFinite(ent.y)) {
+          ca.avt_x = ent.x; ca.avt_y = ent.y;
+          opts = { ...opts, body: JSON.stringify(body) };
+        }
+      }
+    }
+  } catch(_) {}
+  return sb<T>(path, opts);
+}
 
 // ── LINHAGEM (personagem compartilhado entre aventuras) ───────────────────────
 // Um personagem importado de outra aventura carrega um `linhagem_id` em custom_attrs
@@ -1477,20 +1498,21 @@ async function _avtBackfillLinhagem() {
     if (!rpgs.length) return;
     const _norm = (s: any) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
     const porNome: Record<string, any> = {}; // nomeNorm -> [{id, nome, custom_attrs}]
-    for (const r of rpgs) {
-      const rid = r.rpg_id || r.id;
-      if (!rid) continue;
-      let chars = [];
-      try {
-        chars = await _avtSb('characters?rpg_id=eq.' + encodeURIComponent(rid) +
-          '&select=id,nome,custom_attrs') || [];
-      } catch(_) { continue; }
-      chars.forEach((ch: any) => {
-        if (ch.custom_attrs?.tipo_personagem === 'npc' || !ch.nome) return;
-        const k: any = _norm(ch.nome);
-        (porNome[k] = porNome[k] || []).push(ch);
-      });
-    }
+    // Uma única query in.() — o loop anterior fazia 1 GET por campanha (N+1:
+    // 20+ requests sequenciais na abertura do hub).
+    const rids = rpgs.map((r: any) => r.rpg_id || r.id).filter(Boolean);
+    if (!rids.length) return;
+    let chars: any[] = [];
+    try {
+      const inList = rids.map((rid: any) => '"' + String(rid).replace(/"/g, '') + '"').join(',');
+      chars = await _avtSb('characters?rpg_id=in.(' + encodeURIComponent(inList) +
+        ')&select=id,nome,custom_attrs') || [];
+    } catch(_) { return; }
+    chars.forEach((ch: any) => {
+      if (ch.custom_attrs?.tipo_personagem === 'npc' || !ch.nome) return;
+      const k: any = _norm(ch.nome);
+      (porNome[k] = porNome[k] || []).push(ch);
+    });
     for (const k of Object.keys(porNome)) {
       const grupo = porNome[k];
       if (grupo.length < 2) continue; // sem cópias para vincular
@@ -1519,7 +1541,11 @@ window._avtEsc = _avtEsc;
 
 async function aventuraCarregarLista() {
   try {
-    const all = await _avtSb('rpg_registry?select=*&order=name');
+    // Reusa a lista do hub (getAllRPGs) — refazer o fetch dobra o download do
+    // theme_json completo (~34KB por campanha) a cada render da seção.
+    const all = (typeof HUB_DATA !== 'undefined' && HUB_DATA.rpgs?.length)
+      ? HUB_DATA.rpgs
+      : await _avtSb('rpg_registry?select=*&order=name');
     if (!all) return [];
     return all.filter((r: any) => r.is_aventura === true || r.theme_json?.is_aventura === true);
   } catch(e) { return []; }
@@ -4071,9 +4097,22 @@ function _avtRpgAtivo() {
 }
 window._avtRpgAtivo = _avtRpgAtivo;
 
+// O theme_json é gravado INTEIRO (~34KB) — dois clientes salvando em paralelo se
+// sobrescrevem (last-writer-wins). Só mestre ou host da fase têm autoridade para
+// persistir; nos convidados os salvamentos viram no-op (o estado deles chega ao
+// host via broadcasts e é o host quem persiste).
+function _avtPodeSalvarRegistro() {
+  try {
+    if (typeof _avtSouMestre === 'function' && _avtSouMestre()) return true;
+    if (typeof window._avtSouHostDaFaseAtual === 'function' && window._avtSouHostDaFaseAtual()) return true;
+  } catch(_) {}
+  return false;
+}
+
 async function _avtSalvarDungeon() {
   if (!AVT_STATE.dungeon) return;
   if (!_avtRpgAtivo()) return;
+  if (!_avtPodeSalvarRegistro()) return;
   const t = AVT_STATE.rpg?.theme_json || {};
   _avtGravarDungeonNoSlot(t);
   try {
@@ -4086,6 +4125,7 @@ async function _avtSalvarDungeon() {
 // Persiste o theme_json inteiro (level_config, fases_extras, etc.)
 async function _avtSalvarThemeJson() {
   if (!_avtRpgAtivo()) return;
+  if (!_avtPodeSalvarRegistro()) return;
   const t = AVT_STATE.rpg.theme_json || (AVT_STATE.rpg.theme_json = {});
   try {
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
@@ -4216,11 +4256,15 @@ async function _avtCarregarDados(rpgId: any) {
     char.custom_attrs.atributos = atrs;
     if ((_manaFaltava || _novoManaMax !== (atrs.ManaMax ?? 10)) && char.id) _manaToSeed.push(char);
   });
-  _manaToSeed.forEach((char: any) => {
-    _avtSb('characters?id=eq.' + encodeURIComponent(char.id), {
-      method: 'PATCH', body: JSON.stringify({ custom_attrs: char.custom_attrs })
-    }).catch(() => {});
-  });
+  // Persistir o seed é privilégio do mestre — todo cliente recalcula localmente,
+  // mas N clientes PATCHando os mesmos chars a cada entrada só gera corrida.
+  if (typeof _avtSouMestre === 'function' && _avtSouMestre()) {
+    _manaToSeed.forEach((char: any) => {
+      _avtSb('characters?id=eq.' + encodeURIComponent(char.id), {
+        method: 'PATCH', body: JSON.stringify({ custom_attrs: char.custom_attrs })
+      }).catch(() => {});
+    });
+  }
   AVT_STATE.skills     = (skills || []).map((s: any) => {
     if (typeof s.animacao === 'string') { try { s.animacao = JSON.parse(s.animacao); } catch(_) { s.animacao = null; } }
     if (s.animacao && typeof s.animacao !== 'object') s.animacao = null;
@@ -4257,7 +4301,7 @@ async function _avtCarregarDados(rpgId: any) {
   }
   _avtBausPreDungeonParaMapa();
   _avtNormalizarObjetosDungeon(AVT_STATE.dungeon);
-  (AVT_STATE as any)._dynSpawnNextAt = 0;
+  (AVT_STATE as any)._dynSpawnNextAt = -1; // boot: adia 1º spawn até pós-eleição
   // Início é sempre a fase inicial (fase 1). Entrar/Jogar nunca herda a fase de
   // outro jogador — o isolamento por fase cuida do resto.
   (AVT_STATE as any)._faseAtualId = 'principal';
@@ -4446,16 +4490,29 @@ async function _avtFlushPersistencia(origem: any) {
     );
   }
 
-  // 3. Flush posição de NPCs vivos (somente se npcSyncEnabled)
-  if ((AVT_STATE as any).npcSyncEnabled) {
-    for (const ent of (AVT_STATE.entidades || [])) {
-      if (ent.tipo !== 'inimigo' || ent.dbId || ent.hp <= 0) continue;
-      promises.push(
-        (typeof sbRpc === 'function' ? sbRpc('npc_update_position', {
-          _rpg: rpgId, _npc: ent.id, _x: ent.x || 0, _y: ent.y || 0, _user: null
-        }) : Promise.resolve()).catch(e => { try { console.warn('[AVT][flush] posição do NPC "' + ent.id + '" falhou:', e); } catch(_) {} })
-      );
-    }
+  // 3. Flush posição de NPCs vivos (somente se npcSyncEnabled). Sequencial com
+  // curto-circuito: um 404 (migração npc_state ausente) desliga npcSyncEnabled e
+  // aborta o resto — sem isso, cada flush dispara uma rajada de ~30 POSTs 404.
+  if ((AVT_STATE as any).npcSyncEnabled && typeof sbRpc === 'function') {
+    promises.push((async () => {
+      for (const ent of (AVT_STATE.entidades || [])) {
+        if (ent.tipo !== 'inimigo' || ent.dbId || ent.hp <= 0) continue;
+        if (!(AVT_STATE as any).npcSyncEnabled) break;
+        try {
+          await sbRpc('npc_update_position', {
+            _rpg: rpgId, _npc: ent.id, _x: ent.x || 0, _y: ent.y || 0, _user: null
+          });
+        } catch (e: any) {
+          const is404 = e?.status === 404 || (e?.message || String(e)).includes('404');
+          if (is404) {
+            (AVT_STATE as any).npcSyncEnabled = false;
+            try { console.warn('[AVT][flush] npc_update_position não encontrada (404) — flush de NPCs desativado'); } catch(_) {}
+            break;
+          }
+          try { console.warn('[AVT][flush] posição do NPC "' + ent.id + '" falhou:', e); } catch(_) {}
+        }
+      }
+    })());
   }
 
   try { await Promise.allSettled(promises); } catch(_) {}
@@ -13267,6 +13324,13 @@ function _avtGerarLootDinamico(pos: any) {
 // máximos (um roll de chance por vaga); depois repõe a cada intervalo.
 function _avtDynSpawnTick(now: any) {
   if (!AVT_STATE.rpgId || !AVT_STATE.dungeon?.render_data) return;
+  // Boot (-1): espera a eleição de host antes do primeiro spawn. No load todo
+  // cliente ainda "é host solo" por alguns segundos — spawnar loot e salvar o
+  // dungeon nessa janela grava theme_json em corrida com o host verdadeiro.
+  if (((AVT_STATE as any)._dynSpawnNextAt ?? 0) === -1) {
+    (AVT_STATE as any)._dynSpawnNextAt = now + 20_000;
+    return;
+  }
   if (now < ((AVT_STATE as any)._dynSpawnNextAt || 0)) return;
   const cfg: any = _avtDynSpawnConfig();
   (AVT_STATE as any)._dynSpawnNextAt = now + Math.max(15, cfg.intervaloS) * 1000;
@@ -15781,6 +15845,11 @@ function _avtPersistirEstadoInimigos() {
   _avtEstadoInimigosTimer = setTimeout(async () => {
     try {
       if (((AVT_STATE as any)._faseAtualId || 'principal') !== _faseAgendada) return; // fase mudou — descarta
+      // Autoridade avaliada NO DISPARO (pós-debounce): eventos broadcast (ex.:
+      // avt_npc_morreu) chegam a todos os clientes e todos agendavam este PATCH
+      // do theme_json inteiro — convidado sobrescrevia o registro em corrida
+      // com o host. Só mestre/host da fase persistem.
+      if (typeof _avtPodeSalvarRegistro === 'function' && !_avtPodeSalvarRegistro()) return;
       const t = AVT_STATE.rpg.theme_json || {};
       // FIX F1: gravar no slot da FASE CORRENTE. Antes gravava sempre em
       // t.dungeon_data (fase principal) e, como os IDs de inimigo são idênticos
@@ -27981,14 +28050,36 @@ function _avtSkillAnexarRefImg(skId: any, file: any) {
   }
   const reader = new FileReader();
   reader.onload = e => {
-    if (!sk.animacao) sk.animacao = {};
-    sk.animacao.referencia_img = e.target!.result;
-    sk.animacao.referencia_img_mime = file.type;
-    const cfgId = 'avt-sk-anim-cfg-' + skId.replace(/[^a-z0-9]/gi,'_');
-    const cfgEl = document.getElementById(cfgId);
-    if (cfgEl) cfgEl.innerHTML = _avtSkillAnimCfgHtml(sk);
-    _avtSkillAutoSave(skId, 200);
-    mostrarToast('Imagem de referência anexada — clique "⚡ Gerar com IA" para usar', 'ok');
+    // Reduz a imagem antes de gravar: a referência vai INTEIRA para dentro do
+    // JSONB de skills.animacao, e skills é baixada com select=* por todo
+    // jogador a cada entrada na aventura. Um PNG cru de ~800KB no campo fez a
+    // carga de skills de uma campanha real chegar a ~900KB. 256px de silhueta
+    // é o bastante para o preview e para a IA.
+    const dataUri = e.target!.result as string;
+    const img = new Image();
+    img.onload = () => {
+      let out = dataUri, mime = file.type;
+      try {
+        const MAX = 256;
+        const escala = Math.min(1, MAX / Math.max(img.width || 1, img.height || 1));
+        const cv = document.createElement('canvas');
+        cv.width  = Math.max(1, Math.round((img.width  || 1) * escala));
+        cv.height = Math.max(1, Math.round((img.height || 1) * escala));
+        cv.getContext('2d')!.drawImage(img, 0, 0, cv.width, cv.height);
+        const png = cv.toDataURL('image/png'); // preserva alpha (silhueta)
+        if (png && png.length < dataUri.length) { out = png; mime = 'image/png'; }
+      } catch(_) { /* canvas falhou (ex.: imagem corrompida) → usa original */ }
+      if (!sk.animacao) sk.animacao = {};
+      sk.animacao.referencia_img = out;
+      sk.animacao.referencia_img_mime = mime;
+      const cfgId = 'avt-sk-anim-cfg-' + skId.replace(/[^a-z0-9]/gi,'_');
+      const cfgEl = document.getElementById(cfgId);
+      if (cfgEl) cfgEl.innerHTML = _avtSkillAnimCfgHtml(sk);
+      _avtSkillAutoSave(skId, 200);
+      mostrarToast('Imagem de referência anexada — clique "⚡ Gerar com IA" para usar', 'ok');
+    };
+    img.onerror = () => mostrarToast('Não foi possível ler a imagem', 'erro');
+    img.src = dataUri;
   };
   reader.readAsDataURL(file);
 }
@@ -29778,6 +29869,10 @@ try{
   // ticks parciais sem problema: entidade ausente do payload = entidade sem mudança.
   const _TICK_KEYFRAME_EVERY = 10;
   let _tickBase: any = null; // { faseId, map: Map<id, json>, n }
+  // Troca de host invalida a base de deltas: o novo host precisa abrir com um
+  // keyframe completo, senão receptores que perderam broadcasts ficam com
+  // entidades stale até elas mudarem de novo (divergência residual observada).
+  try { addEventListener('rtnet:hostchange', () => { _tickBase = null; }); } catch(_) {}
   window._avtBuildStateTick = function() {
     try {
       if (!_souHostDaFase() || !AVT_STATE || !Array.isArray(AVT_STATE.entidades)) {
@@ -29794,6 +29889,11 @@ try{
           x: e.x, y: e.y,
           hp: e.hp, hpMax: e.hpMax,
           tipo: e.tipo,
+          // Sem propagar `morto`, o convidado fica com hp:0 + morto:false e toda
+          // lógica dependente da flag (respawn/loot/contadores) diverge do host.
+          // Derivado (como no report de HP, não da flag): em runtime a morte de
+          // inimigo é representada por hp<=0 — ninguém seta ent.morto ao matar.
+          morto: !!(e.morto || (e.tipo !== 'jogador' && typeof e.hp === 'number' && e.hp <= 0)),
           anim: e._currentAnim || null,
           escondido: e.escondido || false,
           status_effects: e.status_effects || [],
@@ -29862,6 +29962,8 @@ try{
         } else if (r.escondido === true || (typeof r.hp === 'number' && r.hp <= 0 && ent.tipo === 'inimigo')) {
           ent.escondido = true;
         }
+        // Flag `morto` espelha o host (só não-jogadores; jogadores usam hp/KO próprios)
+        if (ent.tipo !== 'jogador' && typeof r.morto === 'boolean') ent.morto = r.morto;
         // Status effects e flags de movimento: sincronizar do host
         if (Array.isArray(r.status_effects)) ent.status_effects = r.status_effects;
         if (r.atravessar !== undefined) ent.atravessar = r.atravessar;

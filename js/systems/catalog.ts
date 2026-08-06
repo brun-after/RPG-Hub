@@ -1541,24 +1541,24 @@ async function invRemoverItem(invId: any) {
 // ── ADICIONAR ITEM (MESTRE) ───────────────────────────────────────────────
 async function abrirAdicionarItemInv() {
   const rpgId = CURRENT_RPG?.id; if (!rpgId) return;
-  document.getElementById('modal-add-inv-overlay')!.style!.display = 'flex';
-  document.getElementById('add-inv-busca')!.value = '';
+  document.getElementById('modal-add-inv-overlay-cat')!.style!.display = 'flex';
+  document.getElementById('add-inv-busca-cat')!.value = '';
   // Carregar catálogo
   try {
     const data = await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&order=nome`);
     INV.catalogo = data || [];
     filtrarAddInv();
   } catch (e: any) {
-    document.getElementById('add-inv-lista')!.innerHTML = `<div style="color:var(--perigo);padding:20px">${e.message}</div>`;
+    document.getElementById('add-inv-lista-cat')!.innerHTML = `<div style="color:var(--perigo);padding:20px">${e.message}</div>`;
   }
 }
 
 function filtrarAddInv() {
-  const busca = (document.getElementById('add-inv-busca')?.value||'').toLowerCase();
+  const busca = (document.getElementById('add-inv-busca-cat')?.value||'').toLowerCase();
   const itens = INV.catalogo.filter((it: any) => !busca || it.nome.toLowerCase().includes(busca));
   const c = RPG_DATA?.characters?.find(x=>x.nome===INV.charAtivo);
   const charNivel = c?.custom_attrs?.nivel || 1;
-  document.getElementById('add-inv-lista')!.innerHTML = itens.slice(0, 50).map((it: any) => {
+  document.getElementById('add-inv-lista-cat')!.innerHTML = itens.slice(0, 50).map((it: any) => {
     const rc = RARIDADE_CORES[it.raridade] || RARIDADE_CORES.comum;
     const icon = _itemIcon(it);
     const bloq = charNivel < (it.nivel_minimo_uso || 1);
@@ -1594,7 +1594,7 @@ async function addInvConfirmar(catalogId: any) {
     };
     const res = await sb('inventario', { method:'POST', body: JSON.stringify(payload) });
     mostrarToast(`✓ ${it.nome} adicionado${bloq?' (bloqueado, Nv.'+it.nivel_minimo_uso+')':''}`, 'ok');
-    document.getElementById('modal-add-inv-overlay')!.style!.display = 'none';
+    document.getElementById('modal-add-inv-overlay-cat')!.style!.display = 'none';
     await carregarInventarioChar(charId);
     // Broadcast
     _invBroadcastDrop(it, INV.charAtivo, 'doacao_mestre');
