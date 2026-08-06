@@ -25,11 +25,11 @@ window.RTNet = (() => {
     paused:   false,
 
     // WebRTC
-    peers:       new Map(), // peerId → RTCPeerConnection
-    channels:    new Map(), // peerId → RTCDataChannel (reliable)
-    fastChannels:new Map(), // peerId → RTCDataChannel (unreliable)
-    connectingTo:new Set(),
-    peerJoinTs:  new Map(), // peerId → ms epoch reportado pelo peer
+    peers:       new Map<string, RTCPeerConnection>(),
+    channels:    new Map<string, RTCDataChannel>(),          // reliable
+    fastChannels:new Map<string, RTCDataChannel>(),          // unreliable
+    connectingTo:new Set<string>(),
+    peerJoinTs:  new Map<string, number>(),                  // ms epoch reportado pelo peer
 
     // Host
     hostId:      null,
@@ -47,7 +47,7 @@ window.RTNet = (() => {
     periodicSyncTimer:null,
 
     // Event handlers
-    handlers: new Map(),
+    handlers: new Map<string, Set<(payload: any) => void>>(),
 
     // Snapshot
     snapshotProvider: null,
@@ -56,7 +56,7 @@ window.RTNet = (() => {
     mode: 'supabase', // 'p2p' | 'mixed' | 'supabase'
 
     // Election candidates collected during window
-    _candidates: new Map(), // userId → joinTs
+    _candidates: new Map<string, number>(),                  // userId → joinTs
 
     // Voluntary host election
     _volunteers:    [],     // { userId, ts } — candidatos ao host (modo voluntário)
