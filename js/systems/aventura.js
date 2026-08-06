@@ -19740,11 +19740,16 @@ function _avtVfxHost() {
       width: canvas.width, height: canvas.height, powerPreference: 'high-performance',
     });
     h = _avtVfxHostState = { app, canvasRef: canvas, overlayCanvas, active: new Set() };
+    // Tamanho CSS pretendido do overlay. Comparar overlayCanvas.width (backing
+    // store = CSS × resolution) com c.width falha sempre que resolution ≠ 1 (iso
+    // usa ~0.55) e disparava renderer.resize() a cada tick.
+    h._syncW = canvas.width; h._syncH = canvas.height;
     // Sincroniza tamanho/posição com o canvas do mapa (barato; roda só com efeitos ativos)
     h._syncFn = () => {
       const c = h.canvasRef;
       if (!c || !c.isConnected) return;
-      if (h.overlayCanvas.width !== c.width || h.overlayCanvas.height !== c.height) {
+      if (h._syncW !== c.width || h._syncH !== c.height) {
+        h._syncW = c.width; h._syncH = c.height;
         try { h.app.renderer.resize(c.width, c.height); } catch(_) {}
       }
       const l = c.offsetLeft + 'px', t = c.offsetTop + 'px';
