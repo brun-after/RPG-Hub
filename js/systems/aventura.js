@@ -10130,6 +10130,10 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   const animCustomAB = !sk ? _abAnimCfg : null;
   const animPlaceholder = _avtAnimacaoPlaceholder(entJog || jogador, sk);
   const animFinal = animCustomAB?.tipo ? animCustomAB : (sk?.animacao?.tipo ? sk.animacao : animPlaceholder);
+  // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+  if (sk?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+    try { _psAvtLoadCfg(sk.animacao.pixi_studio_id); } catch (_) {}
+  }
   if (animFinal && typeof animarAtaque === 'function') {
     const atacEl = _avtElPosicaoCanvas(entJog || jogador);
     const alvoEl = _avtElPosicaoCanvas(ini);
@@ -11480,6 +11484,10 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   _avtMostrarD20AbaixoDaHead(ini, hitRoll, critMult);
 
   const animPlaceholder = _avtAnimacaoPlaceholder(ini, sk);
+  // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+  if (sk?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+    try { _psAvtLoadCfg(sk.animacao.pixi_studio_id); } catch (_) {}
+  }
   if (animPlaceholder && typeof animarAtaque === 'function') {
     const atacEl = _avtElPosicaoCanvas(ini);
     const alvoEl = _avtElPosicaoCanvas(alvo);
@@ -13977,6 +13985,10 @@ async function _avtExecutarAtaque() {
   const _temAnimRicaAtk = !!(skEfetiva?.animacao && skEfetiva.animacao.tipo && skEfetiva.animacao.tipo !== 'nenhuma');
   const animPlaceholderAtk = _temAnimRicaAtk ? null : _avtAnimacaoPlaceholder(entAtacanteAnim || ativo, sk);
   const _animDuracao = skEfetiva?.animacao?.duracao ?? animPlaceholderAtk?.duracao ?? 600;
+  // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+  if (skEfetiva?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+    try { _psAvtLoadCfg(skEfetiva.animacao.pixi_studio_id); } catch (_) {}
+  }
   if (animPlaceholderAtk && typeof animarAtaque === 'function') {
     const entAlvoAnim = AVT_STATE.entidades.find(e => e.id === alvo.id);
     const atacEl = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
@@ -15181,6 +15193,10 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
     // Animação placeholder do NPC em direção ao alvo
     const animPlaceholderNpc = _avtAnimacaoPlaceholder(entNpc || npc, sk);
     const _animDuracaoNpc = sk?.animacao?.duracao ?? animPlaceholderNpc?.duracao ?? 600;
+    // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+    if (sk?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+      try { _psAvtLoadCfg(sk.animacao.pixi_studio_id); } catch (_) {}
+    }
     if (animPlaceholderNpc && typeof animarAtaque === 'function') {
       const entAlvoNpcAnim = AVT_STATE.entidades.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
       const atacElNpc = _avtElPosicaoCanvas(entNpc || npc);
@@ -17300,14 +17316,42 @@ function avtMestrePainel() {
   if (!open) _avtMestrePainelRender();
 }
 
+// Tempo (ms) que a parte "viajante" da animação leva até o impacto no alvo.
+// Fonte única para o delay do SFX de impacto e para o retorno de _avtPlaySkillAnim
+// (que os callers usam para atrasar animações de morte). Espelha o que cada
+// branch do dispatcher desenha de fato.
+function _avtSkillTravelMs(anim, isAreaMode) {
+  const tipo = anim?.tipo || 'nenhuma';
+  const pos  = anim?.posicao || anim?.gsap_config?.alvo_efeito || 'alvo';
+  const viaja = ['trajetoria', 'raio', 'retorno'].includes(pos);
+  if (tipo === 'gsap') return viaja ? 400 : 0; // espelha o projétil de 400ms do branch gsap
+  if (['projetil', 'onda', 'explosao', 'raio', 'aura'].includes(tipo)) {
+    return viaja ? (anim.duracao || 600) : 0;
+  }
+  if (tipo === 'pixi_particulas') {
+    let cfg = anim.particle_config;
+    // Preset com envelope de fases: expande igual a _avtPixiParticleAnim, senão
+    // o impacto de presets tipo meteor_fall seria tratado como imediato.
+    if (cfg?.preset && !(cfg.phases || cfg.cast || cfg.travel || cfg.impact)) {
+      const pd = (typeof AVT_FX_PRESETS !== 'undefined') ? AVT_FX_PRESETS[cfg.preset] : null;
+      if (pd && (pd.phases || pd.cast || pd.travel || pd.impact)) cfg = Object.assign({}, pd, cfg);
+    }
+    if (cfg && (cfg.phases || cfg.cast || cfg.travel || cfg.impact)) {
+      return ((cfg.cast && cfg.cast.ms) || 0) + ((cfg.travel && cfg.travel.ms) || 0);
+    }
+    return (viaja && !isAreaMode) ? (anim.duracao || 600) : 0;
+  }
+  return 0; // simples/áreas/spine: impacto imediato; pixi_studio via avtPixiGetAnimDelaySync
+}
+
 function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
-  if (!sk) return;
+  if (!sk) return 0;
   alvoEnt = _avtEntViva(alvoEnt);
   atacanteEnt = atacanteEnt ? _avtEntViva(atacanteEnt) : null;
-  if (!alvoEnt) return;
+  if (!alvoEnt) return 0;
   const anim = sk.animacao || {};
   const tipo = anim.tipo || 'nenhuma';
-  if (tipo === 'nenhuma') return;
+  if (tipo === 'nenhuma') return 0;
 
   if (typeof AudioManager !== 'undefined') {
     const audioConf = anim.audio || {};
@@ -17327,10 +17371,14 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
     const impactSfx = audioConf.impact || autoSfx.impact;
     if (castSfx && volCast > 0.001) AudioManager.playSFX(castSfx, { volume: volCast, pitchVariance: 0.06 });
     if (impactSfx && volImp > 0.001) {
-      const travelTypes = ['projetil', 'onda', 'raio'];
-      const isTravel = travelTypes.includes(tipo) &&
-        ['trajetoria', 'raio', 'retorno'].includes(anim.posicao || '');
-      const impactDelay = isTravel ? (anim.duracao || 600) : 0;
+      // Delay alinhado ao tempo real de viagem do visual (inclui gsap com
+      // trajetória e envelopes pixi com fases cast→travel). Para pixi_studio,
+      // usa o delay síncrono do cache do Studio quando disponível.
+      let impactDelay = _avtSkillTravelMs(anim, isAreaMode);
+      if (anim.pixi_studio_id && typeof avtPixiGetAnimDelaySync === 'function') {
+        const dSync = avtPixiGetAnimDelaySync(anim.pixi_studio_id);
+        if (typeof dSync === 'number') impactDelay = dSync;
+      }
       if (impactDelay > 0) {
         setTimeout(() => AudioManager.playSFX(impactSfx, { volume: volImp, pitchVariance: 0.06 }), impactDelay);
       } else {
@@ -17340,7 +17388,7 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
   }
 
   const canvas = AVT_STATE.canvas;
-  if (!canvas) return;
+  if (!canvas) return 0;
   // SZ recalculado a cada chamada: repetições/callbacks tardios usam o zoom atual.
   const toScreen = (ent) => {
     const live = _avtEntViva(ent);
@@ -17372,7 +17420,7 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
       _avtCanvasFlash(alvoScr.x, alvoScr.y, cor, gc.preset || 'Impacto');
     } else if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno') {
       _avtCanvasEfeito('projetil', atacScr.x, atacScr.y, alvoScr.x, alvoScr.y, cor, 400, 20, true, null, posicao);
-      return 400;
+      return _avtSkillTravelMs(anim, isAreaMode);
     } else if (posicao === 'area') {
       _avtCanvasEfeito('explosao', midX, midY, midX, midY, cor, 600, 60, false, null);
     } else {
@@ -17433,19 +17481,13 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
         }
       }, r * (dur + 100));
     }
-    const viajando = posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno';
-    return viajando ? dur : 0;
+    return _avtSkillTravelMs(anim, isAreaMode);
   }
 
   if (tipo === 'pixi_particulas' && anim.particle_config) {
     const posicao = isAreaMode ? 'area' : (anim.posicao || 'alvo');
     _avtPixiParticleAnim(anim.particle_config, atacScr, alvoScr, posicao);
-    const cfg = anim.particle_config;
-    if (cfg && (cfg.phases || cfg.cast || cfg.travel || cfg.impact)) {
-      return ((cfg.cast && cfg.cast.ms) || 0) + ((cfg.travel && cfg.travel.ms) || 0);
-    }
-    const viajando = posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno';
-    return viajando ? (anim.duracao || 600) : 0;
+    return _avtSkillTravelMs(anim, isAreaMode);
   }
 
   if (tipo === 'pixi_spine' && anim.spine_config) {
@@ -17458,12 +17500,19 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
     return 0;
   }
 
-  // Studio Pixi — play by animation ID
+  // Studio Pixi — play by animation ID. A execução é async (o cfg pode vir da
+  // rede), mas o delay de viagem sai síncrono do cache do Studio quando o cfg
+  // já foi carregado — senão 0 (comportamento antigo, degradação suave).
   if ((tipo === 'pixi_studio' || anim.pixi_studio_id) && anim.pixi_studio_id) {
     if (typeof avtPixiPlayAnimation === 'function') {
-      avtPixiPlayAnimation(anim.pixi_studio_id, atacanteEnt, alvoEnt, isAreaMode);
+      try {
+        const p = avtPixiPlayAnimation(anim.pixi_studio_id, atacanteEnt, alvoEnt, isAreaMode);
+        if (p && typeof p.catch === 'function') p.catch(e => console.warn('[avt-fx] pixi_studio:', e));
+      } catch (e) { console.warn('[avt-fx] pixi_studio:', e); }
     }
-    return 0;
+    const dSync = (typeof avtPixiGetAnimDelaySync === 'function')
+      ? avtPixiGetAnimDelaySync(anim.pixi_studio_id) : null;
+    return typeof dSync === 'number' ? dSync : 0;
   }
 
   return 0;
@@ -30709,6 +30758,10 @@ function _avtNpcTurnoInvocado(bat) {
     // Animação de ataque (placeholder ou da skill)
     const _animInv = _avtAnimacaoPlaceholder(entInv, _skUsada);
     const _animDuracaoInv = _skUsada?.animacao?.duracao ?? _animInv?.duracao ?? 600;
+    // Prewarm do cfg do Studio durante o sorteio: o delay de morte sai síncrono do cache.
+    if (_skUsada?.animacao?.pixi_studio_id && typeof _psAvtLoadCfg === 'function') {
+      try { _psAvtLoadCfg(_skUsada.animacao.pixi_studio_id); } catch (_) {}
+    }
     if (_animInv && typeof animarAtaque === 'function') {
       const _atacElInv = _avtElPosicaoCanvas(entInv);
       const _alvoElInv = _avtElPosicaoCanvas(alvo);
