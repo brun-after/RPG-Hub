@@ -137,7 +137,7 @@ function decrementarCooldowns(contexto) {
         cooldowns[habilidadeId]--;
         
         if (cooldowns[habilidadeId] === 0) {
-          arLog(`⚡ Habilidade ${habilidadeId} disponível novamente!`);
+          { const _f = (window as any).arLog; if (typeof _f === 'function') _f(`⚡ Habilidade ${habilidadeId} disponível novamente!`); }
         }
       }
     }

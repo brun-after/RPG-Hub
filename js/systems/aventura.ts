@@ -16788,6 +16788,8 @@ function avtJogadorPainelRender(targetEl?, opts?) {
           const grupos = [...s.formula_dano.matchAll(/(\d+)d(\d+)/g)];
           const fixo   = (s.formula_dano.match(/[+-]\d+(?!d\d)/g) || []).reduce((a, v) => a + parseInt(v), 0);
           const _normAPrev = s2 => (s2||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+          // fix: 'atrs' era referência sem declaração no escopo (ReferenceError latente) — deriva do char como no resto do arquivo
+          const atrs = char?.custom_attrs?.atributos || {};
           const attrChave = s.atributo_base ? (Object.keys(atrs).find(k => _normAPrev(k) === _normAPrev(s.atributo_base)) || null) : null;
           const attrVal = attrChave ? parseFloat(atrs[attrChave] || 0) : 0;
           const mult = s.mod_atributo_mult ?? s.mod_atributo_pct ?? 1.0;

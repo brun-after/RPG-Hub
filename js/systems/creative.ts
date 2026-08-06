@@ -773,7 +773,7 @@ function arCenAbrirCanvas() {
     const img = new Image();
     img.onload = () => {
       const c = document.getElementById('nmce-canvas');
-      if (c) { const ctx = c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img,0,0,c.width,c.height); nmCE.history = []; nmcePush(); }
+      if (c) { const ctx = c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img,0,0,c.width,c.height); nmCE.history = []; if (typeof nmcePushHistory === 'function') nmcePushHistory(); }
     };
     img.src = _arCenCanvasDataUrl;
   }

@@ -2687,8 +2687,8 @@ function mesaCriarToken(c, layer) {
     width:${ca.tipo==='objeto'?40:50}px;
     height:${ca.tipo==='objeto'?40:50}px;
     border-radius:${ca.tipo==='objeto'?'6px':'50%'};
-    border:2px solid ${selecionado?'#7ec8f0':cor};
-    box-shadow:${selecionado?`0 0 0 3px rgba(126,200,240,0.5),`:''}0 0 12px ${cor}55;
+    border:2px solid ${(window as any).selecionado?'#7ec8f0':cor};
+    box-shadow:${(window as any).selecionado?`0 0 0 3px rgba(126,200,240,0.5),`:''}0 0 12px ${cor}55;
     overflow:hidden;
     cursor:${MESA.toolMode?'crosshair':'grab'};
     z-index:10;
@@ -2710,8 +2710,8 @@ function mesaCriarToken(c, layer) {
     token.style.cssText = `position:absolute;left:${pos.x}%;top:${pos.y}%;transform:translate(-50%,-50%);width:${tw}px;height:${th}px;cursor:${MESA.toolMode?'crosshair':'grab'};z-index:10;touch-action:none;opacity:${incapacitado?0.45:1};overflow:visible;display:flex;align-items:flex-end;justify-content:center;`;
     const inner = document.createElement('div');
     // CSS filter cria compositing group que quebra WebGL — omitir para tokens animados
-    const _arFilter = isAnimadoAr ? '' : `filter:drop-shadow(0 ${elev}px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))${selecionado?' drop-shadow(0 0 6px rgba(126,200,240,0.7))':''}`;
-    inner.style.cssText = `width:${tw}px;height:${th}px;border:1px solid ${selecionado?'#7ec8f0':cor+'44'};border-radius:4px;background:transparent;position:relative;${_arFilter};transform:translateY(-${elev}px);display:flex;align-items:center;justify-content:center;overflow:visible;`;
+    const _arFilter = isAnimadoAr ? '' : `filter:drop-shadow(0 ${elev}px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))${(window as any).selecionado?' drop-shadow(0 0 6px rgba(126,200,240,0.7))':''}`;
+    inner.style.cssText = `width:${tw}px;height:${th}px;border:1px solid ${(window as any).selecionado?'#7ec8f0':cor+'44'};border-radius:4px;background:transparent;position:relative;${_arFilter};transform:translateY(-${elev}px);display:flex;align-items:center;justify-content:center;overflow:visible;`;
     const _arEquips = ca.aparencia?.equipamentos_visuais || [];
     const composedImgAr = ca.aparencia?.composed_img;
     if (composedImgAr && !isAnimadoAr) {

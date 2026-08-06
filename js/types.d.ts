@@ -14,16 +14,12 @@ declare global {
     [key: string]: any;
   }
 
-  // Shim de migração: o app acessa .value/.checked/.disabled etc. em elementos
   // obtidos por getElementById sem narrowing. Será removido quando os módulos
   // ganharem tipos reais (Entregas 3-4).
   interface HTMLElement {
     [key: string]: any;
   }
   interface Element {
-    [key: string]: any;
-  }
-  interface Document {
     [key: string]: any;
   }
 
@@ -92,9 +88,7 @@ declare global {
   var adicionarItemInventario: any;
   var aplicarBuffCampanha: any;
   var aplicarDanoBatalha: any;
-  var arLog: any;
   var assertHpConsistente: any;
-  var atrs: any;
   var atualizarDisplayMoedas: any;
   var atualizarInventarioUI: any;
   var atualizarMapaLoot: any;
@@ -115,14 +109,11 @@ declare global {
   var inicializarSistemaAprovacoes: any;
   var iniciarBatalha: any;
   var itemAtualizarPreview: any;
-  var logCombate: any;
   var mapa: any;
   var mapaCarregar: any;
-  var mapaRenderizar: any;
   var mostrarTelaVitoria: any;
   var mostrarTriggerVisual: any;
   var navegarParaMapa: any;
-  var nmcePush: any;
   var notifExecutar: any;
   var ocultarTriggerVisual: any;
   var recalcularHpMax: any;
@@ -136,9 +127,7 @@ declare global {
   var renderMoedas: any;
   var renderPersonagens: any;
   var renderTrades: any;
-  var selecionado: any;
   var setCooldownBatalha: any;
   var skAnimPixiPosicaoChange: any;
-  var ws: any;
   // [migração-ts:auto-globals:fim]
 }

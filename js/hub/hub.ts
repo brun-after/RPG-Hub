@@ -231,8 +231,8 @@ function _mesaToolbarSetup(mapaWrap) {
   });
 
   // Painel esquerdo: listener no documento para não perder o mouse ao entrar no painel
-  if (!document._mesaEsqProximidade) {
-    document._mesaEsqProximidade = true;
+  if (!(document as any)._mesaEsqProximidade) {
+    (document as any)._mesaEsqProximidade = true;
     const LIMIAR_ABRIR  = 60;  // px da borda esquerda para abrir
     const LIMIAR_FECHAR_EXTRA = 16; // px de buffer além da largura do painel para fechar
     let _esqVisible = false;

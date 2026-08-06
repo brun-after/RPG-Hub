@@ -478,7 +478,7 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
       const rpgId = contexto === 'arena' ? AR.session.rpg_id : RPG_DATA.rpgId;
       await sbFn(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
         { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
-      const logFn = contexto === 'arena' ? arLog : logCombate;
+      const logFn = contexto === 'arena' ? (window as any).arLog : (window as any).logCombate;
       if (logFn) logFn(`💙 ${nomeAlvo} ganhou ${efeitoConfig.hp_temp} HP temporário`);
     }
     return;
@@ -497,7 +497,7 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
         const rpgId = contexto === 'arena' ? AR.session.rpg_id : RPG_DATA.rpgId;
         await sbFn(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
           { method: 'PATCH', body: JSON.stringify({ buffs: c.buffs }) });
-        const logFn = contexto === 'arena' ? arLog : logCombate;
+        const logFn = contexto === 'arena' ? (window as any).arLog : (window as any).logCombate;
         if (logFn) logFn(`🧹 ${nomeAlvo} teve debuff "${removido.nome||'?'}" removido`);
       }
     }
@@ -1200,7 +1200,7 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
     const danoFinal = calcularDanoFinal(dano, tipoDano || 'fisico', c, attrDefs, atacanteChar);
     const hpMax = c.custom_attrs?.hp_max ?? 100;
     const novoHp = Math.max(0, (c.hp_atual ?? hpMax) - danoFinal);
-    if (danoFinal !== dano) arLog(`🛡 ${nomeAlvo} — ${dano} de dano bruto → ${danoFinal} após buffs/resistências`);
+    if (danoFinal !== dano && typeof (window as any).arLog === 'function') (window as any).arLog(`🛡 ${nomeAlvo} — ${dano} de dano bruto → ${danoFinal} após buffs/resistências`);
     c.hp_atual = novoHp;
     await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
       { method: 'PATCH', body: JSON.stringify({ hp_atual: novoHp }) });
@@ -6943,7 +6943,7 @@ async function sessionAtivarCena(cenaId) {
   if (cena.afetada && !confirm('⚠ Esta cena foi afetada por mudanças. Ativar mesmo assim?')) return;
   if (cena.cenario) {
     const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === cena.cenario);
-    if (entry) { MAPA_STATE.mapaAtualId = cena.cenario; mapaRenderizar(entry.mapa); }
+    if (entry) { MAPA_STATE.mapaAtualId = cena.cenario; const _f = (window as any).mapaRenderizar; if (typeof _f === 'function') _f(entry.mapa); }
   }
   if (cena.narracao) {
     HUB_EVENTS.emit('cena_carregada', { cena_id: cenaId, nome: cena.id, narracao: cena.narracao });

@@ -1943,6 +1943,7 @@ async function cfgMoedasSalvar() {
 // ── BROADCAST HELPER ─────────────────────────────────────────────────────
 function _invBroadcastDrop(it, personagemDestino, origem) {
   try {
+    const ws = (window as any).ws;   // nunca foi definido — broadcast é no-op desde sempre (antes: ReferenceError engolido pelo try)
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     const payload = {
       tipo_evento: 'item_dropado',
@@ -2020,7 +2021,8 @@ function _patchWsItemDropado(payload) {
 
 // Integrar com o ws existente via monkey-patch do onmessage
 const _wsCheckInterval = setInterval(() => {
-  if (typeof ws !== 'undefined' && ws) {
+  const ws = (window as any).ws;   // nunca foi global — o monkey-patch fica dormente (comportamento atual)
+  if (ws) {
     const originalOnMessage = ws.onmessage;
     ws.onmessage = function(e) {
       if (originalOnMessage) originalOnMessage.call(this, e);
@@ -3412,7 +3414,7 @@ function _ativarControleMobile() {
   try {
     const _el = document.documentElement;
     const _req = _el.requestFullscreen || _el.webkitRequestFullscreen || _el.mozRequestFullScreen;
-    if (_req && !document.fullscreenElement && !document.webkitFullscreenElement) {
+    if (_req && !document.fullscreenElement && !(document as any).webkitFullscreenElement) {
       _req.call(_el).catch(function(){});
     }
   } catch(e) {}
@@ -3544,8 +3546,8 @@ function _desativarControleMobile() {
   clearInterval(_DPAD_TIMER); _DPAD_TIMER = null; _DPAD_DC = 0; _DPAD_DR = 0;
   try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch(e) {}
   try {
-    const _exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen;
-    if (_exit && (document.fullscreenElement || document.webkitFullscreenElement)) {
+    const _exit = document.exitFullscreen || (document as any).webkitExitFullscreen || (document as any).mozCancelFullScreen;
+    if (_exit && (document.fullscreenElement || (document as any).webkitFullscreenElement)) {
       _exit.call(document).catch(function(){});
     }
   } catch(e) {}
