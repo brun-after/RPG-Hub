@@ -10216,14 +10216,11 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       const _critMsgArea = critMult === 2 ? '🎯✦✦ CRÍTICO TOTAL! ' : critMult === 1.5 ? '🎯 CRÍTICO! ' : critMult === 1.2 ? '⭐ CRÍTICO MENOR! ' : '';
       mostrarToast(`${_critMsgArea}${skillNome} [${_areaLabel}] atinge ${_alvosAreaOoc.length} alvo(s)!`, 'ok');
 
-      // Animação de skill em área
-      if (sk && typeof _avtPlaySkillAnim === 'function') {
+      // Animação de skill em área (local + peers, geometria no payload)
+      if (sk) {
         const entJogVivoArea = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
-        _avtPlaySkillAnim(sk, entJogVivoArea, entJogVivoArea, true);
-        // Para skills de área, enviar a geometria (centro/linha) e ancorar no conjurador —
-        // o rótulo "_areaLabel" não resolve uma entidade nos peers, e _areaCentro/_areaLinha
-        // são estado local, então a animação não aparecia para quem não conjurou.
-        try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivoArea.nome, alvoNome: entJogVivoArea.nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null }); } catch(_) {}
+        _avtSkillAnimEmit({ sk, casterEnt: entJogVivoArea, isArea: true,
+          areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null });
       }
 
       // Invocações (efeito 'invocar_catalogo'): vinculadas ao conjurador, uma vez por uso
@@ -10355,9 +10352,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
               try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: entAlvX.nome, animacao: animFinal }); } catch(_) {}
             }
             // Animação rica (pixi/partículas) configurada replica em cada alvo extra (paridade com combate e com o alvo primário OOC).
-            if (skEfetiva?.animacao?.tipo && skEfetiva.animacao.tipo !== 'nenhuma' && typeof _avtPlaySkillAnim === 'function') {
-              try { _avtPlaySkillAnim(skEfetiva, entAlvX, entJog || jogador); } catch(_) {}
-              try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entJog||jogador).nome, alvoNome: entAlvX.nome }); } catch(_) {}
+            if (skEfetiva?.animacao?.tipo && skEfetiva.animacao.tipo !== 'nenhuma') {
+              _avtSkillAnimEmit({ sk: skEfetiva, casterEnt: entJog || jogador, alvoEnt: entAlvX });
             }
             entAlvX.hp = Math.max(0, entAlvX.hp - real);
             _avtAplicarDanoPersistir(entAlvX, entAlvX.hp);
@@ -10430,11 +10426,10 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
 
       // Animação de skill / ataque básico configurada (pixi, partículas, etc.)
       const _temAnimRicaOOC = !!(skEfetiva?.animacao && skEfetiva.animacao.tipo && skEfetiva.animacao.tipo !== 'nenhuma');
-      if ((sk || _temAnimRicaOOC) && typeof _avtPlaySkillAnim === 'function') {
+      if (sk || _temAnimRicaOOC) {
         const entIniVivo = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
         const entJogVivo = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
-        _avtPlaySkillAnim(skEfetiva, entIniVivo, entJogVivo);
-        try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome: entJogVivo.nome, alvoNome: entIniVivo.nome }); } catch(_) {}
+        _avtSkillAnimEmit({ sk: skEfetiva, casterEnt: entJogVivo, alvoEnt: entIniVivo });
       }
 
       if (ini.hp <= 0) {
@@ -11329,10 +11324,7 @@ function _avtTickEfeitosOOC(now) {
                   if (_atacElOoc && _alvoElOoc) _avtSetTimeout(() => animarAtaque({ atacEl: _atacElOoc, alvoEl: _alvoElOoc, animacao: _animOoc, dano: 0 }), _avtSlotMachineMs());
                   try { _avtBroadcast('avt_attack_anim', { atacanteNome: ent.nome, alvoNome: _alvoDom.nome, animacao: _animOoc, delay: _avtSlotMachineMs() }); } catch(_) {}
                 }
-                if (_skUsadaOoc && typeof _avtPlaySkillAnim === 'function') {
-                  _avtPlaySkillAnim(_skUsadaOoc, _alvoDom, ent);
-                  try { _avtBroadcast('avt_skill_anim', { skillId: _skUsadaOoc.id || null, animacao: _skUsadaOoc.animacao || null, atacanteNome: ent.nome, alvoNome: _alvoDom.nome }); } catch(_) {}
-                }
+                if (_skUsadaOoc) _avtSkillAnimEmit({ sk: _skUsadaOoc, casterEnt: ent, alvoEnt: _alvoDom });
               } catch(_) {}
 
               if (_isFumbleOoc) {
@@ -11554,8 +11546,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     if (alvo.tipo !== 'jogador') {
       try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
     }
-    if (sk && typeof _avtPlaySkillAnim === 'function') _avtPlaySkillAnim(sk, alvo, ini);
-    try { _avtBroadcast('avt_skill_anim', { skillId: sk?.id || null, animacao: sk?.animacao || null, atacanteNome: ini.nome, alvoNome: alvo.nome }); } catch(_) {}
+    _avtSkillAnimEmit({ sk, casterEnt: ini, alvoEnt: alvo });
     if (sk?.efeitos_bonus?.length && alvo.hp > 0) {
       const _entAlvoNpc = AVT_STATE.entidades.find(e => e.id === alvo.id) || alvo;
       const _coolEfNpc = _avtGetEfeitoCooldownMs();
@@ -13581,10 +13572,7 @@ async function _avtSkillOverlaySel(skId) {
     _avtRenderHpBar();
     _avtBroadcastBatalha(b);
     mostrarToast(`✨ ${sk.habilidade} aplicado em si mesmo`, 'ok', 2500);
-    if (typeof _avtPlaySkillAnim === 'function') {
-      _avtPlaySkillAnim(sk, casterEnt, casterEnt, false);
-      try { _avtBroadcast('avt_skill_anim', { skillId: sk.id||null, animacao: sk.animacao||null, atacanteNome: casterEnt.nome, alvoNome: casterEnt.nome }); } catch(_) {}
-    }
+    _avtSkillAnimEmit({ sk, casterEnt });
     _avtJanelaMovimentoPosDado(b, ativo, () => _avtTurnoAvancar(b));
     return;
   }
@@ -14127,11 +14115,9 @@ async function _avtExecutarAtaque() {
         _avtLog(`${isCrit ? '🎯 CRÍTICO! ' : ''}${ativo.nome} usa ${skillNome} [${areaLabel}] → ${_alvosAreaFinal.length} alvo(s)`, b.id);
         if (!_mobileAvtDisp) mostrarToast(`${isCrit ? '🎯 CRÍTICO! ' : ''}${skillNome} atinge ${_alvosAreaFinal.length} alvo(s)!`, 'ok');
 
-        // Animar área e limpar estado
-        const _delayMorteArea = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entCaster), _avtEntViva(entCaster), _isAreaAttack) : 0;
-        // Skills de área: enviar geometria (centro/linha) e ancorar no conjurador, pois o
-        // rótulo de área não resolve entidade nos peers e _areaCentro/_areaLinha são locais.
-        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAtacanteAnim||ativo).nome, areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null }); } catch(_) {} }
+        // Animar área (local + peers) e limpar estado
+        const _delayMorteArea = _avtSkillAnimEmit({ sk, casterEnt: entCaster, isArea: true,
+          areaCentro: AVT_STATE._areaCentro || null, areaLinha: AVT_STATE._areaLinha || null });
 
         // Números de dano nos peers: 1 broadcast em lote (o stagger de 80ms é
         // reproduzido no receptor) em vez de 1 evento por alvo dentro do loop.
@@ -14302,8 +14288,7 @@ async function _avtExecutarAtaque() {
               // Anima o ataque em cada alvo extra (modificador multi-alvo): animação rica
               // (skill/ataque básico configurado) ou placeholder, conforme o ataque primário.
               if (_temAnimRicaAtk) {
-                try { _avtPlaySkillAnim(skEfetiva, _avtEntViva(entAlvX || alvX), _avtEntViva(entAtacanteAnim || ativo)); } catch(_) {}
-                try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome: alvX.nome }); } catch(_) {}
+                _avtSkillAnimEmit({ sk: skEfetiva, casterEnt: entAtacanteAnim || ativo, alvoEnt: entAlvX || alvX });
               } else if (animPlaceholderAtk && typeof animarAtaque === 'function') {
                 const _elXm = _avtElPosicaoCanvas(entAlvX || alvX);
                 const _elAm = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
@@ -14330,8 +14315,9 @@ async function _avtExecutarAtaque() {
         }
         _avtRenderHpBar();
         const _playAnimAtk = sk || _temAnimRicaAtk;
-        const _delayMorte = _playAnimAtk ? _avtPlaySkillAnim(skEfetiva, _avtEntViva(entAlvo || alvo), _avtEntViva(entAtacanteAnim || ativo)) : 0;
-        if (_playAnimAtk) { try { _avtBroadcast('avt_skill_anim', { skillId: skEfetiva.id || null, animacao: skEfetiva.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAlvo||alvo).nome }); } catch(_) {} }
+        const _delayMorte = _playAnimAtk
+          ? _avtSkillAnimEmit({ sk: skEfetiva, casterEnt: entAtacanteAnim || ativo, alvoEnt: entAlvo || alvo })
+          : 0;
         if (alvo.hp <= 0) {
           _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
           _avtSetTimeout(() => {
@@ -14943,10 +14929,7 @@ async function _avtExecutarSkillEmAliado(skId, alvoId) {
   if (!bat._cooldowns) bat._cooldowns = {};
   if (sk.cooldown_turnos > 0) bat._cooldowns[cdKey] = sk.cooldown_turnos;
 
-  if (typeof _avtPlaySkillAnim === 'function') {
-    _avtPlaySkillAnim(sk, entAlvoObj||entAlvo, caster, false);
-    try { _avtBroadcast('avt_skill_anim', { skillId: sk.id||null, animacao: sk.animacao||null, atacanteNome: ativo.nome, alvoNome: entAlvo.nome }); } catch(_) {}
-  }
+  _avtSkillAnimEmit({ sk, casterEnt: caster, alvoEnt: entAlvoObj || entAlvo });
 
   _avtRenderHpBar();
   _avtBroadcastBatalha(bat);
@@ -15293,17 +15276,11 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
           const _areaLabelNpc = _npcTipoArea === 'linha' ? '▬ Linha' : '◼ Área';
           _avtLog(`👹 ${npc.nome} usa ${skillNome} [${_areaLabelNpc}] → ${_alvosNpcArea.length} alvo(s)`, bat.id);
           mostrarToast(`👹 ${npc.nome} usa ${skillNome} e atinge ${_alvosNpcArea.length} alvo(s)!`, 'aviso');
-          // Animação local com a geometria da área (save/restore espelha o receptor
-          // avtReceberSkillAnim) e broadcast com geometria + âncora no conjurador —
-          // o rótulo "◼ Área"/"▬ Linha" não resolve entidade nos peers.
-          let _delayMorteNpcArea = 0;
-          if (sk) {
-            const _savedC = AVT_STATE._areaCentro, _savedL = AVT_STATE._areaLinha;
-            AVT_STATE._areaCentro = _areaGeoC; AVT_STATE._areaLinha = _areaGeoL;
-            try { _delayMorteNpcArea = _avtPlaySkillAnim(sk, _avtEntViva(entNpc), _avtEntViva(entNpc), true) || 0; }
-            finally { AVT_STATE._areaCentro = _savedC; AVT_STATE._areaLinha = _savedL; }
-            try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:(entNpc||npc).nome, areaCentro: _areaGeoC, areaLinha: _areaGeoL }); } catch(e) { console.warn('[avt-fx] broadcast área NPC:', e); }
-          }
+          // Animação local com a geometria da área + broadcast com geometria e
+          // âncora no conjurador (o rótulo "◼ Área"/"▬ Linha" não resolve
+          // entidade nos peers).
+          const _delayMorteNpcArea = _avtSkillAnimEmit({ sk, casterEnt: entNpc || npc,
+            isArea: true, areaCentro: _areaGeoC, areaLinha: _areaGeoL });
 
           // Números de dano nos peers: lote único (stagger reproduzido no receptor).
           try { _avtBroadcast('avt_dano_visual_batch', { alvoNomes: _alvosNpcArea.map(a => a.nome), dano: real, isCrit, critMult, stepMs: 80 }); } catch(_) {}
@@ -15424,8 +15401,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         const _critLabelNpc = critMult === 2 ? ' ✦✦ CRÍTICO TOTAL!' : critMult === 1.5 ? ' ✦ CRÍTICO!' : critMult === 1.2 ? ' ⭐ CRÍTICO MENOR!' : '';
         _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${_critLabelNpc}`, bat.id);
         mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${_critLabelNpc}`, 'aviso');
-        const _delayMorteNpc = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || skillAlvo), _avtEntViva(entNpc)) : 0;
-        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:(entAlvo||skillAlvo).nome }); } catch(_) {} }
+        const _delayMorteNpc = _avtSkillAnimEmit({ sk, casterEnt: entNpc || npc, alvoEnt: entAlvo || skillAlvo });
         _avtRenderHpBar();
         _avtBroadcastBatalha(bat);
         if (skillAlvo.hp <= 0) {
@@ -17388,6 +17364,35 @@ function _avtSkillTravelMs(anim, isAreaMode) {
     return (viaja && !isAreaMode) ? (anim.duracao || 600) : 0;
   }
   return 0; // simples/áreas/spine: impacto imediato; pixi_studio via avtPixiGetAnimDelaySync
+}
+
+// Toca a animação da skill localmente E replica nos peers (avt_skill_anim) —
+// o par play+broadcast que antes era copiado em cada coreografia de ataque.
+// Payload idêntico ao dos call sites que substitui; campos de área só quando
+// isArea (aditivo, retrocompatível). Devolve o delay (ms) a aplicar antes de
+// animações de morte.
+function _avtSkillAnimEmit({ sk, casterEnt, alvoEnt = null, isArea = false,
+                             areaCentro = null, areaLinha = null, alvoNome = null } = {}) {
+  if (!sk || !sk.animacao) return 0;
+  const caster = _avtEntViva(casterEnt);
+  const alvo = _avtEntViva(alvoEnt || casterEnt);
+  let delay = 0;
+  const _sc = AVT_STATE._areaCentro, _sl = AVT_STATE._areaLinha;
+  if (isArea) { AVT_STATE._areaCentro = areaCentro; AVT_STATE._areaLinha = areaLinha; }
+  try { delay = _avtPlaySkillAnim(sk, alvo, caster, isArea) || 0; }
+  catch (e) { console.warn('[avt-fx] play:', e); }
+  finally { if (isArea) { AVT_STATE._areaCentro = _sc; AVT_STATE._areaLinha = _sl; } }
+  try {
+    const payload = { skillId: sk.id || null, animacao: sk.animacao || null,
+      atacanteNome: caster?.nome, alvoNome: alvoNome || alvo?.nome };
+    if (isArea) {
+      // Âncora no conjurador: rótulos de área não resolvem entidade nos peers.
+      payload.alvoNome = caster?.nome;
+      payload.areaCentro = areaCentro; payload.areaLinha = areaLinha;
+    }
+    _avtBroadcast('avt_skill_anim', payload);
+  } catch (e) { console.warn('[avt-fx] broadcast:', e); }
+  return delay;
 }
 
 function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
@@ -30842,10 +30847,7 @@ function _avtNpcTurnoInvocado(bat) {
       }
 
       // Animação de skill configurada
-      if (_skUsada && typeof _avtPlaySkillAnim === 'function') {
-        _avtPlaySkillAnim(_skUsada, _avtEntViva(alvo), _avtEntViva(entInv));
-        try { _avtBroadcast('avt_skill_anim', { skillId: _skUsada.id || null, animacao: _skUsada.animacao || null, atacanteNome: entInv.nome, alvoNome: alvo.nome }); } catch(_) {}
-      }
+      _avtSkillAnimEmit({ sk: _skUsada, casterEnt: entInv, alvoEnt: alvo });
 
       // Aplicar dano
       alvo.hp = Math.max(0, alvo.hp - _danoFinalInv);
