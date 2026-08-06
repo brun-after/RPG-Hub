@@ -12,6 +12,13 @@ declare global {
     [key: string]: any;
   }
 
+  // Shim de migração: o app acessa .value/.checked/.disabled etc. em elementos
+  // obtidos por getElementById sem narrowing. Será removido quando os módulos
+  // ganharem tipos reais (Entregas 3-4).
+  interface HTMLElement {
+    [key: string]: any;
+  }
+
   // Bibliotecas de terceiros expostas pelo core/vendor.ts e core/pixi-lazy.ts
   var gsap: any;
   var Howl: any;
@@ -22,4 +29,7 @@ declare global {
   // Globals de módulos ainda não convertidos, referenciados por arquivos .ts
   var RTNet: any;
   var _mapeamentoCache: any;
+
+  // Globals definidos nos <script> inline do index.html
+  var esconderSplash: any;
 }

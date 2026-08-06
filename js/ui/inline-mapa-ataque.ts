@@ -27,4 +27,4 @@ function mapaAtaqueMinimizar() {
 }
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "mapaAtaqueMinimizar", { configurable: true, get: () => mapaAtaqueMinimizar, set: (__v) => { mapaAtaqueMinimizar = __v; } });
+Object.defineProperty(globalThis, "mapaAtaqueMinimizar", { configurable: true, writable: true, value: mapaAtaqueMinimizar });

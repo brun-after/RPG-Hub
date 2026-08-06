@@ -18,8 +18,8 @@ import './core/rtnet';
 import './core/events';
 
 // Chat + áudio
-import './chat/chat.js';
-import './systems/audio.js';
+import './chat/chat';
+import './systems/audio';
 
 // Registry central de tipos de efeito de skill (consumido por combate/aventura)
 import './systems/effect-registry.js';
@@ -40,7 +40,7 @@ import './maps/tactical.js';
 import './maps/background.js';
 
 // Auth, hub e sistemas
-import './auth/auth.js';
+import './auth/auth';
 import './hub/hub.js';
 import './systems/lore.js';
 import './characters/characters.js';
@@ -62,7 +62,7 @@ import './systems/catalog-packages.js';
 import './systems/catalog.js';
 import './systems/attribute-mapping.js';
 import './systems/rest.js';
-import './ui/tutorial.js';
+import './ui/tutorial';
 import './systems/creative.js';
 import './systems/pixi-studio-presets.js';
 import './systems/pixi-studio.js';
@@ -73,11 +73,11 @@ import './combat/anim-gsap-spine.js';
 import './characters/anim-renderer.js';
 import './characters/token';
 import './characters/anim-generator.js';
-import './init.js';
+import './init';
 
 // Blocos que eram <script> inline no index.html (mesma ordem relativa)
-import './ui/inline-patch-import.js';
-import './ui/inline-tema.js';
-import './ui/inline-mapa-ataque.js';
-import './ui/inline-combate-log.js';
-import './ui/inline-error-handler.js';
+import './ui/inline-patch-import';
+import './ui/inline-tema';
+import './ui/inline-mapa-ataque';
+import './ui/inline-combate-log';
+import './ui/inline-error-handler';

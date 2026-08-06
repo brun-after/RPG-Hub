@@ -152,6 +152,7 @@ const _SFX_AUTO_MAP = {
 };
 
 class _AudioManager {
+  [key: string]: any;
   constructor() {
     this._musicState      = 'silent';
     this._currentBgm      = null;
@@ -263,7 +264,7 @@ class _AudioManager {
     } catch (_) { return false; }
   }
 
-  playSFX(idOrUrl, { volume, pitchVariance = 0, pan = 0 } = {}) {
+  playSFX(idOrUrl, { volume, pitchVariance = 0, pan = 0 }: any = {}) {
     if (this._muted || typeof Howl === 'undefined') return;
     const url = this._resolveId(idOrUrl);
     if (!url) return;
@@ -424,7 +425,7 @@ class _AudioManager {
     if (!pref || pref.mode === 'auto') { this._playerPref = null; return; }
     this._playerPref = pref;
     if (pref.mode === 'custom' && pref.tracks) {
-      const overrides = {};
+      const overrides: any = {};
       if (pref.tracks.exploracao_url) overrides.exploracao_url = pref.tracks.exploracao_url;
       if (pref.tracks.combate_url)   overrides.combate_url    = pref.tracks.combate_url;
       if (pref.tracks.boss_url)      overrides.boss_url       = pref.tracks.boss_url;
@@ -443,4 +444,4 @@ Object.defineProperty(globalThis, "DEFAULT_SOUNDTRACKS", { configurable: true, g
 Object.defineProperty(globalThis, "DEFAULT_SFX_LIBRARY", { configurable: true, get: () => DEFAULT_SFX_LIBRARY });
 Object.defineProperty(globalThis, "SOUND_BANK", { configurable: true, get: () => SOUND_BANK });
 Object.defineProperty(globalThis, "_SFX_AUTO_MAP", { configurable: true, get: () => _SFX_AUTO_MAP });
-Object.defineProperty(globalThis, "_AudioManager", { configurable: true, get: () => _AudioManager, set: (__v) => { _AudioManager = __v; } });
+Object.defineProperty(globalThis, "_AudioManager", { configurable: true, writable: true, value: _AudioManager });

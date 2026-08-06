@@ -14,7 +14,7 @@ let CRIATIVO_TIPO = 'ataque'; // 'ataque', 'suporte', 'narrativo'
 let CRIATIVO_ALVO_TIPO = 'unico'; // 'unico', 'area', 'proprio'
 
 // ── 19A: CHAT ────────────────────────────────────────────────
-const CHAT = {
+const CHAT: any = {
   msgs:     [],
   aberto:   false,
   naoLidos: 0,
