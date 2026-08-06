@@ -4296,6 +4296,7 @@ function _avtCleanupListeners() {
   window.removeEventListener('keydown', _avtCanvasKey);
   (AVT_STATE._pendingTimeouts || []).forEach(id => clearTimeout(id));
   AVT_STATE._pendingTimeouts = [];
+  if (AVT_STATE._fxAtivos) AVT_STATE._fxAtivos.length = 0;
   if (AVT_STATE._resizeObs) { AVT_STATE._resizeObs.disconnect(); AVT_STATE._resizeObs = null; }
   avtDpadStop();
   if (typeof avtPixiCleanupAll === 'function') avtPixiCleanupAll();
@@ -6683,6 +6684,10 @@ function _avtRenderFrame() {
       }
     }
   }
+
+  // Efeitos de skill em canvas (projétil/onda/explosão/raio/aura/áreas) — desenhados
+  // pelo próprio loop para não competir com o clearRect (ver _avtCanvasEfeito).
+  try { _avtDesenharEfeitosCanvas(ctx, SZ, camera, now); } catch (e) { console.warn('[avt-fx] draw:', e); }
 
   // Atualizar posição do botão de rolar dados (desktop) para seguir o token ativo
   _avtAtualizarPosBotaoRolar();
@@ -17327,12 +17332,13 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
 
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
-  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  // SZ recalculado a cada chamada: repetições/callbacks tardios usam o zoom atual.
   const toScreen = (ent) => {
     const live = _avtEntViva(ent);
+    const SZn = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
     return {
-      x: Math.round((live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + SZ / 2),
-      y: Math.round((live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + SZ / 2),
+      x: Math.round((live.renderX ?? live.x) * SZn - AVT_STATE.camera.x + SZn / 2),
+      y: Math.round((live.renderY ?? live.y) * SZn - AVT_STATE.camera.y + SZn / 2),
     };
   };
 
@@ -17395,23 +17401,26 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
     const trilha = !!anim.trilha;
     const icone = anim.icone || '';
 
-    const midX = Math.round((atacScr.x + alvoScr.x) / 2);
-    const midY = Math.round((atacScr.y + alvoScr.y) / 2);
-
     for (let r = 0; r < repeticoes; r++) {
       setTimeout(() => {
+        // Posições recalculadas no disparo de cada repetição: entidades e câmera
+        // podem ter se movido desde o cast.
+        const aScr = toScreen(alvoEnt);
+        const cScr = atacanteEnt ? toScreen(atacanteEnt) : aScr;
+        const midX = Math.round((cScr.x + aScr.x) / 2);
+        const midY = Math.round((cScr.y + aScr.y) / 2);
         if (posicao === 'alvo') {
-          _avtCanvasEfeito(tipo, alvoScr.x, alvoScr.y, alvoScr.x, alvoScr.y, cor, dur, tamanho, trilha, icone);
+          _avtCanvasEfeito(tipo, aScr.x, aScr.y, aScr.x, aScr.y, cor, dur, tamanho, trilha, icone);
         } else if (posicao === 'atacante') {
-          _avtCanvasEfeito(tipo, atacScr.x, atacScr.y, atacScr.x, atacScr.y, cor, dur, tamanho, trilha, icone);
+          _avtCanvasEfeito(tipo, cScr.x, cScr.y, cScr.x, cScr.y, cor, dur, tamanho, trilha, icone);
         } else if (posicao === 'meio') {
           _avtCanvasEfeito(tipo, midX, midY, midX, midY, cor, dur, tamanho, trilha, icone);
         } else if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno') {
-          _avtCanvasEfeito(tipo, atacScr.x, atacScr.y, alvoScr.x, alvoScr.y, cor, dur, tamanho, trilha, icone, posicao);
+          _avtCanvasEfeito(tipo, cScr.x, cScr.y, aScr.x, aScr.y, cor, dur, tamanho, trilha, icone, posicao);
         } else if (posicao === 'area') {
           _avtCanvasEfeito('explosao', midX, midY, midX, midY, cor, dur, Math.max(tamanho, 60), trilha, icone);
         } else {
-          _avtCanvasEfeito(tipo, alvoScr.x, alvoScr.y, alvoScr.x, alvoScr.y, cor, dur, tamanho, trilha, icone);
+          _avtCanvasEfeito(tipo, aScr.x, aScr.y, aScr.x, aScr.y, cor, dur, tamanho, trilha, icone);
         }
       }, r * (dur + 100));
     }
@@ -17451,17 +17460,41 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
   return 0;
 }
 
+// Enfileira um efeito no registro world-space (AVT_STATE._fxAtivos). Antes: rAF
+// próprio desenhando no #avt-canvas — competia com o clearRect/fillRect do loop
+// principal (mesma corrida documentada em _avtCanvasFlash) e congelava as
+// coordenadas de tela no momento do cast. Agora o loop principal desenha os
+// efeitos a cada frame via _avtDesenharEfeitosCanvas, reconvertendo célula→tela
+// por frame (efeito acompanha pan/zoom da câmera).
 function _avtCanvasEfeito(tipo, x1, y1, x2, y2, cor, dur, tamanho, trilha, icone, trajetoMode) {
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const startMs = performance.now();
+  const cam = AVT_STATE.camera || { x: 0, y: 0, zoom: 1 };
+  const SZ = Math.round(AVT_SZ * (cam.zoom || 1)) || AVT_SZ;
+  (AVT_STATE._fxAtivos = AVT_STATE._fxAtivos || []).push({
+    tipo,
+    w1x: (x1 + cam.x) / SZ, w1y: (y1 + cam.y) / SZ,
+    w2x: (x2 + cam.x) / SZ, w2y: (y2 + cam.y) / SZ,
+    cor, dur: dur || 600, tamCell: (tamanho || 40) / SZ,
+    trilha: !!trilha, icone: icone || '', trajetoMode: trajetoMode || null,
+    startMs: performance.now(),
+  });
+}
 
-  function lerp(a, b, t) { return a + (b - a) * t; }
-
-  function tick(now) {
-    const elapsed = now - startMs;
-    const t = Math.min(1, elapsed / dur);
+// Desenha os efeitos ativos — chamado 1× por frame pelo loop principal de render,
+// depois de tiles/entidades/objetos. Remove efeitos concluídos e dispara o flash
+// de impacto dos projéteis nas coordenadas atuais.
+function _avtDesenharEfeitosCanvas(ctx, SZ, camera, now) {
+  const list = AVT_STATE._fxAtivos;
+  if (!list || !list.length) return;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const fx = list[i];
+    const t = Math.min(1, (now - fx.startMs) / fx.dur);
+    const tipo = fx.tipo, cor = fx.cor, trilha = fx.trilha, icone = fx.icone, trajetoMode = fx.trajetoMode;
+    const x1 = fx.w1x * SZ - camera.x, y1 = fx.w1y * SZ - camera.y;
+    const x2 = fx.w2x * SZ - camera.x, y2 = fx.w2y * SZ - camera.y;
+    const tamanho = fx.tamCell * SZ;
 
     ctx.save();
     ctx.globalAlpha = 1 - t;
@@ -17632,15 +17665,12 @@ function _avtCanvasEfeito(tipo, x1, y1, x2, y2, cor, dur, tamanho, trilha, icone
 
     ctx.restore();
 
-    if (t < 1) requestAnimationFrame(tick);
-    else if (tipo === 'projetil' && (trajetoMode === 'retorno')) {
-      _avtCanvasFlash(x1, y1, cor, 'Impacto');
-    } else if (tipo === 'projetil') {
-      _avtCanvasFlash(x2, y2, cor, 'Impacto');
+    if (t >= 1) {
+      list.splice(i, 1);
+      if (tipo === 'projetil' && trajetoMode === 'retorno') _avtCanvasFlash(x1, y1, cor, 'Impacto');
+      else if (tipo === 'projetil') _avtCanvasFlash(x2, y2, cor, 'Impacto');
     }
   }
-
-  requestAnimationFrame(tick);
 }
 
 function _avtCanvasFlash(screenX, screenY, cor, tipo) {
