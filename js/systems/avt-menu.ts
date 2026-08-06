@@ -320,6 +320,19 @@ function _avtIsoDeltaToCanvas(dx, dy) {
   return { x: (dx + dy / cosX) / (2 * k), y: (dy / cosX - dx) / (2 * k) };
 }
 
+// Projeção DIRETA para deltas (canvas → tela): inversa exata de _avtIsoDeltaToCanvas.
+// Usada para levar geometria de TRAJETO (caster→alvo) para dentro de containers de VFX
+// billboardados: um billboard interpreta offsets como pixels de TELA, então um ponto P
+// derivado do trajeto precisa virar `pivô + M·(P − pivô)` para cair sobre o token
+// projetado. Offsets decorativos (lift, keyframes, anéis, wobble) ficam crus de
+// propósito — devem ler como pixels de tela "em pé".
+function _avtIsoDeltaToScreen(dx, dy) {
+  const k    = _ISO_SCALE / Math.SQRT2;
+  const cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
+  return { x: (dx - dy) * k, y: (dx + dy) * k * cosX };
+}
+window._avtIsoDeltaToScreen = _avtIsoDeltaToScreen;
+
 // Projeção DIRETA canvas → tela (inversa de _avtIsoScreenToCanvas), em coordenadas do
 // PAI não-transformado do wrap. Usada para posicionar a camada de VFX (que fica FORA da
 // transformação 3D) sobre o tile/profundidade corretos. Como a transform usa origin
@@ -1998,6 +2011,8 @@ Object.defineProperty(globalThis, "_avtIsoSizeWrap", { configurable: true, get: 
 Object.defineProperty(globalThis, "_avtIsoScreenToCanvas", { configurable: true, get: () => _avtIsoScreenToCanvas, set: (__v) => { _avtIsoScreenToCanvas = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtIsoDeltaToCanvas", { configurable: true, get: () => _avtIsoDeltaToCanvas, set: (__v) => { _avtIsoDeltaToCanvas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtIsoDeltaToScreen", { configurable: true, get: () => _avtIsoDeltaToScreen, set: (__v) => { _avtIsoDeltaToScreen = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtIsoCanvasToScreen", { configurable: true, get: () => _avtIsoCanvasToScreen, set: (__v) => { _avtIsoCanvasToScreen = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
