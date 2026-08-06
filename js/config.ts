@@ -14,18 +14,47 @@ const HCAPTCHA_SITEKEY = '127ce404-b488-410a-98dc-eaeab514bcf8'; // ← Substitu
 // 1.4 — HUB_EVENTS: Event Bus central do RPG Hub
 // Uso: HUB_EVENTS.emit(tipo, dados) / HUB_EVENTS.on(tipo, fn)
 // ════════════════════════════════════════════════════════════════════════════
+
+// Célula do grid tático (col A-Z → 0-based, row 1-based → 0-based).
+interface Celula { col: number; row: number; }
+
+// Mapa evento → payload, fiel ao que os emissores enviam HOJE (Entrega 3).
+// Onde emissores divergem, o tipo é a união com opcionais e o desvio está
+// comentado — corrigir emissor/listener é trabalho de produto, não de tipo.
+interface HubEventMap {
+  token_moveu: { nome: string; deCelula?: Celula; paraCelula: Celula; movimentoRestante?: number };
+  dano_aplicado: { atacante: string; alvo: string; valor: number; tipo: string };
+  cura_aplicada: { origem: string; alvo: string; valor: number };
+  turno_avancou: { personagem: string; rodada?: number; batalhaId?: string };
+  habilidade_usada: { personagem: string; habilidade: string; alvo?: string };
+  // Emissores divergem: maps.ts:6886 envia {zona, tipo}; maps.ts:9392 {zona, personagem}.
+  zona_ativada: { zona: string; tipo?: string; personagem?: string };
+  cena_carregada: { cena_id?: string; nome: string; narracao?: string };
+  // BUG documentado: o emissor (hub.ts) preenche mapa_id com dados.batalhaId.
+  batalha_iniciada: { mapa_id: string };
+  batalha_encerrada: { mapa_id: string; resultado?: any };
+  item_usado: { personagem: string; item: string; efeito?: string; aprovacao?: string };
+  // Nomes registrados mas sem emissor hoje (listeners aguardando feature):
+  token_selecionado: any;
+  batalha_atualizada: any;
+  criativo_adicionado: any;
+  criativo_atualizado: any;
+  // Documentado no catálogo original, sem emissor nem listener:
+  loot_dropado: { npc?: string; itens?: any[]; posicao?: any };
+}
+
 const HUB_EVENTS = (() => {
-  const _listeners = {};
+  const _listeners: { [K in keyof HubEventMap]?: Array<(dados: any) => void> } = {};
   return {
-    on(tipo, fn) {
+    on<K extends keyof HubEventMap>(tipo: K, fn: (dados: HubEventMap[K]) => void) {
       if (!_listeners[tipo]) _listeners[tipo] = [];
       _listeners[tipo].push(fn);
     },
-    off(tipo, fn) {
+    off<K extends keyof HubEventMap>(tipo: K, fn: (dados: HubEventMap[K]) => void) {
       if (!_listeners[tipo]) return;
       _listeners[tipo] = _listeners[tipo].filter(f => f !== fn);
     },
-    emit(tipo, dados) {
+    emit<K extends keyof HubEventMap>(tipo: K, dados: HubEventMap[K]) {
       (_listeners[tipo] || []).forEach(fn => {
         try { fn(dados); } catch(e) {
           console.warn('[HUB_EVENTS] erro em listener "' + tipo + '":', e);
@@ -34,19 +63,6 @@ const HUB_EVENTS = (() => {
     }
   };
 })();
-
-// Eventos disponíveis:
-//   token_moveu       { nome, deCelula, paraCelula, movimentoRestante }
-//   dano_aplicado     { atacante, alvo, valor, tipo }
-//   cura_aplicada     { origem, alvo, valor }
-//   turno_avancou     { personagem, rodada }
-//   habilidade_usada  { personagem, habilidade, alvo }
-//   zona_ativada      { zona, personagem }
-//   cena_carregada    { cena_id, nome }
-//   batalha_iniciada  { mapa_id }
-//   batalha_encerrada { mapa_id, resultado }
-//   item_usado        { personagem, item, efeito, aprovacao }
-//   loot_dropado      { npc, itens, posicao }
 
 
 // ── CONFIGURAÇÃO DE E-MAIL ────────────────────────────────────
