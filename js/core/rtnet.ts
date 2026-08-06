@@ -757,7 +757,7 @@ window.RTNet = (() => {
 
   // ── BROADCAST ───────────────────────────────────────────────────
 
-  function _broadcast(tipo: any, payload: any, opts?: any) {
+  function _broadcast<K extends AvtEventName>(tipo: K, payload?: AvtPayloadMap[K], opts?: any) {
     const defaults = EVENT_OPTS[tipo] || { persist: 'never', reliable: true };
     const o = { ...defaults, ...opts };
 
@@ -979,7 +979,7 @@ window.RTNet = (() => {
       if (pi) pi.style.display = 'none';
     },
 
-    broadcast(tipo: any, payload: any, opts: any) {
+    broadcast<K extends AvtEventName>(tipo: K, payload?: AvtPayloadMap[K], opts?: any) {
       if (!_s.initialized) {
         if (typeof realtimeBroadcast === 'function') realtimeBroadcast(tipo, payload);
         return;

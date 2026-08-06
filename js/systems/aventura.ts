@@ -105,7 +105,7 @@ const _AVT_EVENTOS_DE_FASE = new Set([
 // Helper central de broadcast para Modo Aventura.
 // Usa RTNet (P2P + fallback Supabase) quando disponível; caso contrário cai no
 // realtimeBroadcast original. Toda chamada avt_* deve passar por aqui.
-function _avtBroadcast(tipo: any, payload: any) {
+function _avtBroadcast<K extends AvtEventName>(tipo: K, payload?: AvtPayloadMap[K]) {
   try {
     if (payload && typeof payload === 'object' && !Array.isArray(payload)
         && payload.faseId == null && _AVT_EVENTOS_DE_FASE.has(tipo)) {

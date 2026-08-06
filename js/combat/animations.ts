@@ -6,7 +6,7 @@
 // ██  BROADCAST DE COMBATE — eventos em tempo real para todos
 // ═══════════════════════════════════════════════════════════════════════════
 
-function combateBroadcast(tipo: any, dados: any) {
+function combateBroadcast(tipo: CombateEventoTipo, dados: any) {
   try {
     const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
     const ws = AR.ws || realtimeWS;
