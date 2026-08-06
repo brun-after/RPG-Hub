@@ -283,7 +283,7 @@ function _apmodTabSvg(ap){
 </div>`;
 }
 
-function _apmodTabCriatura(aparencia,cor){const modelos=Object.entries(CREATURE_MODELS).map(([k,m])=>({key:k,label:m.label}));const atual=aparencia.modelo_criatura||'npc_generico';return `<div id="apmod-tab-criatura" class="apmod-tab-content" style="display:block"><div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);margin-bottom:10px">Modelo visual da criatura.</div><div style="margin-bottom:12px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:5px;text-transform:uppercase">Cor</label><input type="color" id="apmod-criatura-cor" value="${aparencia.cor_base||cor}" oninput="apmodAtualizarPreview()" style="width:42px;height:32px;border:1px solid var(--borda);border-radius:6px;background:none;cursor:pointer;padding:2px"></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${modelos.map(m=>`<button id="apmod-criatura-btn-${m.key}" onclick="apmodSelecionarCriatura('${m.key}',this)" class="apmod-cria-btn" style="background:rgba(20,29,43,0.8);border:1px solid ${atual===m.key?'var(--destaque)':'var(--borda)'};border-radius:8px;padding:8px 4px;cursor:pointer;color:var(--texto);font-family:var(--fonte-d);font-size:0.58rem;text-align:center;transition:border-color 0.2s"><div style="height:34px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:3px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="30" height="24">${(CREATURE_MODELS[m.key]||CREATURE_MODELS.npc_generico).head(aparencia.cor_base||cor)}</svg></div>${m.label}</button>`).join('')}</div></div>`;}
+function _apmodTabCriatura(aparencia,cor){const modelos=Object.entries<any>(CREATURE_MODELS).map(([k,m])=>({key:k,label:m.label}));const atual=aparencia.modelo_criatura||'npc_generico';return `<div id="apmod-tab-criatura" class="apmod-tab-content" style="display:block"><div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);margin-bottom:10px">Modelo visual da criatura.</div><div style="margin-bottom:12px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:5px;text-transform:uppercase">Cor</label><input type="color" id="apmod-criatura-cor" value="${aparencia.cor_base||cor}" oninput="apmodAtualizarPreview()" style="width:42px;height:32px;border:1px solid var(--borda);border-radius:6px;background:none;cursor:pointer;padding:2px"></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${modelos.map(m=>`<button id="apmod-criatura-btn-${m.key}" onclick="apmodSelecionarCriatura('${m.key}',this)" class="apmod-cria-btn" style="background:rgba(20,29,43,0.8);border:1px solid ${atual===m.key?'var(--destaque)':'var(--borda)'};border-radius:8px;padding:8px 4px;cursor:pointer;color:var(--texto);font-family:var(--fonte-d);font-size:0.58rem;text-align:center;transition:border-color 0.2s"><div style="height:34px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:3px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="30" height="24">${(CREATURE_MODELS[m.key]||CREATURE_MODELS.npc_generico).head(aparencia.cor_base||cor)}</svg></div>${m.label}</button>`).join('')}</div></div>`;}
 
 function apmodTogglePreviewPanel(){
   const content=document.getElementById('apmod-preview-content');
@@ -353,17 +353,17 @@ function apmodGetBaseAparencia(tipoTab){
   }
   
   if(tipoTab==='builder'){
-    const partes={};
+    const partes: any={};
     const tipos=['cabelo','rosto','camisa','calca','sapato'];
     tipos.forEach(tipo=>{
       const sel=document.querySelector(`[data-tipo="${tipo}"].apmod-part-btn.ativo`);
       if(sel) partes[tipo]=sel.dataset.id;
     });
-    partes.cor_pele=document.getElementById('apmod-cor-pele')?.value||'#d4a876';
-    partes.cor_cabelo=document.getElementById('apmod-cor-cabelo')?.value||'#4a2c0a';
-    partes.cor_olho=document.getElementById('apmod-cor-rosto')?.value||'#3a6aaa';
-    partes.cor_camisa=document.getElementById('apmod-cor-camisa')?.value||'#4a7aaa';
-    partes.cor_calca=document.getElementById('apmod-cor-calca')?.value||'#2a3a5a';
+    (partes as any).cor_pele=document.getElementById('apmod-cor-pele')?.value||'#d4a876';
+    (partes as any).cor_cabelo=document.getElementById('apmod-cor-cabelo')?.value||'#4a2c0a';
+    (partes as any).cor_olho=document.getElementById('apmod-cor-rosto')?.value||'#3a6aaa';
+    (partes as any).cor_camisa=document.getElementById('apmod-cor-camisa')?.value||'#4a7aaa';
+    (partes as any).cor_calca=document.getElementById('apmod-cor-calca')?.value||'#2a3a5a';
     partes.cor_sapato=document.getElementById('apmod-cor-sapato')?.value||'#1a1a1a';
     return{modo:'builder',partes,tamanho};
   }
@@ -788,7 +788,7 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
         const src = isSvg ? eq.svg : (eq.img || eq.img_url);
         if (!src) continue;
         
-        const img = await loadImg(src, isSvg, eW, eH);
+        const img: any = await loadImg(src, isSvg, eW, eH);
         if (!img || !img.complete) continue;
         
         ctx.save();
@@ -860,7 +860,7 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
     
     // 2. character
     if (charSrc) {
-      const charImg = await loadImg(charSrc, charIsSvg, W, H);
+      const charImg: any = await loadImg(charSrc, charIsSvg, W, H);
       if (charImg) ctx.drawImage(charImg, 0, 0, W, H);
     }
     
@@ -870,7 +870,7 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
     // ──────────────────────────────────────────────────────────────────────
     // Upload to storage
     // ──────────────────────────────────────────────────────────────────────
-    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    const blob: any = await new Promise(res => canvas.toBlob(res, 'image/png'));
     const slug = (charNome || 'char').replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const file = new File([blob], `composed_${slug}_${Date.now()}.png`, { type: 'image/png' });
     return await uploadToStorage(file, 'characters');
@@ -899,13 +899,13 @@ async function apmodSalvar(nome){
   const ca=c.custom_attrs||{};
 
   // ── Aplicar delta de bonus_attrs dos equipamentos visuais ────────────────
-  const _somarEquipBonus=(equips)=>{const soma={};(equips||[]).forEach(eq=>{if(!eq.bonus_attrs)return;Object.entries(eq.bonus_attrs).forEach(([k,v])=>{soma[k]=(soma[k]||0)+v;});});return soma;};
+  const _somarEquipBonus=(equips)=>{const soma={};(equips||[]).forEach(eq=>{if(!eq.bonus_attrs)return;Object.entries<any>(eq.bonus_attrs).forEach(([k,v])=>{soma[k]=(soma[k]||0)+v;});});return soma;};
   const bonusAntigo=_somarEquipBonus((ca.aparencia||{}).equipamentos_visuais||[]);
   const bonusNovo=_somarEquipBonus(ap.equipamentos_visuais||[]);
   // Reverter antigos e aplicar novos
   const atributos=ca.atributos||{};
-  Object.entries(bonusAntigo).forEach(([k,v])=>{if(v)atributos[k]=(parseFloat(atributos[k])||0)-v;});
-  Object.entries(bonusNovo).forEach(([k,v])=>{if(v)atributos[k]=(parseFloat(atributos[k])||0)+v;});
+  Object.entries<any>(bonusAntigo).forEach(([k,v])=>{if(v)atributos[k]=(parseFloat(atributos[k])||0)-v;});
+  Object.entries<any>(bonusNovo).forEach(([k,v])=>{if(v)atributos[k]=(parseFloat(atributos[k])||0)+v;});
   ca.atributos=atributos;
 
   const novoCa={...ca,aparencia:{...ap, composed_img: null}};
@@ -1131,7 +1131,7 @@ function apmodRemoverEquip(idx){if(idx<0)return;window._apmodEquipsVisuais.splic
 function _apmodTabEquip(aparencia,nome){
   const equips=aparencia.equipamentos_visuais||[];
   const _ri=(eq,i)=>{
-    const bonusStr=eq.bonus_attrs&&Object.keys(eq.bonus_attrs).length?'📊 '+Object.entries(eq.bonus_attrs).map(([k,v])=>k+(v>0?'+':'')+v).join(' · '):'';
+    const bonusStr=eq.bonus_attrs&&Object.keys(eq.bonus_attrs).length?'📊 '+Object.entries<any>(eq.bonus_attrs).map(([k,v])=>k+(v>0?'+':'')+v).join(' · '):'';
     const unlocksStr=eq.unlock_efeitos&&eq.unlock_efeitos.efeitos&&eq.unlock_efeitos.efeitos.length?'🔓 '+eq.unlock_efeitos.efeitos.map(e=>e.nome||e.tipo).join(', '):'';
     const temImg=!!(eq.img||eq.img_url);const temSvg=!!(eq.svg&&eq.svg.length>5);
     const isAtras=eq.camada==='atras';
@@ -1158,7 +1158,7 @@ function _apmodRefreshEquipLista(){
   const equips=window._apmodEquipsVisuais||[];
   if(!equips.length){lista.innerHTML='<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:20px 0">Nenhum equipamento visual</div>';return;}
   lista.innerHTML=equips.map((eq,i)=>{
-    const bonusStr=eq.bonus_attrs&&Object.keys(eq.bonus_attrs).length?'📊 '+Object.entries(eq.bonus_attrs).map(([k,v])=>k+(v>0?'+':'')+v).join(' · '):'';
+    const bonusStr=eq.bonus_attrs&&Object.keys(eq.bonus_attrs).length?'📊 '+Object.entries<any>(eq.bonus_attrs).map(([k,v])=>k+(v>0?'+':'')+v).join(' · '):'';
     const unlocksStr=eq.unlock_efeitos&&eq.unlock_efeitos.efeitos&&eq.unlock_efeitos.efeitos.length?'🔓 '+eq.unlock_efeitos.efeitos.map(e=>e.nome||e.tipo).join(', '):'';
     const temImg=!!(eq.img||eq.img_url);const temSvg=!!(eq.svg&&eq.svg.length>5);
     const isAtras=eq.camada==='atras';
@@ -1177,12 +1177,12 @@ function _apmodRefreshEquipLista(){
 
 function apmodToggleEquipCamada(idx){
   if(!window._apmodEquipsVisuais||idx<0||idx>=window._apmodEquipsVisuais.length)return;
-  const eq=window._apmodEquipsVisuais[idx];
+  const eq: any=window._apmodEquipsVisuais[idx];
   eq.camada=(eq.camada==='atras')?'frente':'atras';
   _apmodRefreshEquipLista();
 }
 
-function _aeqSlots(){return Object.entries(EQUIP_SLOT_LIMITS).map(([k,v])=>'<option value="'+k+'">'+v.label+'</option>').join('');}
+function _aeqSlots(){return Object.entries<any>(EQUIP_SLOT_LIMITS).map(([k,v])=>'<option value="'+k+'">'+v.label+'</option>').join('');}
 
 function apmodAbrirAdicionarEquip(editIdx) {
   // Remove overlay existente
@@ -1216,7 +1216,7 @@ function apmodAbrirAdicionarEquip(editIdx) {
   const uHabs = (ue.habilidades || ['*']).join(', ');
   const uEfeitos = Array.isArray(ue.efeitos) && ue.efeitos.length ? JSON.stringify(ue.efeitos, null, 2) : '';
   const bonusLinhas = Object.keys(w.bonus_attrs).length
-    ? Object.entries(w.bonus_attrs).map(([k, v]) =>
+    ? Object.entries<any>(w.bonus_attrs).map(([k, v]) =>
         `<div class="aeq-bonus-row" style="display:flex;gap:6px;margin-bottom:5px">
           <input class="aeq-bonus-attr" placeholder="Atributo" value="${k}" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem">
           <input type="number" class="aeq-bonus-val" value="${v}" style="width:68px;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem;text-align:center">
@@ -1820,7 +1820,7 @@ function apmodConfirmarEquip() {
     let arr = []; try { arr = JSON.parse(efeitosRaw); } catch(e) { mostrarToast('JSON inválido nos efeitos','erro'); return; }
     if (arr.length) { unlock_efeitos = { habilidades: habsRaw ? habsRaw.split(',').map(h=>h.trim()).filter(Boolean) : ['*'], efeitos: arr }; }
   }
-  const eq = { nome, tipo, visivel, camada, img: imgUrl, img_url: imgUrl, svg, x, y, escala, rotacao, rotacaoH, skewX, skewY, warpCorners: (w.warpCorners || null), maxW: limite.maxW, maxH: limite.maxH };
+  const eq: any = { nome, tipo, visivel, camada, img: imgUrl, img_url: imgUrl, svg, x, y, escala, rotacao, rotacaoH, skewX, skewY, warpCorners: (w.warpCorners || null), maxW: limite.maxW, maxH: limite.maxH };
   if (Object.keys(bonus_attrs).length) eq.bonus_attrs = bonus_attrs;
   if (unlock_efeitos) eq.unlock_efeitos = unlock_efeitos;
   const idx = window._aeqEditIdx != null ? window._aeqEditIdx : -1;
@@ -1834,7 +1834,7 @@ function apmodConfirmarEquip() {
   mostrarToast(idx >= 0 ? 'Equipamento atualizado' : 'Equipamento adicionado', 'ok');
 }
 
-console.log('[APMOD] Sistema de Aparência carregado ✓ | Criaturas:',Object.keys(CREATURE_MODELS).length,'| Parts:',Object.values(APMOD_PARTS).flat().length,'| Templates:',CHAR_JSON_TEMPLATES.length);
+console.log('[APMOD] Sistema de Aparência carregado ✓ | Criaturas:',Object.keys(CREATURE_MODELS).length,'| Parts:',Object.values<any>(APMOD_PARTS).flat().length,'| Templates:',CHAR_JSON_TEMPLATES.length);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🎨 SISTEMA HD — Viewport Expandida para Designs Épicos
@@ -1852,6 +1852,7 @@ console.log('[APMOD] Sistema de Aparência carregado ✓ | Criaturas:',Object.ke
 (function() {
   // ── 1. Override dos renders: ViewBox expandida + overflow:visible ─────
   const _baseRenderFront = apmodRenderFront;
+  // @ts-expect-error — monkey-patch em runtime: reatribuição de function declaration
   apmodRenderFront = function(aparencia, corBase) {
     let svg = _baseRenderFront.call(this, aparencia, corBase);
     // Expande viewport: -20px esq/dir, -28px topo, +28px base
@@ -1883,6 +1884,7 @@ console.log('[APMOD] Sistema de Aparência carregado ✓ | Criaturas:',Object.ke
   };
 
   const _baseRenderIso = apmodRenderIso;
+  // @ts-expect-error — monkey-patch em runtime: reatribuição de function declaration
   apmodRenderIso = function(aparencia, corBase) {
     let svg = _baseRenderIso.call(this, aparencia, corBase);
     svg = svg.replace(/viewBox="[^"]*"/, 'viewBox="-20 -28 72 108"');
@@ -1912,6 +1914,7 @@ console.log('[APMOD] Sistema de Aparência carregado ✓ | Criaturas:',Object.ke
 
   // ── 2. Preview maior e sem clipping ─────────────────────────────────────
   const _baseUpdatePreview = typeof apmodAtualizarPreview === 'function' ? apmodAtualizarPreview : null;
+  // @ts-expect-error — monkey-patch em runtime: reatribuição de function declaration
   apmodAtualizarPreview = function() {
     if (_baseUpdatePreview) _baseUpdatePreview();
     setTimeout(() => {
@@ -1933,6 +1936,7 @@ console.log('[APMOD] Sistema de Aparência carregado ✓ | Criaturas:',Object.ke
 
   // ── 3. Templates com modo:'svg' agora suportados em apmodCarregarTemplate ─
   const _baseCarregarTemplate = apmodCarregarTemplate;
+  // @ts-expect-error — monkey-patch em runtime: reatribuição de function declaration
   apmodCarregarTemplate = function(id) {
     const t = CHAR_JSON_TEMPLATES.find(x => x.id === id);
     if (!t) return;
@@ -2188,71 +2192,71 @@ Object.defineProperty(globalThis, "APMOD_PARTS", { configurable: true, get: () =
 Object.defineProperty(globalThis, "CHAR_JSON_TEMPLATES", { configurable: true, get: () => CHAR_JSON_TEMPLATES, set: (__v) => { CHAR_JSON_TEMPLATES = __v; } });
 Object.defineProperty(globalThis, "EQUIP_SLOT_LIMITS", { configurable: true, get: () => EQUIP_SLOT_LIMITS });
 Object.defineProperty(globalThis, "CREATURE_MODELS", { configurable: true, get: () => CREATURE_MODELS });
-Object.defineProperty(globalThis, "_hexDarken2", { configurable: true, get: () => _hexDarken2, set: (__v) => { _hexDarken2 = __v; } });
-Object.defineProperty(globalThis, "_hexDarken", { configurable: true, get: () => _hexDarken, set: (__v) => { _hexDarken = __v; } });
-Object.defineProperty(globalThis, "_svgPart", { configurable: true, get: () => _svgPart, set: (__v) => { _svgPart = __v; } });
-Object.defineProperty(globalThis, "apmodRenderFront", { configurable: true, get: () => apmodRenderFront, set: (__v) => { apmodRenderFront = __v; } });
-Object.defineProperty(globalThis, "apmodRenderIso", { configurable: true, get: () => apmodRenderIso, set: (__v) => { apmodRenderIso = __v; } });
-Object.defineProperty(globalThis, "apmodRenderHead", { configurable: true, get: () => apmodRenderHead, set: (__v) => { apmodRenderHead = __v; } });
-Object.defineProperty(globalThis, "apmodTokenSVG", { configurable: true, get: () => apmodTokenSVG, set: (__v) => { apmodTokenSVG = __v; } });
-Object.defineProperty(globalThis, "abrirModalAparencia", { configurable: true, get: () => abrirModalAparencia, set: (__v) => { abrirModalAparencia = __v; } });
-Object.defineProperty(globalThis, "_apmodTabJson", { configurable: true, get: () => _apmodTabJson, set: (__v) => { _apmodTabJson = __v; } });
-Object.defineProperty(globalThis, "_apmodTabBuilder", { configurable: true, get: () => _apmodTabBuilder, set: (__v) => { _apmodTabBuilder = __v; } });
-Object.defineProperty(globalThis, "_apmodTabSvg", { configurable: true, get: () => _apmodTabSvg, set: (__v) => { _apmodTabSvg = __v; } });
-Object.defineProperty(globalThis, "_apmodTabCriatura", { configurable: true, get: () => _apmodTabCriatura, set: (__v) => { _apmodTabCriatura = __v; } });
-Object.defineProperty(globalThis, "apmodTogglePreviewPanel", { configurable: true, get: () => apmodTogglePreviewPanel, set: (__v) => { apmodTogglePreviewPanel = __v; } });
-Object.defineProperty(globalThis, "apmodSwitchTab", { configurable: true, get: () => apmodSwitchTab, set: (__v) => { apmodSwitchTab = __v; } });
-Object.defineProperty(globalThis, "apmodFiltrarEstilo", { configurable: true, get: () => apmodFiltrarEstilo, set: (__v) => { apmodFiltrarEstilo = __v; } });
-Object.defineProperty(globalThis, "apmodSelecionarParte", { configurable: true, get: () => apmodSelecionarParte, set: (__v) => { apmodSelecionarParte = __v; } });
-Object.defineProperty(globalThis, "apmodSelecionarCriatura", { configurable: true, get: () => apmodSelecionarCriatura, set: (__v) => { apmodSelecionarCriatura = __v; } });
-Object.defineProperty(globalThis, "apmodCarregarTemplate", { configurable: true, get: () => apmodCarregarTemplate, set: (__v) => { apmodCarregarTemplate = __v; } });
-Object.defineProperty(globalThis, "apmodPreencherBuilder", { configurable: true, get: () => apmodPreencherBuilder, set: (__v) => { apmodPreencherBuilder = __v; } });
-Object.defineProperty(globalThis, "apmodGetBaseAparencia", { configurable: true, get: () => apmodGetBaseAparencia, set: (__v) => { apmodGetBaseAparencia = __v; } });
-Object.defineProperty(globalThis, "apmodGetCurrentAparencia", { configurable: true, get: () => apmodGetCurrentAparencia, set: (__v) => { apmodGetCurrentAparencia = __v; } });
-Object.defineProperty(globalThis, "apmodFecharModal", { configurable: true, get: () => apmodFecharModal, set: (__v) => { apmodFecharModal = __v; } });
-Object.defineProperty(globalThis, "apmodAtualizarPreview", { configurable: true, get: () => apmodAtualizarPreview, set: (__v) => { apmodAtualizarPreview = __v; } });
-Object.defineProperty(globalThis, "apmodTogglePreviewGrande", { configurable: true, get: () => apmodTogglePreviewGrande, set: (__v) => { apmodTogglePreviewGrande = __v; } });
-Object.defineProperty(globalThis, "apmodSharpenImg", { configurable: true, get: () => apmodSharpenImg, set: (__v) => { apmodSharpenImg = __v; } });
-Object.defineProperty(globalThis, "apmodFileToBase64", { configurable: true, get: () => apmodFileToBase64, set: (__v) => { apmodFileToBase64 = __v; } });
-Object.defineProperty(globalThis, "apmodCopiarPromptSvg", { configurable: true, get: () => apmodCopiarPromptSvg, set: (__v) => { apmodCopiarPromptSvg = __v; } });
-Object.defineProperty(globalThis, "apmodParseSvgJson", { configurable: true, get: () => apmodParseSvgJson, set: (__v) => { apmodParseSvgJson = __v; } });
-Object.defineProperty(globalThis, "_aeqGenerateComposedImg", { configurable: true, get: () => _aeqGenerateComposedImg, set: (__v) => { _aeqGenerateComposedImg = __v; } });
-Object.defineProperty(globalThis, "apmodSalvar", { configurable: true, get: () => apmodSalvar, set: (__v) => { apmodSalvar = __v; } });
-Object.defineProperty(globalThis, "tintOverlayHtml", { configurable: true, get: () => tintOverlayHtml, set: (__v) => { tintOverlayHtml = __v; } });
-Object.defineProperty(globalThis, "tintFilterString", { configurable: true, get: () => tintFilterString, set: (__v) => { tintFilterString = __v; } });
-Object.defineProperty(globalThis, "tintWrapImg", { configurable: true, get: () => tintWrapImg, set: (__v) => { tintWrapImg = __v; } });
-Object.defineProperty(globalThis, "_apmodTabTint", { configurable: true, get: () => _apmodTabTint, set: (__v) => { _apmodTabTint = __v; } });
-Object.defineProperty(globalThis, "_apmodTintLinhaHtml", { configurable: true, get: () => _apmodTintLinhaHtml, set: (__v) => { _apmodTintLinhaHtml = __v; } });
-Object.defineProperty(globalThis, "apmodTintIniciar", { configurable: true, get: () => apmodTintIniciar, set: (__v) => { apmodTintIniciar = __v; } });
-Object.defineProperty(globalThis, "apmodTintAdicionar", { configurable: true, get: () => apmodTintAdicionar, set: (__v) => { apmodTintAdicionar = __v; } });
-Object.defineProperty(globalThis, "apmodTintAtualizar", { configurable: true, get: () => apmodTintAtualizar, set: (__v) => { apmodTintAtualizar = __v; } });
-Object.defineProperty(globalThis, "apmodTintRemover", { configurable: true, get: () => apmodTintRemover, set: (__v) => { apmodTintRemover = __v; } });
-Object.defineProperty(globalThis, "apmodTintRefresh", { configurable: true, get: () => apmodTintRefresh, set: (__v) => { apmodTintRefresh = __v; } });
-Object.defineProperty(globalThis, "apmodTintAtualizarPreview", { configurable: true, get: () => apmodTintAtualizarPreview, set: (__v) => { apmodTintAtualizarPreview = __v; } });
-Object.defineProperty(globalThis, "apmodRemoverEquip", { configurable: true, get: () => apmodRemoverEquip, set: (__v) => { apmodRemoverEquip = __v; } });
-Object.defineProperty(globalThis, "_apmodTabEquip", { configurable: true, get: () => _apmodTabEquip, set: (__v) => { _apmodTabEquip = __v; } });
-Object.defineProperty(globalThis, "_apmodRefreshEquipLista", { configurable: true, get: () => _apmodRefreshEquipLista, set: (__v) => { _apmodRefreshEquipLista = __v; } });
-Object.defineProperty(globalThis, "apmodToggleEquipCamada", { configurable: true, get: () => apmodToggleEquipCamada, set: (__v) => { apmodToggleEquipCamada = __v; } });
-Object.defineProperty(globalThis, "_aeqSlots", { configurable: true, get: () => _aeqSlots, set: (__v) => { _aeqSlots = __v; } });
-Object.defineProperty(globalThis, "apmodAbrirAdicionarEquip", { configurable: true, get: () => apmodAbrirAdicionarEquip, set: (__v) => { apmodAbrirAdicionarEquip = __v; } });
-Object.defineProperty(globalThis, "_aeqRenderChar", { configurable: true, get: () => _aeqRenderChar, set: (__v) => { _aeqRenderChar = __v; } });
-Object.defineProperty(globalThis, "_aeqUpdateVisual", { configurable: true, get: () => _aeqUpdateVisual, set: (__v) => { _aeqUpdateVisual = __v; } });
-Object.defineProperty(globalThis, "_aeqPositionDrag", { configurable: true, get: () => _aeqPositionDrag, set: (__v) => { _aeqPositionDrag = __v; } });
-Object.defineProperty(globalThis, "_aeqFromInputs", { configurable: true, get: () => _aeqFromInputs, set: (__v) => { _aeqFromInputs = __v; } });
-Object.defineProperty(globalThis, "_aeqSetCamada", { configurable: true, get: () => _aeqSetCamada, set: (__v) => { _aeqSetCamada = __v; } });
-Object.defineProperty(globalThis, "_aeqAttachHandlers", { configurable: true, get: () => _aeqAttachHandlers, set: (__v) => { _aeqAttachHandlers = __v; } });
-Object.defineProperty(globalThis, "_aeqOnMove", { configurable: true, get: () => _aeqOnMove, set: (__v) => { _aeqOnMove = __v; } });
-Object.defineProperty(globalThis, "_aeqOnUp", { configurable: true, get: () => _aeqOnUp, set: (__v) => { _aeqOnUp = __v; } });
-Object.defineProperty(globalThis, "_aeqComputeMatrix3d", { configurable: true, get: () => _aeqComputeMatrix3d, set: (__v) => { _aeqComputeMatrix3d = __v; } });
-Object.defineProperty(globalThis, "_aeqRepaintWarpLayer", { configurable: true, get: () => _aeqRepaintWarpLayer, set: (__v) => { _aeqRepaintWarpLayer = __v; } });
-Object.defineProperty(globalThis, "_aeqWarpGridInner", { configurable: true, get: () => _aeqWarpGridInner, set: (__v) => { _aeqWarpGridInner = __v; } });
-Object.defineProperty(globalThis, "_aeqBuildWarpLayer", { configurable: true, get: () => _aeqBuildWarpLayer, set: (__v) => { _aeqBuildWarpLayer = __v; } });
-Object.defineProperty(globalThis, "_aeqWarpMoveDoc", { configurable: true, get: () => _aeqWarpMoveDoc, set: (__v) => { _aeqWarpMoveDoc = __v; } });
-Object.defineProperty(globalThis, "_aeqWarpUpDoc", { configurable: true, get: () => _aeqWarpUpDoc, set: (__v) => { _aeqWarpUpDoc = __v; } });
-Object.defineProperty(globalThis, "_aeqToggleWarpMode", { configurable: true, get: () => _aeqToggleWarpMode, set: (__v) => { _aeqToggleWarpMode = __v; } });
-Object.defineProperty(globalThis, "_aeqResetWarp", { configurable: true, get: () => _aeqResetWarp, set: (__v) => { _aeqResetWarp = __v; } });
-Object.defineProperty(globalThis, "_aeqClearWarp", { configurable: true, get: () => _aeqClearWarp, set: (__v) => { _aeqClearWarp = __v; } });
-Object.defineProperty(globalThis, "aeqModoVisual", { configurable: true, get: () => aeqModoVisual, set: (__v) => { aeqModoVisual = __v; } });
-Object.defineProperty(globalThis, "aeqFileUpload", { configurable: true, get: () => aeqFileUpload, set: (__v) => { aeqFileUpload = __v; } });
-Object.defineProperty(globalThis, "aeqAdicionarBonusRow", { configurable: true, get: () => aeqAdicionarBonusRow, set: (__v) => { aeqAdicionarBonusRow = __v; } });
-Object.defineProperty(globalThis, "apmodConfirmarEquip", { configurable: true, get: () => apmodConfirmarEquip, set: (__v) => { apmodConfirmarEquip = __v; } });
+Object.defineProperty(globalThis, "_hexDarken2", { configurable: true, writable: true, value: _hexDarken2 });
+Object.defineProperty(globalThis, "_hexDarken", { configurable: true, writable: true, value: _hexDarken });
+Object.defineProperty(globalThis, "_svgPart", { configurable: true, writable: true, value: _svgPart });
+Object.defineProperty(globalThis, "apmodRenderFront", { configurable: true, writable: true, value: apmodRenderFront });
+Object.defineProperty(globalThis, "apmodRenderIso", { configurable: true, writable: true, value: apmodRenderIso });
+Object.defineProperty(globalThis, "apmodRenderHead", { configurable: true, writable: true, value: apmodRenderHead });
+Object.defineProperty(globalThis, "apmodTokenSVG", { configurable: true, writable: true, value: apmodTokenSVG });
+Object.defineProperty(globalThis, "abrirModalAparencia", { configurable: true, writable: true, value: abrirModalAparencia });
+Object.defineProperty(globalThis, "_apmodTabJson", { configurable: true, writable: true, value: _apmodTabJson });
+Object.defineProperty(globalThis, "_apmodTabBuilder", { configurable: true, writable: true, value: _apmodTabBuilder });
+Object.defineProperty(globalThis, "_apmodTabSvg", { configurable: true, writable: true, value: _apmodTabSvg });
+Object.defineProperty(globalThis, "_apmodTabCriatura", { configurable: true, writable: true, value: _apmodTabCriatura });
+Object.defineProperty(globalThis, "apmodTogglePreviewPanel", { configurable: true, writable: true, value: apmodTogglePreviewPanel });
+Object.defineProperty(globalThis, "apmodSwitchTab", { configurable: true, writable: true, value: apmodSwitchTab });
+Object.defineProperty(globalThis, "apmodFiltrarEstilo", { configurable: true, writable: true, value: apmodFiltrarEstilo });
+Object.defineProperty(globalThis, "apmodSelecionarParte", { configurable: true, writable: true, value: apmodSelecionarParte });
+Object.defineProperty(globalThis, "apmodSelecionarCriatura", { configurable: true, writable: true, value: apmodSelecionarCriatura });
+Object.defineProperty(globalThis, "apmodCarregarTemplate", { configurable: true, writable: true, value: apmodCarregarTemplate });
+Object.defineProperty(globalThis, "apmodPreencherBuilder", { configurable: true, writable: true, value: apmodPreencherBuilder });
+Object.defineProperty(globalThis, "apmodGetBaseAparencia", { configurable: true, writable: true, value: apmodGetBaseAparencia });
+Object.defineProperty(globalThis, "apmodGetCurrentAparencia", { configurable: true, writable: true, value: apmodGetCurrentAparencia });
+Object.defineProperty(globalThis, "apmodFecharModal", { configurable: true, writable: true, value: apmodFecharModal });
+Object.defineProperty(globalThis, "apmodAtualizarPreview", { configurable: true, writable: true, value: apmodAtualizarPreview });
+Object.defineProperty(globalThis, "apmodTogglePreviewGrande", { configurable: true, writable: true, value: apmodTogglePreviewGrande });
+Object.defineProperty(globalThis, "apmodSharpenImg", { configurable: true, writable: true, value: apmodSharpenImg });
+Object.defineProperty(globalThis, "apmodFileToBase64", { configurable: true, writable: true, value: apmodFileToBase64 });
+Object.defineProperty(globalThis, "apmodCopiarPromptSvg", { configurable: true, writable: true, value: apmodCopiarPromptSvg });
+Object.defineProperty(globalThis, "apmodParseSvgJson", { configurable: true, writable: true, value: apmodParseSvgJson });
+Object.defineProperty(globalThis, "_aeqGenerateComposedImg", { configurable: true, writable: true, value: _aeqGenerateComposedImg });
+Object.defineProperty(globalThis, "apmodSalvar", { configurable: true, writable: true, value: apmodSalvar });
+Object.defineProperty(globalThis, "tintOverlayHtml", { configurable: true, writable: true, value: tintOverlayHtml });
+Object.defineProperty(globalThis, "tintFilterString", { configurable: true, writable: true, value: tintFilterString });
+Object.defineProperty(globalThis, "tintWrapImg", { configurable: true, writable: true, value: tintWrapImg });
+Object.defineProperty(globalThis, "_apmodTabTint", { configurable: true, writable: true, value: _apmodTabTint });
+Object.defineProperty(globalThis, "_apmodTintLinhaHtml", { configurable: true, writable: true, value: _apmodTintLinhaHtml });
+Object.defineProperty(globalThis, "apmodTintIniciar", { configurable: true, writable: true, value: apmodTintIniciar });
+Object.defineProperty(globalThis, "apmodTintAdicionar", { configurable: true, writable: true, value: apmodTintAdicionar });
+Object.defineProperty(globalThis, "apmodTintAtualizar", { configurable: true, writable: true, value: apmodTintAtualizar });
+Object.defineProperty(globalThis, "apmodTintRemover", { configurable: true, writable: true, value: apmodTintRemover });
+Object.defineProperty(globalThis, "apmodTintRefresh", { configurable: true, writable: true, value: apmodTintRefresh });
+Object.defineProperty(globalThis, "apmodTintAtualizarPreview", { configurable: true, writable: true, value: apmodTintAtualizarPreview });
+Object.defineProperty(globalThis, "apmodRemoverEquip", { configurable: true, writable: true, value: apmodRemoverEquip });
+Object.defineProperty(globalThis, "_apmodTabEquip", { configurable: true, writable: true, value: _apmodTabEquip });
+Object.defineProperty(globalThis, "_apmodRefreshEquipLista", { configurable: true, writable: true, value: _apmodRefreshEquipLista });
+Object.defineProperty(globalThis, "apmodToggleEquipCamada", { configurable: true, writable: true, value: apmodToggleEquipCamada });
+Object.defineProperty(globalThis, "_aeqSlots", { configurable: true, writable: true, value: _aeqSlots });
+Object.defineProperty(globalThis, "apmodAbrirAdicionarEquip", { configurable: true, writable: true, value: apmodAbrirAdicionarEquip });
+Object.defineProperty(globalThis, "_aeqRenderChar", { configurable: true, writable: true, value: _aeqRenderChar });
+Object.defineProperty(globalThis, "_aeqUpdateVisual", { configurable: true, writable: true, value: _aeqUpdateVisual });
+Object.defineProperty(globalThis, "_aeqPositionDrag", { configurable: true, writable: true, value: _aeqPositionDrag });
+Object.defineProperty(globalThis, "_aeqFromInputs", { configurable: true, writable: true, value: _aeqFromInputs });
+Object.defineProperty(globalThis, "_aeqSetCamada", { configurable: true, writable: true, value: _aeqSetCamada });
+Object.defineProperty(globalThis, "_aeqAttachHandlers", { configurable: true, writable: true, value: _aeqAttachHandlers });
+Object.defineProperty(globalThis, "_aeqOnMove", { configurable: true, writable: true, value: _aeqOnMove });
+Object.defineProperty(globalThis, "_aeqOnUp", { configurable: true, writable: true, value: _aeqOnUp });
+Object.defineProperty(globalThis, "_aeqComputeMatrix3d", { configurable: true, writable: true, value: _aeqComputeMatrix3d });
+Object.defineProperty(globalThis, "_aeqRepaintWarpLayer", { configurable: true, writable: true, value: _aeqRepaintWarpLayer });
+Object.defineProperty(globalThis, "_aeqWarpGridInner", { configurable: true, writable: true, value: _aeqWarpGridInner });
+Object.defineProperty(globalThis, "_aeqBuildWarpLayer", { configurable: true, writable: true, value: _aeqBuildWarpLayer });
+Object.defineProperty(globalThis, "_aeqWarpMoveDoc", { configurable: true, writable: true, value: _aeqWarpMoveDoc });
+Object.defineProperty(globalThis, "_aeqWarpUpDoc", { configurable: true, writable: true, value: _aeqWarpUpDoc });
+Object.defineProperty(globalThis, "_aeqToggleWarpMode", { configurable: true, writable: true, value: _aeqToggleWarpMode });
+Object.defineProperty(globalThis, "_aeqResetWarp", { configurable: true, writable: true, value: _aeqResetWarp });
+Object.defineProperty(globalThis, "_aeqClearWarp", { configurable: true, writable: true, value: _aeqClearWarp });
+Object.defineProperty(globalThis, "aeqModoVisual", { configurable: true, writable: true, value: aeqModoVisual });
+Object.defineProperty(globalThis, "aeqFileUpload", { configurable: true, writable: true, value: aeqFileUpload });
+Object.defineProperty(globalThis, "aeqAdicionarBonusRow", { configurable: true, writable: true, value: aeqAdicionarBonusRow });
+Object.defineProperty(globalThis, "apmodConfirmarEquip", { configurable: true, writable: true, value: apmodConfirmarEquip });

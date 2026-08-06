@@ -135,7 +135,7 @@ async function _preloadTextures(animadoData) {
     if (tex) cache.set('_full', tex);
   } else {
     // v1 / v2-crop: texturas por bone
-    for (const [boneId, bc] of Object.entries(_ANIM_BONE_CFG)) {
+    for (const [boneId, bc] of Object.entries<any>(_ANIM_BONE_CFG)) {
       const partData = parts[boneId];
       if (!partData) continue;
 
@@ -156,10 +156,10 @@ async function _preloadTextures(animadoData) {
     }
   }
 
-  for (const [slot, eData] of Object.entries(equips)) {
-    if (!eData?.svg) continue;
+  for (const [slot, eData] of Object.entries<any>(equips)) {
+    if (!(eData as any)?.svg) continue;
     promises.push(
-      _svgToTexture(eData.svg, 40, 72)
+      _svgToTexture((eData as any).svg, 40, 72)
         .then(tex => { if (tex) cache.set('equip_' + slot, tex); })
     );
   }
@@ -298,8 +298,8 @@ function _buildSceneV2(app, texCache, animadoData) {
 
   // Se não há dados de bbox por bone, exibir a imagem completa estaticamente.
   // Ocorre quando animadoData.parts tem apenas _full sem segmentação por bone.
-  const hasBoneData = Object.entries(animadoData.parts || {})
-    .some(([k, v]) => k !== '_full' && v && typeof v === 'object' && v.bbox);
+  const hasBoneData = Object.entries<any>(animadoData.parts || {})
+    .some(([k, v]) => k !== '_full' && v && typeof v === 'object' && (v as any).bbox);
 
   if (!hasBoneData) {
     if (fullTex && fullTex.baseTexture?.valid && !fullTex.baseTexture?.destroyed) {
@@ -393,9 +393,9 @@ function _updateContainersV2(boneContainers, equipSprites, boneTransforms, anima
 //
 // O PIXI app é criado no tamanho nativo de bones (120×180). O canvas é
 // CSS-escalado para o tamanho de exibição (displayWidth × displayHeight).
-function animRendererMount(container, animadoData, opts = {}) {
-  const cssW = opts.displayWidth  || opts.width  || _NATIVE_W;
-  const cssH = opts.displayHeight || opts.height || _NATIVE_H;
+function animRendererMount(container, animadoData, opts: any = {}) {
+  const cssW = opts.displayWidth  || (opts as any).width  || _NATIVE_W;
+  const cssH = opts.displayHeight || (opts as any).height || _NATIVE_H;
 
   container.innerHTML = '';
 
@@ -407,14 +407,14 @@ function animRendererMount(container, animadoData, opts = {}) {
   container.appendChild(placeholder);
 
   // Desenhar fallback no placeholder enquanto aguarda PIXI
-  if (opts.fallbackSrc) {
+  if ((opts as any).fallbackSrc) {
     const img = new Image();
     img.onload = () => {
       if (!placeholder.isConnected) return;
       const ctx = placeholder.getContext('2d');
       if (ctx) ctx.drawImage(img, 0, 0, cssW, cssH);
     };
-    img.src = opts.fallbackSrc;
+    img.src = (opts as any).fallbackSrc;
   }
 
   let _app            = null;
@@ -425,7 +425,7 @@ function animRendererMount(container, animadoData, opts = {}) {
   let _facingDir      = 'left';
   let _paused         = false;
   let _destroyed      = false;
-  let _currentAnim    = opts.animName || 'idle';
+  let _currentAnim    = (opts as any).animName || 'idle';
   let _startTime      = performance.now();
   let _oneShot        = false;
 
@@ -518,13 +518,13 @@ function animRendererMount(container, animadoData, opts = {}) {
 
       const isV2Full    = !!(animadoData.parts?._full?.texture);
       const fullTex     = isV2Full ? texCache.get('_full') : null;
-      const isV2BoneOnly = !isV2Full && Object.values(animadoData.parts || {})
-        .some(p => p && typeof p === 'object' && p.bbox && !p.svg && !p.texture);
+      const isV2BoneOnly = !isV2Full && Object.values<any>(animadoData.parts || {})
+        .some((p: any) => p && typeof p === 'object' && p.bbox && !p.svg && !p.texture);
       const needsFallback = (isV2Full && !fullTex) || isV2BoneOnly;
 
       if (needsFallback) {
-        if (opts.fallbackSrc) {
-          const fbTex = await _safeTextureFrom(opts.fallbackSrc);
+        if ((opts as any).fallbackSrc) {
+          const fbTex = await _safeTextureFrom((opts as any).fallbackSrc);
           if (fbTex && !_destroyed) {
             const spr = new PIXI.Sprite(fbTex);
             spr.width  = _NATIVE_W;
@@ -556,8 +556,8 @@ function animRendererMount(container, animadoData, opts = {}) {
       // Safety net: se o stage ficou sem filhos após o build (dados insuficientes),
       // mostrar fallbackSrc como imagem estática em vez de canvas transparente.
       if (_app.stage.children.length === 0) {
-        if (opts.fallbackSrc) {
-          const fbTex = await _safeTextureFrom(opts.fallbackSrc);
+        if ((opts as any).fallbackSrc) {
+          const fbTex = await _safeTextureFrom((opts as any).fallbackSrc);
           if (fbTex && !_destroyed) {
             const spr = new PIXI.Sprite(fbTex);
             spr.width  = _NATIVE_W;
@@ -581,7 +581,7 @@ function animRendererMount(container, animadoData, opts = {}) {
         if (animDef) {
           const duration = animDef.duration || 2000;
           const t = _oneShot ? Math.min(elapsed, duration) : elapsed % duration;
-          for (const [boneId, track] of Object.entries(animDef.tracks || {})) {
+          for (const [boneId, track] of Object.entries<any>(animDef.tracks || {})) {
             animTf[boneId] = _animLerp(track, t, duration);
           }
         }
@@ -603,10 +603,10 @@ function animRendererMount(container, animadoData, opts = {}) {
     });
   }).catch(err => {
     console.error('[AnimRenderer] Falha ao inicializar PixiJS:', err);
-    if (!_destroyed && opts.fallbackSrc) {
+    if (!_destroyed && (opts as any).fallbackSrc) {
       container.innerHTML = '';
       const img = document.createElement('img');
-      img.src = opts.fallbackSrc;
+      img.src = (opts as any).fallbackSrc;
       img.style.cssText = `width:${cssW}px;height:${cssH}px;object-fit:contain;display:block;margin:auto`;
       container.appendChild(img);
     }
@@ -651,7 +651,7 @@ async function animRendererStaticFrame(animadoData, width, height, animName, t) 
   const tVal     = t ?? 500;
   const animTf   = {};
 
-  for (const [boneId, track] of Object.entries(animDef?.tracks || {})) {
+  for (const [boneId, track] of Object.entries<any>(animDef?.tracks || {})) {
     animTf[boneId] = _animLerp(track, tVal, duration);
   }
 
@@ -700,16 +700,16 @@ Object.defineProperty(globalThis, "_EQUIP_ATTACH", { configurable: true, get: ()
 Object.defineProperty(globalThis, "_NATIVE_W", { configurable: true, get: () => _NATIVE_W });
 Object.defineProperty(globalThis, "_NATIVE_H", { configurable: true, get: () => _NATIVE_H });
 Object.defineProperty(globalThis, "_TEX_SCALE", { configurable: true, get: () => _TEX_SCALE });
-Object.defineProperty(globalThis, "_pixiEnsureLoaded", { configurable: true, get: () => _pixiEnsureLoaded, set: (__v) => { _pixiEnsureLoaded = __v; } });
-Object.defineProperty(globalThis, "_svgToTexture", { configurable: true, get: () => _svgToTexture, set: (__v) => { _svgToTexture = __v; } });
-Object.defineProperty(globalThis, "_safeTextureFrom", { configurable: true, get: () => _safeTextureFrom, set: (__v) => { _safeTextureFrom = __v; } });
-Object.defineProperty(globalThis, "_preloadTextures", { configurable: true, get: () => _preloadTextures, set: (__v) => { _preloadTextures = __v; } });
-Object.defineProperty(globalThis, "_animLerp", { configurable: true, get: () => _animLerp, set: (__v) => { _animLerp = __v; } });
-Object.defineProperty(globalThis, "_animComputeTransforms", { configurable: true, get: () => _animComputeTransforms, set: (__v) => { _animComputeTransforms = __v; } });
-Object.defineProperty(globalThis, "_buildScene", { configurable: true, get: () => _buildScene, set: (__v) => { _buildScene = __v; } });
-Object.defineProperty(globalThis, "_updateSprites", { configurable: true, get: () => _updateSprites, set: (__v) => { _updateSprites = __v; } });
-Object.defineProperty(globalThis, "_buildSceneV2", { configurable: true, get: () => _buildSceneV2, set: (__v) => { _buildSceneV2 = __v; } });
-Object.defineProperty(globalThis, "_updateContainersV2", { configurable: true, get: () => _updateContainersV2, set: (__v) => { _updateContainersV2 = __v; } });
-Object.defineProperty(globalThis, "animRendererMount", { configurable: true, get: () => animRendererMount, set: (__v) => { animRendererMount = __v; } });
-Object.defineProperty(globalThis, "animRendererStaticFrame", { configurable: true, get: () => animRendererStaticFrame, set: (__v) => { animRendererStaticFrame = __v; } });
-Object.defineProperty(globalThis, "animRendererUpdateEquipment", { configurable: true, get: () => animRendererUpdateEquipment, set: (__v) => { animRendererUpdateEquipment = __v; } });
+Object.defineProperty(globalThis, "_pixiEnsureLoaded", { configurable: true, writable: true, value: _pixiEnsureLoaded });
+Object.defineProperty(globalThis, "_svgToTexture", { configurable: true, writable: true, value: _svgToTexture });
+Object.defineProperty(globalThis, "_safeTextureFrom", { configurable: true, writable: true, value: _safeTextureFrom });
+Object.defineProperty(globalThis, "_preloadTextures", { configurable: true, writable: true, value: _preloadTextures });
+Object.defineProperty(globalThis, "_animLerp", { configurable: true, writable: true, value: _animLerp });
+Object.defineProperty(globalThis, "_animComputeTransforms", { configurable: true, writable: true, value: _animComputeTransforms });
+Object.defineProperty(globalThis, "_buildScene", { configurable: true, writable: true, value: _buildScene });
+Object.defineProperty(globalThis, "_updateSprites", { configurable: true, writable: true, value: _updateSprites });
+Object.defineProperty(globalThis, "_buildSceneV2", { configurable: true, writable: true, value: _buildSceneV2 });
+Object.defineProperty(globalThis, "_updateContainersV2", { configurable: true, writable: true, value: _updateContainersV2 });
+Object.defineProperty(globalThis, "animRendererMount", { configurable: true, writable: true, value: animRendererMount });
+Object.defineProperty(globalThis, "animRendererStaticFrame", { configurable: true, writable: true, value: animRendererStaticFrame });
+Object.defineProperty(globalThis, "animRendererUpdateEquipment", { configurable: true, writable: true, value: animRendererUpdateEquipment });

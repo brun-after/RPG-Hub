@@ -130,7 +130,7 @@ function buildCharBtns(tab) {
   const pets = chars.filter(c => c.custom_attrs?.eh_pet === true);
 
   // Função que insere pets vinculados a um dono logo após seu botão
-  const adicionarComPets = (c, labelOverride) => {
+  const adicionarComPets = (c, labelOverride?) => {
     if (seen.has(c.nome)) return;
     seen.add(c.nome);
     btns.push(makeBtn(c, labelOverride));
@@ -260,19 +260,19 @@ async function removerLore(loreId, titulo) {
 }
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "renderHeader", { configurable: true, get: () => renderHeader, set: (__v) => { renderHeader = __v; } });
-Object.defineProperty(globalThis, "renderLore", { configurable: true, get: () => renderLore, set: (__v) => { renderLore = __v; } });
-Object.defineProperty(globalThis, "fmtSec", { configurable: true, get: () => fmtSec, set: (__v) => { fmtSec = __v; } });
-Object.defineProperty(globalThis, "filtrarLore", { configurable: true, get: () => filtrarLore, set: (__v) => { filtrarLore = __v; } });
+Object.defineProperty(globalThis, "renderHeader", { configurable: true, writable: true, value: renderHeader });
+Object.defineProperty(globalThis, "renderLore", { configurable: true, writable: true, value: renderLore });
+Object.defineProperty(globalThis, "fmtSec", { configurable: true, writable: true, value: fmtSec });
+Object.defineProperty(globalThis, "filtrarLore", { configurable: true, writable: true, value: filtrarLore });
 Object.defineProperty(globalThis, "CHAR_SEARCH_THRESHOLD", { configurable: true, get: () => CHAR_SEARCH_THRESHOLD });
-Object.defineProperty(globalThis, "renderCharButtons", { configurable: true, get: () => renderCharButtons, set: (__v) => { renderCharButtons = __v; } });
-Object.defineProperty(globalThis, "_charSearchToggle", { configurable: true, get: () => _charSearchToggle, set: (__v) => { _charSearchToggle = __v; } });
-Object.defineProperty(globalThis, "charFiltrar", { configurable: true, get: () => charFiltrar, set: (__v) => { charFiltrar = __v; } });
-Object.defineProperty(globalThis, "charFiltrarLimpar", { configurable: true, get: () => charFiltrarLimpar, set: (__v) => { charFiltrarLimpar = __v; } });
-Object.defineProperty(globalThis, "buildCharBtns", { configurable: true, get: () => buildCharBtns, set: (__v) => { buildCharBtns = __v; } });
-Object.defineProperty(globalThis, "selecionarChar", { configurable: true, get: () => selecionarChar, set: (__v) => { selecionarChar = __v; } });
-Object.defineProperty(globalThis, "renderCharView", { configurable: true, get: () => renderCharView, set: (__v) => { renderCharView = __v; } });
-Object.defineProperty(globalThis, "abrirModalLore", { configurable: true, get: () => abrirModalLore, set: (__v) => { abrirModalLore = __v; } });
-Object.defineProperty(globalThis, "fecharModalLore", { configurable: true, get: () => fecharModalLore, set: (__v) => { fecharModalLore = __v; } });
-Object.defineProperty(globalThis, "salvarLore", { configurable: true, get: () => salvarLore, set: (__v) => { salvarLore = __v; } });
-Object.defineProperty(globalThis, "removerLore", { configurable: true, get: () => removerLore, set: (__v) => { removerLore = __v; } });
+Object.defineProperty(globalThis, "renderCharButtons", { configurable: true, writable: true, value: renderCharButtons });
+Object.defineProperty(globalThis, "_charSearchToggle", { configurable: true, writable: true, value: _charSearchToggle });
+Object.defineProperty(globalThis, "charFiltrar", { configurable: true, writable: true, value: charFiltrar });
+Object.defineProperty(globalThis, "charFiltrarLimpar", { configurable: true, writable: true, value: charFiltrarLimpar });
+Object.defineProperty(globalThis, "buildCharBtns", { configurable: true, writable: true, value: buildCharBtns });
+Object.defineProperty(globalThis, "selecionarChar", { configurable: true, writable: true, value: selecionarChar });
+Object.defineProperty(globalThis, "renderCharView", { configurable: true, writable: true, value: renderCharView });
+Object.defineProperty(globalThis, "abrirModalLore", { configurable: true, writable: true, value: abrirModalLore });
+Object.defineProperty(globalThis, "fecharModalLore", { configurable: true, writable: true, value: fecharModalLore });
+Object.defineProperty(globalThis, "salvarLore", { configurable: true, writable: true, value: salvarLore });
+Object.defineProperty(globalThis, "removerLore", { configurable: true, writable: true, value: removerLore });

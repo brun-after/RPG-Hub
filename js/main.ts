@@ -41,15 +41,15 @@ import './maps/background';
 
 // Auth, hub e sistemas
 import './auth/auth';
-import './hub/hub.js';
-import './systems/lore.js';
-import './characters/characters.js';
-import './characters/fichas.js';
-import './characters/skills.js';
-import './characters/invocacoes.js';
-import './characters/appearance.js';
-import './systems/npcs.js';
-import './hub/import.js';
+import './hub/hub';
+import './systems/lore';
+import './characters/characters';
+import './characters/fichas';
+import './characters/skills';
+import './characters/invocacoes';
+import './characters/appearance';
+import './systems/npcs';
+import './hub/import';
 import './systems/arena.js';
 import './systems/inventory.js';
 import './systems/aventura.js';
@@ -70,9 +70,9 @@ import './systems/pixi-studio-avt.js';
 import './systems/market.js';
 import './ui/modals.js';
 import './combat/anim-gsap-spine';
-import './characters/anim-renderer.js';
+import './characters/anim-renderer';
 import './characters/token';
-import './characters/anim-generator.js';
+import './characters/anim-generator';
 import './init';
 
 // Blocos que eram <script> inline no index.html (mesma ordem relativa)

@@ -268,7 +268,7 @@ async function animGenFileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => {
-      const parts = e.target.result.split(',');
+      const parts = (e.target as any).result.split(',');
       resolve({ data: parts[1], mimeType: file.type || 'image/png' });
     };
     reader.onerror = reject;
@@ -353,7 +353,7 @@ async function _animGenApiCall(messages) {
 // ── Entry points ─────────────────────────────────────────────────────────────
 
 async function animGenFromImage(imageFile) {
-  const { data, mimeType } = await animGenFileToBase64(imageFile);
+  const { data, mimeType }: any = await animGenFileToBase64(imageFile);
 
   const lines = await _animGenApiCall([{
     role: 'user',
@@ -382,7 +382,7 @@ async function animGenFromImage(imageFile) {
     leg_lower_r: lines.pivot_knee_r      || { x: 0.15, y: 0.08 },
   };
 
-  const parts = {};
+  const parts: any = {};
   if (fullTex) parts._full = { texture: fullTex, width: CANVAS_W, height: CANVAS_H };
 
   for (const boneId of Object.keys(_ANIM_BONE_CFG)) {
@@ -411,7 +411,7 @@ async function animGenFromImage(imageFile) {
 }
 
 async function animGenEquipFromImage(imageFile, slot) {
-  const { data, mimeType } = await animGenFileToBase64(imageFile);
+  const { data, mimeType }: any = await animGenFileToBase64(imageFile);
 
   const result = await _animGenApiCall([{
     role: 'user',
@@ -463,7 +463,7 @@ async function animGenHandleGenerate() {
     // Show palette
     const paletteEl = document.getElementById('animgen-palette');
     if (paletteEl && animadoData.palette) {
-      paletteEl.innerHTML = Object.entries(animadoData.palette).map(([k, v]) =>
+      paletteEl.innerHTML = Object.entries<any>(animadoData.palette).map(([k, v]) =>
         `<div title="${k}: ${v}" style="width:18px;height:18px;border-radius:3px;background:${v};border:1px solid rgba(255,255,255,0.2)"></div>`
       ).join('');
     }
@@ -612,7 +612,7 @@ async function animGenImportarJSON() {
         leg_upper_r: parsed.pivot_hip_r       || { x: 0.15, y: 0.08 },
         leg_lower_r: parsed.pivot_knee_r      || { x: 0.15, y: 0.08 },
       };
-      const parts   = {};
+      const parts: any   = {};
       if (fullTex) parts._full = { texture: fullTex, width: CANVAS_W, height: CANVAS_H };
       for (const boneId of Object.keys(_ANIM_BONE_CFG)) {
         const bbox = bboxes[boneId];
@@ -652,7 +652,7 @@ async function animGenImportarJSON() {
 
     const paletteEl = document.getElementById('animgen-palette');
     if (paletteEl && animadoData.palette) {
-      paletteEl.innerHTML = Object.entries(animadoData.palette).map(([k, v]) =>
+      paletteEl.innerHTML = Object.entries<any>(animadoData.palette).map(([k, v]) =>
         `<div title="${k}: ${v}" style="width:18px;height:18px;border-radius:3px;background:${v};border:1px solid rgba(255,255,255,0.2)"></div>`
       ).join('');
     }
@@ -853,7 +853,7 @@ function _apmodTabAnimado(aparencia) {
           ⚔ Atacar
         </button>
         <div id="animgen-palette" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">
-          ${Object.entries(animado.palette || {}).map(([k, v]) =>
+          ${Object.entries<any>(animado.palette || {}).map(([k, v]) =>
             `<div title="${k}: ${v}" style="width:16px;height:16px;border-radius:2px;background:${v};border:1px solid rgba(255,255,255,0.15)"></div>`
           ).join('')}
         </div>
@@ -876,24 +876,24 @@ Object.defineProperty(globalThis, "ANIM_EQUIP_PROMPT_TPL", { configurable: true,
 Object.defineProperty(globalThis, "ANIM_DEFAULTS", { configurable: true, get: () => ANIM_DEFAULTS });
 Object.defineProperty(globalThis, "ANIM_SKELETON", { configurable: true, get: () => ANIM_SKELETON });
 Object.defineProperty(globalThis, "_ANIM_PART_ZINDEX", { configurable: true, get: () => _ANIM_PART_ZINDEX });
-Object.defineProperty(globalThis, "_animBoneParentName", { configurable: true, get: () => _animBoneParentName, set: (__v) => { _animBoneParentName = __v; } });
-Object.defineProperty(globalThis, "_buildBboxFromLines", { configurable: true, get: () => _buildBboxFromLines, set: (__v) => { _buildBboxFromLines = __v; } });
-Object.defineProperty(globalThis, "animGenGetApiKey", { configurable: true, get: () => animGenGetApiKey, set: (__v) => { animGenGetApiKey = __v; } });
-Object.defineProperty(globalThis, "animGenSetApiKey", { configurable: true, get: () => animGenSetApiKey, set: (__v) => { animGenSetApiKey = __v; } });
-Object.defineProperty(globalThis, "animGenFileToBase64", { configurable: true, get: () => animGenFileToBase64, set: (__v) => { animGenFileToBase64 = __v; } });
-Object.defineProperty(globalThis, "animGenFileToDataUrl", { configurable: true, get: () => animGenFileToDataUrl, set: (__v) => { animGenFileToDataUrl = __v; } });
-Object.defineProperty(globalThis, "_animCropPartFromImage", { configurable: true, get: () => _animCropPartFromImage, set: (__v) => { _animCropPartFromImage = __v; } });
-Object.defineProperty(globalThis, "_animGenApiCall", { configurable: true, get: () => _animGenApiCall, set: (__v) => { _animGenApiCall = __v; } });
-Object.defineProperty(globalThis, "animGenFromImage", { configurable: true, get: () => animGenFromImage, set: (__v) => { animGenFromImage = __v; } });
-Object.defineProperty(globalThis, "animGenEquipFromImage", { configurable: true, get: () => animGenEquipFromImage, set: (__v) => { animGenEquipFromImage = __v; } });
-Object.defineProperty(globalThis, "animGenHandleImageSelect", { configurable: true, get: () => animGenHandleImageSelect, set: (__v) => { animGenHandleImageSelect = __v; } });
-Object.defineProperty(globalThis, "animGenHandleGenerate", { configurable: true, get: () => animGenHandleGenerate, set: (__v) => { animGenHandleGenerate = __v; } });
-Object.defineProperty(globalThis, "animGenHandleEquipImage", { configurable: true, get: () => animGenHandleEquipImage, set: (__v) => { animGenHandleEquipImage = __v; } });
-Object.defineProperty(globalThis, "animGenSetPreviewAnim", { configurable: true, get: () => animGenSetPreviewAnim, set: (__v) => { animGenSetPreviewAnim = __v; } });
-Object.defineProperty(globalThis, "animGenCopiarPromptPersonagem", { configurable: true, get: () => animGenCopiarPromptPersonagem, set: (__v) => { animGenCopiarPromptPersonagem = __v; } });
-Object.defineProperty(globalThis, "animGenCopiarPromptEquip", { configurable: true, get: () => animGenCopiarPromptEquip, set: (__v) => { animGenCopiarPromptEquip = __v; } });
-Object.defineProperty(globalThis, "animGenImportarJSON", { configurable: true, get: () => animGenImportarJSON, set: (__v) => { animGenImportarJSON = __v; } });
-Object.defineProperty(globalThis, "animGenToggleImport", { configurable: true, get: () => animGenToggleImport, set: (__v) => { animGenToggleImport = __v; } });
-Object.defineProperty(globalThis, "animGenToggleEquipImport", { configurable: true, get: () => animGenToggleEquipImport, set: (__v) => { animGenToggleEquipImport = __v; } });
-Object.defineProperty(globalThis, "animGenImportarEquipJSON", { configurable: true, get: () => animGenImportarEquipJSON, set: (__v) => { animGenImportarEquipJSON = __v; } });
-Object.defineProperty(globalThis, "_apmodTabAnimado", { configurable: true, get: () => _apmodTabAnimado, set: (__v) => { _apmodTabAnimado = __v; } });
+Object.defineProperty(globalThis, "_animBoneParentName", { configurable: true, writable: true, value: _animBoneParentName });
+Object.defineProperty(globalThis, "_buildBboxFromLines", { configurable: true, writable: true, value: _buildBboxFromLines });
+Object.defineProperty(globalThis, "animGenGetApiKey", { configurable: true, writable: true, value: animGenGetApiKey });
+Object.defineProperty(globalThis, "animGenSetApiKey", { configurable: true, writable: true, value: animGenSetApiKey });
+Object.defineProperty(globalThis, "animGenFileToBase64", { configurable: true, writable: true, value: animGenFileToBase64 });
+Object.defineProperty(globalThis, "animGenFileToDataUrl", { configurable: true, writable: true, value: animGenFileToDataUrl });
+Object.defineProperty(globalThis, "_animCropPartFromImage", { configurable: true, writable: true, value: _animCropPartFromImage });
+Object.defineProperty(globalThis, "_animGenApiCall", { configurable: true, writable: true, value: _animGenApiCall });
+Object.defineProperty(globalThis, "animGenFromImage", { configurable: true, writable: true, value: animGenFromImage });
+Object.defineProperty(globalThis, "animGenEquipFromImage", { configurable: true, writable: true, value: animGenEquipFromImage });
+Object.defineProperty(globalThis, "animGenHandleImageSelect", { configurable: true, writable: true, value: animGenHandleImageSelect });
+Object.defineProperty(globalThis, "animGenHandleGenerate", { configurable: true, writable: true, value: animGenHandleGenerate });
+Object.defineProperty(globalThis, "animGenHandleEquipImage", { configurable: true, writable: true, value: animGenHandleEquipImage });
+Object.defineProperty(globalThis, "animGenSetPreviewAnim", { configurable: true, writable: true, value: animGenSetPreviewAnim });
+Object.defineProperty(globalThis, "animGenCopiarPromptPersonagem", { configurable: true, writable: true, value: animGenCopiarPromptPersonagem });
+Object.defineProperty(globalThis, "animGenCopiarPromptEquip", { configurable: true, writable: true, value: animGenCopiarPromptEquip });
+Object.defineProperty(globalThis, "animGenImportarJSON", { configurable: true, writable: true, value: animGenImportarJSON });
+Object.defineProperty(globalThis, "animGenToggleImport", { configurable: true, writable: true, value: animGenToggleImport });
+Object.defineProperty(globalThis, "animGenToggleEquipImport", { configurable: true, writable: true, value: animGenToggleEquipImport });
+Object.defineProperty(globalThis, "animGenImportarEquipJSON", { configurable: true, writable: true, value: animGenImportarEquipJSON });
+Object.defineProperty(globalThis, "_apmodTabAnimado", { configurable: true, writable: true, value: _apmodTabAnimado });

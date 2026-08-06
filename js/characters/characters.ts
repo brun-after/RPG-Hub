@@ -20,7 +20,7 @@ function abrirModalLevelUp(nome){
  let preview=`<b>Nível ${nivel} → ${novoNivel}</b><br><br>`;
  if(hp_por_nivel>0) preview+=`❤ HP Máx: ${hp_max_atual} → ${novo_hp_max}<br>`;
  if(pontos_attr_por_nivel>0) preview+=`⭐ +${pontos_attr_por_nivel} ponto(s) de atributo<br>`;
- Object.entries(aumentos).forEach(([attr,val])=>{ preview+=`🔷 ${attr}: +${val}<br>`; });
+ Object.entries<any>(aumentos).forEach(([attr,val])=>{ preview+=`🔷 ${attr}: +${val}<br>`; });
  if(novas_habs.length) preview+=`✨ Habilidades desbloqueadas: ${novas_habs.join(', ')}<br>`;
  if(!hp_por_nivel&&!pontos_attr_por_nivel&&!Object.keys(aumentos).length&&!novas_habs.length) preview+='Nenhum bônus automático configurado.';
 
@@ -59,7 +59,7 @@ async function executarLevelUp(nome){
  ca.pontos_attr=(ca.pontos_attr||0)+pontos_attr_por_nivel;
  if(!ca.atributos)ca.atributos={};
  // Aplicar aumentos automáticos de atributo PRIMEIRO
- Object.entries(aumentos).forEach(([attr,val])=>{ca.atributos[attr]=(parseFloat(ca.atributos[attr])||0)+val;});
+ Object.entries<any>(aumentos).forEach(([attr,val])=>{ca.atributos[attr]=(parseFloat(ca.atributos[attr])||0)+val;});
 
  // BUG-04 FIX: recalcular hp_max APÓS os aumentos de atributo, para que
  // hp_attr_mult seja aplicado sobre o novo valor do atributo
@@ -271,7 +271,7 @@ async function xpSalvarChar(c, ca) {
 
 async function distribuirPontosAttr(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
- const ca={...(c.custom_attrs||{})};
+ const ca: any={...(c.custom_attrs||{})};
  if(!ca.atributos)ca.atributos={};
  const attrDefs=RPG_DATA.attrDefs||[];
  let total=0;
@@ -285,7 +285,7 @@ async function distribuirPontosAttr(nome){
  });
  if(total===0){mostrarToast('Informe ao menos +1 em algum atributo','erro');return;}
  if(total>(ca.pontos_attr||0)){mostrarToast(`Você tem apenas ${ca.pontos_attr} ponto(s)!`,'erro');return;}
- Object.entries(aumentos).forEach(([attr,val])=>{ca.atributos[attr]=(parseFloat(ca.atributos[attr])||0)+val;});
+ Object.entries<any>(aumentos).forEach(([attr,val])=>{ca.atributos[attr]=(parseFloat(ca.atributos[attr])||0)+val;});
  ca.pontos_attr=(ca.pontos_attr||0)-total;
  // BUG-04 FIX: Recalcular hp_max quando atributo que afeta HP é distribuído
  const lc=(CURRENT_RPG?.theme?.level_config)||{};
@@ -293,7 +293,7 @@ async function distribuirPontosAttr(nome){
  if(novoHpMax && novoHpMax !== c.hp_max){ ca.hp_max=novoHpMax; c.hp_max=novoHpMax; }
  c.custom_attrs=ca;
  try{
-   const patchBody={custom_attrs:ca,pontos_attr:ca.pontos_attr};
+   const patchBody: any={custom_attrs:ca,pontos_attr:ca.pontos_attr};
    if(novoHpMax && novoHpMax !== (c.hp_max||0)) patchBody.hp_max=novoHpMax;
    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
      {method:'PATCH',body:JSON.stringify(patchBody)});
@@ -349,8 +349,9 @@ async function salvarAtributos(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome);
  if(!c)return;
  const ad=RPG_DATA.attrDefs||[];
- const hp=+(document.getElementById('f-hp_atual')?.value)??c.hp_atual;
- const ca={...(c.custom_attrs||{})};
+ // @ts-expect-error — bug latente preservado: '+x' nunca é nullish, o ?? à direita nunca dispara
+ const hp=(+(document.getElementById('f-hp_atual')?.value) as any)??c.hp_atual;
+ const ca: any={...(c.custom_attrs||{})};
  if(!ca.atributos)ca.atributos={};
  // Coletar apenas atributos customizados (fca-*)
  ad.forEach(a=>{
@@ -370,7 +371,7 @@ async function salvarAtributos(nome){
  const btnSalvar = document.querySelector(`#edit-form-${CSS.escape(nome)} .btn-primario`);
  if(btnSalvar){btnSalvar.disabled=true;btnSalvar.textContent='Salvando…';}
  try{
-   const patchBody={hp_atual:hp,custom_attrs:ca};
+   const patchBody: any={hp_atual:hp,custom_attrs:ca};
    if(novoHpMax && novoHpMax > 0) patchBody.hp_max=novoHpMax;
    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
      {method:'PATCH',body:JSON.stringify(patchBody)});
@@ -387,7 +388,7 @@ async function salvarInfoPersonagem(nome){
  if (!podeEditarPersonagem(nome)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }
  const c=RPG_DATA.characters.find(x=>x.nome===nome);
  if(!c)return;
- const ca={...(c.custom_attrs||{})};
+ const ca: any={...(c.custom_attrs||{})};
  const tipoVal=document.getElementById('fc-tipo')?.value; if(tipoVal) ca.tipo=tipoVal;
  const factionVal=document.getElementById('fc-faction')?.value; if(factionVal) ca.npc_faction=factionVal; else if(tipoVal==='jogador') delete ca.npc_faction;
  const corVal=document.getElementById('fc-cor')?.value; if(corVal) ca.cor=corVal;
@@ -409,7 +410,7 @@ async function salvarInfoPersonagem(nome){
  c.custom_attrs=ca;
  const nomeAlvo=renomear?novoNome:nome;
  try{
-   const bodyChar={custom_attrs:ca};
+   const bodyChar: any={custom_attrs:ca};
    if(renomear) bodyChar.nome=novoNome;
    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
      {method:'PATCH',body:JSON.stringify(bodyChar)});
@@ -476,7 +477,7 @@ async function criarNovoPersonagem() {
   const cor = document.getElementById('nc-cor').value || '#4fa3d1';
   const classe = document.getElementById('nc-classe').value.trim();
   const raca = document.getElementById('nc-raca').value.trim();
-  const ca = { tipo, cor, nivel, hp_max:hp_max_override, xp:0, pontos_attr:0 };
+  const ca: any = { tipo, cor, nivel, hp_max:hp_max_override, xp:0, pontos_attr:0 };
   if (classe) ca.classe = classe;
   if (raca) ca.raca = raca;
   if (tipo === 'npc') ca.tipo_personagem = 'npc';
@@ -503,30 +504,30 @@ async function criarNovoPersonagem() {
 }
 
 /* [migração-esm] accessors globais */
-Object.defineProperty(globalThis, "abrirModalLevelUp", { configurable: true, get: () => abrirModalLevelUp, set: (__v) => { abrirModalLevelUp = __v; } });
-Object.defineProperty(globalThis, "executarLevelUp", { configurable: true, get: () => executarLevelUp, set: (__v) => { executarLevelUp = __v; } });
+Object.defineProperty(globalThis, "abrirModalLevelUp", { configurable: true, writable: true, value: abrirModalLevelUp });
+Object.defineProperty(globalThis, "executarLevelUp", { configurable: true, writable: true, value: executarLevelUp });
 Object.defineProperty(globalThis, "_xpModalNome", { configurable: true, get: () => _xpModalNome, set: (__v) => { _xpModalNome = __v; } });
-Object.defineProperty(globalThis, "abrirModalXP", { configurable: true, get: () => abrirModalXP, set: (__v) => { abrirModalXP = __v; } });
-Object.defineProperty(globalThis, "fecharModalXP", { configurable: true, get: () => fecharModalXP, set: (__v) => { fecharModalXP = __v; } });
-Object.defineProperty(globalThis, "xpAtualizarModalUI", { configurable: true, get: () => xpAtualizarModalUI, set: (__v) => { xpAtualizarModalUI = __v; } });
-Object.defineProperty(globalThis, "xpDarRapido", { configurable: true, get: () => xpDarRapido, set: (__v) => { xpDarRapido = __v; } });
-Object.defineProperty(globalThis, "xpDarParaTodos", { configurable: true, get: () => xpDarParaTodos, set: (__v) => { xpDarParaTodos = __v; } });
-Object.defineProperty(globalThis, "xpConfirmarTodos", { configurable: true, get: () => xpConfirmarTodos, set: (__v) => { xpConfirmarTodos = __v; } });
-Object.defineProperty(globalThis, "xpSalvarManual", { configurable: true, get: () => xpSalvarManual, set: (__v) => { xpSalvarManual = __v; } });
-Object.defineProperty(globalThis, "xpExecutarLevelUp", { configurable: true, get: () => xpExecutarLevelUp, set: (__v) => { xpExecutarLevelUp = __v; } });
-Object.defineProperty(globalThis, "xpForcarLevelUp", { configurable: true, get: () => xpForcarLevelUp, set: (__v) => { xpForcarLevelUp = __v; } });
-Object.defineProperty(globalThis, "_xpParaNivel", { configurable: true, get: () => _xpParaNivel, set: (__v) => { _xpParaNivel = __v; } });
-Object.defineProperty(globalThis, "xpChecarAutoLevelUp", { configurable: true, get: () => xpChecarAutoLevelUp, set: (__v) => { xpChecarAutoLevelUp = __v; } });
-Object.defineProperty(globalThis, "xpSalvarChar", { configurable: true, get: () => xpSalvarChar, set: (__v) => { xpSalvarChar = __v; } });
-Object.defineProperty(globalThis, "distribuirPontosAttr", { configurable: true, get: () => distribuirPontosAttr, set: (__v) => { distribuirPontosAttr = __v; } });
-Object.defineProperty(globalThis, "renderAttrButtons", { configurable: true, get: () => renderAttrButtons, set: (__v) => { renderAttrButtons = __v; } });
-Object.defineProperty(globalThis, "renderAttrView", { configurable: true, get: () => renderAttrView, set: (__v) => { renderAttrView = __v; } });
-Object.defineProperty(globalThis, "toggleEdit", { configurable: true, get: () => toggleEdit, set: (__v) => { toggleEdit = __v; } });
-Object.defineProperty(globalThis, "toggleEditChar", { configurable: true, get: () => toggleEditChar, set: (__v) => { toggleEditChar = __v; } });
-Object.defineProperty(globalThis, "attrviewToggleOcultarAtribs", { configurable: true, get: () => attrviewToggleOcultarAtribs, set: (__v) => { attrviewToggleOcultarAtribs = __v; } });
-Object.defineProperty(globalThis, "charviewToggleOcultarAtribs", { configurable: true, get: () => charviewToggleOcultarAtribs, set: (__v) => { charviewToggleOcultarAtribs = __v; } });
-Object.defineProperty(globalThis, "salvarAtributos", { configurable: true, get: () => salvarAtributos, set: (__v) => { salvarAtributos = __v; } });
-Object.defineProperty(globalThis, "salvarInfoPersonagem", { configurable: true, get: () => salvarInfoPersonagem, set: (__v) => { salvarInfoPersonagem = __v; } });
-Object.defineProperty(globalThis, "abrirModalNovoChar", { configurable: true, get: () => abrirModalNovoChar, set: (__v) => { abrirModalNovoChar = __v; } });
-Object.defineProperty(globalThis, "fecharModalNovoChar", { configurable: true, get: () => fecharModalNovoChar, set: (__v) => { fecharModalNovoChar = __v; } });
-Object.defineProperty(globalThis, "criarNovoPersonagem", { configurable: true, get: () => criarNovoPersonagem, set: (__v) => { criarNovoPersonagem = __v; } });
+Object.defineProperty(globalThis, "abrirModalXP", { configurable: true, writable: true, value: abrirModalXP });
+Object.defineProperty(globalThis, "fecharModalXP", { configurable: true, writable: true, value: fecharModalXP });
+Object.defineProperty(globalThis, "xpAtualizarModalUI", { configurable: true, writable: true, value: xpAtualizarModalUI });
+Object.defineProperty(globalThis, "xpDarRapido", { configurable: true, writable: true, value: xpDarRapido });
+Object.defineProperty(globalThis, "xpDarParaTodos", { configurable: true, writable: true, value: xpDarParaTodos });
+Object.defineProperty(globalThis, "xpConfirmarTodos", { configurable: true, writable: true, value: xpConfirmarTodos });
+Object.defineProperty(globalThis, "xpSalvarManual", { configurable: true, writable: true, value: xpSalvarManual });
+Object.defineProperty(globalThis, "xpExecutarLevelUp", { configurable: true, writable: true, value: xpExecutarLevelUp });
+Object.defineProperty(globalThis, "xpForcarLevelUp", { configurable: true, writable: true, value: xpForcarLevelUp });
+Object.defineProperty(globalThis, "_xpParaNivel", { configurable: true, writable: true, value: _xpParaNivel });
+Object.defineProperty(globalThis, "xpChecarAutoLevelUp", { configurable: true, writable: true, value: xpChecarAutoLevelUp });
+Object.defineProperty(globalThis, "xpSalvarChar", { configurable: true, writable: true, value: xpSalvarChar });
+Object.defineProperty(globalThis, "distribuirPontosAttr", { configurable: true, writable: true, value: distribuirPontosAttr });
+Object.defineProperty(globalThis, "renderAttrButtons", { configurable: true, writable: true, value: renderAttrButtons });
+Object.defineProperty(globalThis, "renderAttrView", { configurable: true, writable: true, value: renderAttrView });
+Object.defineProperty(globalThis, "toggleEdit", { configurable: true, writable: true, value: toggleEdit });
+Object.defineProperty(globalThis, "toggleEditChar", { configurable: true, writable: true, value: toggleEditChar });
+Object.defineProperty(globalThis, "attrviewToggleOcultarAtribs", { configurable: true, writable: true, value: attrviewToggleOcultarAtribs });
+Object.defineProperty(globalThis, "charviewToggleOcultarAtribs", { configurable: true, writable: true, value: charviewToggleOcultarAtribs });
+Object.defineProperty(globalThis, "salvarAtributos", { configurable: true, writable: true, value: salvarAtributos });
+Object.defineProperty(globalThis, "salvarInfoPersonagem", { configurable: true, writable: true, value: salvarInfoPersonagem });
+Object.defineProperty(globalThis, "abrirModalNovoChar", { configurable: true, writable: true, value: abrirModalNovoChar });
+Object.defineProperty(globalThis, "fecharModalNovoChar", { configurable: true, writable: true, value: fecharModalNovoChar });
+Object.defineProperty(globalThis, "criarNovoPersonagem", { configurable: true, writable: true, value: criarNovoPersonagem });

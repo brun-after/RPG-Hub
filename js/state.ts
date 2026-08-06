@@ -485,7 +485,7 @@ function normalizeImgUrl(url) {
 const TIPOS_DADO=[4,6,8,10,20,100];
 function getDiceConfig(rpgId){ try{ const s=localStorage.getItem('rpghub_dice_'+rpgId); return s?JSON.parse(s):TIPOS_DADO; }catch(e){ return TIPOS_DADO; } }
 function setDiceConfig(rpgId,arr){ try{ localStorage.setItem('rpghub_dice_'+rpgId,JSON.stringify(arr)); }catch(e){} }
-const IMPORT_CSVS={};
+const IMPORT_CSVS: any={};
 const COR_MAP={primario:'var(--primario-v)',perigo:'#e74c3c',sucesso:'#5ee09a',especial:'#b07ef0',destaque:'var(--destaque-v)',suave:'var(--suave)'};
 
 

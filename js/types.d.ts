@@ -21,6 +21,9 @@ declare global {
   interface Element {
     [key: string]: any;
   }
+  interface Document {
+    [key: string]: any;
+  }
 
   // Bibliotecas de terceiros expostas pelo core/vendor.ts e core/pixi-lazy.ts
   var gsap: any;
@@ -52,10 +55,14 @@ declare global {
   var TOKEN_CTRL: any;
   var TRADES_CACHE: any;
   var _aoeObterAlvosAtingidos: any;
+  var _dataUrlToBlob: any;
+  var _mesaAtaqueInlineConfirmar: any;
+  var _mesaAtaqueInlineRolar: any;
   var abrirModalLoot: any;
   var abrirModalLootToken: any;
   var adicionarItemInventario: any;
   var aplicarBuffCampanha: any;
+  var aplicarDanoBatalha: any;
   var arLog: any;
   var atualizarDisplayMoedas: any;
   var atualizarInventarioUI: any;
@@ -66,6 +73,7 @@ declare global {
   var executarAnimacaoAtaque: any;
   var executarAnimacaoDados: any;
   var gridTacticalShowMoveRange: any;
+  var inicializarSistemaAprovacoes: any;
   var iniciarBatalha: any;
   var logCombate: any;
   var mapa: any;
@@ -74,7 +82,9 @@ declare global {
   var mostrarTelaVitoria: any;
   var mostrarTriggerVisual: any;
   var navegarParaMapa: any;
+  var notifExecutar: any;
   var ocultarTriggerVisual: any;
+  var recalcularHpMax: any;
   var renderBaus: any;
   var renderCatalogo: any;
   var renderEquipamentos: any;
@@ -84,5 +94,6 @@ declare global {
   var renderMoedas: any;
   var renderPersonagens: any;
   var renderTrades: any;
+  var setCooldownBatalha: any;
   // [migração-ts:auto-globals:fim]
 }
