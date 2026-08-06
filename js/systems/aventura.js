@@ -20019,6 +20019,17 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
       const _isoBB = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
         && AVT_GRAFICOS?.vfxProjecao && AVT_GRAFICOS?.vfxBillboard && typeof _ISO_ANGLE_X !== 'undefined')
         && _effPose !== 'floor';
+      // Pivô do billboard (ponto do efeito) e mapeador de TRAJETO: dentro do billboard
+      // os offsets são pixels de TELA, então pontos derivados do trajeto caster→alvo
+      // (lerp de voo, samples de beam, células de área) viram pivô + M·(P − pivô) para
+      // caírem sobre os tokens projetados. Identidade sem billboard (o CSS projeta as
+      // coords cruas). Offsets decorativos (layer.offset, anel de emanação, wobble da
+      // espiral) ficam crus de propósito.
+      const _ax = (mode === 'emanation') ? startX : (mode === 'static' ? endX : midX);
+      const _ay = (mode === 'emanation') ? startY : (mode === 'static' ? endY : midY);
+      const _bbMap = (_isoBB && typeof _avtIsoDeltaToScreen === 'function')
+        ? (p) => { const d = _avtIsoDeltaToScreen(p.x - _ax, p.y - _ay); return { x: _ax + d.x, y: _ay + d.y }; }
+        : (p) => p;
       const bgRoot = new PIXI.Container();
       app.stage.addChild(bgRoot);
       if (_isoBB) {
@@ -20026,8 +20037,6 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
         const _k = _ISO_SCALE / Math.SQRT2;
         const _cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180);
         const _inv2k = 1 / (2 * _k);
-        const _ax = (mode === 'emanation') ? startX : (mode === 'static' ? endX : midX);
-        const _ay = (mode === 'emanation') ? startY : (mode === 'static' ? endY : midY);
         isoRoot.pivot.set(_ax, _ay);
         isoRoot.position.set(_ax, _ay);
         isoRoot.skew.set(Math.PI / 4, -Math.PI / 4);
@@ -20143,19 +20152,21 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
             const N = layer.beamSegments || 12;
             for (let i = 0; i <= N; i++) {
               const t = i / N;
-              const ex = startX + (endX - startX) * t;
-              const ey = startY + (endY - startY) * t;
+              // Sample do feixe mapeado p/ o espaço do billboard (liga os tokens na tela)
+              const p = _bbMap({ x: startX + (endX - startX) * t, y: startY + (endY - startY) * t });
               const em = new PIXI.particles.Emitter(layerContainer, cfg);
-              setSpawn(em, ex, ey, layer.offset); em.emit = true; emitters.push(em);
+              setSpawn(em, p.x, p.y, layer.offset); em.emit = true; emitters.push(em);
             }
           } else if (mode === 'area' && _areaPoints && _areaPoints.length) {
-            // Spawna um emissor em cada célula da área afetada
+            // Spawna um emissor em cada célula da área afetada. Cada célula é mapeada
+            // p/ o espaço do billboard: a malha cobre as células PROJETADAS (losango
+            // iso), com o splash de cada uma "em pé".
             const maxEmitters = Math.min(_areaPoints.length, layer.areaMaxEmitters || 16);
             const step = Math.ceil(_areaPoints.length / maxEmitters);
             for (let i = 0; i < _areaPoints.length; i += step) {
-              const pt = _areaPoints[i];
+              const p = _bbMap(_areaPoints[i]);
               const em = new PIXI.particles.Emitter(layerContainer, cfg);
-              setSpawn(em, pt.x, pt.y, layer.offset); em.emit = true; emitters.push(em);
+              setSpawn(em, p.x, p.y, layer.offset); em.emit = true; emitters.push(em);
             }
           } else if (mode === 'emanation') {
             // Emanação do atacante: emissores formam um anel ao redor do token
@@ -20173,7 +20184,11 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
             setSpawn(emC, startX, startY, layer.offset); emC.emit = true; emitters.push(emC);
           } else {
             const em = new PIXI.particles.Emitter(layerContainer, cfg);
-            setSpawn(em, startX, startY, layer.offset); em.emit = true; emitters.push(em);
+            // Posição inicial mapeada: no travel/espiral o start ≠ pivô (midpoint) e o
+            // primeiro frame já deve sair do token projetado; nos modos estáticos o
+            // ponto coincide com o pivô e o mapeamento é neutro.
+            const p0 = _bbMap({ x: startX, y: startY });
+            setSpawn(em, p0.x, p0.y, layer.offset); em.emit = true; emitters.push(em);
           }
 
           // Trail hosts (one ribbon of fading sprites per active particle)
@@ -20209,12 +20224,14 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
           elapsed += dt;
 
           // Travel / boomerang / spiral positioning
+          // Lerp do trajeto mapeado por _bbMap (billboard: projetado, cai nos tokens da
+          // tela; senão: identidade). O wobble da espiral fica cru — saca-rolhas de tela.
           let cx = startX, cy = startY;
           if (mode === 'travel' || mode === 'boomerang') {
             const t = Math.min(1, elapsed / travelDur);
             const k = mode === 'travel' ? t : (t < 0.5 ? t * 2 : (1 - t) * 2);
-            cx = startX + (endX - startX) * k;
-            cy = startY + (endY - startY) * k;
+            const p = _bbMap({ x: startX + (endX - startX) * k, y: startY + (endY - startY) * k });
+            cx = p.x; cy = p.y;
           } else if (mode === 'spiral') {
             // Trajetória espiral: projétil segue caminho helicoidal até o alvo
             const t    = Math.min(1, elapsed / travelDur);
@@ -20223,8 +20240,9 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
             const spiralRadius = root.spiralRadius || 40;   // raio máx em px
             const angle  = t * Math.PI * 2 * spiralTurns;
             const radius = (1 - t) * spiralRadius;          // encolhe ao chegar
-            cx = lerp(startX, endX, t) + Math.cos(angle) * radius;
-            cy = lerp(startY, endY, t) + Math.sin(angle) * radius;
+            const b = _bbMap({ x: lerp(startX, endX, t), y: lerp(startY, endY, t) });
+            cx = b.x + Math.cos(angle) * radius;
+            cy = b.y + Math.sin(angle) * radius;
           }
 
           // updateOwnerPos: follow DOM token position each frame.
@@ -20437,18 +20455,27 @@ function _avtPlayTravelBody(travelCfg, atacScr, alvoScr, cor, intensidade) {
       const _isoBB = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo
         && AVT_GRAFICOS?.vfxProjecao && AVT_GRAFICOS?.vfxBillboard && typeof _ISO_ANGLE_X !== 'undefined');
       const _root = new PIXI.Container();
+      const _ax = (atacScr.x + alvoScr.x) / 2, _ay = (atacScr.y + alvoScr.y) / 2;
       if (_isoBB) {
         const _k = _ISO_SCALE / Math.SQRT2, _cosX = Math.cos(_ISO_ANGLE_X * Math.PI / 180), _inv2k = 1 / (2 * _k);
-        const _ax = (atacScr.x + alvoScr.x) / 2, _ay = (atacScr.y + alvoScr.y) / 2;
         _root.pivot.set(_ax, _ay); _root.position.set(_ax, _ay);
         _root.skew.set(Math.PI / 4, -Math.PI / 4);
         _root.scale.set(_inv2k * Math.SQRT2, _inv2k * Math.SQRT2 / _cosX);
       }
+      // Endpoints do trajeto no espaço do billboard: P → pivô + M·(P − pivô). Dentro do
+      // billboard os offsets são pixels de TELA, então só assim o corpo sai do token do
+      // caster e chega no token do alvo PROJETADOS. Identidade sem billboard (o CSS já
+      // projeta as coords cruas). O sag do arco e o raio da espiral agem em espaço de
+      // tela (lob arqueia para cima na tela) — leitura pretendida do billboard.
+      const _bbMap = (_isoBB && typeof _avtIsoDeltaToScreen === 'function')
+        ? (p) => { const d = _avtIsoDeltaToScreen(p.x - _ax, p.y - _ay); return { x: _ax + d.x, y: _ay + d.y }; }
+        : (p) => p;
+      const _A = _bbMap(atacScr), _B = _bbMap(alvoScr);
       app.stage.addChild(_root);
       // Trail simples: clones que desbotam (atrás do corpo)
       const trailContainer = new PIXI.Container();
       _root.addChild(trailContainer);
-      body.position.set(atacScr.x, atacScr.y);
+      body.position.set(_A.x, _A.y);
       _root.addChild(body);
       const trailCfg = travelCfg.trail || {};
       const trailMax = trailCfg.length ?? 6;
@@ -20456,33 +20483,31 @@ function _avtPlayTravelBody(travelCfg, atacScr, alvoScr, cor, intensidade) {
       const trail = [];
 
       const start = performance.now();
-      let lastX = atacScr.x, lastY = atacScr.y;
+      let lastX = _A.x, lastY = _A.y;
 
       const tick = () => {
         const now = performance.now();
         const t = Math.min(1, (now - start) / dur);
 
-        // path
+        // path — entre os endpoints já mapeados (_A/_B)
         let cx, cy;
         if (path === 'arc') {
-          const mx = (atacScr.x + alvoScr.x) / 2;
-          const my = (atacScr.y + alvoScr.y) / 2;
-          const dx = alvoScr.x - atacScr.x, dy = alvoScr.y - atacScr.y;
+          const dx = _B.x - _A.x, dy = _B.y - _A.y;
           const len = Math.sqrt(dx*dx + dy*dy);
           const nx = -dy / (len || 1), ny = dx / (len || 1);
           const sag = (travelCfg.arcHeight ?? 40) * Math.sin(t * Math.PI);
-          cx = atacScr.x + (alvoScr.x - atacScr.x) * t + nx * sag;
-          cy = atacScr.y + (alvoScr.y - atacScr.y) * t + ny * sag;
+          cx = _A.x + dx * t + nx * sag;
+          cy = _A.y + dy * t + ny * sag;
         } else if (path === 'spiral') {
-          const baseX = atacScr.x + (alvoScr.x - atacScr.x) * t;
-          const baseY = atacScr.y + (alvoScr.y - atacScr.y) * t;
+          const baseX = _A.x + (_B.x - _A.x) * t;
+          const baseY = _A.y + (_B.y - _A.y) * t;
           const r = 16 * (1 - t);
           const ang = t * Math.PI * 6;
           cx = baseX + Math.cos(ang) * r;
           cy = baseY + Math.sin(ang) * r;
         } else { // linear / homing(v1)
-          cx = atacScr.x + (alvoScr.x - atacScr.x) * t;
-          cy = atacScr.y + (alvoScr.y - atacScr.y) * t;
+          cx = _A.x + (_B.x - _A.x) * t;
+          cy = _A.y + (_B.y - _A.y) * t;
         }
 
         const vx = cx - lastX, vy = cy - lastY;
