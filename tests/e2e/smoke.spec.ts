@@ -11,6 +11,7 @@ const RUIDO_DE_REDE = [
   /ERR_INTERNET_DISCONNECTED/i,
   /fetch/i,
   /hcaptcha/i,
+  /localhost detected/i, // hCaptcha: "Warning: localhost detected. Please use a valid host."
   /service.?worker/i,
 ];
 
