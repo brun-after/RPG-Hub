@@ -2867,7 +2867,7 @@ function _avtJsonParsePreview(txt: any) {
     const dungeon = _avtJsonToDungeon(json);
     AVT_STATE._criando.mapa = dungeon;
     if (st) st.innerHTML = `<span style="color:#27ae60">✓ Mapa válido — ${dungeon.w}×${dungeon.h} tiles, ${json.inimigos?.length||0} inimigos</span>`;
-  } catch(e) {
+  } catch (e: any) {
     AVT_STATE._criando.mapa = null;
     if (st) st.innerHTML = `<span style="color:#e74c3c">✗ JSON inválido: ${e.message}</span>`;
   }
@@ -2954,7 +2954,7 @@ ${_avtGerarPromptJson(params)}`;
     localStorage.setItem('animgen_claude_key', key);
     if (st) st.innerHTML = `<span style="color:#27ae60">✓ Mapa gerado — ${dungeon.w}×${dungeon.h} tiles, ${dungeon._inimigosJson?.length||0} inimigos</span>`;
     mostrarToast('✓ Mapa gerado com Claude!', 'sucesso');
-  } catch(e) {
+  } catch (e: any) {
     if (st) st.innerHTML = `<span style="color:#e74c3c">✗ Erro: ${e.message}</span>`;
     mostrarToast('Erro Claude API: ' + e.message, 'erro');
   } finally {
@@ -3064,7 +3064,7 @@ async function _avtGerarPersonagensComIA() {
     if (lista) lista.innerHTML = _avtCriarRenderCharsLista();
 
     mostrarToast('✓ Personagens gerados pela IA!', 'sucesso');
-  } catch(e) {
+  } catch (e: any) {
     if (st) st.innerHTML = `<span style="color:#e74c3c">✗ Erro: ${e.message}</span>`;
     mostrarToast('Erro IA: ' + e.message, 'erro');
   } finally {
@@ -3114,7 +3114,7 @@ function _avtAplicarPersonagensExterno(val: any) {
     const resumo = gerados.map(g => { const _hp = (typeof _avtCalcHpJog === 'function') ? _avtCalcHpJog({custom_attrs:g.custom_attrs||{atributos:g.atributos||{}}}) : 100; return `${g.nome} (${_hp}HP)`; }).join(', ');
     if (status) status.innerHTML = `<span style="color:#27ae60">✓ Gerado: ${resumo}</span>`;
     mostrarToast('✓ Personagens aplicados!', 'sucesso');
-  } catch(e) {
+  } catch (e: any) {
     if (status) status.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
   }
 }
@@ -3378,7 +3378,7 @@ async function aventuraCriarSubmit() {
     await avtHubRenderSection();
     fecharCriarAventura();
     setTimeout(() => entrarAventura(rpgId), 400);
-  } catch(e) {
+  } catch (e: any) {
     if (btn) { btn.disabled = false; btn.textContent = '▶ Iniciar Dungeon!'; }
     mostrarToast('Erro: ' + (e?.message || e), 'erro');
   }
@@ -3410,7 +3410,7 @@ async function _avtMestreAtribuirJogador(playerId: any, charNome: any) {
     try { _avtBroadcast('avt_member_linked', { player_id: playerId, linked: charNome || null }); } catch(_) {}
     mostrarToast('Personagem atribuído!', 'ok');
     _avtMestrePainelRender();
-  } catch(e) { mostrarToast('Erro ao atribuir: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao atribuir: ' + (e?.message||e), 'erro'); }
 }
 
 // Receptor: o jogador atribuído atualiza seu vínculo localmente
@@ -3446,7 +3446,7 @@ async function _avtMestreSelecionarPersonagem(charNome: any) {
     if (m) m.linked = charNome || null;
     try { _avtBroadcast('avt_member_linked', { player_id: SESSION.user.id, linked: charNome || null }); } catch(_) {}
     mostrarToast(charNome ? `Personagem do mestre: ${charNome}` : 'Personagem do mestre removido', 'ok');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'aviso'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'aviso'); }
   try { _avtAtualizarVisibilidadeOffline(); } catch(_) {}
   _avtMestrePainelRender();
 }
@@ -3652,7 +3652,7 @@ async function _avtBauUploadImg(input: any, bauId: any) {
     const prev = document.getElementById('avt-bau-img-preview');
     if (prev) { prev.style.backgroundImage = `url('${url.replace(/'/g,'%27')}')`; prev.textContent = ''; }
     mostrarToast('Imagem enviada!', 'ok');
-  } catch (e) {
+  } catch (e: any) {
     mostrarToast('Erro no upload: ' + (e?.message || e), 'erro');
     console.error(e);
   }
@@ -3706,7 +3706,7 @@ async function _avtMestreDarItemChar(charNome: any, itemId: any, qty: any) {
     try { if (typeof avtInvBroadcastUpdate === 'function') avtInvBroadcastUpdate(char.id); } catch(_) {}
     mostrarToast(`${item.icone||'📦'} ${item.nome} ×${q} → ${char.nome}`, 'ok');
     _avtMestrePainelRender();
-  } catch(e) { mostrarToast('Erro ao dar item: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao dar item: ' + (e?.message||e), 'erro'); }
 }
 
 // Seleciona personagem na aba Itens e carrega seu inventário sob demanda,
@@ -3739,7 +3739,7 @@ async function _avtMestreAtualizarOuroChar(charNome: any, delta: any) {
     mostrarToast(`💰 ${char.nome}: ${antes} → ${depois} ouro`, 'ok');
     _avtMestrePainelRender();
     if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender();
-  } catch(e) { mostrarToast('Erro ao atualizar ouro: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao atualizar ouro: ' + (e?.message||e), 'erro'); }
 }
 
 async function _avtMestreRemoverItemChar(invId: any, charNome: any, rerender: any) {
@@ -3753,7 +3753,7 @@ async function _avtMestreRemoverItemChar(invId: any, charNome: any, rerender: an
     }
     mostrarToast('Item removido', 'ok');
     if (rerender !== false) _avtMestrePainelRender();
-  } catch(e) { mostrarToast('Erro ao remover item: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao remover item: ' + (e?.message||e), 'erro'); }
 }
 
 async function _avtMestreDesequiparSlotChar(charNome: any, slot: any) {
@@ -3874,7 +3874,7 @@ async function _avtSalvarDungeon() {
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
       method:'PATCH', body:JSON.stringify({ theme_json: t })
     });
-  } catch(e) { mostrarToast('Erro ao salvar dungeon: ' + (e?.message||e), 'aviso'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar dungeon: ' + (e?.message||e), 'aviso'); }
 }
 
 // Persiste o theme_json inteiro (level_config, fases_extras, etc.)
@@ -3885,7 +3885,7 @@ async function _avtSalvarThemeJson() {
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
       method:'PATCH', body:JSON.stringify({ theme_json: t })
     });
-  } catch(e) { mostrarToast('Erro ao salvar configuração: ' + (e?.message||e), 'aviso'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar configuração: ' + (e?.message||e), 'aviso'); }
 }
 window._avtSalvarThemeJson = _avtSalvarThemeJson;
 
@@ -3964,7 +3964,7 @@ async function _avtAdicionarMembro(input: any) {
     AVT_STATE.membros.push({ player_id: jogador.id, nickname: jogador.nickname, role: 'jogador', linked: null });
     mostrarToast(`${jogador.nickname} adicionado!`, 'ok');
     _avtMestrePainelRender();
-  } catch(e) { mostrarToast('Erro ao adicionar: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao adicionar: ' + (e?.message||e), 'erro'); }
 }
 
 async function _avtRemoverMembro(playerId: any) {
@@ -3976,7 +3976,7 @@ async function _avtRemoverMembro(playerId: any) {
     AVT_STATE.membros = AVT_STATE.membros.filter((x: any) => x.player_id !== playerId);
     mostrarToast(`${nick} removido`, 'ok');
     _avtMestrePainelRender();
-  } catch(e) { mostrarToast('Erro ao remover: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao remover: ' + (e?.message||e), 'erro'); }
 }
 
 // ─── HELPERS EXTRAÍDOS: carregamento, RTNet, canvas e tela ─────────────────
@@ -4198,7 +4198,7 @@ async function entrarAventura(rpgId: any) {
       await _avtCarregarDados(rpgId);
       _avtMostrarAventuraScreen();
       _avtIniciarRTNet(rpgId, _avtIniciarCanvas);
-    } catch(e) {
+    } catch (e: any) {
       ocultarLoading();
       mostrarToast('Erro ao carregar dungeon: ' + (e?.message || e), 'erro');
       const screen = document.getElementById('aventura-screen');
@@ -10629,7 +10629,7 @@ async function _avtSalvarPacienciaConfig() {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     try { _avtBroadcast('avt_level_config_update', { config: vals }); } catch(_) {}
     mostrarToast(`⏳ Paciência NPC salva (base: ${vals.paciencia_base_s}s)`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
 }
 
 function _avtGetVelocidadePerseguicao() {
@@ -16216,8 +16216,8 @@ window.avtReceberHostHeartbeat = avtReceberHostHeartbeat;
   if(typeof _avtCarregarBatalhasAtivas !== 'function') return;
   const _orig = _avtCarregarBatalhasAtivas;
   // @ts-expect-error — monkey-patch em runtime: reatribuição de function declaration
-  _avtCarregarBatalhasAtivas = async function(){
-    const r = await _orig.apply(this, arguments);
+  _avtCarregarBatalhasAtivas = async function(this: any){
+    const r = await _orig.apply(this, arguments as any);
     try{ _avtReconciliarEntidades(); }catch(_){}
     return r;
   };
@@ -17163,7 +17163,7 @@ async function avtImportarCatalogoConfirmar() {
   const raw = document.getElementById('avt-catalog-json')?.value.trim();
   if (!raw) { mostrarToast('Cole o JSON do catálogo', 'aviso'); return; }
   let itens;
-  try { itens = JSON.parse(raw); } catch(e) { mostrarToast('JSON inválido: ' + e.message, 'erro'); return; }
+  try { itens = JSON.parse(raw); } catch (e: any) { mostrarToast('JSON inválido: ' + e.message, 'erro'); return; }
   if (!Array.isArray(itens)) { mostrarToast('JSON deve ser um array de itens', 'erro'); return; }
 
   const rpgId = AVT_STATE.rpgId;
@@ -17277,7 +17277,7 @@ async function _avtCatItemUploadImg(input: any) {
     const prev = document.getElementById('avt-catitem-img-preview');
     if (prev) { prev.style.backgroundImage = `url('${url.replace(/'/g,'%27')}')`; prev.textContent = ''; }
     mostrarToast('Imagem enviada!', 'ok');
-  } catch (e) { mostrarToast('Erro no upload: ' + (e?.message || e), 'erro'); console.error(e); }
+  } catch (e: any) { mostrarToast('Erro no upload: ' + (e?.message || e), 'erro'); console.error(e); }
 }
 window._avtCatItemUploadImg = _avtCatItemUploadImg;
 
@@ -17312,7 +17312,7 @@ async function _avtCatItemSalvar(itemId: any) {
     document.getElementById('avt-catitem-editor-overlay')?.remove();
     mostrarToast('Item salvo!', 'ok');
     _avtMestrePainelRender();
-  } catch (e) { mostrarToast('Erro ao salvar item: ' + (e?.message || e), 'erro'); console.error(e); }
+  } catch (e: any) { mostrarToast('Erro ao salvar item: ' + (e?.message || e), 'erro'); console.error(e); }
 }
 window._avtCatItemSalvar = _avtCatItemSalvar;
 
@@ -17326,7 +17326,7 @@ async function _avtCatItemRemover(itemId: any) {
     document.getElementById('avt-catitem-editor-overlay')?.remove();
     mostrarToast('Item excluído', 'ok');
     _avtMestrePainelRender();
-  } catch (e) { mostrarToast('Erro ao excluir: ' + (e?.message || e), 'erro'); console.error(e); }
+  } catch (e: any) { mostrarToast('Erro ao excluir: ' + (e?.message || e), 'erro'); console.error(e); }
 }
 window._avtCatItemRemover = _avtCatItemRemover;
 
@@ -22168,7 +22168,7 @@ async function _avtMestreSalvarMapaUnificado() {
       method: 'PATCH', body: JSON.stringify({ theme_json: tj })
     });
     mostrarToast('Mapa salvo!', 'ok');
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Mapa atualizado localmente (erro ao persistir: ' + (e?.message || e) + ')', 'aviso');
   }
   // Invalida os bakes estáticos locais do próprio mestre (o broadcast não ecoa de volta)
@@ -22226,7 +22226,7 @@ async function _avtSalvarBossDoorConfig() {
   try {
     await _avtSalvarThemeJson();
     mostrarToast('Configuração da porta do boss salva', 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
 }
 window._avtSalvarBossDoorConfig = _avtSalvarBossDoorConfig;
 
@@ -22246,7 +22246,7 @@ async function _avtSalvarSkillScalingAttrs() {
     await _avtSalvarThemeJson();
     mostrarToast(`Atributos de escala salvos: ${sel.join(', ')}`, 'sucesso');
     if (typeof skPopularAtributos === 'function') try { skPopularAtributos(); } catch(_){}
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
   }
 }
@@ -22267,7 +22267,7 @@ async function _avtSalvarPontosAttrPorNivel() {
       body: JSON.stringify({ theme_json: rpg.theme_json })
     });
     mostrarToast(`Pontos por nível salvos: ${val}`, 'sucesso');
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
   }
 }
@@ -22286,7 +22286,7 @@ async function _avtSalvarJanelaMovimento() {
       body: JSON.stringify({ theme_json: rpg.theme_json })
     });
     mostrarToast(`Janela de movimento: ${val}ms`, 'sucesso');
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
   }
 }
@@ -22316,7 +22316,7 @@ async function _avtSalvarHpConfig() {
     const _multShown = rpg.theme_json.level_config.hp_attr_mult ?? 4;
     const desc = hpAttr ? `, escala por ${hpAttr} ×${_multShown}` : '';
     mostrarToast(`HP config salva: base=${hpBase}${desc}`, 'sucesso');
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
   }
 }
@@ -22337,7 +22337,7 @@ async function _avtSalvarVelocidadeCorrida() {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     try { _avtBroadcast('avt_level_config_update', { config: { velocidade_corrida_ms: val } }); } catch(_) {}
     mostrarToast(`Velocidade de corrida: ${val}ms/célula`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarVelocidadeCorrida = _avtSalvarVelocidadeCorrida;
 
@@ -22359,7 +22359,7 @@ async function _avtSalvarDropsConfig() {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     try { _avtBroadcast('avt_level_config_update', { config: cfg }); } catch(_) {}
     mostrarToast('Chances de drop salvas!', 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarDropsConfig = _avtSalvarDropsConfig;
 
@@ -22393,7 +22393,7 @@ async function _avtSalvarDynSpawnConfig() {
     try { _avtBroadcast('avt_level_config_update', { config: cfg }); } catch(_) {}
     (AVT_STATE as any)._dynSpawnNextAt = 0; // aplica já no próximo frame
     mostrarToast('Spawns dinâmicos salvos!', 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarDynSpawnConfig = _avtSalvarDynSpawnConfig;
 
@@ -22509,7 +22509,7 @@ async function _avtSalvarOrbeTiers() {
     try { _avtBroadcast('avt_level_config_update', { config: cfg }); } catch(_) {}
     document.getElementById('avt-orbe-config-overlay')?.remove();
     mostrarToast('Orbes configurados!', 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarOrbeTiers = _avtSalvarOrbeTiers;
 
@@ -22525,7 +22525,7 @@ async function _avtSalvarDestrezaVelPct() {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     try { _avtBroadcast('avt_level_config_update', { config: { destreza_vel_pct_por_ponto: val } }); } catch(_) {}
     mostrarToast(`Bônus de velocidade: ${val}% por ponto de Destreza`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarDestrezaVelPct = _avtSalvarDestrezaVelPct;
 
@@ -22544,7 +22544,7 @@ async function _avtSalvarVelocidadesIA() {
     });
     try { _avtBroadcast('avt_level_config_update', { config: { velocidade_patrulha_ms: patrol } }); } catch(_) {}
     mostrarToast(`Patrulha: ${patrol}ms`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarVelocidadesIA = _avtSalvarVelocidadesIA;
 
@@ -22574,7 +22574,7 @@ async function _avtSalvarAtaqueBasicoNpc() {
       method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json })
     });
     mostrarToast('Ataque básico dos NPCs salvo e aplicado!', 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarAtaqueBasicoNpc = _avtSalvarAtaqueBasicoNpc;
 
@@ -22597,7 +22597,7 @@ async function _avtMestreSalvarAtaqueBasicoJog(entId: any) {
       method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs })
     });
     mostrarToast(`Ataque básico de ${ent?.nome || dbChar.nome} salvo!`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtMestreSalvarAtaqueBasicoJog = _avtMestreSalvarAtaqueBasicoJog;
 
@@ -22618,7 +22618,7 @@ async function _avtSalvarPerseguicaoDesistir() {
     });
     try { _avtBroadcast('avt_level_config_update', { config: { perseguicao_desistir_apos_s: apos, perseguicao_desistir_chance: chance, perseguicao_desistir_intervalo_s: intervalo } }); } catch(_) {}
     mostrarToast(`Desistência: ${apos}s · ${Math.round(chance*100)}% · cada ${intervalo}s`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarPerseguicaoDesistir = _avtSalvarPerseguicaoDesistir;
 
@@ -22818,7 +22818,7 @@ async function _avtSalvarSecsPerTurno() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Segundos por turno (OOC): ${val}s`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarManaSabedoria() {
@@ -22831,7 +22831,7 @@ async function _avtSalvarManaSabedoria() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Mana por Sabedoria: ${val}% por ponto`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarManaRegenTurno() {
@@ -22844,7 +22844,7 @@ async function _avtSalvarManaRegenTurno() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Regen de Mana em combate: ${val} por turno`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarManaRegenOoc() {
@@ -22863,7 +22863,7 @@ async function _avtSalvarManaRegenOoc() {
     mostrarToast(`Regen Mana OOC: ${qtd} a cada ${intv}s · ${passo}/passo`, 'sucesso');
     if (typeof _avtPararRegenManaPorSegundo === 'function') { _avtPararRegenManaPorSegundo(); _avtIniciarRegenManaPorSegundo(); }
     try { _avtBroadcast('avt_level_config_update', { config: { mana_regen_quantidade: qtd, mana_regen_intervalo_s: intv, mana_regen_por_passo: passo } }); } catch(_) {}
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarAtaqueBasicoCooldown() {
@@ -22876,7 +22876,7 @@ async function _avtSalvarAtaqueBasicoCooldown() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Cooldown do ataque básico: ${val} turno(s)`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarAtaqueBasicoForcaMult() {
@@ -22889,7 +22889,7 @@ async function _avtSalvarAtaqueBasicoForcaMult() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Multiplicador de Força no ataque básico: ×${val}`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarRaioAliado() {
@@ -22902,7 +22902,7 @@ async function _avtSalvarRaioAliado() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Raio de convite a aliados: ${val} células`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarRangeAceitarCombate() {
@@ -22915,7 +22915,7 @@ async function _avtSalvarRangeAceitarCombate() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Range para aceitar combate: ${val} células`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarDuracaoAnimDados() {
@@ -22928,7 +22928,7 @@ async function _avtSalvarDuracaoAnimDados() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Duração animação dados: ${val}ms`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarEfeitoCooldownMs() {
@@ -22941,7 +22941,7 @@ async function _avtSalvarEfeitoCooldownMs() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Cooldown de efeitos: ${val}ms`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarXpPerdaMorte() {
@@ -22954,7 +22954,7 @@ async function _avtSalvarXpPerdaMorte() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`XP perdido ao morrer: ${val}`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarXpDecayAtivo() {
@@ -22968,7 +22968,7 @@ async function _avtSalvarXpDecayAtivo() {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Redução de XP por repetição: ${val ? 'ativa' : 'desativada'}`, 'sucesso');
     _avtMestrePainelRender();
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarXpDecayAtivo = _avtSalvarXpDecayAtivo;
 
@@ -22982,7 +22982,7 @@ async function _avtSalvarDowngradeMorte() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Downgrade de nível ao morrer: ${val ? 'ativado' : 'desativado'}`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarHpRecuperacaoMorte() {
@@ -22995,7 +22995,7 @@ async function _avtSalvarHpRecuperacaoMorte() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`HP recuperado após morte: ${val}%`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarInvisibilidadeMorte() {
@@ -23009,7 +23009,7 @@ async function _avtSalvarInvisibilidadeMorte() {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     try { _avtBroadcast('avt_level_config_update', { config: { invisibilidade_morte_seg: seg } }); } catch(_) {}
     mostrarToast(`Invisibilidade após morte: ${seg}s`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarInvisibilidadeMorte = _avtSalvarInvisibilidadeMorte;
 
@@ -23028,7 +23028,7 @@ async function _avtSalvarHpRegen() {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     try { _avtBroadcast('avt_level_config_update', { config: { hp_regen_por_segundo: regenS, hp_regen_por_passo: regenP, hp_regen_em_perseguicao: emPers } }); } catch(_) {}
     mostrarToast(`Regen HP — ${regenS}/s · ${regenP}/passo · perseguição: ${emPers ? 'sim' : 'não'}`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSalvarTrilhaSonora() {
@@ -23049,7 +23049,7 @@ async function _avtSalvarTrilhaSonora() {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     if (typeof AudioManager !== 'undefined') AudioManager.onEnterPhase({ audio });
     mostrarToast('Trilha sonora salva', 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 function _avtPreviewTrilha() {
@@ -23178,7 +23178,7 @@ async function _avtSalvarNpcPortaChance() {
   try {
     await _avtSalvarThemeJson();
     mostrarToast(`Chance de NPC cruzar portas: ${val}%`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
 }
 window._avtSalvarNpcPortaChance = _avtSalvarNpcPortaChance;
 
@@ -23189,7 +23189,7 @@ async function _avtMestreExcluirCampanha() {
     await deleteRPGData(AVT_STATE.rpgId);
     mostrarToast('Campanha excluída', 'ok');
     setTimeout(sairAventura, 800);
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro ao excluir: ' + (e?.message || e), 'erro');
   }
 }
@@ -23354,7 +23354,7 @@ async function _avtMestreAplicarTilesetUpload() {
     mostrarToast('Tileset aplicado!', 'ok');
     document.getElementById('avt-mestre-map-editor-overlay').style.display = 'none';
     setTimeout(_avtMestreAbrirEditorUnificado, 200);
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro: ' + (e?.message || e), 'erro');
   }
 }
@@ -23603,7 +23603,7 @@ function _avtNfJsonParse(txt: any) {
     const dungeon = _avtJsonToDungeon(json);
     AVT_STATE._novaFaseWizard.dungeon = dungeon;
     if (st) st.innerHTML = `<span style="color:#27ae60">✓ Mapa válido — ${dungeon.w}×${dungeon.h} tiles</span>`;
-  } catch(e) {
+  } catch (e: any) {
     AVT_STATE._novaFaseWizard.dungeon = null;
     if (st) st.innerHTML = `<span style="color:#e74c3c">✗ JSON inválido: ${e.message}</span>`;
   }
@@ -23640,7 +23640,7 @@ async function _avtNfGerarComClaude() {
     localStorage.setItem('animgen_claude_key', key);
     if (st) st.innerHTML = `<span style="color:#27ae60">✓ Mapa gerado — ${dungeon.w}×${dungeon.h} tiles</span>`;
     mostrarToast('Mapa gerado com Claude!', 'ok');
-  } catch(e) {
+  } catch (e: any) {
     if (st) st.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
     mostrarToast('Erro Claude: ' + e.message, 'erro');
   } finally {
@@ -23802,7 +23802,7 @@ async function _avtMestreSalvarNovaFase() {
     _avtMestrePainelRender();
     // Navigate mestre directly to the new phase
     _avtEntrarFaseExtra(fase);
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro ao salvar fase: ' + (e?.message || e), 'erro');
   }
 }
@@ -23817,7 +23817,7 @@ async function _avtMestreRemoverFase(faseId: any) {
     });
     mostrarToast('Fase removida', 'ok');
     _avtMestrePainelRender();
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro: ' + (e?.message || e), 'erro');
   }
 }
@@ -24477,7 +24477,7 @@ function _avtPromptFase(titulo: any, labelAvancar: any, onAdvance: any) {
       </div>
     </div>`;
   ov.querySelector('#avt-prompt-fase-no').onclick = fechar;
-  ov.querySelector('#avt-prompt-fase-yes').onclick = () => { fechar(); try { onAdvance && onAdvance(); } catch(e) { mostrarToast('Erro: '+(e?.message||e),'erro'); } };
+  ov.querySelector('#avt-prompt-fase-yes').onclick = () => { fechar(); try { onAdvance && onAdvance(); } catch (e: any) { mostrarToast('Erro: '+(e?.message||e),'erro'); } };
 }
 window._avtPromptFase = _avtPromptFase;
 
@@ -24580,7 +24580,7 @@ function _avtMestreAplicarPersonagensExterno() {
       document.getElementById('avt-mp-ia-ext-overlay')?.remove();
       _avtMestrePainelRender();
     }, 1200);
-  } catch(e) {
+  } catch (e: any) {
     if (status) status.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
   }
 }
@@ -25033,7 +25033,7 @@ async function _avtCe2SalvarImgUrlTipo(entId: any, alvo: any) {
     });
     mostrarToast(alvo === 'iso' ? 'Sprite isométrico salvo!' : alvo === 'token' ? 'Token salvo!' : 'Foto salva!', 'ok');
     _avtCharEditorRender();
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtCe2SalvarImgUrl(entId: any) { return _avtCe2SalvarImgUrlTipo(entId, 'ficha'); }
@@ -25050,7 +25050,7 @@ async function _avtCe2UploadImg(input: any, entId: any, alvo: any) {
     const inp = document.getElementById('avt-ce2-img-url-inp');
     if (inp) inp.value = url;
     await _avtCe2SalvarImgUrlTipo(entId, alvo);
-  } catch (e) {
+  } catch (e: any) {
     mostrarToast('Erro no upload: ' + (e?.message || e), 'erro');
     console.error(e);
   }
@@ -25483,7 +25483,7 @@ async function _avtCharSalvarAttrs(entId: any) {
       });
     }
     _avtCharEditorRender();
-  } catch(e) { mostrarToast('Erro: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro: ' + (e?.message||e), 'erro'); }
 }
 
 const AVT_EQUIP_SLOTS = [
@@ -27131,7 +27131,7 @@ async function _avtSfxBibliotecaUpload() {
     document.getElementById('avt-sfx-up-nome').value = '';
     if (fileEl) fileEl.value = '';
     setTimeout(() => { if (statusEl) statusEl.style.display = 'none'; }, 3000);
-  } catch(e) {
+  } catch (e: any) {
     _show('Erro: ' + (e.message || e), '#e74c3c');
   }
 }
@@ -27144,7 +27144,7 @@ async function _avtSfxBibliotecaRemover(id: any) {
     const listEl = document.getElementById('avt-sfx-lib-list');
     if (listEl) listEl.innerHTML = _avtSfxBibliotecaListHTML();
     _avtSfxDropdownsRefresh();
-  } catch(e) { mostrarToast('Erro ao remover: ' + (e.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao remover: ' + (e.message || e), 'erro'); }
 }
 
 function _avtSfxDropdownsRefresh() {
@@ -27273,7 +27273,7 @@ async function _avtModalSkillSalvar() {
     mostrarToast('Habilidade salva!', 'ok');
     const ceContent = document.getElementById('avt-ce-content');
     if (ceContent) _avtCharEditorRenderSkillEdit(ceContent);
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
 }
 
 // ─── CRÍTICO BASEADO NA FÓRMULA ──────────────────────────────────────────────
@@ -27360,7 +27360,7 @@ async function _avtSalvarCarismaCritConfig() {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     try { _avtBroadcast('avt_level_config_update', { config: { carisma_crit_base_pct: basePct, carisma_crit_progressao: prog } }); } catch(_) {}
     mostrarToast(`✨ Carisma crítico: base=${basePct}%, progressão=${prog}%`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
 }
 
 function _avtTokenTremer(ent: any) {
@@ -27923,7 +27923,7 @@ async function _avtSkillGerarAnimIA(skId: any, animTipo: any) {
     // Persiste imediatamente — sem isso, recarregar a página perde o config gerado
     try { await _avtSkillSalvar(skId); } catch(_) {}
     mostrarToast('Config de animação gerada e salva!', 'ok');
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro ao gerar: ' + (e?.message||e), 'erro');
   }
 }
@@ -27983,7 +27983,7 @@ async function _avtSkillSalvar(id: any) {
     const eid = 'avt-sk-f-' + id.replace(/[^a-z0-9]/gi,'_');
     const formEl = document.getElementById(eid);
     if (formEl) formEl.style.display = 'none';
-  } catch(e) { mostrarToast('Erro: ' + (e?.message || e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSkillDeletar(id: any) {
@@ -28211,7 +28211,7 @@ function _avtAnimPreview() {
     const nP = Object.keys(data.parts).length;
     const nA = Object.keys(data.animations||{}).length;
     if (st) st.innerHTML = '<span style="color:#27ae60">✓ JSON válido — ' + nP + ' parte(s), ' + nA + ' animação(ões)</span>';
-  } catch(e) {
+  } catch (e: any) {
     if (st) st.innerHTML = '<span style="color:#e74c3c">✗ JSON inválido: ' + e.message + '</span>';
   }
 }
@@ -28269,7 +28269,7 @@ async function _avtTopdownIaSalvar(entId: any) {
   let coords = prevTd.coords || null;
   if (coordsText) {
     try { coords = JSON.parse(coordsText); }
-    catch(e) { mostrarToast('JSON de coordenadas inválido: ' + e.message, 'aviso'); return; }
+    catch (e: any) { mostrarToast('JSON de coordenadas inválido: ' + e.message, 'aviso'); return; }
   }
   if (!coords && novoTokenFile) {
     mostrarToast('Cole o JSON de coordenadas (passo ⑤)', 'aviso'); return;
@@ -28335,7 +28335,7 @@ async function _avtTopdownIaSalvar(entId: any) {
 
     mostrarToast(novaFichaFile ? 'Token e imagem da ficha salvos!' : 'Token salvo!', 'ok');
     document.getElementById('avt-anim-import-overlay').style.display = 'none';
-  } catch(err) {
+  } catch (err: any) {
     console.error('_avtTopdownIaSalvar:', err);
     mostrarToast('Erro ao salvar: ' + (err.message || String(err)), 'aviso');
   }
@@ -28375,7 +28375,7 @@ async function _avtIsoIaSalvar(entId: any) {
     mostrarToast('Sprite isométrico salvo!', 'ok');
     const ov = document.getElementById('avt-anim-import-overlay');
     if (ov) ov.style.display = 'none';
-  } catch (e) {
+  } catch (e: any) {
     console.error('_avtIsoIaSalvar:', e);
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
   }
@@ -28649,7 +28649,7 @@ async function _avtWalkPresetSalvar() {
     }
     mostrarToast('Caminhada salva!', 'ok');
     _avtWalkStudioFechar();
-  } catch (e) {
+  } catch (e: any) {
     console.error('_avtWalkPresetSalvar:', e);
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
   }
@@ -28830,7 +28830,7 @@ async function _avtSalvarNpcClasse(key: any) {
     window._avtNpcClasseEditando = null;
     _avtMestrePainelRender();
     mostrarToast(`Classe "${nome || key}" salva!`, 'sucesso');
-  } catch(err) { mostrarToast('Erro ao salvar: ' + (err?.message || err), 'erro'); }
+  } catch (err: any) { mostrarToast('Erro ao salvar: ' + (err?.message || err), 'erro'); }
 }
 window._avtSalvarNpcClasse = _avtSalvarNpcClasse;
 
@@ -28854,7 +28854,7 @@ async function _avtCriarNpcClasse() {
     window._avtNpcClasseEditando = slug;
     _avtMestrePainelRender();
     mostrarToast(`Classe "${nome}" criada!`, 'sucesso');
-  } catch(err) { mostrarToast('Erro ao criar: ' + (err?.message || err), 'erro'); }
+  } catch (err: any) { mostrarToast('Erro ao criar: ' + (err?.message || err), 'erro'); }
 }
 window._avtCriarNpcClasse = _avtCriarNpcClasse;
 
@@ -28920,7 +28920,7 @@ async function _avtBulkAplicarAparenciaPreset(key: any) {
   if (!st.tokenFile) { mostrarToast('Selecione a imagem do token', 'aviso'); return; }
   if (!coordsText)   { mostrarToast('Cole o JSON de coordenadas', 'aviso'); return; }
   let coords;
-  try { coords = JSON.parse(coordsText); } catch(e) { mostrarToast('JSON inválido: ' + e.message, 'aviso'); return; }
+  try { coords = JSON.parse(coordsText); } catch (e: any) { mostrarToast('JSON inválido: ' + e.message, 'aviso'); return; }
   const alvos = AVT_STATE.entidades.filter((e: any) => e.tipo === 'inimigo' && e.presetTipo === key);
   if (!alvos.length) { mostrarToast('Nenhum NPC com este preset na cena', 'aviso'); return; }
   mostrarToast(`Aplicando aparência a ${alvos.length} NPC(s)…`, '');
@@ -29371,7 +29371,7 @@ try{
         } else {
           (AVT_STATE as any)._npcHostLease[ent.id] = 0;
         }
-      } catch(e){
+      } catch (e: any){
         // 404 = função inexistente no banco → degradar imediatamente sem aguardar 10s
         const is404 = e?.status === 404 || (e?.message || String(e)).includes('404');
         if (is404) {
@@ -29390,7 +29390,7 @@ try{
           _x: ent.x||0, _y: ent.y||0, _user: uid
         });
         _markRpcOk();
-      } catch(e){
+      } catch (e: any){
         const is404 = e?.status === 404 || (e?.message || String(e)).includes('404');
         if (is404) {
           (AVT_STATE as any).npcSyncEnabled = false;
@@ -29475,7 +29475,7 @@ try{
   try {
     if (typeof window._avtBroadcast === 'function' && !(window._avtBroadcast as any)._hostrtcWrapped) {
       const _origBroadcast = window._avtBroadcast;
-      const wrapped = function(tipo: any, payload: any) {
+      const wrapped = function(this: any, tipo: any, payload: any) {
         try {
           // Pausado? Bloqueia mutations
           if (_isPaused() && tipo !== 'avt_dado_rolado' && tipo !== 'avt_skill_selecionada') return;
@@ -30310,7 +30310,7 @@ try{
         try {
           if (payload?.nome && payload.nome === AVT_STATE.myCharNome) return;
         } catch(_) {}
-        return _origRecHp.apply(this, arguments);
+        return _origRecHp.apply(this, arguments as any);
       };
     }
   } catch(_) {}
@@ -30357,9 +30357,9 @@ try{
   try {
     const _origNpcTurno = window._avtNpcTurno || (typeof _avtNpcTurno !== 'undefined' ? _avtNpcTurno : null);
     if (typeof _origNpcTurno === 'function') {
-      const _safeNpcTurno = async function(bat: any) {
+      const _safeNpcTurno = async function(this: any, bat: any) {
         try {
-          return await _origNpcTurno.apply(this, arguments);
+          return await _origNpcTurno.apply(this, arguments as any);
         } catch(e) {
           try { console.warn('[AVT][NPC] turno explodiu, forçando avanço', e); } catch(_){}
           try {
@@ -30398,7 +30398,7 @@ try{
     // então chamadores internos também passam pelo wrapper.
     (window as any)[nomeFn] = function() {
       _avtHookTeardown(nomeFn);
-      return (orig as any).apply(this, arguments);
+      return (orig as any).apply(this, arguments as any);
     };
   }
   setTimeout(() => {

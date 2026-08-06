@@ -476,7 +476,7 @@ async function animGenHandleGenerate() {
     }
 
     mostrarToast('Personagem gerado com sucesso!', 'ok');
-  } catch (e) {
+  } catch (e: any) {
     mostrarToast('Erro: ' + e.message, 'erro');
     console.error('[AnimGen]', e);
   } finally {
@@ -512,7 +512,7 @@ async function animGenHandleEquipImage(slot: any, input: any) {
     }
 
     mostrarToast(`Equipamento gerado: ${slot}`, 'ok');
-  } catch (e) {
+  } catch (e: any) {
     mostrarToast('Erro ao gerar equipamento: ' + e.message, 'erro');
     console.error('[AnimGen Equip]', e);
   } finally {
@@ -577,7 +577,7 @@ async function animGenImportarJSON() {
   raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
   let parsed;
-  try { parsed = JSON.parse(raw); } catch(e) {
+  try { parsed = JSON.parse(raw); } catch (e: any) {
     mostrarToast('JSON inválido: ' + e.message, 'erro');
     if (btn) { btn.disabled = false; btn.textContent = '✅ Carregar Personagem'; }
     return;
@@ -664,7 +664,7 @@ async function animGenImportarJSON() {
     }
 
     mostrarToast('Personagem importado! Clique em Salvar para persistir.', 'ok');
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro ao processar JSON: ' + e.message, 'erro');
     console.error('[AnimGen Import]', e);
   } finally {
@@ -695,7 +695,7 @@ function animGenImportarEquipJSON(slot: any) {
   raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
   let parsed;
-  try { parsed = JSON.parse(raw); } catch(e) { mostrarToast('JSON inválido: ' + e.message, 'erro'); return; }
+  try { parsed = JSON.parse(raw); } catch (e: any) { mostrarToast('JSON inválido: ' + e.message, 'erro'); return; }
 
   if (!parsed.svg) { mostrarToast('JSON não contém o campo "svg"', 'erro'); return; }
 

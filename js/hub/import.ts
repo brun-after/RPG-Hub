@@ -65,7 +65,7 @@ function fecharPixiStudio(){
 }
 
 
-function lerCSV(tipo: any,input: any){const f=input.files[0];if(!f)return;const st=document.getElementById('status-'+tipo),rd=new FileReader();rd.onload=e=>{try{const p=parseCSV(e.target.result);p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));IMPORT_CSVS[tipo]=p;st.textContent=`✓ ${p.length} linha(s)`;st.className='import-status ok';st.style.display='block';}catch(err){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
+function lerCSV(tipo: any,input: any){const f=input.files[0];if(!f)return;const st=document.getElementById('status-'+tipo),rd=new FileReader();rd.onload=e=>{try{const p=parseCSV(e.target.result);p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));IMPORT_CSVS[tipo]=p;st.textContent=`✓ ${p.length} linha(s)`;st.className='import-status ok';st.style.display='block';}catch (err: any){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
 
 // Lê CSV colado como texto
 function lerCSVPaste(tipo: any, texto: any) {
@@ -76,13 +76,13 @@ function lerCSVPaste(tipo: any, texto: any) {
     p.forEach(r => Object.keys(r).forEach(k => { if(typeof r[k]==='string') r[k]=r[k].replace(/\\n/g,'\n'); }));
     IMPORT_CSVS[tipo] = p;
     if (st) { st.textContent = `✓ ${p.length} linha(s) (texto colado)`; st.className='import-status ok'; st.style.display='block'; }
-  } catch(err) {
+  } catch (err: any) {
     if (st) { st.textContent = `✗ ${err.message}`; st.className='import-status err'; st.style.display='block'; }
     IMPORT_CSVS[tipo] = null;
   }
 }
 
-function lerAllInOne(input: any){const f=input.files[0];if(!f)return;const st=document.getElementById('status-allinone'),rd=new FileReader();rd.onload=e=>{try{const secs=parseMultiSection(e.target.result);const ns=Object.keys(secs);if(!ns.length)throw new Error('Nenhuma seção encontrada.');ns.forEach(s=>IMPORT_CSVS[s]=secs[s]);st.textContent=`✓ ${ns.length} seção(ões): ${ns.join(', ')}`;st.className='import-status ok';st.style.display='block';}catch(err){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
+function lerAllInOne(input: any){const f=input.files[0];if(!f)return;const st=document.getElementById('status-allinone'),rd=new FileReader();rd.onload=e=>{try{const secs=parseMultiSection(e.target.result);const ns=Object.keys(secs);if(!ns.length)throw new Error('Nenhuma seção encontrada.');ns.forEach(s=>IMPORT_CSVS[s]=secs[s]);st.textContent=`✓ ${ns.length} seção(ões): ${ns.join(', ')}`;st.className='import-status ok';st.style.display='block';}catch (err: any){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
 
 // Lê CSV all-in-one colado como texto
 function lerAllInOnePaste(texto: any) {
@@ -94,7 +94,7 @@ function lerAllInOnePaste(texto: any) {
     if (!ns.length) throw new Error('Nenhuma seção encontrada. Use #SECTION:config, #SECTION:characters…');
     ns.forEach(s => IMPORT_CSVS[s] = secs[s]);
     if (st) { st.textContent = `✓ ${ns.length} seção(ões): ${ns.join(', ')} (texto colado)`; st.className='import-status ok'; st.style.display='block'; }
-  } catch(err) {
+  } catch (err: any) {
     if (st) { st.textContent = `✗ ${err.message}`; st.className='import-status err'; st.style.display='block'; }
   }
 }
@@ -143,7 +143,7 @@ function _processarMapasJSONTexto(texto: any, st: any) {
       st.innerHTML = `<span style="color:var(--sucesso)">✓ ${arr.length} mapa(s)${formatInfo}: ${labels}</span>`;
       st.style.display='block';
     }
-  } catch(err) {
+  } catch (err: any) {
     if (st) { st.innerHTML = `<span style="color:var(--perigo)">✗ JSON inválido: ${err.message}</span>`; st.style.display='block'; }
     _mapasImportJSON = null;
   }
@@ -177,7 +177,7 @@ async function importarSoMapas() {
     _mapasImportJSON = null;
     document.getElementById('paste-mapas').value = '';
     document.getElementById('file-mapas').value = '';
-  } catch(e) {
+  } catch (e: any) {
     mostrarSt(`✗ Erro: ${e.message}`, 'err');
   }
 }
@@ -227,7 +227,7 @@ async function enviarImport(){
    if(!secs.length){showSt('status-import','Nenhum arquivo carregado','err');return;}
    btn.disabled=true;btn.textContent='Atualizando...';
    try{const upd=await updateRPG(rpgId,IMPORT_CSVS);showSt('status-import',`✓ Atualizado: ${upd.join(', ')}`,'ok');HUB_DATA.rpgs=await getAllRPGs()||[];setTimeout(fecharImport,2000);}
-   catch(e){showSt('status-import',`✗ ${e.message}`,'err');}
+   catch (e: any){showSt('status-import',`✗ ${e.message}`,'err');}
    finally{btn.disabled=false;btn.textContent='Atualizar RPG';}
    return;
  }
@@ -235,7 +235,7 @@ async function enviarImport(){
  if(IMPORT_CSVS.characters&&IMPORT_CSVS.characters.length&&(!IMPORT_CSVS.attr_defs||!(IMPORT_CSVS as any).attr_defs.length)){showSt('status-import','⚠ #SECTION:characters requer #SECTION:attr_defs para definir os atributos. Adicione a seção attr_defs ao arquivo.','err');return;}
  btn.disabled=true;btn.textContent='Importando...';
  try{const rpgId=await importRPG(IMPORT_CSVS, _mapasImportJSON);showSt('status-import',`✓ "${(IMPORT_CSVS as any).config[0].name}" importado!`,'ok');HUB_DATA.rpgs=await getAllRPGs()||[];renderRPGList(HUB_DATA.rpgs);setTimeout(fecharImport,2000);}
- catch(e){showSt('status-import',`✗ ${e.message}`,'err');}
+ catch (e: any){showSt('status-import',`✗ ${e.message}`,'err');}
  finally{btn.disabled=false;btn.textContent='Importar RPG';}
 }
 
@@ -1594,7 +1594,7 @@ async function importarMapasJSON(rpgId: any, mapas: any) {
     // Upsert: POST → se duplicado, PATCH
     try {
       await sb('mapas', { method: 'POST', body: JSON.stringify(body) });
-    } catch(e) {
+    } catch (e: any) {
       if (e.message && e.message.includes('23505')) {
         await sb(`mapas?rpg_id=eq.${encodeURIComponent(rpgId)}&map_id=eq.${encodeURIComponent(m.map_id)}`, {
           method: 'PATCH',
@@ -1683,7 +1683,7 @@ async function importarMapasMesaPaste() {
   try {
     const raw = paste.replace(/^```[a-z]*\n?/, '').replace(/```$/, '').trim();
     data = JSON.parse(raw);
-  } catch(e) { showSt('JSON inválido: ' + e.message, 'err'); return; }
+  } catch (e: any) { showSt('JSON inválido: ' + e.message, 'err'); return; }
 
   const arr = Array.isArray(data) ? data : (data.mapas ? data.mapas : [data]);
   if (!arr.length || !arr[0].map_id) { showSt('Formato inválido: cada mapa precisa de map_id.', 'err'); return; }
@@ -1700,7 +1700,7 @@ async function importarMapasMesaPaste() {
     renderMapasTab();
     document.getElementById('modal-gerar-mapa-ia-overlay').style.display = 'none';
     mostrarToast(`✓ ${arr.length} mapa(s) criado(s)!`, 'ok');
-  } catch(e) {
+  } catch (e: any) {
     showSt('Erro: ' + (e.message || e), 'err');
   }
 }

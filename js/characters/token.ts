@@ -613,7 +613,7 @@ function _tokAplicarPatches() {
     window.mapaIniciarDrag = function(nome, el, e) {
       _tokDragStartX[nome] = e?.clientX;
       window._animCtrlMap?.[nome]?.setAnimation('walk');
-      return _orig.apply(this, arguments);
+      return _orig.apply(this, arguments as any);
     };
     (window.mapaIniciarDrag as any).__tokPatchado = true;
   }
@@ -627,7 +627,7 @@ function _tokAplicarPatches() {
         if (Math.abs(dx) > 5) _tokSetFacing(nome, dx > 0 ? 'right' : 'left');
         delete _tokDragStartX[nome];
       }
-      const result = await _orig.apply(this, arguments);
+      const result = await _orig.apply(this, arguments as any);
       if (nome) window._animCtrlMap?.[nome]?.setAnimation('idle');
       return result;
     };
@@ -637,7 +637,7 @@ function _tokAplicarPatches() {
   if (typeof window.tokenMoveReceber === 'function' && !(window.tokenMoveReceber as any).__tokPatchado) {
     const _orig = window.tokenMoveReceber;
     window.tokenMoveReceber = function(payload) {
-      const result = _orig.apply(this, arguments);
+      const result = _orig.apply(this, arguments as any);
       if (payload?.nome) {
         const ctrl = window._animCtrlMap?.[payload.nome];
         if (ctrl) { ctrl.setAnimation('walk'); setTimeout(() => ctrl.setAnimation('idle'), 800); }

@@ -66,7 +66,7 @@ async function carregarCatalogo() {
     const data = await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&order=nome`);
     CATALOGO_STATE.itens = data || [];
     filtrarCatalogo();
-  } catch(e) {
+  } catch (e: any) {
     document.getElementById('cat-lista').innerHTML = `<div style="color:var(--perigo);padding:20px;text-align:center">${e.message}</div>`;
   }
 }
@@ -612,7 +612,7 @@ async function salvarItem() {
     fecharFormItem();
     carregarCatalogo();
     renderTabelasTab();
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro: ' + (e.message || 'Falha ao salvar'), 'erro');
   } finally {
     btn.disabled = false; btn.textContent = '💾 SALVAR ITEM';
@@ -630,7 +630,7 @@ async function duplicarItemAtual() {
     mostrarToast('✓ Item duplicado', 'ok');
     fecharFormItem();
     carregarCatalogo();
-  } catch(e) { mostrarToast('Erro ao duplicar: ' + e.message, 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao duplicar: ' + e.message, 'erro'); }
 }
 
 async function deletarItemAtual() {
@@ -643,7 +643,7 @@ async function deletarItemAtual() {
     mostrarToast('✓ Item deletado', '');
     fecharFormItem();
     carregarCatalogo();
-  } catch(e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  } catch (e: any) { mostrarToast('Erro: ' + e.message, 'erro'); }
 }
 
 // ── DAR ITEM A PERSONAGEM ──
@@ -690,7 +690,7 @@ async function confirmarDarItem() {
         origem: 'doacao_mestre'
       });
     }
-  } catch(e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  } catch (e: any) { mostrarToast('Erro: ' + e.message, 'erro'); }
 }
 
 // ── BOTÃO DE ACESSO AO CATÁLOGO ──
@@ -1535,7 +1535,7 @@ async function invRemoverItem(invId: any) {
     document.getElementById('modal-inv-item-overlay').style.display = 'none';
     mostrarToast('Item removido', '');
     renderInvCompleto();
-  } catch(e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  } catch (e: any) { mostrarToast('Erro: ' + e.message, 'erro'); }
 }
 
 // ── ADICIONAR ITEM (MESTRE) ───────────────────────────────────────────────
@@ -1548,7 +1548,7 @@ async function abrirAdicionarItemInv() {
     const data = await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&order=nome`);
     INV.catalogo = data || [];
     filtrarAddInv();
-  } catch(e) {
+  } catch (e: any) {
     document.getElementById('add-inv-lista').innerHTML = `<div style="color:var(--perigo);padding:20px">${e.message}</div>`;
   }
 }
@@ -1598,7 +1598,7 @@ async function addInvConfirmar(catalogId: any) {
     await carregarInventarioChar(charId);
     // Broadcast
     _invBroadcastDrop(it, INV.charAtivo, 'doacao_mestre');
-  } catch(e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  } catch (e: any) { mostrarToast('Erro: ' + e.message, 'erro'); }
 }
 
 // ── I4 — VERIFICAR DESBLOQUEIO DE ITENS AO SUBIR NÍVEL ──────────────────
@@ -1714,7 +1714,7 @@ async function renderInvMoedas() {
     }
 
     el.innerHTML = html;
-  } catch(e) {
+  } catch (e: any) {
     el.innerHTML = `<div style="color:var(--perigo);padding:20px">${e.message}</div>`;
   }
 }
@@ -1826,7 +1826,7 @@ async function confirmarTransacaoMoeda() {
     }
     document.getElementById('modal-moeda-tx-overlay').style.display = 'none';
     renderInvMoedas();
-  } catch(e) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  } catch (e: any) { mostrarToast('Erro: ' + e.message, 'erro'); }
 }
 
 async function _moedaUpsert(charId: any, denominacao: any, delta: any) {
@@ -1937,7 +1937,7 @@ async function cfgMoedasSalvar() {
     if (!CURRENT_RPG.theme) CURRENT_RPG.theme = {};
     CURRENT_RPG.theme.denominacoes_moeda = validas;
     mostrarToast('✓ Moedas salvas! Recarregue o inventário para ver as mudanças.', 'ok');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e.message||''), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e.message||''), 'erro'); }
 }
 
 // ── BROADCAST HELPER ─────────────────────────────────────────────────────
@@ -2814,7 +2814,7 @@ async function renderInvBau() {
     // Popular lista de depósito
     if (INV.charAtivo) renderBauDepositarLista();
 
-  } catch(e) {
+  } catch (e: any) {
     el.innerHTML = `<div style="color:var(--perigo);padding:16px">Erro ao carregar baú: ${e.message}</div>`;
   }
 }
@@ -2853,7 +2853,7 @@ window.bauDepositarItem = async function(instId: any) {
     if (INV.charId) { delete (INV.carregado as any)[INV.charId]; }
     BAU_STATE.carregado = false;
     await renderInvBau();
-  } catch(e) { mostrarToast('Erro ao depositar: ' + e.message, 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao depositar: ' + e.message, 'erro'); }
 };
 
 window.bauRetirarItem = async function(instId: any) {
@@ -2870,7 +2870,7 @@ window.bauRetirarItem = async function(instId: any) {
     BAU_STATE.carregado = false;
     if (charId) delete (INV.carregado as any)[charId];
     await renderInvBau();
-  } catch(e) { mostrarToast('Erro ao retirar: ' + e.message, 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao retirar: ' + e.message, 'erro'); }
 };
 
 
@@ -2961,7 +2961,7 @@ window.enviarProposta = async function() {
     });
     mostrarToast(`📨 Proposta enviada para ${destNome}`, 'ok');
     fecharModalTrade();
-  } catch(e) { mostrarToast('Erro ao enviar proposta: ' + e.message.replace(/^.*:\s*/, '') , 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao enviar proposta: ' + e.message.replace(/^.*:\s*/, '') , 'erro'); }
 };
 
 window.responderTrade = async function(acao: any) {
@@ -5549,7 +5549,7 @@ async function mercadoAdicionarItem() {
     document.getElementById('mercado-novo-estoque').value = '';
     await carregarMercadoItens(mid);
     if (MERCADO_STATE.gerTab === 'lista') _mercadoRenderListaGerenciar();
-  } catch(e) { mostrarToast('Erro ao adicionar: ' + (e.message||'falha'), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao adicionar: ' + (e.message||'falha'), 'erro'); }
 }
 
 function _mercadoRenderListaGerenciar() {
@@ -5601,7 +5601,7 @@ async function mercadoRemoverItem(rowId: any) {
     _mercadoRenderListaGerenciar();
     renderMercadoItens();
     mostrarToast('Item removido', '');
-  } catch(e) { mostrarToast('Erro ao remover: ' + (e.message||''), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao remover: ' + (e.message||''), 'erro'); }
 }
 
 function mercadoSalvarConfig() {
@@ -5619,7 +5619,7 @@ async function carregarMercadoItens(mercadoId: any) {
     MERCADO_STATE.todos = rows || [];
     MERCADO_STATE.itens = [...MERCADO_STATE.todos];
     renderMercadoItens();
-  } catch(e) {
+  } catch (e: any) {
     if (el) el.innerHTML = `<div style="color:#e74c3c;padding:16px;grid-column:1/-1">Erro: ${e.message}</div>`;
   }
 }
@@ -5720,7 +5720,7 @@ window.comprarItemMercado = async function(rowId: any, preco: any, denom: any) {
     // Debitar usando _moedaUpsert do I6 (fonte única de verdade)
     try {
       await _moedaUpsert(charId, denom, -precoNum);
-    } catch(e) { mostrarToast('Erro ao debitar moedas: ' + (e.message||''), 'erro'); return; }
+    } catch (e: any) { mostrarToast('Erro ao debitar moedas: ' + (e.message||''), 'erro'); return; }
   }
 
   // 2. Adicionar ao inventário
@@ -5732,10 +5732,10 @@ window.comprarItemMercado = async function(rowId: any, preco: any, denom: any) {
       })});
       if (typeof _invBroadcastDrop === 'function') _invBroadcastDrop(it, charNome, 'compra');
       if (typeof INV !== 'undefined' && charId) delete (INV.carregado as any)[charId];
-    } catch(e) {
+    } catch(e: any) {
       // Estornar débito se inventário falhou
       if (precoNum > 0) {
-        try { await _moedaUpsert(charId, denom, +precoNum); } catch(_) {}
+        try { await _moedaUpsert(charId, denom, +precoNum); } catch (_: any) {}
         mostrarToast('Erro ao comprar — moedas estornadas.', 'erro');
       } else {
         mostrarToast('Erro ao adicionar ao inventário: ' + (e.message||''), 'erro');
@@ -5808,7 +5808,7 @@ async function _mercCarregarAbaVender() {
         ${precoH}${btnV}
       </div>`;
     }).join('');
-  } catch(e) { if (listaEl) listaEl.innerHTML = `<div style="color:#e74c3c;padding:16px">Erro: ${e.message}</div>`; }
+  } catch (e: any) { if (listaEl) listaEl.innerHTML = `<div style="color:#e74c3c;padding:16px">Erro: ${e.message}</div>`; }
 }
 
 window.mercadoVenderItem = async function(invRowId: any, itemCatalogId: any, nomeItem: any, preco: any, denom: any, ev: any) {
@@ -5827,7 +5827,7 @@ window.mercadoVenderItem = async function(invRowId: any, itemCatalogId: any, nom
     mostrarToast(`✓ ${nomeItem} vendido por ${preco} ${denom}`, 'ok');
     await _mercAtualizarSaldo();
     await _mercCarregarAbaVender();
-  } catch(e) { mostrarToast('Erro ao vender: ' + (e.message||''), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao vender: ' + (e.message||''), 'erro'); }
 };
 
 // ── Histórico unificado (dono_id + personagem_nome) ──────────
@@ -5862,7 +5862,7 @@ async function mercadoCarregarHistorico() {
         <span style="font-family:'Cinzel',serif;font-size:0.78rem;color:${cor};flex-shrink:0">${sinal}${Math.abs(t.quantidade||0)} ${t.denominacao||''}</span>
       </div>`;
     }).join('');
-  } catch(e) { el.innerHTML = `<div style="color:#e74c3c;padding:16px">Erro: ${e.message}</div>`; }
+  } catch (e: any) { el.innerHTML = `<div style="color:#e74c3c;padding:16px">Erro: ${e.message}</div>`; }
 }
 
 // ── Controle de abas ─────────────────────────────────────────
@@ -6624,7 +6624,7 @@ function _onReceberAnimacaoCriativo(data: any) {
     }
     // Chamar original
     if (_criativoMestreConcluirFase1_original) {
-      return _criativoMestreConcluirFase1_original.apply(this, arguments);
+      return _criativoMestreConcluirFase1_original.apply(this, arguments as any);
     }
   };
 
@@ -7027,7 +7027,7 @@ function _onReceberAnimacaoCriativo(data: any) {
 
     // Chamar original
     if (_batalhaAtacarVez_original) {
-      return _batalhaAtacarVez_original.apply(this, arguments);
+      return _batalhaAtacarVez_original.apply(this, arguments as any);
     }
   };
 
@@ -7245,7 +7245,7 @@ function _onReceberAnimacaoCriativo(data: any) {
         return; // bloquear seleção
       }
     }
-    if (_atkSelecionarAlvo_original) return _atkSelecionarAlvo_original.apply(this, arguments);
+    if (_atkSelecionarAlvo_original) return _atkSelecionarAlvo_original.apply(this, arguments as any);
   };
 
   _fixLog('B11', 'alcance_celulas validado ao selecionar alvo em campanha');
@@ -7277,7 +7277,7 @@ function _onReceberAnimacaoCriativo(data: any) {
   const _iniciarApp_orig = window.iniciarApp;
   if (_iniciarApp_orig) {
     window.iniciarApp = async function() {
-      const result = await _iniciarApp_orig.apply(this, arguments);
+      const result = await _iniciarApp_orig.apply(this, arguments as any);
       setTimeout(() => {
         if (RPG_DATA?.characters?.length) assertHpConsistente();
       }, 2000);

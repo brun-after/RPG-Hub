@@ -1498,7 +1498,7 @@ JSON:`;
     try {
       JSON.parse(val);
       if (err) err.style.display = 'none';
-    } catch (e) {
+    } catch (e: any) {
       if (err) { err.style.display = ''; err.textContent = '⚠ JSON inválido: ' + e.message; }
     }
   };
@@ -1713,7 +1713,7 @@ JSON:`;
     try {
       JSON.parse(val);
       if (err) err.style.display = 'none';
-    } catch (e) {
+    } catch (e: any) {
       if (err) {
         err.style.display = '';
         err.textContent = '⚠ JSON inválido: ' + e.message;

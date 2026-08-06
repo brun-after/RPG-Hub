@@ -447,7 +447,7 @@ function _avtExtHandleJSONPaste(val: any) {
     const nomeCampanha = data.nome ? ` — <b>${data.nome}</b>` : '';
     if (status) status.innerHTML =
       `<span style="color:#27ae60">✓ ${nc} personagem(ns) + mapa ${w}×${h} — ${ns} sala(s)${nomeCampanha}</span>`;
-  } catch(e) {
+  } catch (e: any) {
     (AVT_STATE._criando as any)._extCampanhaJSON = null;
     if (status) status.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
   }
@@ -594,7 +594,7 @@ function faseTilesetHandleJSONPaste(val: any) {
     if (status) status.innerHTML = hasMapa
       ? `<span style="color:#27ae60">✓ Tileset + mapa ${w}×${h} válidos — ${cfg.mapa.salas?.length||0} salas</span>`
       : `<span style="color:#e67e22">⚠ Tileset válido mas sem "mapa.tiles" — a IA não incluiu o layout</span>`;
-  } catch(e) {
+  } catch (e: any) {
     (AVT_STATE._criando as any)._tilesetConfig = null;
     if (status) status.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
   }

@@ -101,7 +101,7 @@ const DEBUG_MODE = false; // Mude para true para ativar logs detalhados
 const BATTLE_SYSTEM = {
   _fila: [] as any[],
   _processando: false,
-  _pendingReactions: {},
+  _pendingReactions: {} as Record<string, any>,
 
   // ── Config da campanha ───────────────────────────────────────────────────
   getConfig() {

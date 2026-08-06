@@ -753,7 +753,7 @@ window.__avtFlushPendingBroadcasts = function(){
       _hpTimer = setTimeout(_flushHp, wait);
       return;
     }
-    return _origRB.apply(this, arguments);
+    return _origRB.apply(this, arguments as any);
   };
   // Flush do HP pendente ao esconder/fechar a aba — antes não havia teardown, então um HP
   // pendente (inclusive a morte) se perdia se a aba fechasse dentro dos 60ms de coalescing.

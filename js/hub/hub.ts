@@ -833,7 +833,7 @@ async function entrarRPG(rpgId: any){
    iniciarRealtime(rpgId);
    chatMostrar(rpgId);
    _carregarProgressivo(rpgId);
- }catch(e){ocultarLoading();mostrarToast('Erro ao carregar RPG: '+(e?.message||e),'erro');console.error('[RPG Hub] entrarRPG erro:', e);}
+ }catch (e: any){ocultarLoading();mostrarToast('Erro ao carregar RPG: '+(e?.message||e),'erro');console.error('[RPG Hub] entrarRPG erro:', e);}
 }
 
 // ── Inicializar sistemas das fases ao entrar na campanha ────────────────

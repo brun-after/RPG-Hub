@@ -4972,7 +4972,7 @@ function renderMapaViewer() {
     existingImg.src = normalizeImgUrl(m.img_url);
     existingImg.style.cssText = 'display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:-webkit-optimize-contrast;';
     // Ajusta a proporção do container ao carregar a imagem (modo fullscreen sem corte)
-    const _aplicarAspecto = function() {
+    const _aplicarAspecto = function(this: any) {
       const mi = document.getElementById('mapa-img');
       if (mi && this.naturalWidth && this.naturalHeight) {
         mi.style.aspectRatio = `${this.naturalWidth}/${this.naturalHeight}`;
@@ -7090,12 +7090,12 @@ async function _npcCalcAcao(nomeNpc: any, comportamento: any, mapId: any) {
   switch(comportamento) {
     case 'agressivo':{ const mp=_maisProx(inimigos); if(mp){const sk=_maisDano(); if(sk&&mp.dist<=(sk.alcance_celulas||1)){atacar={skill:sk,alvo:mp.char.nome};}else{moverPara=_emDir(mp.char.nome);}}} break;
     case 'defensivo':{ if(hpPct<0.4){moverPara=_fugir();}else{const mp=_maisProx(inimigos);if(mp){const sk=_maisDano();if(sk&&mp.dist<=(sk.alcance_celulas||1))atacar={skill:sk,alvo:mp.char.nome};}}} break;
-    case 'suporte':  { const aMin=aliados.reduce((b,x)=>{const h=x.hp_atual??(x.custom_attrs?.hp_max||100),m=x.custom_attrs?.hp_max||100;return(!b||h/m<b.pct)?{char:x,pct:h/m}:b;},null); const sk=_skillCura(); if(aMin&&sk&&aMin.pct<0.7){const d=_dist(aMin.char.nome);if(d!==null&&d<=(sk.alcance_celulas||1)){atacar={skill:sk,alvo:aMin.char.nome};}else{moverPara=_emDir(aMin.char.nome);}}else{const mp=_maisProx(inimigos);if(mp){const sk2=_maisDano();if(sk2&&mp.dist<=(sk2.alcance_celulas||1))atacar={skill:sk2,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}}} break;
+    case 'suporte':  { const aMin=aliados.reduce((b: any,x: any)=>{const h=x.hp_atual??(x.custom_attrs?.hp_max||100),m=x.custom_attrs?.hp_max||100;return(!b||h/m<b.pct)?{char:x,pct:h/m}:b;},null); const sk=_skillCura(); if(aMin&&sk&&aMin.pct<0.7){const d=_dist(aMin.char.nome);if(d!==null&&d<=(sk.alcance_celulas||1)){atacar={skill:sk,alvo:aMin.char.nome};}else{moverPara=_emDir(aMin.char.nome);}}else{const mp=_maisProx(inimigos);if(mp){const sk2=_maisDano();if(sk2&&mp.dist<=(sk2.alcance_celulas||1))atacar={skill:sk2,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}}} break;
     case 'covarde':  { if(hpPct<0.6){moverPara=_fugir();}else{const mp=_maisProx(inimigos);if(mp&&mp.dist<=1){const sk=_maisDano();if(sk)atacar={skill:sk,alvo:mp.char.nome};}}} break;
     case 'protetor': { const mp=_maisProx(inimigos); if(mp){const sk=skills.find((s: any)=>s.alvo_tipo==='aliado')||_maisDano();if(sk&&mp.dist<=(sk.alcance_celulas||1)){atacar={skill:sk,alvo:mp.char.nome};}else{moverPara=_emDir(mp.char.nome);}}} break;
     case 'berserk':  { const mp=_maisProx(inimigos); if(mp){const sk=_maisDano();if(sk){if(mp.dist<=(sk.alcance_celulas||1))atacar={skill:sk,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}}} break;
     case 'emboscador':{ const skR=skills.filter((s: any)=>s.alvo_tipo==='inimigo'&&(s.alcance_celulas||1)>2).sort((a: any,b: any)=>(b.alcance_celulas||0)-(a.alcance_celulas||0))[0]; const mp=_maisProx(inimigos); if(mp&&skR){if(mp.dist<=skR.alcance_celulas)atacar={skill:skR,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}else if(mp&&mp.dist<=2){moverPara=_fugir();}} break;
-    case 'cacador':  { if(!alvoFixo){const ap=inimigos.reduce((b,x)=>{const h=x.hp_atual??100;return(!b||h<b.hp)?{char:x,hp:h}:b;},null);if(ap)alvoFixo=ap.char.nome;} if(alvoFixo){const d=_dist(alvoFixo);const sk=_maisDano();if(sk){if(d!==null&&d<=(sk.alcance_celulas||1))atacar={skill:sk,alvo:alvoFixo};else moverPara=_emDir(alvoFixo);}}} break;
+    case 'cacador':  { if(!alvoFixo){const ap=inimigos.reduce((b: any,x: any)=>{const h=x.hp_atual??100;return(!b||h<b.hp)?{char:x,hp:h}:b;},null);if(ap)alvoFixo=ap.char.nome;} if(alvoFixo){const d=_dist(alvoFixo);const sk=_maisDano();if(sk){if(d!==null&&d<=(sk.alcance_celulas||1))atacar={skill:sk,alvo:alvoFixo};else moverPara=_emDir(alvoFixo);}}} break;
     case 'estrategista':{ const skC=skills.find((s: any)=>s.alvo_tipo==='inimigo'&&s.efeitos_bonus?.some((e: any)=>e.sem_movimento||e.sem_ataque)); const sk=_maisDano(); const mp=_maisProx(inimigos); if(mp){const skU=(skC&&!mp.char.buffs?.some((b: any)=>b.sem_movimento))?skC:sk;if(skU&&mp.dist<=(skU.alcance_celulas||1))atacar={skill:skU,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}} break;
     default:{ const todos=['agressivo','defensivo','suporte','covarde','emboscador']; return _npcCalcAcao(nomeNpc,todos[Math.floor(Math.random()*todos.length)],mapId); }
   }
@@ -10445,7 +10445,7 @@ async function removerAttrDef(id: any, nome: any) {
 }
 function selecionarOpcaoConfig(nome: any,el: any){CFG_CHAR=nome;document.querySelectorAll('.char-opcao').forEach(o=>o.classList.remove('selecionado'));el.classList.add('selecionado');}
 async function salvarConfig(){if(!CFG_CHAR){mostrarToast('Selecione um personagem','erro');return;}try{await saveMemberLinked(RPG_DATA.rpgId,CFG_CHAR);RPG_DATA.linked=CFG_CHAR;renderHeader();mostrarToast('Vínculo salvo!','sucesso');}catch(e){mostrarToast('Erro ao salvar','erro');}}
-async function confirmarDeleteRPG(){if(!CURRENT_RPG||CURRENT_RPG.id==='dual'){mostrarToast('DUAL não pode ser deletado','erro');return;}if(!confirm(`Deletar "${CURRENT_RPG.name}"?`))return;try{await deleteRPGData(CURRENT_RPG.id);mostrarToast('RPG deletado','sucesso');HUB_DATA.rpgs=HUB_DATA.rpgs.filter(r=>r.rpg_id!==CURRENT_RPG.id);setTimeout(voltarHub,800);}catch(e){mostrarToast(e.message||'Erro','erro');}}
+async function confirmarDeleteRPG(){if(!CURRENT_RPG||CURRENT_RPG.id==='dual'){mostrarToast('DUAL não pode ser deletado','erro');return;}if(!confirm(`Deletar "${CURRENT_RPG.name}"?`))return;try{await deleteRPGData(CURRENT_RPG.id);mostrarToast('RPG deletado','sucesso');HUB_DATA.rpgs=HUB_DATA.rpgs.filter(r=>r.rpg_id!==CURRENT_RPG.id);setTimeout(voltarHub,800);}catch (e: any){mostrarToast(e.message||'Erro','erro');}}
 
 
 
@@ -11001,7 +11001,7 @@ async function criarNovoMapa() {
     } else {
       selecionarMapa(map_id);
     }
-  } catch(e) {
+  } catch (e: any) {
     console.error('criarNovoMapa erro:', e);
     mostrarToast('Erro ao criar mapa: ' + (e?.message || e), 'erro');
   } finally {
@@ -11055,7 +11055,7 @@ let PLACEMENT_STATE: any = null;
   // Debouncing helper
   function debounce(fn: any, delay: any) {
     let timeout: any;
-    return function() {
+    return function(this: any) {
       const context = this;
       const args = arguments;
       clearTimeout(timeout);
@@ -11590,7 +11590,7 @@ let PLACEMENT_STATE: any = null;
         const _orig = window.mapaDesenharGrade;
         window.mapaDesenharGrade = function (m) {
           try { 
-            _orig.apply(this, arguments); 
+            _orig.apply(this, arguments as any); 
           } catch (e) { 
             console.warn('[grid] orig mapaDesenharGrade erro:', e); 
           }
@@ -11609,7 +11609,7 @@ let PLACEMENT_STATE: any = null;
       if (typeof window.mapaRenderTokens === 'function' && !(window.mapaRenderTokens as any).__gtPatched) {
         const _orig = window.mapaRenderTokens;
         window.mapaRenderTokens = function (m) {
-          const r = _orig.apply(this, arguments);
+          const r = _orig.apply(this, arguments as any);
           
           // SÓ processar se não estiver em storm
           if (!_renderStormDetected && !_renderingInProgress) {
@@ -11660,7 +11660,7 @@ let PLACEMENT_STATE: any = null;
       if (typeof window.renderMapaViewer === 'function' && !(window.renderMapaViewer as any).__gtPatched) {
         const _orig = window.renderMapaViewer;
         window.renderMapaViewer = function () {
-          const r = _orig.apply(this, arguments);
+          const r = _orig.apply(this, arguments as any);
           
           if (!_renderStormDetected && !_renderingInProgress) {
             try { 

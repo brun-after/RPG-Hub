@@ -801,7 +801,7 @@ async function avtMenuAbrir(rpgId: any) {
     if (panel) panel.style.display = 'none';
 
     _avtMenuRenderBotoes();
-  } catch(e) {
+  } catch (e: any) {
     ocultarLoading();
     mostrarToast('Erro ao abrir menu: ' + (e?.message || e), 'erro');
     _avtMenuFallback(rpgId);
@@ -1114,7 +1114,7 @@ async function _avtMenuRemoverFaseComRefresh(faseId: any) {
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_MENU_STATE.rpgId)}`,
       { method: 'PATCH', body: JSON.stringify({ theme_json: theme }) });
     mostrarToast('Fase removida', 'ok');
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro ao remover: ' + (e?.message || e), 'erro');
   }
   _avtMenuAbrirFaseMestre();
@@ -1307,7 +1307,7 @@ async function _avtMenuSalvarEditarFase(faseId: any) {
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_MENU_STATE.rpgId)}`,
       { method: 'PATCH', body: JSON.stringify({ theme_json: theme }) });
     mostrarToast('Fase atualizada!', 'ok');
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
   }
   _avtMenuAbrirFaseMestre();
@@ -1400,7 +1400,7 @@ async function _avtMenuCriarPersonagem() {
     if (chars) AVT_STATE.chars = chars;
     mostrarToast(`Personagem "${nome.trim()}" criado!`, 'ok');
     _avtMenuAbrirPersonagem();
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro ao criar personagem: ' + (e?.message || e), 'erro');
   }
 }
@@ -1704,7 +1704,7 @@ async function _avtMenuSalvarConfigMestre() {
     const sc = document.getElementById('avt-menu-screen');
     if (sc && color) sc.style.background = color;
     mostrarToast('Config do mestre salva!', 'ok');
-  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'erro'); }
 }
 window._avtMenuSalvarConfigMestre = _avtMenuSalvarConfigMestre;
 
@@ -1867,7 +1867,7 @@ async function _avtMenuEntrarJogo({ charNome, faseId }: any) {
       }
     });
 
-  } catch(e) {
+  } catch (e: any) {
     ocultarLoading();
     mostrarToast('Erro ao entrar: ' + (e?.message || e), 'erro');
   }

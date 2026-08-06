@@ -369,7 +369,7 @@ async function psSalvar() {
     _psSetDirty(false);
     await psCarregarLista();
     mostrarToast('Animação salva!', 'sucesso');
-  } catch (e) {
+  } catch (e: any) {
     mostrarToast('Erro ao salvar: ' + (e.message || e), 'erro');
   }
 }
@@ -3070,7 +3070,7 @@ function psImportarJson(jsonStr: any) {
   if (!jsonStr) jsonStr = document.getElementById('ps-import-json-text')?.value || '';
   if (!jsonStr.trim()) return mostrarToast('JSON vazio', 'erro');
   let parsed;
-  try { parsed = JSON.parse(jsonStr); } catch (e) { return mostrarToast('JSON inválido: ' + e.message, 'erro'); }
+  try { parsed = JSON.parse(jsonStr); } catch (e: any) { return mostrarToast('JSON inválido: ' + e.message, 'erro'); }
 
   let config;
   if (parsed.version === 2 && parsed.layers) {
@@ -3166,7 +3166,7 @@ async function psUploadTexture(layerId: any, input: any) {
     psUpdateLayerProp(layerId, 'texture_url', url);
     _psRenderPropsPanel();
     mostrarToast('Imagem carregada!', 'sucesso');
-  } catch (e) {
+  } catch (e: any) {
     mostrarToast('Erro no upload: ' + (e.message || e), 'erro');
   }
 }

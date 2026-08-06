@@ -242,7 +242,7 @@
 
       var _origAplicarTema = window.aplicarTema;
       window.aplicarTema = function() {
-        _origAplicarTema.apply(this, arguments);
+        _origAplicarTema.apply(this, arguments as any);
         if (_estaAtivo()) {
           _aplicarVars();
           _injetarCSS();
@@ -251,7 +251,7 @@
 
       var _origVoltarHub = window.voltarHub;
       window.voltarHub = function() {
-        _origVoltarHub.apply(this, arguments);
+        _origVoltarHub.apply(this, arguments as any);
         if (_estaAtivo()) {
           _aplicarVars();
           _injetarCSS();

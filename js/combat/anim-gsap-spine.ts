@@ -606,7 +606,7 @@
             const r = typeof _origAnimar === 'function'
               ? _origAnimar.call(this, { atacEl, alvoEl, animacao: animPixi, dano })
               : Promise.resolve();
-            (r || Promise.resolve()).then(resolve).catch(resolve);
+            (r || Promise.resolve()).then(resolve as any).catch(resolve as any);
             return;
           }
 

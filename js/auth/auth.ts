@@ -84,7 +84,7 @@ async function authSubmit() {
     } else {
       await authEntrar(email, senha);
     }
-  } catch(e) {
+  } catch (e: any) {
     authErro(e.message || 'Erro desconhecido');
   } finally {
     btn.disabled = false;

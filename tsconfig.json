@@ -7,6 +7,10 @@
     "noEmit": true,
     "strict": false,
     "noImplicitAny": true,
+    "noImplicitThis": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "useUnknownInCatchVariables": true,
     "skipLibCheck": true,
     "isolatedModules": true,
     "types": ["vite/client", "node"]

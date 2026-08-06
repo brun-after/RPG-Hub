@@ -63,7 +63,7 @@ async function removerMapeamento(rpgId: any, nomeCustomizado: any) {
       const nomes = usando.slice(0,3).map((x: any)=>x.nome).join(', ');
       throw new Error(`Atributo usado por ${usando.length} item(ns): ${nomes}. Remova-o dos itens antes.`);
     }
-  } catch(e) {
+  } catch (e: any) {
     if (e.message.includes('usado por')) throw e;
     // tabela item_catalog pode não existir ainda, ok
   }
@@ -118,7 +118,7 @@ async function renderAttrMappingUI() {
   try {
     await carregarMapeamento(rpgId);
     _renderMappingGrid(rpgId, attrNumericos);
-  } catch(e) {
+  } catch (e: any) {
     grid.innerHTML = `<div style="color:var(--perigo);font-size:0.8rem">${e.message}</div>`;
   }
 }
@@ -165,7 +165,7 @@ async function atrMappingAdicionar(rpgId: any, grupo: any) {
     await salvarMapeamento(rpgId, nome, grupo);
     mostrarToast(`✓ "${nome}" mapeado para ${GRUPO_INFO[grupo].label}`, 'ok');
     renderAttrMappingUI();
-  } catch(e) { mostrarToast(e.message, 'erro'); }
+  } catch (e: any) { mostrarToast(e.message, 'erro'); }
 }
 
 async function atrMappingRemover(rpgId: any, nome: any, grupo: any) {
@@ -174,7 +174,7 @@ async function atrMappingRemover(rpgId: any, nome: any, grupo: any) {
     await removerMapeamento(rpgId, nome);
     mostrarToast(`✓ "${nome}" removido`, '');
     renderAttrMappingUI();
-  } catch(e) { mostrarToast(e.message, 'erro'); }
+  } catch (e: any) { mostrarToast(e.message, 'erro'); }
 }
 
 // Hook: renderizar mapping ao entrar na aba config

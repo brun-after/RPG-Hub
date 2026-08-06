@@ -3187,7 +3187,7 @@ async function executarArImportarMapa() {
   try {
     const cleaned = raw.replace(/^```[a-z]*\n?/, '').replace(/```$/, '').trim();
     data = JSON.parse(cleaned);
-  } catch(e) { showErr('JSON inválido: ' + e.message); return; }
+  } catch (e: any) { showErr('JSON inválido: ' + e.message); return; }
 
   const mapa = Array.isArray(data) ? data[0] : data;
   if (!mapa) { showErr('Nenhum mapa encontrado no JSON.'); return; }
@@ -3500,7 +3500,7 @@ async function importarBatalhaIA() {
     batalha = JSON.parse(jsonRaw);
   } catch (_) {
     try { batalha = _parseBatalhaCSV(raw); }
-    catch (e) { mostrarErro('Formato inválido: ' + e.message); return; }
+    catch (e: any) { mostrarErro('Formato inválido: ' + e.message); return; }
   }
 
   const { submapa: nomeSubmapa, personagens = [], inimigos = [], npcs_especiais = [], render_data } = batalha;
@@ -3565,7 +3565,7 @@ async function importarBatalhaIA() {
         ...(render_data ? { render_data } : {}),
       };
       RPG_DATA.mapas.push({ id: row?.id, rpg_id: rpgId, mapa: mapaObj });
-    } catch(e) {
+    } catch (e: any) {
       mostrarErro('Erro ao criar submapa: ' + e.message);
       return;
     }

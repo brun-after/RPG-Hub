@@ -2356,7 +2356,7 @@ async function criarSubmit() {
       await entrarRPG(rpgId);
     }, 1200);
 
-  } catch(e) {
+  } catch (e: any) {
     btn.disabled = false; btn.textContent = '✦ Criar Campanha!';
     const msg = e.message || 'Erro desconhecido';
     if (st) { st.className='import-status err'; st.textContent = '✗ ' + msg; }

@@ -270,7 +270,7 @@ async function faseGenGerarCoordenadas() {
 
     _faseGenRenderEditorJSON();
     mostrarToast('✓ Coordenadas extraídas e catálogo gerado', 'ok');
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro Claude Vision: ' + e.message, 'err');
     console.error('[fase-generator] Claude Vision error:', e);
   } finally {
@@ -402,7 +402,7 @@ function faseGenImportarJSONExterno() {
     ta.value = '';
     document.getElementById('fase-import-externo-wrap').style.display = 'none';
     mostrarToast('✓ JSON importado', 'ok');
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('JSON inválido: ' + e.message, 'err');
   }
 }
@@ -418,7 +418,7 @@ function faseGenJSONEditado(val: any) {
   try {
     _faseGenModalData = JSON.parse(val);
     document.getElementById('fase-json-err').textContent = '';
-  } catch(e) {
+  } catch (e: any) {
     document.getElementById('fase-json-err').textContent = '⚠ JSON inválido: ' + e.message;
   }
 }
@@ -472,7 +472,7 @@ async function faseGenSalvar() {
     if (MAPA_STATE.mapaAtualId === _faseGenMapId) {
       renderMapaViewer?.();
     }
-  } catch(e) {
+  } catch (e: any) {
     mostrarToast('Erro ao salvar: ' + e.message, 'err');
     console.error('[fase-generator] save error:', e);
   } finally {

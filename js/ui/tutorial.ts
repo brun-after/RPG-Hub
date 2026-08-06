@@ -214,7 +214,7 @@ function tutorialReiniciar() {
 (function _hookTutorialConfig() {
   const origRenderConfig = window.renderConfig;
   window.renderConfig = function() {
-    origRenderConfig && origRenderConfig.apply(this, arguments);
+    origRenderConfig && origRenderConfig.apply(this, arguments as any);
     setTimeout(() => {
       const tog = document.getElementById('cfg-tutorial-toggle');
       if (tog && RPG_DATA?.rpgId) {

@@ -80,7 +80,7 @@ async function mercadoCriarInformacao() {
       _limparFormularioInformacao();
       mostrarToast(`✓ Informação "${nome}" adicionada ao mercado`, 'sucesso');
     }
-  } catch (e) { mostrarToast('Erro ao criar informação: ' + e.message, 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao criar informação: ' + e.message, 'erro'); }
 }
 
 function _limparFormularioInformacao() {
@@ -124,7 +124,7 @@ async function comprarInformacao(rowId: any, preco: any, denom: any) {
     const saldo = atual?.[0]?.quantidade || 0;
     if (saldo < precoNum) { mostrarToast(`❌ Saldo insuficiente — você tem ${saldo} ${denom}`, 'erro'); return; }
     try { await _moedaUpsert(charId, denom, -precoNum); }
-    catch (e) { mostrarToast('Erro ao debitar moedas: ' + e.message, 'erro'); return; }
+    catch (e: any) { mostrarToast('Erro ao debitar moedas: ' + e.message, 'erro'); return; }
   }
 
   // 2. Registrar compra
@@ -223,7 +223,7 @@ async function verInformacoesCompradas() {
         ${itensHtml}
       </div>`;
     document.body.appendChild(modal);
-  } catch (e) { mostrarToast('Erro ao carregar informações: ' + e.message, 'erro'); }
+  } catch (e: any) { mostrarToast('Erro ao carregar informações: ' + e.message, 'erro'); }
 }
 
 // Sobrescrever renderMercadoItens para suportar tipo 'informacao'
@@ -231,7 +231,7 @@ async function verInformacoesCompradas() {
   const _originalRender = window.renderMercadoItens;
   window.renderMercadoItens = function() {
     const grid = document.getElementById('mercado-itens-grid');
-    if (!grid) return _originalRender ? _originalRender.apply(this, arguments) : undefined;
+    if (!grid) return _originalRender ? _originalRender.apply(this, arguments as any) : undefined;
 
     const isMestre   = _isMestre();
     const filtroBusca = (document.getElementById('mercado-busca')?.value || '').toLowerCase();
@@ -247,7 +247,7 @@ async function verInformacoesCompradas() {
 
     // Se filtro não é 'informacao' exclusivo, usar renderização original para itens normais
     if (filtroTipo !== 'informacao') {
-      return _originalRender ? _originalRender.apply(this, arguments) : undefined;
+      return _originalRender ? _originalRender.apply(this, arguments as any) : undefined;
     }
 
     if (filtroBusca) {

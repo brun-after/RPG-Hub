@@ -684,7 +684,7 @@ function apmodParseSvgJson(){
   const val=ta.value.trim();
   if(!val){mostrarToast('Cole o JSON primeiro','erro');return;}
   let obj;
-  try{obj=JSON.parse(val);}catch(e){mostrarToast('JSON inválido: '+e.message,'erro');return;}
+  try{obj=JSON.parse(val);}catch (e: any){mostrarToast('JSON inválido: '+e.message,'erro');return;}
   const svgF=obj.frente_svg||obj.svg_frente||'';
   const svgI=obj.iso_svg||obj.svg_iso||'';
   const validarSvg=(svg: any,nome: any)=>{if(!svg)return true;const t=svg.trim();if(!t.startsWith('<svg')||!t.includes('</svg>')){mostrarToast(`${nome}: não parece ser SVG válido`,'erro');return false;}return true;};
@@ -1853,7 +1853,7 @@ console.log('[APMOD] Sistema de Aparência carregado ✓ | Criaturas:',Object.ke
   // ── 1. Override dos renders: ViewBox expandida + overflow:visible ─────
   const _baseRenderFront = apmodRenderFront;
   // @ts-expect-error — monkey-patch em runtime: reatribuição de function declaration
-  apmodRenderFront = function(aparencia, corBase) {
+  apmodRenderFront = function(this: any, aparencia, corBase) {
     let svg = _baseRenderFront.call(this, aparencia, corBase);
     // Expande viewport: -20px esq/dir, -28px topo, +28px base
     svg = svg.replace(/viewBox="[^"]*"/, 'viewBox="-20 -28 72 124"');
@@ -1885,7 +1885,7 @@ console.log('[APMOD] Sistema de Aparência carregado ✓ | Criaturas:',Object.ke
 
   const _baseRenderIso = apmodRenderIso;
   // @ts-expect-error — monkey-patch em runtime: reatribuição de function declaration
-  apmodRenderIso = function(aparencia, corBase) {
+  apmodRenderIso = function(this: any, aparencia, corBase) {
     let svg = _baseRenderIso.call(this, aparencia, corBase);
     svg = svg.replace(/viewBox="[^"]*"/, 'viewBox="-20 -28 72 108"');
     // Arte grande: SVG renderizado no tamanho real do personagem (reduzido ÷4 quando vai ao mapa)
