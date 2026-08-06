@@ -161,6 +161,8 @@ class _AudioManager {
     this._defaultExploracao = null;
     this._sfxCache           = {};
     this.volume              = { music: 0.45, sfx: 0.75 };
+    this._musicVolUser       = false; // true quando o jogador ajustou o slider local de música
+    this._playerPref         = null;  // preferência de trilhas do jogador (setPlayerPref)
     this._muted              = false;
     this._pendingBgm         = null;  // {url, volume} para retry após autoplay bloqueado
     this._userSfxBiblioteca  = [];    // [{id, nome, url, cat}] — carregado sob demanda
@@ -186,11 +188,32 @@ class _AudioManager {
 
   // ── Música de fundo ───────────────────────────────────────────────────────
 
+  // Config de áudio efetiva da fase: a do mestre (_phaseConfig), com as trilhas
+  // sobrescritas pelas escolhas do jogador quando a preferência é 'custom'.
+  // 'auto'/'master' seguem a trilha do mestre sem alteração.
+  _effectiveAudio() {
+    const base = this._phaseConfig || {};
+    const pref = this._playerPref;
+    if (!pref || pref.mode !== 'custom' || !pref.tracks) return base;
+    const out = { ...base };
+    if (pref.tracks.exploracao_url) out.exploracao_url = pref.tracks.exploracao_url;
+    if (pref.tracks.combate_url)    out.combate_url    = pref.tracks.combate_url;
+    if (pref.tracks.boss_url)       out.boss_url       = pref.tracks.boss_url;
+    return out;
+  }
+
+  // Volume efetivo da BGM: o ajuste local do jogador (slider do menu) vence o
+  // volume_musica configurado pelo mestre; sem ajuste local, vale o do mestre.
+  _bgmVolume(audio: any) {
+    if (this._musicVolUser) return this.volume.music;
+    return audio?.volume_musica ?? this.volume.music;
+  }
+
   onEnterPhase(fase: any, phaseId: any) {
-    const audio = fase?.audio || fase?.render_data?.audio || {};
-    this._phaseConfig    = audio;
+    this._phaseConfig    = fase?.audio || fase?.render_data?.audio || {};
     this._currentPhaseId = phaseId || fase?.map_id || fase?.id || 'main';
 
+    const audio = this._effectiveAudio();
     let url = this._resolveId(audio.exploracao_url || audio.musica_url);
     if (!url) {
       url = this._getOrPickDefaultTrack('exploracao', this._currentPhaseId);
@@ -198,30 +221,30 @@ class _AudioManager {
     } else {
       this._defaultExploracao = null;
     }
-    if (url) this._playBgm(url, { volume: audio.volume_musica ?? this.volume.music });
+    if (url) this._playBgm(url, { volume: this._bgmVolume(audio) });
     else this.stopMusic();
     this._musicState = 'exploration';
   }
 
   onCombatStart(hasBoss = false) {
     if (this._musicState === 'combat' || this._musicState === 'boss') return;
-    const audio = this._phaseConfig || {};
+    const audio = this._effectiveAudio();
     const key   = hasBoss ? 'boss_url' : 'combate_url';
     let url = this._resolveId(audio[key]);
     if (!url) {
       const cat = hasBoss ? 'boss' : 'combate';
       url = this._getOrPickDefaultTrack(cat, this._currentPhaseId);
     }
-    if (url) this._playBgm(url, { volume: audio.volume_musica ?? this.volume.music });
+    if (url) this._playBgm(url, { volume: this._bgmVolume(audio) });
     this._musicState = hasBoss ? 'boss' : 'combat';
   }
 
   onCombatEnd() {
     if (this._musicState !== 'combat' && this._musicState !== 'boss') return;
-    const audio = this._phaseConfig || {};
+    const audio = this._effectiveAudio();
     let url = this._resolveId(audio.exploracao_url || audio.musica_url);
     if (!url) url = this._defaultExploracao || this._getOrPickDefaultTrack('exploracao', this._currentPhaseId);
-    if (url) this._playBgm(url, { volume: audio.volume_musica ?? this.volume.music });
+    if (url) this._playBgm(url, { volume: this._bgmVolume(audio) });
     this._musicState = 'exploration';
   }
 
@@ -377,6 +400,7 @@ class _AudioManager {
 
   setMusicVolume(v: any) {
     this.volume.music = Math.min(1, Math.max(0, v));
+    this._musicVolUser = true; // preferência local passa a vencer o volume_musica do mestre
     if (this._currentBgm) this._currentBgm.volume(this._muted ? 0 : this.volume.music);
   }
 
@@ -419,21 +443,12 @@ class _AudioManager {
     return pick;
   }
 
-  // Preferência de música do jogador (definida no menu de início)
+  // Preferência de música do jogador (definida no menu de início). Setter puro:
+  // as trilhas efetivas são resolvidas em _effectiveAudio() a cada transição
+  // (onEnterPhase/onCombatStart/onCombatEnd), então basta guardar a escolha.
   // pref = { mode: 'auto'|'master'|'custom', tracks: { exploracao_url, combate_url, boss_url } }
   setPlayerPref(pref: any) {
-    if (!pref || pref.mode === 'auto') { this._playerPref = null; return; }
-    this._playerPref = pref;
-    if (pref.mode === 'custom' && pref.tracks) {
-      const overrides: any = {};
-      if (pref.tracks.exploracao_url) overrides.exploracao_url = pref.tracks.exploracao_url;
-      if (pref.tracks.combate_url)   overrides.combate_url    = pref.tracks.combate_url;
-      if (pref.tracks.boss_url)      overrides.boss_url       = pref.tracks.boss_url;
-      // Re-aplica fase atual com os overrides
-      if (this._phaseConfig) {
-        this.onEnterPhase({ audio: { ...this._phaseConfig, ...overrides } }, this._currentPhaseId);
-      }
-    }
+    this._playerPref = (!pref || pref.mode === 'auto') ? null : pref;
   }
 }
 

@@ -84,7 +84,6 @@ declare global {
     _avtFaseHostUnloadBound?: any;
     _avtIniciarHpHeartbeat?: any;
     _avtIniciarRegenHpPorSegundo?: any;
-    _avtMenuPlayerMusicPref?: any;
     _avtNpcAddPresetKey?: any;
     _avtNpcApplyDamage?: any;
     _avtNpcClasseEditando?: any;
