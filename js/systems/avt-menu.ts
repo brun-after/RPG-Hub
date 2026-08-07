@@ -30,7 +30,7 @@ window._avtEmMenuConfig = _avtEmMenuConfig;
 // ─────────────────────────────────────────────────────────────────────────────
 
 var AVT_GRAFICOS: Record<string, any> = {
-  ativo: false, nivel: 1, isoAtivo: false, isoTeclado: false, isoMobile: false, analogico: false,
+  ativo: false, nivel: 1, isoAtivo: false, analogico: false,
   // Refinamentos da visão isométrica (ligados por padrão; individualmente desativáveis).
   bilbordes: true,    // personagens/labels "em pé" (contra-transformação afim)
   atmosfera: true,    // vinheta + luz ambiente nos jogadores
@@ -169,6 +169,10 @@ function _avtGraficosCarregar() {
     const raw = localStorage.getItem(_AVT_GRAFICOS_KEY);
     if (raw) Object.assign(AVT_GRAFICOS, JSON.parse(raw));
   } catch(e) {}
+  // Migração: os controles isométricos agora são automáticos (remapeamento central
+  // tela→grade em _avtRemapDirTelaParaGrade); as flags de opt-in deixaram de existir.
+  delete AVT_GRAFICOS.isoTeclado;
+  delete AVT_GRAFICOS.isoMobile;
   _avtGraficosCssFxAplicar();
   _avtAudioAplicar();
 }
@@ -390,8 +394,6 @@ function _avtGraficosIsoToggle(ativo: any) {
   _avtGraficosIsoAplicar();
   const chk = document.getElementById('avt-cfg-iso-ativo');
   if (chk) chk.checked = ativo;
-  // Reflete o estado (habilita/desabilita) dos controles iso, se o painel estiver aberto
-  _avtControlesAtualizarUI();
   _avtIsoRefinosAtualizarUI();
 }
 
@@ -424,35 +426,16 @@ function _avtIsoRefinosAtualizarUI() {
   if (pol) pol.checked = !!AVT_GRAFICOS.polimento;
 }
 
-// ── Controles isométricos (preferência individual) ───────────────────────────
-function _avtGraficosTecladoToggle(ativo: any) {
-  AVT_GRAFICOS.isoTeclado = ativo;
-  _avtGraficosSalvar();
-  const chk = document.getElementById('avt-cfg-iso-teclado');
-  if (chk) chk.checked = ativo;
-}
-
-function _avtGraficosMobileToggle(ativo: any) {
-  AVT_GRAFICOS.isoMobile = ativo;
-  _avtGraficosSalvar();
-  _avtGraficosControlesAplicar();
-  const chk = document.getElementById('avt-cfg-iso-mobile');
-  if (chk) chk.checked = ativo;
-}
-
 // Mostra/esconde os overlays de controle conforme preferências (sem gate de touch —
 // se o usuário ativou explicitamente a opção, é suficiente para exibir).
 function _avtGraficosControlesAplicar() {
-  const isoDpad     = document.getElementById('avt-iso-dpad');
   const regularDpad = document.getElementById('avt-dpad');
   const analogicoEl = document.getElementById('avt-analogico-stick');
 
-  const showIsoDpad   = !!(AVT_GRAFICOS.isoAtivo && AVT_GRAFICOS.isoMobile && !AVT_GRAFICOS.analogico);
   const showAnalogico = !!AVT_GRAFICOS.analogico;
 
-  if (isoDpad)     isoDpad.style!.display     = showIsoDpad   ? 'block' : 'none';
   if (analogicoEl) analogicoEl.style!.display = showAnalogico ? 'block' : 'none';
-  if (regularDpad && (showIsoDpad || showAnalogico)) regularDpad.style!.display = 'none';
+  if (regularDpad && showAnalogico) regularDpad.style!.display = 'none';
 
   if (showAnalogico) _avtAnalogicoIniciar();
 }
@@ -478,14 +461,12 @@ function _avtAnalogicoIniciar() {
   const R = 50; // raio máximo de deslocamento do knob em px
   let _active = false, _lastSector = -1;
 
-  // 8 setores horários desde E: E SE S SO O NO N NE
-  // Modo normal → (dx,dy) de grade convencionais
-  // Modo iso    → rotaciona 45° para alinhar ao visual da tela
-  const _mapNormal = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
-  const _mapIso    = [[1,-1],[1,0],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+  // 8 setores horários desde E: E SE S SO O NO N NE — sempre direções de TELA;
+  // avtDpad → _avtDpadDoMove aplica o remapeamento central tela→grade em iso.
+  const _mapTela = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
 
   function _dirGrid(sector: any) {
-    return (AVT_GRAFICOS?.isoAtivo ? _mapIso : _mapNormal)[sector];
+    return _mapTela[sector];
   }
 
   function _mover(ex: any, ey: any) {
@@ -518,63 +499,26 @@ function _avtAnalogicoIniciar() {
   }));
 }
 
-// Atualiza o estado disabled/checked dos toggles da aba Controles, se visíveis.
-function _avtControlesAtualizarUI() {
-  const isoOn = !!AVT_GRAFICOS.isoAtivo;
-  ['avt-cfg-iso-teclado', 'avt-cfg-iso-mobile'].forEach(id => {
-    const chk = document.getElementById(id);
-    if (chk) chk.disabled = !isoOn;
-  });
-  const aviso = document.getElementById('avt-cfg-controles-aviso');
-  if (aviso) aviso.style!.display = isoOn ? 'none' : 'block';
-}
-
 function _avtMenuHtmlControles() {
   const g = AVT_GRAFICOS;
-  const dis = g.isoAtivo ? '' : 'disabled';
-  const op  = g.isoAtivo ? '1' : '0.45';
   return `
     <div>
       <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">🎮 Controles</div>
 
-      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:18px">
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:14px">
         <input type="checkbox" id="avt-cfg-analogico"
                style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
                ${g.analogico ? 'checked' : ''}
                onchange="_avtGraficosAnalogicoToggle(this.checked)">
         <div>
           <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto,#c8d8e8)">Controle analógico</div>
-          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">Alavanca virtual no lugar do D-pad. Em modo isométrico os eixos se alinham à perspectiva visual.</div>
+          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">Alavanca virtual no lugar do D-pad.</div>
         </div>
       </label>
 
-      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.55);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">🗺 Controles Isométricos</div>
-
-      <div id="avt-cfg-controles-aviso" style="display:${g.isoAtivo ? 'none' : 'block'};font-size:0.68rem;color:#c89a4b;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;padding:8px 10px;margin-bottom:12px">
-        Disponível apenas com a <b>Visão Isométrica</b> ativada (aba Gráficos).
+      <div style="font-size:0.68rem;color:#7a92aa;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.15);border-radius:8px;padding:8px 10px;margin-bottom:12px">
+        Na <b>Visão Isométrica</b>, todos os controles (D-pad, analógico e WASD) já se alinham automaticamente à perspectiva da tela — apertar ↑ move o personagem para cima na tela.
       </div>
-
-      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:10px;opacity:${op}">
-        <input type="checkbox" id="avt-cfg-iso-teclado" ${dis}
-               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
-               ${g.isoTeclado ? 'checked' : ''}
-               onchange="_avtGraficosTecladoToggle(this.checked)">
-        <div>
-          <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto,#c8d8e8)">Controle isométrico (teclado)</div>
-          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">Move com W / E / S / D em diamante, alinhado às diagonais da tela.</div>
-        </div>
-      </label>
-
-      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;opacity:${op}">
-        <input type="checkbox" id="avt-cfg-iso-mobile" ${dis}
-               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
-               ${g.isoMobile ? 'checked' : ''}
-               onchange="_avtGraficosMobileToggle(this.checked)">
-        <div>
-          <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto,#c8d8e8)">Controle isométrico mobile</div>
-          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">D-pad com as diagonais em destaque e os direcionais comuns reduzidos.</div>
-        </div>
-      </label>
       <div style="font-size:0.6rem;color:#5a6b7a;margin-top:6px">Preferências salvas localmente neste dispositivo.</div>
     </div>
   `;
@@ -778,8 +722,6 @@ function _avtMenuHtmlGraficos() {
 window._avtGraficosToggle        = _avtGraficosToggle;
 window._avtGraficosNivel         = _avtGraficosNivel;
 window._avtGraficosIsoToggle     = _avtGraficosIsoToggle;
-window._avtGraficosTecladoToggle = _avtGraficosTecladoToggle;
-window._avtGraficosMobileToggle  = _avtGraficosMobileToggle;
 window._avtGraficosControlesAplicar = _avtGraficosControlesAplicar;
 window._avtIsoScreenToCanvas     = _avtIsoScreenToCanvas;
 window._avtIsoDeltaToCanvas      = _avtIsoDeltaToCanvas;
@@ -2150,18 +2092,12 @@ Object.defineProperty(globalThis, "_avtGraficosRefinoToggle", { configurable: tr
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtIsoRefinosAtualizarUI", { configurable: true, get: () => _avtIsoRefinosAtualizarUI, set: (__v) => { _avtIsoRefinosAtualizarUI = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtGraficosTecladoToggle", { configurable: true, get: () => _avtGraficosTecladoToggle, set: (__v) => { _avtGraficosTecladoToggle = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtGraficosMobileToggle", { configurable: true, get: () => _avtGraficosMobileToggle, set: (__v) => { _avtGraficosMobileToggle = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtGraficosControlesAplicar", { configurable: true, get: () => _avtGraficosControlesAplicar, set: (__v) => { _avtGraficosControlesAplicar = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtGraficosAnalogicoToggle", { configurable: true, get: () => _avtGraficosAnalogicoToggle, set: (__v) => { _avtGraficosAnalogicoToggle = __v; } });
 Object.defineProperty(globalThis, "_avtAnalogicoIniciado", { configurable: true, get: () => _avtAnalogicoIniciado, set: (__v) => { _avtAnalogicoIniciado = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtAnalogicoIniciar", { configurable: true, get: () => _avtAnalogicoIniciar, set: (__v) => { _avtAnalogicoIniciar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtControlesAtualizarUI", { configurable: true, get: () => _avtControlesAtualizarUI, set: (__v) => { _avtControlesAtualizarUI = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMenuHtmlControles", { configurable: true, get: () => _avtMenuHtmlControles, set: (__v) => { _avtMenuHtmlControles = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])

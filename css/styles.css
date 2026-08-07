@@ -1510,35 +1510,6 @@ body.mesa-ativa.nav-peek .nav-tabs {
   border-radius: 4px;
 }
 
-/* D-pad isométrico: diagonais em destaque, cardeais reduzidos */
-.avt-isodpad-diag {
-  width: 60px; height: 60px;
-  background: rgba(79,163,209,0.22);
-  border: 1px solid rgba(79,163,209,0.6);
-  border-radius: 12px;
-  color: #7fc4ee;
-  font-size: 1.5rem;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: none;
-}
-.avt-isodpad-diag:active { background: rgba(79,163,209,0.45); }
-.avt-isodpad-card {
-  width: 34px; height: 34px;
-  background: rgba(79,163,209,0.06);
-  border: 1px solid rgba(79,163,209,0.18);
-  border-radius: 7px;
-  color: #4fa3d1;
-  font-size: 0.85rem;
-  opacity: 0.4;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: none;
-}
-.avt-isodpad-card:active { background: rgba(79,163,209,0.22); opacity: 0.7; }
-
 /* Joystick analógico virtual */
 .avt-joystick-outer {
   width: 130px; height: 130px;

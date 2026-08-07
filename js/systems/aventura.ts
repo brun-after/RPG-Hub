@@ -5864,6 +5864,7 @@ function _avtCanvasInit() {
   // Save overlay and dpad BEFORE clearing wrap (innerHTML='' detaches all children)
   const _savedOverlay = document.getElementById('avt-dados-overlay');
   const _savedDpad    = document.getElementById('avt-dpad');
+  const _savedStick   = document.getElementById('avt-analogico-stick');
   wrap.innerHTML = '';
 
   const canvas = document.createElement('canvas');
@@ -5880,8 +5881,9 @@ function _avtCanvasInit() {
     ov.style!.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:35;overflow:hidden';
     wrap.appendChild(ov);
   }
-  // Re-add D-pad inside wrap so it stays on top of canvas
+  // Re-add D-pad e joystick inside wrap so they stay on top of canvas
   if (_savedDpad) wrap.appendChild(_savedDpad);
+  if (_savedStick) wrap.appendChild(_savedStick);
 
   AVT_STATE.canvas = canvas;
   if (typeof _avtGraficosAplicar === 'function') _avtGraficosAplicar();
@@ -6729,17 +6731,32 @@ function _avtRenderFrame() {
 
     if (_avtIsMoving) {
       const _prevRx = e._avtPrevRenderX ?? e.renderX;
+      const _prevRy = e._avtPrevRenderY ?? e.renderY;
       const _movDx  = e.renderX - _prevRx;
-      if (Math.abs(_movDx) > 0.001) {
-        const _dir = _movDx > 0 ? 'right' : 'left';
+      const _movDy  = e.renderY - _prevRy;
+      // Facing pelo X DA TELA: em iso o wrapper roda 45°, então o eixo horizontal
+      // visível é a projeção (dx - dy) — andar no eixo Y da grade aparece como
+      // esquerda/direita e precisa virar o sprite (senão "moonwalk").
+      const _movTelaX = (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo)
+        ? (_movDx - _movDy) : _movDx;
+      if (Math.abs(_movTelaX) > 0.001) {
+        const _dir = _movTelaX > 0 ? 'right' : 'left';
         if ((window._tokFacingDir || {})[e.nome] !== _dir) {
           window._tokFacingDir = window._tokFacingDir || {};
           window._tokFacingDir[e.nome] = _dir;
           window._animCtrlMap?.[e.nome]?.setFacing?.(_dir);
         }
       }
+      // Relógio de caminhada por DISTÂNCIA: avança proporcional ao deslocamento real
+      // (para quando a entidade para), alimentando o bob/passada dos presets em vez
+      // do relógio de parede — cada entidade quica no ritmo do próprio passo.
+      const _distFrame = Math.hypot(_movDx, _movDy);
+      if (_distFrame > 0) {
+        e._walkClockMs = (e._walkClockMs || 0) + (1000 * _distFrame) / Math.max(0.001, baseSpeed);
+      }
     }
     e._avtPrevRenderX = e.renderX;
+    e._avtPrevRenderY = e.renderY;
   });
 
   // ── Broadcast de posição fina (sub-célula) do jogador local, throttle ~50ms ──
@@ -6819,11 +6836,14 @@ function _avtRenderFrame() {
   // Aplica a variação de cor da fase mesmo sem tileset carregado (tiles de fundo procedurais também recebem o tint).
   const _hueOn = _hue && ('filter' in ctx);
   if (_hueOn) ctx.filter = `hue-rotate(${_hue}deg)`;
+  // Em iso, sub-pixel: arredondar aqui gera degrau diagonal amplificado pelo
+  // scale CSS (tiles adjacentes mantêm distância exata SZ com float).
+  const _tileIso = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo);
   for (let y = 0; y < dungeon.h; y++) {
     for (let x = 0; x < dungeon.w; x++) {
       const t  = dungeon.tiles[y]?.[x];
-      const px = Math.round(x * SZ - camera.x);
-      const py = Math.round(y * SZ - camera.y);
+      const px = _tileIso ? (x * SZ - camera.x) : Math.round(x * SZ - camera.x);
+      const py = _tileIso ? (y * SZ - camera.y) : Math.round(y * SZ - camera.y);
       if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
       if ((AVT_STATE as any)._tilesetLoaded) {
         ctx.imageSmoothingEnabled = false;
@@ -7157,9 +7177,14 @@ function _avtRenderFrame() {
     if (_isInvocado) ctx.globalAlpha = 0.85;
     const _t = performance.now();
     if (e._tremendo && _t > (e._tremendoUntil || 0)) { e._tremendo = false; }
+    // Em iso, manter sub-pixel: o Math.round em px de canvas vira degrau diagonal
+    // de ~1,8px na tela depois do scale+rotação CSS (escadinha/jitter).
+    const _iso = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo);
     const _shake = e._tremendo ? Math.round(Math.sin(_t * 0.09) * 4) : 0;
-    const px = Math.round(e.renderX * SZ - camera.x) + _shake;
-    const py = Math.round(e.renderY * SZ - camera.y) + (e._tremendo ? Math.round(Math.cos(_t * 0.13) * 3) : 0);
+    const _pxRaw = e.renderX * SZ - camera.x;
+    const _pyRaw = e.renderY * SZ - camera.y;
+    const px = (_iso ? _pxRaw : Math.round(_pxRaw)) + _shake;
+    const py = (_iso ? _pyRaw : Math.round(_pyRaw)) + (e._tremendo ? Math.round(Math.cos(_t * 0.13) * 3) : 0);
     if (px+SZ<0 || px>canvas.width || py+SZ<0 || py>canvas.height) { if (_isAvatar || _isInvocado) ctx.globalAlpha = 1; return; }
 
     const isBoss = e.isBoss === true;
@@ -7171,7 +7196,6 @@ function _avtRenderFrame() {
     // para o centro do losango sob a transformação CSS); assim o personagem "pousa" no tile
     // em vez de preencher a célula — cujo fundo, ao ser inclinado, cairia num canto do
     // losango ("pés num canto"). No top-down, mantém o comportamento anterior (sob o token).
-    const _iso = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo);
     const _footX = cx;
     const _footY = _iso ? cy : (cy + r + 2);
 
@@ -8036,7 +8060,9 @@ function _avtAnimAtualizar(ent: any) {
   const now = performance.now();
   if (ent.x !== a.lastX || ent.y !== a.lastY) {
     const dx = ent.x - a.lastX, dy = ent.y - a.lastY;
-    if (dx !== 0) a.facing = dx > 0 ? 1 : -1;
+    // Facing pelo X DA TELA: em iso, o eixo horizontal visível é (dx - dy).
+    const fx = (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo) ? (dx - dy) : dx;
+    if (fx !== 0) a.facing = fx > 0 ? 1 : -1;
     // Vetor de direção (top-down precisa de dx e dy para rotacionar)
     if (dx !== 0 || dy !== 0) a.dir = { dx, dy };
     a.lastX = ent.x; a.lastY = ent.y;
@@ -8209,8 +8235,18 @@ function _avtDesenharIsoIa(ctx: any, ent: any, footX: any, footY: any, SZ: any, 
   // fatiamento, o translate(footX,footY), o espelhamento de facing e o estilo
   // selecionado. Fallback: desenho estático caso o módulo não esteja carregado.
   if (typeof avtWalkRender === 'function') {
+    // Andando, o relógio dos presets é o relógio de DISTÂNCIA da entidade (para
+    // junto com ela e escala com a velocidade real), com semente por id para
+    // dessincronizar o quique entre entidades. Parado, relógio de parede.
+    if (ent._walkSeed == null) {
+      let _h = 0; const _sid = String(ent.id || '');
+      for (let i = 0; i < _sid.length; i++) _h = (_h * 31 + _sid.charCodeAt(i)) | 0;
+      ent._walkSeed = Math.abs(_h) % 997;
+    }
+    const clock = (st === 'walk' && ent._walkClockMs != null)
+      ? ent._walkClockMs + ent._walkSeed : now;
     avtWalkRender(ctx, img, {
-      footX, footY, SZ, now,
+      footX, footY, SZ, now: clock,
       state: st, tState,
       facing: facingEfetivo,
       presetId: data.walkPreset || 'quique',
@@ -9665,18 +9701,12 @@ function _avtCanvasKey(e: any) {
   }
 
   // ── WASD: mover personagem ────────────────────────────────────────────────
-  // Em isométrico com "controle iso (teclado)", usa W/E/S/D em diamante: a posição
-  // física da tecla casa com a direção na tela (cada tecla = um eixo cardeal da grade,
-  // que aparece como diagonal). W=cima-esq(Oeste), E=cima-dir(Norte), S=baixo-esq(Sul),
-  // D=baixo-dir(Leste).
-  let wasd: any;
-  if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo && AVT_GRAFICOS?.isoTeclado) {
-    wasd = { w:[-1,0], e:[0,-1], s:[0,1], d:[1,0] };
-  } else {
-    wasd = { a:[-1,0], d:[1,0], w:[0,-1], s:[0,1] };
-  }
-  const dir = wasd[_key];
-  if (!dir) return;
+  // WASD sempre em direções de TELA (W=cima, A=esquerda, S=baixo, D=direita);
+  // _avtRemapDirTelaParaGrade converte para a grade quando o isométrico está ativo.
+  const wasd: any = { a:[-1,0], d:[1,0], w:[0,-1], s:[0,1] };
+  const dirTela = wasd[_key];
+  if (!dirTela) return;
+  const dir = _avtRemapDirTelaParaGrade(dirTela[0], dirTela[1]);
   const _myBatKey = _avtMinhaBatalha();
   if (_myBatKey) {
     // Em combate: só mover se for o turno da entidade que controlo
@@ -9777,8 +9807,24 @@ function _avtNumpadDispararSkill(num: any) {
 }
 window._avtNumpadDispararSkill = _avtNumpadDispararSkill;
 
+// Remapeamento central de direção TELA → GRADE. Toda entrada direcional (D-pads,
+// joystick, WASD) emite a direção como ela aparece NA TELA; quando o isométrico
+// está ativo (rotateZ 45° do wrapper), converte para o eixo da grade equivalente.
+// Tabela derivada de _avtIsoDeltaToCanvas: cardeais de tela viram diagonais de
+// grade e vice-versa. Identidade fora do iso.
+const _AVT_ISO_DIR_MAP: Record<string, [number, number]> = {
+  '1,0': [1,-1], '1,1': [1,0], '0,1': [1,1], '-1,1': [0,1],
+  '-1,0': [-1,1], '-1,-1': [-1,0], '0,-1': [-1,-1], '1,-1': [0,-1],
+};
+function _avtRemapDirTelaParaGrade(dx: any, dy: any): [number, number] {
+  if (!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo)) return [dx, dy];
+  return _AVT_ISO_DIR_MAP[dx + ',' + dy] || [dx, dy];
+}
+window._avtRemapDirTelaParaGrade = _avtRemapDirTelaParaGrade;
+
 // Entrada do D-pad do controle mobile para o modo aventura
-function _avtDpadControle(dc: any, dr: any) {
+function _avtDpadControle(dcTela: any, drTela: any) {
+  const [dc, dr] = _avtRemapDirTelaParaGrade(dcTela, drTela);
   const bat     = _avtMinhaBatalha();
   const jogador = _avtEntidadeControlada();
   if (!jogador) return;
@@ -12802,7 +12848,10 @@ function avtDpadStop() {
   _avtDpadTimer = null;
 }
 
-function _avtDpadDoMove(dx: any, dy: any) {
+function _avtDpadDoMove(dxTela: any, dyTela: any) {
+  // Entrada em direção de TELA (D-pad do index.html e joystick analógico);
+  // o remap central converte para a grade quando o isométrico está ativo.
+  const [dx, dy] = _avtRemapDirTelaParaGrade(dxTela, dyTela);
   const _jog = _avtMeuJogador();
   if (_jog && (_jog._waypoints?.length > 0 || (AVT_STATE as any)._caminhoDestino?.length > 0)) {
     (AVT_STATE as any)._caminhoDestino = null;
