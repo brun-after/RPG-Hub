@@ -85,7 +85,7 @@ export function makeCharsRows() {
       custom_attrs: {
         classe_aventura: 'guerreiro', cor: '#4fa3d1',
         avt_x: 3, avt_y: 3,
-        skills_ids: [101, 102],
+        skills_ids: [101, 102, 103],
         atributos: { ...ATTRS_GUERREIRO, Mana: 10, ManaMax: 10 },
       },
     },
@@ -123,6 +123,16 @@ export function makeSkillsRows() {
       alvo_tipo: 'inimigo',
       // string JSON — exercita parse + normalização via EFFECT_REGISTRY
       efeitos_bonus: '[{"nome":"Queimadura","dot_formula":"1d4","dot_turnos":2}]',
+      critico_positivo: null, critico_negativo: null,
+      animacao: null,
+    },
+    {
+      id: 103, rpg_id: RPG_ID, personagem: 'Alice', character_id: 'char-alice',
+      habilidade: 'Armadilha de Caça', efeito: 'Arma uma armadilha na célula alvo',
+      formula_dano: null, custo_rsv: '1 Mana', cooldown_turnos: 2,
+      tipo_dano: 'fisico', alcance_celulas: 3, atributo_base: null,
+      alvo_tipo: 'inimigo',
+      efeitos_bonus: [{ tipo: 'armadilha', armadilha_formula: '1d6', duracao_turnos: 5, armadilha_max: 2, armadilha_cor: '#e8604c' }],
       critico_positivo: null, critico_negativo: null,
       animacao: null,
     },

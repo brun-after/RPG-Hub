@@ -100,6 +100,7 @@ const _AVT_EVENTOS_DE_FASE = new Set([
   'avt_convite_combate', 'avt_bau_aberto', 'avt_obj_spawn', 'avt_obj_pickup',
   'avt_skill_anim', 'avt_attack_anim', 'avt_efeito_anim_start', 'avt_efeito_anim_stop',
   'avt_dano_visual', 'avt_dano_visual_batch', 'avt_rastro_marcar', 'avt_entidade_nova',
+  'avt_armadilha_marcar', 'avt_armadilha_remover',
 ]);
 
 // Helper central de broadcast para Modo Aventura.
@@ -923,6 +924,189 @@ function _avtRenderRastroCells(ctx: any, camera: any, SZ: any, canvas: any) {
     ctx.strokeStyle = `rgba(${rgb},0.5)`;
     ctx.lineWidth = 1;
     ctx.strokeRect(px + 1.5, py + 1.5, SZ - 3, SZ - 3);
+  }
+}
+
+// ══ Armadilhas de skill (jogador arma; dispara quando INIMIGO pisa) ══════════
+// Células one-shot em AVT_STATE._armadilhaCells. Diferente do rastro (que fere
+// cada inimigo 1× e persiste), a armadilha é consumida no primeiro disparo e
+// pode carregar um efeito extra (dot/stun). Posicionamento é do cliente do
+// caster; o DISPARO é autoritativo (host), pois quem move NPC é o host.
+
+// Efeito 'armadilha' de uma skill (normalizado), ou null.
+function _avtSkillTemArmadilha(sk: any) {
+  if (!sk) return null;
+  const efs = _avtNormalizarEfeitosSkill(sk.efeitos_bonus);
+  return (efs || []).find((e: any) => e && e.tipo === 'armadilha') || null;
+}
+window._avtSkillTemArmadilha = _avtSkillTemArmadilha;
+
+function _avtArmadilhasDoCaster(casterNome: any) {
+  const now = Date.now();
+  return ((AVT_STATE as any)._armadilhaCells || [])
+    .filter((c: any) => c.caster === casterNome && now < c.expiry_ms);
+}
+window._avtArmadilhasDoCaster = _avtArmadilhasDoCaster;
+
+// Remove uma armadilha localmente; broadcast fica a cargo do chamador.
+function _avtArmadilhaRemoverLocal(trapId: any) {
+  const cells = (AVT_STATE as any)._armadilhaCells;
+  if (!cells) return;
+  (AVT_STATE as any)._armadilhaCells = cells.filter((c: any) => c.id !== trapId);
+}
+
+// Arma uma armadilha na célula. `_fromNet`: veio de avt_armadilha_marcar (não
+// re-broadcasta e preserva id/expiry do emissor para manter os clientes iguais).
+function _avtArmadilhaMarcarCelula(caster: any, x: any, y: any, ef: any, _fromNet?: any, _net?: any) {
+  if (!caster || !ef) return null;
+  const tx = Math.round(x), ty = Math.round(y);
+  if (typeof _avtTilePassavel === 'function' && !_avtTilePassavel(tx, ty, AVT_STATE.dungeon)) return null;
+  if (!(AVT_STATE as any)._armadilhaCells) (AVT_STATE as any)._armadilhaCells = [];
+  const casterNome = typeof caster === 'string' ? caster : caster.nome;
+  const casterId = typeof caster === 'object' ? (caster.id || null) : null;
+  const dur = Math.max(1, ef.duracao_turnos || 10);
+  const max = Math.max(1, parseInt(ef.armadilha_max) || 3);
+  const cor = ef.armadilha_cor || '#e8604c';
+  const cell = {
+    id: (_fromNet && _net?.trapId) || ('trap_' + (casterId || casterNome) + '_' + Date.now() + '_' + Math.floor(Math.random() * 1e4)),
+    x: tx, y: ty,
+    formula: ef.armadilha_formula || '1d6',
+    efeito: ef.armadilha_efeito || null,
+    expiry_ms: (_fromNet && typeof _net?.expiry_ms === 'number') ? _net.expiry_ms : (Date.now() + dur * _avtGetEfeitoCooldownMs()),
+    caster: casterNome, casterId, cor, max,
+  };
+  // Já existe armadilha na mesma célula (de qualquer caster): a nova substitui.
+  const dup = (AVT_STATE as any)._armadilhaCells.find((c: any) => c.x === tx && c.y === ty);
+  if (dup) _avtArmadilhaRemoverLocal(dup.id);
+  // Limite por caster: excedeu → remove a mais antiga (só o cliente que armou avisa a rede).
+  const doCaster = _avtArmadilhasDoCaster(casterNome);
+  if (doCaster.length >= max) {
+    const antiga = doCaster.sort((a: any, b: any) => a.expiry_ms - b.expiry_ms)[0];
+    _avtArmadilhaRemoverLocal(antiga.id);
+    if (!_fromNet) {
+      try { _avtBroadcast('avt_armadilha_remover', { trapId: antiga.id, motivo: 'limite' }); } catch(_) {}
+    }
+  }
+  (AVT_STATE as any)._armadilhaCells.push(cell);
+  if (!_fromNet) {
+    try {
+      _avtBroadcast('avt_armadilha_marcar', {
+        trapId: cell.id, x: tx, y: ty, formula: cell.formula, efeito: cell.efeito,
+        expiry_ms: cell.expiry_ms, caster: casterNome, casterId, cor, max,
+      });
+    } catch(_) {}
+  }
+  return cell;
+}
+window._avtArmadilhaMarcarCelula = _avtArmadilhaMarcarCelula;
+
+// Efeito extra da armadilha (dot/stun) no alvo — executado pela autoridade.
+// Espelha o push de status de skill: em combate (bloco alvo-único) e OOC.
+function _avtArmadilhaAplicarEfeito(cell: any, entAlvo: any) {
+  const ef = cell?.efeito;
+  if (!ef || !ef.tipo || !entAlvo) return;
+  const bat = (typeof _avtBatalhaDeEnt === 'function') ? _avtBatalhaDeEnt(entAlvo.id) : null;
+  if (!entAlvo.status_effects) entAlvo.status_effects = [];
+  const entry: any = { ...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
+    expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs(),
+    _casterNome: cell.caster, _casterId: cell.casterId };
+  if (!bat) entry._ooc = true;
+  entAlvo.status_effects.push(entry);
+  if (bat) {
+    const _ini = bat.iniciativa?.find((e: any) => e.id === entAlvo.id);
+    if (_ini) {
+      if (!_ini.status_effects) _ini.status_effects = [];
+      _ini.status_effects.push({ ...entry });
+    }
+  } else {
+    if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+    AVT_STATE._oocStatusEffects.push({ entId: entAlvo.id, entNome: entAlvo.nome, ef: { ...entry }, lastTickAt: Date.now() });
+  }
+  if (ef.tipo === 'stun')    entAlvo._stunned    = true;
+  if (ef.tipo === 'silence') entAlvo._silenciado = true;
+  if (ef.tipo === 'dot')     { try { _avtMostrarDotDrip(entAlvo, ef.dot_variante); } catch(_) {} }
+  _avtLog(`  ↳ ${ef.tipo} da armadilha aplicado em ${entAlvo.nome} (${ef.duracao_turnos ?? 1}t)`, bat?.id);
+}
+
+// Dispara a armadilha quando uma entidade hostil entra/está na célula.
+// Só a autoridade decide (é ela quem move NPCs); propaga via avt_hp_update +
+// avt_armadilha_remover. One-shot: a célula é consumida.
+function _avtArmadilhaChecarEntrada(ent: any, x: any, y: any) {
+  if (!_avtEhAutoridade()) return;
+  const cells = (AVT_STATE as any)._armadilhaCells;
+  if (!cells || !cells.length || !_avtRastroEhHostil(ent)) return;
+  const tx = Math.round(x), ty = Math.round(y), now = Date.now();
+  const cell = cells.find((c: any) => now < c.expiry_ms && c.x === tx && c.y === ty);
+  if (!cell) return;
+  _avtArmadilhaRemoverLocal(cell.id);
+  const dano = _avtRolarFormula(cell.formula || '1d6');
+  if (dano > 0) {
+    ent.hp = Math.max(0, ent.hp - dano);
+    try { _avtAplicarDanoPersistir(ent, ent.hp); } catch(_) {}
+    try { _avtMostrarDanoAbaixoHp(ent, dano, false); } catch(_) {}
+    try { _avtBroadcast('avt_hp_update', { nome: ent.nome, hp: ent.hp, hpMax: ent.hpMax }); } catch(_) {}
+  }
+  const _batT = (typeof _avtBatalhaDeEnt === 'function') ? _avtBatalhaDeEnt(ent.id) : null;
+  _avtLog(`🪤 ${ent.nome} pisou na armadilha de ${cell.caster} e sofre ${dano}`, _batT?.id);
+  try { _avtArmadilhaAplicarEfeito(cell, ent); } catch(_) {}
+  try { _avtBroadcast('avt_armadilha_remover', { trapId: cell.id, motivo: 'disparo', alvoNome: ent.nome, dano }); } catch(_) {}
+  if (ent.hp <= 0) { _avtNpcMorreu(ent, _batT || null, { creditoNome: cell.caster }); if (_batT) _avtCheckVitoria(_batT); }
+}
+window._avtArmadilhaChecarEntrada = _avtArmadilhaChecarEntrada;
+
+function _avtArmadilhaPrune() {
+  const cells = (AVT_STATE as any)._armadilhaCells;
+  if (!cells || !cells.length) return;
+  const now = Date.now();
+  (AVT_STATE as any)._armadilhaCells = cells.filter((c: any) => now < c.expiry_ms);
+}
+window._avtArmadilhaPrune = _avtArmadilhaPrune;
+
+window.avtReceberArmadilhaMarcar = function(p: any) {
+  try {
+    if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return;
+    if (!_avtMinhaFase(p.faseId)) return; // isolamento por fase
+    if (p.expiry_ms && Date.now() >= p.expiry_ms) return;
+    _avtArmadilhaMarcarCelula(p.caster || p.casterId, p.x, p.y, {
+      tipo: 'armadilha', armadilha_formula: p.formula, armadilha_efeito: p.efeito,
+      armadilha_max: p.max, armadilha_cor: p.cor,
+    }, true, p);
+  } catch(_) {}
+};
+
+window.avtReceberArmadilhaRemover = function(p: any) {
+  try {
+    if (!p || !p.trapId) return;
+    if (!_avtMinhaFase(p.faseId)) return;
+    _avtArmadilhaRemoverLocal(p.trapId);
+    if (p.motivo === 'disparo' && p.alvoNome) {
+      _avtLog(`🪤 ${p.alvoNome} pisou numa armadilha e sofreu ${p.dano ?? 0}`);
+    }
+  } catch(_) {}
+};
+
+// Desenha as armadilhas armadas (glifo + borda pulsante). Inimigos são NPCs —
+// não há "esconder do adversário": todo cliente vê as armadilhas do grupo.
+function _avtRenderArmadilhaCells(ctx: any, camera: any, SZ: any, canvas: any) {
+  const cells = (AVT_STATE as any)._armadilhaCells;
+  if (!cells || !cells.length) return;
+  const now = Date.now();
+  const pulse = 0.35 + 0.25 * (0.5 + 0.5 * Math.sin(now / 300));
+  for (const cell of cells) {
+    if (now >= cell.expiry_ms) continue;
+    const px = Math.round(cell.x * SZ - camera.x);
+    const py = Math.round(cell.y * SZ - camera.y);
+    if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
+    const rgb = _avtHexRgb(cell.cor || '#e8604c');
+    ctx.strokeStyle = `rgba(${rgb},${pulse.toFixed(3)})`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 3.5, py + 3.5, SZ - 7, SZ - 7);
+    ctx.font = `${Math.round(SZ * 0.5)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 0.9;
+    ctx.fillText('🪤', px + SZ / 2, py + SZ / 2);
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -4290,6 +4474,12 @@ async function _avtCarregarDados(rpgId: any) {
   AVT_STATE.npcTimers = {};
   AVT_STATE._lastFrameTs = 0;
   AVT_STATE.batalhas = [];
+  // Runtime por sessão: células e relógios de varredura não sobrevivem a um novo
+  // carregamento (re-entrada/troca de RPG sem reload herdaria estado velho).
+  (AVT_STATE as any)._rastroCells = [];
+  (AVT_STATE as any)._armadilhaCells = [];
+  AVT_STATE._ultimaVerifProxGlobal = 0;
+  (AVT_STATE as any)._ultimaAutoAtaqueVerif = 0;
 
   await _avtCarregarAtribuicaoJogador(rpgId);
 
@@ -4367,6 +4557,7 @@ function _avtIniciarRTNet(rpgId: any, onHostElected: any) {
         batalhaAutoSuspensa:AVT_STATE.batalhaAutoSuspensa,
         // Rastros contaminados: hitSet (Set) → array para serializar.
         _rastroCells: ((AVT_STATE as any)._rastroCells || []).map((c: any) => ({ ...c, hitSet: Array.from(c.hitSet || []) })),
+        _armadilhaCells: (AVT_STATE as any)._armadilhaCells || [],
       }));
       if (AVT_STATE._charHpFlushTimer) clearInterval((AVT_STATE as any)._charHpFlushTimer);
       (AVT_STATE as any)._charHpFlushTimer = setInterval(() => {
@@ -5880,6 +6071,13 @@ function _avtRenderFrame() {
         AVT_STATE.entidades.forEach((e: any) => { try { _avtRastroChecarEntrada(e, e.x, e.y); } catch(_) {} });
       }
     } catch(_) {}
+    // Armadilhas de skill: prune + disparo em hostis parados sobre a célula
+    try {
+      _avtArmadilhaPrune();
+      if ((AVT_STATE as any)._armadilhaCells?.length) {
+        AVT_STATE.entidades.forEach((e: any) => { try { _avtArmadilhaChecarEntrada(e, e.x, e.y); } catch(_) {} });
+      }
+    } catch(_) {}
     // Checa todos os jogadores vivos fora de combate (útil no host p/ jogadores remotos)
     AVT_STATE.entidades
       .filter((e: any) => e.tipo === 'jogador' && e.hp > 0 && !_avtBatalhaDeEnt(e.id))
@@ -6011,6 +6209,7 @@ function _avtRenderFrame() {
           }
           if (e.tipo === 'inimigo') _avtNpcTentarPorta(e, tgt.x, tgt.y);
           try { _avtRastroChecarEntrada(e, tgt.x, tgt.y); } catch (_) {}
+          try { _avtArmadilhaChecarEntrada(e, tgt.x, tgt.y); } catch (_) {}
           continue;
         }
         break;
@@ -6027,6 +6226,7 @@ function _avtRenderFrame() {
           }
           if (e.tipo === 'inimigo') _avtNpcTentarPorta(e, tgt.x, tgt.y);
           try { _avtRastroChecarEntrada(e, tgt.x, tgt.y); } catch (_) {}
+          try { _avtArmadilhaChecarEntrada(e, tgt.x, tgt.y); } catch (_) {}
         } else {
           break;
         }
@@ -6196,6 +6396,7 @@ function _avtRenderFrame() {
 
   // Rastros contaminados (Rastro Persona / Rastro Anima)
   try { _avtRenderRastroCells(ctx, camera, SZ, canvas); } catch(_) {}
+  try { _avtRenderArmadilhaCells(ctx, camera, SZ, canvas); } catch(_) {}
 
   // Overlay de grade suave nos tilesets (linhas finas e translúcidas)
   // (com a camada PIXI ativa OU o bake legado, a grade já foi assada junto com os tiles)
@@ -23115,6 +23316,10 @@ function avtAplicarSnapshotMerge(snap: any) {
       (AVT_STATE as any)._rastroCells = snap._rastroCells
         .filter((c: any) => c && _nowR < c.expiry_ms)
         .map((c: any) => ({ ...c, hitSet: new Set(c.hitSet || []) }));
+    }
+    if (Array.isArray(snap._armadilhaCells)) {
+      const _nowT = Date.now();
+      (AVT_STATE as any)._armadilhaCells = snap._armadilhaCells.filter((c: any) => c && _nowT < c.expiry_ms);
     }
     if ('batalhaAutoSuspensa' in snap) AVT_STATE.batalhaAutoSuspensa = snap.batalhaAutoSuspensa;
     try { if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar(); } catch(_) {}

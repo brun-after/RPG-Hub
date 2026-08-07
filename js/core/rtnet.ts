@@ -162,6 +162,8 @@ window.RTNet = (() => {
     avt_obj_pickup:           { handler: 'avtReceberObjPickup',          persist: 'immediate', reliable: true },
     // [COBERTURA COMPLETA]
     avt_rastro_marcar:        { handler: 'avtReceberRastroMarcar',       persist: 'never', reliable: true },
+    avt_armadilha_marcar:     { handler: 'avtReceberArmadilhaMarcar',    persist: 'never', reliable: true },
+    avt_armadilha_remover:    { handler: 'avtReceberArmadilhaRemover',   persist: 'never', reliable: true },
     avt_ooc_cooldown:         { handler: 'avtReceberOocCooldown',        persist: 'never', reliable: true },
     avt_inv_update:           { handler: 'avtReceberInvUpdate',          persist: 'never', reliable: true },
     // [FASES]
