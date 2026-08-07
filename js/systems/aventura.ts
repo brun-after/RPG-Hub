@@ -9233,14 +9233,13 @@ function _avtSfxOuvinte() {
   return null;
 }
 
-// Volume final do SFX: aplica o volume global de efeitos (slider do menu), a
-// redução de 25% e a atenuação linear por distância (Chebyshev, como o sistema
-// de alcance de skill). O volume global entra aqui porque playSFX com volume
-// explícito ignora AudioManager.volume.sfx. Retorna 0 quando a fonte está fora
-// do alcance audível, sinalizando ao chamador para não tocar.
+// Ganho do SFX posicional: ganho de design × redução de 25% do modo aventura ×
+// atenuação linear por distância (Chebyshev, como o sistema de alcance de
+// skill). O volume global do slider NÃO entra aqui — playSFX trata todo volume
+// de chamador como ganho relativo e já o multiplica. Retorna 0 quando a fonte
+// está fora do alcance audível, sinalizando ao chamador para não tocar.
 function _avtSfxVolDist(baseVol: any, fonte: any) {
-  const globalSfx = (typeof AudioManager !== 'undefined') ? AudioManager.volume.sfx : 0.75;
-  let v = (baseVol ?? 0.75) * AVT_SFX_AVENTURA_MULT * globalSfx;
+  let v = (baseVol ?? 0.75) * AVT_SFX_AVENTURA_MULT;
   const ouv = _avtSfxOuvinte();
   if (ouv && fonte && typeof fonte.x === 'number') {
     const dist = Math.max(Math.abs(ouv.x - fonte.x), Math.abs(ouv.y - fonte.y));
