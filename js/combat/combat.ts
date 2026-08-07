@@ -3634,6 +3634,7 @@ async function _atkAplicarDanoFinal() {
     }
   } else if (!ehSuportePuro) {
     // Só aplica dano se não for suporte puro
+    let _houveImpacto = false;
     for (const nomeAlvo of alvosAtaque) {
       // ── D&D 5e: rolagem de ataque d20 vs CA ──────────────────
       const _cfg = typeof getBattleConfig === 'function' ? getBattleConfig() : null;
@@ -3675,12 +3676,7 @@ async function _atkAplicarDanoFinal() {
         }
       }
       await atkAplicarDano(nomeAlvo, dano, contexto, h.tipo_dano);
-      if (typeof AudioManager !== 'undefined') {
-        const _sfxImp = h.animacao?.audio?.impact
-          ? h.animacao.audio
-          : AudioManager.getSkillSfx(h.animacao?.tipo||'', h.animacao?.posicao||'', h.tipo_dano||'', h.animacao?.gsap_config?.preset||'');
-        if (_sfxImp.impact) AudioManager.playSFX(_sfxImp.impact, { volume: h.animacao?.audio?.volume ?? 0.75, pitchVariance: 0.08 });
-      }
+      _houveImpacto = true;
       // Disparar scanner de habilidades reativas após dano
       if (typeof _batalhaProcessarEventoReativo === 'function') {
         await _batalhaProcessarEventoReativo('sofrer_dano', { atacanteNome, alvoNome: nomeAlvo, dano, habilidade: h, contexto });
@@ -3689,6 +3685,14 @@ async function _atkAplicarDanoFinal() {
           await _batalhaProcessarEventoReativo('ser_reduzido_zero', { atacanteNome, alvoNome: nomeAlvo, dano, habilidade: h, contexto });
         }
       }
+    }
+    // Um cast = um som de impacto, mesmo em AoE (dentro do loop, N alvos
+    // empilhavam N tocadas idênticas no mesmo frame). Whiff total não toca.
+    if (_houveImpacto && typeof AudioManager !== 'undefined') {
+      const _sfxImp = h.animacao?.audio?.impact
+        ? h.animacao.audio
+        : AudioManager.getSkillSfx(h.animacao?.tipo||'', h.animacao?.posicao||'', h.tipo_dano||'', h.animacao?.gsap_config?.preset||'');
+      if (_sfxImp.impact) AudioManager.playSFX(_sfxImp.impact, { volume: h.animacao?.audio?.volume ?? 0.75, pitchVariance: 0.08 });
     }
   }
   // Se for suporte puro, apenas os efeitos extras serão aplicados abaixo
