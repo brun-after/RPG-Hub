@@ -24388,6 +24388,12 @@ function _avtMestreNovaFaseRender() {
               📁 Imagem tileset
               <input type="file" accept="image/*" style="display:none" onchange="_avtNfHandleTilesetImg(this)">
             </label>
+            <input id="avt-nf-ts-cols" type="number" value="${w._tilesetCols || 4}" min="4" max="5" title="Colunas do atlas desta fase"
+              oninput="AVT_STATE._novaFaseWizard._tilesetCols=+this.value"
+              style="width:44px;padding:4px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.68rem">
+            <input id="avt-nf-ts-rows" type="number" value="${w._tilesetRows || 4}" min="4" max="5" title="Linhas do atlas desta fase"
+              oninput="AVT_STATE._novaFaseWizard._tilesetRows=+this.value"
+              style="width:44px;padding:4px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.68rem">
             <span id="avt-nf-ts-nome" style="font-size:0.65rem;color:#7a92aa">${w._tilesetImgNome || ''}</span>
             ${w._tilesetImgUrl ? `<button onclick="_avtNfRemoverTileset()" style="padding:3px 8px;background:rgba(232,96,76,0.08);border:1px solid rgba(232,96,76,0.2);border-radius:4px;color:#e74c3c;font-size:0.6rem;cursor:pointer">✕ Remover</button>` : ''}
           </div>
@@ -24661,11 +24667,23 @@ async function _avtMestreSalvarNovaFase() {
 
   const _ordensExistentes = (AVT_STATE.rpg.theme_json?.fases_extras || []).map((f: any) => f.ordem ?? 0);
   const _proxOrdem = (_ordensExistentes.length ? Math.max(..._ordensExistentes) : 0) + 1;
+  // Config própria do tileset da fase: sem ela, a imagem era fatiada com o
+  // cols/rows da campanha principal (um atlas 5×5 virava lixo num grid 4×4).
+  const faseTilesetCfg = faseTilesetUrl ? {
+    version: 2,
+    cols: Math.min(5, Math.max(4, w._tilesetCols || 4)),
+    rows: Math.min(5, Math.max(4, w._tilesetRows || 4)),
+    blocos: _avtMergeBlocosCanonicos(null,
+      Math.min(5, Math.max(4, w._tilesetCols || 4)),
+      Math.min(5, Math.max(4, w._tilesetRows || 4))),
+  } : null;
+
   const fase = {
     id: Date.now().toString(),
     nome,
     dungeon_data: dungeonData,
     tileset_img_url: faseTilesetUrl || null,
+    tileset_config: faseTilesetCfg,
     ordem: w.ordem ?? _proxOrdem,
     npc_level: w.npc_level ?? (_proxOrdem + 1),
     tint_hue: (_proxOrdem * 28) % 360,

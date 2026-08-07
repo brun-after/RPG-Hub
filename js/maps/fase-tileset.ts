@@ -84,8 +84,11 @@ function _faseTilesetBlocosCanonicos(cols: any, rows: any) {
 // ── Prompt 1 — Geração de imagem do tileset ──────────────────────────────────
 function faseTilesetImgPromptTemplate(opts: any) {
   const estilo = opts.estilo || 'pixel art fantasy dungeon';
-  const cols   = Math.min(10, Math.max(4, opts.cols || 4));
-  const rows   = Math.min(10, Math.max(4, opts.rows || 4));
+  // Clamp ao intervalo ENDEREÇÁVEL pelo layout canônico (cols 0-4, rows 0-4):
+  // pedir 10×10 fazia o artista desenhar até 80% de células que o renderer
+  // jamais consegue referenciar.
+  const cols   = Math.min(5, Math.max(4, opts.cols || 4));
+  const rows   = Math.min(5, Math.max(4, opts.rows || 4));
 
   const row3 = rows >= 4 ? `
 Row 3 — Portas e variações especiais:
@@ -113,7 +116,6 @@ Coluna 4 — Cantos internos (côncavos):
   ${rows >= 4 ? 'bloco_4_3 = Canto interno SE (côncavo SE) — piso vindo de Norte e Oeste; diagonal NW também é piso' : ''}
 ` : '';
 
-  const extraRows = rows > 5 ? `\nLinhas 5+: variações temáticas extras compatíveis com o estilo definido.` : '';
 
   return `Você é um artista sênior de games criando um tileset para um RPG de visão top-down no estilo: "${estilo}".
 
@@ -121,7 +123,7 @@ Pense como um concept artist de um jogo AAA — cada tile deve ser visualmente r
 
 REQUISITOS TÉCNICOS OBRIGATÓRIOS:
 - Imagem QUADRADA PERFEITA (largura == altura) — ex: 512×512, 1024×1024, 2048×2048
-- Grade uniforme de exatamente ${cols} colunas × ${rows} linhas (mínimo 4×4, máximo 10×10)
+- Grade uniforme de exatamente ${cols} colunas × ${rows} linhas (mínimo 4×4, máximo 5×5 — todas as células têm função)
 - Células perfeitamente iguais — zero margens, zero padding entre elas
 - As linhas de grade são frações exatas das dimensões da imagem (sem pixels extras)
 - Perspectiva top-down pura (câmera olhando diretamente de cima)
@@ -152,7 +154,7 @@ Linha 2 — Cantos Sul e Baú:
   bloco_1_2 = Face da parede Sul (borda inferior — piso fica ACIMA)
   bloco_2_2 = Canto SE (parede virando do sul para o leste)
   bloco_3_2 = Baú do tesouro (baú fechado de madeira/metal, top-down — reconhecível imediatamente)
-${row3}${row4}${col4}${extraRows}
+${row3}${row4}${col4}
 
 REGRAS VISUAIS DE QUALIDADE:
 - Paredes devem ter profundidade e espessura visível — não são apenas linhas
@@ -171,13 +173,18 @@ OUTPUT: Uma única imagem plana (sem camadas), sem rótulos, sem UI, sem bordas 
 
 // ── Prompt 2 — Coordenadas + layout completo da dungeon ──────────────────────
 function faseTilesetLayoutPromptTemplate(opts: any) {
-  const cols      = Math.min(10, Math.max(4, opts.cols || 4));
-  const rows      = Math.min(10, Math.max(4, opts.rows || 4));
+  const cols      = Math.min(5, Math.max(4, opts.cols || 4));
+  const rows      = Math.min(5, Math.max(4, opts.rows || 4));
   const descricao = opts.descricao || 'a dungeon with several rooms connected by corridors';
   const largura   = opts.largura   || 24;
   const altura    = opts.altura    || 18;
 
   const portaFaseBloco   = rows >= 4 ? `\n    "porta":      "bloco_0_3",\n    "piso_3":     "bloco_1_3",\n    "parede_int": "bloco_2_3",\n    "porta_fase": "bloco_3_3",` : '';
+  // Coerência com o prompt de imagem: se a imagem tem a coluna 4 (cantos
+  // côncavos) e/ou a linha 4 (decoração), o JSON de blocos DEVE mapeá-las —
+  // antes o layout omitia essas chaves e o import as descartava.
+  const cantoIntBloco    = cols >= 5 ? `\n    "canto_int_NO": "bloco_4_0",\n    "canto_int_NE": "bloco_4_1",\n    "canto_int_SO": "bloco_4_2",${rows >= 4 ? `\n    "canto_int_SE": "bloco_4_3",` : ''}` : '';
+  const row4Bloco        = rows >= 5 ? `\n    "piso_4":     "bloco_0_4",\n    "piso_5":     "bloco_1_4",\n    "objeto_2":   "bloco_2_4",\n    "objeto_3":   "bloco_3_4",` : '';
   const portaFaseValores = rows >= 4 ? `\n  "porta"       — closed door (placed on corridor openings between rooms)\n  "piso_3"      — floor variant 3 (use sparingly for dramatic effect)\n  "parede_int"  — inner wall / alcove (decorative interior wall)\n  "porta_fase"  — phase portal / exit (one per dungeon, in the final room)` : '';
 
   return `Você recebeu uma imagem de tileset dividida em grade ${cols}×${rows}. As células são nomeadas bloco_COL_LINHA (índice zero, col 0 = mais à esquerda, linha 0 = mais acima).
@@ -213,7 +220,7 @@ Retorne APENAS um objeto JSON (sem markdown, comece com {):
     "canto_SO":   "bloco_0_2",
     "parede_S":   "bloco_1_2",
     "canto_SE":   "bloco_2_2",
-    "bau":        "bloco_3_2"${portaFaseBloco}
+    "bau":        "bloco_3_2"${portaFaseBloco}${cantoIntBloco}${row4Bloco}
   },
 
   "mapa": {
@@ -241,6 +248,8 @@ Retorne APENAS um objeto JSON (sem markdown, comece com {):
 - O layout canônico acima já define as posições corretas — ajuste "blocos" SOMENTE se a imagem claramente divergir
 - Célula bloco_C_L ocupa a fração x=[C/${cols}, (C+1)/${cols}] × y=[L/${rows}, (L+1)/${rows}] da imagem
 - Se um papel não tiver correspondência visual clara, reutilize o tile mais próximo
+- Um valor de bloco pode ter sufixo de rotação "@1|@2|@3" (90/180/270° horário) para
+  reutilizar a MESMA arte girada — ex.: "parede_L": "bloco_1_0@1" gira a parede Norte
 - NÃO inclua "tile_size" — o sistema calcula automaticamente
 
 ══ DESIGN DE DUNGEON — PENSE COMO LEVEL DESIGNER ══
@@ -280,10 +289,11 @@ IMPORTANTE: Retorne APENAS o JSON. O array "tiles" deve ter EXATAMENTE ${altura}
 
 // ── Prompt unificado para IA externa (personagens + dungeon + tileset) ────────
 function _avtPromptCampanhaExterna(opts: any) {
-  const cols = Math.min(10, Math.max(4, opts.cols || 4));
-  const rows = Math.min(10, Math.max(4, opts.rows || 4));
+  const cols = Math.min(5, Math.max(4, opts.cols || 4));
+  const rows = Math.min(5, Math.max(4, opts.rows || 4));
 
   const portaBlocos   = rows >= 4 ? `\n      "porta":      "bloco_0_3",\n      "piso_3":     "bloco_1_3",\n      "parede_int": "bloco_2_3",\n      "porta_fase": "bloco_3_3",` : '';
+  const cantoIntBlocos = cols >= 5 ? `\n      "canto_int_NO": "bloco_4_0",\n      "canto_int_NE": "bloco_4_1",\n      "canto_int_SO": "bloco_4_2",${rows >= 4 ? `\n      "canto_int_SE": "bloco_4_3",` : ''}` : '';
   const portaValores  = rows >= 4 ? `\n  "porta"       — porta fechada (coloque nas aberturas de corredores entre salas)\n  "piso_3"      — piso variante 3 (use pontualmente para efeito dramático)\n  "parede_int"  — parede interna / alcova decorativa\n  "porta_fase"  — portal de saída (apenas 1 por dungeon, na sala final)` : '';
 
   return `Você é um mestre de RPG criativo com olhar de game designer experiente. Os jogadores vão descrever os personagens que querem diretamente nesta conversa.
@@ -335,7 +345,7 @@ O campo raiz "nome" é OBRIGATÓRIO — título curto da aventura em português 
       "canto_SO":   "bloco_0_2",
       "parede_S":   "bloco_1_2",
       "canto_SE":   "bloco_2_2",
-      "bau":        "bloco_3_2"${portaBlocos}
+      "bau":        "bloco_3_2"${portaBlocos}${cantoIntBlocos}
     },
     "mapa": {
       "largura": <LARGURA>,
