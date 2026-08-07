@@ -394,6 +394,36 @@ function _psToAvtConfig(cfg: any) {
   return avt;
 }
 
+// ── Saneamento de config na carga ────────────────────────────────────────────
+// Configs salvos enquanto psUpdateEmitterProp gravava na raiz errada carregam um
+// subtree fantasma layer.emitter.emitter.* com as ÚLTIMAS edições do usuário.
+// Mescla (fantasma vence) e remove; o próximo save persiste limpo.
+function _psFixEmitterGhost(layer: any) {
+  const e = layer && layer.emitter;
+  if (!e || typeof e !== 'object' || !e.emitter || typeof e.emitter !== 'object') return;
+  const merge = (dst: any, src: any) => {
+    for (const k of Object.keys(src)) {
+      const v = src[k];
+      if (v && typeof v === 'object' && !Array.isArray(v)
+          && dst[k] && typeof dst[k] === 'object' && !Array.isArray(dst[k])) merge(dst[k], v);
+      else dst[k] = v;
+    }
+  };
+  merge(e, e.emitter);
+  delete e.emitter;
+}
+// Ponto único de saneamento: fantasma do emitter + keyframes ordenados por t
+// (a interpolação assume ordem; keyframes fora de ordem ou duplicados vinham de
+// drags antigos e geravam saltos/NaN).
+function _psSanitizeCfg(cfg: any) {
+  if (!cfg) return cfg;
+  (cfg.layers || []).forEach((l: any) => {
+    _psFixEmitterGhost(l);
+    if (Array.isArray(l.keyframes)) l.keyframes.sort((a: any, b: any) => (a.t ?? 0) - (b.t ?? 0));
+  });
+  return cfg;
+}
+
 // ── Load animation config (from cache or Supabase) ─────────────────────────
 // Falhas/IDs inexistentes entram num cache negativo de 30s — sem ele, cada uso da
 // skill re-batia na rede pelo mesmo ID quebrado.
@@ -406,7 +436,7 @@ async function _psAvtLoadCfg(animId: any) {
   if (cache && cache[animId]) return cache[animId];
   try {
     const rows = await _avtSb(`pixi_animations?id=eq.${encodeURIComponent(animId)}&select=config_json`);
-    const cfg = rows && rows[0] && rows[0].config_json;
+    const cfg = _psSanitizeCfg(rows && rows[0] && rows[0].config_json);
     if (cfg && cache) {
       cache[animId] = cfg;
       setTimeout(() => { delete cache[animId]; }, 30000);
@@ -1553,3 +1583,7 @@ Object.defineProperty(globalThis, "avtPixiCleanupAll", { configurable: true, get
 Object.defineProperty(globalThis, "_psBuildBackgroundDim", { configurable: true, get: () => _psBuildBackgroundDim, set: (__v) => { _psBuildBackgroundDim = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_psVignetteTexture", { configurable: true, get: () => _psVignetteTexture, set: (__v) => { _psVignetteTexture = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFixEmitterGhost", { configurable: true, get: () => _psFixEmitterGhost, set: (__v) => { _psFixEmitterGhost = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psSanitizeCfg", { configurable: true, get: () => _psSanitizeCfg, set: (__v) => { _psSanitizeCfg = __v; } });

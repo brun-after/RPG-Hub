@@ -270,6 +270,7 @@ async function psCarregarAnimacao(id: any) {
   const row = PIXI_STUDIO_STATE.animacoes.find((a: any) => a.id === id);
   if (!row) return;
   PIXI_STUDIO_STATE.atual = JSON.parse(JSON.stringify(row));
+  if (typeof _psSanitizeCfg === 'function') _psSanitizeCfg(PIXI_STUDIO_STATE.atual.config_json);
   PIXI_STUDIO_STATE._dirty = false;
   _psHistoryReset();
   PIXI_STUDIO_STATE.layerSel = null;
@@ -526,6 +527,10 @@ function psUpdateLayerProp(layerId: any, key: any, value: any) {
 function psUpdateEmitterProp(layerId: any, key: any, value: any) {
   const layer = _psGetLayer(layerId);
   if (!layer || !layer.emitter) return;
+  // Call sites passam a chave prefixada ('emitter.maxParticles'), mas a raiz aqui
+  // já é layer.emitter — sem o strip, tudo ia para layer.emitter.emitter.* e
+  // nenhum slider tinha efeito (o fantasma é saneado por _psFixEmitterGhost).
+  key = String(key).replace(/^emitter\./, '');
   if (key.includes('.')) {
     const parts = key.split('.');
     let obj = layer.emitter;
@@ -1128,9 +1133,13 @@ function psSetAnchorHeight(id: any, zFrac: any) {
   _psRenderPropsPanel(); psPreviewRebuildAll();
 }
 
+// parseFloat com default explícito: `parseFloat(v)||d` devolvia o valor antigo
+// quando o slider ia a 0 — nenhum range conseguia chegar a zero.
+function psNum(v: any, d: any) { const n = parseFloat(v); return isNaN(n) ? d : n; }
+
 function _psRangeHtml(layerId: any, label: any, key: any, val: any, min: any, max: any, step: any, isEmitter: any) {
-  const fn = isEmitter ? `psUpdateEmitterProp('${layerId}','${key}',parseFloat(this.value)||${val})`
-                       : `psUpdateLayerProp('${layerId}','${key}',parseFloat(this.value)||${val})`;
+  const fn = isEmitter ? `psUpdateEmitterProp('${layerId}','${key}',psNum(this.value,${val}))`
+                       : `psUpdateLayerProp('${layerId}','${key}',psNum(this.value,${val}))`;
   return `<div class="form-group"><label style="font-size:0.62rem;display:flex;justify-content:space-between">${label}<span id="ps-rv-${layerId}-${key.replace(/\./g,'-')}">${val}</span></label>
   <input type="range" min="${min}" max="${max}" step="${step}" value="${val}"
     oninput="document.getElementById('ps-rv-${layerId}-${key.replace(/\./g,'-')}').textContent=this.value;${fn}"
@@ -3105,6 +3114,7 @@ function psImportarJson(jsonStr: any) {
     config.layers[0].emitter = _psValidateEmitterCfg(parsed);
     config.layers[0].nome = 'Importado';
   }
+  if (typeof _psSanitizeCfg === 'function') _psSanitizeCfg(config);
   (config.layers || []).forEach((l: any, i: any) => { if (!l.id) l.id = 'l_' + Date.now() + '_' + i; });
 
   if (!PIXI_STUDIO_STATE.atual) psNova();
@@ -3323,6 +3333,7 @@ window.psRemoveAudioEvent     = psRemoveAudioEvent;
 window.psToggleBloom          = psToggleBloom;
 window.psSetLighting          = psSetLighting;
 window.psSetBackground        = psSetBackground;
+window.psNum                  = psNum;
 window.psSetTravel            = psSetTravel;
 window.psChainAdd             = psChainAdd;
 window.psChainSetDelay        = psChainSetDelay;
@@ -3446,6 +3457,8 @@ Object.defineProperty(globalThis, "psToggleBloom", { configurable: true, get: ()
 Object.defineProperty(globalThis, "psSetLighting", { configurable: true, get: () => psSetLighting, set: (__v) => { psSetLighting = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "psSetBackground", { configurable: true, get: () => psSetBackground, set: (__v) => { psSetBackground = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psNum", { configurable: true, get: () => psNum, set: (__v) => { psNum = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_psScreenFxHtml", { configurable: true, get: () => _psScreenFxHtml, set: (__v) => { _psScreenFxHtml = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
