@@ -11404,6 +11404,10 @@ function _avtIniciarAnimPersistente(ef: any, entAlvo: any, casterEnt: any, _from
         tipo:       ef.tipo,
         alvoNome:   entAlvo?.nome || null,
         casterNome: casterEnt?.nome || null,
+        // IDs para resolução exata no peer (nomes duplicados animavam o token errado
+        // e a key de stop `${id}_${tipo}` reconstruída da entidade errada nunca parava)
+        alvoId:     entAlvo?.id ?? null,
+        casterId:   casterEnt?.id ?? null,
       });
     } catch(_) {}
   }
@@ -11414,7 +11418,7 @@ function _avtPararAnimPersistente(ef: any, entAlvo: any, _fromNet?: any) {
   if (typeof avtPixiStopPersistent !== 'function') return;
   avtPixiStopPersistent(`${entAlvo?.id}_${ef.tipo}`);
   if (!_fromNet) {
-    try { _avtBroadcast('avt_efeito_anim_stop', { tipo: ef.tipo, alvoNome: entAlvo?.nome || null }); } catch(_) {}
+    try { _avtBroadcast('avt_efeito_anim_stop', { tipo: ef.tipo, alvoNome: entAlvo?.nome || null, alvoId: entAlvo?.id ?? null }); } catch(_) {}
   }
 }
 
@@ -17702,11 +17706,16 @@ function _avtSkillAnimEmit({ sk, casterEnt, alvoEnt = null, isArea = false,
   catch (e) { console.warn('[avt-fx] play:', e); }
   finally { if (isArea) { AVT_STATE._areaCentro = _sc; AVT_STATE._areaLinha = _sl; } }
   try {
+    // IDs junto dos nomes: nomes duplicados (dois monstros iguais) faziam o peer
+    // animar o token errado. Receptores novos resolvem por ID; clientes antigos
+    // ignoram os campos extras e seguem pelo nome (retrocompatível nos 2 sentidos).
     const payload: any = { skillId: sk.id || null, animacao: sk.animacao || null,
-      atacanteNome: caster?.nome, alvoNome: alvoNome || alvo?.nome };
+      atacanteNome: caster?.nome, alvoNome: alvoNome || alvo?.nome,
+      atacanteId: caster?.id ?? null, alvoId: alvo?.id ?? null };
     if (isArea) {
       // Âncora no conjurador: rótulos de área não resolvem entidade nos peers.
       payload.alvoNome = caster?.nome;
+      payload.alvoId = caster?.id ?? null;
       payload.areaCentro = areaCentro; payload.areaLinha = areaLinha;
     }
     _avtBroadcast('avt_skill_anim', payload);
@@ -23015,20 +23024,24 @@ function avtReceberLevelConfigUpdate({ config }: any = {}) {
 window.avtReceberLevelConfigUpdate = avtReceberLevelConfigUpdate;
 
 // Receber broadcast de animação de skill — re-toca localmente
-function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, animacao, areaCentro, areaLinha, faseId }: any = {}) {
+function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, atacanteId, alvoId, animacao, areaCentro, areaLinha, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof _avtPlaySkillAnim !== 'function') return;
     let sk = skillId ? (AVT_STATE.skills || []).find((s: any) => s.id === skillId) : null;
     if (!sk && animacao) sk = { id: skillId, animacao };
     if (!sk) return;
-    const atac = AVT_STATE.entidades.find((e: any) => e.nome === atacanteNome);
+    // ID primeiro (nomes duplicados resolvem o token errado); nome é o fallback
+    // para payloads de clientes antigos que não enviam os IDs.
+    const atac = (atacanteId != null && _avtEntById(atacanteId))
+              || AVT_STATE.entidades.find((e: any) => e.nome === atacanteNome);
     if (!atac) return;
     const isArea = !!(areaCentro || areaLinha);
     // Skill de área: o alvo enviado é o próprio conjurador (âncora) e a geometria vem no
     // payload, pois _areaCentro/_areaLinha são estado local de quem conjurou. Sem isso, a
     // animação de área não aparecia para os peers (o rótulo de área não resolve entidade).
-    let alvo = AVT_STATE.entidades.find((e: any) => e.nome === alvoNome);
+    let alvo = (alvoId != null && _avtEntById(alvoId))
+            || AVT_STATE.entidades.find((e: any) => e.nome === alvoNome);
     if (!alvo) {
       if (!isArea) return; // alvo único não resolvido: comportamento antigo (não anima)
       alvo = atac;
@@ -23049,13 +23062,17 @@ window.avtReceberSkillAnim = avtReceberSkillAnim;
 // Receber broadcast de início de animação persistente de efeito (Rastro Persona,
 // Atravessar, modificadores de ataque básico, etc.). Espelha avtReceberSkillAnim:
 // resolve as entidades por nome e reconstrói a chave local antes de tocar.
-function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome, faseId }: any = {}) {
+function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome, alvoId, casterId, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof avtPixiPlayPersistent !== 'function' || !animId || !tipo) return;
-    const alvo = alvoNome ? AVT_STATE.entidades.find((e: any) => e.nome === alvoNome) : null;
+    // ID primeiro: com nomes duplicados a key `${alvo.id}_${tipo}` era reconstruída da
+    // entidade errada e o stop correspondente nunca desligava a animação real.
+    const alvo = (alvoId != null && _avtEntById(alvoId))
+              || (alvoNome ? AVT_STATE.entidades.find((e: any) => e.nome === alvoNome) : null);
     if (!alvo) return; // sem entidade-âncora resolvida não há onde ancorar a animação
-    const caster = casterNome ? AVT_STATE.entidades.find((e: any) => e.nome === casterNome) : null;
+    const caster = (casterId != null && _avtEntById(casterId))
+                || (casterNome ? AVT_STATE.entidades.find((e: any) => e.nome === casterNome) : null);
     const key = `${alvo.id}_${tipo}`;
     avtPixiPlayPersistent(animId, alvo, caster, posicao || 'alvo', key);
   } catch(e) { try { console.warn('[AVT] avtReceberEfeitoAnimStart:', e); } catch(_) {} }
@@ -23063,11 +23080,12 @@ function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome
 window.avtReceberEfeitoAnimStart = avtReceberEfeitoAnimStart;
 
 // Receber broadcast de parada de animação persistente de efeito.
-function avtReceberEfeitoAnimStop({ tipo, alvoNome, faseId }: any = {}) {
+function avtReceberEfeitoAnimStop({ tipo, alvoNome, alvoId, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof avtPixiStopPersistent !== 'function' || !tipo) return;
-    const alvo = alvoNome ? AVT_STATE.entidades.find((e: any) => e.nome === alvoNome) : null;
+    const alvo = (alvoId != null && _avtEntById(alvoId))
+              || (alvoNome ? AVT_STATE.entidades.find((e: any) => e.nome === alvoNome) : null);
     if (!alvo) return;
     avtPixiStopPersistent(`${alvo.id}_${tipo}`);
   } catch(e) { try { console.warn('[AVT] avtReceberEfeitoAnimStop:', e); } catch(_) {} }
