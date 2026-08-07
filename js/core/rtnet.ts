@@ -160,6 +160,7 @@ window.RTNet = (() => {
     // [OBJETOS]
     avt_obj_spawn:            { handler: 'avtReceberObjSpawn',           persist: 'immediate', reliable: true },
     avt_obj_pickup:           { handler: 'avtReceberObjPickup',          persist: 'immediate', reliable: true },
+    avt_armadilha_obj_disparo:{ handler: 'avtReceberArmadilhaObjDisparo', persist: 'immediate', reliable: true },
     // [COBERTURA COMPLETA]
     avt_rastro_marcar:        { handler: 'avtReceberRastroMarcar',       persist: 'never', reliable: true },
     avt_armadilha_marcar:     { handler: 'avtReceberArmadilhaMarcar',    persist: 'never', reliable: true },

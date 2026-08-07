@@ -143,6 +143,7 @@ declare global {
     avtReceberCharUpdate?: any;
     avtReceberFaseMudou?: any;
     avtReceberArmadilhaMarcar?: any;
+    avtReceberArmadilhaObjDisparo?: any;
     avtReceberArmadilhaRemover?: any;
     avtReceberInvUpdate?: any;
     avtReceberItemDesequipado?: any;

@@ -100,7 +100,7 @@ const _AVT_EVENTOS_DE_FASE = new Set([
   'avt_convite_combate', 'avt_bau_aberto', 'avt_obj_spawn', 'avt_obj_pickup',
   'avt_skill_anim', 'avt_attack_anim', 'avt_efeito_anim_start', 'avt_efeito_anim_stop',
   'avt_dano_visual', 'avt_dano_visual_batch', 'avt_rastro_marcar', 'avt_entidade_nova',
-  'avt_armadilha_marcar', 'avt_armadilha_remover',
+  'avt_armadilha_marcar', 'avt_armadilha_remover', 'avt_armadilha_obj_disparo',
 ]);
 
 // Helper central de broadcast para Modo Aventura.
@@ -6162,6 +6162,18 @@ function _avtRenderFrame() {
         AVT_STATE.entidades.forEach((e: any) => { try { _avtArmadilhaChecarEntrada(e, e.x, e.y); } catch(_) {} });
       }
     } catch(_) {}
+    // Armadilhas do mestre: rearmar as desarmadas cujo prazo venceu (cada
+    // cliente rearma localmente pelo timestamp compartilhado no disparo)
+    try {
+      const _rdRearm = AVT_STATE.dungeon?.render_data;
+      if (_rdRearm?.objetos?.length) {
+        for (const _oRe of _rdRearm.objetos) {
+          if (_oRe.tipo === 'armadilha_mestre' && _oRe._rearmarEm && Date.now() >= _oRe._rearmarEm) {
+            _oRe.armada = true; _oRe._rearmarEm = null;
+          }
+        }
+      }
+    } catch(_) {}
     // Checa todos os jogadores vivos fora de combate (útil no host p/ jogadores remotos)
     AVT_STATE.entidades
       .filter((e: any) => e.tipo === 'jogador' && e.hp > 0 && !_avtBatalhaDeEnt(e.id))
@@ -6229,6 +6241,7 @@ function _avtRenderFrame() {
         if (_rpWp) _avtRastroMarcarCelula(_jPlayer, cell.x, cell.y, _rpWp.rastro_formula || '1d6', _rpWp.duracao_turnos ?? 3, _rpWp.rastro_cor);
         _avtRecuperarPorMovimento(_jPlayer, 1);
         try { _avtColetarObjsNaPosicao(_jPlayer); } catch(_) {}
+        try { _avtChecarArmadilhaMestreNaPosicao(_jPlayer); } catch(_) {}
         // Pisar num baú precisa repintar o painel para o botão "Abrir Baú"
         // aparecer (baús não são auto-coletados, então a coleta não repinta).
         try {
@@ -7248,6 +7261,17 @@ function _avtRenderFrame() {
           ctx.font = `${Math.round(SZ * 0.5)}px serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText('🔊', ocx, ocy);
+          ctx.restore();
+        }
+      } else if (tipo === 'armadilha_mestre') {
+        // Armadilha do mestre: OCULTA dos jogadores — só o mestre vê o marcador
+        // (alpha reduzido quando desarmada/aguardando rearme).
+        if (_avtSouMestre()) {
+          ctx.save();
+          ctx.globalAlpha = o.armada === false ? 0.35 : 0.75;
+          ctx.font = `${Math.round(SZ * 0.5)}px serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('🪤', ocx, ocy);
           ctx.restore();
         }
       }
@@ -8929,6 +8953,7 @@ function _avtCanvasClick(e: any) {
           _avtBcastTokenMove({ nome: ativo.nome, x: tileX, y: tileY });
           if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
           else _avtDebounceSalvarPosicaoNpc(ativo);
+          try { _avtChecarArmadilhaMestreNaPosicao(entAtivo || ativo); } catch(_) {}
         }
       }
     } else if ((AVT_STATE as any)._modoAlvoHabilidade) {
@@ -9698,6 +9723,7 @@ function _avtMoverJogador(dx: any, dy: any) {
       // Rastro Persona: contaminar a célula em que o jogador pisou (combate)
       const _rpMv = _avtRastroPersonaAtivo(jogador);
       if (_rpMv) _avtRastroMarcarCelula(jogador, nx, ny, _rpMv.rastro_formula || '1d6', _rpMv.duracao_turnos ?? 3, _rpMv.rastro_cor);
+      try { _avtChecarArmadilhaMestreNaPosicao(jogador); } catch(_) {}
       _avtBroadcastBatalha(minhaBat); // sincroniza movimentoRestante com todos os clientes
       if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
       else _avtDebounceSalvarPosicaoNpc(ativo);
@@ -9779,6 +9805,7 @@ function _avtMoverJogador(dx: any, dy: any) {
         }
         _avtRecuperarPorMovimento(jogador, 1);
         try { _avtColetarObjsNaPosicao(jogador); } catch(_) {}
+        try { _avtChecarArmadilhaMestreNaPosicao(jogador); } catch(_) {}
         _avtCameraUpdate();
       };
     }
@@ -17477,6 +17504,103 @@ function _avtBauNaPosicao(x: any, y: any) {
   }) || null;
 }
 
+// ── Armadilhas do mestre (objetos de fase) ────────────────────────────────────
+// Ocultas dos jogadores (render só para o mestre, padrão som_ambiente) e
+// disparadas quando um JOGADOR pisa. Quem decide o disparo é o cliente do
+// próprio jogador (autoridade do próprio HP — mesmo padrão da coleta), que
+// propaga o estado via avt_armadilha_obj_disparo; mestre/host persiste.
+
+function _avtArmadilhaMestreNaPosicao(x: any, y: any) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd?.objetos) return null;
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  return rd.objetos.find((o: any) => {
+    if (o.tipo !== 'armadilha_mestre' || o.armada === false) return false;
+    return Math.round((o.x ?? 0) * dw) === x && Math.round((o.y ?? 0) * dh) === y;
+  }) || null;
+}
+window._avtArmadilhaMestreNaPosicao = _avtArmadilhaMestreNaPosicao;
+
+function _avtChecarArmadilhaMestreNaPosicao(jogador: any) {
+  if (!jogador || jogador.tipo !== 'jogador' || jogador.hp <= 0) return;
+  if (jogador.nome !== AVT_STATE.myCharNome) return;
+  const jx = Math.round(jogador.x), jy = Math.round(jogador.y);
+  const trap = _avtArmadilhaMestreNaPosicao(jx, jy);
+  if (!trap) return;
+
+  const rd = AVT_STATE.dungeon.render_data;
+  const modo = trap.modo === 'rearmar' ? 'rearmar' : 'oneshot';
+  let rearmarEmMs = null;
+  if (modo === 'oneshot') {
+    const idx = rd.objetos.findIndex((o: any) => String(o.id) === String(trap.id));
+    if (idx >= 0) rd.objetos.splice(idx, 1);
+  } else {
+    trap.armada = false;
+    trap._rearmarEm = rearmarEmMs = Date.now() + Math.max(1, parseFloat(trap.rearmar_s) || 30) * 1000;
+  }
+
+  const dano = _avtRolarFormula(trap.formula || '1d6');
+  if (dano > 0) {
+    try { _avtRTBroadcastPlayerDamage(jogador.nome, dano, trap.nome || 'Armadilha'); } catch(_) {}
+    try { _avtMostrarDanoAbaixoHp(jogador, dano, false); } catch(_) {}
+  }
+  try { _avtSfxPosicional('impacto_fisico', jogador, 0.6); } catch(_) {}
+  mostrarToast(`🪤 Você ativou uma armadilha! −${dano} HP`, 'erro');
+  _avtLog(`🪤 ${jogador.nome} ativou a armadilha ${trap.nome || ''}`.trim());
+
+  // Efeito extra (dot/stun) em si mesmo — status OOC; em P2P não-host o efeito
+  // vai ao host (só ele tica DOT/efeitos OOC), espelho do fluxo de skill OOC.
+  const ef = trap.efeito;
+  if (ef?.tipo) {
+    try {
+      if (!jogador.status_effects) jogador.status_effects = [];
+      const entry: any = { ...ef, _turnos_restantes: ef.duracao_turnos ?? 1, _ooc: true,
+        expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs(),
+        _casterNome: trap.nome || 'Armadilha' };
+      jogador.status_effects.push(entry);
+      if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+      AVT_STATE._oocStatusEffects.push({ entId: jogador.id, entNome: jogador.nome, ef: { ...entry }, lastTickAt: Date.now() });
+      if (ef.tipo === 'stun')    jogador._stunned    = true;
+      if (ef.tipo === 'silence') jogador._silenciado = true;
+      if (ef.tipo === 'dot')     { try { _avtMostrarDotDrip(jogador, ef.dot_variante); } catch(_) {} }
+      if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost()) {
+        RTNet.sendToHost('avt_player_action', {
+          tipo: 'ooc_effect_apply',
+          entId: jogador.id, entNome: jogador.nome,
+          oocEntry: { entId: jogador.id, entNome: jogador.nome, ef: { ...entry }, lastTickAt: Date.now() },
+          statusEffect: entry,
+        });
+      }
+    } catch(_) {}
+  }
+
+  try { _avtBroadcast('avt_armadilha_obj_disparo', { objId: trap.id, jogadorNome: jogador.nome, dano, modo, rearmarEmMs }); } catch(_) {}
+  try { _avtSalvarDungeon(); } catch(_) {} // no-op em convidado (guard de autoridade)
+  try { avtJogadorPainelRender(); } catch(_) {}
+}
+window._avtChecarArmadilhaMestreNaPosicao = _avtChecarArmadilhaMestreNaPosicao;
+
+window.avtReceberArmadilhaObjDisparo = function(p: any) {
+  try {
+    if (!p || !p.objId) return;
+    if (!_avtMinhaFase(p.faseId)) return;
+    const rd = AVT_STATE.dungeon?.render_data;
+    if (!rd?.objetos) return;
+    const idx = rd.objetos.findIndex((o: any) => String(o.id) === String(p.objId));
+    if (idx < 0) return;
+    if (p.modo === 'rearmar') {
+      rd.objetos[idx].armada = false;
+      rd.objetos[idx]._rearmarEm = p.rearmarEmMs || null;
+    } else {
+      rd.objetos.splice(idx, 1);
+    }
+    if (typeof _avtSouMestre === 'function' && _avtSouMestre()) {
+      mostrarToast(`🪤 ${p.jogadorNome || 'Jogador'} ativou uma armadilha (−${p.dano ?? 0} HP)`, 'aviso');
+    }
+    if (_avtPodeSalvarRegistro()) { try { _avtSalvarDungeon(); } catch(_) {} }
+  } catch(_) {}
+};
+
 // Coleta automática de loot/orbes na célula do jogador (chamada ao chegar numa
 // célula durante a exploração). Coleta TODOS os objetos coletáveis na posição.
 async function _avtColetarObjsNaPosicao(jogador: any) {
@@ -17734,7 +17858,12 @@ function avtReceberObjSpawn({ obj, faseId }: any = {}) {
     if (!AVT_STATE.dungeon.render_data) AVT_STATE.dungeon.render_data = {};
     const rd = AVT_STATE.dungeon.render_data;
     if (!rd.objetos) rd.objetos = [];
-    if (!rd.objetos.some((o: any) => String(o.id) === String(obj.id))) rd.objetos.push(obj);
+    // Merge por id: reposicionamento/edição de objeto pelo mestre em jogo
+    // também sincroniza (antes, id existente era ignorado e só a próxima carga
+    // da fase refletia a mudança).
+    const ex = rd.objetos.find((o: any) => String(o.id) === String(obj.id));
+    if (ex) Object.assign(ex, obj);
+    else rd.objetos.push(obj);
   } catch(_) {}
 }
 window.avtReceberObjSpawn = avtReceberObjSpawn;

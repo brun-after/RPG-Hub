@@ -97,6 +97,100 @@ describe('armadilha-skill: disparo', () => {
   });
 });
 
+// Armadilha do MESTRE: objeto de fase oculto que dispara quando um JOGADOR pisa.
+// O disparo é decidido pelo cliente do próprio jogador; sem RTNet o dano cai no
+// fallback local de _avtRTBroadcastPlayerDamage (modo solo).
+const injTrap = (sim: any, extra: any = {}) => {
+  const trap = {
+    id: 'traphm_teste', tipo: 'armadilha_mestre', nome: 'Espinhos',
+    x: 4 / 24, y: 3 / 16, formula: '1d6', efeito: null,
+    modo: 'oneshot', rearmar_s: 30, armada: true, _rearmarEm: null, ...extra,
+  };
+  sim.state.dungeon.render_data.objetos.push(trap);
+  return trap;
+};
+
+describe('armadilha do mestre (objeto de fase)', () => {
+  it('one-shot: jogador pisa, sofre dano e o objeto some', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const alice = sim.jogador();
+    const hpAntes = alice.hp;
+    injTrap(sim);
+
+    g._avtMoverJogador(1, 0); // (3,3) → (4,3), célula da armadilha
+    sim.run(180);
+
+    expect(alice.hp).toBeLessThan(hpAntes);
+    expect(sim.state.dungeon.render_data.objetos
+      .some((o: any) => o.id === 'traphm_teste')).toBe(false);
+  });
+
+  it('rearmar: desarma no disparo e rearma após o prazo', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const alice = sim.jogador();
+    const trap = injTrap(sim, { modo: 'rearmar', rearmar_s: 5 });
+
+    g._avtMoverJogador(1, 0);
+    sim.run(180);
+    const hpApos1 = alice.hp;
+    expect(hpApos1).toBeLessThan(alice.hpMax);
+    expect(trap.armada).toBe(false);
+    expect(trap._rearmarEm).toBeGreaterThan(Date.now());
+
+    // Pisar de novo enquanto desarmada: nada acontece
+    g._avtChecarArmadilhaMestreNaPosicao(alice);
+    expect(alice.hp).toBe(hpApos1);
+
+    vi.advanceTimersByTime(5200);
+    sim.run(70); // varredura de 1s rearma pelo timestamp
+    expect(trap.armada).toBe(true);
+
+    g._avtChecarArmadilhaMestreNaPosicao(alice); // ainda sobre a célula (4,3)
+    expect(alice.hp).toBeLessThan(hpApos1);
+  });
+
+  it('só o PRÓPRIO jogador dispara: NPC e aliado remoto não ativam', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const goblin = sim.npc('ini_0');
+    const bob = sim.state.entidades.find((e: any) => e.nome === 'Bob');
+    injTrap(sim);
+
+    goblin.x = 4; goblin.y = 3; goblin.renderX = 4; goblin.renderY = 3;
+    bob.x = 4; bob.y = 3; bob.renderX = 4; bob.renderY = 3;
+    g._avtChecarArmadilhaMestreNaPosicao(goblin); // tipo 'inimigo' → early return
+    g._avtChecarArmadilhaMestreNaPosicao(bob);    // não é myCharNome → early return
+    sim.run(150);
+
+    expect(goblin.hp).toBe(160);
+    expect(bob.hp).toBe(bob.hpMax);
+    expect(sim.state.dungeon.render_data.objetos
+      .some((o: any) => o.id === 'traphm_teste')).toBe(true);
+  });
+
+  it('efeito extra (stun) aplica no jogador que pisou', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const alice = sim.jogador();
+    injTrap(sim, { efeito: { tipo: 'stun', duracao_turnos: 1 } });
+
+    g._avtMoverJogador(1, 0);
+    sim.run(180);
+
+    expect(alice._stunned).toBe(true);
+    expect((alice.status_effects || []).some((e: any) => e.tipo === 'stun')).toBe(true);
+    expect((sim.state._oocStatusEffects || []).some((o: any) => o.entNome === 'Alice')).toBe(true);
+  });
+
+  it('avtReceberObjSpawn faz merge por id (reposicionamento sincroniza)', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    g.avtReceberObjSpawn({ obj: { id: 'obj-m', tipo: 'armadilha_mestre', x: 0.25, y: 0.25, armada: true } });
+    g.avtReceberObjSpawn({ obj: { id: 'obj-m', tipo: 'armadilha_mestre', x: 0.75, y: 0.5, armada: false } });
+    const objs = sim.state.dungeon.render_data.objetos.filter((o: any) => o.id === 'obj-m');
+    expect(objs).toHaveLength(1);
+    expect(objs[0].x).toBe(0.75);
+    expect(objs[0].armada).toBe(false);
+  });
+});
+
 describe('armadilha-skill: limites e expiração', () => {
   it('armadilha_max remove a mais antiga do caster ao exceder', async () => {
     const sim = await bootAventuraSim({ charNome: 'Alice' });
