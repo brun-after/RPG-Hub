@@ -367,21 +367,19 @@ async function salvarAtributos(nome: any){
  const novoHpMax = calcularHpMaxComAtributos(lc, ca.atributos, null, ca.nivel||1);
  if(novoHpMax && novoHpMax !== c.hp_max){ ca.hp_max=novoHpMax; c.hp_max=novoHpMax; }
  c.hp_atual=hp; c.custom_attrs=ca;
- // UX-02 FIX: Desabilitar botão durante salvamento
- const btnSalvar = document.querySelector(`#edit-form-${CSS.escape(nome)} .btn-primario`);
- if(btnSalvar){btnSalvar.disabled=true;btnSalvar.textContent='Salvando…';}
- try{
-   const patchBody: any={hp_atual:hp,custom_attrs:ca};
-   if(novoHpMax && novoHpMax > 0) patchBody.hp_max=novoHpMax;
-   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
-     {method:'PATCH',body:JSON.stringify(patchBody)});
-   mostrarToast('Atributos salvos!','sucesso');
-   if(typeof renderFichaView==='function') renderFichaView(nome); else renderAttrView(nome);
- }catch(e){
-   mostrarToast('Erro ao salvar atributos','erro');
- }finally{
-   if(btnSalvar){btnSalvar.disabled=false;btnSalvar.textContent='Salvar';}
- }
+ // Otimista: renderiza JÁ (o render reconstrói o formulário) e persiste em
+ // background — sem botão preso em "Salvando…" esperando o round-trip.
+ const patchBody: any={hp_atual:hp,custom_attrs:ca};
+ if(novoHpMax && novoHpMax > 0) patchBody.hp_max=novoHpMax;
+ if(typeof renderFichaView==='function') renderFichaView(nome); else renderAttrView(nome);
+ mostrarToast('Atributos salvos!','sucesso');
+ const _filtroAttr=c.id?`id=eq.${encodeURIComponent(c.id)}`:`rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`;
+ salvarOtimista({
+   chave: 'characters:' + (c.id || nome),
+   persistir: () => sb(`characters?${_filtroAttr}`,{method:'PATCH',body:JSON.stringify(patchBody)}),
+   aoFalhar: () => osRefetchCharacter(RPG_DATA!.rpgId, c.id || nome),
+   msgErro: '⚠ Falha ao salvar atributos — ressincronizando…',
+ });
 }
 
 // ── salvarInfoPersonagem: salva info do personagem (aba Personagem) ──
@@ -410,6 +408,21 @@ async function salvarInfoPersonagem(nome: any){
  }
  c.custom_attrs=ca;
  const nomeAlvo=renomear?novoNome:nome;
+ if(!renomear){
+   // Otimista (caminho comum): renderiza JÁ e persiste em background.
+   mostrarToast('Personagem salvo!','sucesso');
+   if(typeof renderFichaView==='function') renderFichaView(nome); else { renderCharView(nome); renderAttrView(nome); }
+   const _filtroInfo=c.id?`id=eq.${encodeURIComponent(c.id)}`:`rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nome)}`;
+   salvarOtimista({
+     chave: 'characters:' + (c.id || nome),
+     persistir: () => sb(`characters?${_filtroInfo}`,{method:'PATCH',body:JSON.stringify({custom_attrs:c.custom_attrs})}),
+     aoFalhar: () => osRefetchCharacter(RPG_DATA!.rpgId, c.id || nome),
+     msgErro: '⚠ Falha ao salvar personagem — ressincronizando…',
+   });
+   return;
+ }
+ // Rename: cadeia multi-tabela (characters, skills ×2, rpg_members) — segue
+ // pessimista até virar uma RPC atômica.
  try{
    const bodyChar: any={custom_attrs:ca};
    if(renomear) bodyChar.nome=novoNome;

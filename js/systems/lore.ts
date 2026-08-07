@@ -234,15 +234,25 @@ async function salvarLore() {
   const conteudo = document.getElementById('lore-conteudo-input')!.value!.trim!()!;
   if (!titulo) { mostrarToast('Título obrigatório', 'erro'); return; }
   const body = { rpg_id: RPG_DATA!.rpgId, titulo, secao, conteudo };
+  if (loreId) {
+    // Otimista (edição): muta local, fecha o modal e renderiza JÁ; PATCH em
+    // background. Criação (POST) segue aguardada — precisa do id do servidor.
+    const idx = RPG_DATA!.lore.findIndex(l => l.id == loreId);
+    if (idx >= 0) RPG_DATA!.lore[idx] = { ...RPG_DATA!.lore[idx], ...body };
+    fecharModalLore();
+    renderLore();
+    mostrarToast('Lore salvo!', 'sucesso');
+    salvarOtimista({
+      chave: 'lore:' + loreId,
+      persistir: () => sb(`lore?id=eq.${encodeURIComponent(loreId)}`, { method: 'PATCH', body: JSON.stringify(body) }),
+      aoFalhar: osRefetchLore,
+      msgErro: '⚠ Falha ao salvar lore — ressincronizando…',
+    });
+    return;
+  }
   try {
-    if (loreId) {
-      await sb(`lore?id=eq.${encodeURIComponent(loreId)}`, { method: 'PATCH', body: JSON.stringify(body) });
-      const idx = RPG_DATA!.lore.findIndex(l => l.id == loreId);
-      if (idx >= 0) RPG_DATA!.lore[idx] = { ...RPG_DATA!.lore[idx], ...body };
-    } else {
-      const [novo] = await sb('lore', { method: 'POST', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify(body) });
-      RPG_DATA!.lore.push(novo || body);
-    }
+    const [novo] = await sb('lore', { method: 'POST', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify(body) });
+    RPG_DATA!.lore.push(novo || body);
     fecharModalLore();
     renderLore();
     mostrarToast('Lore salvo!', 'sucesso');

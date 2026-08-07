@@ -547,7 +547,7 @@ async function salvarItem() {
 
   // Verificar trade-off severo
   const severo = CATALOGO_STATE.bonusLinhas.some(l => parseFloat(l.valor) < 0 && Math.abs(parseFloat(l.valor)) > 10);
-  if (severo && !confirm('⚠️ Trade-off severo detectado. Confirmar salvar?')) return;
+  if (severo && !await confirmarAsync('⚠️ Trade-off severo detectado. Confirmar salvar?', { ok: 'Salvar' })) return;
 
   const bonusObj: Record<string, any> = {};
   for (const l of CATALOGO_STATE.bonusLinhas) {
@@ -590,19 +590,38 @@ async function salvarItem() {
     tier_max: document.getElementById('fi-droppable')!.checked! ? (parseInt(document.getElementById('fi-tier-max')!.value!)||5) : null
   };
 
+  if (id) {
+    // Otimista (edição): sincroniza os stores locais, fecha o form e
+    // renderiza JÁ (sem refetch — buscar agora leria o dado antigo);
+    // PATCH em background. item_catalog não tem canal realtime, então não
+    // há eco a suprimir.
+    const savedRow = { ...payload, id: parseInt(id) };
+    if (INV.itemDefs) {
+      const idxDef = INV.itemDefs.findIndex((d: any) => d.id === savedRow.id);
+      if (idxDef >= 0) INV.itemDefs[idxDef] = { ...INV.itemDefs[idxDef], ...savedRow };
+      else INV.itemDefs.push(savedRow);
+    }
+    const idxCat = (CATALOGO_STATE.itens || []).findIndex((x: any) => x.id === savedRow.id);
+    if (idxCat >= 0) CATALOGO_STATE.itens[idxCat] = { ...CATALOGO_STATE.itens[idxCat], ...savedRow };
+    mostrarToast('✓ Item atualizado', 'ok');
+    fecharFormItem();
+    filtrarCatalogo();
+    renderTabelasTab();
+    salvarOtimista({
+      chave: 'item_catalog:' + id,
+      persistir: () => sb(`item_catalog?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(payload) }),
+      aoFalhar: async () => { await carregarCatalogo(); renderTabelasTab(); },
+      msgErro: `⚠ Falha ao salvar ${nome} — ressincronizando…`,
+    });
+    return;
+  }
+  // Criação (POST): segue aguardada — precisa do id do servidor.
   const btn = document.getElementById('fi-btn-salvar');
   btn!.disabled = true; btn!.textContent = 'Salvando...';
   try {
-    let savedRow = null;
-    if (id) {
-      const rows = await sb(`item_catalog?id=eq.${id}`, { method:'PATCH', prefer:'return=representation', body: JSON.stringify(payload) });
-      savedRow = rows?.[0] || { ...payload, id: parseInt(id) };
-      mostrarToast('✓ Item atualizado', 'ok');
-    } else {
-      const rows = await sb('item_catalog', { method:'POST', prefer:'return=representation', body: JSON.stringify(payload) });
-      savedRow = rows?.[0] || payload;
-      mostrarToast('✓ Item criado', 'ok');
-    }
+    const rows = await sb('item_catalog', { method:'POST', prefer:'return=representation', body: JSON.stringify(payload) });
+    const savedRow = rows?.[0] || payload;
+    mostrarToast('✓ Item criado', 'ok');
     // Sincronizar com INV.itemDefs para que renderTabelasTab reflita a mudança
     if (savedRow && INV.itemDefs) {
       const idx = INV.itemDefs.findIndex((d: any) => d.id === savedRow.id);
