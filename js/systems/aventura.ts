@@ -9599,6 +9599,19 @@ function _avtCanvasKey(e: any) {
     _avtMestreEditarLoja(lojaId);
     return;
   }
+  if (e.key === 'Escape') {
+    // Mira de skill/primeiro-ataque ativa → cancela; sem nada para cancelar,
+    // alterna o overlay de pausa (que não pausa a simulação).
+    if ((AVT_STATE as any)._modoAlvoHabilidade || AVT_STATE._primeiroAtaqueModoAlvo) {
+      try { _avtLimparModoAlvo(); } catch(_) {}
+      AVT_STATE._primeiroAtaqueModoAlvo = null;
+      (AVT_STATE as any)._habilidadeRange = null;
+      if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
+      mostrarToast('Mira cancelada', '', 1200);
+      return;
+    }
+    if (typeof avtPausaToggle === 'function') { avtPausaToggle(); return; }
+  }
 
   // ── NumpadAdd (+): efetivar ataque / rolar dados ─────────────────────────
   if (_code === 'NumpadAdd') {
