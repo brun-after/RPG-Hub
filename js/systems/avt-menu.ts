@@ -30,12 +30,13 @@ window._avtEmMenuConfig = _avtEmMenuConfig;
 // ─────────────────────────────────────────────────────────────────────────────
 
 var AVT_GRAFICOS: Record<string, any> = {
-  ativo: false, nivel: 1, isoAtivo: false, isoTeclado: false, isoMobile: false, analogico: false,
+  ativo: false, nivel: 1, isoAtivo: false, analogico: false,
   // Refinamentos da visão isométrica (ligados por padrão; individualmente desativáveis).
   bilbordes: true,    // personagens/labels "em pé" (contra-transformação afim)
   atmosfera: true,    // vinheta + luz ambiente nos jogadores
   profundidade: true, // y-sort + ângulo 2:1 (estilo Diablo)
   pernas: true,       // movimentação de pernas dos tokens (passada articulada) ao andar
+  fatias: true,       // billboard fatiado (18 tiras) nos tokens iso; false = 1 drawImage só
   polimento: true,    // números arredondados + labels mais legíveis
   vfxProjecao: true,  // efeitos de habilidade posicionados pela projeção iso (tile/profundidade corretos)
   vfxBillboard: true, // efeitos de habilidade "em pé" (sem cisalhamento), acompanhando os personagens
@@ -55,16 +56,30 @@ var AVT_GRAFICOS: Record<string, any> = {
 
 const _AVT_GRAFICOS_KEY = 'rpghub_avt_graficos';
 
+// Detecção de touch para defaults conservadores em celulares/tablets.
+function _avtIsTouchDevice() {
+  try { return ('ontouchstart' in window) || navigator.maxTouchPoints > 0; } catch (_) { return false; }
+}
+window._avtIsTouchDevice = _avtIsTouchDevice;
+
 // ── PRESETS DE QUALIDADE ─────────────────────────────────────────────────────
 // Cada preset seta em lote os toggles que custam frame time. "baixo" corta os
-// custos por-frame (atmosfera, y-sort, pernas, CSS contínuo, luz GPU).
+// custos por-frame (atmosfera, y-sort, pernas, CSS contínuo, luz GPU, fatias).
+// "minimo" não aparece nos botões — é o último degrau da degradação adaptativa
+// para celulares fracos: desliga também billboards e VFX iso.
 const _AVT_QUALIDADE_PRESETS: Record<string, any> = {
+  minimo: { ativo: false, atmosfera: false, profundidade: false, pernas: false,
+            polimento: false, cssFx: false, luzGpu: false, fatias: false,
+            bilbordes: false, vfxProjecao: false, vfxBillboard: false },
   baixo: { ativo: false, atmosfera: false, profundidade: false, pernas: false,
-           polimento: false, cssFx: false, luzGpu: false },
+           polimento: false, cssFx: false, luzGpu: false, fatias: false,
+           bilbordes: true, vfxProjecao: true, vfxBillboard: true },
   medio: { atmosfera: true, profundidade: true, pernas: true,
-           polimento: true, cssFx: true, luzGpu: true },
+           polimento: true, cssFx: true, luzGpu: true, fatias: true,
+           bilbordes: true, vfxProjecao: true, vfxBillboard: true },
   alto:  { ativo: true, atmosfera: true, profundidade: true, pernas: true,
-           polimento: true, cssFx: true, luzGpu: true },
+           polimento: true, cssFx: true, luzGpu: true, fatias: true,
+           bilbordes: true, vfxProjecao: true, vfxBillboard: true },
 };
 
 function _avtGraficosPreset(nome: any, opts: any) {
@@ -77,11 +92,14 @@ function _avtGraficosPreset(nome: any, opts: any) {
   if (!(opts && opts.silencioso)) {
     try { if (typeof mostrarToast === 'function') mostrarToast('Qualidade gráfica: ' + nome, 'ok'); } catch(_) {}
   }
-  // Atualiza a UI do menu se o painel de configurações estiver aberto
+  // Atualiza a UI do menu se o painel de configurações estiver aberto.
+  // Guarda de mestre: sem ela, um jogador comum que trocasse de preset tinha o
+  // painel substituído pela barra de abas do MESTRE.
   try {
     const panel = document.getElementById('avt-menu-panel');
     if (panel && panel.style!.display !== 'none' && panel.style!.display !== '') {
-      _avtMenuAbrirConfigMestre(AVT_MENU_STATE.configAba || 'graficos');
+      if (AVT_STATE.isMestre) _avtMenuAbrirConfigMestre(AVT_MENU_STATE.configAba || 'graficos');
+      else if (AVT_MENU_STATE._configAberta || document.getElementById('avt-cfg-preset-baixo')) _avtMenuAbrirConfig();
     }
   } catch(_) {}
 }
@@ -107,7 +125,7 @@ window._avtGraficosCssFxAplicar = _avtGraficosCssFxAplicar;
 // Degrada um nível com aviso; nunca sobe sozinho (o jogador decide subir).
 function _avtGraficosDegradar() {
   if (AVT_GRAFICOS.adaptativo === false) return false;
-  const ordem = ['alto', 'medio', 'baixo'];
+  const ordem = ['alto', 'medio', 'baixo', 'minimo'];
   const atual = AVT_GRAFICOS.preset;
   // preset null (personalizado): trata como "alto" para poder degradar
   const idx = atual ? ordem.indexOf(atual) : 0;
@@ -116,7 +134,10 @@ function _avtGraficosDegradar() {
   _avtGraficosPreset(novo, { silencioso: true });
   try {
     if (typeof mostrarToast === 'function') {
-      mostrarToast('⚙ FPS baixo — qualidade gráfica reduzida para "' + novo + '". Ajuste no menu ⚙ Gráficos.', '');
+      const msg = novo === 'minimo'
+        ? '⚙ FPS muito baixo — modo de emergência "mínimo" ativado (efeitos desligados). Ajuste no menu ⚙ Gráficos.'
+        : '⚙ FPS baixo — qualidade gráfica reduzida para "' + novo + '". Ajuste no menu ⚙ Gráficos.';
+      mostrarToast(msg, '');
     }
   } catch(_) {}
   return true;
@@ -164,11 +185,35 @@ function _avtVfxOverlayResolution() {
 }
 window._avtVfxOverlayResolution = _avtVfxOverlayResolution;
 
+// Resolução do canvas principal 2D e do mundo PIXI: em iso num dispositivo touch,
+// renderiza a 1/oversize. O wrap iso é 1,8× maior para cobrir os cantos girados;
+// pagar 3,24× de fill-rate em três canvases empilhados é o que trava o jogo em
+// GPU móvel — mesma mitigação já aplicada aos overlays de VFX acima. O canvas
+// mantém o tamanho CSS cheio; só o backing store encolhe.
+function _avtMainCanvasResolution() {
+  if (!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS && AVT_GRAFICOS.isoAtivo)) return 1;
+  if (!_avtIsTouchDevice()) return 1;
+  return 1 / (_ISO_OVERSIZE || 1.8);
+}
+window._avtMainCanvasResolution = _avtMainCanvasResolution;
+
 function _avtGraficosCarregar() {
+  let raw: any = null;
   try {
-    const raw = localStorage.getItem(_AVT_GRAFICOS_KEY);
+    raw = localStorage.getItem(_AVT_GRAFICOS_KEY);
     if (raw) Object.assign(AVT_GRAFICOS, JSON.parse(raw));
   } catch(e) {}
+  // Primeira visita num dispositivo touch: preset conservador — o custo de
+  // iso + filtros do padrão travava celulares. O jogador pode subir no menu.
+  if (!raw && _avtIsTouchDevice()) {
+    Object.assign(AVT_GRAFICOS, _AVT_QUALIDADE_PRESETS.baixo);
+    AVT_GRAFICOS.preset = 'baixo';
+    _avtGraficosSalvar();
+  }
+  // Migração: os controles isométricos agora são automáticos (remapeamento central
+  // tela→grade em _avtRemapDirTelaParaGrade); as flags de opt-in deixaram de existir.
+  delete AVT_GRAFICOS.isoTeclado;
+  delete AVT_GRAFICOS.isoMobile;
   _avtGraficosCssFxAplicar();
   _avtAudioAplicar();
 }
@@ -390,8 +435,6 @@ function _avtGraficosIsoToggle(ativo: any) {
   _avtGraficosIsoAplicar();
   const chk = document.getElementById('avt-cfg-iso-ativo');
   if (chk) chk.checked = ativo;
-  // Reflete o estado (habilita/desabilita) dos controles iso, se o painel estiver aberto
-  _avtControlesAtualizarUI();
   _avtIsoRefinosAtualizarUI();
 }
 
@@ -424,35 +467,16 @@ function _avtIsoRefinosAtualizarUI() {
   if (pol) pol.checked = !!AVT_GRAFICOS.polimento;
 }
 
-// ── Controles isométricos (preferência individual) ───────────────────────────
-function _avtGraficosTecladoToggle(ativo: any) {
-  AVT_GRAFICOS.isoTeclado = ativo;
-  _avtGraficosSalvar();
-  const chk = document.getElementById('avt-cfg-iso-teclado');
-  if (chk) chk.checked = ativo;
-}
-
-function _avtGraficosMobileToggle(ativo: any) {
-  AVT_GRAFICOS.isoMobile = ativo;
-  _avtGraficosSalvar();
-  _avtGraficosControlesAplicar();
-  const chk = document.getElementById('avt-cfg-iso-mobile');
-  if (chk) chk.checked = ativo;
-}
-
 // Mostra/esconde os overlays de controle conforme preferências (sem gate de touch —
 // se o usuário ativou explicitamente a opção, é suficiente para exibir).
 function _avtGraficosControlesAplicar() {
-  const isoDpad     = document.getElementById('avt-iso-dpad');
   const regularDpad = document.getElementById('avt-dpad');
   const analogicoEl = document.getElementById('avt-analogico-stick');
 
-  const showIsoDpad   = !!(AVT_GRAFICOS.isoAtivo && AVT_GRAFICOS.isoMobile && !AVT_GRAFICOS.analogico);
   const showAnalogico = !!AVT_GRAFICOS.analogico;
 
-  if (isoDpad)     isoDpad.style!.display     = showIsoDpad   ? 'block' : 'none';
   if (analogicoEl) analogicoEl.style!.display = showAnalogico ? 'block' : 'none';
-  if (regularDpad && (showIsoDpad || showAnalogico)) regularDpad.style!.display = 'none';
+  if (regularDpad && showAnalogico) regularDpad.style!.display = 'none';
 
   if (showAnalogico) _avtAnalogicoIniciar();
 }
@@ -478,14 +502,12 @@ function _avtAnalogicoIniciar() {
   const R = 50; // raio máximo de deslocamento do knob em px
   let _active = false, _lastSector = -1;
 
-  // 8 setores horários desde E: E SE S SO O NO N NE
-  // Modo normal → (dx,dy) de grade convencionais
-  // Modo iso    → rotaciona 45° para alinhar ao visual da tela
-  const _mapNormal = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
-  const _mapIso    = [[1,-1],[1,0],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+  // 8 setores horários desde E: E SE S SO O NO N NE — sempre direções de TELA;
+  // avtDpad → _avtDpadDoMove aplica o remapeamento central tela→grade em iso.
+  const _mapTela = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
 
   function _dirGrid(sector: any) {
-    return (AVT_GRAFICOS?.isoAtivo ? _mapIso : _mapNormal)[sector];
+    return _mapTela[sector];
   }
 
   function _mover(ex: any, ey: any) {
@@ -518,63 +540,26 @@ function _avtAnalogicoIniciar() {
   }));
 }
 
-// Atualiza o estado disabled/checked dos toggles da aba Controles, se visíveis.
-function _avtControlesAtualizarUI() {
-  const isoOn = !!AVT_GRAFICOS.isoAtivo;
-  ['avt-cfg-iso-teclado', 'avt-cfg-iso-mobile'].forEach(id => {
-    const chk = document.getElementById(id);
-    if (chk) chk.disabled = !isoOn;
-  });
-  const aviso = document.getElementById('avt-cfg-controles-aviso');
-  if (aviso) aviso.style!.display = isoOn ? 'none' : 'block';
-}
-
 function _avtMenuHtmlControles() {
   const g = AVT_GRAFICOS;
-  const dis = g.isoAtivo ? '' : 'disabled';
-  const op  = g.isoAtivo ? '1' : '0.45';
   return `
     <div>
       <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">🎮 Controles</div>
 
-      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:18px">
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:14px">
         <input type="checkbox" id="avt-cfg-analogico"
                style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
                ${g.analogico ? 'checked' : ''}
                onchange="_avtGraficosAnalogicoToggle(this.checked)">
         <div>
           <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto,#c8d8e8)">Controle analógico</div>
-          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">Alavanca virtual no lugar do D-pad. Em modo isométrico os eixos se alinham à perspectiva visual.</div>
+          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">Alavanca virtual no lugar do D-pad.</div>
         </div>
       </label>
 
-      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.55);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">🗺 Controles Isométricos</div>
-
-      <div id="avt-cfg-controles-aviso" style="display:${g.isoAtivo ? 'none' : 'block'};font-size:0.68rem;color:#c89a4b;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;padding:8px 10px;margin-bottom:12px">
-        Disponível apenas com a <b>Visão Isométrica</b> ativada (aba Gráficos).
+      <div style="font-size:0.68rem;color:#7a92aa;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.15);border-radius:8px;padding:8px 10px;margin-bottom:12px">
+        Na <b>Visão Isométrica</b>, todos os controles (D-pad, analógico e WASD) já se alinham automaticamente à perspectiva da tela — apertar ↑ move o personagem para cima na tela.
       </div>
-
-      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:10px;opacity:${op}">
-        <input type="checkbox" id="avt-cfg-iso-teclado" ${dis}
-               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
-               ${g.isoTeclado ? 'checked' : ''}
-               onchange="_avtGraficosTecladoToggle(this.checked)">
-        <div>
-          <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto,#c8d8e8)">Controle isométrico (teclado)</div>
-          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">Move com W / E / S / D em diamante, alinhado às diagonais da tela.</div>
-        </div>
-      </label>
-
-      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;opacity:${op}">
-        <input type="checkbox" id="avt-cfg-iso-mobile" ${dis}
-               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
-               ${g.isoMobile ? 'checked' : ''}
-               onchange="_avtGraficosMobileToggle(this.checked)">
-        <div>
-          <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto,#c8d8e8)">Controle isométrico mobile</div>
-          <div style="font-size:0.72rem;color:var(--suave,#7a92aa);margin-top:2px">D-pad com as diagonais em destaque e os direcionais comuns reduzidos.</div>
-        </div>
-      </label>
       <div style="font-size:0.6rem;color:#5a6b7a;margin-top:6px">Preferências salvas localmente neste dispositivo.</div>
     </div>
   `;
@@ -584,7 +569,10 @@ function _avtGraficosAplicar() {
   _avtGarantirFiltros3D();
   const canvas = AVT_STATE?.canvas || document.getElementById('avt-canvas');
   if (!canvas) return;
-  canvas.style.filter = AVT_GRAFICOS.ativo ? `url(#avt-filtro3d-${AVT_GRAFICOS.nivel})` : '';
+  // Touch: o filtro SVG feConvolveMatrix sobre um canvas repintado todo frame
+  // dentro de uma camada 3D é um dos gatilhos de travamento em GPU móvel — off.
+  const filtroOn = AVT_GRAFICOS.ativo && !_avtIsTouchDevice();
+  canvas.style.filter = filtroOn ? `url(#avt-filtro3d-${AVT_GRAFICOS.nivel})` : '';
   _avtGraficosIsoAplicar();
 }
 
@@ -771,15 +759,40 @@ function _avtMenuHtmlGraficos() {
       }).join('')}
 
       <div style="font-size:0.6rem;color:#5a6b7a;margin-top:2px">Para um sprite isométrico personalizado, configure na ficha do personagem.</div>
+
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:rgba(200,168,75,0.55);text-transform:uppercase;letter-spacing:.08em;margin:14px 0 8px">🔧 Avançado</div>
+      ${[
+        ['cssFx',          'Animações CSS decorativas', 'Glow/pulso contínuos de tokens e elementos da HUD.'],
+        ['luzGpu',         'Luz dinâmica (GPU)',        'Camada WebGL de tochas/auras dos jogadores (iso + atmosfera).'],
+        ['vfxOverlayUnico','Overlay único de efeitos',  'Um único contexto WebGL persistente para os efeitos de habilidade (recomendado). Desligue apenas se os efeitos falharem no seu dispositivo.'],
+      ].map(([chave, titulo, desc]) => `
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:9px 10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:8px">
+        <input type="checkbox" id="avt-cfg-adv-${chave}"
+               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
+               ${g[chave as any] !== false ? 'checked' : ''}
+               onchange="_avtGraficosAvancadoToggle('${chave}', this.checked)">
+        <div>
+          <div style="font-size:0.8rem;color:var(--texto,#c8d8e8)">${titulo}</div>
+          <div style="font-size:0.7rem;color:var(--suave,#7a92aa);margin-top:2px">${desc}</div>
+        </div>
+      </label>`).join('')}
     </div>
   `;
 }
 
+// Toggles avançados (cssFx/luzGpu/vfxOverlayUnico): flags lidas pelo pipeline de
+// render/VFX que antes só mudavam como efeito colateral dos presets.
+function _avtGraficosAvancadoToggle(chave: any, ativo: any) {
+  AVT_GRAFICOS[chave] = !!ativo;
+  AVT_GRAFICOS.preset = null; // ajuste manual → sai do preset em lote
+  _avtGraficosSalvar();
+  _avtGraficosAplicarTudo();
+}
+window._avtGraficosAvancadoToggle = _avtGraficosAvancadoToggle;
+
 window._avtGraficosToggle        = _avtGraficosToggle;
 window._avtGraficosNivel         = _avtGraficosNivel;
 window._avtGraficosIsoToggle     = _avtGraficosIsoToggle;
-window._avtGraficosTecladoToggle = _avtGraficosTecladoToggle;
-window._avtGraficosMobileToggle  = _avtGraficosMobileToggle;
 window._avtGraficosControlesAplicar = _avtGraficosControlesAplicar;
 window._avtIsoScreenToCanvas     = _avtIsoScreenToCanvas;
 window._avtIsoDeltaToCanvas      = _avtIsoDeltaToCanvas;
@@ -802,6 +815,13 @@ async function avtMenuAbrir(rpgId: any) {
     sc.style!.display = 'flex';
 
     const t = AVT_STATE.rpg?.theme_json || {};
+
+    // Hidrata as colisões do level_config já no menu: os toggles da aba "modo"
+    // do config leem AVT_STATE.colisaoJog* — sem isso, fora de partida eles
+    // mostravam (e regravavam) o default false em vez do valor salvo.
+    const _lcMenu = t.level_config || {};
+    AVT_STATE.colisaoJogJog = _lcMenu.colisao_jog_jog ?? false;
+    AVT_STATE.colisaoJogNpc = _lcMenu.colisao_jog_npc ?? false;
 
     // Imagem de fundo
     const bgEl = document.getElementById('avt-menu-bg-img');
@@ -906,21 +926,13 @@ function _avtMenuRenderBotoes() {
   const cont = document.getElementById('avt-menu-botoes');
   if (!cont) return;
 
-  const sd = AVT_MENU_STATE.sessionData || {};
-  const temSessao = !!(sd.last_char_nome);
   const t = AVT_STATE.rpg?.theme_json || {};
   const acc = t.destaque || '#c8a84b';
 
-  const botoes = [
+  const botoes: any[] = [
     {
-      id: 'jogar', label: '▶ Jogar', sub: 'Novo início',
+      id: 'jogar', label: '▶ Jogar', sub: 'Entrar na aventura',
       cor: acc, fn: '_avtMenuAbrirJogar()',
-    },
-    {
-      id: 'continuar', label: '⟳ Continuar', sub: 'Retomar sessão',
-      cor: '#4fa3d1', fn: '_avtMenuAbrirContinuar()',
-      disabled: !temSessao,
-      titulo: temSessao ? '' : 'Sem sessão anterior',
     },
     {
       id: 'fase', label: '🗺 Fase', sub: 'Escolher entrada',
@@ -1010,42 +1022,84 @@ function _avtMenuFecharPanel() {
 window._avtMenuFecharPanel = _avtMenuFecharPanel;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// JOGAR — seleção de personagem para novo início
+// JOGAR — botão único: seleção de personagem → painel pré-jogo → Iniciar
+// (ingressa na partida ativa se houver; senão cria uma). Substitui o antigo
+// par Jogar/Continuar que só causava confusão.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _avtMenuAbrirJogar() {
-  _avtMenuAbrirPanel(_avtMenuHtmlSeletorChar('_avtMenuEntrarJogar'), 'Selecionar Personagem');
+  _avtMenuAbrirPanel(_avtMenuHtmlSeletorChar('_avtMenuPreJogo'), 'Selecionar Personagem');
 }
 window._avtMenuAbrirJogar = _avtMenuAbrirJogar;
 
-function _avtMenuEntrarJogar(charNome: any) {
-  _avtMenuEntrarJogo({ charNome, faseId: 'principal' });
+// Painel pré-jogo: card do personagem escolhido + Editar (abre a ficha) +
+// Iniciar. Permite ajustar a ficha antes de entrar na partida.
+function _avtMenuPreJogo(charNome: any) {
+  const ch = _avtMenuCharsVisiveis().find((c: any) => c.nome === charNome)
+    || (AVT_STATE.chars || []).find((c: any) => c.nome === charNome);
+  if (!ch) { mostrarToast('Personagem não encontrado', 'erro'); return; }
+  const ca = ch.custom_attrs || {};
+  const cor = ca.cor || '#4fa3d1';
+  const nomeSafe = String(ch.nome).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const html = `
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:14px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.18);border-radius:10px;padding:16px">
+        <div style="width:52px;height:52px;border-radius:50%;background:${cor};display:flex;align-items:center;justify-content:center;font-size:1.4rem;color:#fff;flex-shrink:0">${(ch.nome||'?')[0].toUpperCase()}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-family:var(--fonte-d);font-size:0.9rem;color:#c8d8e8">${ch.nome}</div>
+          <div style="font-size:0.65rem;color:#7a92aa;margin-top:3px">${ca.classe||'Aventureiro'} ${ca.raca ? '· '+ca.raca : ''} · Nv ${ch.nivel||1} · ${ch.hp_atual||100}/${_avtCalcHpJog(ch)||100} HP</div>
+        </div>
+        <button onclick="_avtMenuEditarChar('${ch.id}','${nomeSafe}')"
+          style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.62rem;padding:6px 12px;cursor:pointer;flex-shrink:0">✎ Editar</button>
+      </div>
+      <div id="avt-prejogo-status" style="font-size:0.66rem;color:#7a92aa;text-align:center;min-height:16px">Verificando partida…</div>
+      <button onclick="_avtMenuIniciar('${nomeSafe}')"
+        style="background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.5);border-radius:10px;padding:14px;cursor:pointer;color:#c8a84b;font-family:var(--fonte-d);font-size:0.85rem;letter-spacing:.08em;text-transform:uppercase;width:100%">▶ Iniciar</button>
+    </div>
+  `;
+  _avtMenuAbrirPanel(html, ch.nome);
+  // Sonda assíncrona: informa se vai ingressar numa partida ativa ou criar uma.
+  _avtMatchAoVivo(AVT_MENU_STATE.rpgId).then((live: any) => {
+    const el = document.getElementById('avt-prejogo-status');
+    if (!el) return;
+    if (live) {
+      el.textContent = '🟢 Partida em andamento — você vai ingressar nela.';
+      el.style!.color = '#5ee09a';
+    } else {
+      el.textContent = 'Nenhuma partida ativa — ao iniciar, você cria a partida.';
+    }
+  }).catch(() => {
+    const el = document.getElementById('avt-prejogo-status');
+    if (el) el.textContent = '';
+  });
 }
-window._avtMenuEntrarJogar = _avtMenuEntrarJogar;
+window._avtMenuPreJogo = _avtMenuPreJogo;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONTINUAR — retoma última sessão
-// ─────────────────────────────────────────────────────────────────────────────
+// Partida "viva" = linha de snapshot em rpg_session_state/avt_session_state com
+// updated_at mais novo que a janela de frescor do host (o host reescreve a cada
+// 15s — mesma sonda que RTNet._checkExistingHost usa ao entrar).
+async function _avtMatchAoVivo(rpgId: any) {
+  if (typeof sessionStateGet !== 'function' || !rpgId) return null;
+  const rows: any = await sessionStateGet(rpgId).catch(() => null);
+  const row = rows && rows[0];
+  if (!row || !row.updated_at || !row.host_user_id) return null;
+  const freshMs = (typeof (window as any).RTNET_HOST_FRESH_MS === 'number') ? (window as any).RTNET_HOST_FRESH_MS : 35000;
+  const age = Date.now() - new Date(row.updated_at).getTime();
+  return age < freshMs ? row : null;
+}
+window._avtMatchAoVivo = _avtMatchAoVivo;
 
-function _avtMenuAbrirContinuar() {
+async function _avtMenuIniciar(charNome: any) {
   const sd = AVT_MENU_STATE.sessionData || {};
-  const lastChar = sd.last_char_nome;
-  const lastFase = sd.last_fase_id || 'principal';
-  if (!lastChar) { mostrarToast('Sem sessão anterior salva', 'aviso'); return; }
-
-  if (AVT_STATE.isMestre) {
-    _avtMenuAbrirPanel(_avtMenuHtmlSeletorChar('_avtMenuEntrarContinuarComChar', lastFase), 'Continuar — Escolher Personagem');
-  } else {
-    _avtMenuEntrarJogo({ charNome: lastChar, faseId: lastFase });
-  }
+  let live: any = null;
+  try { live = await _avtMatchAoVivo(AVT_MENU_STATE.rpgId); } catch (_) {}
+  // Criador da partida → a sala de espera se auto-resolve (volunteerAsHost)
+  // em vez de exibir os botões "Iniciar como Host"/"Aguardar".
+  (AVT_STATE as any)._criadorDaPartida = !live;
+  const faseId = sd.last_fase_id || 'principal';
+  _avtMenuEntrarJogo({ charNome, faseId });
 }
-window._avtMenuAbrirContinuar = _avtMenuAbrirContinuar;
-
-function _avtMenuEntrarContinuarComChar(charNome: any) {
-  const lastFase = (AVT_MENU_STATE.sessionData || {}).last_fase_id || 'principal';
-  _avtMenuEntrarJogo({ charNome, faseId: lastFase });
-}
-window._avtMenuEntrarContinuarComChar = _avtMenuEntrarContinuarComChar;
+window._avtMenuIniciar = _avtMenuIniciar;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FASE — escolher fase e depois personagem
@@ -1446,18 +1500,20 @@ function _avtMenuAbrirConfig() {
   if (AVT_STATE.isMestre) {
     _avtMenuAbrirConfigMestre(AVT_MENU_STATE.configAba || 'menu');
   } else {
+    // Sem _avtMenuBindColorPicker aqui: os inputs de cor existem só na aba
+    // "menu" do mestre — no painel do jogador era um no-op copiado.
     _avtMenuAbrirPanel(_avtMenuHtmlConfigJogador(), '⚙ Configurações');
-    _avtMenuBindColorPicker();
   }
 }
 window._avtMenuAbrirConfig = _avtMenuAbrirConfig;
 
 function _avtMenuAbrirConfigMestre(aba: any) {
   AVT_MENU_STATE.configAba = aba;
+  // Sem aba "combate": o config do menu roda sempre FORA de partida e a aba só
+  // renderizava o aviso "disponível em jogo" (o painel do mestre em jogo a tem).
   const abas = [
     { id: 'menu',          label: '🖼 Menu' },
     { id: 'modo',          label: '🎮 Modo Mestre' },
-    { id: 'combate',       label: '⚔ Combate' },
     { id: 'balanceamento', label: '⚖ Balanço' },
     { id: 'npcs',          label: '🤖 NPCs' },
     { id: 'loot_xp',       label: '📊 XP' },
@@ -1631,7 +1687,7 @@ function _avtMenuHtmlConfigJogador() {
       </div>
 
       <div>
-        <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:6px">Posição do D-pad</div>
+        <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:6px">🎥 Câmera (mobile)</div>
         <div style="display:flex;gap:8px">
           ${['centralizado','deadzone'].map(p => `
             <button onclick="_avtMenuSetMobilePref('posicao','${p}')"
@@ -1640,7 +1696,7 @@ function _avtMenuHtmlConfigJogador() {
                 background:rgba(79,163,209,${mb.posicao===p?'0.12':'0.04'});
                 border:1px solid rgba(79,163,209,${mb.posicao===p?'0.45':'0.15'});
                 color:${mb.posicao===p?'#4fa3d1':'#7a92aa'}">
-              ${p==='centralizado' ? '⊕ Centralizado' : '↔ Dead Zone'}
+              ${p==='centralizado' ? '⊕ Centralizada' : '↔ Segue pelas bordas'}
             </button>
           `).join('')}
         </div>
@@ -2150,18 +2206,12 @@ Object.defineProperty(globalThis, "_avtGraficosRefinoToggle", { configurable: tr
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtIsoRefinosAtualizarUI", { configurable: true, get: () => _avtIsoRefinosAtualizarUI, set: (__v) => { _avtIsoRefinosAtualizarUI = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtGraficosTecladoToggle", { configurable: true, get: () => _avtGraficosTecladoToggle, set: (__v) => { _avtGraficosTecladoToggle = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtGraficosMobileToggle", { configurable: true, get: () => _avtGraficosMobileToggle, set: (__v) => { _avtGraficosMobileToggle = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtGraficosControlesAplicar", { configurable: true, get: () => _avtGraficosControlesAplicar, set: (__v) => { _avtGraficosControlesAplicar = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtGraficosAnalogicoToggle", { configurable: true, get: () => _avtGraficosAnalogicoToggle, set: (__v) => { _avtGraficosAnalogicoToggle = __v; } });
 Object.defineProperty(globalThis, "_avtAnalogicoIniciado", { configurable: true, get: () => _avtAnalogicoIniciado, set: (__v) => { _avtAnalogicoIniciado = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtAnalogicoIniciar", { configurable: true, get: () => _avtAnalogicoIniciar, set: (__v) => { _avtAnalogicoIniciar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtControlesAtualizarUI", { configurable: true, get: () => _avtControlesAtualizarUI, set: (__v) => { _avtControlesAtualizarUI = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMenuHtmlControles", { configurable: true, get: () => _avtMenuHtmlControles, set: (__v) => { _avtMenuHtmlControles = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
@@ -2192,12 +2242,6 @@ Object.defineProperty(globalThis, "_avtMenuAbrirPanel", { configurable: true, ge
 Object.defineProperty(globalThis, "_avtMenuFecharPanel", { configurable: true, get: () => _avtMenuFecharPanel, set: (__v) => { _avtMenuFecharPanel = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMenuAbrirJogar", { configurable: true, get: () => _avtMenuAbrirJogar, set: (__v) => { _avtMenuAbrirJogar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMenuEntrarJogar", { configurable: true, get: () => _avtMenuEntrarJogar, set: (__v) => { _avtMenuEntrarJogar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMenuAbrirContinuar", { configurable: true, get: () => _avtMenuAbrirContinuar, set: (__v) => { _avtMenuAbrirContinuar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMenuEntrarContinuarComChar", { configurable: true, get: () => _avtMenuEntrarContinuarComChar, set: (__v) => { _avtMenuEntrarContinuarComChar = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMenuAbrirFase", { configurable: true, get: () => _avtMenuAbrirFase, set: (__v) => { _avtMenuAbrirFase = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])

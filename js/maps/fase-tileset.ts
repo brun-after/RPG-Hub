@@ -1,6 +1,58 @@
 // maps/fase-tileset.js
 // Tileset system for adventure mode: prompts, validation, string-grid rendering
 
+// ── Células com rotação/flip ─────────────────────────────────────────────────
+// Uma célula do grid é number (AVT_T) | string semântica | null. A string pode
+// carregar um transform D4 como sufixo: "parede_N@t", t ∈ 1..7
+//   1/2/3 = rotação 90/180/270° horária; 4..7 = flip horizontal + rotação (t-4)·90°
+// Sem sufixo = identidade — saves antigos continuam parseando inalterados.
+// TODO consumidor de célula deve ler a chave via _avtCellBase e o transform via
+// _avtCellXform; nunca comparar a string crua.
+function _avtCellBase(cell: any) {
+  if (typeof cell !== 'string') return cell;
+  const i = cell.indexOf('@');
+  return i === -1 ? cell : cell.slice(0, i);
+}
+function _avtCellXform(cell: any) {
+  if (typeof cell !== 'string') return 0;
+  const i = cell.indexOf('@');
+  if (i === -1) return 0;
+  const t = parseInt(cell.slice(i + 1), 10);
+  return (Number.isFinite(t) && t >= 1 && t <= 7) ? t : 0;
+}
+function _avtCellCom(key: any, t: any) {
+  return t ? key + '@' + t : key;
+}
+
+// Desenha um tile aplicando o transform D4 (rotação em torno do centro).
+function _avtDrawTileXform(ctx: any, img: any, px: any, py: any, SZ: any, t: any) {
+  if (!t) { ctx.drawImage(img, px, py, SZ, SZ); return; }
+  const rot = t & 3, flip = t >= 4;
+  ctx.save();
+  ctx.translate(px + SZ / 2, py + SZ / 2);
+  ctx.rotate(rot * Math.PI / 2);
+  if (flip) ctx.scale(-1, 1);
+  ctx.drawImage(img, -SZ / 2, -SZ / 2, SZ, SZ);
+  ctx.restore();
+}
+
+// Recorta uma região da imagem-fonte já aplicando o transform D4 num canvas —
+// usado pelos fatiadores para materializar blocos rotacionados 1× no load
+// (mecanismo de dedup: "parede_L": "bloco_1_0@1" reusa a arte da parede N).
+function _avtTileXformCanvas(src: any, sx: any, sy: any, sw: any, sh: any, t: any) {
+  const rot = (t || 0) & 3, flip = (t || 0) >= 4;
+  const cv = document.createElement('canvas');
+  const rot90 = rot === 1 || rot === 3;
+  cv.width = Math.max(1, Math.round(rot90 ? sh : sw));
+  cv.height = Math.max(1, Math.round(rot90 ? sw : sh));
+  const c = cv.getContext('2d')!;
+  c.translate(cv.width / 2, cv.height / 2);
+  c.rotate(rot * Math.PI / 2);
+  if (flip) c.scale(-1, 1);
+  c.drawImage(src, sx, sy, sw, sh, -sw / 2, -sh / 2, sw, sh);
+  return cv;
+}
+
 // ── Layout canônico fixo — o sistema sempre espera elementos nestas posições ──
 // col 0 = cantos NW/SW + parede Oeste   |  col 1 = paredes N/S + piso variante
 // col 2 = cantos NE/SE + parede Leste   |  col 3 = piso principal / objetos / baú
@@ -32,8 +84,11 @@ function _faseTilesetBlocosCanonicos(cols: any, rows: any) {
 // ── Prompt 1 — Geração de imagem do tileset ──────────────────────────────────
 function faseTilesetImgPromptTemplate(opts: any) {
   const estilo = opts.estilo || 'pixel art fantasy dungeon';
-  const cols   = Math.min(10, Math.max(4, opts.cols || 4));
-  const rows   = Math.min(10, Math.max(4, opts.rows || 4));
+  // Clamp ao intervalo ENDEREÇÁVEL pelo layout canônico (cols 0-4, rows 0-4):
+  // pedir 10×10 fazia o artista desenhar até 80% de células que o renderer
+  // jamais consegue referenciar.
+  const cols   = Math.min(5, Math.max(4, opts.cols || 4));
+  const rows   = Math.min(5, Math.max(4, opts.rows || 4));
 
   const row3 = rows >= 4 ? `
 Row 3 — Portas e variações especiais:
@@ -61,7 +116,6 @@ Coluna 4 — Cantos internos (côncavos):
   ${rows >= 4 ? 'bloco_4_3 = Canto interno SE (côncavo SE) — piso vindo de Norte e Oeste; diagonal NW também é piso' : ''}
 ` : '';
 
-  const extraRows = rows > 5 ? `\nLinhas 5+: variações temáticas extras compatíveis com o estilo definido.` : '';
 
   return `Você é um artista sênior de games criando um tileset para um RPG de visão top-down no estilo: "${estilo}".
 
@@ -69,7 +123,7 @@ Pense como um concept artist de um jogo AAA — cada tile deve ser visualmente r
 
 REQUISITOS TÉCNICOS OBRIGATÓRIOS:
 - Imagem QUADRADA PERFEITA (largura == altura) — ex: 512×512, 1024×1024, 2048×2048
-- Grade uniforme de exatamente ${cols} colunas × ${rows} linhas (mínimo 4×4, máximo 10×10)
+- Grade uniforme de exatamente ${cols} colunas × ${rows} linhas (mínimo 4×4, máximo 5×5 — todas as células têm função)
 - Células perfeitamente iguais — zero margens, zero padding entre elas
 - As linhas de grade são frações exatas das dimensões da imagem (sem pixels extras)
 - Perspectiva top-down pura (câmera olhando diretamente de cima)
@@ -100,7 +154,7 @@ Linha 2 — Cantos Sul e Baú:
   bloco_1_2 = Face da parede Sul (borda inferior — piso fica ACIMA)
   bloco_2_2 = Canto SE (parede virando do sul para o leste)
   bloco_3_2 = Baú do tesouro (baú fechado de madeira/metal, top-down — reconhecível imediatamente)
-${row3}${row4}${col4}${extraRows}
+${row3}${row4}${col4}
 
 REGRAS VISUAIS DE QUALIDADE:
 - Paredes devem ter profundidade e espessura visível — não são apenas linhas
@@ -119,13 +173,18 @@ OUTPUT: Uma única imagem plana (sem camadas), sem rótulos, sem UI, sem bordas 
 
 // ── Prompt 2 — Coordenadas + layout completo da dungeon ──────────────────────
 function faseTilesetLayoutPromptTemplate(opts: any) {
-  const cols      = Math.min(10, Math.max(4, opts.cols || 4));
-  const rows      = Math.min(10, Math.max(4, opts.rows || 4));
+  const cols      = Math.min(5, Math.max(4, opts.cols || 4));
+  const rows      = Math.min(5, Math.max(4, opts.rows || 4));
   const descricao = opts.descricao || 'a dungeon with several rooms connected by corridors';
   const largura   = opts.largura   || 24;
   const altura    = opts.altura    || 18;
 
   const portaFaseBloco   = rows >= 4 ? `\n    "porta":      "bloco_0_3",\n    "piso_3":     "bloco_1_3",\n    "parede_int": "bloco_2_3",\n    "porta_fase": "bloco_3_3",` : '';
+  // Coerência com o prompt de imagem: se a imagem tem a coluna 4 (cantos
+  // côncavos) e/ou a linha 4 (decoração), o JSON de blocos DEVE mapeá-las —
+  // antes o layout omitia essas chaves e o import as descartava.
+  const cantoIntBloco    = cols >= 5 ? `\n    "canto_int_NO": "bloco_4_0",\n    "canto_int_NE": "bloco_4_1",\n    "canto_int_SO": "bloco_4_2",${rows >= 4 ? `\n    "canto_int_SE": "bloco_4_3",` : ''}` : '';
+  const row4Bloco        = rows >= 5 ? `\n    "piso_4":     "bloco_0_4",\n    "piso_5":     "bloco_1_4",\n    "objeto_2":   "bloco_2_4",\n    "objeto_3":   "bloco_3_4",` : '';
   const portaFaseValores = rows >= 4 ? `\n  "porta"       — closed door (placed on corridor openings between rooms)\n  "piso_3"      — floor variant 3 (use sparingly for dramatic effect)\n  "parede_int"  — inner wall / alcove (decorative interior wall)\n  "porta_fase"  — phase portal / exit (one per dungeon, in the final room)` : '';
 
   return `Você recebeu uma imagem de tileset dividida em grade ${cols}×${rows}. As células são nomeadas bloco_COL_LINHA (índice zero, col 0 = mais à esquerda, linha 0 = mais acima).
@@ -161,7 +220,7 @@ Retorne APENAS um objeto JSON (sem markdown, comece com {):
     "canto_SO":   "bloco_0_2",
     "parede_S":   "bloco_1_2",
     "canto_SE":   "bloco_2_2",
-    "bau":        "bloco_3_2"${portaFaseBloco}
+    "bau":        "bloco_3_2"${portaFaseBloco}${cantoIntBloco}${row4Bloco}
   },
 
   "mapa": {
@@ -189,6 +248,8 @@ Retorne APENAS um objeto JSON (sem markdown, comece com {):
 - O layout canônico acima já define as posições corretas — ajuste "blocos" SOMENTE se a imagem claramente divergir
 - Célula bloco_C_L ocupa a fração x=[C/${cols}, (C+1)/${cols}] × y=[L/${rows}, (L+1)/${rows}] da imagem
 - Se um papel não tiver correspondência visual clara, reutilize o tile mais próximo
+- Um valor de bloco pode ter sufixo de rotação "@1|@2|@3" (90/180/270° horário) para
+  reutilizar a MESMA arte girada — ex.: "parede_L": "bloco_1_0@1" gira a parede Norte
 - NÃO inclua "tile_size" — o sistema calcula automaticamente
 
 ══ DESIGN DE DUNGEON — PENSE COMO LEVEL DESIGNER ══
@@ -228,10 +289,11 @@ IMPORTANTE: Retorne APENAS o JSON. O array "tiles" deve ter EXATAMENTE ${altura}
 
 // ── Prompt unificado para IA externa (personagens + dungeon + tileset) ────────
 function _avtPromptCampanhaExterna(opts: any) {
-  const cols = Math.min(10, Math.max(4, opts.cols || 4));
-  const rows = Math.min(10, Math.max(4, opts.rows || 4));
+  const cols = Math.min(5, Math.max(4, opts.cols || 4));
+  const rows = Math.min(5, Math.max(4, opts.rows || 4));
 
   const portaBlocos   = rows >= 4 ? `\n      "porta":      "bloco_0_3",\n      "piso_3":     "bloco_1_3",\n      "parede_int": "bloco_2_3",\n      "porta_fase": "bloco_3_3",` : '';
+  const cantoIntBlocos = cols >= 5 ? `\n      "canto_int_NO": "bloco_4_0",\n      "canto_int_NE": "bloco_4_1",\n      "canto_int_SO": "bloco_4_2",${rows >= 4 ? `\n      "canto_int_SE": "bloco_4_3",` : ''}` : '';
   const portaValores  = rows >= 4 ? `\n  "porta"       — porta fechada (coloque nas aberturas de corredores entre salas)\n  "piso_3"      — piso variante 3 (use pontualmente para efeito dramático)\n  "parede_int"  — parede interna / alcova decorativa\n  "porta_fase"  — portal de saída (apenas 1 por dungeon, na sala final)` : '';
 
   return `Você é um mestre de RPG criativo com olhar de game designer experiente. Os jogadores vão descrever os personagens que querem diretamente nesta conversa.
@@ -283,7 +345,7 @@ O campo raiz "nome" é OBRIGATÓRIO — título curto da aventura em português 
       "canto_SO":   "bloco_0_2",
       "parede_S":   "bloco_1_2",
       "canto_SE":   "bloco_2_2",
-      "bau":        "bloco_3_2"${portaBlocos}
+      "bau":        "bloco_3_2"${portaBlocos}${cantoIntBlocos}
     },
     "mapa": {
       "largura": <LARGURA>,
@@ -347,6 +409,26 @@ DIRETRIZES ARTÍSTICAS DE LEVEL DESIGN:
 4. Os jogadores copiarão o JSON e colarão no sistema de RPG`;
 }
 
+// ── Merge canônico de blocos ──────────────────────────────────────────────────
+// A IA costuma devolver "blocos" incompleto (o prompt de layout nunca incluía os
+// canto_int_* que o prompt de imagem exige) — aceitar verbatim descartava chaves
+// que o autotiler usa. Sempre parte do canônico, sobrepõe o fornecido e descarta
+// referências fora do grid cols×rows (com aviso).
+function _avtMergeBlocosCanonicos(fornecidos: any, cols: any, rows: any) {
+  const blocos: any = {
+    ..._faseTilesetBlocosCanonicos(cols, rows),
+    ...((fornecidos && typeof fornecidos === 'object') ? fornecidos : {}),
+  };
+  for (const [k, v] of Object.entries(blocos)) {
+    const m = String(v).match(/^bloco_(\d+)_(\d+)(?:@[1-7])?$/);
+    if (!m || parseInt(m[1], 10) >= cols || parseInt(m[2], 10) >= rows) {
+      try { console.warn(`[tileset] bloco fora do grid ${cols}×${rows} descartado: ${k} → ${v}`); } catch (_) {}
+      delete blocos[k];
+    }
+  }
+  return blocos;
+}
+
 // ── Validação do JSON da campanha externa (personagens + tileset) ─────────────
 function _avtValidarJSONCampanhaExterna(raw: any) {
   if (typeof raw === 'string') {
@@ -365,9 +447,7 @@ function _avtValidarJSONCampanhaExterna(raw: any) {
   const cfg = raw.tileset_config;
   const cfgCols = cfg.cols || 4;
   const cfgRows = cfg.rows || 4;
-  const blocos = (cfg.blocos && typeof cfg.blocos === 'object')
-    ? cfg.blocos
-    : _faseTilesetBlocosCanonicos(cfgCols, cfgRows);
+  const blocos = _avtMergeBlocosCanonicos(cfg.blocos, cfgCols, cfgRows);
 
   const mapa = cfg.mapa;
   if (!mapa || !Array.isArray(mapa.tiles) || !mapa.tiles.length)
@@ -463,9 +543,7 @@ function faseTilesetValidarJSON(raw: any) {
 
   const cols = raw.cols || 4;
   const rows = raw.rows || 4;
-  const blocos = (raw.blocos && typeof raw.blocos === 'object')
-    ? raw.blocos
-    : _faseTilesetBlocosCanonicos(cols, rows);
+  const blocos = _avtMergeBlocosCanonicos(raw.blocos, cols, rows);
 
   const result = {
     version: raw.version || 2,
@@ -620,9 +698,12 @@ async function _avtCarregarTileset(imgUrl: any, config: any) {
   const textures: Record<string, any> = {};
 
   for (const [semanticKey, blocoRef] of Object.entries<any>(config.blocos || {})) {
-    const match = String(blocoRef).match(/^bloco_(\d+)_(\d+)$/);
+    // Suporta rotação no valor do bloco: "bloco_1_0@1" = mesma arte, girada 90°
+    // (dedup: as 4 faces de parede podem sair de 1 célula do atlas).
+    const match = String(blocoRef).match(/^bloco_(\d+)_(\d+)(?:@([1-7]))?$/);
     if (!match) continue;
     const col = parseInt(match[1]), row = parseInt(match[2]);
+    const xf  = match[3] ? parseInt(match[3], 10) : 0;
 
     // Round each boundary independently to avoid cumulative float drift
     const x0 = Math.round(sep + col * (sw + sep));
@@ -630,10 +711,7 @@ async function _avtCarregarTileset(imgUrl: any, config: any) {
     const w0 = Math.round(sep + (col + 1) * (sw + sep)) - x0 - sep;
     const h0 = Math.round(sep + (row + 1) * (sh + sep)) - y0 - sep;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = w0; canvas.height = h0;
-    const ctx = canvas.getContext('2d');
-    ctx!.drawImage(img, x0, y0, w0, h0, 0, 0, w0, h0);
+    const canvas = _avtTileXformCanvas(img, x0, y0, w0, h0, xf);
 
     const tileImg = new Image();
     tileImg.src = canvas.toDataURL('image/png');
@@ -671,11 +749,14 @@ function _avtTipoParede(N: any, S: any, E: any, W: any, NE: any, NW: any, SE: an
   if (N && E && !S && !W && !NE) return 'canto_SO';
   if (N && W && !S && !E && !NW) return 'canto_SE';
 
-  // Cantos internos (côncavos) — diagonal oposto também é piso → piso envolve este tile
-  if (S && E && !N && !W && SE)  return blocos?.canto_int_NO ?? 'parede_N';
-  if (S && W && !N && !E && SW)  return blocos?.canto_int_NE ?? 'parede_N';
-  if (N && E && !S && !W && NE)  return blocos?.canto_int_SO ?? 'parede_S';
-  if (N && W && !S && !E && NW)  return blocos?.canto_int_SE ?? 'parede_S';
+  // Cantos internos (côncavos) — diagonal oposto também é piso → piso envolve este tile.
+  // Retorna a CHAVE SEMÂNTICA (nunca a referência "bloco_C_R": o lookup de textura
+  // e os predicados de colisão são indexados pela chave — devolver o block-ref
+  // gerava tile invisível + colisão contraditória em toda junção côncava).
+  if (S && E && !N && !W && SE)  return blocos?.canto_int_NO ? 'canto_int_NO' : 'parede_N';
+  if (S && W && !N && !E && SW)  return blocos?.canto_int_NE ? 'canto_int_NE' : 'parede_N';
+  if (N && E && !S && !W && NE)  return blocos?.canto_int_SO ? 'canto_int_SO' : 'parede_S';
+  if (N && W && !S && !E && NW)  return blocos?.canto_int_SE ? 'canto_int_SE' : 'parede_S';
 
   if (N && S && !E && !W) return 'parede_N'; // corredor vertical
   if (E && W && !N && !S) return 'parede_O'; // corredor horizontal
@@ -704,22 +785,34 @@ const _AVT_CHAVES_PAREDE = new Set([
 function _avtChaveEhParede(cell: any) {
   if (cell === null || cell === undefined) return true;            // void = sólido
   if (typeof cell === 'number') return cell === AVT_T.PAREDE;      // 0 = parede
-  return _AVT_CHAVES_PAREDE.has(cell) || cell === 'parede';        // 'parede' legado
+  const base = _avtCellBase(cell);
+  return _AVT_CHAVES_PAREDE.has(base) || base === 'parede';        // 'parede' legado
 }
 
 // ── Verificar se tile é passável (para colisão) ───────────────────────────────
+// porta/porta_fase são PASSÁVEIS: são aberturas de corredor e o portal de saída
+// (concordando com _avtChaveEhParede e _avtNormalizarTilesParedes, que já os
+// tratavam como piso — a discordância selava corredores de mapas de IA).
 function _avtTilePassavel(x: any, y: any, dungeon: any) {
   const t = dungeon.tiles[y]?.[x];
   if (t === null || t === undefined) return false;
   if (typeof t === 'number') return t === AVT_T.PISO || t === AVT_T.SAIDA;
-  // String-key grid: passável se for piso ou baú
-  return t.startsWith('piso') || t === 'bau';
+  const base = _avtCellBase(t);
+  return base.startsWith('piso') || base === 'bau' || base === 'porta' || base === 'porta_fase';
 }
 
 // ── Autotile para grids binários legados (0/1) ────────────────────────────────
 function _avtGetTileSemanticKey(x: any, y: any, dungeon: any) {
   const tileAt = (tx: any, ty: any) => dungeon.tiles[ty]?.[tx] === AVT_T.PISO;
   const here = dungeon.tiles[y]?.[x];
+
+  // SAÍDA com tileset: usa o tile de portal se existir; sem ele, null faz o
+  // renderer cair no desenho legado da porta verde (antes caía no autotiler de
+  // parede e a saída sumia atrás de um tile de muro).
+  if (here === AVT_T.SAIDA) {
+    const blocosS = (AVT_STATE as any)._tilesetConfig?.blocos;
+    return blocosS?.porta_fase ? 'porta_fase' : null;
+  }
 
   if (here === AVT_T.PISO) {
     if (dungeon._chestPositions?.some((p: any) => p.x === x && p.y === y)) return 'bau';
@@ -749,8 +842,9 @@ function _avtNormalizarTilesParedes(tiles: any) {
     const t = tiles[y]?.[x];
     if (t === null || t === undefined) return false;
     if (typeof t === 'number') return t === 1;
-    return t.startsWith('piso') || t === 'bau' ||
-           t.startsWith('objeto') || t === 'porta' || t === 'porta_fase';
+    const base = _avtCellBase(t);
+    return base.startsWith('piso') || base === 'bau' ||
+           base.startsWith('objeto') || base === 'porta' || base === 'porta_fase';
   };
 
   const chavesParede = new Set([
@@ -771,7 +865,7 @@ function _avtNormalizarTilesParedes(tiles: any) {
 
       const eParede = typeof cell === 'number'
         ? cell !== 1
-        : chavesParede.has(cell);
+        : chavesParede.has(_avtCellBase(cell));
 
       if (!eParede) { linha.push(cell); continue; }
 
@@ -808,15 +902,23 @@ async function _faseTilesetCarregar(rd: any) {
 
   const textures: Record<string, any> = {};
   for (const [semanticKey, blocoRef] of Object.entries<any>(config.blocos || {})) {
-    const match = String(blocoRef).match(/^bloco_(\d+)_(\d+)$/);
+    const match = String(blocoRef).match(/^bloco_(\d+)_(\d+)(?:@([1-7]))?$/);
     if (!match) continue;
     const col = parseInt(match[1]), row = parseInt(match[2]);
+    const xf  = match[3] ? parseInt(match[3], 10) : 0;
     // Round each boundary independently to avoid cumulative float drift
     const x0 = Math.round(sep + col * (sw + sep));
     const y0 = Math.round(sep + row * (sh + sep));
     const w0 = Math.round(sep + (col + 1) * (sw + sep)) - x0 - sep;
     const h0 = Math.round(sep + (row + 1) * (sh + sep)) - y0 - sep;
-    textures[semanticKey] = new PIXI.Texture(bt, new PIXI.Rectangle(x0, y0, w0, h0));
+    const drawableSrc: any = (bt as any).resource?.source;
+    if (xf && drawableSrc) {
+      // Rotação materializada via canvas (mais simples e portátil que groupD8)
+      const cv = _avtTileXformCanvas(drawableSrc, x0, y0, w0, h0, xf);
+      textures[semanticKey] = PIXI.Texture.from(cv);
+    } else {
+      textures[semanticKey] = new PIXI.Texture(bt, new PIXI.Rectangle(x0, y0, w0, h0));
+    }
   }
 
   if (typeof FASE_STATE !== 'undefined') {
@@ -840,18 +942,40 @@ function _faseRenderDungeonTiles(layer: any, rd: any) {
     if (!row) continue;
     for (let x = 0; x < row.length; x++) {
       const cell = row[x];
-      const key  = typeof cell === 'string' ? cell : _avtGetTileSemanticKey(x, y, dungeon);
+      const key  = typeof cell === 'string' ? _avtCellBase(cell) : _avtGetTileSemanticKey(x, y, dungeon);
       const tex  = key ? textures[key] : null;
       if (!tex) continue;
       const spr = new PIXI.Sprite(tex);
-      spr.x = x * displayTs; spr.y = y * displayTs;
-      spr.width = displayTs; spr.height = displayTs;
+      const xf = _avtCellXform(cell);
+      if (xf) {
+        // Transform D4 da célula: rotação/flip em torno do centro do tile
+        spr.anchor.set(0.5);
+        spr.x = x * displayTs + displayTs / 2; spr.y = y * displayTs + displayTs / 2;
+        spr.rotation = (xf & 3) * Math.PI / 2;
+        spr.width = displayTs; spr.height = displayTs;
+        if (xf >= 4) spr.scale.x = -Math.abs(spr.scale.x);
+      } else {
+        spr.x = x * displayTs; spr.y = y * displayTs;
+        spr.width = displayTs; spr.height = displayTs;
+      }
       layer.addChild(spr);
     }
   }
 }
 
 /* [migração-esm] accessors globais */
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCellBase", { configurable: true, get: () => _avtCellBase, set: (__v) => { _avtCellBase = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCellXform", { configurable: true, get: () => _avtCellXform, set: (__v) => { _avtCellXform = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtCellCom", { configurable: true, get: () => _avtCellCom, set: (__v) => { _avtCellCom = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtDrawTileXform", { configurable: true, get: () => _avtDrawTileXform, set: (__v) => { _avtDrawTileXform = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtTileXformCanvas", { configurable: true, get: () => _avtTileXformCanvas, set: (__v) => { _avtTileXformCanvas = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtMergeBlocosCanonicos", { configurable: true, get: () => _avtMergeBlocosCanonicos, set: (__v) => { _avtMergeBlocosCanonicos = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_faseTilesetBlocosCanonicos", { configurable: true, get: () => _faseTilesetBlocosCanonicos, set: (__v) => { _faseTilesetBlocosCanonicos = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])

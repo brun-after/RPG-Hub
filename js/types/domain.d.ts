@@ -38,6 +38,7 @@ declare global {
     estabilizado?: boolean;
     skills_ids?: any[];
     skill_numeros?: any;
+    skill_icones?: any;
     equipamento?: any;
     equipamentos?: string;
     companheiro?: string;

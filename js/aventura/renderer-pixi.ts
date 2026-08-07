@@ -64,7 +64,7 @@ function _texturaLuz(PIXI: any): any {
   return _lightTex;
 }
 
-function _atualizarLuzes(PIXI: any, canvas: any, esc: number): void {
+function _atualizarLuzes(PIXI: any, viewW: number, viewH: number, esc: number): void {
   const on = _luzGpuHabilitada();
   _lightsOn = on;
   if (!on) { if (_lightRoot) _lightRoot.visible = false; return; }
@@ -114,7 +114,7 @@ function _atualizarLuzes(PIXI: any, canvas: any, esc: number): void {
     }
   }
   if (_dustSprites.length) {
-    const vw = canvas.width / esc, vh = canvas.height / esc;
+    const vw = viewW / esc, vh = viewH / esc;
     const camX = -(_tileRoot ? _tileRoot.position.x : 0) / esc, camY = -(_tileRoot ? _tileRoot.position.y : 0) / esc;
     for (const sp of _dustSprites) {
       if (!dustOn) { sp.visible = false; continue; }
@@ -281,15 +281,22 @@ function avtPixiWorldFrame(canvas: any, camera: any, SZ: number, dungeon: any, g
     return false;
   }
 
+  // Dimensões lógicas (px CSS) e resolução: em iso+touch o backing renderiza a
+  // 1/oversize (mesma mitigação do canvas 2D — ver _avtMainCanvasResolution).
+  const W: any = window as any;
+  const vw = (typeof W._avtViewW === 'function' && W._avtViewW()) || canvas.width;
+  const vh = (typeof W._avtViewH === 'function' && W._avtViewH()) || canvas.height;
+  const res = (typeof W._avtMainCanvasResolution === 'function') ? W._avtMainCanvasResolution() : 1;
+
   // (Re)criação do app quando não existe ou o canvas foi recriado/wrap foi limpo
   if (!_app || !_app.view.isConnected || _app.view.nextSibling !== canvas) {
     if (_app) { try { _app.destroy(true, { children: true, texture: false }); } catch (e) {} }
     _app = new PIXI.Application({
-      width: canvas.width || 100,
-      height: canvas.height || 100,
+      width: vw || 100,
+      height: vh || 100,
       backgroundColor: 0x050810,
       antialias: false,
-      resolution: 1,
+      resolution: res,
       autoStart: false,               // render manual, em sincronia com o rAF do jogo
       powerPreference: 'high-performance',
     });
@@ -298,12 +305,13 @@ function avtPixiWorldFrame(canvas: any, camera: any, SZ: number, dungeon: any, g
     _bakeSig = ''; _tileRoot = null; _viewCss = '';
   }
 
-  // Espelha caixa CSS e tamanho de pixels do canvas 2D
+  // Espelha caixa CSS do canvas 2D (a caixa estica o backing reduzido, se houver)
   const css = canvas.style.cssText.replace('cursor:pointer;', '').replace('cursor: pointer;', '');
   if (css !== _viewCss) { _app.view.style.cssText = css; _app.view.style.pointerEvents = 'none'; _viewCss = css; }
-  if (_app.renderer.width !== canvas.width || _app.renderer.height !== canvas.height) {
-    if (!(canvas.width > 0 && canvas.height > 0)) return false;
-    _app.renderer.resize(canvas.width, canvas.height);
+  if (_app.renderer.resolution !== res) _app.renderer.resolution = res;
+  if (_app.renderer.screen.width !== vw || _app.renderer.screen.height !== vh) {
+    if (!(vw > 0 && vh > 0)) return false;
+    _app.renderer.resize(vw, vh);
   }
 
   // Rebake quando a fase/tileset/grade/conteúdo mudam (assinatura barata por frame).
@@ -340,15 +348,15 @@ function avtPixiWorldFrame(canvas: any, camera: any, SZ: number, dungeon: any, g
   _tileRoot.scale.set(esc);
   _tileRoot.position.set(-camera.x, -camera.y);
 
-  // Culling por chunk (esconde chunks fora do viewport)
+  // Culling por chunk (esconde chunks fora do viewport, em px CSS)
   const vx0 = camera.x / esc, vy0 = camera.y / esc;
-  const vx1 = vx0 + canvas.width / esc, vy1 = vy0 + canvas.height / esc;
+  const vx1 = vx0 + vw / esc, vy1 = vy0 + vh / esc;
   for (const ch of _chunks) {
     ch.c.visible = !(ch.px + ch.w < vx0 || ch.px > vx1 || ch.py + ch.h < vy0 || ch.py > vy1);
   }
 
   // Luz dinâmica GPU (tochas + poeira ambiente)
-  try { _atualizarLuzes(PIXI, canvas, esc); } catch (e) { _lightsOn = false; }
+  try { _atualizarLuzes(PIXI, vw, vh, esc); } catch (e) { _lightsOn = false; }
 
   _app.renderer.render(_app.stage);
   return true;

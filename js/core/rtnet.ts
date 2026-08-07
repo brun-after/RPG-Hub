@@ -90,6 +90,9 @@ window.RTNet = (() => {
   const SNAPSHOT_SKIP_MAX_MS = 20_000;  // ms — snapshot inalterado pode pular no máx. 1 tick seguido
   const DB_HOST_FRESH_MS     = 35_000;  // ms — idade máx. da linha de snapshot p/ aceitar host existente
                                         //      (cobre o tick pulado: idade real chega a ~30s em idle)
+  // Exposto p/ a sonda "partida viva?" do menu (avt-menu._avtMatchAoVivo) usar
+  // exatamente a mesma janela de frescor de _checkExistingHost.
+  try { (window as any).RTNET_HOST_FRESH_MS = DB_HOST_FRESH_MS; } catch (_) {}
   const STATE_TICK_INTERVAL  = 100;     // ms — tick autoritativo via DataChannel (10 Hz, confiável)
   const ELECTION_WAIT        = 250;     // ms — janela curta de coleta (apenas empate raro)
   const ELECTION_MODE        = 'voluntary'; // 'auto' = primeiro a entrar; 'voluntary' = aguarda host_volunteer

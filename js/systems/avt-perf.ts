@@ -105,7 +105,11 @@ var AVT_PERF = (() => {
       if (typeof AVT_STATE === 'undefined' || !AVT_STATE || !AVT_STATE.canvas) { _adaptStrikes = 0; return; }
       const frames = _count - _adaptLastCount;
       _adaptLastCount = _count;
-      if (frames < 30) { _adaptStrikes = 0; return; } // sem frames suficientes (menu/background)
+      // Piso de 5 (≈1 FPS): com o piso antigo de 30, um device travado a <6 FPS
+      // nunca acumulava frames "suficientes" e a degradação jamais disparava —
+      // exatamente quando era mais necessária. document.hidden cobre o caso
+      // aba-em-background que o piso alto tentava filtrar.
+      if (document.hidden || frames < 5) { _adaptStrikes = 0; return; }
       const { fps } = _fpsStats();
       if (fps > 0 && fps < 45) {
         _adaptStrikes++;

@@ -257,6 +257,25 @@ function _avtSalaEspera(rpgNome: any, callback: any) {
   const statusEl = document.getElementById('avt-sala-status');
   if (statusEl) statusEl.textContent = '';
 
+  // Criador da partida (sonda do menu não achou sessão viva): sem fricção de
+  // "Iniciar como Host"/"Aguardar" — voluntaria-se imediatamente. A eleição
+  // voluntária existente resolve empates (dois criadores simultâneos) e a
+  // auto-promoção solo de 3s do RTNet segue como backstop.
+  if ((AVT_STATE as any)._criadorDaPartida) {
+    (AVT_STATE as any)._criadorDaPartida = false;
+    const btnHost0 = document.getElementById('avt-btn-ser-host');
+    const btnAg0 = document.getElementById('avt-btn-aguardar-host');
+    if (btnHost0) btnHost0.style!.display = 'none';
+    if (btnAg0) btnAg0.style!.display = 'none';
+    if (statusEl) statusEl.textContent = '⚔ Iniciando sessão…';
+    try { RTNet.volunteerAsHost(); } catch (_) {}
+  } else {
+    const btnHost0 = document.getElementById('avt-btn-ser-host');
+    const btnAg0 = document.getElementById('avt-btn-aguardar-host');
+    if (btnHost0) btnHost0.style!.display = '';
+    if (btnAg0) btnAg0.style!.display = '';
+  }
+
   // Atualiza lista de presença periodicamente
   function _atualizarLista() {
     const lista = document.getElementById('avt-sala-lista');
@@ -418,6 +437,23 @@ function _avtSkillsOrdenadasPorNumero(skills: any, dbChar: any, ent: any) {
 }
 window._avtGetSkillNumero = _avtGetSkillNumero;
 window._avtSkillsOrdenadasPorNumero = _avtSkillsOrdenadasPorNumero;
+// Ícone escolhido pelo jogador para os botões do controle mobile:
+// custom_attrs.skill_icones = { [skId]: emoji ou texto curto (≤4) }.
+function _avtGetSkillIcone(dbChar: any, ent: any, skId: any) {
+  const a = dbChar?.custom_attrs?.skill_icones;
+  const b = ent?.custom_attrs?.skill_icones;
+  const v = (a && a[skId]) || (b && b[skId]) || null;
+  return (typeof v === 'string' && v.trim()) ? v.trim() : null;
+}
+// Fallback quando não há ícone: primeiros 3 pontos de código do nome (seguro
+// para emoji/acentos via Array.from), maiúsculos.
+function _avtSkillAbrev(nome: any) {
+  const s = String(nome || '').trim();
+  if (!s) return '•';
+  return Array.from(s).slice(0, 3).join('').toUpperCase();
+}
+window._avtGetSkillIcone = _avtGetSkillIcone;
+window._avtSkillAbrev = _avtSkillAbrev;
 const AVT_T  = { PAREDE: 0, PISO: 1, SAIDA: 2 };
 const AVT_SZ = 48;
 
@@ -918,7 +954,7 @@ function _avtRenderRastroCells(ctx: any, camera: any, SZ: any, canvas: any) {
     if (now >= cell.expiry_ms) continue;
     const px = Math.round(cell.x * SZ - camera.x);
     const py = Math.round(cell.y * SZ - camera.y);
-    if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
+    if (px + SZ < 0 || px > _avtViewW() || py + SZ < 0 || py > _avtViewH()) continue;
     const rgb = _avtHexRgb(cell.cor || '#5ee09a');
     ctx.fillStyle = `rgba(${rgb},${pulse.toFixed(3)})`;
     ctx.fillRect(px, py, SZ, SZ);
@@ -1181,7 +1217,7 @@ function _avtRenderArmadilhaCells(ctx: any, camera: any, SZ: any, canvas: any) {
     if (now >= cell.expiry_ms) continue;
     const px = Math.round(cell.x * SZ - camera.x);
     const py = Math.round(cell.y * SZ - camera.y);
-    if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
+    if (px + SZ < 0 || px > _avtViewW() || py + SZ < 0 || py > _avtViewH()) continue;
     const rgb = _avtHexRgb(cell.cor || '#e8604c');
     ctx.strokeStyle = `rgba(${rgb},${pulse.toFixed(3)})`;
     ctx.lineWidth = 2;
@@ -2548,28 +2584,14 @@ function _avtCriarRenderMapaSub(opcao: any) {
     AVT_STATE._criando.mapa = 'procedural';
 
   } else if (opcao === 'editor') {
+    const _mapaAtual: any = (AVT_STATE._criando as any)?.mapa;
+    const _temGrid = _mapaAtual && typeof _mapaAtual === 'object' && Array.isArray(_mapaAtual.tiles);
     sub.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-        <span style="font-size:0.7rem;color:#7a92aa">Tamanho:</span>
-        <select id="avt-ed-tamanho" onchange="_avtEditorTamanho(this.value)"
-          style="padding:4px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.7rem">
-          <option value="22x16">Pequena (22×16 — ~5 salas)</option>
-          <option value="40x28">Média (40×28 — ~12 salas)</option>
-          <option value="60x40" selected>Grande (60×40 — ~25 salas)</option>
-          <option value="80x56">Enorme (80×56 — ~50 salas)</option>
-        </select>
-        <span style="font-size:0.68rem;color:#7a92aa">·</span>
-        <button onclick="_avtEditorAcaoSet('piso')" id="avt-ed-btn-piso" class="avt-ed-btn avt-ed-btn-ativo">Piso</button>
-        <button onclick="_avtEditorAcaoSet('parede')" id="avt-ed-btn-parede" class="avt-ed-btn">Parede</button>
-        <button onclick="_avtEditorAcaoSet('sala')" id="avt-ed-btn-sala" class="avt-ed-btn">Sala</button>
-        <button onclick="_avtEditorLimpar()" class="avt-ed-btn">Limpar</button>
-        <button onclick="_avtEditorReset()" class="avt-ed-btn">Resetar</button>
-      </div>
-      <div style="overflow:auto;max-height:380px;border:1px solid rgba(79,163,209,0.15);border-radius:6px">
-        <canvas id="avt-ed-canvas" style="cursor:crosshair;display:block;touch-action:none"></canvas>
+      <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start">
+        <div style="font-size:0.68rem;color:#7a92aa;line-height:1.5">Desenhe o mapa no editor de fases — tela cheia, com zoom/pan, balde, retângulo, desfazer e suporte a toque.</div>
+        <button onclick="_avtCriandoAbrirEditor()" class="avt-ed-btn avt-ed-btn-ativo" style="padding:10px 16px;font-size:0.75rem">🖉 Abrir editor de mapa</button>
+        <div id="avt-criando-editor-status" style="font-size:0.66rem;color:#4fa3d1">${_temGrid ? `✓ Mapa ${_mapaAtual.w}×${_mapaAtual.h} pronto — ${_mapaAtual.rooms?.length || 0} sala(s)` : 'Nenhum mapa desenhado ainda'}</div>
       </div>`;
-    _avtEd.w = 60; _avtEd.h = 40;
-    setTimeout(_avtEditorInit, 50);
 
   } else if (opcao === 'json') {
     sub.innerHTML = `
@@ -2577,12 +2599,11 @@ function _avtCriarRenderMapaSub(opcao: any) {
         <div style="flex:1;min-width:120px">
           <label style="display:block;font-size:0.65rem;color:rgba(79,163,209,0.7);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Nº de salas</label>
           <input id="avt-json-salas" type="number" min="1" max="50" value="10"
-            style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem"
-            oninput="_avtJsonAtualizarPrompt()">
+            style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
         </div>
         <div style="flex:2;min-width:150px">
           <label style="display:block;font-size:0.65rem;color:rgba(79,163,209,0.7);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Tamanho do grid</label>
-          <select id="avt-json-tamanho" onchange="_avtJsonAtualizarPrompt()"
+          <select id="avt-json-tamanho"
             style="width:100%;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
             <option value="22x16">Pequena (22×16)</option>
             <option value="40x28">Média (40×28)</option>
@@ -2930,152 +2951,26 @@ function _avtCriarAvancar() {
 // TILE EDITOR
 // ─────────────────────────────────────────────────────────────────────────────
 
-var _avtEd: any = { tiles: null, w: 60, h: 40, acao: 'piso', painting: false, salaStart: null };
 
-function _avtEditorTamanho(val: any) {
-  const [w, h] = val.split('x').map(Number);
-  _avtEd.w = w; _avtEd.h = h;
-  _avtEd.tiles = null;
-  _avtEditorInit();
-}
-
-function _avtEditorInit() {
-  const EDSZ = 14, W = _avtEd.w, H = _avtEd.h;
-  if (!_avtEd.tiles) _avtEditorReset();
-  const canvas = document.getElementById('avt-ed-canvas');
-  if (!canvas) return;
-  canvas.width  = W * EDSZ;
-  canvas.height = H * EDSZ;
-  canvas.style!.width  = (W * EDSZ) + 'px';
-  canvas.style!.height = (H * EDSZ) + 'px';
-  _avtEditorRenderCanvas();
-
-  const getTile = (e: any) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = W * EDSZ / rect.width;
-    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    const scaleY = H * EDSZ / rect.height;
-    return { tx: Math.floor(cx * scaleX / EDSZ), ty: Math.floor(cy * scaleY / EDSZ) };
-  };
-
-  const paint = (e: any) => {
-    if (!_avtEd.painting) return;
-    const {tx, ty} = getTile(e);
-    if (tx < 0 || ty < 0 || tx >= W || ty >= H) return;
-    if (_avtEd.acao === 'sala' && _avtEd.salaStart) {
-      // Preview only — fill on mouseup
-    } else {
-      _avtEd.tiles[ty][tx] = _avtEd.acao === 'parede' ? AVT_T.PAREDE : AVT_T.PISO;
-    }
-    _avtEditorRenderCanvas();
-    AVT_STATE._criando.mapa = _avtEditorExport();
-  };
-
-  canvas.onmousedown = canvas.ontouchstart = (e: any) => {
-    e.preventDefault(); _avtEd.painting = true;
-    if (_avtEd.acao === 'sala') { _avtEd.salaStart = getTile(e); return; }
-    paint(e);
-  };
-  canvas.onmousemove = canvas.ontouchmove = (e: any) => { e.preventDefault(); paint(e); };
-  canvas.onmouseup = canvas.ontouchend = (e: any) => {
-    if (_avtEd.acao === 'sala' && _avtEd.salaStart) {
-      const {tx, ty} = getTile(e);
-      const x0=Math.min(_avtEd.salaStart.tx,tx), y0=Math.min(_avtEd.salaStart.ty,ty);
-      const x1=Math.max(_avtEd.salaStart.tx,tx), y1=Math.max(_avtEd.salaStart.ty,ty);
-      for (let y=y0; y<=y1; y++) for (let x=x0; x<=x1; x++) _avtEd.tiles[y][x] = AVT_T.PISO;
-      _avtEd.salaStart = null;
-    }
-    _avtEd.painting = false;
-    _avtEditorRenderCanvas();
-    AVT_STATE._criando.mapa = _avtEditorExport();
-  };
-  document.onmouseup = () => { _avtEd.painting = false; };
-}
-
-function _avtEditorReset() {
-  _avtEd.tiles = _avtGerarDungeon(_avtEd.w, _avtEd.h).tiles;
-  _avtEditorRenderCanvas();
-  AVT_STATE._criando.mapa = _avtEditorExport();
-}
-
-function _avtEditorLimpar() {
-  _avtEd.tiles = Array.from({length: _avtEd.h}, () => Array(_avtEd.w).fill(AVT_T.PAREDE));
-  _avtEditorRenderCanvas();
-  AVT_STATE._criando.mapa = _avtEditorExport();
-}
-
-function _avtEditorAcaoSet(acao: any) {
-  _avtEd.acao = acao;
-  ['piso','parede','sala'].forEach(a => {
-    const btn = document.getElementById(`avt-ed-btn-${a}`);
-    if (btn) btn.classList.toggle('avt-ed-btn-ativo', a === acao);
+// Abre o editor de fases (fase-editor.ts) em modo rascunho para o wizard de
+// criação de campanha; o resultado vai direto em AVT_STATE._criando.mapa.
+function _avtCriandoAbrirEditor() {
+  const atual: any = (AVT_STATE._criando as any)?.mapa;
+  const temGrid = atual && typeof atual === 'object' && Array.isArray(atual.tiles);
+  (window as any).avtFaseEditorAbrir({
+    modo: 'draft',
+    w: temGrid ? atual.w : 40,
+    h: temGrid ? atual.h : 28,
+    tiles: temGrid ? atual.tiles : null,
+    rooms: temGrid ? (atual.rooms || []) : [],
+    onExport: (d: any) => {
+      AVT_STATE._criando.mapa = d;
+      const st = document.getElementById('avt-criando-editor-status');
+      if (st) st.textContent = `✓ Mapa ${d.w}×${d.h} pronto — ${d.rooms?.length || 0} sala(s)`;
+    },
   });
 }
-
-function _avtEditorRenderCanvas() {
-  const canvas = document.getElementById('avt-ed-canvas');
-  if (!canvas || !_avtEd.tiles) return;
-  const ctx = canvas.getContext!('2d');
-  const EDSZ = 14, W = _avtEd.w, H = _avtEd.h;
-  ctx.fillStyle = '#020408';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const t = _avtEd.tiles[y][x];
-      const px = x * EDSZ, py = y * EDSZ;
-      if (t === AVT_T.SAIDA) {
-        ctx.fillStyle = '#0d2a10';
-        ctx.fillRect(px, py, EDSZ, EDSZ);
-        ctx.strokeStyle = 'rgba(46,204,113,0.35)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(px + 0.5, py + 0.5, EDSZ - 1, EDSZ - 1);
-        ctx.fillStyle = 'rgba(46,204,113,0.5)';
-        ctx.fillRect(px + EDSZ/2 - 1, py + EDSZ/2 - 1, 2, 2);
-      } else if (t === AVT_T.PISO) {
-        ctx.fillStyle = '#162840';
-        ctx.fillRect(px, py, EDSZ, EDSZ);
-        ctx.strokeStyle = 'rgba(79,163,209,0.14)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(px + 0.5, py + 0.5, EDSZ - 1, EDSZ - 1);
-        ctx.fillStyle = 'rgba(79,163,209,0.2)';
-        ctx.fillRect(px + EDSZ/2 - 0.5, py + EDSZ/2 - 0.5, 1, 1);
-      } else {
-        // Parede: diferencia as que fazem borda com piso (edge walls) das paredes internas
-        const adjFloor = (
-          (_avtEd.tiles[y-1]?.[x] === AVT_T.PISO) ||
-          (_avtEd.tiles[y+1]?.[x] === AVT_T.PISO) ||
-          (_avtEd.tiles[y]?.[x-1] === AVT_T.PISO) ||
-          (_avtEd.tiles[y]?.[x+1] === AVT_T.PISO)
-        );
-        ctx.fillStyle = adjFloor ? '#0b0e18' : '#060810';
-        ctx.fillRect(px, py, EDSZ, EDSZ);
-        if (adjFloor) {
-          ctx.strokeStyle = 'rgba(79,163,209,0.12)';
-          ctx.lineWidth = 0.5;
-          ctx.strokeRect(px + 0.5, py + 0.5, EDSZ - 1, EDSZ - 1);
-        }
-      }
-    }
-  }
-  // Legenda compacta
-  const leg = document.getElementById('avt-ed-legenda');
-  if (leg) return;
-  const legEl = document.createElement('div');
-  legEl.id = 'avt-ed-legenda';
-  legEl.style!.cssText = 'display:flex;gap:10px;flex-wrap:wrap;margin-top:5px;font-size:0.6rem;color:#7a92aa;font-family:var(--fonte-d,monospace)';
-  legEl.innerHTML = `
-    <span><span style="display:inline-block;width:10px;height:10px;background:#162840;border:1px solid rgba(79,163,209,0.14);vertical-align:middle;margin-right:3px"></span>Piso</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#060810;vertical-align:middle;margin-right:3px"></span>Parede</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#0b0e18;border:1px solid rgba(79,163,209,0.12);vertical-align:middle;margin-right:3px"></span>Borda de parede</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#0d2a10;border:1px solid rgba(46,204,113,0.35);vertical-align:middle;margin-right:3px"></span>Saída</span>`;
-  canvas.parentNode!.insertBefore(legEl, canvas.nextSibling);
-}
-
-function _avtEditorExport() {
-  const rooms: any = [];
-  return { tiles: _avtEd.tiles, w: _avtEd.w, h: _avtEd.h, rooms, inimigos: [] as any[] };
-}
+window._avtCriandoAbrirEditor = _avtCriandoAbrirEditor;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JSON IMPORT
@@ -3142,9 +3037,6 @@ REGRAS:
 - ${salas >= 20 ? 'Para dungeons grandes: distribua salas em clusters temáticos (entrada, desenvolvimento, clímax)' : 'Organize as salas em progressão linear com uma bifurcação opcional'}`;
 }
 
-function _avtJsonAtualizarPrompt() {
-  // Atualiza o prompt ao mudar salas/tamanho na UI do modo json
-}
 
 function _avtCopiarPromptJson() {
   const params = _avtGetGridParams('avt-json');
@@ -5345,11 +5237,14 @@ function _avtBlocoFuncao(key: any) {
 }
 
 // Dado (coluna,linha) de um bloco no spritesheet, devolve a chave semântica canônica.
+// Ignora o sufixo @rot do valor: "bloco_1_0@1" ainda é a célula (1,0) do atlas.
 function _avtBlocoChavePorCelula(tc: any, tr: any) {
   const blocos = (AVT_STATE as any)._tilesetConfig?.blocos
     || AVT_STATE.dungeon?.tileset_config?.blocos || {};
   const alvo = `bloco_${tc}_${tr}`;
-  for (const [k, v] of Object.entries<any>(blocos)) if (v === alvo) return k;
+  for (const [k, v] of Object.entries<any>(blocos)) {
+    if (v === alvo || String(v).replace(/@[1-7]$/, '') === alvo) return k;
+  }
   return null;
 }
 
@@ -5357,7 +5252,8 @@ function _avtBlocoChavePorCelula(tc: any, tr: any) {
 function _avtClasseCelula(cell: any) {
   if (cell === null || cell === undefined) return 'P';
   if (typeof cell === 'number') return cell === AVT_T.PAREDE ? 'P' : 'F';
-  if (cell === 'porta' || cell === 'porta_fase') return 'D';
+  const base = _avtCellBase(cell);
+  if (base === 'porta' || base === 'porta_fase') return 'D';
   return _avtChaveEhParede(cell) ? 'P' : 'F';
 }
 
@@ -5864,6 +5760,7 @@ function _avtCanvasInit() {
   // Save overlay and dpad BEFORE clearing wrap (innerHTML='' detaches all children)
   const _savedOverlay = document.getElementById('avt-dados-overlay');
   const _savedDpad    = document.getElementById('avt-dpad');
+  const _savedStick   = document.getElementById('avt-analogico-stick');
   wrap.innerHTML = '';
 
   const canvas = document.createElement('canvas');
@@ -5880,8 +5777,9 @@ function _avtCanvasInit() {
     ov.style!.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:35;overflow:hidden';
     wrap.appendChild(ov);
   }
-  // Re-add D-pad inside wrap so it stays on top of canvas
+  // Re-add D-pad e joystick inside wrap so they stay on top of canvas
   if (_savedDpad) wrap.appendChild(_savedDpad);
+  if (_savedStick) wrap.appendChild(_savedStick);
 
   AVT_STATE.canvas = canvas;
   if (typeof _avtGraficosAplicar === 'function') _avtGraficosAplicar();
@@ -6147,6 +6045,14 @@ function _avtCanvasResizeDebounced() {
 }
 window._avtCanvasResizeDebounced = _avtCanvasResizeDebounced;
 
+// Viewport lógico do canvas principal em px CSS. Em iso+touch o backing store é
+// reduzido (_avtMainCanvasResolution) para conter o fill-rate do wrap oversized;
+// todo desenho/culling/câmera continua em px CSS via ctx.setTransform no frame.
+function _avtViewW() { return (AVT_STATE as any).viewW || AVT_STATE.canvas?.width || 0; }
+function _avtViewH() { return (AVT_STATE as any).viewH || AVT_STATE.canvas?.height || 0; }
+window._avtViewW = _avtViewW;
+window._avtViewH = _avtViewH;
+
 function _avtCanvasResize() {
   const wrap = document.getElementById('avt-mapa-wrap');
   const canvas = AVT_STATE.canvas;
@@ -6174,8 +6080,14 @@ function _avtCanvasResize() {
     canvas.style.cssText = 'display:block;cursor:pointer;image-rendering:pixelated;position:absolute;inset:0';
   }
   if (w > 0 && h > 0) {
-    canvas.width  = w;
-    canvas.height = h;
+    // Backing store possivelmente reduzido (iso+touch); tamanho CSS segue cheio
+    // (inset:0 / width:100% no cssText acima), então o navegador estica o backing.
+    const res = (typeof _avtMainCanvasResolution === 'function') ? _avtMainCanvasResolution() : 1;
+    (AVT_STATE as any).viewW = w;
+    (AVT_STATE as any).viewH = h;
+    (AVT_STATE as any)._canvasRes = res;
+    canvas.width  = Math.max(1, Math.round(w * res));
+    canvas.height = Math.max(1, Math.round(h * res));
     AVT_STATE.ctx = canvas.getContext('2d');
     // Só centraliza na primeira inicialização — não recentraliza quando a HUD
     // de combate abre/fecha (causava sensação de "câmera puxada pra baixo").
@@ -6187,7 +6099,7 @@ function _avtCanvasResize() {
 function _avtCameraCenter() {
   const jogadores = AVT_STATE.entidades.filter((e: any) => e.tipo === 'jogador');
   const canvas = AVT_STATE.canvas;
-  if (!jogadores.length || !canvas || !canvas.width) return;
+  if (!jogadores.length || !canvas || !_avtViewW()) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   // No iso, centraliza no jogador controlado (sem offset/clamp) e sincroniza.
   if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo) {
@@ -6203,8 +6115,8 @@ function _avtCameraCenter() {
   const cy = jogadores.reduce((s: any, j: any) => s + j.y, 0) / jogadores.length;
   const _ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
   const _overlayH = _ctrlDisp ? ((AVT_STATE as any)._overlayH ?? 160) : 0;
-  const effectiveH = canvas.height - _overlayH;
-  AVT_STATE.camera.x = cx * SZ - canvas.width/2  + SZ/2;
+  const effectiveH = _avtViewH() - _overlayH;
+  AVT_STATE.camera.x = cx * SZ - _avtViewW()/2  + SZ/2;
   AVT_STATE.camera.y = cy * SZ - effectiveH/2 + SZ/2;
   (AVT_STATE.camera as any)._targetX = AVT_STATE.camera.x;
   (AVT_STATE.camera as any)._targetY = AVT_STATE.camera.y;
@@ -6227,8 +6139,8 @@ function _avtCameraUpdate() {
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   // Mobile: margem maior → câmera segue antes do personagem chegar à borda → mais centralizado
   const MARGIN = (navigator.maxTouchPoints > 0 || 'ontouchstart' in window) ? 0.30 : 0.20;
-  const mW = canvas.width  * MARGIN;
-  const mH = canvas.height * MARGIN;
+  const mW = _avtViewW()  * MARGIN;
+  const mH = _avtViewH() * MARGIN;
 
   // No modo controle dispositivo, descontar a altura do overlay inferior para manter
   // o personagem visível acima dos botões de controle. Lê o DOM com throttle de 1s
@@ -6244,7 +6156,7 @@ function _avtCameraUpdate() {
     if (MOBILE_CTRL?.modoCamara === 'centralizada') return;
   }
   const _overlayH = _ctrlDispCam ? ((AVT_STATE as any)._overlayH ?? 160) : 0;
-  const effectiveH = canvas.height - _overlayH;
+  const effectiveH = _avtViewH() - _overlayH;
 
   const j = _avtMeuJogador() || AVT_STATE.entidades.find((e: any) => e.tipo === 'jogador' && e.hp > 0);
   if (!j) return;
@@ -6274,7 +6186,7 @@ function _avtCameraUpdate() {
   let shiftX = 0, shiftY = 0;
   if (xChanged) {
     if (px < mW - hyst)                   shiftX = px - mW;
-    else if (px > canvas.width - mW + hyst) shiftX = px - (canvas.width - mW);
+    else if (px > _avtViewW() - mW + hyst) shiftX = px - (_avtViewW() - mW);
   }
   if (yChanged) {
     if (py < mH - hyst)                   shiftY = py - mH;
@@ -6285,8 +6197,8 @@ function _avtCameraUpdate() {
   // Clamp para evitar câmera presa fora dos limites do mapa
   const dungeon = AVT_STATE.dungeon;
   if (dungeon) {
-    const maxCX = Math.max(0, dungeon.w * SZ - canvas.width);
-    const maxCY = Math.max(0, dungeon.h * SZ - canvas.height);
+    const maxCX = Math.max(0, dungeon.w * SZ - _avtViewW());
+    const maxCY = Math.max(0, dungeon.h * SZ - _avtViewH());
     AVT_STATE.camera._targetX = Math.max(0, Math.min((AVT_STATE.camera as any)._targetX, maxCX));
     AVT_STATE.camera._targetY = Math.max(0, Math.min((AVT_STATE.camera as any)._targetY, maxCY));
   }
@@ -6303,8 +6215,8 @@ function _avtCameraFocarEntidades(entA: any, entB: any) {
   const midX = (ax + bx) / 2, midY = (ay + by) / 2;
   const _ctrlDispCam = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
   const _overlayH = _ctrlDispCam ? ((AVT_STATE as any)._overlayH ?? 160) : 0;
-  const effectiveH = canvas.height - _overlayH;
-  AVT_STATE.camera.x = Math.round(midX * SZ - canvas.width / 2);
+  const effectiveH = _avtViewH() - _overlayH;
+  AVT_STATE.camera.x = Math.round(midX * SZ - _avtViewW() / 2);
   AVT_STATE.camera.y = Math.round(midY * SZ - effectiveH / 2);
   (AVT_STATE.camera as any)._targetX = AVT_STATE.camera.x;
   (AVT_STATE.camera as any)._targetY = AVT_STATE.camera.y;
@@ -6318,17 +6230,17 @@ function _avtCameraUpdateCentralizada(skipClamp?: any) {
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   // No iso (skipClamp) centraliza de verdade, sem descontar o overlay inferior.
   const _overlayH = skipClamp ? 0 : ((AVT_STATE as any)._overlayH ?? 160);
-  const effectiveH = canvas.height - _overlayH;
+  const effectiveH = _avtViewH() - _overlayH;
   const j = _avtMeuJogador() || AVT_STATE.entidades.find((e: any) => e.tipo === 'jogador' && e.hp > 0);
   if (!j) return;
   const rx = j.renderX ?? j.x;
   const ry = j.renderY ?? j.y;
-  let tX = rx * SZ - canvas.width / 2 + SZ / 2;
+  let tX = rx * SZ - _avtViewW() / 2 + SZ / 2;
   let tY = ry * SZ - effectiveH / 2 + SZ / 2;
   const dungeon = AVT_STATE.dungeon;
   if (dungeon && !skipClamp) {
-    tX = Math.max(0, Math.min(tX, Math.max(0, dungeon.w * SZ - canvas.width)));
-    tY = Math.max(0, Math.min(tY, Math.max(0, dungeon.h * SZ - canvas.height)));
+    tX = Math.max(0, Math.min(tX, Math.max(0, dungeon.w * SZ - _avtViewW())));
+    tY = Math.max(0, Math.min(tY, Math.max(0, dungeon.h * SZ - _avtViewH())));
   }
   (AVT_STATE.camera as any)._targetX = tX;
   (AVT_STATE.camera as any)._targetY = tY;
@@ -6355,6 +6267,23 @@ function _avtTileBakeInvalidate() {
   (AVT_STATE as any)._mmBake = null; // minimapa compartilha o gatilho de invalidação
 }
 window._avtTileBakeInvalidate = _avtTileBakeInvalidate;
+
+// Desenho legado da SAÍDA (porta verde) — usado quando não há tileset ou quando
+// o tileset não tem tile 'porta_fase' para representar a saída.
+function _avtDrawSaidaLegacy(ctx: any, px: any, py: any, SZ: any) {
+  ctx.fillStyle = '#101520';
+  ctx.fillRect(px, py, SZ, SZ);
+  ctx.fillStyle = 'rgba(79,220,140,0.18)';
+  ctx.fillRect(px+2, py+2, SZ-4, SZ-4);
+  ctx.strokeStyle = 'rgba(79,220,140,0.6)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(px+2, py+2, SZ-4, SZ-4);
+  ctx.fillStyle = 'rgba(79,220,140,0.8)';
+  ctx.font = `${Math.round(SZ*0.55)}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🚪', px + SZ/2, py + SZ/2);
+}
 
 function _avtLegacyTileBake(dungeon: any, gridStyle: any, hue: any) {
   const SZ = AVT_SZ;
@@ -6383,25 +6312,15 @@ function _avtLegacyTileBake(dungeon: any, gridStyle: any, hue: any) {
       const px = x * SZ, py = y * SZ;
       if ((AVT_STATE as any)._tilesetLoaded) {
         ctx.imageSmoothingEnabled = false;
-        const tkey = typeof t === 'string' ? t : _avtGetTileSemanticKey(x, y, dungeon);
+        const tkey = typeof t === 'string' ? _avtCellBase(t) : _avtGetTileSemanticKey(x, y, dungeon);
         const tileImg = tkey ? (AVT_STATE as any)._tilesetTextures[tkey] : null;
-        if (tileImg) { ctx.drawImage(tileImg, px, py, SZ, SZ); continue; }
+        if (tileImg) { _avtDrawTileXform(ctx, tileImg, px, py, SZ, _avtCellXform(t)); continue; }
+        if (t === AVT_T.SAIDA) { _avtDrawSaidaLegacy(ctx, px, py, SZ); continue; }
         if (t === null || t === undefined) continue;
         ctx.fillStyle = _avtTilePassavel(x, y, dungeon) ? '#101520' : '#0a0c14';
         ctx.fillRect(px, py, SZ, SZ);
       } else if (t === AVT_T.SAIDA) {
-        ctx.fillStyle = '#101520';
-        ctx.fillRect(px, py, SZ, SZ);
-        ctx.fillStyle = 'rgba(79,220,140,0.18)';
-        ctx.fillRect(px+2, py+2, SZ-4, SZ-4);
-        ctx.strokeStyle = 'rgba(79,220,140,0.6)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(px+2, py+2, SZ-4, SZ-4);
-        ctx.fillStyle = 'rgba(79,220,140,0.8)';
-        ctx.font = `${Math.round(SZ*0.55)}px serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🚪', px + SZ/2, py + SZ/2);
+        _avtDrawSaidaLegacy(ctx, px, py, SZ);
       } else if (t === AVT_T.PISO || (typeof t === 'string' && _avtTilePassavel(x, y, dungeon))) {
         ctx.fillStyle = '#101520';
         ctx.fillRect(px, py, SZ, SZ);
@@ -6471,6 +6390,12 @@ function _avtRenderFrame() {
     if (performance.now() < (AVT_STATE as any)._fxFreezeUntil) return;
     (AVT_STATE as any)._fxFreezeUntil = 0; // expired — clear so it never stays stuck
   }
+
+  // Backing store reduzido (iso+touch): todo o desenho do frame acontece em px
+  // CSS; a escala para o backing menor é aplicada uma vez aqui.
+  const _res = (AVT_STATE as any)._canvasRes || 1;
+  if (_res !== 1) ctx.setTransform(_res, 0, 0, _res, 0, 0);
+  else ctx.setTransform(1, 0, 0, 1, 0, 0);
 
   // Track delta time for patience timers
   const now = performance.now();
@@ -6653,6 +6578,7 @@ function _avtRenderFrame() {
   // Roda ANTES do canvas clear: _onWaypointReached chama _avtCameraUpdate, então
   // camera.x/y fica definitivo antes de tiles e entidades serem desenhados no
   // mesmo frame — elimina o jitter de câmera causado por atualização no meio do frame.
+  const _ctrlEntId = (typeof _avtEntidadeControlada === 'function' ? _avtEntidadeControlada()?.id : null);
   entidades.forEach((e: any) => {
     if (e.renderX == null) {
       e.renderX = e.x; e.renderY = e.y;
@@ -6663,7 +6589,7 @@ function _avtRenderFrame() {
     // catch-up suave para NPCs quando a fila acumula por latência de broadcast;
     // jogador local nunca ultrapassa baseSpeed para respeitar o teto de destreza
     const qLen = e._waypoints.length;
-    const ehJogadorLocal = typeof _avtEntidadeControlada === 'function' && e.id === _avtEntidadeControlada()?.id;
+    const ehJogadorLocal = e.id === _ctrlEntId;
     const catchUp = ehJogadorLocal ? 1 : (qLen > 4 ? Math.min(2.5, 1 + (qLen - 4) * 0.25) : 1);
     let remaining = (dt / 1000) * baseSpeed * catchUp;
 
@@ -6729,17 +6655,32 @@ function _avtRenderFrame() {
 
     if (_avtIsMoving) {
       const _prevRx = e._avtPrevRenderX ?? e.renderX;
+      const _prevRy = e._avtPrevRenderY ?? e.renderY;
       const _movDx  = e.renderX - _prevRx;
-      if (Math.abs(_movDx) > 0.001) {
-        const _dir = _movDx > 0 ? 'right' : 'left';
+      const _movDy  = e.renderY - _prevRy;
+      // Facing pelo X DA TELA: em iso o wrapper roda 45°, então o eixo horizontal
+      // visível é a projeção (dx - dy) — andar no eixo Y da grade aparece como
+      // esquerda/direita e precisa virar o sprite (senão "moonwalk").
+      const _movTelaX = (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo)
+        ? (_movDx - _movDy) : _movDx;
+      if (Math.abs(_movTelaX) > 0.001) {
+        const _dir = _movTelaX > 0 ? 'right' : 'left';
         if ((window._tokFacingDir || {})[e.nome] !== _dir) {
           window._tokFacingDir = window._tokFacingDir || {};
           window._tokFacingDir[e.nome] = _dir;
           window._animCtrlMap?.[e.nome]?.setFacing?.(_dir);
         }
       }
+      // Relógio de caminhada por DISTÂNCIA: avança proporcional ao deslocamento real
+      // (para quando a entidade para), alimentando o bob/passada dos presets em vez
+      // do relógio de parede — cada entidade quica no ritmo do próprio passo.
+      const _distFrame = Math.hypot(_movDx, _movDy);
+      if (_distFrame > 0) {
+        e._walkClockMs = (e._walkClockMs || 0) + (1000 * _distFrame) / Math.max(0.001, baseSpeed);
+      }
     }
     e._avtPrevRenderX = e.renderX;
+    e._avtPrevRenderY = e.renderY;
   });
 
   // ── Broadcast de posição fina (sub-célula) do jogador local, throttle ~50ms ──
@@ -6801,10 +6742,10 @@ function _avtRenderFrame() {
 
   let _tileBakeUsado = false;
   if (_pixiWorld) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, _avtViewW(), _avtViewH());
   } else {
   ctx.fillStyle = '#050810';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, _avtViewW(), _avtViewH());
   // Bake estático por fase (inclui hue-rotate e grade); por frame só um blit da
   // região visível, escalado pelo zoom. Mapas gigantes caem no loop legado.
   const _bake = _avtLegacyTileBake(dungeon, _gridStyle, _hue);
@@ -6813,42 +6754,34 @@ function _avtRenderFrame() {
     const _f = AVT_SZ / SZ; // fator tela → bake (bake é a AVT_SZ base)
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(_bake,
-      camera.x * _f, camera.y * _f, canvas.width * _f, canvas.height * _f,
-      0, 0, canvas.width, canvas.height);
+      camera.x * _f, camera.y * _f, _avtViewW() * _f, _avtViewH() * _f,
+      0, 0, _avtViewW(), _avtViewH());
   } else {
   // Aplica a variação de cor da fase mesmo sem tileset carregado (tiles de fundo procedurais também recebem o tint).
   const _hueOn = _hue && ('filter' in ctx);
   if (_hueOn) ctx.filter = `hue-rotate(${_hue}deg)`;
+  // Em iso, sub-pixel: arredondar aqui gera degrau diagonal amplificado pelo
+  // scale CSS (tiles adjacentes mantêm distância exata SZ com float).
+  const _tileIso = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo);
   for (let y = 0; y < dungeon.h; y++) {
     for (let x = 0; x < dungeon.w; x++) {
       const t  = dungeon.tiles[y]?.[x];
-      const px = Math.round(x * SZ - camera.x);
-      const py = Math.round(y * SZ - camera.y);
-      if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
+      const px = _tileIso ? (x * SZ - camera.x) : Math.round(x * SZ - camera.x);
+      const py = _tileIso ? (y * SZ - camera.y) : Math.round(y * SZ - camera.y);
+      if (px + SZ < 0 || px > _avtViewW() || py + SZ < 0 || py > _avtViewH()) continue;
       if ((AVT_STATE as any)._tilesetLoaded) {
         ctx.imageSmoothingEnabled = false;
-        // String-key grid (ia_fase): usa a chave diretamente
+        // String-key grid (ia_fase): usa a chave diretamente (base sem @rot)
         // Binary grid (outros modos): usa autotile por vizinhos
-        const key = typeof t === 'string' ? t : _avtGetTileSemanticKey(x, y, dungeon);
+        const key = typeof t === 'string' ? _avtCellBase(t) : _avtGetTileSemanticKey(x, y, dungeon);
         const tileImg = key ? (AVT_STATE as any)._tilesetTextures[key] : null;
-        if (tileImg) { ctx.drawImage(tileImg, px, py, SZ, SZ); continue; }
+        if (tileImg) { _avtDrawTileXform(ctx, tileImg, px, py, SZ, _avtCellXform(t)); continue; }
+        if (t === AVT_T.SAIDA) { _avtDrawSaidaLegacy(ctx, px, py, SZ); continue; }
         if (t === null || t === undefined) continue; // void — fundo já foi preenchido
         ctx.fillStyle = _avtTilePassavel(x, y, dungeon) ? '#101520' : '#0a0c14';
         ctx.fillRect(px, py, SZ, SZ);
       } else if (t === AVT_T.SAIDA) {
-        ctx.fillStyle = '#101520';
-        ctx.fillRect(px, py, SZ, SZ);
-        // Pulsing exit indicator (static glow)
-        ctx.fillStyle = 'rgba(79,220,140,0.18)';
-        ctx.fillRect(px+2, py+2, SZ-4, SZ-4);
-        ctx.strokeStyle = 'rgba(79,220,140,0.6)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(px+2, py+2, SZ-4, SZ-4);
-        ctx.fillStyle = 'rgba(79,220,140,0.8)';
-        ctx.font = `${Math.round(SZ*0.55)}px serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🚪', px + SZ/2, py + SZ/2);
+        _avtDrawSaidaLegacy(ctx, px, py, SZ);
       } else if (t === AVT_T.PISO || (typeof t === 'string' && _avtTilePassavel(x, y, dungeon))) {
         ctx.fillStyle = '#101520';
         ctx.fillRect(px, py, SZ, SZ);
@@ -6882,13 +6815,13 @@ function _avtRenderFrame() {
     ctx.setLineDash([]);
     for (let gx = 0; gx <= dungeon.w; gx++) {
       const gpx = Math.round(gx * SZ - camera.x);
-      if (gpx < -1 || gpx > canvas.width + 1) continue;
-      ctx.beginPath(); ctx.moveTo(gpx, 0); ctx.lineTo(gpx, canvas.height); ctx.stroke();
+      if (gpx < -1 || gpx > _avtViewW() + 1) continue;
+      ctx.beginPath(); ctx.moveTo(gpx, 0); ctx.lineTo(gpx, _avtViewH()); ctx.stroke();
     }
     for (let gy = 0; gy <= dungeon.h; gy++) {
       const gpy = Math.round(gy * SZ - camera.y);
-      if (gpy < -1 || gpy > canvas.height + 1) continue;
-      ctx.beginPath(); ctx.moveTo(0, gpy); ctx.lineTo(canvas.width, gpy); ctx.stroke();
+      if (gpy < -1 || gpy > _avtViewH() + 1) continue;
+      ctx.beginPath(); ctx.moveTo(0, gpy); ctx.lineTo(_avtViewW(), gpy); ctx.stroke();
     }
   }
 
@@ -6899,7 +6832,7 @@ function _avtRenderFrame() {
       const { col, row } = _fase.porta;
       const fpx = Math.round(col * SZ - camera.x);
       const fpy = Math.round(row * SZ - camera.y);
-      if (fpx + SZ < 0 || fpx > canvas.width || fpy + SZ < 0 || fpy > canvas.height) continue;
+      if (fpx + SZ < 0 || fpx > _avtViewW() || fpy + SZ < 0 || fpy > _avtViewH()) continue;
       const _doorTex = AVT_STATE._tilesetLoaded ? (AVT_STATE as any)._tilesetTextures?.['porta_fase'] : null;
       if (_doorTex) {
         ctx.imageSmoothingEnabled = false;
@@ -6934,7 +6867,7 @@ function _avtRenderFrame() {
     for (const _ep of [_pi.a, _pi.b]) {
       const epx = Math.round(_ep.col * SZ - camera.x);
       const epy = Math.round(_ep.row * SZ - camera.y);
-      if (epx + SZ < 0 || epx > canvas.width || epy + SZ < 0 || epy > canvas.height) continue;
+      if (epx + SZ < 0 || epx > _avtViewW() || epy + SZ < 0 || epy > _avtViewH()) continue;
       ctx.fillStyle = 'rgba(123,47,190,0.18)';
       ctx.fillRect(epx + 2, epy + 2, SZ - 4, SZ - 4);
       ctx.strokeStyle = 'rgba(168,120,255,0.8)';
@@ -6962,7 +6895,7 @@ function _avtRenderFrame() {
   if (_pp && (AVT_STATE._faseAtualId || 'principal') === (_pp._faseOrigem || ((AVT_STATE as any)._faseAtualId || 'principal'))) {
     const ppx = Math.round(_pp.col * SZ - camera.x);
     const ppy = Math.round(_pp.row * SZ - camera.y);
-    if (!(ppx + SZ < 0 || ppx > canvas.width || ppy + SZ < 0 || ppy > canvas.height)) {
+    if (!(ppx + SZ < 0 || ppx > _avtViewW() || ppy + SZ < 0 || ppy > _avtViewH())) {
       const _pulse = 0.5 + 0.4 * Math.abs(Math.sin(Date.now() / 400));
       ctx.fillStyle = `rgba(79,220,140,${0.15 * _pulse + 0.1})`;
       ctx.fillRect(ppx + 2, ppy + 2, SZ - 4, SZ - 4);
@@ -7016,7 +6949,7 @@ function _avtRenderFrame() {
     ctx.save();
     tiles.forEach(({ x, y }: any) => {
       const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
-      if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
+      if (rpx + SZ < 0 || rpx > _avtViewW() || rpy + SZ < 0 || rpy > _avtViewH()) return;
       ctx.fillStyle = 'rgba(79,163,209,0.18)';
       ctx.fillRect(rpx, rpy, SZ, SZ);
       ctx.strokeStyle = 'rgba(79,163,209,0.45)';
@@ -7025,7 +6958,7 @@ function _avtRenderFrame() {
     });
     (tilesAlvo || []).forEach(({ x, y }: any) => {
       const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
-      if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
+      if (rpx + SZ < 0 || rpx > _avtViewW() || rpy + SZ < 0 || rpy > _avtViewH()) return;
       ctx.fillStyle = 'rgba(232,96,76,0.25)';
       ctx.fillRect(rpx, rpy, SZ, SZ);
       ctx.strokeStyle = 'rgba(232,96,76,0.7)';
@@ -7034,7 +6967,7 @@ function _avtRenderFrame() {
     });
     (tilesAlvoVermelho || []).forEach(({ x, y }: any) => {
       const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
-      if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
+      if (rpx + SZ < 0 || rpx > _avtViewW() || rpy + SZ < 0 || rpy > _avtViewH()) return;
       ctx.fillStyle = 'rgba(232,96,76,0.22)';
       ctx.fillRect(rpx, rpy, SZ, SZ);
       ctx.strokeStyle = 'rgba(232,180,76,0.8)';
@@ -7053,7 +6986,7 @@ function _avtRenderFrame() {
     }
     (tilesAlvoAmarelo || []).forEach(({ x, y }: any) => {
       const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
-      if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
+      if (rpx + SZ < 0 || rpx > _avtViewW() || rpy + SZ < 0 || rpy > _avtViewH()) return;
       ctx.fillStyle = 'rgba(200,168,75,0.22)';
       ctx.fillRect(rpx, rpy, SZ, SZ);
       ctx.strokeStyle = 'rgba(200,168,75,0.65)';
@@ -7157,10 +7090,15 @@ function _avtRenderFrame() {
     if (_isInvocado) ctx.globalAlpha = 0.85;
     const _t = performance.now();
     if (e._tremendo && _t > (e._tremendoUntil || 0)) { e._tremendo = false; }
+    // Em iso, manter sub-pixel: o Math.round em px de canvas vira degrau diagonal
+    // de ~1,8px na tela depois do scale+rotação CSS (escadinha/jitter).
+    const _iso = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo);
     const _shake = e._tremendo ? Math.round(Math.sin(_t * 0.09) * 4) : 0;
-    const px = Math.round(e.renderX * SZ - camera.x) + _shake;
-    const py = Math.round(e.renderY * SZ - camera.y) + (e._tremendo ? Math.round(Math.cos(_t * 0.13) * 3) : 0);
-    if (px+SZ<0 || px>canvas.width || py+SZ<0 || py>canvas.height) { if (_isAvatar || _isInvocado) ctx.globalAlpha = 1; return; }
+    const _pxRaw = e.renderX * SZ - camera.x;
+    const _pyRaw = e.renderY * SZ - camera.y;
+    const px = (_iso ? _pxRaw : Math.round(_pxRaw)) + _shake;
+    const py = (_iso ? _pyRaw : Math.round(_pyRaw)) + (e._tremendo ? Math.round(Math.cos(_t * 0.13) * 3) : 0);
+    if (px+SZ<0 || px>_avtViewW() || py+SZ<0 || py>_avtViewH()) { if (_isAvatar || _isInvocado) ctx.globalAlpha = 1; return; }
 
     const isBoss = e.isBoss === true;
     const rBase = Math.floor(SZ * 0.36);
@@ -7171,7 +7109,6 @@ function _avtRenderFrame() {
     // para o centro do losango sob a transformação CSS); assim o personagem "pousa" no tile
     // em vez de preencher a célula — cujo fundo, ao ser inclinado, cairia num canto do
     // losango ("pés num canto"). No top-down, mantém o comportamento anterior (sob o token).
-    const _iso = !!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo);
     const _footX = cx;
     const _footY = _iso ? cy : (cy + r + 2);
 
@@ -7342,7 +7279,7 @@ function _avtRenderFrame() {
     // Barra de mana abaixo da HP bar (apenas jogadores)
     let _lastBarBottomY = barY + barH;
     if (e.tipo === 'jogador') {
-      const _dbCM = AVT_STATE.chars.find((c: any) => c.id === e.dbId || c.nome === e.nome);
+      const _dbCM = _avtCharDeEnt(e);
       const _rsvsM = _dbCM ? _avtRecursosDoChar(_dbCM) : [];
       const _rsvM = _rsvsM[0];
       let _manaPct = 0;
@@ -7367,7 +7304,7 @@ function _avtRenderFrame() {
     }
 
     // Equipped weapon icon overlay (bottom-right corner)
-    const dbCharForEquip = AVT_STATE.chars.find((c: any)=>c.id===e.dbId||c.nome===e.nome);
+    const dbCharForEquip = _avtCharDeEnt(e);
     const equippedWeapon = dbCharForEquip?.custom_attrs?.equipamento?.arma_principal;
     if (equippedWeapon && typeof equippedWeapon === 'object' && equippedWeapon.img_url) {
       const iconSz = Math.round(SZ * 0.38);
@@ -7431,12 +7368,21 @@ function _avtRenderFrame() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const _maxNomeW = SZ * 1.6;
-    let _nomeLabel = e.nome;
-    if (ctx.measureText(_nomeLabel).width > _maxNomeW) {
-      while (_nomeLabel.length > 1 && ctx.measureText(_nomeLabel + '…').width > _maxNomeW) {
-        _nomeLabel = _nomeLabel.slice(0, -1);
+    // Truncamento cacheado por entidade (measureText por frame custa em mobile);
+    // invalida quando nome/tamanho/fonte mudam.
+    let _nomeLabel;
+    const _lblKey = e.nome + '|' + SZ + '|' + (_polirLabel ? 1 : 0);
+    if (e._lblCache && e._lblCache.k === _lblKey) {
+      _nomeLabel = e._lblCache.out;
+    } else {
+      _nomeLabel = e.nome;
+      if (ctx.measureText(_nomeLabel).width > _maxNomeW) {
+        while (_nomeLabel.length > 1 && ctx.measureText(_nomeLabel + '…').width > _maxNomeW) {
+          _nomeLabel = _nomeLabel.slice(0, -1);
+        }
+        _nomeLabel += '…';
       }
-      _nomeLabel += '…';
+      e._lblCache = { k: _lblKey, out: _nomeLabel };
     }
     if (_polirLabel) {
       ctx.lineWidth = Math.max(2, Math.round(SZ * 0.06));
@@ -7575,7 +7521,7 @@ function _avtRenderFrame() {
       const _oy = Math.round((o.y ?? 0) * dungeon.h);
       const px = Math.round(_ox * SZ - camera.x);
       const py = Math.round(_oy * SZ - camera.y);
-      if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
+      if (px + SZ < 0 || px > _avtViewW() || py + SZ < 0 || py > _avtViewH()) continue;
       const ocx = px + SZ / 2, ocy = py + SZ / 2;
       const tipo = o.tipo;
       if (tipo === 'bau' || tipo === 'chest') {
@@ -7697,9 +7643,11 @@ function _avtRenderMinimap() {
   if (!dungeon || !dungeon.tiles) { mm.style!.display = 'none'; return; }
   mm.style!.display = 'block';
 
-  // Throttle: pontos do minimapa a 10 Hz são suficientes (e o mapa é estático)
+  // Throttle: pontos do minimapa a 10 Hz são suficientes (e o mapa é estático);
+  // em touch, 3 Hz — cada redraw é clear + blit + glow por entidade.
   const _mmNow = performance.now();
-  if (AVT_STATE._mmLastDraw && _mmNow - (AVT_STATE as any)._mmLastDraw < 100) return;
+  const _mmMinMs = (typeof _avtIsTouchDevice === 'function' && _avtIsTouchDevice()) ? 333 : 100;
+  if (AVT_STATE._mmLastDraw && _mmNow - (AVT_STATE as any)._mmLastDraw < _mmMinMs) return;
   (AVT_STATE as any)._mmLastDraw = _mmNow;
 
   const W = dungeon.w, H = dungeon.h;
@@ -7782,8 +7730,8 @@ function _avtRenderEffectCountersOverlay() {
   const vivos = new Set();
 
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  const canvasW = AVT_STATE.canvas.width;
-  const canvasH = AVT_STATE.canvas.height;
+  const canvasW = _avtViewW();
+  const canvasH = _avtViewH();
 
   (AVT_STATE.entidades || []).forEach((ent: any) => {
     const efeitos = _avtEfetosAtivosEnt(ent);
@@ -8036,7 +7984,9 @@ function _avtAnimAtualizar(ent: any) {
   const now = performance.now();
   if (ent.x !== a.lastX || ent.y !== a.lastY) {
     const dx = ent.x - a.lastX, dy = ent.y - a.lastY;
-    if (dx !== 0) a.facing = dx > 0 ? 1 : -1;
+    // Facing pelo X DA TELA: em iso, o eixo horizontal visível é (dx - dy).
+    const fx = (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo) ? (dx - dy) : dx;
+    if (fx !== 0) a.facing = fx > 0 ? 1 : -1;
     // Vetor de direção (top-down precisa de dx e dy para rotacionar)
     if (dx !== 0 || dy !== 0) a.dir = { dx, dy };
     a.lastX = ent.x; a.lastY = ent.y;
@@ -8209,13 +8159,24 @@ function _avtDesenharIsoIa(ctx: any, ent: any, footX: any, footY: any, SZ: any, 
   // fatiamento, o translate(footX,footY), o espelhamento de facing e o estilo
   // selecionado. Fallback: desenho estático caso o módulo não esteja carregado.
   if (typeof avtWalkRender === 'function') {
+    // Andando, o relógio dos presets é o relógio de DISTÂNCIA da entidade (para
+    // junto com ela e escala com a velocidade real), com semente por id para
+    // dessincronizar o quique entre entidades. Parado, relógio de parede.
+    if (ent._walkSeed == null) {
+      let _h = 0; const _sid = String(ent.id || '');
+      for (let i = 0; i < _sid.length; i++) _h = (_h * 31 + _sid.charCodeAt(i)) | 0;
+      ent._walkSeed = Math.abs(_h) % 997;
+    }
+    const clock = (st === 'walk' && ent._walkClockMs != null)
+      ? ent._walkClockMs + ent._walkSeed : now;
     avtWalkRender(ctx, img, {
-      footX, footY, SZ, now,
+      footX, footY, SZ, now: clock,
       state: st, tState,
       facing: facingEfetivo,
       presetId: data.walkPreset || 'quique',
       params: data.walkParams || null,
       pernas: pernasGlobal && (data.pernas !== false),
+      fatias: (typeof AVT_GRAFICOS === 'undefined') || AVT_GRAFICOS.fatias !== false,
     });
   } else {
     const H = SZ * 1.12, W = H * (img.naturalWidth / img.naturalHeight);
@@ -8270,10 +8231,28 @@ function _avtDesenharAparencia(ctx: any, ent: any, cx: any, cy: any, SZ: any, ap
 // MOVIMENTO FLUIDO — velocidade por destreza
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Índice de personagens por id e nome, reconstruído quando a lista muda de
+// referência ou tamanho — evita AVT_STATE.chars.find() por entidade por frame
+// nos caminhos quentes do render loop (velocidade, barra de mana, arma equipada).
+function _avtCharDeEnt(ent: any) {
+  const chars = AVT_STATE.chars || [];
+  let ix = (AVT_STATE as any)._charIdx;
+  if (!ix || ix.ref !== chars || ix.n !== chars.length) {
+    const porId = new Map(); const porNome = new Map();
+    for (const c of chars) {
+      if (c.id != null) porId.set(String(c.id), c);
+      if (c.nome && !porNome.has(c.nome)) porNome.set(c.nome, c);
+    }
+    ix = (AVT_STATE as any)._charIdx = { ref: chars, n: chars.length, porId, porNome };
+  }
+  return (ent.dbId != null && ix.porId.get(String(ent.dbId)))
+    || (ent.nome && ix.porNome.get(ent.nome)) || null;
+}
+
 function _avtGetVelocidadeMovimento(ent: any) {
   const ms  = _avtGetVelocidadeCorridaMs();
   const pct = _avtGetDestrezaVelPct();
-  const dbChar = AVT_STATE.chars.find((c: any) => c.id === ent.dbId || c.nome === ent.nome);
+  const dbChar = _avtCharDeEnt(ent);
   const dex  = dbChar?.custom_attrs?.atributos?.destreza ?? ent.atributos?.destreza ?? 10;
   let mult = Math.max(0.2, 1 + ((dex - 10) * pct) / 100);
   if (ent?._dominado) mult *= 1.3;
@@ -9665,18 +9644,12 @@ function _avtCanvasKey(e: any) {
   }
 
   // ── WASD: mover personagem ────────────────────────────────────────────────
-  // Em isométrico com "controle iso (teclado)", usa W/E/S/D em diamante: a posição
-  // física da tecla casa com a direção na tela (cada tecla = um eixo cardeal da grade,
-  // que aparece como diagonal). W=cima-esq(Oeste), E=cima-dir(Norte), S=baixo-esq(Sul),
-  // D=baixo-dir(Leste).
-  let wasd: any;
-  if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo && AVT_GRAFICOS?.isoTeclado) {
-    wasd = { w:[-1,0], e:[0,-1], s:[0,1], d:[1,0] };
-  } else {
-    wasd = { a:[-1,0], d:[1,0], w:[0,-1], s:[0,1] };
-  }
-  const dir = wasd[_key];
-  if (!dir) return;
+  // WASD sempre em direções de TELA (W=cima, A=esquerda, S=baixo, D=direita);
+  // _avtRemapDirTelaParaGrade converte para a grade quando o isométrico está ativo.
+  const wasd: any = { a:[-1,0], d:[1,0], w:[0,-1], s:[0,1] };
+  const dirTela = wasd[_key];
+  if (!dirTela) return;
+  const dir = _avtRemapDirTelaParaGrade(dirTela[0], dirTela[1]);
   const _myBatKey = _avtMinhaBatalha();
   if (_myBatKey) {
     // Em combate: só mover se for o turno da entidade que controlo
@@ -9777,8 +9750,24 @@ function _avtNumpadDispararSkill(num: any) {
 }
 window._avtNumpadDispararSkill = _avtNumpadDispararSkill;
 
+// Remapeamento central de direção TELA → GRADE. Toda entrada direcional (D-pads,
+// joystick, WASD) emite a direção como ela aparece NA TELA; quando o isométrico
+// está ativo (rotateZ 45° do wrapper), converte para o eixo da grade equivalente.
+// Tabela derivada de _avtIsoDeltaToCanvas: cardeais de tela viram diagonais de
+// grade e vice-versa. Identidade fora do iso.
+const _AVT_ISO_DIR_MAP: Record<string, [number, number]> = {
+  '1,0': [1,-1], '1,1': [1,0], '0,1': [1,1], '-1,1': [0,1],
+  '-1,0': [-1,1], '-1,-1': [-1,0], '0,-1': [-1,-1], '1,-1': [0,-1],
+};
+function _avtRemapDirTelaParaGrade(dx: any, dy: any): [number, number] {
+  if (!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo)) return [dx, dy];
+  return _AVT_ISO_DIR_MAP[dx + ',' + dy] || [dx, dy];
+}
+window._avtRemapDirTelaParaGrade = _avtRemapDirTelaParaGrade;
+
 // Entrada do D-pad do controle mobile para o modo aventura
-function _avtDpadControle(dc: any, dr: any) {
+function _avtDpadControle(dcTela: any, drTela: any) {
+  const [dc, dr] = _avtRemapDirTelaParaGrade(dcTela, drTela);
   const bat     = _avtMinhaBatalha();
   const jogador = _avtEntidadeControlada();
   if (!jogador) return;
@@ -10574,15 +10563,15 @@ function _avtEnquadrarAlvosCamera(alvos: any, jogador: any) {
   minX -= margin; minY -= margin; maxX += margin; maxY += margin;
   const rangeX = maxX - minX, rangeY = maxY - minY;
   const newZoom = Math.min(
-    canvas.width  / (rangeX * AVT_SZ),
-    canvas.height / (rangeY * AVT_SZ),
+    _avtViewW()  / (rangeX * AVT_SZ),
+    _avtViewH() / (rangeY * AVT_SZ),
     AVT_STATE.camera.zoom * 1.2
   );
   const clampedZoom = Math.max(0.4, Math.min(newZoom, 3.0));
   const SZn = Math.round(AVT_SZ * clampedZoom);
   AVT_STATE.camera.zoom = clampedZoom;
-  AVT_STATE.camera.x = Math.round(((minX + maxX) / 2) * SZn - canvas.width  / 2);
-  AVT_STATE.camera.y = Math.round(((minY + maxY) / 2) * SZn - canvas.height / 2);
+  AVT_STATE.camera.x = Math.round(((minX + maxX) / 2) * SZn - _avtViewW()  / 2);
+  AVT_STATE.camera.y = Math.round(((minY + maxY) / 2) * SZn - _avtViewH() / 2);
 }
 
 // Exibe o seletor de skills do primeiro ataque (sem alvo pré-selecionado)
@@ -12802,7 +12791,10 @@ function avtDpadStop() {
   _avtDpadTimer = null;
 }
 
-function _avtDpadDoMove(dx: any, dy: any) {
+function _avtDpadDoMove(dxTela: any, dyTela: any) {
+  // Entrada em direção de TELA (D-pad do index.html e joystick analógico);
+  // o remap central converte para a grade quando o isométrico está ativo.
+  const [dx, dy] = _avtRemapDirTelaParaGrade(dxTela, dyTela);
   const _jog = _avtMeuJogador();
   if (_jog && (_jog._waypoints?.length > 0 || (AVT_STATE as any)._caminhoDestino?.length > 0)) {
     (AVT_STATE as any)._caminhoDestino = null;
@@ -13527,7 +13519,7 @@ function _avtGetCharScreenPos(charNome: any) {
   const canvasX = Math.round(ent.x * SZ - AVT_STATE.camera.x + SZ / 2);
   const canvasY = Math.round(ent.y * SZ - AVT_STATE.camera.y + SZ / 2);
   // Verificar se está dentro dos limites visíveis do canvas
-  if (canvasX < 0 || canvasX > canvas.width || canvasY < 0 || canvasY > canvas.height) return null;
+  if (canvasX < 0 || canvasX > _avtViewW() || canvasY < 0 || canvasY > _avtViewH()) return null;
   const rect = canvas.getBoundingClientRect();
   return { x: rect.left + canvasX, y: rect.top + canvasY };
 }
@@ -14447,7 +14439,14 @@ function _avtHudMostrar(show: any) {
 function _avtSkillOverlayGetAlvoScreenPos(alvo: any) {
   const canvas = AVT_STATE.canvas;
   if (!canvas || !alvo) return null;
-  const rect = canvas.getBoundingClientRect();
+  // getBoundingClientRect força layout numa camada 3D — cacheia por ~100ms
+  // (chamado por frame pelo posicionador do botão de rolar).
+  const _rcNow = performance.now();
+  let _rc = (AVT_STATE as any)._canvasRectCache;
+  if (!_rc || _rcNow - _rc.t > 100 || _rc.el !== canvas) {
+    _rc = (AVT_STATE as any)._canvasRectCache = { t: _rcNow, el: canvas, rect: canvas.getBoundingClientRect() };
+  }
+  const rect = _rc.rect;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const rx = alvo.renderX ?? alvo.x;
   const ry = alvo.renderY ?? alvo.y;
@@ -17558,8 +17557,13 @@ function _avtRecursosDoChar(char: any) {
   const atrs = char.custom_attrs?.atributos || {};
   const recursos: any = [];
   ((AVT_STATE as any).attrDefs || []).forEach((def: any) => {
-    let cfg: any = {};
-    try { cfg = typeof def.opcoes === 'string' ? JSON.parse(def.opcoes) : (def.opcoes || {}); } catch(e) {}
+    // Parse 1x por def (era JSON.parse por def, por jogador, POR FRAME via a
+    // barra de mana do render loop). attrDefs recarrega objetos novos ao editar.
+    let cfg: any = def._opcParsed;
+    if (cfg === undefined) {
+      try { cfg = typeof def.opcoes === 'string' ? JSON.parse(def.opcoes) : (def.opcoes || {}); } catch(e) { cfg = {}; }
+      def._opcParsed = cfg;
+    }
     if (cfg.e_recurso && (cfg as any).max_attr) {
       const atual = parseFloat(atrs[def.nome] ?? 0);
       const max   = parseFloat(atrs[(cfg as any).max_attr] ?? 0);
@@ -21035,7 +21039,9 @@ function _avtVfxHost() {
   try {
     const overlayCanvas = document.createElement('canvas');
     overlayCanvas.id = 'avt-vfx-host';
-    overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+    // Dimensões LÓGICAS em px CSS (o backing do canvas principal pode estar
+    // reduzido em iso+touch; PIXI aplica a própria resolution sobre o lógico).
+    overlayCanvas.width = _avtViewW(); overlayCanvas.height = _avtViewH();
     overlayCanvas.style!.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
     canvas.parentElement.style.position = 'relative';
     canvas.parentElement.appendChild(overlayCanvas);
@@ -21044,20 +21050,21 @@ function _avtVfxHost() {
       antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
       resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1),
       autoDensity: true,
-      width: canvas.width, height: canvas.height, powerPreference: 'high-performance',
+      width: _avtViewW(), height: _avtViewH(), powerPreference: 'high-performance',
     });
     h = _avtVfxHostState = { app, canvasRef: canvas, overlayCanvas, active: new Set() };
     // Tamanho CSS pretendido do overlay. Comparar overlayCanvas.width (backing
-    // store = CSS × resolution) com c.width falha sempre que resolution ≠ 1 (iso
-    // usa ~0.55) e disparava renderer.resize() a cada tick.
-    h._syncW = canvas.width; h._syncH = canvas.height;
+    // store = CSS × resolution) com o viewport falha sempre que resolution ≠ 1
+    // (iso usa ~0.55) e disparava renderer.resize() a cada tick.
+    h._syncW = _avtViewW(); h._syncH = _avtViewH();
     // Sincroniza tamanho/posição com o canvas do mapa (barato; roda só com efeitos ativos)
     h._syncFn = () => {
       const c = h.canvasRef;
       if (!c || !c.isConnected) return;
-      if (h._syncW !== c.width || h._syncH !== c.height) {
-        h._syncW = c.width; h._syncH = c.height;
-        try { h.app.renderer.resize(c.width, c.height); } catch(_) {}
+      const vw = _avtViewW(), vh = _avtViewH();
+      if (h._syncW !== vw || h._syncH !== vh) {
+        h._syncW = vw; h._syncH = vh;
+        try { h.app.renderer.resize(vw, vh); } catch(_) {}
       }
       const l = c.offsetLeft + 'px', t = c.offsetTop + 'px';
       if (h.overlayCanvas.style.left !== l) h.overlayCanvas.style.left = l;
@@ -21254,7 +21261,7 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
 
     if (!_usaHost) {
       overlayCanvas = document.createElement('canvas');
-      overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+      overlayCanvas.width = _avtViewW(); overlayCanvas.height = _avtViewH();
       overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
       canvas.parentElement.style.position = 'relative';
       canvas.parentElement.appendChild(overlayCanvas);
@@ -21273,7 +21280,7 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
         app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0,
           antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
           resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
-          width: canvas.width, height: canvas.height, powerPreference:'high-performance' });
+          width: _avtViewW(), height: _avtViewH(), powerPreference:'high-performance' });
       }
 
       // ── Stage tree ────────────────────────────────────────────────────────
@@ -21730,14 +21737,14 @@ function _avtPlayTravelBody(travelCfg: any, atacScr: any, alvoScr: any, cor: any
       if (!_usaHost) {
         overlayCanvas = document.createElement('canvas');
         overlayCanvas.id = 'avt-pixi-body-overlay-' + Math.random().toString(36).slice(2,8);
-        overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+        overlayCanvas.width = _avtViewW(); overlayCanvas.height = _avtViewH();
         overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:99`;
         canvas.parentElement.style.position = 'relative';
         canvas.parentElement.appendChild(overlayCanvas);
         app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha:0,
           antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
           resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
-          width: canvas.width, height: canvas.height });
+          width: _avtViewW(), height: _avtViewH() });
       }
       const _destroyApp = () => {
         if (_usaHost) { try { app.destroy(); } catch(_) {} }
@@ -21883,8 +21890,8 @@ function _avtPixiSpineAnim(spineConfig: any, screenX: any, screenY: any) {
 
     const overlayCanvas = document.createElement('canvas');
     overlayCanvas.id = 'avt-pixi-spine-overlay';
-    overlayCanvas.width = canvas.width;
-    overlayCanvas.height = canvas.height;
+    overlayCanvas.width = _avtViewW();
+    overlayCanvas.height = _avtViewH();
     overlayCanvas.style!.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:101`;
     canvas.parentElement.style.position = 'relative';
     canvas.parentElement.appendChild(overlayCanvas);
@@ -21894,7 +21901,7 @@ function _avtPixiSpineAnim(spineConfig: any, screenX: any, screenY: any) {
     try {
       app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0,
         resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
-        width: canvas.width, height: canvas.height });
+        width: _avtViewW(), height: _avtViewH() });
       PIXI.Assets.load([spineConfig.skeleton, spineConfig.atlas].filter(Boolean)).then((resources: any) => {
         try {
           const SpineClass = PIXI.spine && PIXI.spine.Spine;
@@ -23086,428 +23093,12 @@ function _avtMpConteudoAba() {
 // tileset (string semântica) · Porta (interna/fase, com destino) · Apagar.
 // Aprende as edições e re-renderiza ao vivo + broadcast ao salvar.
 // ════════════════════════════════════════════════════════════════════════════
-const _AVT_ED_SZ = 14;
-
+// Editor de mapa do mestre: delega ao editor de fases novo (fase-editor.ts).
+// O nome antigo é mantido porque há onclick inline no painel do mestre.
 function _avtMestreAbrirEditorUnificado() {
-  const dungeon = AVT_STATE.dungeon;
-  if (!dungeon) { mostrarToast('Nenhum mapa carregado', 'aviso'); return; }
-
-  let overlay = document.getElementById('avt-mestre-map-editor-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'avt-mestre-map-editor-overlay';
-    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px;overflow:auto';
-    document.body.appendChild(overlay);
-  }
-  overlay.style!.display = 'flex';
-
-  const EDSZ = _AVT_ED_SZ;
-  const W = dungeon.w, H = dungeon.h;
-
-  // Estado de edição
-  _avtEd.tiles         = dungeon.tiles.map((r: any) => [...r]);
-  (_avtEd as any).tilesBaseline = dungeon.tiles.map((r: any) => [...r]);   // p/ o diff de aprendizado
-  _avtEd.w = W; _avtEd.h = H;
-  (_avtEd as any).tool = 'wall';
-  (_avtEd as any).tsBrush = null;
-  (_avtEd as any).pendingDoorAnchor = null;
-  (_avtEd as any).portasInternas = (dungeon._portasInternas || []).map((p: any) => JSON.parse(JSON.stringify(p)));
-  (_avtEd as any).fasesExtras    = (AVT_STATE.rpg?.theme_json?.fases_extras || []).map((f: any) => JSON.parse(JSON.stringify(f)));
-
   // Migração: tileset_paints é morto (nunca renderizado) — limpa no próximo save.
   if (AVT_STATE.rpg?.theme_json?.tileset_paints) delete AVT_STATE.rpg.theme_json.tileset_paints;
-
-  const tilesetUrl = AVT_STATE.rpg?.theme_json?.tileset_img_url || dungeon.tileset_img_url || null;
-  const tsCfg = (AVT_STATE as any)._tilesetConfig || dungeon.tileset_config || null;
-  const TS_COLS = tsCfg?.cols || 4, TS_ROWS = tsCfg?.rows || 4;
-  const dentroFaseExtra = (AVT_STATE._faseAtualId && (AVT_STATE as any)._faseAtualId !== 'principal');
-
-  const toolBtn = (id: any, label: any) => `<button id="avt-ed-tool-${id}" class="avt-mp-btn avt-ed-tool ${(_avtEd as any).tool===id?'avt-mp-btn-ativo':''}" onclick="_avtEdSetTool('${id}')">${label}</button>`;
-
-  overlay.innerHTML = `
-    <div style="width:100%;max-width:1100px">
-      <div class="avt-ed-toolbar">
-        <div class="avt-ed-group">
-          ${toolBtn('floor','🟫 Piso')}${toolBtn('wall','🔲 Parede')}
-        </div>
-        <div class="avt-ed-group">${toolBtn('door','🚪 Porta')}</div>
-        <div class="avt-ed-group">${toolBtn('erase','🧽 Apagar')}</div>
-        <span class="avt-ed-spacer"></span>
-        ${tilesetUrl ? `<button class="avt-mp-btn" onclick="_avtEdDistribuirTileset()">✦ Distribuir automaticamente</button>` : ''}
-        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtMestreSalvarMapaUnificado()">💾 Salvar</button>
-        <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
-      </div>
-      <div id="avt-ed-status" style="font-size:0.66rem;color:#7a92aa;margin-bottom:8px">Ferramenta: Parede · clique/arraste para pintar.</div>
-      ${dentroFaseExtra ? `<div style="font-size:0.64rem;color:#f0cc6a;margin-bottom:8px">⚠ Você está numa fase extra. Portas de fase só funcionam editando a partir da fase inicial.</div>` : ''}
-      <div style="display:flex;gap:12px;flex-wrap:wrap">
-        ${tilesetUrl ? `
-        <div style="flex:0 0 auto">
-          <div style="font-size:0.62rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Tileset — clique p/ a peça exata</div>
-          <div id="avt-ts-picker" style="border:1px solid rgba(79,163,209,0.2);border-radius:6px;overflow:hidden;cursor:crosshair;position:relative">
-            <img id="avt-ts-img" src="${tilesetUrl}" style="display:block;image-rendering:pixelated;max-width:256px">
-            <canvas id="avt-ts-overlay" style="position:absolute;top:0;left:0;pointer-events:none"></canvas>
-          </div>
-          <div id="avt-ts-brush-info" style="font-size:0.6rem;color:#4fa3d1;margin-top:4px">Nenhuma peça selecionada</div>
-        </div>` : `
-        <div style="flex:0 0 auto;max-width:200px;font-size:0.64rem;color:#7a92aa;line-height:1.5">
-          Este dungeon não tem tileset. Pinte com Piso/Parede ou
-          <button onclick="_avtMestreToggleTrocaTileset()" style="background:none;border:none;color:#4fa3d1;cursor:pointer;text-decoration:underline;padding:0;font-size:0.64rem">carregue um tileset</button>.
-          <div id="avt-ts-troca-painel" style="display:none;margin-top:8px">
-            <div style="display:flex;gap:6px;margin-bottom:6px">
-              <input id="avt-mp-ts-cols" type="number" value="4" min="4" max="10" style="width:48px;padding:4px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8">
-              <input id="avt-mp-ts-rows" type="number" value="4" min="4" max="10" style="width:48px;padding:4px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8">
-            </div>
-            <label style="display:inline-block;padding:5px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:5px;color:#4fa3d1;font-size:0.62rem;cursor:pointer">📁 Imagem<input type="file" accept="image/*" style="display:none" onchange="_avtMestreHandleTilesetUpload(this)"></label>
-            <span id="avt-mp-ts-nome" style="font-size:0.6rem;color:#7a92aa"></span>
-            <img id="avt-mp-ts-preview" style="display:none;max-width:100%;max-height:100px;margin-top:6px;border:1px solid rgba(79,163,209,0.2);border-radius:4px;image-rendering:pixelated">
-            <button onclick="_avtMestreAplicarTilesetUpload()" style="display:block;margin-top:6px;padding:6px 10px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.3);border-radius:5px;color:#27ae60;font-size:0.64rem;cursor:pointer">✓ Aplicar</button>
-          </div>
-        </div>`}
-        <div style="flex:1;min-width:260px">
-          <div style="overflow:auto;max-height:66vh;border:1px solid rgba(255,255,255,0.1);border-radius:8px">
-            <canvas id="avt-ed-canvas-mestre" style="display:block;image-rendering:pixelated"></canvas>
-          </div>
-          <div style="margin-top:6px;font-size:0.62rem;color:#7a92aa">Piso/Parede criam ou removem colisão · peça do tileset fixa o desenho exato · a aparência atualiza ao salvar.</div>
-        </div>
-      </div>
-    </div>`;
-
-  const canvas = document.getElementById('avt-ed-canvas-mestre');
-  if (!canvas) return;
-  canvas.width = W * EDSZ; canvas.height = H * EDSZ;
-  canvas.style!.width = (W * EDSZ) + 'px'; canvas.style!.height = (H * EDSZ) + 'px';
-
-  // Render WYSIWYG (espelha o render loop ao vivo: tileset + autotiler)
-  (_avtEd as any)._render = function() {
-    const ctx = canvas.getContext!('2d');
-    const view = { w: W, h: H, tiles: _avtEd.tiles, _chestPositions: dungeon._chestPositions };
-    ctx.imageSmoothingEnabled = false;
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const t = _avtEd.tiles[y]?.[x];
-        const px = x * EDSZ, py = y * EDSZ;
-        let drawn = false;
-        if (AVT_STATE._tilesetLoaded && (AVT_STATE as any)._tilesetTextures) {
-          const key = typeof t === 'string' ? t : _avtGetTileSemanticKey(x, y, view);
-          const img = key ? (AVT_STATE as any)._tilesetTextures[key] : null;
-          if (img) { ctx.drawImage(img, px, py, EDSZ, EDSZ); drawn = true; }
-        }
-        if (!drawn) {
-          ctx.fillStyle = (t === AVT_T.SAIDA) ? '#1a3a1a' : _avtChaveEhParede(t) ? '#0a0c14' : '#101520';
-          ctx.fillRect(px, py, EDSZ, EDSZ);
-          ctx.strokeStyle = '#1b2536'; ctx.lineWidth = 0.5;
-          ctx.strokeRect(px + 0.5, py + 0.5, EDSZ - 1, EDSZ - 1);
-        }
-      }
-    }
-    ctx.font = `${Math.round(EDSZ * 0.8)}px serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ((_avtEd as any).portasInternas || []).forEach((p: any) => [p.a, p.b].forEach(ep => {
-      if (!ep) return;
-      ctx.fillStyle = 'rgba(168,120,255,0.95)';
-      ctx.fillText('🌀', ep.col * EDSZ + EDSZ / 2, ep.row * EDSZ + EDSZ / 2);
-    }));
-    ((_avtEd as any).fasesExtras || []).forEach((f: any) => {
-      const pr = f.porta; if (!pr) return;
-      ctx.fillStyle = 'rgba(200,168,75,0.95)';
-      ctx.fillText('🚪', pr.col * EDSZ + EDSZ / 2, pr.row * EDSZ + EDSZ / 2);
-    });
-    if ((_avtEd as any).pendingDoorAnchor) {
-      const a = (_avtEd as any).pendingDoorAnchor;
-      ctx.strokeStyle = '#a878ff'; ctx.lineWidth = 2;
-      ctx.strokeRect(a.col * EDSZ + 1, a.row * EDSZ + 1, EDSZ - 2, EDSZ - 2);
-    }
-    AVT_STATE.entidades.forEach((ent: any) => {
-      if (ent.x < 0 || ent.x >= W || ent.y < 0 || ent.y >= H) return;
-      ctx.fillStyle = ent.cor || (ent.tipo === 'jogador' ? '#4fa3d1' : '#e74c3c');
-      ctx.beginPath();
-      ctx.arc(ent.x * EDSZ + EDSZ / 2, ent.y * EDSZ + EDSZ / 2, EDSZ / 2 - 1, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  };
-  (_avtEd as any)._render();
-
-  // Garante que as texturas do tileset estejam em memória; sem isso o canvas
-  // mostraria apenas cores sólidas (dá a impressão de que o tileset "sumiu").
-  if (tilesetUrl && tsCfg && !(AVT_STATE as any)._tilesetLoaded && typeof _avtCarregarTileset === 'function') {
-    _avtCarregarTileset(tilesetUrl, tsCfg).then(() => (_avtEd as any)._render?.()).catch(() => {});
-  }
-
-  const coords = (e: any) => {
-    const rect = canvas.getBoundingClientRect();
-    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    return { tx: Math.floor(cx / rect.width * W), ty: Math.floor(cy / rect.height * H) };
-  };
-  let painting = false;
-  // Ferramentas de "clique único" (abrem modal/criam par) não devem repetir no arraste.
-  const isClickTool = () => (_avtEd as any).tool === 'door' ||
-    (_avtEd.tool === 'tileset' && (_avtEd as any).tsBrush?.fn === 'door');
-  const onDown = (e: any) => {
-    e.preventDefault();
-    const { tx, ty } = coords(e);
-    _avtEdAplicarTool(tx, ty);
-    painting = !isClickTool();
-  };
-  const onMove = (e: any) => { if (!painting) return; e.preventDefault(); const { tx, ty } = coords(e); _avtEdAplicarTool(tx, ty); };
-  canvas.addEventListener('mousedown', onDown);
-  canvas.addEventListener('mousemove', onMove);
-  canvas.addEventListener('mouseup', () => { painting = false; });
-  canvas.addEventListener('touchstart', onDown);
-  canvas.addEventListener('touchmove', onMove);
-  canvas.addEventListener('touchend', () => { painting = false; });
-
-  // Picker de blocos do tileset
-  const tsImg = document.getElementById('avt-ts-img');
-  const tsOverlay = document.getElementById('avt-ts-overlay');
-  if (tsImg && tsOverlay) {
-    const picker = document.getElementById('avt-ts-picker');
-    picker!.addEventListener('click', e => {
-      const rect = tsImg.getBoundingClientRect();
-      const cellW = rect.width / TS_COLS, cellH = rect.height / TS_ROWS;
-      const tc = Math.floor((e.clientX - rect.left) / cellW);
-      const tr = Math.floor((e.clientY - rect.top) / cellH);
-      const key = _avtBlocoChavePorCelula(tc, tr);
-      const fn = _avtBlocoFuncao(key);
-      (_avtEd as any).tsBrush = { tc, tr, key, fn };
-      (_avtEd as any).tool = 'tileset';
-      _avtEdAtualizarBotoes();
-      const fnLabel = fn === 'wall' ? 'Parede' : fn === 'door' ? 'Porta' : 'Piso';
-      const info = document.getElementById('avt-ts-brush-info');
-      if (info) info.textContent = key ? `Peça: ${key} (${fnLabel})` : `Bloco (${tc},${tr}) — ${fnLabel}`;
-      _avtEdStatus(`Peça do tileset: ${key || (tc + ',' + tr)} → ${fnLabel}`);
-      const oc = tsOverlay.getContext!('2d');
-      tsOverlay.style!.width = rect.width + 'px'; tsOverlay.style!.height = rect.height + 'px';
-      tsOverlay.width = rect.width; tsOverlay.height = rect.height;
-      oc.clearRect(0, 0, tsOverlay.width, tsOverlay.height);
-      oc.strokeStyle = '#4fa3d1'; oc.lineWidth = 2;
-      oc.strokeRect(tc * cellW + 1, tr * cellH + 1, cellW - 2, cellH - 2);
-    });
-  }
-}
-
-function _avtEdStatus(msg: any) {
-  const el = document.getElementById('avt-ed-status');
-  if (el) el.textContent = msg;
-}
-
-function _avtEdAtualizarBotoes() {
-  document.querySelectorAll('#avt-mestre-map-editor-overlay .avt-ed-tool')
-    .forEach(b => b.classList.remove('avt-mp-btn-ativo'));
-  const btn = document.getElementById('avt-ed-tool-' + (_avtEd as any).tool);
-  if (btn) btn.classList.add('avt-mp-btn-ativo');
-}
-
-function _avtEdSetTool(tool: any) {
-  (_avtEd as any).tool = tool;
-  if (tool !== 'tileset') (_avtEd as any).tsBrush = null;
-  if (tool !== 'door') (_avtEd as any).pendingDoorAnchor = null;
-  _avtEdAtualizarBotoes();
-  const labels: Record<string, any> = { floor: 'Piso', wall: 'Parede', door: 'Porta', erase: 'Apagar' };
-  _avtEdStatus('Ferramenta: ' + (labels[tool] || tool));
-  (_avtEd as any)._render?.();
-}
-
-// ── Distribuição automática: "assa" as peças do tileset em todo o mapa ──────────
-// Para cada célula não-vazia computa a chave semântica (parede_*/canto_*/piso_*/…)
-// e a grava no grid. Persiste no Salvar; a colisão segue correta porque o grid usa
-// _avtChaveEhParede para identificar todas as chaves de parede.
-function _avtEdDistribuirTileset() {
-  if (!_avtEd.tiles) return;
-  const tsCfg = (AVT_STATE as any)._tilesetConfig || AVT_STATE.dungeon?.tileset_config;
-  if (!tsCfg?.blocos) { mostrarToast('Tileset sem configuração de blocos', 'aviso'); return; }
-  const W = _avtEd.w, H = _avtEd.h;
-  // View numérica do grid original: a detecção de vizinhos do autotiler compara com
-  // AVT_T.PISO, então normalizamos mesmo se o grid já tiver chaves de string assadas.
-  const numTiles = _avtEd.tiles.map((row: any) => row.map((t: any) => {
-    if (t === null || t === undefined) return null;
-    if (typeof t === 'number') return t;
-    return (t.startsWith('piso') || t === 'bau' || t.startsWith('objeto')) ? AVT_T.PISO : AVT_T.PAREDE;
-  }));
-  const view = { w: W, h: H, tiles: numTiles, _chestPositions: AVT_STATE.dungeon?._chestPositions };
-  let n = 0;
-  const novo = _avtEd.tiles.map((r: any) => [...r]);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const t = _avtEd.tiles[y]?.[x];
-      if (t === null || t === undefined) continue;   // void permanece sólido
-      if (t === AVT_T.SAIDA) continue;               // preserva a saída
-      const key = _avtGetTileSemanticKey(x, y, view);
-      if (key) { novo[y][x] = key; n++; }
-    }
-  }
-  _avtEd.tiles = novo;
-  _avtEdStatus(`Tileset distribuído em ${n} células.`);
-  mostrarToast('Tileset distribuído pelo mapa', 'ok');
-  (_avtEd as any)._render?.();
-}
-
-// Dispatcher de pintura
-function _avtEdAplicarTool(tx: any, ty: any) {
-  if (!_avtEd.tiles || tx < 0 || ty < 0 || tx >= _avtEd.w || ty >= _avtEd.h) return;
-  if (!_avtEd.tiles[ty]) _avtEd.tiles[ty] = [];
-  const tool = (_avtEd as any).tool;
-  if (tool === 'floor') {
-    _avtEd.tiles[ty][tx] = AVT_T.PISO;
-  } else if (tool === 'wall') {
-    _avtEd.tiles[ty][tx] = AVT_T.PAREDE;
-  } else if (tool === 'erase') {
-    _avtEdApagar(tx, ty); return;
-  } else if (tool === 'door' || (tool === 'tileset' && (_avtEd as any).tsBrush?.fn === 'door')) {
-    if ((_avtEd as any).pendingDoorAnchor) { _avtEdCompletarPortaInterna(tx, ty); }
-    else { _avtEdAbrirConfigPorta(tx, ty); }
-    return;
-  } else if (tool === 'tileset' && (_avtEd as any).tsBrush?.key) {
-    _avtEd.tiles[ty][tx] = (_avtEd as any).tsBrush.key;   // peça semântica exata (string)
-  }
-  (_avtEd as any)._render?.();
-}
-
-function _avtEdApagar(col: any, row: any) {
-  // Remove par interno (par inteiro) e porta de fase nesta célula.
-  const antes = (_avtEd as any).portasInternas.length;
-  _avtEd.portasInternas = (_avtEd as any).portasInternas.filter((p: any) =>
-    !((p.a && p.a.col === col && p.a.row === row) || (p.b && p.b.col === col && p.b.row === row)));
-  if ((_avtEd as any).portasInternas.length !== antes) mostrarToast('Porta interna removida', 'ok');
-  (_avtEd as any).fasesExtras.forEach((f: any) => {
-    if (f.porta && f.porta.col === col && f.porta.row === row) { f.porta = null; mostrarToast('Porta de fase removida', 'ok'); }
-  });
-  _avtEd.tiles[row][col] = AVT_T.PAREDE;   // volta a parede/void
-  (_avtEd as any)._render?.();
-}
-
-// ── Portas no editor ─────────────────────────────────────────────────────────
-function _avtEdAbrirConfigPorta(col: any, row: any) {
-  (_avtEd as any)._portaCfgCell = { col, row };
-  let modal = document.getElementById('avt-ed-porta-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'avt-ed-porta-modal';
-    modal.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9600;display:flex;align-items:center;justify-content:center';
-    document.body.appendChild(modal);
-  }
-  const fases = (_avtEd as any).fasesExtras || [];
-  modal.innerHTML = `
-    <div style="background:#0d1320;border:1px solid rgba(79,163,209,0.3);border-radius:10px;padding:18px;width:320px;max-width:92vw">
-      <div style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8d8e8;margin-bottom:12px">🚪 Posicionar porta (${col},${row})</div>
-      <label style="display:block;font-size:0.72rem;color:#c8d8e8;margin-bottom:6px"><input type="radio" name="avt-ed-porta-tipo" value="interna" checked> 🌀 Porta interna (teleporte)</label>
-      <label style="display:block;font-size:0.72rem;color:#c8d8e8;margin-bottom:10px"><input type="radio" name="avt-ed-porta-tipo" value="fase"> 🚪 Porta de fase</label>
-      <div id="avt-ed-porta-fase-cfg" style="display:none;border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;margin-bottom:10px">
-        ${fases.length ? `
-        <label style="display:block;font-size:0.64rem;color:#7a92aa;margin-bottom:4px">Leva à fase</label>
-        <select id="avt-ed-porta-fase-sel" style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;margin-bottom:8px">
-          ${fases.map((f: any) => `<option value="${f.id}">${f.nome}</option>`).join('')}
-        </select>
-        <label style="display:block;font-size:0.64rem;color:#7a92aa;margin-bottom:4px">Tranca</label>
-        <select id="avt-ed-porta-lock" style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem">
-          <option value="livre">🔓 Livre</option>
-          <option value="chave">🔑 Chave</option>
-          <option value="npc">⚔ Derrotar NPC/Boss</option>
-        </select>` : `<div style="font-size:0.66rem;color:#f0cc6a">Nenhuma fase extra criada. Use "🚪 + Nova Fase" antes de ligar uma porta de fase.</div>`}
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-ed-porta-modal').style.display='none'">Cancelar</button>
-        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtEdConfirmarPorta()">Confirmar</button>
-      </div>
-    </div>`;
-  modal.style!.display = 'flex';
-  modal.querySelectorAll('input[name="avt-ed-porta-tipo"]').forEach(r =>
-    r.addEventListener('change', () => {
-      const tipo = document.querySelector('input[name="avt-ed-porta-tipo"]:checked')?.value;
-      const cfg = document.getElementById('avt-ed-porta-fase-cfg');
-      if (cfg) cfg.style!.display = tipo === 'fase' ? 'block' : 'none';
-    }));
-}
-
-function _avtEdConfirmarPorta() {
-  const cell = (_avtEd as any)._portaCfgCell;
-  if (!cell) return;
-  const tipo = document.querySelector('input[name="avt-ed-porta-tipo"]:checked')?.value || 'interna';
-  document.getElementById('avt-ed-porta-modal')!.style!.display = 'none';
-  if (tipo === 'interna') {
-    (_avtEd as any).pendingDoorAnchor = { col: cell.col, row: cell.row };
-    _avtEd.tiles[cell.row][cell.col] = AVT_T.PISO; // passável
-    _avtEdStatus('Porta interna: clique na célula de destino (teleporte).');
-    mostrarToast('Clique no destino da porta interna', 'ok');
-  } else {
-    const faseId = document.getElementById('avt-ed-porta-fase-sel')?.value;
-    if (!faseId) { mostrarToast('Crie uma fase antes', 'aviso'); return; }
-    const lock = document.getElementById('avt-ed-porta-lock')?.value || 'livre';
-    const fase = (_avtEd as any).fasesExtras.find((f: any) => f.id === faseId);
-    if (fase) {
-      fase.porta = { col: cell.col, row: cell.row, lock_type: lock,
-        chave_palavra: fase.porta?.chave_palavra || '', npc_boss_id: fase.porta?.npc_boss_id || '' };
-      _avtEd.tiles[cell.row][cell.col] = AVT_T.PISO;
-      mostrarToast('Porta de fase posicionada', 'ok');
-    }
-  }
-  (_avtEd as any)._render?.();
-}
-
-function _avtEdCompletarPortaInterna(col: any, row: any) {
-  const a = (_avtEd as any).pendingDoorAnchor;
-  (_avtEd as any).pendingDoorAnchor = null;
-  if (!a) return;
-  if (a.col === col && a.row === row) { mostrarToast('Destino deve ser outra célula', 'aviso'); return; }
-  const maxNum = (_avtEd as any).portasInternas.reduce((m: any, p: any) => Math.max(m, p.numero || 0), 1);
-  const numero = maxNum + 1;
-  (_avtEd as any).portasInternas.push({ numero, nome: 'Porta ' + numero, a: { col: a.col, row: a.row }, b: { col, row } });
-  _avtEd.tiles[row][col] = AVT_T.PISO;
-  _avtEdStatus('Porta interna criada.');
-  mostrarToast('Porta interna criada', 'ok');
-  (_avtEd as any)._render?.();
-}
-
-async function _avtMestreSalvarMapaUnificado() {
-  if (!_avtEd.tiles || !AVT_STATE.dungeon) return;
-  // Aprendizado: diff baseline×editado + estatísticas → perfil de estilo
-  try {
-    const tj = AVT_STATE.rpg.theme_json = AVT_STATE.rpg.theme_json || {};
-    const profile = tj.generation_style_profile || {};
-    const rules = _avtAprenderPlacements((_avtEd as any).tilesBaseline, _avtEd.tiles, _avtEd.w, _avtEd.h, profile.placement_rules || {});
-    // dungeon temporário p/ stats (com as portas e tiles editados)
-    const dungeonStats = { tiles: _avtEd.tiles, rooms: AVT_STATE.dungeon.rooms, _portasInternas: (_avtEd as any).portasInternas };
-    tj.generation_style_profile = _avtMesclarPerfilEstilo(profile, _avtDerivarStats(dungeonStats), rules);
-  } catch(e) { console.warn('[avt] aprendizado de estilo falhou:', e); }
-
-  // Aplicar ao dungeon ativo
-  AVT_STATE.dungeon.tiles = _avtEd.tiles.map((r: any) => [...r]);
-  AVT_STATE.dungeon._portasInternas = (_avtEd as any).portasInternas;
-
-  // Persistir estado da fase atual no lugar certo (principal vs fase extra)
-  const tj = AVT_STATE.rpg.theme_json;
-  const faseId = (AVT_STATE as any)._faseAtualId || 'principal';
-  _avtGravarDungeonNoSlot(tj);
-  // Portas de fase editadas (merge das coords) — mantém objetos das fases já existentes
-  if ((_avtEd as any).fasesExtras && tj.fases_extras) {
-    tj.fases_extras.forEach((f: any) => {
-      const ed = _avtEd.fasesExtras.find((x: any) => x.id === f.id);
-      if (ed) f.porta = ed.porta;
-    });
-  }
-  if (tj.tileset_paints) delete tj.tileset_paints;
-
-  const overlay = document.getElementById('avt-mestre-map-editor-overlay');
-  if (overlay) overlay.style!.display = 'none';
-  try {
-    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
-      method: 'PATCH', body: JSON.stringify({ theme_json: tj })
-    });
-    mostrarToast('Mapa salvo!', 'ok');
-  } catch (e: any) {
-    mostrarToast('Mapa atualizado localmente (erro ao persistir: ' + (e?.message || e) + ')', 'aviso');
-  }
-  // Invalida os bakes estáticos locais do próprio mestre (o broadcast não ecoa de volta)
-  AVT_STATE._dungeonRev = ((AVT_STATE as any)._dungeonRev || 0) + 1;
-  if (typeof _avtTileBakeInvalidate === 'function') _avtTileBakeInvalidate();
-  // Broadcast p/ os outros clientes (escopo por fase)
-  try {
-    _avtBroadcast?.('avt_dungeon_update', {
-      faseId,
-      dungeon: AVT_STATE.dungeon,
-      fases_extras: tj.fases_extras || []
-    });
-  } catch(_) {}
+  (window as any).avtFaseEditorAbrir({ modo: 'live' });
 }
 
 // Recebe atualização de mapa de outro cliente (mestre editou ao vivo)
@@ -23532,10 +23123,6 @@ function avtReceberDungeonUpdate(p: any) {
 window.avtReceberDungeonUpdate = avtReceberDungeonUpdate;
 window._avtMestreAbrirEditorUnificado = _avtMestreAbrirEditorUnificado;
 // Handlers inline (onclick/onchange) do editor unificado precisam estar no escopo global.
-window._avtEdSetTool = _avtEdSetTool;
-window._avtEdDistribuirTileset = _avtEdDistribuirTileset;
-window._avtMestreSalvarMapaUnificado = _avtMestreSalvarMapaUnificado;
-window._avtEdConfirmarPorta = _avtEdConfirmarPorta;
 window._avtMestreToggleTrocaTileset = _avtMestreToggleTrocaTileset;
 window._avtMestreHandleTilesetUpload = _avtMestreHandleTilesetUpload;
 window._avtMestreAplicarTilesetUpload = _avtMestreAplicarTilesetUpload;
@@ -24654,17 +24241,6 @@ function _avtMestreToggleTrocaTileset() {
   painel.style!.display = painel.style!.display === 'none' ? 'block' : 'none';
 }
 
-function _avtMestreCopiarPromptTileset() {
-  const cols = parseInt(document.getElementById('avt-mp-ts-cols')?.value || '4', 10);
-  const rows = parseInt(document.getElementById('avt-mp-ts-rows')?.value || '4', 10);
-  const estilo = AVT_STATE.rpg?.name || 'pixel art fantasy dungeon';
-  if (typeof faseTilesetImgPromptTemplate === 'function') {
-    const prompt = faseTilesetImgPromptTemplate({ estilo, cols, rows });
-    navigator.clipboard.writeText(prompt)
-      .then(() => mostrarToast('📋 Prompt copiado!', 'ok'))
-      .catch(() => mostrarToast('Erro ao copiar', 'err'));
-  }
-}
 
 function _avtMestreHandleTilesetUpload(input: any) {
   const file = input?.files?.[0];
@@ -24812,6 +24388,12 @@ function _avtMestreNovaFaseRender() {
               📁 Imagem tileset
               <input type="file" accept="image/*" style="display:none" onchange="_avtNfHandleTilesetImg(this)">
             </label>
+            <input id="avt-nf-ts-cols" type="number" value="${w._tilesetCols || 4}" min="4" max="5" title="Colunas do atlas desta fase"
+              oninput="AVT_STATE._novaFaseWizard._tilesetCols=+this.value"
+              style="width:44px;padding:4px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.68rem">
+            <input id="avt-nf-ts-rows" type="number" value="${w._tilesetRows || 4}" min="4" max="5" title="Linhas do atlas desta fase"
+              oninput="AVT_STATE._novaFaseWizard._tilesetRows=+this.value"
+              style="width:44px;padding:4px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.68rem">
             <span id="avt-nf-ts-nome" style="font-size:0.65rem;color:#7a92aa">${w._tilesetImgNome || ''}</span>
             ${w._tilesetImgUrl ? `<button onclick="_avtNfRemoverTileset()" style="padding:3px 8px;background:rgba(232,96,76,0.08);border:1px solid rgba(232,96,76,0.2);border-radius:4px;color:#e74c3c;font-size:0.6rem;cursor:pointer">✕ Remover</button>` : ''}
           </div>
@@ -24906,25 +24488,12 @@ function _avtNfRenderMapaSub(opcao: any) {
       <div id="avt-nf-claude-status" style="font-size:0.68rem;color:#7a92aa"></div>
     </div>`;
   } else if (opcao === 'editor') {
-    sub.innerHTML = `<div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center">
-        <span style="font-size:0.65rem;color:#7a92aa">Tamanho:</span>
-        <select id="avt-nf-ed-tamanho" onchange="_avtNfEditorTamanho(this.value)"
-          style="padding:3px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.68rem">
-          <option value="22x16">22×16</option>
-          <option value="40x28" selected>40×28</option>
-          <option value="60x40">60×40</option>
-        </select>
-        <button onclick="_avtNfEditorAcao('piso')" class="avt-ed-btn avt-ed-btn-ativo" id="avt-nf-btn-piso">Piso</button>
-        <button onclick="_avtNfEditorAcao('parede')" class="avt-ed-btn" id="avt-nf-btn-parede">Parede</button>
-        <button onclick="_avtNfEditorLimpar()" class="avt-ed-btn">Limpar</button>
-        <button onclick="_avtNfEditorExport()" class="avt-mp-btn avt-mp-btn-ok" style="font-size:0.65rem;padding:3px 10px">✓ Usar este mapa</button>
-      </div>
-      <div style="overflow:auto;max-height:220px;border:1px solid rgba(79,163,209,0.12);border-radius:5px">
-        <canvas id="avt-nf-ed-canvas" style="cursor:crosshair;display:block;touch-action:none"></canvas>
-      </div>
+    const _nfMapa: any = w.dungeon;
+    const _nfTem = _nfMapa && Array.isArray(_nfMapa.tiles);
+    sub.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+      <button onclick="_avtNfAbrirEditor()" class="avt-ed-btn avt-ed-btn-ativo" style="padding:8px 14px">🖉 Abrir editor de mapa</button>
+      <div id="avt-nf-editor-status" style="font-size:0.66rem;color:#4fa3d1">${_nfTem ? `✓ Mapa ${_nfMapa.w}×${_nfMapa.h} pronto` : 'Nenhum mapa desenhado ainda'}</div>
     </div>`;
-    setTimeout(_avtNfEditorInit, 50);
   }
 }
 
@@ -25004,63 +24573,27 @@ async function _avtNfGerarComClaude() {
   }
 }
 
-// Minimal canvas editor for nova fase
-const _avtNfEd = { tiles: null as any, w: 40, h: 28, acao: 'piso', drawing: false };
-function _avtNfEditorInit() {
-  const canvas = document.getElementById('avt-nf-ed-canvas');
-  if (!canvas) return;
-  canvas.width = _avtNfEd.w * 12; canvas.height = _avtNfEd.h * 12;
-  if (!_avtNfEd.tiles) _avtNfEd.tiles = Array.from({length:_avtNfEd.h}, ()=>Array(_avtNfEd.w).fill(AVT_T.PAREDE));
-  _avtNfEditorDraw();
-  const paint = (e: any) => {
-    const r = canvas.getBoundingClientRect();
-    const cw = r.width/_avtNfEd.w, ch = r.height/_avtNfEd.h;
-    const tx = Math.floor((e.clientX-r.left)/cw), ty = Math.floor((e.clientY-r.top)/ch);
-    if (tx>=0&&tx<_avtNfEd.w&&ty>=0&&ty<_avtNfEd.h) {
-      _avtNfEd.tiles[ty][tx] = _avtNfEd.acao==='piso' ? AVT_T.PISO : AVT_T.PAREDE;
-      _avtNfEditorDraw();
-    }
-  };
-  canvas.onmousedown = e => { _avtNfEd.drawing=true; paint(e); };
-  canvas.onmousemove = e => { if(_avtNfEd.drawing) paint(e); };
-  canvas.onmouseup = () => { _avtNfEd.drawing=false; };
-}
-function _avtNfEditorDraw() {
-  const canvas = document.getElementById('avt-nf-ed-canvas');
-  if (!canvas||!_avtNfEd.tiles) return;
-  const ctx = canvas.getContext!('2d');
-  const cw = canvas.width!/_avtNfEd.w, ch = canvas.height!/_avtNfEd.h;
-  for (let y=0;y<_avtNfEd.h;y++) for (let x=0;x<_avtNfEd.w;x++) {
-    ctx.fillStyle = _avtNfEd.tiles[y][x]===AVT_T.PISO?'#1a2535':'#0a0c14';
-    ctx.fillRect(x*cw,y*ch,cw,ch);
-  }
-}
-function _avtNfEditorAcao(a: any) {
-  _avtNfEd.acao = a;
-  ['piso','parede'].forEach(k => {
-    const b = document.getElementById('avt-nf-btn-'+k);
-    if (b) b.classList.toggle('avt-ed-btn-ativo', k===a);
+// Editor de mapa da Nova Fase: abre o fase-editor (fase-editor.ts) em modo
+// rascunho — com touch, zoom, balde e undo (o mini editor antigo era só mouse).
+function _avtNfAbrirEditor() {
+  const w = AVT_STATE._novaFaseWizard;
+  if (!w) return;
+  const atual: any = w.dungeon;
+  const temGrid = atual && Array.isArray(atual.tiles);
+  (window as any).avtFaseEditorAbrir({
+    modo: 'draft',
+    w: temGrid ? atual.w : 40,
+    h: temGrid ? atual.h : 28,
+    tiles: temGrid ? atual.tiles : null,
+    rooms: temGrid ? (atual.rooms || []) : [],
+    onExport: (d: any) => {
+      w.dungeon = d;
+      mostrarToast('Mapa do editor definido!', 'ok');
+      _avtMestreNovaFaseRender();
+    },
   });
 }
-function _avtNfEditorTamanho(v: any) {
-  const [ww,hh] = v.split('x').map(Number);
-  _avtNfEd.w=ww; _avtNfEd.h=hh;
-  _avtNfEd.tiles = Array.from({length:hh},()=>Array(ww).fill(AVT_T.PAREDE));
-  const c = document.getElementById('avt-nf-ed-canvas');
-  if (c) { c.width=ww*12; c.height=hh*12; }
-  _avtNfEditorDraw();
-}
-function _avtNfEditorLimpar() {
-  _avtNfEd.tiles = Array.from({length:_avtNfEd.h},()=>Array(_avtNfEd.w).fill(AVT_T.PAREDE));
-  _avtNfEditorDraw();
-}
-function _avtNfEditorExport() {
-  const w = AVT_STATE._novaFaseWizard;
-  if (!w||!_avtNfEd.tiles) return;
-  w.dungeon = { tiles:_avtNfEd.tiles.map((r: any)=>[...r]), w:_avtNfEd.w, h:_avtNfEd.h, rooms:[] };
-  mostrarToast('Mapa do editor definido!', 'ok');
-  _avtMestreNovaFaseRender();
-}
+window._avtNfAbrirEditor = _avtNfAbrirEditor;
 
 function _avtNfHandleTilesetImg(input: any) {
   const file = input?.files?.[0];
@@ -25134,11 +24667,23 @@ async function _avtMestreSalvarNovaFase() {
 
   const _ordensExistentes = (AVT_STATE.rpg.theme_json?.fases_extras || []).map((f: any) => f.ordem ?? 0);
   const _proxOrdem = (_ordensExistentes.length ? Math.max(..._ordensExistentes) : 0) + 1;
+  // Config própria do tileset da fase: sem ela, a imagem era fatiada com o
+  // cols/rows da campanha principal (um atlas 5×5 virava lixo num grid 4×4).
+  const faseTilesetCfg = faseTilesetUrl ? {
+    version: 2,
+    cols: Math.min(5, Math.max(4, w._tilesetCols || 4)),
+    rows: Math.min(5, Math.max(4, w._tilesetRows || 4)),
+    blocos: _avtMergeBlocosCanonicos(null,
+      Math.min(5, Math.max(4, w._tilesetCols || 4)),
+      Math.min(5, Math.max(4, w._tilesetRows || 4))),
+  } : null;
+
   const fase = {
     id: Date.now().toString(),
     nome,
     dungeon_data: dungeonData,
     tileset_img_url: faseTilesetUrl || null,
+    tileset_config: faseTilesetCfg,
     ordem: w.ordem ?? _proxOrdem,
     npc_level: w.npc_level ?? (_proxOrdem + 1),
     tint_hue: (_proxOrdem * 28) % 360,
@@ -27012,8 +26557,8 @@ function _avtCharEditorRenderSkills(container: any, ent: any, dbChar: any) {
     return '';
   };
 
-  const skillCards = mySkills.map((sk: any) => {
-    const icon = autoIcon(sk);
+  const skillCards = mySkills.map((sk: any, _skIdx: number) => {
+    const icon = _avtGetSkillIcone(dbChar, ent, sk.id) || autoIcon(sk);
     const bodyId = 'avt-sk2-body-' + sk.id.replace(/[^a-z0-9]/gi, '_');
     const skIdSafe = sk.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const nameSafe = (sk.habilidade || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -27033,11 +26578,20 @@ function _avtCharEditorRenderSkills(container: any, ent: any, dbChar: any) {
     const rollBtn = temFormula
       ? `<button class="avt-ce2-skill-roll-btn" onclick="event.stopPropagation();typeof rolarFormulaDano==='function'&&rolarFormulaDano('${formula}','${nameSafe}','${ent.nome.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">🎲 ${formula}</button>` : '';
 
-    const numAtual = _avtGetSkillNumero(dbChar, ent, sk.id);
-    const numInput = `<input type="number" min="1" max="99" value="${numAtual ?? ''}" placeholder="#"
+    // Ordem por setas ↑/↓ (renumera 1..n) — substitui o campo de número livre.
+    const _ordBtn = (delta: number, glifo: string, off: boolean) =>
+      `<button ${off ? 'disabled' : ''} onclick="event.stopPropagation();_avtMoverSkillOrdem('${entIdSafe}','${skIdSafe}',${delta})"
+        title="${delta < 0 ? 'Subir na ordem' : 'Descer na ordem'}"
+        style="width:22px;height:14px;padding:0;line-height:1;font-size:0.55rem;cursor:${off ? 'default' : 'pointer'};
+               background:rgba(200,168,75,${off ? '0.04' : '0.12'});border:1px solid rgba(200,168,75,${off ? '0.12' : '0.35'});
+               border-radius:4px;color:${off ? 'rgba(200,168,75,0.25)' : '#c8a84b'}">${glifo}</button>`;
+    const ordemBtns = `<span style="display:inline-flex;flex-direction:column;gap:2px;margin-right:4px" onclick="event.stopPropagation()">
+        ${_ordBtn(-1, '▲', _skIdx === 0)}${_ordBtn(1, '▼', _skIdx === mySkills.length - 1)}</span>`;
+    const iconeAtual = _avtGetSkillIcone(dbChar, ent, sk.id);
+    const iconInput = `<input type="text" maxlength="4" value="${(iconeAtual ?? '').replace(/"/g, '&quot;')}" placeholder="${autoIcon(sk)}"
         onclick="event.stopPropagation()"
-        onchange="_avtSetSkillNumero('${entIdSafe}','${skIdSafe}', this.value)"
-        title="Número da skill no controle móvel"
+        onchange="_avtSetSkillIcone('${entIdSafe}','${skIdSafe}', this.value)"
+        title="Ícone no botão do controle móvel: emoji ou 3-4 letras. Vazio = automático."
         style="width:42px;padding:3px 4px;background:rgba(5,8,16,0.7);border:1px solid rgba(200,168,75,0.35);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.7rem;text-align:center;margin-right:4px">`;
     const isArc = (dbChar?.custom_attrs?.arc_skill_id || ent?.custom_attrs?.arc_skill_id) === sk.id;
     const arcBtn = `<button onclick="event.stopPropagation();_avtSetArcSkill('${entIdSafe}','${skIdSafe}')"
@@ -27054,7 +26608,7 @@ function _avtCharEditorRenderSkills(container: any, ent: any, dbChar: any) {
             <div class="avt-ce2-skill-name">${sk.habilidade || 'Habilidade'}</div>
             ${badges.length ? `<div class="avt-ce2-skill-badges">${badges.join('')}</div>` : ''}
           </div>
-          <div class="avt-ce2-skill-actions">${arcBtn}${numInput}${removeBtn}</div>
+          <div class="avt-ce2-skill-actions">${arcBtn}${ordemBtns}${iconInput}${removeBtn}</div>
         </div>
         <div class="avt-ce2-skill-body" id="${bodyId}">
           ${sk.efeito ? `<div class="avt-ce2-skill-desc">${sk.efeito}</div>` : ''}
@@ -27291,6 +26845,57 @@ function _avtSetSkillNumero(entId: any, skillId: any, valor: any) {
   if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
 }
 window._avtSetSkillNumero = _avtSetSkillNumero;
+
+// Grava o ícone escolhido pelo jogador (emoji/texto curto) para o botão da skill
+// no controle mobile. Vazio remove (volta ao ícone automático).
+function _avtSetSkillIcone(entId: any, skillId: any, valor: any) {
+  const ent = AVT_STATE.entidades.find((e: any) => e.id === entId);
+  if (!ent) return;
+  const dbChar = AVT_STATE.chars.find((c: any) => c.id === ent?.dbId || c.nome === ent?.nome);
+  const target = dbChar || ent;
+  if (!target.custom_attrs) target.custom_attrs = {};
+  if (!target.custom_attrs.skill_icones) target.custom_attrs.skill_icones = {};
+  const v = (valor == null) ? '' : String(valor).trim().slice(0, 8);
+  if (!v) delete target.custom_attrs.skill_icones[skillId];
+  else target.custom_attrs.skill_icones[skillId] = v;
+  if (dbChar?.id) {
+    _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs })
+    }).catch(e => mostrarToast('Erro ao salvar ícone: ' + (e?.message || e), 'erro'));
+  }
+  _avtCharEditorRender();
+  if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._avtSetSkillIcone = _avtSetSkillIcone;
+
+// Reordena a skill (↑/↓) na lista do personagem e renumera 1..n sequencial em
+// skill_numeros — a ORDEM substitui o antigo campo de número livre; os mesmos
+// números continuam alimentando o anel do controle, a lista e os atalhos numpad.
+function _avtMoverSkillOrdem(entId: any, skillId: any, delta: any) {
+  const ent = AVT_STATE.entidades.find((e: any) => e.id === entId);
+  if (!ent) return;
+  const dbChar = AVT_STATE.chars.find((c: any) => c.id === ent?.dbId || c.nome === ent?.nome);
+  const target = dbChar || ent;
+  const charSkillIds = dbChar?.custom_attrs?.skills_ids || ent?.custom_attrs?.skills_ids || [];
+  let mySkills = AVT_STATE.skills.filter((sk: any) => charSkillIds.includes(sk.id));
+  mySkills = _avtSkillsOrdenadasPorNumero(mySkills, dbChar, ent);
+  const idx = mySkills.findIndex((sk: any) => sk.id === skillId);
+  const j = idx + (delta > 0 ? 1 : -1);
+  if (idx < 0 || j < 0 || j >= mySkills.length) return;
+  const tmp = mySkills[idx]; mySkills[idx] = mySkills[j]; mySkills[j] = tmp;
+  if (!target.custom_attrs) target.custom_attrs = {};
+  const nums: Record<string, number> = {};
+  mySkills.forEach((sk: any, i: number) => { nums[sk.id] = i + 1; });
+  target.custom_attrs.skill_numeros = nums;
+  if (dbChar?.id) {
+    _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs })
+    }).catch(e => mostrarToast('Erro ao salvar ordem: ' + (e?.message || e), 'erro'));
+  }
+  _avtCharEditorRender();
+  if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._avtMoverSkillOrdem = _avtMoverSkillOrdem;
 
 function _avtSetArcSkill(entId: any, skillId: any) {
   const ent = AVT_STATE.entidades.find((e: any) => e.id === entId);
@@ -31764,8 +31369,8 @@ try{
     const cy = (j.renderY != null ? j.renderY : j.y);
     const _ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
     const _overlayH = _ctrlDisp ? ((AVT_STATE as any)._overlayH ?? 160) : 0;
-    const effectiveH = canvas.height - _overlayH;
-    const targetX = cx * SZ - canvas.width / 2 + SZ / 2;
+    const effectiveH = _avtViewH() - _overlayH;
+    const targetX = cx * SZ - _avtViewW() / 2 + SZ / 2;
     const targetY = cy * SZ - effectiveH / 2 + SZ / 2;
     AVT_STATE.camera.x = targetX;
     AVT_STATE.camera.y = targetY;
@@ -32570,27 +32175,10 @@ Object.defineProperty(globalThis, "avtCriarImportCampanha", { configurable: true
 Object.defineProperty(globalThis, "_avtCriarVoltar", { configurable: true, get: () => _avtCriarVoltar, set: (__v) => { _avtCriarVoltar = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtCriarAvancar", { configurable: true, get: () => _avtCriarAvancar, set: (__v) => { _avtCriarAvancar = __v; } });
-Object.defineProperty(globalThis, "_avtEd", { configurable: true, get: () => _avtEd, set: (__v) => { _avtEd = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorTamanho", { configurable: true, get: () => _avtEditorTamanho, set: (__v) => { _avtEditorTamanho = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorInit", { configurable: true, get: () => _avtEditorInit, set: (__v) => { _avtEditorInit = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorReset", { configurable: true, get: () => _avtEditorReset, set: (__v) => { _avtEditorReset = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorLimpar", { configurable: true, get: () => _avtEditorLimpar, set: (__v) => { _avtEditorLimpar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorAcaoSet", { configurable: true, get: () => _avtEditorAcaoSet, set: (__v) => { _avtEditorAcaoSet = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorRenderCanvas", { configurable: true, get: () => _avtEditorRenderCanvas, set: (__v) => { _avtEditorRenderCanvas = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorExport", { configurable: true, get: () => _avtEditorExport, set: (__v) => { _avtEditorExport = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtGetGridParams", { configurable: true, get: () => _avtGetGridParams, set: (__v) => { _avtGetGridParams = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtGerarPromptJson", { configurable: true, get: () => _avtGerarPromptJson, set: (__v) => { _avtGerarPromptJson = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtJsonAtualizarPrompt", { configurable: true, get: () => _avtJsonAtualizarPrompt, set: (__v) => { _avtJsonAtualizarPrompt = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtCopiarPromptJson", { configurable: true, get: () => _avtCopiarPromptJson, set: (__v) => { _avtCopiarPromptJson = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
@@ -33345,29 +32933,8 @@ Object.defineProperty(globalThis, "_avtMestrePainelRender", { configurable: true
 Object.defineProperty(globalThis, "_avtMpAba", { configurable: true, get: () => _avtMpAba, set: (__v) => { _avtMpAba = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMpConteudoAba", { configurable: true, get: () => _avtMpConteudoAba, set: (__v) => { _avtMpConteudoAba = __v; } });
-Object.defineProperty(globalThis, "_AVT_ED_SZ", { configurable: true, get: () => _AVT_ED_SZ });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMestreAbrirEditorUnificado", { configurable: true, get: () => _avtMestreAbrirEditorUnificado, set: (__v) => { _avtMestreAbrirEditorUnificado = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdStatus", { configurable: true, get: () => _avtEdStatus, set: (__v) => { _avtEdStatus = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdAtualizarBotoes", { configurable: true, get: () => _avtEdAtualizarBotoes, set: (__v) => { _avtEdAtualizarBotoes = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdSetTool", { configurable: true, get: () => _avtEdSetTool, set: (__v) => { _avtEdSetTool = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdDistribuirTileset", { configurable: true, get: () => _avtEdDistribuirTileset, set: (__v) => { _avtEdDistribuirTileset = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdAplicarTool", { configurable: true, get: () => _avtEdAplicarTool, set: (__v) => { _avtEdAplicarTool = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdApagar", { configurable: true, get: () => _avtEdApagar, set: (__v) => { _avtEdApagar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdAbrirConfigPorta", { configurable: true, get: () => _avtEdAbrirConfigPorta, set: (__v) => { _avtEdAbrirConfigPorta = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdConfirmarPorta", { configurable: true, get: () => _avtEdConfirmarPorta, set: (__v) => { _avtEdConfirmarPorta = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdCompletarPortaInterna", { configurable: true, get: () => _avtEdCompletarPortaInterna, set: (__v) => { _avtEdCompletarPortaInterna = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMestreSalvarMapaUnificado", { configurable: true, get: () => _avtMestreSalvarMapaUnificado, set: (__v) => { _avtMestreSalvarMapaUnificado = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "avtReceberDungeonUpdate", { configurable: true, get: () => avtReceberDungeonUpdate, set: (__v) => { avtReceberDungeonUpdate = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
@@ -33468,8 +33035,6 @@ Object.defineProperty(globalThis, "_avtMpTilesetFile", { configurable: true, get
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMestreToggleTrocaTileset", { configurable: true, get: () => _avtMestreToggleTrocaTileset, set: (__v) => { _avtMestreToggleTrocaTileset = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMestreCopiarPromptTileset", { configurable: true, get: () => _avtMestreCopiarPromptTileset, set: (__v) => { _avtMestreCopiarPromptTileset = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMestreHandleTilesetUpload", { configurable: true, get: () => _avtMestreHandleTilesetUpload, set: (__v) => { _avtMestreHandleTilesetUpload = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMestreAplicarTilesetUpload", { configurable: true, get: () => _avtMestreAplicarTilesetUpload, set: (__v) => { _avtMestreAplicarTilesetUpload = __v; } });
@@ -33491,19 +33056,6 @@ Object.defineProperty(globalThis, "_avtNfGerarProcedural", { configurable: true,
 Object.defineProperty(globalThis, "_avtNfJsonParse", { configurable: true, get: () => _avtNfJsonParse, set: (__v) => { _avtNfJsonParse = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtNfGerarComClaude", { configurable: true, get: () => _avtNfGerarComClaude, set: (__v) => { _avtNfGerarComClaude = __v; } });
-Object.defineProperty(globalThis, "_avtNfEd", { configurable: true, get: () => _avtNfEd });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtNfEditorInit", { configurable: true, get: () => _avtNfEditorInit, set: (__v) => { _avtNfEditorInit = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtNfEditorDraw", { configurable: true, get: () => _avtNfEditorDraw, set: (__v) => { _avtNfEditorDraw = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtNfEditorAcao", { configurable: true, get: () => _avtNfEditorAcao, set: (__v) => { _avtNfEditorAcao = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtNfEditorTamanho", { configurable: true, get: () => _avtNfEditorTamanho, set: (__v) => { _avtNfEditorTamanho = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtNfEditorLimpar", { configurable: true, get: () => _avtNfEditorLimpar, set: (__v) => { _avtNfEditorLimpar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtNfEditorExport", { configurable: true, get: () => _avtNfEditorExport, set: (__v) => { _avtNfEditorExport = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtNfHandleTilesetImg", { configurable: true, get: () => _avtNfHandleTilesetImg, set: (__v) => { _avtNfHandleTilesetImg = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
