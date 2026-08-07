@@ -44,6 +44,35 @@ function _psAvtAcquireApp() {
   };
 }
 
+// No PIXI v7 setar blendMode num Container é no-op para as partículas (blend é
+// por-sprite). O seletor "Blend Mode" da camada só funciona injetando o behavior
+// blendMode no config v5 do @pixi/particle-emitter (pós-upgradeConfig).
+function _psApplyBlendBehavior(emitCfg: any, blendName: any) {
+  if (!blendName || blendName === 'normal' || !Array.isArray(emitCfg?.behaviors)) return emitCfg;
+  if (!emitCfg.behaviors.some((b: any) => b && b.type === 'blendMode')) {
+    emitCfg.behaviors.push({ type: 'blendMode', config: { blendMode: blendName } });
+  }
+  return emitCfg;
+}
+
+// Espelho do _psDestroyFilters do editor: filtros seguram render-textures/framebuffers
+// que o PIXI NÃO libera no destroy do node — sem isto cada efeito em jogo vazava GPU.
+function _psAvtDestroyFilters(node: any) {
+  const fs = node && node.filters;
+  if (Array.isArray(fs)) fs.forEach((f: any) => { try { f && f.destroy && f.destroy(); } catch (_) {} });
+  if (node) node.filters = null;
+}
+
+// setTimeout rastreado: timers de fases futuras (chain, impacto de projétil, SFX)
+// precisam morrer no teardown (troca de fase/saída) — um setTimeout cru continuaria
+// e tocaria a animação/som na cena seguinte.
+var _PS_AVT_TIMERS = new Set<any>();
+function _psAvtDelay(fn: any, ms: any) {
+  const id = setTimeout(() => { _PS_AVT_TIMERS.delete(id); try { fn(); } catch (_) {} }, ms);
+  _PS_AVT_TIMERS.add(id);
+  return id;
+}
+
 // Registra um efeito one-shot no rastreio global, para que avtPixiCleanupAll consiga
 // destruí-lo em teardown (troca de fase/saída) mesmo antes do timer de fim disparar.
 function _psAvtTrack(cleanup: any, durMs: any) {
@@ -73,6 +102,40 @@ function _psAvtTexFrom(url: any) {
     }
     return tex || PIXI.Texture.WHITE;
   } catch (_) { return PIXI.Texture.WHITE; }
+}
+
+// Textura de vinheta radial (canvas 2D, cacheada): centro transparente → bordas pretas.
+let _psVignetteTex: any = null;
+function _psVignetteTexture() {
+  if (_psVignetteTex && _psVignetteTex.baseTexture && _psVignetteTex.baseTexture.valid !== false) return _psVignetteTex;
+  const S = 256;
+  const c = document.createElement('canvas'); c.width = c.height = S;
+  const g = c.getContext('2d')!;
+  const grd = g.createRadialGradient(S / 2, S / 2, S * 0.22, S / 2, S / 2, S * 0.52);
+  grd.addColorStop(0, 'rgba(0,0,0,0)');
+  grd.addColorStop(0.65, 'rgba(0,0,0,0.6)');
+  grd.addColorStop(1, 'rgba(0,0,0,1)');
+  g.fillStyle = grd; g.fillRect(0, 0, S, S);
+  _psVignetteTex = PIXI.Texture.from(c);
+  return _psVignetteTex;
+}
+
+// Node de escurecimento de fundo. Usa renderer.screen (coordenadas do stage), NÃO
+// renderer.width/height: este é o backing store (screen × resolution) e no overlay
+// iso (resolution 1/1.8) o retângulo sairia parcial/deslocado — a "sombra retangular"
+// sobre o mapa. radialDim ganha vinheta real; sem darken explícito assume 0.3 (legado).
+function _psBuildBackgroundDim(app: any, bg: any) {
+  if (!bg || (!bg.darken && !bg.radialDim)) return null;
+  const W = app.renderer.screen.width, H = app.renderer.screen.height;
+  const a = Math.min(1, bg.darken || 0.3);
+  if (bg.radialDim) {
+    const sp = new PIXI.Sprite(_psVignetteTexture());
+    sp.width = W; sp.height = H; sp.alpha = a;
+    return sp;
+  }
+  const dim = new PIXI.Graphics();
+  dim.beginFill(0x000000, a).drawRect(0, 0, W, H).endFill();
+  return dim;
 }
 
 // ── Transform studio-space coordinates to adventure screen-space ─────────────
@@ -360,31 +423,74 @@ function _psToAvtConfig(cfg: any) {
   return avt;
 }
 
+// ── Saneamento de config na carga ────────────────────────────────────────────
+// Configs salvos enquanto psUpdateEmitterProp gravava na raiz errada carregam um
+// subtree fantasma layer.emitter.emitter.* com as ÚLTIMAS edições do usuário.
+// Mescla (fantasma vence) e remove; o próximo save persiste limpo.
+function _psFixEmitterGhost(layer: any) {
+  const e = layer && layer.emitter;
+  if (!e || typeof e !== 'object' || !e.emitter || typeof e.emitter !== 'object') return;
+  const merge = (dst: any, src: any) => {
+    for (const k of Object.keys(src)) {
+      const v = src[k];
+      if (v && typeof v === 'object' && !Array.isArray(v)
+          && dst[k] && typeof dst[k] === 'object' && !Array.isArray(dst[k])) merge(dst[k], v);
+      else dst[k] = v;
+    }
+  };
+  merge(e, e.emitter);
+  delete e.emitter;
+}
+// Ponto único de saneamento: fantasma do emitter + keyframes ordenados por t
+// (a interpolação assume ordem; keyframes fora de ordem ou duplicados vinham de
+// drags antigos e geravam saltos/NaN).
+function _psSanitizeCfg(cfg: any) {
+  if (!cfg) return cfg;
+  (cfg.layers || []).forEach((l: any) => {
+    _psFixEmitterGhost(l);
+    if (Array.isArray(l.keyframes)) l.keyframes.sort((a: any, b: any) => (a.t ?? 0) - (b.t ?? 0));
+  });
+  return cfg;
+}
+
 // ── Load animation config (from cache or Supabase) ─────────────────────────
 // Falhas/IDs inexistentes entram num cache negativo de 30s — sem ele, cada uso da
 // skill re-batia na rede pelo mesmo ID quebrado.
-const _PS_CFG_FAIL = new Map(); // animId -> ts da falha
+const _PS_CFG_FAIL = new Map(); // animId -> ts da falha (cap de tamanho em _psCfgFail)
+const _PS_CFG_INFLIGHT = new Map(); // animId -> Promise — dedupe de requests simultâneos
+function _psCfgFail(animId: any) {
+  _PS_CFG_FAIL.set(animId, Date.now());
+  // IDs quebrados variados (ex.: skills apontando para animações apagadas) não
+  // podem crescer o mapa sem limite — descarta a entrada mais antiga.
+  if (_PS_CFG_FAIL.size > 100) _PS_CFG_FAIL.delete(_PS_CFG_FAIL.keys().next().value);
+}
 async function _psAvtLoadCfg(animId: any) {
   if (!animId) return null;
   const failTs = _PS_CFG_FAIL.get(animId);
   if (failTs && Date.now() - failTs < 30000) return null;
   const cache = (typeof PIXI_STUDIO_STATE !== 'undefined') ? PIXI_STUDIO_STATE._animCache : null;
   if (cache && cache[animId]) return cache[animId];
-  try {
-    const rows = await _avtSb(`pixi_animations?id=eq.${encodeURIComponent(animId)}&select=config_json`);
-    const cfg = rows && rows[0] && rows[0].config_json;
-    if (cfg && cache) {
-      cache[animId] = cfg;
-      setTimeout(() => { delete cache[animId]; }, 30000);
+  // N usos simultâneos da mesma skill compartilham um único request ao PostgREST
+  if (_PS_CFG_INFLIGHT.has(animId)) return _PS_CFG_INFLIGHT.get(animId);
+  const p = (async () => {
+    try {
+      const rows = await _avtSb(`pixi_animations?id=eq.${encodeURIComponent(animId)}&select=config_json`);
+      const cfg = _psSanitizeCfg(rows && rows[0] && rows[0].config_json);
+      if (cfg && cache) {
+        cache[animId] = cfg;
+        setTimeout(() => { delete cache[animId]; }, 30000);
+      }
+      if (!cfg) _psCfgFail(animId);
+      else _PS_CFG_FAIL.delete(animId);
+      return cfg || null;
+    } catch (e) {
+      console.warn('[pixi-studio-avt] Failed to load anim', animId, e);
+      _psCfgFail(animId);
+      return null;
     }
-    if (!cfg) _PS_CFG_FAIL.set(animId, Date.now());
-    else _PS_CFG_FAIL.delete(animId);
-    return cfg || null;
-  } catch (e) {
-    console.warn('[pixi-studio-avt] Failed to load anim', animId, e);
-    _PS_CFG_FAIL.set(animId, Date.now());
-    return null;
-  }
+  })().finally(() => _PS_CFG_INFLIGHT.delete(animId));
+  _PS_CFG_INFLIGHT.set(animId, p);
+  return p;
 }
 
 // ── Delay de viagem SÍNCRONO de uma animação do Studio ─────────────────────
@@ -406,7 +512,9 @@ function avtPixiGetAnimDelaySync(animId: any) {
 // ── Build screen coordinates from entity (mirrors _avtPlaySkillAnim) ───────
 function _psAvtToScreen(ent: any) {
   const canvas = AVT_STATE.canvas;
-  if (!canvas) return { x: canvas ? canvas.width / 2 : 400, y: canvas ? canvas.height / 2 : 300 };
+  // Null-safe nos dois argumentos: _psAvtFollow chama com targetEnt nulo no
+  // fallback e `live.renderX` lançaria TypeError.
+  if (!ent || !canvas) return { x: canvas ? canvas.width / 2 : 400, y: canvas ? canvas.height / 2 : 300 };
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const live = typeof _avtEntViva === 'function' ? _avtEntViva(ent) : ent;
   return {
@@ -433,7 +541,9 @@ function _psAvtInterpKf(kfs: any, t: any) {
   if (t >= kfs[kfs.length - 1].t) return Object.assign({}, kfs[kfs.length - 1]);
   for (let i = 0; i < kfs.length - 1; i++) {
     if (t >= kfs[i].t && t <= kfs[i + 1].t) {
-      const fRaw = (t - kfs[i].t) / (kfs[i + 1].t - kfs[i].t);
+      // Keyframes com o mesmo t zeram o denominador → NaN em x/y/scale/rotation
+      const denom = kfs[i + 1].t - kfs[i].t;
+      const fRaw = denom > 0 ? (t - kfs[i].t) / denom : 0;
       // Apply per-keyframe easing (owned by the outgoing keyframe). Default linear.
       const f = (typeof window !== 'undefined' && window._psEase)
         ? window._psEase(kfs[i].ease || 'linear', fRaw) : fRaw;
@@ -677,6 +787,55 @@ async function _psAvtRenderShapes(cfg: any, startScr: any, endScr: any, behavior
   }, durMs + 200);
 }
 
+// ── Render 'background' layers as a full-screen overlay in combat ────────────
+// O botão "+Fundo" do Studio criava camadas que só o preview renderizava — todos
+// os caminhos de runtime filtravam por outros tipos e descartavam em silêncio.
+// Espelha _psDrawBackground (solid/gradient/image) em renderer.screen.
+async function _psAvtRenderBackgrounds(cfg: any) {
+  const layers = (cfg.layers || []).filter((l: any) => l.visivel && l.tipo === 'background');
+  if (!layers.length) return;
+
+  await _avtEnsurePixiParticles();
+  if (typeof PIXI === 'undefined') return;
+
+  const acq = _psAvtAcquireApp();
+  if (!acq) return;
+  const app = acq.app;
+  const durMs = cfg.duracao_ms || cfg.duration || 1000;
+  const W = app.renderer.screen.width, H = app.renderer.screen.height;
+
+  for (const l of layers) {
+    try {
+      let node: any = null;
+      if (l.bg_type === 'image' && l.bg_image_url) {
+        node = new PIXI.Sprite(_psAvtTexFrom(l.bg_image_url));
+        node.width = W; node.height = H;
+        node.alpha = l.bg_alpha ?? 1;
+      } else if (l.bg_type === 'gradient') {
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const ctx = c.getContext('2d');
+        if (!ctx) continue;
+        const ang = (l.bg_angle || 90) * Math.PI / 180;
+        const grd = ctx.createLinearGradient(
+          W / 2 - Math.cos(ang) * W / 2, H / 2 - Math.sin(ang) * H / 2,
+          W / 2 + Math.cos(ang) * W / 2, H / 2 + Math.sin(ang) * H / 2);
+        grd.addColorStop(0, l.bg_color || '#000000');
+        grd.addColorStop(1, l.bg_color2 || '#000000');
+        ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+        node = new PIXI.Sprite(PIXI.Texture.from(c));
+        node.alpha = l.bg_alpha ?? 1;
+      } else {
+        const color = parseInt((l.bg_color || '#000000').replace('#', ''), 16) || 0;
+        node = new PIXI.Graphics();
+        node.beginFill(color, l.bg_alpha || 0).drawRect(0, 0, W, H).endFill();
+      }
+      if (node) app.stage.addChild(node);
+    } catch (_) {}
+  }
+
+  _psAvtTrack(() => acq.destroy(), durMs + 200);
+}
+
 // Resolve a layer's effective anchor → { x, y, lift, pose }.
 // Prefers the new per-layer `anchor` model; otherwise falls back to legacy
 // `posicao_override` (screen point) plus the default chest lift in iso.
@@ -723,7 +882,8 @@ function _avtScaleEmitterCfg(cfg: any, s: any) {
 // Uses a similarity transform to map studio-space → screen-space. Each layer is wrapped
 // in a pose-aware iso root (upright/floor) and lifted to its configured height.
 async function _psAvtRenderWithSpawnPath(cfg: any, atacScr: any, alvoScr: any, casterEnt: any, targetEnt: any) {
-  const layers = (cfg.layers || []).filter((l: any) => l.emitter);
+  // l.visivel: paridade com os demais renderers — camada oculta no Studio não emite em jogo
+  const layers = (cfg.layers || []).filter((l: any) => l.visivel && l.emitter);
   if (!layers.length) return;
 
   await _avtEnsurePixiParticles();
@@ -760,13 +920,8 @@ async function _psAvtRenderWithSpawnPath(cfg: any, atacScr: any, alvoScr: any, c
   app.stage.addChild(bgRoot, sceneRoot, uiRoot);
 
   // Background dim / vignette (full screen, behind the effects)
-  if (cfg.background && (cfg.background.darken || cfg.background.radialDim)) {
-    const dim = new PIXI.Graphics();
-    const a = cfg.background.darken || 0.3;
-    dim.beginFill(0x000000, a).drawRect(0, 0, app.renderer.width, app.renderer.height).endFill();
-    if (cfg.background.radialDim) dim.blendMode = PIXI.BLEND_MODES.MULTIPLY;
-    bgRoot.addChild(dim);
-  }
+  const bgDim = _psBuildBackgroundDim(app, cfg.background);
+  if (bgDim) bgRoot.addChild(bgDim);
 
   // Scene-level lighting (bloom + tone) + user filters, applied to the whole effect.
   const sceneFilters = [];
@@ -792,6 +947,7 @@ async function _psAvtRenderWithSpawnPath(cfg: any, atacScr: any, alvoScr: any, c
   };
 
   const emitters: any = [];
+  const layerContainers: any = [];
   for (const l of layers) {
     const anchor = _psAvtLayerAnchor(l, atacScr, alvoScr, casterEnt, targetEnt);
     // spawn_path spans both tokens → pivot at the travel midpoint; static → the layer anchor.
@@ -799,6 +955,7 @@ async function _psAvtRenderWithSpawnPath(cfg: any, atacScr: any, alvoScr: any, c
     const span = _avtVfxSpanFns(anchor.pose, pivot);
     const root = _avtVfxRoot(sceneRoot, anchor.pose, pivot, anchor.lift);
     const container = new PIXI.Container();
+    layerContainers.push(container);
     container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
     // Per-layer glow + tint + user filters (preserve the studio look)
     const layerFilters = (typeof _avtBuildPixiFilters === 'function') ? _avtBuildPixiFilters(l.filters, container) : [];
@@ -824,6 +981,7 @@ async function _psAvtRenderWithSpawnPath(cfg: any, atacScr: any, alvoScr: any, c
     if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) {
       try { emitCfg = PIXI.particles.upgradeConfig(emitCfg, texArr); } catch (_) {}
     }
+    _psApplyBlendBehavior(emitCfg, l.blendMode);
     try {
       const em = new PIXI.particles.Emitter(container, emitCfg);
       // Initial position: start of spawn_path or the layer anchor
@@ -883,6 +1041,8 @@ async function _psAvtRenderWithSpawnPath(cfg: any, atacScr: any, alvoScr: any, c
     for (const { em } of emitters) {
       try { if (!em.destroyed) em.destroy(); } catch (_) {}
     }
+    _psAvtDestroyFilters(sceneRoot);
+    layerContainers.forEach((c: any) => _psAvtDestroyFilters(c));
     acq.destroy();
   }, durMs + 300);
 }
@@ -905,10 +1065,13 @@ async function avtPixiPlayAnimation(animId: any, atacanteEnt: any, alvoEnt: any,
     if (cfg.audio.cast)   AudioManager.playSFX(cfg.audio.cast,   { volume: vol });
     if (cfg.audio.impact) {
       const delay = (behavior === 'projectile') ? (cfg.behavior_config?.projectile_speed_ms || 500) : 0;
-      if (delay > 0) setTimeout(() => AudioManager.playSFX(cfg.audio.impact, { volume: vol }), delay);
+      if (delay > 0) _psAvtDelay(() => AudioManager.playSFX(cfg.audio.impact, { volume: vol }), delay);
       else           AudioManager.playSFX(cfg.audio.impact, { volume: vol });
     }
   }
+
+  // Camadas de fundo (tipo:'background') — overlay full-screen independente do behavior
+  _psAvtRenderBackgrounds(cfg);
 
   // Separate layers with per-layer behavior_override (follow-caster/follow-target) from the rest
   const FOLLOW_OVR = ['follow-caster', 'follow-target', 'channel'];
@@ -1014,6 +1177,7 @@ async function _psAvtRenderTravel(cfg: any, atacScr: any, alvoScr: any, path: an
     const tex = l.texture_url ? _psAvtTexFrom(l.texture_url) : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
     const texArr = [tex || PIXI.Texture.WHITE];
     if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) { try { emitCfg = PIXI.particles.upgradeConfig(emitCfg, texArr); } catch (_) {} }
+    _psApplyBlendBehavior(emitCfg, l.blendMode);
     try {
       const em = new PIXI.particles.Emitter(container, emitCfg);
       const p0 = span.pt(atacScr);
@@ -1081,16 +1245,18 @@ function _psAvtProjectile(cfg: any, atacScr: any, alvoScr: any, alvoEnt: any, at
   const avtCfg  = _psToAvtConfig(cfg);
   if (!avtCfg) return 0;
 
-  // Phase 1: cast anim at the caster's live position
+  // Phase 1: cast anim at the caster's live position. background:null — as janelas
+  // cast+impact se sobrepõem e o dim de fundo empilharia (2× o escurecimento);
+  // só a fase de impacto carrega o background.
   if (typeof _avtPixiParticleAnim === 'function') {
     const castAtac = atacanteEnt ? _psAvtToScreen(atacanteEnt) : atacScr;
-    _avtPixiParticleAnim(Object.assign({}, avtCfg, { duration: Math.min(400, speedMs) }),
+    _avtPixiParticleAnim(Object.assign({}, avtCfg, { duration: Math.min(400, speedMs), background: null }),
       castAtac, castAtac, 'atacante');
   }
 
   // Phase 2: impact anim at the target's live position after travel time (re-acquired
   // so it lands on the target token's current spot, never the one captured at fire time)
-  setTimeout(() => {
+  _psAvtDelay(() => {
     if (typeof _avtPixiParticleAnim === 'function') {
       const ends = _psAvtLiveEnds(atacanteEnt, alvoEnt, atacScr, alvoScr);
       _avtPixiParticleAnim(avtCfg, ends.atac, ends.alvo, 'alvo');
@@ -1154,6 +1320,7 @@ function _psAvtFollow(cfg: any, targetEnt: any, durMs: any) {
         if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) {
           try { emitCfg = PIXI.particles.upgradeConfig(emitCfg, texArr); } catch (_) {}
         }
+        _psApplyBlendBehavior(emitCfg, l.blendMode);
         const em = new PIXI.particles.Emitter(container, emitCfg);
         em.updateSpawnPos(startScr.x, startScr.y);
         em.emit = true;
@@ -1222,11 +1389,13 @@ function _psAvtChain(cfg: any, atacanteEnt: any, alvoEnt: any, isAreaMode: any) 
   const seq = cfg.behavior_config?.sequence || [];
   let delay = 0;
   for (const step of seq) {
-    const stepDelay = delay;
-    setTimeout(() => {
-      if (step.animId) avtPixiPlayAnimation(step.animId, atacanteEnt, alvoEnt, isAreaMode);
-    }, stepDelay);
+    // Soma ANTES de agendar: a UI promete "delay (ms) antes deste passo", mas o
+    // acumulador era somado depois — o delay de cada passo atrasava o seguinte,
+    // o do 1º era ignorado e o do último nunca valia.
     delay += (step.delay_ms || 0);
+    _psAvtDelay(() => {
+      if (step.animId) avtPixiPlayAnimation(step.animId, atacanteEnt, alvoEnt, isAreaMode);
+    }, delay);
   }
 }
 
@@ -1234,23 +1403,37 @@ function _psAvtChain(cfg: any, atacanteEnt: any, alvoEnt: any, isAreaMode: any) 
 // Used for status effects that last multiple turns (HoT, DoT, Atravessar, etc.)
 // key: unique string (e.g. "entId_efeitoNome") to identify this animation
 // posicao: 'alvo' | 'atacante' | 'meio' — which entity to follow
+//
+// Guarda anti-race: o stop roda ANTES de dois awaits. Duas chamadas próximas com a
+// mesma key (reaplicação de buff, local + broadcast do peer) registravam as duas e o
+// cleanup da primeira se perdia — emissor órfão até o TTL. O token por key invalida a
+// chamada mais antiga; a geração invalida tudo que estava em voo num avtPixiCleanupAll.
+var _psAvtGen = 0;
+var _PS_PERSIST_PENDING = new Map();  // key -> token da chamada mais recente
 async function avtPixiPlayPersistent(animId: any, alvoEnt: any, casterEnt: any, posicao: any, key: any) {
   avtPixiStopPersistent(key);  // stop any existing animation for this key
+  const token = {};
+  const gen = _psAvtGen;
+  _PS_PERSIST_PENDING.set(key, token);
+  const stale = () => _PS_PERSIST_PENDING.get(key) !== token || _psAvtGen !== gen;
+  const bail = () => { if (!stale()) _PS_PERSIST_PENDING.delete(key); };
 
   const cfg = await _psAvtLoadCfg(animId);
-  if (!cfg || !cfg.layers?.length) return;
+  if (stale()) return;
+  if (!cfg || !cfg.layers?.length) return bail();
 
   await _avtEnsurePixiParticles();
-  if (typeof PIXI === 'undefined') return;
+  if (stale()) return;
+  if (typeof PIXI === 'undefined') return bail();
 
   const canvas = AVT_STATE.canvas;
-  if (!canvas) return;
+  if (!canvas) return bail();
 
   const primaryEnt = (posicao === 'atacante') ? (casterEnt || alvoEnt) : (alvoEnt || casterEnt);
-  if (!primaryEnt) return;
+  if (!primaryEnt) return bail();
 
   const acq = _psAvtAcquireApp();
-  if (!acq) return;
+  if (!acq) return bail();
   const app = acq.app;
 
   const vfxScale = _avtVfxScale(cfg);
@@ -1284,6 +1467,7 @@ async function avtPixiPlayPersistent(animId: any, alvoEnt: any, casterEnt: any, 
       const tex = l.texture_url ? _psAvtTexFrom(l.texture_url) : (typeof _avtProcTextures === 'function' ? _avtProcTextures(l.texture || 'spark') : null);
       const texArr = [tex || PIXI.Texture.WHITE];
       if (PIXI.particles?.upgradeConfig && !Array.isArray(emitCfg.behaviors)) { try { emitCfg = PIXI.particles.upgradeConfig(emitCfg, texArr); } catch (_) {} }
+      _psApplyBlendBehavior(emitCfg, l.blendMode);
       try {
         const em = new PIXI.particles.Emitter(container, emitCfg);
         em.updateSpawnPos(startScr.x, startScr.y);
@@ -1397,6 +1581,7 @@ async function avtPixiPlayPersistent(animId: any, alvoEnt: any, casterEnt: any, 
   app.ticker.add(trackFn);
 
   let _persistDone = false;
+  const entry: any = {};
   const cleanup = () => {
     if (_persistDone) return;
     _persistDone = true;
@@ -1406,10 +1591,17 @@ async function avtPixiPlayPersistent(animId: any, alvoEnt: any, casterEnt: any, 
       try { if (!em.em.destroyed) em.em.destroy(); } catch (_) {}
     }
     acq.destroy();
-    _PS_PERSISTENT.delete(key);
+    // Só remove a PRÓPRIA entrada: uma chamada stale limpando-se não pode
+    // derrubar o registro da chamada mais nova que já assumiu a key.
+    if (_PS_PERSISTENT.get(key) === entry) _PS_PERSISTENT.delete(key);
   };
+  entry.cleanup = cleanup;
 
-  _PS_PERSISTENT.set(key, { cleanup });
+  // A key foi reivindicada por outra chamada (ou houve teardown global) durante a
+  // montagem — desfaz tudo que este caminho alocou em vez de registrar um órfão.
+  if (stale()) { cleanup(); return; }
+  _PS_PERSISTENT.set(key, entry);
+  _PS_PERSIST_PENDING.delete(key);
 }
 
 function avtPixiStopPersistent(key: any) {
@@ -1419,6 +1611,12 @@ function avtPixiStopPersistent(key: any) {
 
 // ── Cleanup all active animations (one-shots, follow/channel E persistentes) ──
 function avtPixiCleanupAll() {
+  // Invalida montagens de persistentes em voo (paradas num await) e mata os
+  // timers de fases futuras (chain/impacto/SFX) — nada pode tocar na cena seguinte.
+  _psAvtGen++;
+  _PS_PERSIST_PENDING.clear();
+  for (const id of _PS_AVT_TIMERS) clearTimeout(id);
+  _PS_AVT_TIMERS.clear();
   const entries = _PS_AVT_ACTIVE.slice();
   _PS_AVT_ACTIVE = [];
   for (const entry of entries) {
@@ -1493,6 +1691,8 @@ Object.defineProperty(globalThis, "_psAvtInterpGeneric", { configurable: true, g
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_psAvtRenderShapes", { configurable: true, get: () => _psAvtRenderShapes, set: (__v) => { _psAvtRenderShapes = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtRenderBackgrounds", { configurable: true, get: () => _psAvtRenderBackgrounds, set: (__v) => { _psAvtRenderBackgrounds = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_psAvtLayerAnchor", { configurable: true, get: () => _psAvtLayerAnchor, set: (__v) => { _psAvtLayerAnchor = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtScaleEmitterCfg", { configurable: true, get: () => _avtScaleEmitterCfg, set: (__v) => { _avtScaleEmitterCfg = __v; } });
@@ -1518,3 +1718,19 @@ Object.defineProperty(globalThis, "avtPixiPlayPersistent", { configurable: true,
 Object.defineProperty(globalThis, "avtPixiStopPersistent", { configurable: true, get: () => avtPixiStopPersistent, set: (__v) => { avtPixiStopPersistent = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "avtPixiCleanupAll", { configurable: true, get: () => avtPixiCleanupAll, set: (__v) => { avtPixiCleanupAll = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psBuildBackgroundDim", { configurable: true, get: () => _psBuildBackgroundDim, set: (__v) => { _psBuildBackgroundDim = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psVignetteTexture", { configurable: true, get: () => _psVignetteTexture, set: (__v) => { _psVignetteTexture = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psFixEmitterGhost", { configurable: true, get: () => _psFixEmitterGhost, set: (__v) => { _psFixEmitterGhost = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psSanitizeCfg", { configurable: true, get: () => _psSanitizeCfg, set: (__v) => { _psSanitizeCfg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtDestroyFilters", { configurable: true, get: () => _psAvtDestroyFilters, set: (__v) => { _psAvtDestroyFilters = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psApplyBlendBehavior", { configurable: true, get: () => _psApplyBlendBehavior, set: (__v) => { _psApplyBlendBehavior = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtDelay", { configurable: true, get: () => _psAvtDelay, set: (__v) => { _psAvtDelay = __v; } });
+Object.defineProperty(globalThis, "_PS_AVT_TIMERS", { configurable: true, get: () => _PS_AVT_TIMERS, set: (__v) => { _PS_AVT_TIMERS = __v; } });
+Object.defineProperty(globalThis, "_PS_PERSIST_PENDING", { configurable: true, get: () => _PS_PERSIST_PENDING, set: (__v) => { _PS_PERSIST_PENDING = __v; } });

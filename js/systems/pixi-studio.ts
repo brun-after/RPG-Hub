@@ -270,6 +270,7 @@ async function psCarregarAnimacao(id: any) {
   const row = PIXI_STUDIO_STATE.animacoes.find((a: any) => a.id === id);
   if (!row) return;
   PIXI_STUDIO_STATE.atual = JSON.parse(JSON.stringify(row));
+  if (typeof _psSanitizeCfg === 'function') _psSanitizeCfg(PIXI_STUDIO_STATE.atual.config_json);
   PIXI_STUDIO_STATE._dirty = false;
   _psHistoryReset();
   PIXI_STUDIO_STATE.layerSel = null;
@@ -304,7 +305,9 @@ function _psDefaultConfig() {
     version: 3, behavior: 'one-shot', duracao_ms: 1000, posicao: 'alvo',
     camera: { shake: { amp: 4, decay: 0.92, freq: 32 } },
     lighting: { bloom: { threshold: 0.6, intensity: 0.7, quality: 4 }, tone: 'filmic' },
-    background: { darken: 0.1 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
+    // darken 0: animação nova não escurece o mapa por padrão — o mestre liga
+    // conscientemente pelo slider "Escurecer fundo" (era 0.1 e lia como bug em jogo).
+    background: { darken: 0 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l_' + Date.now(), tipo: 'emitter', nome: 'Partículas', visivel: true, z: 3,
         blendMode: 'add', texture: 'spark', texture_url: null as any, glow: null as any,
@@ -492,8 +495,15 @@ function psMoveLayer(layerId: any, dir: any) {
   const newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= layers.length) return;
   const tmp = layers[idx]; layers[idx] = layers[newIdx]; layers[newIdx] = tmp;
+  // O render ordena por z, não pela posição no array — sem trocar os z as setas
+  // só mexiam na lista lateral. z iguais (comum: default 3) são reindexados pela
+  // nova ordem do array para o swap ter efeito visível.
+  const za = layers[idx].z ?? 0, zb = layers[newIdx].z ?? 0;
+  if (za === zb) layers.forEach((l: any, i: number) => { l.z = i; });
+  else { layers[idx].z = zb; layers[newIdx].z = za; }
   _psSetDirty(true);
   _psRenderLayerList();
+  psPreviewRebuildAll();
 }
 
 function psSelectLayer(layerId: any) {
@@ -524,6 +534,10 @@ function psUpdateLayerProp(layerId: any, key: any, value: any) {
 function psUpdateEmitterProp(layerId: any, key: any, value: any) {
   const layer = _psGetLayer(layerId);
   if (!layer || !layer.emitter) return;
+  // Call sites passam a chave prefixada ('emitter.maxParticles'), mas a raiz aqui
+  // já é layer.emitter — sem o strip, tudo ia para layer.emitter.emitter.* e
+  // nenhum slider tinha efeito (o fantasma é saneado por _psFixEmitterGhost).
+  key = String(key).replace(/^emitter\./, '');
   if (key.includes('.')) {
     const parts = key.split('.');
     let obj = layer.emitter;
@@ -795,7 +809,26 @@ ${L.bloom ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;marg
   <select onchange="psSetLighting('tone',this.value)" style="width:100%;padding:5px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem">
     ${[['none','nenhum'],['filmic','filmic'],['aces','aces']].map(([v,l])=>`<option value="${v}"${(L.tone||'none')===v?' selected':''}>${l}</option>`).join('')}
   </select></div>
+${_psBackgroundHtml(cfg)}
 </div>`;
+}
+// ── Background dim (darken + vinheta) ────────────────────────────────────────
+function _psBackgroundHtml(cfg: any) {
+  const bg = cfg.background || {};
+  const d = bg.darken || 0;
+  return `<div style="border-top:1px solid var(--borda);padding-top:8px;margin-top:8px">
+<div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">Fundo</div>
+<div class="form-group"><label style="font-size:0.6rem;display:flex;justify-content:space-between">Escurecer fundo<span>${d.toFixed(2)}</span></label>
+  <input type="range" min="0" max="0.8" step="0.05" value="${d}" oninput="this.previousElementSibling.querySelector('span').textContent=parseFloat(this.value).toFixed(2);psSetBackground('darken',parseFloat(this.value))" style="width:100%"></div>
+<label style="display:flex;align-items:center;gap:6px;font-size:0.7rem;cursor:pointer;margin-top:4px">
+  <input type="checkbox" ${bg.radialDim ? 'checked' : ''} onchange="psSetBackground('radialDim',this.checked)"> Vinheta radial (escurece só as bordas)</label>
+</div>`;
+}
+function psSetBackground(key: any, val: any) {
+  const cfg = PIXI_STUDIO_STATE.atual?.config_json; if (!cfg) return;
+  if (!cfg.background) cfg.background = {};
+  cfg.background[key] = val;
+  _psSetDirty(true); psPreviewRebuildAll();
 }
 function psToggleBloom(on: any) {
   const cfg = PIXI_STUDIO_STATE.atual?.config_json; if (!cfg) return;
@@ -1107,9 +1140,13 @@ function psSetAnchorHeight(id: any, zFrac: any) {
   _psRenderPropsPanel(); psPreviewRebuildAll();
 }
 
+// parseFloat com default explícito: `parseFloat(v)||d` devolvia o valor antigo
+// quando o slider ia a 0 — nenhum range conseguia chegar a zero.
+function psNum(v: any, d: any) { const n = parseFloat(v); return isNaN(n) ? d : n; }
+
 function _psRangeHtml(layerId: any, label: any, key: any, val: any, min: any, max: any, step: any, isEmitter: any) {
-  const fn = isEmitter ? `psUpdateEmitterProp('${layerId}','${key}',parseFloat(this.value)||${val})`
-                       : `psUpdateLayerProp('${layerId}','${key}',parseFloat(this.value)||${val})`;
+  const fn = isEmitter ? `psUpdateEmitterProp('${layerId}','${key}',psNum(this.value,${val}))`
+                       : `psUpdateLayerProp('${layerId}','${key}',psNum(this.value,${val}))`;
   return `<div class="form-group"><label style="font-size:0.62rem;display:flex;justify-content:space-between">${label}<span id="ps-rv-${layerId}-${key.replace(/\./g,'-')}">${val}</span></label>
   <input type="range" min="${min}" max="${max}" step="${step}" value="${val}"
     oninput="document.getElementById('ps-rv-${layerId}-${key.replace(/\./g,'-')}').textContent=this.value;${fn}"
@@ -1338,6 +1375,8 @@ function psUpdateColorStop(layerId: any, idx: any, key: any, value: any) {
   const layer = _psGetLayer(layerId);
   if (!layer?.emitter?.color?.list) return;
   layer.emitter.color.list[idx][key] = value;
+  // Paridade com alpha/scale stops: gradiente fora de ordem quebra o upgradeConfig
+  if (key === 'time') layer.emitter.color.list.sort((a: any, b: any) => a.time - b.time);
   _psSetDirty(true);
   psPreviewSyncEmitter(layerId);
   // Refresh gradient preview
@@ -1574,6 +1613,28 @@ async function psPreviewMount() {
     PIXI_STUDIO_STATE._lastTs = 0;
     cancelAnimationFrame(PIXI_STUDIO_STATE._rafId);
     PIXI_STUDIO_STATE._rafId = requestAnimationFrame(_psPreviewTick);
+
+    // Acompanha resize do container (debounce): sem isto o preview ficava esticado
+    // e o hitArea desalinhava após redimensionar a janela/painel.
+    if (typeof ResizeObserver !== 'undefined' && canvas.parentElement) {
+      const obs = new ResizeObserver(() => {
+        clearTimeout(_psResizeTimer);
+        _psResizeTimer = setTimeout(() => {
+          const a = PIXI_STUDIO_STATE.previewApp;
+          const cv: any = document.getElementById('ps-preview-canvas');
+          if (!a || !cv) return;
+          const nw = cv.offsetWidth || 480, nh = cv.offsetHeight || 300;
+          if (nw === a.renderer.screen.width && nh === a.renderer.screen.height) return;
+          try {
+            a.renderer.resize(nw, nh);
+            a.stage.hitArea = new PIXI.Rectangle(0, 0, nw, nh);
+            psPreviewRebuildAll();
+          } catch (_) {}
+        }, 150);
+      });
+      obs.observe(canvas.parentElement);
+      (PIXI_STUDIO_STATE as any)._resizeObs = obs;
+    }
   } catch (e) {
     console.warn('[pixi-studio] preview setup failed', e);
     try { app.destroy(false, { children: true, texture: false }); } catch (_) {}
@@ -1587,6 +1648,12 @@ function psPreviewUnmount() {
   cancelAnimationFrame(PIXI_STUDIO_STATE._rafId);
   PIXI_STUDIO_STATE.previewPlaying = false;
   PIXI_STUDIO_STATE.previewTime = 0;
+  _psClearAudioTimers();
+  if ((PIXI_STUDIO_STATE as any)._resizeObs) {
+    try { (PIXI_STUDIO_STATE as any)._resizeObs.disconnect(); } catch (_) {}
+    (PIXI_STUDIO_STATE as any)._resizeObs = null;
+  }
+  clearTimeout(_psResizeTimer);
   _psDestroyAllEmitters();
   if (PIXI_STUDIO_STATE.previewApp) {
     try { PIXI_STUDIO_STATE.previewApp.destroy(false, { children: true, texture: false }); } catch (_) {}
@@ -1634,23 +1701,29 @@ function _psDoPlay() {
 }
 
 // Play the animation's audio (cast/impact/timed events) during preview — mirrors avtPixiPlayAnimation
+function _psClearAudioTimers() {
+  ((PIXI_STUDIO_STATE as any)._audioTimers || []).forEach((id: any) => clearTimeout(id));
+  (PIXI_STUDIO_STATE as any)._audioTimers = [];
+}
 function _psPlayPreviewAudio() {
   const cfg = PIXI_STUDIO_STATE.atual?.config_json;
   if (!cfg || typeof AudioManager === 'undefined') return;
+  _psClearAudioTimers();
+  const timers = (PIXI_STUDIO_STATE as any)._audioTimers;
   const a = cfg.audio || {};
   const vol = a.volume ?? 0.75;
   const play = (id: any, v?: any) => { try { AudioManager.playSFX(id, { volume: v ?? vol }); } catch (_) {} };
   if (a.cast) play(a.cast);
   if (a.impact) {
     const delay = (cfg.behavior === 'projectile') ? (cfg.behavior_config?.projectile_speed_ms || 500) : 0;
-    if (delay > 0) setTimeout(() => { if (PIXI_STUDIO_STATE.previewPlaying) play(a.impact); }, delay);
+    if (delay > 0) timers.push(setTimeout(() => { if (PIXI_STUDIO_STATE.previewPlaying) play(a.impact); }, delay));
     else play(a.impact);
   }
   const dur = cfg.duracao_ms || 1000;
   (a.events || []).forEach((ev: any) => {
     if (!ev || !ev.sfx) return;
     const at = Math.max(0, Math.min(1, ev.t ?? 0)) * dur;
-    setTimeout(() => { if (PIXI_STUDIO_STATE.previewPlaying) play(ev.sfx, ev.volume); }, at);
+    timers.push(setTimeout(() => { if (PIXI_STUDIO_STATE.previewPlaying) play(ev.sfx, ev.volume); }, at));
   });
 }
 
@@ -1661,6 +1734,7 @@ function psPreviewPause() {
 function psPreviewStop() {
   PIXI_STUDIO_STATE.previewPlaying = false;
   PIXI_STUDIO_STATE.previewTime = 0;
+  _psClearAudioTimers();
   _psUpdateTimeDisplay(0);
   // Reset sprites to t=0 visually
   if (PIXI_STUDIO_STATE.previewApp) _psPreviewRenderFrame(0);
@@ -2072,7 +2146,9 @@ function _psInterpKf(keyframes: any, t: any) {
   for (let i = 0; i < sorted.length - 1; i++) {
     if (t >= sorted[i].t && t <= sorted[i + 1].t) { lo = sorted[i]; hi = sorted[i + 1]; break; }
   }
-  const fRaw = (t - lo.t) / (hi.t - lo.t);
+  // Keyframes com o mesmo t (drag/arredondamento) zeram o denominador → NaN em x/y/scale
+  const denom = hi.t - lo.t;
+  const fRaw = denom > 0 ? (t - lo.t) / denom : 0;
   // Easing is owned by the *outgoing* keyframe (lo). Default linear = legacy behavior.
   const f = _psEase(lo.ease || 'linear', fRaw);
   const lerp = (a: any, b: any) => typeof a === 'number' && typeof b === 'number' ? a + (b - a) * f : a;
@@ -2164,11 +2240,10 @@ function psPreviewRebuildAll() {
   const fxOn = (PIXI_STUDIO_STATE as any)._fxEnabled !== false;
   (PIXI_STUDIO_STATE as any)._originGizmo = null;
 
-  // Background darken (parity with runtime _avtPixiParticleAnim) — behind effect layers
-  if (fxOn && cfg.background && cfg.background.darken) {
-    const dim = new PIXI.Graphics();
-    dim.beginFill(0x000000, cfg.background.darken).drawRect(0, 0, app.renderer.width, app.renderer.height).endFill();
-    worldRoot.addChild(dim);
+  // Background darken/vinheta (parity with runtime _avtPixiParticleAnim) — behind effect layers
+  if (fxOn && typeof _psBuildBackgroundDim === 'function') {
+    const dim = _psBuildBackgroundDim(app, cfg.background);
+    if (dim) worldRoot.addChild(dim);
   }
 
   for (const layer of sorted) {
@@ -2627,6 +2702,8 @@ function _psCreateEmitter(layer: any, container: any, x: any, y: any) {
     try { cfg = PIXI.particles.upgradeConfig(cfg, texArr); }
     catch (e) { console.warn('[pixi-studio] upgradeConfig failed:', e); }
   }
+  // Blend real por-partícula (blendMode no Container é no-op) — WYSIWYG com o runtime
+  if (typeof _psApplyBlendBehavior === 'function') _psApplyBlendBehavior(cfg, layer.blendMode);
   // Per-emitter light cast (cheap fake lighting) — parity with runtime
   if (layer.lightCast) {
     try {
@@ -2794,18 +2871,24 @@ function psTimelineScrubEnd() {
   document.removeEventListener('touchend', psTimelineScrubEnd);
 }
 function psTimelineKfDragStart(layerId: any, kfIdx: any, e: any) {
-  PIXI_STUDIO_STATE._kfDrag = { layerId, kfIdx };
+  // Guarda a REFERÊNCIA do keyframe, não o índice: psUpdateKeyframe re-sorteia o
+  // array a cada movimento, então um índice fixo passa a apontar para o vizinho
+  // assim que o keyframe arrastado cruza outro.
+  const kf = _psGetLayer(layerId)?.keyframes?.[kfIdx] || null;
+  PIXI_STUDIO_STATE._kfDrag = { layerId, kf };
   document.addEventListener('mousemove', _psKfDragMove);
   document.addEventListener('mouseup', _psKfDragEnd);
 }
 function _psKfDragMove(e: any) {
-  if (!PIXI_STUDIO_STATE._kfDrag) return;
-  const { layerId, kfIdx } = PIXI_STUDIO_STATE._kfDrag;
+  const d = PIXI_STUDIO_STATE._kfDrag;
+  if (!d || !d.kf) return;
+  const idx = _psGetLayer(d.layerId)?.keyframes?.indexOf(d.kf) ?? -1;
+  if (idx < 0) return;
   const ruler = document.getElementById('ps-tl-ruler');
   if (!ruler) return;
   const rect = ruler.getBoundingClientRect();
   const t = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  psUpdateKeyframe(layerId, kfIdx, { t });
+  psUpdateKeyframe(d.layerId, idx, { t });
 }
 function _psKfDragEnd() {
   PIXI_STUDIO_STATE._kfDrag = null;
@@ -3073,7 +3156,11 @@ function psImportarJson(jsonStr: any) {
   try { parsed = JSON.parse(jsonStr); } catch (e: any) { return mostrarToast('JSON inválido: ' + e.message, 'erro'); }
 
   let config;
-  if (parsed.version === 2 && parsed.layers) {
+  // Discrimina pela ESTRUTURA, não pela version: o save grava version 3 e o check
+  // `version === 2` fazia o próprio export do Studio cair no ramo de config cru,
+  // descartando layers/câmera/áudio no round-trip. Configs crus de particle-emitter
+  // nunca têm `layers`.
+  if (Array.isArray(parsed.layers)) {
     // Full Studio config — validate emitter layers
     config = parsed;
     (config.layers || []).forEach((l: any) => {
@@ -3085,6 +3172,7 @@ function psImportarJson(jsonStr: any) {
     config.layers[0].emitter = _psValidateEmitterCfg(parsed);
     config.layers[0].nome = 'Importado';
   }
+  if (typeof _psSanitizeCfg === 'function') _psSanitizeCfg(config);
   (config.layers || []).forEach((l: any, i: any) => { if (!l.id) l.id = 'l_' + Date.now() + '_' + i; });
 
   if (!PIXI_STUDIO_STATE.atual) psNova();
@@ -3302,6 +3390,8 @@ window.psUpdateAudioEvent     = psUpdateAudioEvent;
 window.psRemoveAudioEvent     = psRemoveAudioEvent;
 window.psToggleBloom          = psToggleBloom;
 window.psSetLighting          = psSetLighting;
+window.psSetBackground        = psSetBackground;
+window.psNum                  = psNum;
 window.psSetTravel            = psSetTravel;
 window.psChainAdd             = psChainAdd;
 window.psChainSetDelay        = psChainSetDelay;
@@ -3423,6 +3513,10 @@ Object.defineProperty(globalThis, "_psLightingHtml", { configurable: true, get: 
 Object.defineProperty(globalThis, "psToggleBloom", { configurable: true, get: () => psToggleBloom, set: (__v) => { psToggleBloom = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "psSetLighting", { configurable: true, get: () => psSetLighting, set: (__v) => { psSetLighting = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psSetBackground", { configurable: true, get: () => psSetBackground, set: (__v) => { psSetBackground = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psNum", { configurable: true, get: () => psNum, set: (__v) => { psNum = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_psScreenFxHtml", { configurable: true, get: () => _psScreenFxHtml, set: (__v) => { _psScreenFxHtml = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])

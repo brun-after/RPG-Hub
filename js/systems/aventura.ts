@@ -11421,6 +11421,10 @@ function _avtIniciarAnimPersistente(ef: any, entAlvo: any, casterEnt: any, _from
         tipo:       ef.tipo,
         alvoNome:   entAlvo?.nome || null,
         casterNome: casterEnt?.nome || null,
+        // IDs para resolução exata no peer (nomes duplicados animavam o token errado
+        // e a key de stop `${id}_${tipo}` reconstruída da entidade errada nunca parava)
+        alvoId:     entAlvo?.id ?? null,
+        casterId:   casterEnt?.id ?? null,
       });
     } catch(_) {}
   }
@@ -11431,7 +11435,7 @@ function _avtPararAnimPersistente(ef: any, entAlvo: any, _fromNet?: any) {
   if (typeof avtPixiStopPersistent !== 'function') return;
   avtPixiStopPersistent(`${entAlvo?.id}_${ef.tipo}`);
   if (!_fromNet) {
-    try { _avtBroadcast('avt_efeito_anim_stop', { tipo: ef.tipo, alvoNome: entAlvo?.nome || null }); } catch(_) {}
+    try { _avtBroadcast('avt_efeito_anim_stop', { tipo: ef.tipo, alvoNome: entAlvo?.nome || null, alvoId: entAlvo?.id ?? null }); } catch(_) {}
   }
 }
 
@@ -17719,11 +17723,16 @@ function _avtSkillAnimEmit({ sk, casterEnt, alvoEnt = null, isArea = false,
   catch (e) { console.warn('[avt-fx] play:', e); }
   finally { if (isArea) { AVT_STATE._areaCentro = _sc; AVT_STATE._areaLinha = _sl; } }
   try {
+    // IDs junto dos nomes: nomes duplicados (dois monstros iguais) faziam o peer
+    // animar o token errado. Receptores novos resolvem por ID; clientes antigos
+    // ignoram os campos extras e seguem pelo nome (retrocompatível nos 2 sentidos).
     const payload: any = { skillId: sk.id || null, animacao: sk.animacao || null,
-      atacanteNome: caster?.nome, alvoNome: alvoNome || alvo?.nome };
+      atacanteNome: caster?.nome, alvoNome: alvoNome || alvo?.nome,
+      atacanteId: caster?.id ?? null, alvoId: alvo?.id ?? null };
     if (isArea) {
       // Âncora no conjurador: rótulos de área não resolvem entidade nos peers.
       payload.alvoNome = caster?.nome;
+      payload.alvoId = caster?.id ?? null;
       payload.areaCentro = areaCentro; payload.areaLinha = areaLinha;
     }
     _avtBroadcast('avt_skill_anim', payload);
@@ -18516,7 +18525,11 @@ function _avtProcTextures(name: any) {
       g.beginPath(); g.arc(r*0.78, r*0.72, r*0.14, 0, Math.PI*2); g.fill();
       g.beginPath(); g.arc(r*1.22, r*0.72, r*0.14, 0, Math.PI*2); g.fill();
     });
-    default: return PIXI.Texture.WHITE;
+    default:
+      // Texture.WHITE é 1×1 sólido — escalado vira um quadrado chapado na tela.
+      // Nome desconhecido (preset antigo/typo) degrada para 'spark' com aviso.
+      console.warn('[pixi-fx] textura desconhecida:', name, '— usando spark');
+      return _avtProcTextures('spark');
   }
 }
 
@@ -19949,7 +19962,9 @@ function _avtCameraFX(app: any, worldRoot: any, uiRoot: any, camCfg: any, totalD
   if (Craw.hitstop && IP.hitstopMul > 0) (C as any).hitstop = Object.assign({}, Craw.hitstop, { ms: (Craw.hitstop.ms || 0) * IP.hitstopMul });
   if (Craw.zoomPunch && IP.zoomPunchMul > 0) (C as any).zoomPunch = Object.assign({}, Craw.zoomPunch, { scale: 1 + ((Craw.zoomPunch.scale || 1) - 1) * IP.zoomPunchMul });
   if (Craw.chromaticAberration && IP.chromaticMul > 0) (C as any).chromaticAberration = Object.assign({}, Craw.chromaticAberration, { amount: (Craw.chromaticAberration.amount || 0) * IP.chromaticMul });
-  const W = app.renderer.width, H = app.renderer.height;
+  // renderer.screen (coordenadas do stage), não renderer.width/height (backing store):
+  // com resolution ≠ 1 (overlay iso) o flash cobriria só parte da tela.
+  const W = app.renderer.screen.width, H = app.renderer.screen.height;
   const baseX = worldRoot.position.x, baseY = worldRoot.position.y;
   const baseScale = worldRoot.scale.x;
 
@@ -19965,7 +19980,7 @@ function _avtCameraFX(app: any, worldRoot: any, uiRoot: any, camCfg: any, totalD
   }
 
   // RGB split filter (chromatic aberration)
-  let rgb = null;
+  let rgb: any = null;
   if ((C as any).chromaticAberration && !reducedMotion && PIXI.filters && PIXI.filters.RGBSplitFilter) {
     rgb = new PIXI.filters.RGBSplitFilter([0,0],[0,0],[0,0]);
     uiRoot.filters = (uiRoot.filters || []).concat(rgb);
@@ -20025,6 +20040,13 @@ function _avtCameraFX(app: any, worldRoot: any, uiRoot: any, camCfg: any, totalD
   app.ticker.add(tick);
   return () => {
     try { app.ticker.remove(tick); } catch(_) {}
+    // O RGBSplit pendurado em uiRoot.filters segura framebuffers que nenhum outro
+    // teardown alcança — remove da lista e destrói aqui, onde a ref existe.
+    if (rgb) {
+      try { uiRoot.filters = (uiRoot.filters || []).filter((f: any) => f !== rgb); } catch(_) {}
+      try { (rgb as any).destroy && (rgb as any).destroy(); } catch(_) {}
+      rgb = null;
+    }
     worldRoot.position.set(baseX, baseY);
     worldRoot.scale.set(baseScale);
     (AVT_STATE as any)._fxFreezeUntil = 0;
@@ -20391,12 +20413,9 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
       app.stage.addChild(uiRoot);
 
       // Background dim (vignette) — tela cheia, atrás dos efeitos (não billboarda)
-      if (root.background && (root.background.darken || root.background.radialDim)) {
-        const dim = new PIXI.Graphics();
-        const a = root.background.darken || 0.3;
-        dim.beginFill(0x000000, a).drawRect(0,0,app.renderer.width, app.renderer.height).endFill();
-        if (root.background.radialDim) dim.blendMode = PIXI.BLEND_MODES.MULTIPLY;
-        bgRoot.addChild(dim);
+      if (typeof _psBuildBackgroundDim === 'function') {
+        const dim = _psBuildBackgroundDim(app, root.background);
+        if (dim) bgRoot.addChild(dim);
       }
 
       // Global filters: bloom + tone + user-defined
@@ -20449,6 +20468,11 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
           const isV5 = Array.isArray(cfg.behaviors);
           if (!isV5 && PIXI.particles.upgradeConfig) {
             try { cfg = PIXI.particles.upgradeConfig(cfg, textures); } catch(_) {}
+          }
+          // Blend real por-partícula: blendMode em Container é no-op no PIXI v7
+          // (a atribuição abaixo continua existindo só para o trail ler).
+          if (typeof _psApplyBlendBehavior === 'function') {
+            _psApplyBlendBehavior(cfg, (layer.blendMode || root.blendMode || '').toLowerCase());
           }
           totalParticleCap += (cfg.maxParticles || 50);
 
@@ -20673,6 +20697,13 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
           packs.forEach((p: any) => p.emitters.forEach((em: any) => {
             try { em.emit = false; em.destroy(); } catch(_) {}
           }));
+          // Filtros seguram render-textures que o destroy do stage NÃO libera —
+          // sem destruí-los explicitamente cada efeito vazava GPU (o editor já
+          // fazia isto via _psDestroyFilters; o runtime nunca recebeu o mesmo).
+          if (typeof _psAvtDestroyFilters === 'function') {
+            _psAvtDestroyFilters(worldRoot);
+            packs.forEach((p: any) => { if (p.layerContainer) _psAvtDestroyFilters(p.layerContainer); });
+          }
           if (_usaHost) {
             try { app.destroy(); } catch(_) {} // adapter: destrói o Container e libera o host
           } else {
@@ -20683,6 +20714,21 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
           }
           (AVT_STATE as any)._fxFreezeUntil = 0;
         }, totalDuration + 1100);
+      }).catch((e) => {
+        // Sem este catch, uma exceção na montagem assíncrona (cameraFX, filtros,
+        // emitters) deixaria bgRoot/dim adicionados sincronamente presos no stage
+        // do host para sempre — retângulo escuro permanente sobre o mapa.
+        console.warn('[pixi-fx] montagem de camadas falhou:', e);
+        if (typeof _psAvtDestroyFilters === 'function') _psAvtDestroyFilters(worldRoot);
+        if (_usaHost) {
+          try { if (app) app.destroy(); } catch(_) {} // adapter: remove tickFns e destrói o Container
+        } else {
+          if (overlayCanvas) overlayCanvas.remove();
+          try { if (app) (app as any).destroy(true); } catch(_) {}
+          _avtPixiActiveApps--;
+          _avtPixiDrainQueue();
+        }
+        (AVT_STATE as any)._fxFreezeUntil = 0;
       });
     } catch(e) {
       console.warn('[pixi-fx] erro ao iniciar:', e);
@@ -22995,20 +23041,24 @@ function avtReceberLevelConfigUpdate({ config }: any = {}) {
 window.avtReceberLevelConfigUpdate = avtReceberLevelConfigUpdate;
 
 // Receber broadcast de animação de skill — re-toca localmente
-function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, animacao, areaCentro, areaLinha, faseId }: any = {}) {
+function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, atacanteId, alvoId, animacao, areaCentro, areaLinha, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof _avtPlaySkillAnim !== 'function') return;
     let sk = skillId ? (AVT_STATE.skills || []).find((s: any) => s.id === skillId) : null;
     if (!sk && animacao) sk = { id: skillId, animacao };
     if (!sk) return;
-    const atac = AVT_STATE.entidades.find((e: any) => e.nome === atacanteNome);
+    // ID primeiro (nomes duplicados resolvem o token errado); nome é o fallback
+    // para payloads de clientes antigos que não enviam os IDs.
+    const atac = (atacanteId != null && _avtEntById(atacanteId))
+              || AVT_STATE.entidades.find((e: any) => e.nome === atacanteNome);
     if (!atac) return;
     const isArea = !!(areaCentro || areaLinha);
     // Skill de área: o alvo enviado é o próprio conjurador (âncora) e a geometria vem no
     // payload, pois _areaCentro/_areaLinha são estado local de quem conjurou. Sem isso, a
     // animação de área não aparecia para os peers (o rótulo de área não resolve entidade).
-    let alvo = AVT_STATE.entidades.find((e: any) => e.nome === alvoNome);
+    let alvo = (alvoId != null && _avtEntById(alvoId))
+            || AVT_STATE.entidades.find((e: any) => e.nome === alvoNome);
     if (!alvo) {
       if (!isArea) return; // alvo único não resolvido: comportamento antigo (não anima)
       alvo = atac;
@@ -23029,13 +23079,17 @@ window.avtReceberSkillAnim = avtReceberSkillAnim;
 // Receber broadcast de início de animação persistente de efeito (Rastro Persona,
 // Atravessar, modificadores de ataque básico, etc.). Espelha avtReceberSkillAnim:
 // resolve as entidades por nome e reconstrói a chave local antes de tocar.
-function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome, faseId }: any = {}) {
+function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome, alvoId, casterId, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof avtPixiPlayPersistent !== 'function' || !animId || !tipo) return;
-    const alvo = alvoNome ? AVT_STATE.entidades.find((e: any) => e.nome === alvoNome) : null;
+    // ID primeiro: com nomes duplicados a key `${alvo.id}_${tipo}` era reconstruída da
+    // entidade errada e o stop correspondente nunca desligava a animação real.
+    const alvo = (alvoId != null && _avtEntById(alvoId))
+              || (alvoNome ? AVT_STATE.entidades.find((e: any) => e.nome === alvoNome) : null);
     if (!alvo) return; // sem entidade-âncora resolvida não há onde ancorar a animação
-    const caster = casterNome ? AVT_STATE.entidades.find((e: any) => e.nome === casterNome) : null;
+    const caster = (casterId != null && _avtEntById(casterId))
+                || (casterNome ? AVT_STATE.entidades.find((e: any) => e.nome === casterNome) : null);
     const key = `${alvo.id}_${tipo}`;
     avtPixiPlayPersistent(animId, alvo, caster, posicao || 'alvo', key);
   } catch(e) { try { console.warn('[AVT] avtReceberEfeitoAnimStart:', e); } catch(_) {} }
@@ -23043,11 +23097,12 @@ function avtReceberEfeitoAnimStart({ animId, posicao, tipo, alvoNome, casterNome
 window.avtReceberEfeitoAnimStart = avtReceberEfeitoAnimStart;
 
 // Receber broadcast de parada de animação persistente de efeito.
-function avtReceberEfeitoAnimStop({ tipo, alvoNome, faseId }: any = {}) {
+function avtReceberEfeitoAnimStop({ tipo, alvoNome, alvoId, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   try {
     if (typeof avtPixiStopPersistent !== 'function' || !tipo) return;
-    const alvo = alvoNome ? AVT_STATE.entidades.find((e: any) => e.nome === alvoNome) : null;
+    const alvo = (alvoId != null && _avtEntById(alvoId))
+              || (alvoNome ? AVT_STATE.entidades.find((e: any) => e.nome === alvoNome) : null);
     if (!alvo) return;
     avtPixiStopPersistent(`${alvo.id}_${tipo}`);
   } catch(e) { try { console.warn('[AVT] avtReceberEfeitoAnimStop:', e); } catch(_) {} }
