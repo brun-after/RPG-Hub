@@ -32,7 +32,9 @@ async function bootComLoja(estoque: any, opts: { postStatus?: number; ouro?: num
   sim.state.dungeon.render_data.objetos.push(loja);
   const char = sim.state.chars.find((c: any) => c.nome === 'Alice');
   char.custom_attrs.ouro = opts.ouro ?? 100;
-  if (!g.AVT_INV.rpgId) await g.avtInvInit('rpg-sim');
+  // O boot dispara avtInvInit sem await (fire-and-forget); aguardar aqui torna
+  // o estado do catálogo determinístico antes das asserções.
+  await g.avtInvInit('rpg-sim');
   (g.AVT_INV.inventarios as any)['char-alice'] = (g.AVT_INV.inventarios as any)['char-alice'] || [];
   return { sim, loja, char };
 }
