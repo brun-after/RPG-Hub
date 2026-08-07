@@ -101,6 +101,7 @@ const _AVT_EVENTOS_DE_FASE = new Set([
   'avt_skill_anim', 'avt_attack_anim', 'avt_efeito_anim_start', 'avt_efeito_anim_stop',
   'avt_dano_visual', 'avt_dano_visual_batch', 'avt_rastro_marcar', 'avt_entidade_nova',
   'avt_armadilha_marcar', 'avt_armadilha_remover', 'avt_armadilha_obj_disparo',
+  'avt_loja_update',
 ]);
 
 // Helper central de broadcast para Modo Aventura.
@@ -6416,10 +6417,11 @@ function _avtRenderFrame() {
         _avtRecuperarPorMovimento(_jPlayer, 1);
         try { _avtColetarObjsNaPosicao(_jPlayer); } catch(_) {}
         try { _avtChecarArmadilhaMestreNaPosicao(_jPlayer); } catch(_) {}
-        // Pisar num baú precisa repintar o painel para o botão "Abrir Baú"
-        // aparecer (baús não são auto-coletados, então a coleta não repinta).
+        // Pisar num baú/loja precisa repintar o painel para o cartão contextual
+        // aparecer (não são auto-coletados, então a coleta não repinta).
         try {
-          if (_avtBauNaPosicao(Math.round(cell.x), Math.round(cell.y))) avtJogadorPainelRender();
+          if (_avtBauNaPosicao(Math.round(cell.x), Math.round(cell.y)) ||
+              (typeof _avtLojaNaPosicao === 'function' && _avtLojaNaPosicao(Math.round(cell.x), Math.round(cell.y)))) avtJogadorPainelRender();
         } catch(_) {}
         _avtCameraUpdate();
         const fimDoCaminho = restantes === 0 &&
@@ -7384,6 +7386,19 @@ function _avtRenderFrame() {
           ctx.font = `${Math.round(SZ * 0.62)}px serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText(o.aberto ? '📭' : '📦', ocx, ocy);
+        }
+        ctx.restore();
+      } else if (tipo === 'loja') {
+        // Loja: visível a todos (sprite via img_url ou emoji do objeto).
+        const img = o.img_url ? _avtObjImg(o.img_url) : null;
+        ctx.save();
+        if (img) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, px + 2, py + 2, SZ - 4, SZ - 4);
+        } else {
+          ctx.font = `${Math.round(SZ * 0.62)}px serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(o.icone || '🛒', ocx, ocy);
         }
         ctx.restore();
       } else if (tipo === 'loot') {
@@ -10005,6 +10020,10 @@ function _avtMoverJogador(dx: any, dy: any) {
         _avtRecuperarPorMovimento(jogador, 1);
         try { _avtColetarObjsNaPosicao(jogador); } catch(_) {}
         try { _avtChecarArmadilhaMestreNaPosicao(jogador); } catch(_) {}
+        try {
+          if (_avtBauNaPosicao(Math.round(cell.x), Math.round(cell.y)) ||
+              (typeof _avtLojaNaPosicao === 'function' && _avtLojaNaPosicao(Math.round(cell.x), Math.round(cell.y)))) avtJogadorPainelRender();
+        } catch(_) {}
         _avtCameraUpdate();
       };
     }
@@ -17596,6 +17615,16 @@ function avtJogadorPainelRender(targetEl?: any, opts?: any) {
     <div style="border:1px solid rgba(200,168,75,0.25);border-radius:8px;padding:10px">
       <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#c8a84b;margin-bottom:8px">📦 ${bauNaPosicao.nome || 'Baú'}</div>
       <button onclick="avtAbrirBau('${bauNaPosicao.id}')" style="background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 12px;cursor:pointer;width:100%">📦 Abrir Baú</button>
+    </div>`;
+  }
+
+  // ── 6b. Loja na posição (ou adjacente) ────────────────────────
+  const lojaNaPosicao = (typeof _avtLojaNaPosicao === 'function') ? _avtLojaNaPosicao(Math.round(jogador.x), Math.round(jogador.y)) : null;
+  if (lojaNaPosicao) {
+    html += `
+    <div style="border:1px solid rgba(200,168,75,0.25);border-radius:8px;padding:10px">
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#c8a84b;margin-bottom:8px">${_escHtml(lojaNaPosicao.icone || '🛒')} ${_escHtml(lojaNaPosicao.nome || 'Loja')}</div>
+      <button onclick="avtAbrirLoja('${_escHtml(String(lojaNaPosicao.id).replace(/'/g, "\\'"))}')" style="background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 12px;cursor:pointer;width:100%">🛒 Abrir Loja</button>
     </div>`;
   }
 

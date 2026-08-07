@@ -54,6 +54,7 @@ declare global {
     avt_armadilha_marcar: { trapId?: any; x?: any; y?: any; formula?: any; efeito?: any; expiry_ms?: any; caster?: any; casterId?: any; cor?: any; max?: any; faseId?: any; [k: string]: any };
     avt_armadilha_remover: { trapId?: any; motivo?: any; alvoNome?: any; dano?: any; faseId?: any; [k: string]: any };
     avt_armadilha_obj_disparo: { objId?: any; jogadorNome?: any; dano?: any; modo?: any; rearmarEmMs?: any; faseId?: any; [k: string]: any };
+    avt_loja_update: { lojaId?: any; estoque?: any; faseId?: any; [k: string]: any };
     avt_ooc_cooldown: { [k: string]: any };
     avt_inv_update: { [k: string]: any };
     avt_fase_mudou: { [k: string]: any };

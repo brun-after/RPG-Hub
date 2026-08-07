@@ -139,6 +139,21 @@ export function makeSkillsRows() {
   ];
 }
 
+export function makeItemCatalogRows() {
+  return [
+    { id: 'it-pocao', rpg_id: RPG_ID, nome: 'Poção de Vida', tipo: 'consumivel', icone: '🧪', raridade: 'comum',
+      descricao: 'Recupera 20 HP', efeitos: [{ tipo: 'hp', valor: 20 }], valor_base: 30,
+      slot_padrao: null, atributos_bonus: null, img_url: null, droppable: false, drop_rate: 0, visual_config: null },
+    { id: 'it-espada', rpg_id: RPG_ID, nome: 'Espada Curta', tipo: 'equipamento', icone: '🗡', raridade: 'incomum',
+      descricao: null, efeitos: null, valor_base: 100, slot_padrao: 'arma_principal',
+      atributos_bonus: { 'Força': 2 }, img_url: null, droppable: false, drop_rate: 0, visual_config: null },
+    // Sem valor_base de propósito — exercita "⚠ sem preço" (compra) e "sem cotação" (venda)
+    { id: 'it-relicario', rpg_id: RPG_ID, nome: 'Relicário Antigo', tipo: 'misc', icone: '🧿', raridade: 'raro',
+      descricao: null, efeitos: null, valor_base: null, slot_padrao: null,
+      atributos_bonus: null, img_url: null, droppable: false, drop_rate: 0, visual_config: null },
+  ];
+}
+
 export function makeAttrDefsRows() {
   return [
     { id: 1, rpg_id: RPG_ID, nome: 'Força', tipo: 'number', opcoes: null, ordem: 1, categoria: 'basico' },
@@ -155,7 +170,7 @@ export function rotasAventura() {
     { match: `/rest/v1/rpg_registry?rpg_id=eq.${RPG_ID}`, resposta: [makeRpgRegistryRow()] },
     { match: `/rest/v1/characters?rpg_id=eq.${RPG_ID}`, resposta: makeCharsRows() },
     { match: `/rest/v1/skills?rpg_id=eq.${RPG_ID}`, resposta: makeSkillsRows() },
-    { match: `/rest/v1/item_catalog`, resposta: [] },
+    { match: `/rest/v1/item_catalog`, resposta: makeItemCatalogRows() },
     { match: `/rest/v1/attr_defs?rpg_id=eq.${RPG_ID}`, resposta: makeAttrDefsRows() },
   ];
 }

@@ -147,6 +147,7 @@ declare global {
     avtReceberArmadilhaRemover?: any;
     avtReceberInvUpdate?: any;
     avtReceberItemDesequipado?: any;
+    avtReceberLojaUpdate?: any;
     avtReceberItemEquipado?: any;
     avtReceberMoveInput?: any;
     avtReceberOocCooldown?: any;

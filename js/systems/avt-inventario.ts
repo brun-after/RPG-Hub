@@ -590,6 +590,287 @@ async function avtInvRemoverOuro(charNome: any, qty: any) {
   avtInvBroadcastUpdate(char.id, { ouro: char.custom_attrs.ouro });
 }
 
+// ─── LOJA (objeto 'loja' no mapa da aventura) ────────────────────────────────
+// Compra/venda com o ouro de characters.custom_attrs.ouro. O objeto vive em
+// dungeon.render_data.objetos; o estoque sincroniza por avt_loja_update e o
+// banco continua a fonte de verdade de ouro/itens (via avt_inv_update).
+// Decisão de design: item vendido pelo jogador NÃO entra no estoque da loja.
+
+function _avtLojaGetById(lojaId: any) {
+  const rd = (typeof AVT_STATE !== 'undefined' ? AVT_STATE : null)?.dungeon?.render_data;
+  return rd?.objetos?.find((o: any) => o.tipo === 'loja' && String(o.id) === String(lojaId)) || null;
+}
+
+// Loja na célula do jogador ou adjacente (Chebyshev ≤ 1).
+function _avtLojaNaPosicao(x: any, y: any) {
+  const st = (typeof AVT_STATE !== 'undefined') ? AVT_STATE : null;
+  const rd = st?.dungeon?.render_data;
+  if (!rd?.objetos) return null;
+  const dw = st!.dungeon?.w || 1, dh = st!.dungeon?.h || 1;
+  return rd.objetos.find((o: any) => {
+    if (o.tipo !== 'loja') return false;
+    const ox = Math.round((o.x ?? 0) * dw), oy = Math.round((o.y ?? 0) * dh);
+    return Math.max(Math.abs(ox - x), Math.abs(oy - y)) <= 1;
+  }) || null;
+}
+window._avtLojaNaPosicao = _avtLojaNaPosicao;
+
+function _avtLojaDef(itemId: any) {
+  const cat = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.itemCatalog : null) || [];
+  return cat.find((i: any) => String(i.id) === String(itemId))
+      || AVT_INV.catalogo.find((i: any) => String(i.id) === String(itemId)) || null;
+}
+
+function _avtLojaRevendaPct() {
+  const lc = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.rpg?.theme_json?.level_config : null) || {};
+  const p = parseFloat(lc.loja_revenda_pct);
+  return Number.isFinite(p) ? Math.max(0, Math.min(100, p)) : 50;
+}
+
+function _avtLojaPrecoCompra(def: any) {
+  const v = parseFloat(def?.valor_base);
+  return Number.isFinite(v) && v >= 0 ? Math.round(v) : null;
+}
+
+function _avtLojaPrecoVenda(def: any) {
+  const compra = _avtLojaPrecoCompra(def);
+  return compra == null ? null : Math.floor(compra * _avtLojaRevendaPct() / 100);
+}
+
+async function avtAbrirLoja(lojaId: any) {
+  const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+  if (!jogador) return mostrarToast('Nenhum personagem vinculado', 'aviso');
+  const loja = _avtLojaGetById(lojaId);
+  if (!loja) return mostrarToast('Loja não encontrada', 'erro');
+  // O cartão pode ficar no painel após o jogador se afastar — revalida posição.
+  const aqui = _avtLojaNaPosicao(Math.round(jogador.x), Math.round(jogador.y));
+  if (!aqui || String(aqui.id) !== String(loja.id)) {
+    mostrarToast('Aproxime-se da loja', 'aviso');
+    if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender();
+    return;
+  }
+  const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === jogador.nome);
+  if (!char?.id) return;
+  if (!(AVT_INV.inventarios as any)[char.id]) await avtInvCarregarChar(char.id);
+  (AVT_INV as any)._lojaAberta = { lojaId: String(loja.id), aba: 'comprar' };
+  _avtLojaRenderModal();
+}
+window.avtAbrirLoja = avtAbrirLoja;
+
+function avtFecharLoja() {
+  (AVT_INV as any)._lojaAberta = null;
+  document.getElementById('avt-loja-modal')?.remove();
+}
+window.avtFecharLoja = avtFecharLoja;
+
+function _avtLojaAba(aba: any) {
+  const st = (AVT_INV as any)._lojaAberta;
+  if (!st) return;
+  st.aba = aba === 'vender' ? 'vender' : 'comprar';
+  _avtLojaRenderModal();
+}
+window._avtLojaAba = _avtLojaAba;
+
+function _avtLojaRenderModal() {
+  const st = (AVT_INV as any)._lojaAberta;
+  if (!st) return;
+  const loja = _avtLojaGetById(st.lojaId);
+  const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+  const char = jogador ? (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === jogador.nome) : null;
+  if (!loja || !char) { avtFecharLoja(); return; }
+
+  let overlay = document.getElementById('avt-loja-modal');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'avt-loja-modal';
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9500;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.addEventListener('click', (e: any) => { if (e.target === overlay) avtFecharLoja(); });
+    document.body.appendChild(overlay);
+  }
+
+  const ouro = char.custom_attrs?.ouro || 0;
+  const abaBtn = (aba: string, label: string) => `
+    <button onclick="_avtLojaAba('${aba}')" style="flex:1;padding:6px;border-radius:6px;cursor:pointer;font-family:var(--fonte-d);font-size:0.7rem;
+      background:${st.aba === aba ? 'rgba(200,168,75,0.15)' : 'transparent'};
+      border:1px solid ${st.aba === aba ? 'rgba(200,168,75,0.4)' : 'rgba(79,163,209,0.15)'};
+      color:${st.aba === aba ? '#c8a84b' : '#7a92aa'}">${label}</button>`;
+
+  overlay.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(200,168,75,0.3);border-radius:12px;padding:18px;width:100%;max-width:460px;max-height:88vh;overflow-y:auto" onclick="event.stopPropagation()">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-family:var(--fonte-d);font-size:0.95rem;color:#c8a84b">${_escHtml(loja.icone || '🛒')} ${_escHtml(loja.nome || 'Loja')}</div>
+        <button onclick="avtFecharLoja()" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem">×</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(200,168,75,0.07);border:1px solid rgba(200,168,75,0.18);border-radius:8px;margin-bottom:10px">
+        <span style="font-size:1rem">💰</span>
+        <span style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8a84b;font-weight:700">${ouro}</span>
+        <span style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa">seu ouro</span>
+        <span style="margin-left:auto;font-size:0.6rem;color:#7a92aa">venda a ${_avtLojaRevendaPct()}% do valor</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        ${abaBtn('comprar', '🛒 Comprar')}
+        ${abaBtn('vender', '💰 Vender')}
+      </div>
+      <div id="avt-loja-body">
+        ${st.aba === 'vender' ? _avtLojaRenderVender(loja, char) : _avtLojaRenderComprar(loja, char)}
+      </div>
+    </div>`;
+}
+
+function _avtLojaRenderComprar(loja: any, char: any) {
+  const estoque = Array.isArray(loja.estoque) ? loja.estoque : [];
+  if (!estoque.length) {
+    return '<div style="font-family:var(--fonte-d);font-size:0.7rem;color:#7a92aa;text-align:center;padding:14px 0">A loja está sem estoque.</div>';
+  }
+  const ouro = char.custom_attrs?.ouro || 0;
+  const lojaSafe = _escHtml(String(loja.id).replace(/'/g, "\\'"));
+  return estoque.map((e: any) => {
+    const def = _avtLojaDef(e.item_id);
+    if (!def) return '';
+    const preco = _avtLojaPrecoCompra(def);
+    const esgotado = e.qtd != null && e.qtd <= 0;
+    const semPreco = preco == null;
+    const podeComprar = !esgotado && !semPreco && ouro >= (preco || 0);
+    const idSafe = _escHtml(String(def.id).replace(/'/g, "\\'"));
+    return `
+    <div style="display:flex;align-items:center;gap:8px;border:1px solid rgba(79,163,209,0.1);border-radius:7px;padding:7px 10px;margin-bottom:5px;background:rgba(5,8,16,0.3);opacity:${esgotado ? 0.5 : 1}">
+      ${_avtInvIco(def, 20)}
+      <div style="flex:1;min-width:0">
+        <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(def.nome)}</div>
+        <div style="font-size:0.58rem;color:${_AVT_RAR_COR[def.raridade] || '#888'}">${_escHtml(def.raridade || 'comum')} · ${e.qtd == null ? '∞' : e.qtd + ' em estoque'}</div>
+      </div>
+      <span style="font-family:var(--fonte-d);font-size:0.72rem;color:#c8a84b;flex-shrink:0">${semPreco ? '<span style="color:#e0a54a">⚠ sem preço</span>' : '💰 ' + preco}</span>
+      <button ${podeComprar ? `onclick="avtLojaComprar('${lojaSafe}','${idSafe}')"` : 'disabled'}
+        style="background:${podeComprar ? 'rgba(94,224,154,0.1)' : 'rgba(100,100,100,0.08)'};border:1px solid ${podeComprar ? 'rgba(94,224,154,0.22)' : 'rgba(100,100,100,0.15)'};border-radius:5px;
+               color:${podeComprar ? '#5ee09a' : '#556'};font-family:var(--fonte-d);font-size:0.58rem;padding:4px 10px;cursor:${podeComprar ? 'pointer' : 'default'};flex-shrink:0;white-space:nowrap">${esgotado ? 'Esgotado' : 'Comprar'}</button>
+    </div>`;
+  }).join('') || '<div style="font-family:var(--fonte-d);font-size:0.7rem;color:#7a92aa;text-align:center;padding:14px 0">Nenhum item disponível.</div>';
+}
+
+function _avtLojaRenderVender(loja: any, char: any) {
+  const inv = ((AVT_INV.inventarios as any)[char.id] || []).filter((i: any) => !i.equipado);
+  if (!inv.length) {
+    return '<div style="font-family:var(--fonte-d);font-size:0.7rem;color:#7a92aa;text-align:center;padding:14px 0">Nada para vender (itens equipados não aparecem).</div>';
+  }
+  const lojaSafe = _escHtml(String(loja.id).replace(/'/g, "\\'"));
+  return inv.map((item: any) => {
+    const def = AVT_INV.catalogo.find(d => d.id === (item.item_catalog_id || item.item_def_id)) || _avtLojaDef(item.item_catalog_id || item.item_def_id);
+    if (!def) return '';
+    const preco = _avtLojaPrecoVenda(def);
+    const semCotacao = preco == null;
+    const idSafe = _escHtml(String(item.id).replace(/'/g, "\\'"));
+    const qtdSuffix = (item.quantidade || 1) > 1 ? ` ×${item.quantidade}` : '';
+    return `
+    <div style="display:flex;align-items:center;gap:8px;border:1px solid rgba(79,163,209,0.1);border-radius:7px;padding:7px 10px;margin-bottom:5px;background:rgba(5,8,16,0.3)">
+      ${_avtInvIco(def, 20)}
+      <div style="flex:1;min-width:0">
+        <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(def.nome)}${qtdSuffix}</div>
+        <div style="font-size:0.58rem;color:${_AVT_RAR_COR[def.raridade] || '#888'}">${_escHtml(def.raridade || 'comum')} · ${_escHtml(def.tipo)}</div>
+      </div>
+      <span style="font-family:var(--fonte-d);font-size:0.72rem;color:#c8a84b;flex-shrink:0">${semCotacao ? '<span style="color:#556">sem cotação</span>' : '💰 ' + preco}</span>
+      <button ${semCotacao ? 'disabled' : `onclick="avtLojaVender('${lojaSafe}','${idSafe}')"`}
+        style="background:${semCotacao ? 'rgba(100,100,100,0.08)' : 'rgba(200,168,75,0.1)'};border:1px solid ${semCotacao ? 'rgba(100,100,100,0.15)' : 'rgba(200,168,75,0.25)'};border-radius:5px;
+               color:${semCotacao ? '#556' : '#c8a84b'};font-family:var(--fonte-d);font-size:0.58rem;padding:4px 10px;cursor:${semCotacao ? 'default' : 'pointer'};flex-shrink:0;white-space:nowrap">Vender</button>
+    </div>`;
+  }).join('');
+}
+
+let _avtLojaOperando = false;
+
+async function avtLojaComprar(lojaId: any, itemId: any) {
+  if (_avtLojaOperando) return;
+  _avtLojaOperando = true;
+  try {
+    const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+    const loja = _avtLojaGetById(lojaId);
+    if (!jogador || !loja) return;
+    const aqui = _avtLojaNaPosicao(Math.round(jogador.x), Math.round(jogador.y));
+    if (!aqui || String(aqui.id) !== String(loja.id)) { mostrarToast('Aproxime-se da loja', 'aviso'); return; }
+    const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === jogador.nome);
+    if (!char?.id) return;
+    const entry = (loja.estoque || []).find((e: any) => String(e.item_id) === String(itemId));
+    if (!entry) return;
+    if (entry.qtd != null && entry.qtd <= 0) { mostrarToast('Item esgotado', 'aviso'); return; }
+    const def = _avtLojaDef(itemId);
+    const preco = _avtLojaPrecoCompra(def);
+    if (!def || preco == null) { mostrarToast('Item sem preço definido', 'aviso'); return; }
+    const ouro = char.custom_attrs?.ouro || 0;
+    if (ouro < preco) { mostrarToast(`❌ Ouro insuficiente (${ouro}/${preco})`, 'erro'); return; }
+
+    await avtInvRemoverOuro(char.nome, preco);
+    const row = await avtInvDarItem(char.id, itemId, 1);
+    if (!row) {
+      // Estorno: o débito de ouro passou mas o item não entrou no inventário.
+      await avtInvDarOuro(char.nome, preco);
+      mostrarToast('Compra falhou — ouro estornado', 'erro');
+      return;
+    }
+    if (entry.qtd != null) entry.qtd = Math.max(0, entry.qtd - 1);
+    try { if (typeof window._avtBroadcast === 'function') window._avtBroadcast('avt_loja_update', { lojaId: String(loja.id), estoque: loja.estoque }); } catch (_) {}
+    try { if (typeof _avtPodeSalvarRegistro === 'function' && _avtPodeSalvarRegistro() && typeof _avtSalvarDungeon === 'function') _avtSalvarDungeon(); } catch (_) {}
+    mostrarToast(`🛒 ${def.nome} comprado por ${preco} ouro`, 'sucesso');
+    _avtLojaRenderModal();
+    try { if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender(); } catch (_) {}
+  } finally {
+    _avtLojaOperando = false;
+  }
+}
+window.avtLojaComprar = avtLojaComprar;
+
+async function avtLojaVender(lojaId: any, invId: any) {
+  if (_avtLojaOperando) return;
+  _avtLojaOperando = true;
+  try {
+    const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+    const loja = _avtLojaGetById(lojaId);
+    if (!jogador || !loja) return;
+    const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === jogador.nome);
+    if (!char?.id) return;
+    const invItem = ((AVT_INV.inventarios as any)[char.id] || []).find((i: any) => String(i.id) === String(invId));
+    if (!invItem) return;
+    if (invItem.equipado) { mostrarToast('Desequipe o item antes de vender', 'aviso'); return; }
+    const def = AVT_INV.catalogo.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id)) || _avtLojaDef(invItem.item_catalog_id || invItem.item_def_id);
+    const preco = _avtLojaPrecoVenda(def);
+    if (!def || preco == null) { mostrarToast('Este item não tem cotação', 'aviso'); return; }
+    if (typeof confirm === 'function' && !confirm(`Vender ${def.nome} por ${preco} ouro?`)) return;
+
+    if ((invItem.quantidade || 1) > 1) {
+      invItem.quantidade -= 1;
+      try {
+        await sb(`inventario?id=eq.${encodeURIComponent(invItem.id)}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quantidade: invItem.quantidade }),
+        });
+      } catch (_) {}
+      avtInvBroadcastUpdate(char.id);
+    } else {
+      await avtInvRemoverItem(invId, char.id).catch(() => {});
+    }
+    await avtInvDarOuro(char.nome, preco);
+    mostrarToast(`💰 ${def.nome} vendido por ${preco} ouro`, 'sucesso');
+    _avtLojaRenderModal();
+    try { if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender(); } catch (_) {}
+  } finally {
+    _avtLojaOperando = false;
+  }
+}
+window.avtLojaVender = avtLojaVender;
+
+// Estoque mudou em outro cliente (compra) — substitui e re-renderiza se aberta.
+window.avtReceberLojaUpdate = function (p: any) {
+  try {
+    if (!p || !p.lojaId) return;
+    if (typeof _avtMinhaFase === 'function' && !_avtMinhaFase(p.faseId)) return;
+    const loja = _avtLojaGetById(p.lojaId);
+    if (!loja) return;
+    if (Array.isArray(p.estoque)) loja.estoque = p.estoque;
+    if (typeof _avtPodeSalvarRegistro === 'function' && _avtPodeSalvarRegistro()) {
+      try { if (typeof _avtSalvarDungeon === 'function') _avtSalvarDungeon(); } catch (_) {}
+    }
+    if ((AVT_INV as any)._lojaAberta?.lojaId === String(p.lojaId)) _avtLojaRenderModal();
+  } catch (_) {}
+};
+
 // ─── RENDERIZAÇÃO ─────────────────────────────────────────────────────────────
 
 async function avtAbrirInventario() {
