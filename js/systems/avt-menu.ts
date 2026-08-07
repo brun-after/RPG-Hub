@@ -92,11 +92,14 @@ function _avtGraficosPreset(nome: any, opts: any) {
   if (!(opts && opts.silencioso)) {
     try { if (typeof mostrarToast === 'function') mostrarToast('Qualidade gráfica: ' + nome, 'ok'); } catch(_) {}
   }
-  // Atualiza a UI do menu se o painel de configurações estiver aberto
+  // Atualiza a UI do menu se o painel de configurações estiver aberto.
+  // Guarda de mestre: sem ela, um jogador comum que trocasse de preset tinha o
+  // painel substituído pela barra de abas do MESTRE.
   try {
     const panel = document.getElementById('avt-menu-panel');
     if (panel && panel.style!.display !== 'none' && panel.style!.display !== '') {
-      _avtMenuAbrirConfigMestre(AVT_MENU_STATE.configAba || 'graficos');
+      if (AVT_STATE.isMestre) _avtMenuAbrirConfigMestre(AVT_MENU_STATE.configAba || 'graficos');
+      else if (AVT_MENU_STATE._configAberta || document.getElementById('avt-cfg-preset-baixo')) _avtMenuAbrirConfig();
     }
   } catch(_) {}
 }
@@ -813,6 +816,13 @@ async function avtMenuAbrir(rpgId: any) {
 
     const t = AVT_STATE.rpg?.theme_json || {};
 
+    // Hidrata as colisões do level_config já no menu: os toggles da aba "modo"
+    // do config leem AVT_STATE.colisaoJog* — sem isso, fora de partida eles
+    // mostravam (e regravavam) o default false em vez do valor salvo.
+    const _lcMenu = t.level_config || {};
+    AVT_STATE.colisaoJogJog = _lcMenu.colisao_jog_jog ?? false;
+    AVT_STATE.colisaoJogNpc = _lcMenu.colisao_jog_npc ?? false;
+
     // Imagem de fundo
     const bgEl = document.getElementById('avt-menu-bg-img');
     if (bgEl) {
@@ -916,21 +926,13 @@ function _avtMenuRenderBotoes() {
   const cont = document.getElementById('avt-menu-botoes');
   if (!cont) return;
 
-  const sd = AVT_MENU_STATE.sessionData || {};
-  const temSessao = !!(sd.last_char_nome);
   const t = AVT_STATE.rpg?.theme_json || {};
   const acc = t.destaque || '#c8a84b';
 
-  const botoes = [
+  const botoes: any[] = [
     {
-      id: 'jogar', label: '▶ Jogar', sub: 'Novo início',
+      id: 'jogar', label: '▶ Jogar', sub: 'Entrar na aventura',
       cor: acc, fn: '_avtMenuAbrirJogar()',
-    },
-    {
-      id: 'continuar', label: '⟳ Continuar', sub: 'Retomar sessão',
-      cor: '#4fa3d1', fn: '_avtMenuAbrirContinuar()',
-      disabled: !temSessao,
-      titulo: temSessao ? '' : 'Sem sessão anterior',
     },
     {
       id: 'fase', label: '🗺 Fase', sub: 'Escolher entrada',
@@ -1020,42 +1022,84 @@ function _avtMenuFecharPanel() {
 window._avtMenuFecharPanel = _avtMenuFecharPanel;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// JOGAR — seleção de personagem para novo início
+// JOGAR — botão único: seleção de personagem → painel pré-jogo → Iniciar
+// (ingressa na partida ativa se houver; senão cria uma). Substitui o antigo
+// par Jogar/Continuar que só causava confusão.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _avtMenuAbrirJogar() {
-  _avtMenuAbrirPanel(_avtMenuHtmlSeletorChar('_avtMenuEntrarJogar'), 'Selecionar Personagem');
+  _avtMenuAbrirPanel(_avtMenuHtmlSeletorChar('_avtMenuPreJogo'), 'Selecionar Personagem');
 }
 window._avtMenuAbrirJogar = _avtMenuAbrirJogar;
 
-function _avtMenuEntrarJogar(charNome: any) {
-  _avtMenuEntrarJogo({ charNome, faseId: 'principal' });
+// Painel pré-jogo: card do personagem escolhido + Editar (abre a ficha) +
+// Iniciar. Permite ajustar a ficha antes de entrar na partida.
+function _avtMenuPreJogo(charNome: any) {
+  const ch = _avtMenuCharsVisiveis().find((c: any) => c.nome === charNome)
+    || (AVT_STATE.chars || []).find((c: any) => c.nome === charNome);
+  if (!ch) { mostrarToast('Personagem não encontrado', 'erro'); return; }
+  const ca = ch.custom_attrs || {};
+  const cor = ca.cor || '#4fa3d1';
+  const nomeSafe = String(ch.nome).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const html = `
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:center;gap:14px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.18);border-radius:10px;padding:16px">
+        <div style="width:52px;height:52px;border-radius:50%;background:${cor};display:flex;align-items:center;justify-content:center;font-size:1.4rem;color:#fff;flex-shrink:0">${(ch.nome||'?')[0].toUpperCase()}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-family:var(--fonte-d);font-size:0.9rem;color:#c8d8e8">${ch.nome}</div>
+          <div style="font-size:0.65rem;color:#7a92aa;margin-top:3px">${ca.classe||'Aventureiro'} ${ca.raca ? '· '+ca.raca : ''} · Nv ${ch.nivel||1} · ${ch.hp_atual||100}/${_avtCalcHpJog(ch)||100} HP</div>
+        </div>
+        <button onclick="_avtMenuEditarChar('${ch.id}','${nomeSafe}')"
+          style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.62rem;padding:6px 12px;cursor:pointer;flex-shrink:0">✎ Editar</button>
+      </div>
+      <div id="avt-prejogo-status" style="font-size:0.66rem;color:#7a92aa;text-align:center;min-height:16px">Verificando partida…</div>
+      <button onclick="_avtMenuIniciar('${nomeSafe}')"
+        style="background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.5);border-radius:10px;padding:14px;cursor:pointer;color:#c8a84b;font-family:var(--fonte-d);font-size:0.85rem;letter-spacing:.08em;text-transform:uppercase;width:100%">▶ Iniciar</button>
+    </div>
+  `;
+  _avtMenuAbrirPanel(html, ch.nome);
+  // Sonda assíncrona: informa se vai ingressar numa partida ativa ou criar uma.
+  _avtMatchAoVivo(AVT_MENU_STATE.rpgId).then((live: any) => {
+    const el = document.getElementById('avt-prejogo-status');
+    if (!el) return;
+    if (live) {
+      el.textContent = '🟢 Partida em andamento — você vai ingressar nela.';
+      el.style!.color = '#5ee09a';
+    } else {
+      el.textContent = 'Nenhuma partida ativa — ao iniciar, você cria a partida.';
+    }
+  }).catch(() => {
+    const el = document.getElementById('avt-prejogo-status');
+    if (el) el.textContent = '';
+  });
 }
-window._avtMenuEntrarJogar = _avtMenuEntrarJogar;
+window._avtMenuPreJogo = _avtMenuPreJogo;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONTINUAR — retoma última sessão
-// ─────────────────────────────────────────────────────────────────────────────
+// Partida "viva" = linha de snapshot em rpg_session_state/avt_session_state com
+// updated_at mais novo que a janela de frescor do host (o host reescreve a cada
+// 15s — mesma sonda que RTNet._checkExistingHost usa ao entrar).
+async function _avtMatchAoVivo(rpgId: any) {
+  if (typeof sessionStateGet !== 'function' || !rpgId) return null;
+  const rows: any = await sessionStateGet(rpgId).catch(() => null);
+  const row = rows && rows[0];
+  if (!row || !row.updated_at || !row.host_user_id) return null;
+  const freshMs = (typeof (window as any).RTNET_HOST_FRESH_MS === 'number') ? (window as any).RTNET_HOST_FRESH_MS : 35000;
+  const age = Date.now() - new Date(row.updated_at).getTime();
+  return age < freshMs ? row : null;
+}
+window._avtMatchAoVivo = _avtMatchAoVivo;
 
-function _avtMenuAbrirContinuar() {
+async function _avtMenuIniciar(charNome: any) {
   const sd = AVT_MENU_STATE.sessionData || {};
-  const lastChar = sd.last_char_nome;
-  const lastFase = sd.last_fase_id || 'principal';
-  if (!lastChar) { mostrarToast('Sem sessão anterior salva', 'aviso'); return; }
-
-  if (AVT_STATE.isMestre) {
-    _avtMenuAbrirPanel(_avtMenuHtmlSeletorChar('_avtMenuEntrarContinuarComChar', lastFase), 'Continuar — Escolher Personagem');
-  } else {
-    _avtMenuEntrarJogo({ charNome: lastChar, faseId: lastFase });
-  }
+  let live: any = null;
+  try { live = await _avtMatchAoVivo(AVT_MENU_STATE.rpgId); } catch (_) {}
+  // Criador da partida → a sala de espera se auto-resolve (volunteerAsHost)
+  // em vez de exibir os botões "Iniciar como Host"/"Aguardar".
+  (AVT_STATE as any)._criadorDaPartida = !live;
+  const faseId = sd.last_fase_id || 'principal';
+  _avtMenuEntrarJogo({ charNome, faseId });
 }
-window._avtMenuAbrirContinuar = _avtMenuAbrirContinuar;
-
-function _avtMenuEntrarContinuarComChar(charNome: any) {
-  const lastFase = (AVT_MENU_STATE.sessionData || {}).last_fase_id || 'principal';
-  _avtMenuEntrarJogo({ charNome, faseId: lastFase });
-}
-window._avtMenuEntrarContinuarComChar = _avtMenuEntrarContinuarComChar;
+window._avtMenuIniciar = _avtMenuIniciar;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FASE — escolher fase e depois personagem
@@ -1456,18 +1500,20 @@ function _avtMenuAbrirConfig() {
   if (AVT_STATE.isMestre) {
     _avtMenuAbrirConfigMestre(AVT_MENU_STATE.configAba || 'menu');
   } else {
+    // Sem _avtMenuBindColorPicker aqui: os inputs de cor existem só na aba
+    // "menu" do mestre — no painel do jogador era um no-op copiado.
     _avtMenuAbrirPanel(_avtMenuHtmlConfigJogador(), '⚙ Configurações');
-    _avtMenuBindColorPicker();
   }
 }
 window._avtMenuAbrirConfig = _avtMenuAbrirConfig;
 
 function _avtMenuAbrirConfigMestre(aba: any) {
   AVT_MENU_STATE.configAba = aba;
+  // Sem aba "combate": o config do menu roda sempre FORA de partida e a aba só
+  // renderizava o aviso "disponível em jogo" (o painel do mestre em jogo a tem).
   const abas = [
     { id: 'menu',          label: '🖼 Menu' },
     { id: 'modo',          label: '🎮 Modo Mestre' },
-    { id: 'combate',       label: '⚔ Combate' },
     { id: 'balanceamento', label: '⚖ Balanço' },
     { id: 'npcs',          label: '🤖 NPCs' },
     { id: 'loot_xp',       label: '📊 XP' },
@@ -1641,7 +1687,7 @@ function _avtMenuHtmlConfigJogador() {
       </div>
 
       <div>
-        <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:6px">Posição do D-pad</div>
+        <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:6px">🎥 Câmera (mobile)</div>
         <div style="display:flex;gap:8px">
           ${['centralizado','deadzone'].map(p => `
             <button onclick="_avtMenuSetMobilePref('posicao','${p}')"
@@ -1650,7 +1696,7 @@ function _avtMenuHtmlConfigJogador() {
                 background:rgba(79,163,209,${mb.posicao===p?'0.12':'0.04'});
                 border:1px solid rgba(79,163,209,${mb.posicao===p?'0.45':'0.15'});
                 color:${mb.posicao===p?'#4fa3d1':'#7a92aa'}">
-              ${p==='centralizado' ? '⊕ Centralizado' : '↔ Dead Zone'}
+              ${p==='centralizado' ? '⊕ Centralizada' : '↔ Segue pelas bordas'}
             </button>
           `).join('')}
         </div>
@@ -2196,12 +2242,6 @@ Object.defineProperty(globalThis, "_avtMenuAbrirPanel", { configurable: true, ge
 Object.defineProperty(globalThis, "_avtMenuFecharPanel", { configurable: true, get: () => _avtMenuFecharPanel, set: (__v) => { _avtMenuFecharPanel = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMenuAbrirJogar", { configurable: true, get: () => _avtMenuAbrirJogar, set: (__v) => { _avtMenuAbrirJogar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMenuEntrarJogar", { configurable: true, get: () => _avtMenuEntrarJogar, set: (__v) => { _avtMenuEntrarJogar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMenuAbrirContinuar", { configurable: true, get: () => _avtMenuAbrirContinuar, set: (__v) => { _avtMenuAbrirContinuar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMenuEntrarContinuarComChar", { configurable: true, get: () => _avtMenuEntrarContinuarComChar, set: (__v) => { _avtMenuEntrarContinuarComChar = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMenuAbrirFase", { configurable: true, get: () => _avtMenuAbrirFase, set: (__v) => { _avtMenuAbrirFase = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])

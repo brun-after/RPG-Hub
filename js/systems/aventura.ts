@@ -257,6 +257,25 @@ function _avtSalaEspera(rpgNome: any, callback: any) {
   const statusEl = document.getElementById('avt-sala-status');
   if (statusEl) statusEl.textContent = '';
 
+  // Criador da partida (sonda do menu não achou sessão viva): sem fricção de
+  // "Iniciar como Host"/"Aguardar" — voluntaria-se imediatamente. A eleição
+  // voluntária existente resolve empates (dois criadores simultâneos) e a
+  // auto-promoção solo de 3s do RTNet segue como backstop.
+  if ((AVT_STATE as any)._criadorDaPartida) {
+    (AVT_STATE as any)._criadorDaPartida = false;
+    const btnHost0 = document.getElementById('avt-btn-ser-host');
+    const btnAg0 = document.getElementById('avt-btn-aguardar-host');
+    if (btnHost0) btnHost0.style!.display = 'none';
+    if (btnAg0) btnAg0.style!.display = 'none';
+    if (statusEl) statusEl.textContent = '⚔ Iniciando sessão…';
+    try { RTNet.volunteerAsHost(); } catch (_) {}
+  } else {
+    const btnHost0 = document.getElementById('avt-btn-ser-host');
+    const btnAg0 = document.getElementById('avt-btn-aguardar-host');
+    if (btnHost0) btnHost0.style!.display = '';
+    if (btnAg0) btnAg0.style!.display = '';
+  }
+
   // Atualiza lista de presença periodicamente
   function _atualizarLista() {
     const lista = document.getElementById('avt-sala-lista');

@@ -3277,6 +3277,15 @@ function _mostrarSeletorModoControle() {
     d.remove();
     MOBILE_CTRL.modoTela = modo;
     (MOBILE_CTRL as any).ativadoManualmente = true;
+    // Write-back: a escolha aqui persistia só até o reload, enquanto o menu de
+    // config gravava outra em rpg_members.session_data — mantém as duas juntas.
+    try {
+      const _sdMenu = (typeof AVT_MENU_STATE !== 'undefined' && AVT_MENU_STATE?.sessionData) || null;
+      if (_sdMenu && typeof _avtMenuSalvarSessionData === 'function') {
+        const mp = Object.assign({}, _sdMenu.mobile_pref || {}, { tipo: modo });
+        _avtMenuSalvarSessionData({ mobile_pref: mp });
+      }
+    } catch (_) {}
     _ativarControleMobile();
   };
   const _mostrarSelecaoCamera = () => {
