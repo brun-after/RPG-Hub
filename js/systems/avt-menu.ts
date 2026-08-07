@@ -1791,7 +1791,7 @@ function _avtMenuAbrirGuia() {
 
       <section>
         <div style="font-size:0.65rem;color:#c8a84b;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">🎮 Movimento</div>
-        <p style="font-size:0.72rem;color:#7a92aa;line-height:1.6">Use <b style="color:#c8d8e8">WASD</b> ou as <b style="color:#c8d8e8">setas do teclado</b> para mover seu personagem pelo dungeon. No celular, use o <b style="color:#c8d8e8">D-pad</b> que aparece na tela. Clique em qualquer ponto do mapa para mover até lá.</p>
+        <p style="font-size:0.72rem;color:#7a92aa;line-height:1.6">Use <b style="color:#c8d8e8">WASD</b> para mover seu personagem pelo dungeon — as <b style="color:#c8d8e8">setas do teclado</b> alternam o inimigo alvo. No celular, use o <b style="color:#c8d8e8">D-pad</b> que aparece na tela. Clique em qualquer ponto do mapa para mover até lá.</p>
       </section>
 
       <section>

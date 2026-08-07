@@ -12,7 +12,7 @@
 //   • Host pode transferir manualmente: host_transfer_offer → host_transfer_ack.
 //   • Sem host válido → RTNet._paused = true; aventura pausa simulação até
 //     alguém clicar "Assumir host".
-//   • Tick autoritativo: host emite avt_state_tick a cada 500ms (canal fast).
+//   • Tick autoritativo: host emite avt_state_tick a cada 100ms (STATE_TICK_INTERVAL, canal reliable).
 
 window.RTNet = (() => {
 
@@ -668,7 +668,7 @@ window.RTNet = (() => {
     _s._stats.rtt = Math.max(0, Math.round(performance.now() - payload.t));
   }
 
-  // ── TICK AUTORITATIVO (host → todos, 500ms) ────────────────────
+  // ── TICK AUTORITATIVO (host → todos, STATE_TICK_INTERVAL = 100ms) ──────────
 
   function _startStateTick() {
     _stopStateTick();

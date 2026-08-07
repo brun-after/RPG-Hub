@@ -9857,8 +9857,8 @@ function _avtMostrarPrimeiroAtaqueModal(jogador: any) {
       class="avt-skill-overlay-item" ${disabled}
       data-sk-alcance="${alcance}"
       data-cdkey="${cdKey}"
-      title="${(sk.efeito||'').replace(/"/g,'&quot;')}">
-      <span>${sk.habilidade}<span class="avt-cd-label">${cdStr}</span></span>
+      title="${_escHtml(sk.efeito||'')}">
+      <span>${_escHtml(sk.habilidade)}<span class="avt-cd-label">${cdStr}</span></span>
       <span style="font-size:0.58rem;color:#7a92aa">${sk.formula_dano||'1d6'} · ⟷${alcance}c</span>
     </div>`;
   }).join('');
@@ -13766,8 +13766,8 @@ function _avtMostrarSkillOverlay() {
       const cd = (b._cooldowns || {})[cdKey] || 0;  // usa cooldowns da batalha (fix P5)
       return `<div onclick="${cd > 0 ? '' : `_avtSkillOverlaySel('${sk.id}')`}"
         class="avt-skill-overlay-item ${pendingId===sk.id?'avt-skill-overlay-ativo':''} ${cd > 0 ? 'avt-skill-overlay-disabled' : ''}"
-        title="${(sk.efeito||'').replace(/"/g,'&quot;')}">
-        <span>${sk.habilidade}</span>
+        title="${_escHtml(sk.efeito||'')}">
+        <span>${_escHtml(sk.habilidade)}</span>
         <span style="font-size:0.58rem;color:#7a92aa">${sk.formula_dano||'1d6'}${cd > 0 ? ` ⏱${cd}` : ''}</span>
       </div>`;
     }).join('')}
@@ -14791,10 +14791,10 @@ function _avtHudUpdate() {
       ...mySkillsHud.map((sk: any) => {
         const cd = (b._cooldowns || {})[ativo.id + '_' + sk.id] || 0;
         const safeId = sk.id.replace(/'/g, "\\'");
-        const safeEfeito = (sk.efeito || '').replace(/"/g, '&quot;');
+        const safeEfeito = _escHtml(sk.efeito || '');
         return `<div class="avt-skill-overlay-item${_pendingId===sk.id?' avt-skill-overlay-ativo':''}${cd>0?' avt-skill-overlay-disabled':''}"
           onclick="${cd>0?'void 0':`_avtSkillOverlaySel('${safeId}')`}" title="${safeEfeito}">
-          <span>${sk.habilidade}</span>${cd>0?`<span style="font-size:0.5rem;color:#c8a84b;margin-left:4px">⏱${cd}</span>`:''}
+          <span>${_escHtml(sk.habilidade)}</span>${cd>0?`<span style="font-size:0.5rem;color:#c8a84b;margin-left:4px">⏱${cd}</span>`:''}
           <span style="font-size:0.55rem;color:#7a92aa">${sk.formula_dano||'1d6'}${cd>0?` ⏱${cd}`:''}</span>
         </div>`;
       })
@@ -17123,11 +17123,11 @@ function avtJogadorPainelRender(targetEl?: any, opts?: any) {
         return `
         <div style="border:1px solid ${emCd ? 'rgba(100,100,100,0.1)' : 'rgba(79,163,209,0.14)'};border-radius:7px;padding:9px 10px;opacity:${emCd ? '0.5' : '1'};background:${emCd ? 'rgba(10,15,25,0.4)' : 'transparent'}">
           <div style="display:flex;align-items:center;gap:5px;margin-bottom:${(danoHtml || custoHtml) ? '4px' : '0'};flex-wrap:wrap">
-            <span style="font-family:var(--fonte-d);font-size:0.75rem;color:${emCd ? '#556677' : '#c8d8e8'};flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.habilidade}</span>
+            <span style="font-family:var(--fonte-d);font-size:0.75rem;color:${emCd ? '#556677' : '#c8d8e8'};flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(s.habilidade)}</span>
             <span style="font-family:var(--fonte-d);font-size:0.5rem;padding:1px 5px;border:1px solid ${tipoCor}44;border-radius:3px;color:${tipoCor};flex-shrink:0">${tipoLabel}</span>
             ${emCd ? `<span style="font-family:var(--fonte-d);font-size:0.58rem;color:#f0a050;background:rgba(240,160,80,0.1);border:1px solid rgba(240,160,80,0.2);border-radius:3px;padding:1px 5px;flex-shrink:0">⏳${cd}t</span>` : ''}
           </div>
-          ${s.efeito && !danoHtml ? `<div style="font-size:0.6rem;color:#7a92aa;margin-bottom:3px;line-height:1.4">${s.efeito}</div>` : ''}
+          ${s.efeito && !danoHtml ? `<div style="font-size:0.6rem;color:#7a92aa;margin-bottom:3px;line-height:1.4">${_escHtml(s.efeito)}</div>` : ''}
           ${(danoHtml || custoHtml) ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${danoHtml}${custoHtml}</div>` : ''}
         </div>`;
       }).join('')}

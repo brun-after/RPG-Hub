@@ -35,7 +35,7 @@ const _AVT_RAR_COR: Record<string, any> = {
 function _avtInvIco(def: any, px: any) {
   px = px || 18;
   if (def && def.img_url) {
-    return `<span style="display:inline-block;width:${px}px;height:${px}px;flex-shrink:0;border-radius:4px;vertical-align:middle;background:#0a0f18 center/cover no-repeat;background-image:url('${String(def.img_url).replace(/'/g,'%27')}')"></span>`;
+    return `<span style="display:inline-block;width:${px}px;height:${px}px;flex-shrink:0;border-radius:4px;vertical-align:middle;background:#0a0f18 center/cover no-repeat;background-image:url('${String(def.img_url).replace(/'/g,'%27').replace(/"/g,'%22')}')"></span>`;
   }
   return `<span style="font-size:${Math.round(px*0.9)}px;flex-shrink:0">${(def && def.icone) || '📦'}</span>`;
 }
@@ -209,6 +209,7 @@ async function _avtInvDoEquipar(char: any, invItem: any, def: any) {
 
   // Update animated renderer if applicable
   const animJson = def.visual_config?.animacao_json;
+  const animSlotPrev = ca.aparencia?.animado?.equipment_slots?.[slotDef] ?? null;
   if (animJson && ca.aparencia?.modo === 'animado') {
     const ctrl = window._animCtrlMap?.[char.nome];
     if (ctrl && typeof animRendererUpdateEquipment === 'function') {
@@ -241,6 +242,22 @@ async function _avtInvDoEquipar(char: any, invItem: any, def: any) {
       : '';
     mostrarToast(`⚔ ${def.nome} equipado!${diffStr}`, 'sucesso');
   } catch (_) {
+    // Reverte a mutação local: o banco continua sendo a fonte de verdade.
+    Object.entries(snapshot).forEach(([attr, delta]) => {
+      ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) - delta;
+    });
+    invItem.equipado       = false;
+    invItem.slot_equipado  = null;
+    invItem.bonus_snapshot = null;
+    if (animJson && ca.aparencia?.modo === 'animado') {
+      const ctrl = window._animCtrlMap?.[char.nome];
+      if (ctrl && typeof animRendererUpdateEquipment === 'function') {
+        animRendererUpdateEquipment(ctrl, slotDef, animSlotPrev);
+      }
+      if (ca.aparencia?.animado?.equipment_slots) {
+        ca.aparencia.animado.equipment_slots[slotDef] = animSlotPrev;
+      }
+    }
     mostrarToast('Erro ao equipar', 'erro');
   }
 }
@@ -250,19 +267,32 @@ async function _avtInvDoDesequipar(char: any, invItem: any, def: any) {
   if (!ca.atributos) ca.atributos = {};
 
   const snapshot = invItem.bonus_snapshot;
+  const removidos: Record<string, number> = {};
   if (snapshot && Object.keys(snapshot).length) {
     Object.entries<any>(snapshot).forEach(([attr, delta]) => {
+      removidos[attr] = delta;
       ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) - delta;
     });
   } else if (def) {
     const bonus = def.atributos_bonus || def.bonus_attrs || {};
     Object.entries<any>(bonus).forEach(([attr, val]) => {
-      const n = typeof val === 'object' ? val.valor : parseFloat(val) || 0;
-      ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) - n;
+      const atual = parseFloat(ca.atributos[attr]) || 0;
+      let n;
+      if (typeof val === 'object' && val.modo === 'pct') {
+        // Sem snapshot só resta inverter o pct sobre o valor pós-equipar para
+        // recuperar o delta que o equipar aplicou (equipar: atual + round(atual·p%)).
+        const fator = 1 + (parseFloat(val.valor) || 0) / 100;
+        n = fator > 0 ? atual - Math.round(atual / fator) : 0;
+      } else {
+        n = typeof val === 'object' ? (parseFloat(val.valor) || 0) : parseFloat(val) || 0;
+      }
+      removidos[attr] = n;
+      ca.atributos[attr] = atual - n;
     });
   }
 
   const slotDef = invItem.slot_equipado || def?.slot_padrao || def?.slot;
+  const animPrev = slotDef ? ca.aparencia?.animado?.equipment_slots?.[slotDef] ?? null : null;
   invItem.equipado       = false;
   invItem.slot_equipado  = null;
   invItem.bonus_snapshot = null;
@@ -292,6 +322,22 @@ async function _avtInvDoDesequipar(char: any, invItem: any, def: any) {
     ]);
     mostrarToast(`${def?.nome || 'Item'} desequipado`, 'ok');
   } catch (_) {
+    // Reverte a mutação local: o banco continua sendo a fonte de verdade.
+    Object.entries(removidos).forEach(([attr, delta]) => {
+      ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) + delta;
+    });
+    invItem.equipado       = true;
+    invItem.slot_equipado  = slotDef || null;
+    invItem.bonus_snapshot = snapshot || null;
+    if (slotDef && ca.aparencia?.modo === 'animado') {
+      const ctrl = window._animCtrlMap?.[char.nome];
+      if (ctrl && typeof animRendererUpdateEquipment === 'function') {
+        animRendererUpdateEquipment(ctrl, slotDef, animPrev);
+      }
+      if (ca.aparencia?.animado?.equipment_slots) {
+        ca.aparencia.animado.equipment_slots[slotDef] = animPrev;
+      }
+    }
     mostrarToast('Erro ao desequipar', 'erro');
   }
 }
@@ -578,7 +624,7 @@ function avtInvRenderPanel(charNome: any, containerId: any) {
 
   const inv      = (AVT_INV.inventarios as any)[char.id] || [];
   const ouro     = char.custom_attrs?.ouro || 0;
-  const nomeSafe = charNome.replace(/'/g, "\\'");
+  const nomeSafe = _escHtml(charNome.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
 
   // ── Ouro ──
   let html = `
@@ -604,10 +650,10 @@ function avtInvRenderPanel(charNome: any, containerId: any) {
       const idSafe = String(equippedItem.id).replace(/'/g, "\\'");
       html += `
       <div onclick="avtInvEquipar('${nomeSafe}','${idSafe}')"
-        title="${def.nome} — ${slotInfo.label}. Clique para desequipar."
+        title="${_escHtml(def.nome)} — ${slotInfo.label}. Clique para desequipar."
         style="padding:5px 4px;background:rgba(79,163,209,0.06);border:1px solid ${border};border-radius:5px;cursor:pointer;text-align:center;min-width:0">
         <div style="font-size:0.5rem;color:#7a92aa;margin-bottom:2px">${slotInfo.icon} ${slotInfo.label}</div>
-        <div style="font-size:0.6rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${def.nome}">${_avtInvIco(def,14)} ${def.nome}</div>
+        <div style="font-size:0.6rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_escHtml(def.nome)}">${_avtInvIco(def,14)} ${_escHtml(def.nome)}</div>
       </div>`;
     } else {
       html += `
@@ -652,9 +698,9 @@ function avtInvRenderPanel(charNome: any, containerId: any) {
       <div style="display:flex;align-items:center;gap:8px;border:1px solid rgba(79,163,209,0.1);border-radius:7px;padding:7px 10px;background:rgba(5,8,16,0.3)">
         ${_avtInvIco(def,20)}
         <div style="flex:1;min-width:0">
-          <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${def.nome}</div>
-          <div style="font-size:0.58rem;color:${rarColor}">${def.raridade || 'comum'} · ${def.tipo}${efLabel ? ' · ' + efLabel : ''}${qtdSuffix}</div>
-          ${def.descricao ? `<div style="font-size:0.57rem;color:#556;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${def.descricao}</div>` : ''}
+          <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(def.nome)}</div>
+          <div style="font-size:0.58rem;color:${rarColor}">${_escHtml(def.raridade || 'comum')} · ${_escHtml(def.tipo)}${efLabel ? ' · ' + efLabel : ''}${qtdSuffix}</div>
+          ${def.descricao ? `<div style="font-size:0.57rem;color:#556;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(def.descricao)}</div>` : ''}
         </div>
         ${actionBtn}
       </div>`;
@@ -673,7 +719,6 @@ function avtInvRenderSlotsHud(char: any) {
   const equipped = inv.filter((i: any) => i.equipado && i.slot_equipado);
   if (!equipped.length) return '';
 
-  const nomeSafe  = char.nome.replace(/'/g, "\\'");
   const equipOpen = (typeof AVT_STATE !== 'undefined' && AVT_STATE._ppEquipOpen) || false;
   const SLOTS_PP: Record<string, any> = { arma_principal: '⚔', arma_secundaria: '🗡', cabeca: '🪖', corpo: '🥋', maos: '🧤', pernas: '👖', pes: '👢', anel: '💍', amuleto: '📿', capa: '🧣' };
 
@@ -695,8 +740,8 @@ function avtInvRenderSlotsHud(char: any) {
       html += `
       <div style="display:flex;align-items:center;gap:7px;padding:3px 6px">
         <span style="font-size:0.75rem;flex-shrink:0">${slotIcon}</span>
-        <span style="font-size:0.62rem;color:#c8d8e8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${def.icone || ''} ${def.nome}</span>
-        <span style="font-size:0.55rem;color:${rarColor}">${def.raridade || 'comum'}</span>
+        <span style="font-size:0.62rem;color:#c8d8e8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(def.icone || '')} ${_escHtml(def.nome)}</span>
+        <span style="font-size:0.55rem;color:${rarColor}">${_escHtml(def.raridade || 'comum')}</span>
       </div>`;
     });
     html += `</div>`;
@@ -716,7 +761,7 @@ function avtInvRenderConsumiveisHud(char: any) {
   });
   if (!consumiveis.length) return '';
 
-  const nomeSafe = char.nome.replace(/'/g, "\\'");
+  const nomeSafe = _escHtml(char.nome.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
   let html = `
   <div style="display:flex;flex-direction:column;gap:5px">
     <div style="display:flex;align-items:center;justify-content:space-between">
@@ -731,9 +776,9 @@ function avtInvRenderConsumiveisHud(char: any) {
     const efLabel = _avtInvEfLabel(def.efeitos);
     html += `
     <div style="display:flex;align-items:center;gap:8px;border:1px solid rgba(79,163,209,0.1);border-radius:6px;padding:6px 9px">
-      <span style="font-size:1.1rem;flex-shrink:0">${def.icone || '📦'}</span>
+      <span style="font-size:1.1rem;flex-shrink:0">${_escHtml(def.icone || '📦')}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${def.nome}</div>
+        <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(def.nome)}</div>
         <div style="font-size:0.6rem;color:#7a92aa">${efLabel ? efLabel + ' · ' : ''}×${item.quantidade}</div>
       </div>
       <button onclick="avtInvUsarConsumivel('${nomeSafe}','${idSafe}')"
@@ -752,8 +797,8 @@ function _avtInvEfLabel(efeitos: any) {
   const ef = efeitos[0];
   if (!ef) return '';
   if (ef.tipo === 'hp'      && ef.valor > 0)  return `❤ +${ef.valor}`;
-  if (ef.tipo === 'recurso' && ef.valor > 0)  return `✨ +${ef.valor} ${ef.recurso || ''}`.trim();
-  if (ef.tipo === 'atributo')                  return `⬆ ${ef.attr} +${ef.valor}`;
+  if (ef.tipo === 'recurso' && ef.valor > 0)  return `✨ +${ef.valor} ${_escHtml(ef.recurso || '')}`.trim();
+  if (ef.tipo === 'atributo')                  return `⬆ ${_escHtml(ef.attr)} +${ef.valor}`;
   if (ef.tipo === 'dano')                      return `💔 ${ef.valor} dano`;
   return '';
 }
@@ -767,7 +812,7 @@ function avtInvRenderMestreInv(charNome: any) {
 
   const inv         = (AVT_INV.inventarios as any)[char.id] || [];
   const SLOTS_LBL   = { arma_principal:{l:'Arma',i:'⚔'}, arma_secundaria:{l:'Escudo',i:'🗡'}, cabeca:{l:'Cabeça',i:'🪖'}, corpo:{l:'Corpo',i:'🥋'}, maos:{l:'Mãos',i:'🧤'}, pernas:{l:'Pernas',i:'👖'}, pes:{l:'Pés',i:'👢'}, anel:{l:'Anel',i:'💍'}, amuleto:{l:'Amuleto',i:'📿'}, capa:{l:'Capa',i:'🧣'} };
-  const nomeSafe    = charNome.replace(/'/g, "\\'");
+  const nomeSafe    = _escHtml(charNome.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
   const charIdSafe  = String(char.id).replace(/'/g, "\\'");
 
   if (!inv.length) {
@@ -793,7 +838,7 @@ function avtInvRenderMestreInv(charNome: any) {
       if (!def) return;
       html += `<div style="padding:5px 6px;background:rgba(79,163,209,0.06);border:1px solid ${border};border-radius:5px;min-width:0">
         <div style="font-size:0.55rem;color:#7a92aa;margin-bottom:2px">${i} ${l}</div>
-        <div style="font-size:0.62rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${def.icone || '📦'} ${def.nome}</div>
+        <div style="font-size:0.62rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(def.icone || '📦')} ${_escHtml(def.nome)}</div>
         <button onclick="_avtMestreRemoverItemChar('${String(eq.id).replace(/'/g,"\\'")}','${nomeSafe}',true)"
           style="margin-top:2px;width:100%;background:none;border:1px solid rgba(200,168,75,0.15);border-radius:3px;color:#7a92aa;font-size:0.52rem;cursor:pointer;padding:1px 0">↩ Remover</button>
       </div>`;
@@ -809,10 +854,10 @@ function avtInvRenderMestreInv(charNome: any) {
       if (!def) return;
       const idSafe = String(item.id).replace(/'/g, "\\'");
       html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 7px;background:rgba(79,163,209,0.03);border:1px solid rgba(79,163,209,0.08);border-radius:5px;margin-bottom:3px">
-        <span style="font-size:0.9rem">${def.icone || '📦'}</span>
+        <span style="font-size:0.9rem">${_escHtml(def.icone || '📦')}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-size:0.68rem;color:#c8d8e8">${def.nome}</div>
-          <div style="font-size:0.58rem;color:#7a92aa">${def.tipo}${item.quantidade > 1 ? ` · ×${item.quantidade}` : ''}</div>
+          <div style="font-size:0.68rem;color:#c8d8e8">${_escHtml(def.nome)}</div>
+          <div style="font-size:0.58rem;color:#7a92aa">${_escHtml(def.tipo)}${item.quantidade > 1 ? ` · ×${item.quantidade}` : ''}</div>
         </div>
         <button onclick="_avtMestreRemoverItemChar('${idSafe}','${nomeSafe}',true)"
           style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.8rem;padding:0">✕</button>
