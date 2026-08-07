@@ -19,7 +19,10 @@ async function sb<T = any>(path: string, opts: SbOpts = {}, _retry = 0): Promise
   const headers: Record<string, string> = {
     'apikey':       SUPABASE_KEY,
     'Content-Type': 'application/json',
-    'Prefer':       opts.prefer || 'return=representation',
+    // Default return=minimal: writes não devolvem a linha (economiza a
+    // serialização de blobs grandes no servidor). Callers que consomem a
+    // resposta passam prefer:'return=representation' explicitamente.
+    'Prefer':       opts.prefer || 'return=minimal',
     ...(opts.headers || {})
   };
   if (SESSION?.access_token) {

@@ -1592,7 +1592,7 @@ async function addInvConfirmar(catalogId: any) {
       bloqueado_por_nivel: bloq,
       origem: 'doacao_mestre'
     };
-    const res = await sb('inventario', { method:'POST', body: JSON.stringify(payload) });
+    await sb('inventario', { method:'POST', body: JSON.stringify(payload) });
     mostrarToast(`✓ ${it.nome} adicionado${bloq?' (bloqueado, Nv.'+it.nivel_minimo_uso+')':''}`, 'ok');
     document.getElementById('modal-add-inv-overlay-cat')!.style!.display = 'none';
     await carregarInventarioChar(charId);

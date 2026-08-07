@@ -364,13 +364,13 @@ async function salvarInvocacao() {
   try {
     if (_invModalId) {
       const rows = await sb(`invocacoes?id=eq.${encodeURIComponent(_invModalId)}`,
-        { method: 'PATCH', body: JSON.stringify(body) });
+        { method: 'PATCH', prefer: 'return=representation', body: JSON.stringify(body) });
       const updated = Array.isArray(rows) ? rows[0] : rows;
       const idx = INV_OCACOES.catalogo.findIndex(i => i.id === _invModalId);
       if (idx >= 0) INV_OCACOES.catalogo[idx] = { ...INV_OCACOES.catalogo[idx], ...body, ...(updated || {}) };
       mostrarToast('Invocação atualizada!', 'sucesso');
     } else {
-      const rows = await sb('invocacoes', { method: 'POST', body: JSON.stringify(body) });
+      const rows = await sb('invocacoes', { method: 'POST', prefer: 'return=representation', body: JSON.stringify(body) });
       const created = Array.isArray(rows) ? rows[0] : rows;
       if (created) INV_OCACOES.catalogo.push(created);
       mostrarToast('Invocação criada!', 'sucesso');

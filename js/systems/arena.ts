@@ -841,7 +841,7 @@ async function salvarChar() {
       if (idx >= 0) { AR.chars[idx].nome = nome; AR.chars[idx].hp_atual = hp; AR.chars[idx].hp_max = hpMax; AR.chars[idx].custom_attrs = customAttrs; }
       arToast('Personagem atualizado!','sucesso');
     } else {
-      const novo = await arSb('characters', {method:'POST', body:JSON.stringify({
+      const novo = await arSb('characters', {method:'POST', prefer:'return=representation', body:JSON.stringify({
         rpg_id:AR.session.rpg_id, nome,
         hp_atual:hp,
         hp_max:hpMax,
@@ -1907,7 +1907,7 @@ async function arAprovarEntidade(id: any) {
     buffs: [] as any[]
   };
   try {
-    const novo = await arSb('characters', {method:'POST', body:JSON.stringify({
+    const novo = await arSb('characters', {method:'POST', prefer:'return=representation', body:JSON.stringify({
       rpg_id:AR.session.rpg_id, nome:s.nome, hp_atual:s.hp, hp_max:s.hp,
       nivel:1, xp:0, pontos_attr:0, custom_attrs:customAttrs
     })});
@@ -1988,7 +1988,7 @@ async function arBulkCriarCriaturas() {
       temporaria:true // marca para ser apagada ao zerar batalha
     };
     try {
-      const novo = await arSb('characters', {method:'POST', body:JSON.stringify({
+      const novo = await arSb('characters', {method:'POST', prefer:'return=representation', body:JSON.stringify({
         rpg_id:AR.session.rpg_id, nome:c.nome, hp_atual:c.hp, hp_max:c.hp,
         nivel:1, xp:0, pontos_attr:0, custom_attrs:customAttrs
       })});

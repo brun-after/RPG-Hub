@@ -886,7 +886,7 @@ async function _atkInvocarPersonagem(skill: any, invocadorNome: any, contexto: a
     };
 
     try {
-      const novo = await arSb('characters', { method: 'POST', body: JSON.stringify({
+      const novo = await arSb('characters', { method: 'POST', prefer: 'return=representation', body: JSON.stringify({
         rpg_id:      AR.session.rpg_id,
         nome:        nomeInvocado,
         hp_atual:    hp,

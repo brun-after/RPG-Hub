@@ -1475,7 +1475,7 @@ async function _avtMenuCriarPersonagem() {
       hp_atual: 100, hp_max: 100, xp: 0, nivel: 1, pontos_attr: 0,
       custom_attrs: { tipo: 'jogador', cor: '#4fa3d1' }
     };
-    const res = await _avtSb('characters', { method: 'POST', body: JSON.stringify(novoChar) });
+    await _avtSb('characters', { method: 'POST', body: JSON.stringify(novoChar) });
     // Atribuir ao usuário
     if (uid) {
       await _avtSb(`rpg_members?rpg_id=eq.${encodeURIComponent(AVT_MENU_STATE.rpgId)}&player_id=eq.${encodeURIComponent(uid)}`,
