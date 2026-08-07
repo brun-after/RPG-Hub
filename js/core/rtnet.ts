@@ -670,6 +670,8 @@ window.RTNet = (() => {
   function _onPong(payload: any) {
     if (!payload || payload.to !== _s.userId || typeof payload.t !== 'number') return;
     _s._stats.rtt = Math.max(0, Math.round(performance.now() - payload.t));
+    // Cadência natural do ping (2s) já limita a frequência deste repaint.
+    try { _updateTransportIndicator(); } catch (_) {}
   }
 
   // ── TICK AUTORITATIVO (host → todos, STATE_TICK_INTERVAL = 100ms) ──────────
@@ -835,10 +837,15 @@ window.RTNet = (() => {
     const map: Record<string, any> = { p2p: ['🟢', 'P2P ativo'], mixed: ['🟡', 'P2P parcial'], supabase: ['🔴', 'Supabase (fallback)'] };
     const [icon, title] = map[_s.mode] || ['🔴', 'Supabase'];
     const degradado = _s.mode !== 'p2p' && _s.peerJoinTs.size > 0;
-    el.textContent = icon;
-    el.title = degradado
+    // RTT ao host (ping de 2s) visível no header: "está travando" vira número.
+    const rtt = _s._stats.rtt;
+    const temRtt = !_s._isHost && Number.isFinite(rtt) && rtt > 0;
+    const rttQual = !temRtt ? '' : rtt >= 250 ? 'conexão lenta' : rtt >= 100 ? 'conexão razoável' : 'conexão boa';
+    el.textContent = icon + (temRtt ? ` ${rtt}ms` : '');
+    const base = degradado
       ? title + ' — sem conexão direta com algum jogador (latência maior). Um servidor TURN resolve NAT restrito; veja docs/setup.md.'
       : title;
+    el.title = base + (temRtt ? ` · RTT ao host ${rtt}ms (${rttQual})` : '');
     el.style!.display = 'inline';
   }
 
