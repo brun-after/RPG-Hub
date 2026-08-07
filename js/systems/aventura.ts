@@ -18499,7 +18499,11 @@ function _avtProcTextures(name: any) {
       g.beginPath(); g.arc(r*0.78, r*0.72, r*0.14, 0, Math.PI*2); g.fill();
       g.beginPath(); g.arc(r*1.22, r*0.72, r*0.14, 0, Math.PI*2); g.fill();
     });
-    default: return PIXI.Texture.WHITE;
+    default:
+      // Texture.WHITE é 1×1 sólido — escalado vira um quadrado chapado na tela.
+      // Nome desconhecido (preset antigo/typo) degrada para 'spark' com aviso.
+      console.warn('[pixi-fx] textura desconhecida:', name, '— usando spark');
+      return _avtProcTextures('spark');
   }
 }
 
@@ -20438,6 +20442,11 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
           const isV5 = Array.isArray(cfg.behaviors);
           if (!isV5 && PIXI.particles.upgradeConfig) {
             try { cfg = PIXI.particles.upgradeConfig(cfg, textures); } catch(_) {}
+          }
+          // Blend real por-partícula: blendMode em Container é no-op no PIXI v7
+          // (a atribuição abaixo continua existindo só para o trail ler).
+          if (typeof _psApplyBlendBehavior === 'function') {
+            _psApplyBlendBehavior(cfg, (layer.blendMode || root.blendMode || '').toLowerCase());
           }
           totalParticleCap += (cfg.maxParticles || 50);
 

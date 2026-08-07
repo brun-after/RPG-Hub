@@ -2702,6 +2702,8 @@ function _psCreateEmitter(layer: any, container: any, x: any, y: any) {
     try { cfg = PIXI.particles.upgradeConfig(cfg, texArr); }
     catch (e) { console.warn('[pixi-studio] upgradeConfig failed:', e); }
   }
+  // Blend real por-partícula (blendMode no Container é no-op) — WYSIWYG com o runtime
+  if (typeof _psApplyBlendBehavior === 'function') _psApplyBlendBehavior(cfg, layer.blendMode);
   // Per-emitter light cast (cheap fake lighting) — parity with runtime
   if (layer.lightCast) {
     try {
