@@ -4674,7 +4674,7 @@ async function _avtCarregarDados(rpgId: any) {
     _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
     _avtSb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=nome`),
     _avtSb(`skills?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
-    _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus&order=id`).catch((): any[] => []),
+    _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,valor_base&order=id`).catch((): any[] => []),
     _avtSb(`attr_defs?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=ordem`).catch((): any[] => [])
   ]);
 
@@ -18139,7 +18139,7 @@ async function avtImportarCatalogoConfirmar() {
   }
 
   // Reload catalog
-  const catalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate`).catch((): any[] => []);
+  const catalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate,valor_base`).catch((): any[] => []);
   AVT_STATE.itemCatalog = catalog || [];
 
   document.getElementById('avt-catalog-import-modal')?.remove();
@@ -18201,6 +18201,10 @@ function _avtCatItemEditor(itemId: any) {
           <label style="${labCss}">Slot (equip.)</label>
           <input id="avt-catitem-slot" value="${esc(v.slot_padrao)}" placeholder="ex: arma_principal" style="${inputCss}">
         </div>
+        <div>
+          <label style="${labCss}">💰 Valor base (ouro)</label>
+          <input type="number" id="avt-catitem-valor" min="0" step="1" value="${(v as any).valor_base ?? ''}" placeholder="preço na loja" style="${inputCss}">
+        </div>
       </div>
       <div style="border:1px solid rgba(231,76,60,0.2);border-radius:6px;padding:8px;margin-bottom:12px">
         <label style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:#c8d8e8;cursor:pointer">
@@ -18251,6 +18255,7 @@ async function _avtCatItemSalvar(itemId: any) {
     img_url: (document.getElementById('avt-catitem-img-url')?.value || '').trim() || null,
     droppable: !!document.getElementById('avt-catitem-droppable')?.checked,
     drop_rate: parseFloat(document.getElementById('avt-catitem-droprate')?.value!) || 0,
+    valor_base: (() => { const _v = parseFloat(document.getElementById('avt-catitem-valor')?.value!); return Number.isFinite(_v) && _v >= 0 ? _v : null; })(),
   };
   try {
     if (itemId) {
@@ -18264,7 +18269,7 @@ async function _avtCatItemSalvar(itemId: any) {
         body: JSON.stringify({ ...payload, rpg_id: rpgId })
       });
     }
-    AVT_STATE.itemCatalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate`).catch(()=>AVT_STATE.itemCatalog||[]);
+    AVT_STATE.itemCatalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate,valor_base`).catch(()=>AVT_STATE.itemCatalog||[]);
     document.getElementById('avt-catitem-editor-overlay')?.remove();
     mostrarToast('Item salvo!', 'ok');
     _avtMestrePainelRender();
@@ -18278,7 +18283,7 @@ async function _avtCatItemRemover(itemId: any) {
   const rpgId = AVT_STATE.rpgId;
   try {
     await _avtSb(`item_catalog?id=eq.${encodeURIComponent(itemId)}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
-    AVT_STATE.itemCatalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate`).catch(()=>AVT_STATE.itemCatalog||[]);
+    AVT_STATE.itemCatalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate,valor_base`).catch(()=>AVT_STATE.itemCatalog||[]);
     document.getElementById('avt-catitem-editor-overlay')?.remove();
     mostrarToast('Item excluído', 'ok');
     _avtMestrePainelRender();
@@ -22292,6 +22297,16 @@ function _avtMpConteudoAba() {
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDropsConfig()" style="width:100%">💾 Salvar</button>
       </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🛒 Loja</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Percentual do valor base pago ao jogador quando ele VENDE um item na loja (a compra usa o valor base cheio do catálogo).</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-loja-revenda-pct" min="0" max="100" step="1" value="${Math.round(lc.loja_revenda_pct != null ? lc.loja_revenda_pct : 50)}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#c8a84b">% do valor na venda</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarLojaConfig()" style="width:100%">💾 Salvar</button>
+      </div>
       ${(() => {
         const d = _avtDynSpawnConfig();
         const inCss = 'width:64px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center';
@@ -23344,6 +23359,23 @@ async function _avtSalvarDropsConfig() {
   } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarDropsConfig = _avtSalvarDropsConfig;
+
+// Salva a config da loja (percentual de revenda).
+async function _avtSalvarLojaConfig() {
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  const raw = parseInt(document.getElementById('avt-mp-loja-revenda-pct')?.value!);
+  const cfg = { loja_revenda_pct: isNaN(raw) ? 50 : Math.max(0, Math.min(100, raw)) };
+  Object.assign(rpg.theme_json.level_config, cfg);
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    try { _avtBroadcast('avt_level_config_update', { config: cfg }); } catch(_) {}
+    mostrarToast('Configuração da loja salva!', 'sucesso');
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtSalvarLojaConfig = _avtSalvarLojaConfig;
 
 // Salva a config dos spawns dinâmicos de baús/loot/orbes.
 async function _avtSalvarDynSpawnConfig() {

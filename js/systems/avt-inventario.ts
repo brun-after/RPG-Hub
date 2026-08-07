@@ -49,7 +49,7 @@ async function avtInvInit(rpgId: any) {
   try {
     const e = encodeURIComponent(rpgId);
     const [catalogo, inventario] = await Promise.all([
-      sb(`item_catalog?rpg_id=eq.${e}&select=id,nome,tipo,icone,raridade,descricao,slot_padrao,atributos_bonus,efeitos,visual_config,img_url&order=nome`).catch((): any[] => []),
+      sb(`item_catalog?rpg_id=eq.${e}&select=id,nome,tipo,icone,raridade,descricao,slot_padrao,atributos_bonus,efeitos,visual_config,img_url,valor_base&order=nome`).catch((): any[] => []),
       sb(`inventario?rpg_id=eq.${e}&select=*&order=id`).catch((): any[] => []),
     ]);
     AVT_INV.catalogo = catalogo || [];
