@@ -65,6 +65,7 @@ function fecharArenaHub() {
 function sairArenaSession() {
   chatOcultar();
   salvarNav('hub');
+  if (typeof osFlushTudo === 'function') osFlushTudo();   // grava saves debounced pendentes
   arFecharRealtime();
   document.getElementById('arena-session')!.style!.display = 'none';
   document.getElementById('arena-hub')!.style!.display = 'block';
@@ -1434,6 +1435,8 @@ async function verHistorico(loreId: any) {
 async function confirmarDeletarArena() {
   if (!AR.session) return;
   if (!confirm(`Deletar a arena "${AR.session.name}" permanentemente?\nTodos os dados serão perdidos.`)) return;
+  // Drena saves debounced antes dos DELETEs para não escrever após apagar
+  if (typeof osFlushTudo === 'function') { try { await osFlushTudo(); } catch(_) {} }
   try {
     await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {method:'DELETE'});
     await arSb(`lore?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {method:'DELETE'});
@@ -1453,7 +1456,9 @@ function arAddLog(texto: any) {
   if (AR.estado.log.length > 200) AR.estado.log.shift();
 }
 
-async function arSalvarEstado() {
+// Serializa e grava AR.estado inteiro — roda no fire do debounce, lendo o
+// estado vivo daquele momento (a limpeza de ataques também roda aqui).
+async function _arSalvarEstadoAgora() {
   const id = AR.session.rpg_id;
   if (AR.iniciativa) (AR.estado as any).iniciativa_arena = AR.iniciativa;
   else delete (AR.estado as any).iniciativa_arena;
@@ -1463,13 +1468,24 @@ async function arSalvarEstado() {
       a.status === 'aguardando_mestre' || a.status === 'aprovado_dc' || a.status === 'rolagem_enviada'
     );
   }
-  try {
-    await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(id)}`,
-      {method:'PATCH', body:JSON.stringify({arena_estado:JSON.stringify(AR.estado)})});
-  } catch(e) {
-    console.error('Erro ao salvar estado arena:', e);
-    arToast('\u26a0 Falha ao salvar \u2014 verifique a conexão', 'erro');
-  }
+  await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(id)}`,
+    {method:'PATCH', body:JSON.stringify({arena_estado:JSON.stringify(AR.estado)})});
+}
+
+// Shim otimista: mantém a assinatura dos ~45 call sites que fazem
+// `await arSalvarEstado()` — o await agora resolve imediatamente e a
+// gravação do blob inteiro sai coalescida num debounce de 200ms. Erro →
+// toast + re-fetch do arena_estado canônico. Antes de transições
+// destrutivas (sair/deletar arena) chamar osFlushTudo().
+async function arSalvarEstado() {
+  if (!AR.session) return;
+  salvarOtimistaDebounced({
+    chave: 'rpg_registry:arena:' + AR.session.rpg_id,
+    ms: 200,
+    persistir: _arSalvarEstadoAgora,
+    aoFalhar: osRefetchArenaEstado,
+    msgErro: '⚠ Falha ao salvar a arena — ressincronizando…',
+  });
 }
 // ═══════════════════════════════════════════════════════════════
 // REALTIME
