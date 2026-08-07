@@ -5913,9 +5913,14 @@ function _avtRenderFrame() {
         if (e.tipo !== 'jogador' || e.escondido || e.hp <= 0) continue;
         const movendo = (e._waypoints && e._waypoints.length) || e._lerpTo;
         if (!movendo) continue;
-        if (now - (e._lastStepSfx || 0) < 320) continue;
+        if (now - (e._lastStepSfx || 0) < 450) continue;
+        // Gate global além do por-entidade: com vários jogadores em movimento o
+        // total de passos fica limitado (~7/s) em vez de escalar com o grupo.
+        if (now - ((AVT_STATE as any)._lastStepSfxGlobal || 0) < 140) break;
         e._lastStepSfx = now;
-        _avtSfxPosicional('step_stone', e, 0.28, 0.18);
+        if (_avtSfxPosicional('step_stone', e, 0.22, 0.18)) {
+          (AVT_STATE as any)._lastStepSfxGlobal = now;
+        }
       }
     }
   }
@@ -9295,7 +9300,20 @@ function _avtAtualizarSonsAmbiente() {
       let vol = 0;
       if (ouv && !AudioManager._muted) {
         const d = Math.max(Math.abs(fonte.x - ouv.x), Math.abs(fonte.y - ouv.y));
+        // Volume absoluto (seta direto no Howl, fora do playSFX) — por isso o
+        // slider global entra aqui, ao contrário dos ganhos de _avtSfxVolDist.
         vol = Math.max(0, 1 - d / raio) * (o.som.vol ?? 0.55) * AudioManager.volume.sfx;
+      }
+      // Inaudível por >3s contínuos: pausa o streaming html5 em vez de manter o
+      // loop tocando a volume 0. play() sem args retoma o único som pausado.
+      if (vol <= 0.001) {
+        if (!rec.silenteDesde) rec.silenteDesde = Date.now();
+        else if (Date.now() - rec.silenteDesde > 3000 && rec.howl.playing()) {
+          try { rec.howl.pause(); } catch (_) {}
+        }
+      } else {
+        rec.silenteDesde = 0;
+        if (!rec.howl.playing()) { try { rec.howl.play(); } catch (_) {} }
       }
       try { rec.howl.volume(Math.min(1, vol)); } catch (_) {}
     }
@@ -23050,7 +23068,7 @@ function avtReceberAttackAnim({ atacanteNome, alvoNome, animacao, delay, faseId 
     // Ataque básico remoto era mudo: impacto físico leve, atenuado pela distância
     const _go = () => {
       try { animarAtaque({ atacEl, alvoEl, animacao, dano: 0 }); } catch(_) {}
-      _avtSfxPosicional('hit_physical', alvo, 0.45);
+      _avtSfxPosicional('hit_physical', alvo, 0.35);
     };
     if (delay > 0) setTimeout(_go, delay); else _go();
   } catch(e) { try { console.warn('[AVT] avtReceberAttackAnim:', e); } catch(_) {} }
