@@ -3124,20 +3124,6 @@ function _avtCtrlToggleAutoAlvo() {
 }
 window._avtCtrlToggleAutoAlvo = _avtCtrlToggleAutoAlvo;
 
-function _getUltSkillId(charKey: any) {
-  try { return localStorage.getItem('mc_ult_' + charKey) || null; } catch (_) { return null; }
-}
-function _setUltSkillId(charKey: any, skillId: any) {
-  try {
-    const cur = localStorage.getItem('mc_ult_' + charKey);
-    if (cur === skillId) localStorage.removeItem('mc_ult_' + charKey);
-    else localStorage.setItem('mc_ult_' + charKey, skillId);
-  } catch (_) {}
-  if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
-}
-window._getUltSkillId = _getUltSkillId;
-window._setUltSkillId = _setUltSkillId;
-
 function _avtCtrlToggleAutoAlvoPref() {
   MOBILE_CTRL.autoAlvoPrefMenorHP = !MOBILE_CTRL.autoAlvoPrefMenorHP;
   try { localStorage.setItem('mc_auto_alvo_pref', MOBILE_CTRL.autoAlvoPrefMenorHP ? 'menor_hp' : 'proximo'); } catch (_) {}
@@ -4452,9 +4438,11 @@ function _atualizarZonaDireitaAventura() {
     if (alvoEnt) alvoDistancia = Math.max(Math.abs(Math.round(alvoEnt.x) - Math.round(jogador.x)), Math.abs(Math.round(alvoEnt.y) - Math.round(jogador.y)));
   }
 
-  // Montar itens de skill (com número e dbChar para ordenação)
+  // Montar itens de skill (com número p/ ordenação + ícone/abreviação p/ o rótulo)
   const _dbCharCtrl = AVT_STATE.chars.find((c: any) => c.id === jogador.dbId || c.nome === jogador.nome);
   const _getNum = (skId2: any) => (typeof _avtGetSkillNumero === 'function' ? _avtGetSkillNumero(_dbCharCtrl, jogador, skId2) : null);
+  const _getIcone = (skId2: any) => (typeof _avtGetSkillIcone === 'function' ? _avtGetSkillIcone(_dbCharCtrl, jogador, skId2) : null);
+  const _getAbrev = (nome2: any) => (typeof _avtSkillAbrev === 'function' ? _avtSkillAbrev(nome2) : '•');
 
   // No modo controle aventura, o ataque básico é automático — não exibir como botão manual
   const _ctrlAventuraDisp = MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
@@ -4471,7 +4459,7 @@ function _atualizarZonaDireitaAventura() {
     }
     for (const sk of mySkills) {
       const cd = (bat._cooldowns || {})[jogador.id + '_' + sk.id] || 0;
-      skillItems.push({ id: sk.id, nome: sk.habilidade, formula: sk.formula_dano || '1d6', alcance: sk.alcance_celulas ?? 1, cd, num: _getNum(sk.id) });
+      skillItems.push({ id: sk.id, nome: sk.habilidade, formula: sk.formula_dano || '1d6', alcance: sk.alcance_celulas ?? 1, cd, num: _getNum(sk.id), icone: _getIcone(sk.id), abrev: _getAbrev(sk.habilidade) });
     }
   } else {
     if (!_ctrlAventuraDisp) {
@@ -4487,11 +4475,10 @@ function _atualizarZonaDireitaAventura() {
     if (typeof _avtSkillsOrdenadasPorNumero === 'function') minhas = _avtSkillsOrdenadasPorNumero(minhas, _dbCharCtrl, jogador);
     for (const sk of minhas) {
       const cdMs = (AVT_STATE._oocCooldowns[(jogador.id||jogador.nome) + '_' + sk.id] || 0) - Date.now();
-      skillItems.push({ id: sk.id, nome: sk.habilidade, formula: sk.formula_dano || '1d6', alcance: sk.alcance_celulas ?? 1, cd: cdMs > 0 ? Math.ceil(cdMs/1000) : 0, num: _getNum(sk.id) });
+      skillItems.push({ id: sk.id, nome: sk.habilidade, formula: sk.formula_dano || '1d6', alcance: sk.alcance_celulas ?? 1, cd: cdMs > 0 ? Math.ceil(cdMs/1000) : 0, num: _getNum(sk.id), icone: _getIcone(sk.id), abrev: _getAbrev(sk.habilidade) });
     }
   }
 
-  const charKey = (jogador && (jogador.dbId || jogador.nome)) || '';
   const ultId = _dbCharCtrl?.custom_attrs?.arc_skill_id || null;
   const recolhido = !!MOBILE_CTRL.skillsRecolhidas;
 
@@ -4543,7 +4530,7 @@ function _atualizarZonaDireitaAventura() {
     const ultItem = ultId ? skillItems.find(sk => sk.id === ultId) : null;
     const isUltSel = skId === ultId && !!ultItem;
     const isUltDisabled = !ultItem || ultItem.cd > 0 || (alvoDistancia !== null && alvoDistancia > ultItem.alcance);
-    const ultLabel = !ultItem ? '⚡' : (ultItem.cd > 0 ? '⏱' : (ultItem.num != null ? String(ultItem.num) : '⚡'));
+    const ultLabel = !ultItem ? '⚡' : (ultItem.cd > 0 ? '⏱' : ((ultItem as any).icone || '⚡'));
     const btnUlt = document.createElement('button');
     btnUlt.style!.cssText = `position:absolute;top:66px;left:66px;` +
       `width:54px;height:54px;padding:0;border-radius:50%;` +
@@ -4588,13 +4575,15 @@ function _atualizarZonaDireitaAventura() {
       const pos = _ARC_SLOTS[i + 1];
       const isSel = skId === item.id;
       const isDisabled = item.cd > 0 || (alvoDistancia !== null && alvoDistancia > item.alcance);
-      const label = item.basico ? '⚔' : (item.num != null ? String(item.num) : '•');
+      // Rótulo: ícone escolhido pelo jogador → abreviação do nome (era o número)
+      const label = item.basico ? '⚔' : ((item as any).icone || (item as any).abrev || '•');
+      const _lblAbrev = !item.basico && !(item as any).icone && Array.from(label).length > 1;
       const btn = document.createElement('button');
       btn.style!.cssText = `position:absolute;top:${pos.top}px;left:${pos.left}px;` +
         `width:44px;height:44px;padding:0;border-radius:50%;` +
         `background:rgba(${isSel?'200,168,75,0.45':'79,163,209,0.25'});` +
         `border:1.5px solid rgba(${isSel?'200,168,75,0.9':'79,163,209,0.5'});` +
-        `font-family:var(--fonte-d);font-size:${item.basico?'0.85':'0.72'}rem;font-weight:600;` +
+        `font-family:var(--fonte-d);font-size:${item.basico?'0.85':(_lblAbrev?'0.52':'0.72')}rem;font-weight:600;letter-spacing:${_lblAbrev?'0.02em':'normal'};` +
         `color:${isSel?'#c8a84b':'#c8d8e8'};cursor:pointer;touch-action:manipulation;` +
         `display:flex;align-items:center;justify-content:center;z-index:2;` +
         `opacity:${isDisabled?'0.4':'1'};pointer-events:${isDisabled?'none':'auto'}`;
@@ -4674,8 +4663,8 @@ function _atualizarZonaDireitaAventura() {
         `font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;touch-action:manipulation;` +
         `display:flex;flex-direction:column;align-items:flex-start;text-align:left;` +
         `opacity:${isDisabled?'0.35':'1'};pointer-events:${isDisabled?'none':'auto'}`;
-      const numTag = (item.num != null && !item.basico) ? `<span style="color:#c8a84b;margin-right:4px">#${item.num}</span>` : '';
-      btn.innerHTML = `<span style="color:${isSel?'#c8a84b':'#c8d8e8'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;width:100%">${numTag}${item.nome}${item.cd>0?` ⏱${item.cd}s`:''}</span><span style="font-size:0.5rem;color:#7a92aa">⟷${item.alcance}</span>`;
+      const iconTag = ((item as any).icone && !item.basico) ? `<span style="margin-right:4px">${(item as any).icone}</span>` : '';
+      btn.innerHTML = `<span style="color:${isSel?'#c8a84b':'#c8d8e8'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;width:100%">${iconTag}${item.nome}${item.cd>0?` ⏱${item.cd}s`:''}</span><span style="font-size:0.5rem;color:#7a92aa">⟷${item.alcance}</span>`;
       const itemId = item.id;
       btn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlSelecionarSkill(itemId); });
       btn.addEventListener('click', () => _avtCtrlSelecionarSkill(itemId));
@@ -7828,10 +7817,6 @@ Object.defineProperty(globalThis, "_avtCtrlRolarSkillEsquerda", { configurable: 
 Object.defineProperty(globalThis, "_ARC_SLOTS", { configurable: true, get: () => _ARC_SLOTS });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtCtrlToggleAutoAlvo", { configurable: true, get: () => _avtCtrlToggleAutoAlvo, set: (__v) => { _avtCtrlToggleAutoAlvo = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_getUltSkillId", { configurable: true, get: () => _getUltSkillId, set: (__v) => { _getUltSkillId = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_setUltSkillId", { configurable: true, get: () => _setUltSkillId, set: (__v) => { _setUltSkillId = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtCtrlToggleAutoAlvoPref", { configurable: true, get: () => _avtCtrlToggleAutoAlvoPref, set: (__v) => { _avtCtrlToggleAutoAlvoPref = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])

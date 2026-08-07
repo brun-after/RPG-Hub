@@ -418,6 +418,23 @@ function _avtSkillsOrdenadasPorNumero(skills: any, dbChar: any, ent: any) {
 }
 window._avtGetSkillNumero = _avtGetSkillNumero;
 window._avtSkillsOrdenadasPorNumero = _avtSkillsOrdenadasPorNumero;
+// Ícone escolhido pelo jogador para os botões do controle mobile:
+// custom_attrs.skill_icones = { [skId]: emoji ou texto curto (≤4) }.
+function _avtGetSkillIcone(dbChar: any, ent: any, skId: any) {
+  const a = dbChar?.custom_attrs?.skill_icones;
+  const b = ent?.custom_attrs?.skill_icones;
+  const v = (a && a[skId]) || (b && b[skId]) || null;
+  return (typeof v === 'string' && v.trim()) ? v.trim() : null;
+}
+// Fallback quando não há ícone: primeiros 3 pontos de código do nome (seguro
+// para emoji/acentos via Array.from), maiúsculos.
+function _avtSkillAbrev(nome: any) {
+  const s = String(nome || '').trim();
+  if (!s) return '•';
+  return Array.from(s).slice(0, 3).join('').toUpperCase();
+}
+window._avtGetSkillIcone = _avtGetSkillIcone;
+window._avtSkillAbrev = _avtSkillAbrev;
 const AVT_T  = { PAREDE: 0, PISO: 1, SAIDA: 2 };
 const AVT_SZ = 48;
 
@@ -27127,8 +27144,8 @@ function _avtCharEditorRenderSkills(container: any, ent: any, dbChar: any) {
     return '';
   };
 
-  const skillCards = mySkills.map((sk: any) => {
-    const icon = autoIcon(sk);
+  const skillCards = mySkills.map((sk: any, _skIdx: number) => {
+    const icon = _avtGetSkillIcone(dbChar, ent, sk.id) || autoIcon(sk);
     const bodyId = 'avt-sk2-body-' + sk.id.replace(/[^a-z0-9]/gi, '_');
     const skIdSafe = sk.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const nameSafe = (sk.habilidade || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -27148,11 +27165,20 @@ function _avtCharEditorRenderSkills(container: any, ent: any, dbChar: any) {
     const rollBtn = temFormula
       ? `<button class="avt-ce2-skill-roll-btn" onclick="event.stopPropagation();typeof rolarFormulaDano==='function'&&rolarFormulaDano('${formula}','${nameSafe}','${ent.nome.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">🎲 ${formula}</button>` : '';
 
-    const numAtual = _avtGetSkillNumero(dbChar, ent, sk.id);
-    const numInput = `<input type="number" min="1" max="99" value="${numAtual ?? ''}" placeholder="#"
+    // Ordem por setas ↑/↓ (renumera 1..n) — substitui o campo de número livre.
+    const _ordBtn = (delta: number, glifo: string, off: boolean) =>
+      `<button ${off ? 'disabled' : ''} onclick="event.stopPropagation();_avtMoverSkillOrdem('${entIdSafe}','${skIdSafe}',${delta})"
+        title="${delta < 0 ? 'Subir na ordem' : 'Descer na ordem'}"
+        style="width:22px;height:14px;padding:0;line-height:1;font-size:0.55rem;cursor:${off ? 'default' : 'pointer'};
+               background:rgba(200,168,75,${off ? '0.04' : '0.12'});border:1px solid rgba(200,168,75,${off ? '0.12' : '0.35'});
+               border-radius:4px;color:${off ? 'rgba(200,168,75,0.25)' : '#c8a84b'}">${glifo}</button>`;
+    const ordemBtns = `<span style="display:inline-flex;flex-direction:column;gap:2px;margin-right:4px" onclick="event.stopPropagation()">
+        ${_ordBtn(-1, '▲', _skIdx === 0)}${_ordBtn(1, '▼', _skIdx === mySkills.length - 1)}</span>`;
+    const iconeAtual = _avtGetSkillIcone(dbChar, ent, sk.id);
+    const iconInput = `<input type="text" maxlength="4" value="${(iconeAtual ?? '').replace(/"/g, '&quot;')}" placeholder="${autoIcon(sk)}"
         onclick="event.stopPropagation()"
-        onchange="_avtSetSkillNumero('${entIdSafe}','${skIdSafe}', this.value)"
-        title="Número da skill no controle móvel"
+        onchange="_avtSetSkillIcone('${entIdSafe}','${skIdSafe}', this.value)"
+        title="Ícone no botão do controle móvel: emoji ou 3-4 letras. Vazio = automático."
         style="width:42px;padding:3px 4px;background:rgba(5,8,16,0.7);border:1px solid rgba(200,168,75,0.35);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.7rem;text-align:center;margin-right:4px">`;
     const isArc = (dbChar?.custom_attrs?.arc_skill_id || ent?.custom_attrs?.arc_skill_id) === sk.id;
     const arcBtn = `<button onclick="event.stopPropagation();_avtSetArcSkill('${entIdSafe}','${skIdSafe}')"
@@ -27169,7 +27195,7 @@ function _avtCharEditorRenderSkills(container: any, ent: any, dbChar: any) {
             <div class="avt-ce2-skill-name">${sk.habilidade || 'Habilidade'}</div>
             ${badges.length ? `<div class="avt-ce2-skill-badges">${badges.join('')}</div>` : ''}
           </div>
-          <div class="avt-ce2-skill-actions">${arcBtn}${numInput}${removeBtn}</div>
+          <div class="avt-ce2-skill-actions">${arcBtn}${ordemBtns}${iconInput}${removeBtn}</div>
         </div>
         <div class="avt-ce2-skill-body" id="${bodyId}">
           ${sk.efeito ? `<div class="avt-ce2-skill-desc">${sk.efeito}</div>` : ''}
@@ -27406,6 +27432,57 @@ function _avtSetSkillNumero(entId: any, skillId: any, valor: any) {
   if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
 }
 window._avtSetSkillNumero = _avtSetSkillNumero;
+
+// Grava o ícone escolhido pelo jogador (emoji/texto curto) para o botão da skill
+// no controle mobile. Vazio remove (volta ao ícone automático).
+function _avtSetSkillIcone(entId: any, skillId: any, valor: any) {
+  const ent = AVT_STATE.entidades.find((e: any) => e.id === entId);
+  if (!ent) return;
+  const dbChar = AVT_STATE.chars.find((c: any) => c.id === ent?.dbId || c.nome === ent?.nome);
+  const target = dbChar || ent;
+  if (!target.custom_attrs) target.custom_attrs = {};
+  if (!target.custom_attrs.skill_icones) target.custom_attrs.skill_icones = {};
+  const v = (valor == null) ? '' : String(valor).trim().slice(0, 8);
+  if (!v) delete target.custom_attrs.skill_icones[skillId];
+  else target.custom_attrs.skill_icones[skillId] = v;
+  if (dbChar?.id) {
+    _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs })
+    }).catch(e => mostrarToast('Erro ao salvar ícone: ' + (e?.message || e), 'erro'));
+  }
+  _avtCharEditorRender();
+  if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._avtSetSkillIcone = _avtSetSkillIcone;
+
+// Reordena a skill (↑/↓) na lista do personagem e renumera 1..n sequencial em
+// skill_numeros — a ORDEM substitui o antigo campo de número livre; os mesmos
+// números continuam alimentando o anel do controle, a lista e os atalhos numpad.
+function _avtMoverSkillOrdem(entId: any, skillId: any, delta: any) {
+  const ent = AVT_STATE.entidades.find((e: any) => e.id === entId);
+  if (!ent) return;
+  const dbChar = AVT_STATE.chars.find((c: any) => c.id === ent?.dbId || c.nome === ent?.nome);
+  const target = dbChar || ent;
+  const charSkillIds = dbChar?.custom_attrs?.skills_ids || ent?.custom_attrs?.skills_ids || [];
+  let mySkills = AVT_STATE.skills.filter((sk: any) => charSkillIds.includes(sk.id));
+  mySkills = _avtSkillsOrdenadasPorNumero(mySkills, dbChar, ent);
+  const idx = mySkills.findIndex((sk: any) => sk.id === skillId);
+  const j = idx + (delta > 0 ? 1 : -1);
+  if (idx < 0 || j < 0 || j >= mySkills.length) return;
+  const tmp = mySkills[idx]; mySkills[idx] = mySkills[j]; mySkills[j] = tmp;
+  if (!target.custom_attrs) target.custom_attrs = {};
+  const nums: Record<string, number> = {};
+  mySkills.forEach((sk: any, i: number) => { nums[sk.id] = i + 1; });
+  target.custom_attrs.skill_numeros = nums;
+  if (dbChar?.id) {
+    _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs })
+    }).catch(e => mostrarToast('Erro ao salvar ordem: ' + (e?.message || e), 'erro'));
+  }
+  _avtCharEditorRender();
+  if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._avtMoverSkillOrdem = _avtMoverSkillOrdem;
 
 function _avtSetArcSkill(entId: any, skillId: any) {
   const ent = AVT_STATE.entidades.find((e: any) => e.id === entId);
