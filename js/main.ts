@@ -13,6 +13,7 @@ import './config';
 import './state';
 import './core/utils';
 import './core/supabase';
+import './core/optimistic-save';
 import './core/realtime';
 import './core/rtnet';
 import './core/events';
