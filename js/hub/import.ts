@@ -55,6 +55,11 @@ function abrirPixiStudio(){
 function fecharPixiStudio(){
   const scr=document.getElementById('pixi-studio-screen');
   if(scr) scr.style!.display='none';
+  // Desmonta o preview: sem isto o rAF continuava rodando com o Studio fechado e
+  // cada reabertura órfava mais um contexto WebGL (browsers limitam a ~16).
+  if(typeof psPreviewUnmount==='function'){
+    try{ if(typeof psPreviewStop==='function') psPreviewStop(); psPreviewUnmount(); }catch(_){ }
+  }
   if(typeof PIXI_STUDIO_STATE!=='undefined' && PIXI_STUDIO_STATE._origin==='aventura'){
     PIXI_STUDIO_STATE._origin=null;
     const menu=document.getElementById('avt-menu-screen');

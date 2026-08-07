@@ -495,8 +495,15 @@ function psMoveLayer(layerId: any, dir: any) {
   const newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= layers.length) return;
   const tmp = layers[idx]; layers[idx] = layers[newIdx]; layers[newIdx] = tmp;
+  // O render ordena por z, não pela posição no array — sem trocar os z as setas
+  // só mexiam na lista lateral. z iguais (comum: default 3) são reindexados pela
+  // nova ordem do array para o swap ter efeito visível.
+  const za = layers[idx].z ?? 0, zb = layers[newIdx].z ?? 0;
+  if (za === zb) layers.forEach((l: any, i: number) => { l.z = i; });
+  else { layers[idx].z = zb; layers[newIdx].z = za; }
   _psSetDirty(true);
   _psRenderLayerList();
+  psPreviewRebuildAll();
 }
 
 function psSelectLayer(layerId: any) {
@@ -1368,6 +1375,8 @@ function psUpdateColorStop(layerId: any, idx: any, key: any, value: any) {
   const layer = _psGetLayer(layerId);
   if (!layer?.emitter?.color?.list) return;
   layer.emitter.color.list[idx][key] = value;
+  // Paridade com alpha/scale stops: gradiente fora de ordem quebra o upgradeConfig
+  if (key === 'time') layer.emitter.color.list.sort((a: any, b: any) => a.time - b.time);
   _psSetDirty(true);
   psPreviewSyncEmitter(layerId);
   // Refresh gradient preview
@@ -1604,6 +1613,28 @@ async function psPreviewMount() {
     PIXI_STUDIO_STATE._lastTs = 0;
     cancelAnimationFrame(PIXI_STUDIO_STATE._rafId);
     PIXI_STUDIO_STATE._rafId = requestAnimationFrame(_psPreviewTick);
+
+    // Acompanha resize do container (debounce): sem isto o preview ficava esticado
+    // e o hitArea desalinhava após redimensionar a janela/painel.
+    if (typeof ResizeObserver !== 'undefined' && canvas.parentElement) {
+      const obs = new ResizeObserver(() => {
+        clearTimeout(_psResizeTimer);
+        _psResizeTimer = setTimeout(() => {
+          const a = PIXI_STUDIO_STATE.previewApp;
+          const cv: any = document.getElementById('ps-preview-canvas');
+          if (!a || !cv) return;
+          const nw = cv.offsetWidth || 480, nh = cv.offsetHeight || 300;
+          if (nw === a.renderer.screen.width && nh === a.renderer.screen.height) return;
+          try {
+            a.renderer.resize(nw, nh);
+            a.stage.hitArea = new PIXI.Rectangle(0, 0, nw, nh);
+            psPreviewRebuildAll();
+          } catch (_) {}
+        }, 150);
+      });
+      obs.observe(canvas.parentElement);
+      (PIXI_STUDIO_STATE as any)._resizeObs = obs;
+    }
   } catch (e) {
     console.warn('[pixi-studio] preview setup failed', e);
     try { app.destroy(false, { children: true, texture: false }); } catch (_) {}
@@ -1617,6 +1648,12 @@ function psPreviewUnmount() {
   cancelAnimationFrame(PIXI_STUDIO_STATE._rafId);
   PIXI_STUDIO_STATE.previewPlaying = false;
   PIXI_STUDIO_STATE.previewTime = 0;
+  _psClearAudioTimers();
+  if ((PIXI_STUDIO_STATE as any)._resizeObs) {
+    try { (PIXI_STUDIO_STATE as any)._resizeObs.disconnect(); } catch (_) {}
+    (PIXI_STUDIO_STATE as any)._resizeObs = null;
+  }
+  clearTimeout(_psResizeTimer);
   _psDestroyAllEmitters();
   if (PIXI_STUDIO_STATE.previewApp) {
     try { PIXI_STUDIO_STATE.previewApp.destroy(false, { children: true, texture: false }); } catch (_) {}
@@ -1664,23 +1701,29 @@ function _psDoPlay() {
 }
 
 // Play the animation's audio (cast/impact/timed events) during preview — mirrors avtPixiPlayAnimation
+function _psClearAudioTimers() {
+  ((PIXI_STUDIO_STATE as any)._audioTimers || []).forEach((id: any) => clearTimeout(id));
+  (PIXI_STUDIO_STATE as any)._audioTimers = [];
+}
 function _psPlayPreviewAudio() {
   const cfg = PIXI_STUDIO_STATE.atual?.config_json;
   if (!cfg || typeof AudioManager === 'undefined') return;
+  _psClearAudioTimers();
+  const timers = (PIXI_STUDIO_STATE as any)._audioTimers;
   const a = cfg.audio || {};
   const vol = a.volume ?? 0.75;
   const play = (id: any, v?: any) => { try { AudioManager.playSFX(id, { volume: v ?? vol }); } catch (_) {} };
   if (a.cast) play(a.cast);
   if (a.impact) {
     const delay = (cfg.behavior === 'projectile') ? (cfg.behavior_config?.projectile_speed_ms || 500) : 0;
-    if (delay > 0) setTimeout(() => { if (PIXI_STUDIO_STATE.previewPlaying) play(a.impact); }, delay);
+    if (delay > 0) timers.push(setTimeout(() => { if (PIXI_STUDIO_STATE.previewPlaying) play(a.impact); }, delay));
     else play(a.impact);
   }
   const dur = cfg.duracao_ms || 1000;
   (a.events || []).forEach((ev: any) => {
     if (!ev || !ev.sfx) return;
     const at = Math.max(0, Math.min(1, ev.t ?? 0)) * dur;
-    setTimeout(() => { if (PIXI_STUDIO_STATE.previewPlaying) play(ev.sfx, ev.volume); }, at);
+    timers.push(setTimeout(() => { if (PIXI_STUDIO_STATE.previewPlaying) play(ev.sfx, ev.volume); }, at));
   });
 }
 
@@ -1691,6 +1734,7 @@ function psPreviewPause() {
 function psPreviewStop() {
   PIXI_STUDIO_STATE.previewPlaying = false;
   PIXI_STUDIO_STATE.previewTime = 0;
+  _psClearAudioTimers();
   _psUpdateTimeDisplay(0);
   // Reset sprites to t=0 visually
   if (PIXI_STUDIO_STATE.previewApp) _psPreviewRenderFrame(0);
@@ -2102,7 +2146,9 @@ function _psInterpKf(keyframes: any, t: any) {
   for (let i = 0; i < sorted.length - 1; i++) {
     if (t >= sorted[i].t && t <= sorted[i + 1].t) { lo = sorted[i]; hi = sorted[i + 1]; break; }
   }
-  const fRaw = (t - lo.t) / (hi.t - lo.t);
+  // Keyframes com o mesmo t (drag/arredondamento) zeram o denominador → NaN em x/y/scale
+  const denom = hi.t - lo.t;
+  const fRaw = denom > 0 ? (t - lo.t) / denom : 0;
   // Easing is owned by the *outgoing* keyframe (lo). Default linear = legacy behavior.
   const f = _psEase(lo.ease || 'linear', fRaw);
   const lerp = (a: any, b: any) => typeof a === 'number' && typeof b === 'number' ? a + (b - a) * f : a;
@@ -2823,18 +2869,24 @@ function psTimelineScrubEnd() {
   document.removeEventListener('touchend', psTimelineScrubEnd);
 }
 function psTimelineKfDragStart(layerId: any, kfIdx: any, e: any) {
-  PIXI_STUDIO_STATE._kfDrag = { layerId, kfIdx };
+  // Guarda a REFERÊNCIA do keyframe, não o índice: psUpdateKeyframe re-sorteia o
+  // array a cada movimento, então um índice fixo passa a apontar para o vizinho
+  // assim que o keyframe arrastado cruza outro.
+  const kf = _psGetLayer(layerId)?.keyframes?.[kfIdx] || null;
+  PIXI_STUDIO_STATE._kfDrag = { layerId, kf };
   document.addEventListener('mousemove', _psKfDragMove);
   document.addEventListener('mouseup', _psKfDragEnd);
 }
 function _psKfDragMove(e: any) {
-  if (!PIXI_STUDIO_STATE._kfDrag) return;
-  const { layerId, kfIdx } = PIXI_STUDIO_STATE._kfDrag;
+  const d = PIXI_STUDIO_STATE._kfDrag;
+  if (!d || !d.kf) return;
+  const idx = _psGetLayer(d.layerId)?.keyframes?.indexOf(d.kf) ?? -1;
+  if (idx < 0) return;
   const ruler = document.getElementById('ps-tl-ruler');
   if (!ruler) return;
   const rect = ruler.getBoundingClientRect();
   const t = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  psUpdateKeyframe(layerId, kfIdx, { t });
+  psUpdateKeyframe(d.layerId, idx, { t });
 }
 function _psKfDragEnd() {
   PIXI_STUDIO_STATE._kfDrag = null;
@@ -3102,7 +3154,11 @@ function psImportarJson(jsonStr: any) {
   try { parsed = JSON.parse(jsonStr); } catch (e: any) { return mostrarToast('JSON inválido: ' + e.message, 'erro'); }
 
   let config;
-  if (parsed.version === 2 && parsed.layers) {
+  // Discrimina pela ESTRUTURA, não pela version: o save grava version 3 e o check
+  // `version === 2` fazia o próprio export do Studio cair no ramo de config cru,
+  // descartando layers/câmera/áudio no round-trip. Configs crus de particle-emitter
+  // nunca têm `layers`.
+  if (Array.isArray(parsed.layers)) {
     // Full Studio config — validate emitter layers
     config = parsed;
     (config.layers || []).forEach((l: any) => {
