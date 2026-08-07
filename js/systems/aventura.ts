@@ -1085,6 +1085,90 @@ window.avtReceberArmadilhaRemover = function(p: any) {
   } catch(_) {}
 };
 
+// Modo de mira da armadilha: destaca células válidas (passáveis e livres no
+// alcance da skill) e espera um clique no canvas — em vez de escolher um alvo.
+function _avtIniciarModoArmadilha(skId: any, casterEnt: any) {
+  if (!casterEnt) return;
+  const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
+  const ef = _avtSkillTemArmadilha(sk);
+  if (!ef) return;
+  const alcance = sk?.alcance_celulas ?? 2;
+  const ax = Math.round(casterEnt.x), ay = Math.round(casterEnt.y);
+  const tiles = [];
+  for (let dy = -alcance; dy <= alcance; dy++) {
+    for (let dx = -alcance; dx <= alcance; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > alcance) continue;
+      const tx = ax + dx, ty = ay + dy;
+      if (!_avtTilePassavel(tx, ty, AVT_STATE.dungeon)) continue;
+      if (AVT_STATE.entidades.some((e: any) => e.hp > 0 && !e.escondido &&
+          Math.round(e.x) === tx && Math.round(e.y) === ty)) continue;
+      tiles.push({ x: tx, y: ty });
+    }
+  }
+  (AVT_STATE as any)._habilidadeRange = { tiles, tilesAlvo: [] };
+  (AVT_STATE as any)._modoArmadilhaCelula = { skId, casterId: casterEnt.id };
+  try { if (AVT_STATE.canvas) AVT_STATE.canvas.style!.cursor = 'crosshair'; } catch(_) {}
+  mostrarToast('🪤 Clique numa célula para armar a armadilha (Esc cancela)', 'ok', 3000);
+}
+window._avtIniciarModoArmadilha = _avtIniciarModoArmadilha;
+
+function _avtCancelarModoArmadilha() {
+  (AVT_STATE as any)._modoArmadilhaCelula = null;
+  (AVT_STATE as any)._habilidadeRange = null;
+  try { if (AVT_STATE.canvas) AVT_STATE.canvas.style!.cursor = 'default'; } catch(_) {}
+}
+window._avtCancelarModoArmadilha = _avtCancelarModoArmadilha;
+
+// Clique do canvas no modo armadilha: valida célula, cobra custo/cooldown
+// (combate: turnos; OOC: ms) e arma. Armar NÃO encerra o turno (paridade com mover).
+async function _avtArmarArmadilhaEm(tileX: any, tileY: any) {
+  const modo = (AVT_STATE as any)._modoArmadilhaCelula;
+  if (!modo) return;
+  const sk = AVT_STATE.skills.find((s: any) => s.id === modo.skId);
+  const ef = _avtSkillTemArmadilha(sk);
+  const caster = AVT_STATE.entidades.find((e: any) => e.id === modo.casterId) || _avtMeuJogador();
+  if (!sk || !ef || !caster || caster.hp <= 0) { _avtCancelarModoArmadilha(); return; }
+  const alcance = sk.alcance_celulas ?? 2;
+  const dist = Math.max(Math.abs(tileX - Math.round(caster.x)), Math.abs(tileY - Math.round(caster.y)));
+  if (dist > alcance) { mostrarToast('❌ Fora do alcance', 'aviso'); return; }
+  if (!_avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) { mostrarToast('❌ Célula inválida', 'aviso'); return; }
+  if (AVT_STATE.entidades.some((e: any) => e.hp > 0 && !e.escondido &&
+      Math.round(e.x) === tileX && Math.round(e.y) === tileY)) {
+    mostrarToast('❌ Célula ocupada', 'aviso'); return;
+  }
+
+  const bat = (typeof _avtBatalhaDeEnt === 'function') ? _avtBatalhaDeEnt(caster.id) : null;
+  if (bat) {
+    const cdKey = caster.id + '_' + sk.id;
+    if (((bat._cooldowns || {})[cdKey] || 0) > 0) { mostrarToast('⏱ Habilidade em cooldown', 'aviso'); return; }
+    if (sk.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
+      const ok = await _avtDescontarCustoSkill(caster.nome, sk.custo_rsv);
+      if (!ok) return;
+    }
+    if (sk.cooldown_turnos > 0) {
+      if (!bat._cooldowns) bat._cooldowns = {};
+      bat._cooldowns[cdKey] = sk.cooldown_turnos;
+    }
+  } else {
+    const oocKey = (caster.id || caster.nome) + '_' + sk.id;
+    if ((AVT_STATE._oocCooldowns[oocKey] || 0) > Date.now()) { mostrarToast('⏱ Habilidade em cooldown', 'aviso'); return; }
+    if (sk.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
+      const ok = await _avtDescontarCustoSkill(caster.nome, sk.custo_rsv);
+      if (!ok) return;
+    }
+    _avtSetOocCooldown(oocKey, Date.now() + (sk.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000);
+  }
+
+  const cell = _avtArmadilhaMarcarCelula(caster, tileX, tileY, ef);
+  _avtCancelarModoArmadilha();
+  if (cell) {
+    _avtLog(`🪤 ${caster.nome} armou uma armadilha`, bat?.id);
+    mostrarToast(`🪤 Armadilha armada (${_avtArmadilhasDoCaster(caster.nome).length}/${cell.max})`, 'ok', 2200);
+    try { avtJogadorPainelRender(); } catch(_) {}
+  }
+}
+window._avtArmarArmadilhaEm = _avtArmarArmadilhaEm;
+
 // Desenha as armadilhas armadas (glifo + borda pulsante). Inimigos são NPCs —
 // não há "esconder do adversário": todo cliente vê as armadilhas do grupo.
 function _avtRenderArmadilhaCells(ctx: any, camera: any, SZ: any, canvas: any) {
@@ -8394,6 +8478,8 @@ function _avtMostrarRollCenter(resultado: any, isCrit: any, multInfo: any) {
 function _avtAtivarModoAlvo(skId: any, atacante: any) {
   _avtLimparModoAlvo();
   const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
+  // Armadilha mira uma CÉLULA, não um alvo
+  if (_avtSkillTemArmadilha(sk)) { _avtIniciarModoArmadilha(skId, atacante); return; }
   const alcance = _avtAlcanceAlvoJogador(sk, atacante);
   const tipoArea = sk?.tipo_area || null;
   const tamanhoArea = sk?.tamanho_area || 1;
@@ -8752,6 +8838,12 @@ function _avtCanvasClick(e: any) {
     return;
   }
 
+  // Modo armadilha: clique escolhe a célula onde armar
+  if ((AVT_STATE as any)._modoArmadilhaCelula) {
+    _avtArmarArmadilhaEm(tileX, tileY);
+    return;
+  }
+
   const ent = AVT_STATE.entidades.find((e: any) => Math.round(e.x)===tileX && Math.round(e.y)===tileY);
 
   // Master reposition mode: move selected entity to clicked tile
@@ -9022,6 +9114,12 @@ function _avtCanvasKey(e: any) {
   const _key  = (e.key  || '').toLowerCase();
   const _code = e.code  || '';
 
+  // ── Escape: cancelar modo de armar armadilha ─────────────────────────────
+  if (e.key === 'Escape' && (AVT_STATE as any)._modoArmadilhaCelula) {
+    _avtCancelarModoArmadilha();
+    mostrarToast('Armadilha cancelada', '');
+    return;
+  }
   // ── Escape: cancelar modo de posicionamento de baú ───────────────────────
   if (e.key === 'Escape' && (AVT_STATE as any)._modoBauPlacement) {
     const { bauId } = (AVT_STATE as any)._modoBauPlacement;
@@ -10149,6 +10247,9 @@ async function _avtPrimeiroAtaqueSelecionarSkill(skId: any) {
 
   const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
 
+  // Skills de armadilha: escolher uma célula para armar (não um alvo)
+  if (_avtSkillTemArmadilha(sk)) { _avtIniciarModoArmadilha(skId, jogador); return; }
+
   // Skills de aliado: mostrar lista de aliados (fora de combate não há bat.iniciativa, usa entidades)
   if (sk?.alvo_tipo === 'aliado') {
     const _isMcDispOoc = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
@@ -10312,6 +10413,8 @@ async function _avtAplicarSkillAliadoOoc(skId: any, alvoId: any) {
 // Ativa o modo de destaque de range para seleção de alvo de primeiro ataque (desktop)
 function _avtAtivarModoAlvoPrimeiroAtaque(skId: any, atacante: any) {
   const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
+  // Armadilha mira uma CÉLULA, não um alvo
+  if (_avtSkillTemArmadilha(sk)) { _avtIniciarModoArmadilha(skId, atacante); return; }
   const alcance = _avtAlcanceAlvoJogador(sk, atacante);
   const tiles = [];
   const tilesAlvoVermelho: any = [];
@@ -10476,6 +10579,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId: any, targetId: any, _remote:
   }
 
   const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
+  // Skill de armadilha nunca executa como ataque — redireciona à mira de célula.
+  if (_avtSkillTemArmadilha(sk)) { _avtIniciarModoArmadilha(skId, jogador); return; }
   const _tipoAreaOoc       = sk?.tipo_area || null;
   const _isTodosInimigoOoc = sk?.alvo_tipo === 'todos_inimigos';
   const _isAreaOoc         = _tipoAreaOoc === 'quadrado' || _tipoAreaOoc === 'linha' || _isTodosInimigoOoc;
@@ -14257,6 +14362,15 @@ async function _avtExecutarAtaque() {
   if (_ativoSilEnt?._silenciado) {
     mostrarToast('🔇 Silenciado! Não pode atacar nem usar habilidades.', 'aviso');
     return;
+  }
+  // Skill de armadilha pendente nunca "rola ataque" — redireciona à mira de célula.
+  {
+    const _skPendTrap = (AVT_STATE as any)._pendingSkillId
+      ? AVT_STATE.skills.find((s: any) => s.id === (AVT_STATE as any)._pendingSkillId) : null;
+    if (_avtSkillTemArmadilha(_skPendTrap)) {
+      _avtIniciarModoArmadilha((AVT_STATE as any)._pendingSkillId, _ativoSilEnt || ativo);
+      return;
+    }
   }
   // Efeito sem_ataque ativo bloqueia o ataque conforme o tipo configurado
   // (todos | fisico | magico — comparado ao tipo_dano da skill/ataque escolhido).
@@ -26729,13 +26843,14 @@ function _avtSkmRenderEfeitos() {
     {v:'fantasma',l:'👻 Fantasma'},{v:'atravessar',l:'🧱 Atravessar'},
     {v:'necromante',l:'☠ Necromante'},
     {v:'rastro_persona',l:'🐾 Rastro Persona'},{v:'rastro_anima',l:'✨ Rastro Anima'},
+    {v:'armadilha',l:'🪤 Armadilha'},
     {v:'empurrao',l:'💨 Empurrão / Puxão'},
     {v:'ab_cd_reduzir',l:'⏩ AB: Reduzir cooldown'},{v:'ab_dano_buff',l:'💪 AB: Buff de dano'},
     {v:'ab_multi_alvo',l:'🎯 AB: Múltiplos alvos'},{v:'ab_alcance_buff',l:'📏 AB: Aumentar alcance'},
   ];
   const inpSt = 'padding:3px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem';
   cont.innerHTML = _AVT_SK_MODAL.efeitos.map((ef,i)=>{
-    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar','fantasma','atravessar','necromante','rastro_persona','rastro_anima','ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo);
+    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar','fantasma','atravessar','necromante','rastro_persona','rastro_anima','armadilha','ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo);
     return `<div style="padding:7px 8px;margin-bottom:6px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:6px">
       <div style="display:flex;gap:5px;align-items:center;margin-bottom:2px">
         <select onchange="_avtSkmEfTipoChange(${i},this.value)" style="${inpSt};flex:1">
@@ -26762,6 +26877,31 @@ function _avtSkmRenderEfeitos() {
         <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#5ee09a">Cor do rastro:
           <input type="color" value="${ef.rastro_cor||'#5ee09a'}" oninput="_AVT_SK_MODAL.efeitos[${i}].rastro_cor=this.value"
             style="width:32px;height:22px;padding:1px;border:1px solid rgba(94,224,154,0.4);border-radius:3px;background:#0a0f18;cursor:pointer"></label>
+      </div>` : ''}
+      ${ef.tipo==='armadilha' ? _avtSkmMiniDiceBuilderHTML(i,'armadilha','🪤 Dano da armadilha (fórmula de dados)') : ''}
+      ${ef.tipo==='armadilha' ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#e8604c" title="Nº máximo de armadilhas suas armadas ao mesmo tempo (a mais antiga cai)">Máx. simultâneas:
+          <input type="number" min="1" max="20" value="${ef.armadilha_max??3}" oninput="_AVT_SK_MODAL.efeitos[${i}].armadilha_max=Math.max(1,+this.value)"
+            style="width:48px;${inpSt};text-align:center"></label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#e8604c">Cor:
+          <input type="color" value="${ef.armadilha_cor||'#e8604c'}" oninput="_AVT_SK_MODAL.efeitos[${i}].armadilha_cor=this.value"
+            style="width:32px;height:22px;padding:1px;border:1px solid rgba(232,96,76,0.4);border-radius:3px;background:#0a0f18;cursor:pointer"></label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#e8604c" title="Efeito extra aplicado no inimigo que pisar">Ao disparar:
+          <select onchange="_avtSkmArmEfeitoChange(${i},this.value)" style="${inpSt}">
+            <option value="none" ${!ef.armadilha_efeito?'selected':''}>Só dano</option>
+            <option value="dot" ${ef.armadilha_efeito?.tipo==='dot'?'selected':''}>🩸 + DOT</option>
+            <option value="stun" ${ef.armadilha_efeito?.tipo==='stun'?'selected':''}>⚡ + Stun</option>
+          </select></label>
+        ${ef.armadilha_efeito?.tipo==='dot' ? `
+          <input type="text" value="${(ef.armadilha_efeito.dot_formula||'1d4').replace(/"/g,'&quot;')}" placeholder="1d4" title="Fórmula do DOT por turno"
+            oninput="_AVT_SK_MODAL.efeitos[${i}].armadilha_efeito.dot_formula=this.value" style="width:64px;${inpSt}">
+          <input type="number" min="1" max="99" value="${ef.armadilha_efeito.duracao_turnos??2}" title="Duração do DOT (turnos)"
+            oninput="_AVT_SK_MODAL.efeitos[${i}].armadilha_efeito.duracao_turnos=Math.max(1,+this.value)" style="width:42px;${inpSt};text-align:center">
+          <span style="font-size:0.62rem;color:#7a92aa">turnos de DOT</span>` : ''}
+        ${ef.armadilha_efeito?.tipo==='stun' ? `
+          <input type="number" min="1" max="99" value="${ef.armadilha_efeito.duracao_turnos??1}" title="Duração do stun (turnos)"
+            oninput="_AVT_SK_MODAL.efeitos[${i}].armadilha_efeito.duracao_turnos=Math.max(1,+this.value)" style="width:42px;${inpSt};text-align:center">
+          <span style="font-size:0.62rem;color:#7a92aa">turnos de stun</span>` : ''}
       </div>` : ''}
       ${ef.tipo==='empurrao' ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:4px">
         <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#f0a84b" title="Empurrar afasta o alvo; Puxão aproxima-o do conjurador">💨 Direção:
@@ -26852,6 +26992,11 @@ function _avtSkmRenderEfeitos() {
         if (ef.rastro_formula && !ef.rastro_fb?.length) ef.rastro_fb = _avtEfFBParseFormula(ef.rastro_formula);
         _avtEfFBAtualizarUI(i, 'rastro');
       }
+      // Armadilha usa a chave de builder 'armadilha' → ef.armadilha_formula
+      if (ef.tipo==='armadilha') {
+        if (ef.armadilha_formula && !ef.armadilha_fb?.length) ef.armadilha_fb = _avtEfFBParseFormula(ef.armadilha_formula);
+        _avtEfFBAtualizarUI(i, 'armadilha');
+      }
     });
   }, 0);
 }
@@ -26874,6 +27019,11 @@ function _avtSkmEfTipoChange(i: any, val: any) {
   } else if (val === 'empurrao') {
     if (ef.empurrao_direcao == null)   ef.empurrao_direcao = 'longe';
     if (ef.empurrao_distancia == null) ef.empurrao_distancia = 3;
+  } else if (val === 'armadilha') {
+    if (ef.armadilha_formula == null) ef.armadilha_formula = '';
+    if (ef.armadilha_max == null)     ef.armadilha_max = 3;
+    if (ef.armadilha_cor == null)     ef.armadilha_cor = '#e8604c';
+    if (ef.duracao_turnos == null)    ef.duracao_turnos = 10;
   }
   if (['ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(val) && ef.duracao_turnos == null) {
     ef.duracao_turnos = 3;
@@ -26881,6 +27031,17 @@ function _avtSkmEfTipoChange(i: any, val: any) {
   _avtSkmRenderEfeitos();
 }
 window._avtSkmEfTipoChange = _avtSkmEfTipoChange;
+
+// Troca o efeito extra da armadilha (nenhum/dot/stun), semeando defaults.
+function _avtSkmArmEfeitoChange(i: any, val: any) {
+  const ef = _AVT_SK_MODAL.efeitos[i];
+  if (!ef) return;
+  if (val === 'dot')       ef.armadilha_efeito = { tipo: 'dot', dot_formula: '1d4', dot_variante: 'sangramento', duracao_turnos: 2 };
+  else if (val === 'stun') ef.armadilha_efeito = { tipo: 'stun', duracao_turnos: 1 };
+  else                     ef.armadilha_efeito = null;
+  _avtSkmRenderEfeitos();
+}
+window._avtSkmArmEfeitoChange = _avtSkmArmEfeitoChange;
 
 // ── Persistent animation picker helpers (per-effect, adventure mode) ─────────
 

@@ -131,6 +131,45 @@ describe('armadilha-skill: limites e expiração', () => {
     expect(goblin.hp).toBe(hpAntes); // expirou sem ferir
   });
 
+  it('fluxo de cast OOC: mira → clique arma, debita custo e entra em cooldown', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const alice = sim.jogador();
+    const char = sim.state.chars.find((c: any) => c.nome === 'Alice');
+    const manaAntes = char.custom_attrs.atributos.Mana;
+
+    g._avtIniciarModoArmadilha(103, alice); // Armadilha de Caça (1 Mana, alcance 3, cd 2t)
+    expect(sim.state._modoArmadilhaCelula?.skId).toBe(103);
+    const tiles = sim.state._habilidadeRange?.tiles || [];
+    expect(tiles.length).toBeGreaterThan(0);
+    // Alcance Chebyshev ≤ 3 a partir de (3,3); célula de Bob (5,3) fica fora (ocupada)
+    expect(tiles.every((t: any) => Math.max(Math.abs(t.x - 3), Math.abs(t.y - 3)) <= 3)).toBe(true);
+    expect(tiles.some((t: any) => t.x === 5 && t.y === 3)).toBe(false);
+
+    await g._avtArmarArmadilhaEm(4, 3);
+    expect(sim.state._armadilhaCells).toHaveLength(1);
+    expect(sim.state._modoArmadilhaCelula).toBeNull();
+    expect(char.custom_attrs.atributos.Mana).toBe(manaAntes - 1);
+    const oocKey = (alice.id || alice.nome) + '_103';
+    expect(sim.state._oocCooldowns[oocKey]).toBeGreaterThan(Date.now());
+
+    // Em cooldown: novo arm não cria célula nem debita de novo
+    g._avtIniciarModoArmadilha(103, alice);
+    await g._avtArmarArmadilhaEm(6, 6);
+    expect(sim.state._armadilhaCells).toHaveLength(1);
+    expect(char.custom_attrs.atributos.Mana).toBe(manaAntes - 1);
+  });
+
+  it('fora do alcance da skill não arma (modo continua ativo)', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const alice = sim.jogador();
+    g._avtIniciarModoArmadilha(103, alice);
+    await g._avtArmarArmadilhaEm(10, 10); // dist Chebyshev 7 > alcance 3
+    expect(sim.state._armadilhaCells ?? []).toHaveLength(0);
+    expect(sim.state._modoArmadilhaCelula?.skId).toBe(103);
+    g._avtCancelarModoArmadilha();
+    expect(sim.state._modoArmadilhaCelula).toBeNull();
+  });
+
   it('não arma em célula de parede', async () => {
     const sim = await bootAventuraSim({ charNome: 'Alice' });
     const alice = sim.jogador();
