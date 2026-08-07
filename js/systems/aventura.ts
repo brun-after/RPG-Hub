@@ -4166,6 +4166,204 @@ function _avtTrapRemover(trapId: any) {
 }
 window._avtTrapRemover = _avtTrapRemover;
 
+// ── Lojas: ferramentas do mestre ─────────────────────────────────────────────
+// Espelham o trio do baú. O runtime de compra/venda vive em avt-inventario.ts
+// (avtAbrirLoja / avtLojaComprar / avtLojaVender).
+
+function _avtMestreGetLoja(lojaId: any) {
+  return AVT_STATE.dungeon?.render_data?.objetos?.find((o: any) =>
+    o.tipo === 'loja' && String(o.id) === String(lojaId)) || null;
+}
+
+function _avtMestreAddLoja() {
+  const rd = AVT_STATE.dungeon?.render_data || (AVT_STATE.dungeon ? (AVT_STATE.dungeon.render_data = {}) : null);
+  if (!rd) { mostrarToast('Nenhum mapa carregado', 'aviso'); return; }
+  if (!Array.isArray(rd.objetos)) rd.objetos = [];
+  const loja = { id: 'loja_' + Date.now(), tipo: 'loja', nome: 'Loja', icone: '🛒',
+    img_url: null as any, x: 0.5, y: 0.5, estoque: [] as any[] };
+  rd.objetos.push(loja);
+  _avtSalvarDungeon();
+  try { _avtBroadcast('avt_obj_spawn', { obj: loja }); } catch(_) {}
+  _avtMestreEditarLoja(loja.id);
+}
+window._avtMestreAddLoja = _avtMestreAddLoja;
+
+function _avtEntrarModoLojaPlacement(lojaId: any) {
+  (AVT_STATE as any)._modoLojaPlacement = { lojaId };
+  if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = 'crosshair';
+  mostrarToast('📍 Clique no mapa para posicionar a loja', 'ok');
+}
+window._avtEntrarModoLojaPlacement = _avtEntrarModoLojaPlacement;
+
+function _avtLojasSecao(emJogo: any) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  const lojas = (rd?.objetos || []).filter((o: any) => o.tipo === 'loja');
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🛒 Lojas</div>
+        <div class="avt-mp-hint" style="margin-bottom:6px">Ponto de compra/venda no mapa. Os preços vêm do 💰 Valor base de cada item do catálogo; a % de revenda fica na aba ⚖ Balanceamento.</div>
+        ${rd ? `
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:8px" onclick="_avtMestreAddLoja()">🛒 + Nova loja</button>
+        ${lojas.length ? lojas.map((o: any) => {
+          const safe = String(o.id).replace(/'/g,"\\'");
+          const tx = Math.round((o.x ?? 0) * dw), ty = Math.round((o.y ?? 0) * dh);
+          const nItens = (o.estoque || []).length;
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;padding:6px 8px;background:rgba(200,168,75,0.04);border:1px solid rgba(200,168,75,0.14);border-radius:6px">
+            <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${_escHtml(o.icone || '🛒')} ${_escHtml(o.nome || 'Loja')} <span style="font-size:0.6rem;color:#7a92aa">Col ${tx}, Ln ${ty} · ${nItens} item(ns)</span></span>
+            ${emJogo ? `<button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" title="Posicionar no mapa" onclick="document.getElementById('avt-mestre-panel').style.display='none';_avtEntrarModoLojaPlacement('${safe}')">📍</button>` : ''}
+            <button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" onclick="_avtMestreEditarLoja('${safe}')">✏</button>
+            <button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 7px;font-size:0.65rem" onclick="_avtMestreRemoverLoja('${safe}')">✕</button>
+          </div>`;
+        }).join('') : '<div class="avt-mp-hint">Nenhuma loja no mapa.</div>'}
+        ` : '<div class="avt-mp-hint">Sem mapa carregado.</div>'}
+      </div>`;
+}
+window._avtLojasSecao = _avtLojasSecao;
+
+// Editor de loja com builder de estoque. Trabalha numa cópia (_AVT_LOJA_EDIT)
+// e só grava no objeto ao salvar.
+let _AVT_LOJA_EDIT: any = null;
+
+function _avtMestreEditarLoja(lojaId: any) {
+  const loja = _avtMestreGetLoja(lojaId);
+  if (!loja) return;
+  _AVT_LOJA_EDIT = { lojaId: String(lojaId), estoque: (loja.estoque || []).map((e: any) => ({ ...e })) };
+  _avtLojaEditorRender();
+}
+window._avtMestreEditarLoja = _avtMestreEditarLoja;
+
+function _avtLojaEditorRender() {
+  const st = _AVT_LOJA_EDIT;
+  const loja = st ? _avtMestreGetLoja(st.lojaId) : null;
+  if (!st || !loja) return;
+  const emJogo = !(typeof _avtEmMenuConfig === 'function' && _avtEmMenuConfig());
+  const inpSt = 'box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem';
+  let overlay = document.getElementById('avt-loja-editor-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'avt-loja-editor-overlay';
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(overlay);
+  }
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  const tx = Math.round((loja.x ?? 0.5) * dw), ty = Math.round((loja.y ?? 0.5) * dh);
+  const safe = String(st.lojaId).replace(/'/g,"\\'");
+  const catalog = AVT_STATE.itemCatalog || [];
+  const nomeItem = (id: any) => {
+    const d = catalog.find((i: any) => String(i.id) === String(id));
+    return d ? `${d.icone || '📦'} ${d.nome}` : `#${id}`;
+  };
+  const precoLabel = (id: any) => {
+    const d = catalog.find((i: any) => String(i.id) === String(id));
+    const v = parseFloat(d?.valor_base);
+    return Number.isFinite(v) ? `💰 ${Math.round(v)}` : '<span style="color:#e0a54a">⚠ sem preço</span>';
+  };
+  overlay.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(200,168,75,0.3);border-radius:12px;padding:20px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8a84b">🛒 Loja</div>
+        <button onclick="document.getElementById('avt-loja-editor-overlay').style.display='none'" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 90px;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Nome</label>
+          <input id="avt-loja-ed-nome" value="${_escHtml(loja.nome || 'Loja')}" style="width:100%;${inpSt}">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Ícone (emoji)</label>
+          <input id="avt-loja-ed-icone" value="${_escHtml(loja.icone || '🛒')}" maxlength="4" style="width:100%;${inpSt}">
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Imagem (URL, opcional — substitui o emoji no mapa)</label>
+        <input id="avt-loja-ed-img" value="${_escHtml(loja.img_url || '')}" placeholder="https://…" style="width:100%;${inpSt}">
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:4px">📦 Estoque</label>
+        ${st.estoque.length ? st.estoque.map((e: any, i: number) => `
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;padding:5px 8px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.12);border-radius:6px">
+            <span style="flex:1;font-size:0.7rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(nomeItem(e.item_id))}</span>
+            <span style="font-size:0.62rem;color:#c8a84b;flex-shrink:0">${precoLabel(e.item_id)}</span>
+            <span style="font-size:0.62rem;color:#7a92aa;flex-shrink:0">${e.qtd == null ? '∞' : '×' + e.qtd}</span>
+            <button onclick="_avtLojaEditorRmItem(${i})" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.8rem;padding:0">✕</button>
+          </div>`).join('') : '<div style="font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Estoque vazio.</div>'}
+        <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+          <select id="avt-loja-ed-additem" style="flex:1;${inpSt}">
+            <option value="">— Item do catálogo —</option>
+            ${catalog.map((i: any) => `<option value="${_escHtml(String(i.id).replace(/'/g, "\\'"))}">${_escHtml(i.nome)}${Number.isFinite(parseFloat(i.valor_base)) ? ' (💰' + Math.round(parseFloat(i.valor_base)) + ')' : ' (⚠ sem preço)'}</option>`).join('')}
+          </select>
+          <input id="avt-loja-ed-addqtd" type="number" min="1" value="5" title="Quantidade" style="width:52px;text-align:center;${inpSt}">
+          <label style="display:flex;align-items:center;gap:3px;font-size:0.62rem;color:#7a92aa;flex-shrink:0" title="Estoque infinito">
+            <input type="checkbox" id="avt-loja-ed-addinf">∞</label>
+          <button class="avt-mp-btn avt-mp-btn-ok" style="padding:4px 10px;font-size:0.7rem" onclick="_avtLojaEditorAddItem()">＋</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="flex:1">
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Posição no mapa</label>
+          <div style="padding:5px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">Col ${tx}, Linha ${ty}</div>
+        </div>
+        ${emJogo ? `<button class="avt-mp-btn" style="padding:5px 10px;font-size:0.72rem;margin-top:14px;white-space:nowrap" onclick="document.getElementById('avt-loja-editor-overlay').style.display='none';document.getElementById('avt-mestre-panel').style.display='none';_avtEntrarModoLojaPlacement('${safe}')">📍 Posicionar no mapa</button>` : ''}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtLojaEditorSalvar('${safe}')">💾 Salvar</button>
+        <button class="avt-mp-btn avt-mp-btn-danger" style="flex:1" onclick="document.getElementById('avt-loja-editor-overlay').style.display='none'">✕ Fechar</button>
+      </div>
+    </div>`;
+  overlay.style!.display = 'flex';
+}
+
+function _avtLojaEditorAddItem() {
+  const st = _AVT_LOJA_EDIT;
+  if (!st) return;
+  const itemId = document.getElementById('avt-loja-ed-additem')?.value;
+  if (!itemId) { mostrarToast('Escolha um item do catálogo', 'aviso'); return; }
+  const inf = !!document.getElementById('avt-loja-ed-addinf')?.checked;
+  const qtd = inf ? null : Math.max(1, parseInt(document.getElementById('avt-loja-ed-addqtd')?.value!) || 1);
+  const ex = st.estoque.find((e: any) => String(e.item_id) === String(itemId));
+  if (ex) ex.qtd = (ex.qtd == null || qtd == null) ? null : ex.qtd + qtd;
+  else st.estoque.push({ item_id: itemId, qtd });
+  _avtLojaEditorRender();
+}
+window._avtLojaEditorAddItem = _avtLojaEditorAddItem;
+
+function _avtLojaEditorRmItem(idx: any) {
+  const st = _AVT_LOJA_EDIT;
+  if (!st) return;
+  st.estoque.splice(idx, 1);
+  _avtLojaEditorRender();
+}
+window._avtLojaEditorRmItem = _avtLojaEditorRmItem;
+
+function _avtLojaEditorSalvar(lojaId: any) {
+  const st = _AVT_LOJA_EDIT;
+  const loja = _avtMestreGetLoja(lojaId);
+  if (!st || !loja) return;
+  loja.nome = document.getElementById('avt-loja-ed-nome')?.value!.trim!()! || 'Loja';
+  loja.icone = (document.getElementById('avt-loja-ed-icone')?.value || '🛒').trim() || '🛒';
+  loja.img_url = (document.getElementById('avt-loja-ed-img')?.value || '').trim() || null;
+  loja.estoque = st.estoque.map((e: any) => ({ ...e }));
+  _avtSalvarDungeon();
+  try { _avtBroadcast('avt_obj_spawn', { obj: loja }); } catch(_) {}
+  const overlay = document.getElementById('avt-loja-editor-overlay');
+  if (overlay) overlay.style!.display = 'none';
+  mostrarToast('Loja salva', 'sucesso');
+  _avtMestrePainelRender();
+}
+window._avtLojaEditorSalvar = _avtLojaEditorSalvar;
+
+function _avtMestreRemoverLoja(lojaId: any) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd?.objetos) return;
+  const idx = rd.objetos.findIndex((o: any) => String(o.id) === String(lojaId));
+  if (idx >= 0) rd.objetos.splice(idx, 1);
+  _avtSalvarDungeon();
+  try { _avtBroadcast('avt_obj_pickup', { objId: lojaId }); } catch(_) {}
+  _avtMestrePainelRender();
+}
+window._avtMestreRemoverLoja = _avtMestreRemoverLoja;
+
 function _avtMestreRemoverBau(bauId: any) {
   const rd = AVT_STATE.dungeon?.render_data;
   if (!rd?.objetos) return;
@@ -9051,6 +9249,23 @@ function _avtCanvasClick(e: any) {
     return;
   }
 
+  // Shop placement mode (mestre): click to set shop position on the map
+  if ((AVT_STATE as any)._modoLojaPlacement) {
+    const { lojaId } = (AVT_STATE as any)._modoLojaPlacement;
+    (AVT_STATE as any)._modoLojaPlacement = null;
+    canvas.style.cursor = '';
+    const lojaPl = _avtMestreGetLoja(lojaId);
+    if (lojaPl && AVT_STATE.dungeon) {
+      lojaPl.x = tileX / AVT_STATE.dungeon.w;
+      lojaPl.y = tileY / AVT_STATE.dungeon.h;
+      _avtSalvarDungeon();
+      try { _avtBroadcast('avt_obj_spawn', { obj: lojaPl }); } catch(_) {}
+      mostrarToast(`Loja posicionada em coluna ${tileX}, linha ${tileY}`, 'ok');
+      _avtMestreEditarLoja(lojaId);
+    }
+    return;
+  }
+
   // Trap placement mode (mestre): click to set trap position on the map
   if ((AVT_STATE as any)._modoTrapPlacement) {
     const { trapId } = (AVT_STATE as any)._modoTrapPlacement;
@@ -9374,6 +9589,14 @@ function _avtCanvasKey(e: any) {
     if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
     mostrarToast('Posicionamento cancelado', 'aviso');
     _avtTrapEditar(trapId);
+    return;
+  }
+  if (e.key === 'Escape' && (AVT_STATE as any)._modoLojaPlacement) {
+    const { lojaId } = (AVT_STATE as any)._modoLojaPlacement;
+    (AVT_STATE as any)._modoLojaPlacement = null;
+    if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
+    mostrarToast('Posicionamento cancelado', 'aviso');
+    _avtMestreEditarLoja(lojaId);
     return;
   }
 
@@ -22281,6 +22504,7 @@ function _avtMpConteudoAba() {
         }).join('')}
         ` : ''}
       </div>
+      ${_avtLojasSecao(emJogo)}
 
 `;
     }
