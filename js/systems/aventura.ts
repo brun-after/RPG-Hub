@@ -5381,11 +5381,14 @@ function _avtBlocoFuncao(key: any) {
 }
 
 // Dado (coluna,linha) de um bloco no spritesheet, devolve a chave semântica canônica.
+// Ignora o sufixo @rot do valor: "bloco_1_0@1" ainda é a célula (1,0) do atlas.
 function _avtBlocoChavePorCelula(tc: any, tr: any) {
   const blocos = (AVT_STATE as any)._tilesetConfig?.blocos
     || AVT_STATE.dungeon?.tileset_config?.blocos || {};
   const alvo = `bloco_${tc}_${tr}`;
-  for (const [k, v] of Object.entries<any>(blocos)) if (v === alvo) return k;
+  for (const [k, v] of Object.entries<any>(blocos)) {
+    if (v === alvo || String(v).replace(/@[1-7]$/, '') === alvo) return k;
+  }
   return null;
 }
 
@@ -5393,7 +5396,8 @@ function _avtBlocoChavePorCelula(tc: any, tr: any) {
 function _avtClasseCelula(cell: any) {
   if (cell === null || cell === undefined) return 'P';
   if (typeof cell === 'number') return cell === AVT_T.PAREDE ? 'P' : 'F';
-  if (cell === 'porta' || cell === 'porta_fase') return 'D';
+  const base = _avtCellBase(cell);
+  if (base === 'porta' || base === 'porta_fase') return 'D';
   return _avtChaveEhParede(cell) ? 'P' : 'F';
 }
 
@@ -6408,6 +6412,23 @@ function _avtTileBakeInvalidate() {
 }
 window._avtTileBakeInvalidate = _avtTileBakeInvalidate;
 
+// Desenho legado da SAÍDA (porta verde) — usado quando não há tileset ou quando
+// o tileset não tem tile 'porta_fase' para representar a saída.
+function _avtDrawSaidaLegacy(ctx: any, px: any, py: any, SZ: any) {
+  ctx.fillStyle = '#101520';
+  ctx.fillRect(px, py, SZ, SZ);
+  ctx.fillStyle = 'rgba(79,220,140,0.18)';
+  ctx.fillRect(px+2, py+2, SZ-4, SZ-4);
+  ctx.strokeStyle = 'rgba(79,220,140,0.6)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(px+2, py+2, SZ-4, SZ-4);
+  ctx.fillStyle = 'rgba(79,220,140,0.8)';
+  ctx.font = `${Math.round(SZ*0.55)}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🚪', px + SZ/2, py + SZ/2);
+}
+
 function _avtLegacyTileBake(dungeon: any, gridStyle: any, hue: any) {
   const SZ = AVT_SZ;
   const bw = dungeon.w * SZ, bh = dungeon.h * SZ;
@@ -6435,25 +6456,15 @@ function _avtLegacyTileBake(dungeon: any, gridStyle: any, hue: any) {
       const px = x * SZ, py = y * SZ;
       if ((AVT_STATE as any)._tilesetLoaded) {
         ctx.imageSmoothingEnabled = false;
-        const tkey = typeof t === 'string' ? t : _avtGetTileSemanticKey(x, y, dungeon);
+        const tkey = typeof t === 'string' ? _avtCellBase(t) : _avtGetTileSemanticKey(x, y, dungeon);
         const tileImg = tkey ? (AVT_STATE as any)._tilesetTextures[tkey] : null;
-        if (tileImg) { ctx.drawImage(tileImg, px, py, SZ, SZ); continue; }
+        if (tileImg) { _avtDrawTileXform(ctx, tileImg, px, py, SZ, _avtCellXform(t)); continue; }
+        if (t === AVT_T.SAIDA) { _avtDrawSaidaLegacy(ctx, px, py, SZ); continue; }
         if (t === null || t === undefined) continue;
         ctx.fillStyle = _avtTilePassavel(x, y, dungeon) ? '#101520' : '#0a0c14';
         ctx.fillRect(px, py, SZ, SZ);
       } else if (t === AVT_T.SAIDA) {
-        ctx.fillStyle = '#101520';
-        ctx.fillRect(px, py, SZ, SZ);
-        ctx.fillStyle = 'rgba(79,220,140,0.18)';
-        ctx.fillRect(px+2, py+2, SZ-4, SZ-4);
-        ctx.strokeStyle = 'rgba(79,220,140,0.6)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(px+2, py+2, SZ-4, SZ-4);
-        ctx.fillStyle = 'rgba(79,220,140,0.8)';
-        ctx.font = `${Math.round(SZ*0.55)}px serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🚪', px + SZ/2, py + SZ/2);
+        _avtDrawSaidaLegacy(ctx, px, py, SZ);
       } else if (t === AVT_T.PISO || (typeof t === 'string' && _avtTilePassavel(x, y, dungeon))) {
         ctx.fillStyle = '#101520';
         ctx.fillRect(px, py, SZ, SZ);
@@ -6904,28 +6915,17 @@ function _avtRenderFrame() {
       if (px + SZ < 0 || px > _avtViewW() || py + SZ < 0 || py > _avtViewH()) continue;
       if ((AVT_STATE as any)._tilesetLoaded) {
         ctx.imageSmoothingEnabled = false;
-        // String-key grid (ia_fase): usa a chave diretamente
+        // String-key grid (ia_fase): usa a chave diretamente (base sem @rot)
         // Binary grid (outros modos): usa autotile por vizinhos
-        const key = typeof t === 'string' ? t : _avtGetTileSemanticKey(x, y, dungeon);
+        const key = typeof t === 'string' ? _avtCellBase(t) : _avtGetTileSemanticKey(x, y, dungeon);
         const tileImg = key ? (AVT_STATE as any)._tilesetTextures[key] : null;
-        if (tileImg) { ctx.drawImage(tileImg, px, py, SZ, SZ); continue; }
+        if (tileImg) { _avtDrawTileXform(ctx, tileImg, px, py, SZ, _avtCellXform(t)); continue; }
+        if (t === AVT_T.SAIDA) { _avtDrawSaidaLegacy(ctx, px, py, SZ); continue; }
         if (t === null || t === undefined) continue; // void — fundo já foi preenchido
         ctx.fillStyle = _avtTilePassavel(x, y, dungeon) ? '#101520' : '#0a0c14';
         ctx.fillRect(px, py, SZ, SZ);
       } else if (t === AVT_T.SAIDA) {
-        ctx.fillStyle = '#101520';
-        ctx.fillRect(px, py, SZ, SZ);
-        // Pulsing exit indicator (static glow)
-        ctx.fillStyle = 'rgba(79,220,140,0.18)';
-        ctx.fillRect(px+2, py+2, SZ-4, SZ-4);
-        ctx.strokeStyle = 'rgba(79,220,140,0.6)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(px+2, py+2, SZ-4, SZ-4);
-        ctx.fillStyle = 'rgba(79,220,140,0.8)';
-        ctx.font = `${Math.round(SZ*0.55)}px serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🚪', px + SZ/2, py + SZ/2);
+        _avtDrawSaidaLegacy(ctx, px, py, SZ);
       } else if (t === AVT_T.PISO || (typeof t === 'string' && _avtTilePassavel(x, y, dungeon))) {
         ctx.fillStyle = '#101520';
         ctx.fillRect(px, py, SZ, SZ);
