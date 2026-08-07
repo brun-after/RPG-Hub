@@ -173,6 +173,23 @@
     }
   }
 
+  // ── Fast path sem fatiamento (qualidade "baixo"/"minimo" — GPU móvel) ───────
+  // 1 drawImage com o bob do motor genérico aplicado à imagem inteira, em vez de
+  // 18-36 tiras cisalhadas por entidade por frame (o maior custo por token em iso).
+  function _simples(ctx: any, img: any, o: any) {
+    const { SZ, now, state, tState, H, W } = o;
+    let bobAmp, bobHz;
+    if (state === 'walk')        { bobAmp = SZ * 0.06;  bobHz = 1 / 130; }
+    else if (state === 'attack') { bobAmp = SZ * 0.02;  bobHz = 1 / 120; }
+    else                         { bobAmp = SZ * 0.012; bobHz = 1 / 900; }
+    let atkPush = 0;
+    if (state === 'attack') { const tt = Math.min(1, tState / 400); atkPush = Math.sin(tt * Math.PI) * W * 0.20; }
+    const bob = (state === 'walk')
+      ? -Math.abs(Math.sin(now * bobHz * Math.PI * 2)) * bobAmp
+      : Math.sin(now * bobHz * Math.PI * 2) * bobAmp;
+    ctx.drawImage(img, -W / 2 + atkPush * 0.5, -H + bob, W, H);
+  }
+
   // ── Registro de presets (ordem = ordem de exibição no estúdio) ──────────────
   const AVT_WALK_PRESETS: Record<string, any> = {
     quique: {
@@ -230,7 +247,7 @@
   };
 
   // ── Ponto de entrada único (jogo + estúdio) ─────────────────────────────────
-  // o = { footX, footY, SZ, now, state, tState, facing, presetId, params, pernas }
+  // o = { footX, footY, SZ, now, state, tState, facing, presetId, params, pernas, fatias }
   function avtWalkRender(ctx: any, img: any, o: any) {
     if (!img || !(img.complete && img.naturalWidth > 0)) return;
     const id = (o.presetId && AVT_WALK_PRESETS[o.presetId]) ? o.presetId : 'quique';
@@ -241,10 +258,12 @@
       tState: o.tState || 0,
       params: Object.assign({}, preset.paramsPadrao, o.params || {}),
     });
+    // fatias:false (qualidade baixa/mínima) → desenho inteiro em 1 blit
+    const drawFn = (o.fatias === false) ? _simples : preset.draw;
     ctx.save();
     ctx.translate(o.footX, o.footY);
     if ((o.facing || 1) < 0) ctx.scale(-1, 1);
-    try { preset.draw(ctx, img, oo); } catch (e) { /* nunca quebra o loop de render */ }
+    try { drawFn(ctx, img, oo); } catch (e) { /* nunca quebra o loop de render */ }
     ctx.restore();
   }
 

@@ -918,7 +918,7 @@ function _avtRenderRastroCells(ctx: any, camera: any, SZ: any, canvas: any) {
     if (now >= cell.expiry_ms) continue;
     const px = Math.round(cell.x * SZ - camera.x);
     const py = Math.round(cell.y * SZ - camera.y);
-    if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
+    if (px + SZ < 0 || px > _avtViewW() || py + SZ < 0 || py > _avtViewH()) continue;
     const rgb = _avtHexRgb(cell.cor || '#5ee09a');
     ctx.fillStyle = `rgba(${rgb},${pulse.toFixed(3)})`;
     ctx.fillRect(px, py, SZ, SZ);
@@ -1181,7 +1181,7 @@ function _avtRenderArmadilhaCells(ctx: any, camera: any, SZ: any, canvas: any) {
     if (now >= cell.expiry_ms) continue;
     const px = Math.round(cell.x * SZ - camera.x);
     const py = Math.round(cell.y * SZ - camera.y);
-    if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
+    if (px + SZ < 0 || px > _avtViewW() || py + SZ < 0 || py > _avtViewH()) continue;
     const rgb = _avtHexRgb(cell.cor || '#e8604c');
     ctx.strokeStyle = `rgba(${rgb},${pulse.toFixed(3)})`;
     ctx.lineWidth = 2;
@@ -6149,6 +6149,14 @@ function _avtCanvasResizeDebounced() {
 }
 window._avtCanvasResizeDebounced = _avtCanvasResizeDebounced;
 
+// Viewport lógico do canvas principal em px CSS. Em iso+touch o backing store é
+// reduzido (_avtMainCanvasResolution) para conter o fill-rate do wrap oversized;
+// todo desenho/culling/câmera continua em px CSS via ctx.setTransform no frame.
+function _avtViewW() { return (AVT_STATE as any).viewW || AVT_STATE.canvas?.width || 0; }
+function _avtViewH() { return (AVT_STATE as any).viewH || AVT_STATE.canvas?.height || 0; }
+window._avtViewW = _avtViewW;
+window._avtViewH = _avtViewH;
+
 function _avtCanvasResize() {
   const wrap = document.getElementById('avt-mapa-wrap');
   const canvas = AVT_STATE.canvas;
@@ -6176,8 +6184,14 @@ function _avtCanvasResize() {
     canvas.style.cssText = 'display:block;cursor:pointer;image-rendering:pixelated;position:absolute;inset:0';
   }
   if (w > 0 && h > 0) {
-    canvas.width  = w;
-    canvas.height = h;
+    // Backing store possivelmente reduzido (iso+touch); tamanho CSS segue cheio
+    // (inset:0 / width:100% no cssText acima), então o navegador estica o backing.
+    const res = (typeof _avtMainCanvasResolution === 'function') ? _avtMainCanvasResolution() : 1;
+    (AVT_STATE as any).viewW = w;
+    (AVT_STATE as any).viewH = h;
+    (AVT_STATE as any)._canvasRes = res;
+    canvas.width  = Math.max(1, Math.round(w * res));
+    canvas.height = Math.max(1, Math.round(h * res));
     AVT_STATE.ctx = canvas.getContext('2d');
     // Só centraliza na primeira inicialização — não recentraliza quando a HUD
     // de combate abre/fecha (causava sensação de "câmera puxada pra baixo").
@@ -6189,7 +6203,7 @@ function _avtCanvasResize() {
 function _avtCameraCenter() {
   const jogadores = AVT_STATE.entidades.filter((e: any) => e.tipo === 'jogador');
   const canvas = AVT_STATE.canvas;
-  if (!jogadores.length || !canvas || !canvas.width) return;
+  if (!jogadores.length || !canvas || !_avtViewW()) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   // No iso, centraliza no jogador controlado (sem offset/clamp) e sincroniza.
   if (typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo) {
@@ -6205,8 +6219,8 @@ function _avtCameraCenter() {
   const cy = jogadores.reduce((s: any, j: any) => s + j.y, 0) / jogadores.length;
   const _ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
   const _overlayH = _ctrlDisp ? ((AVT_STATE as any)._overlayH ?? 160) : 0;
-  const effectiveH = canvas.height - _overlayH;
-  AVT_STATE.camera.x = cx * SZ - canvas.width/2  + SZ/2;
+  const effectiveH = _avtViewH() - _overlayH;
+  AVT_STATE.camera.x = cx * SZ - _avtViewW()/2  + SZ/2;
   AVT_STATE.camera.y = cy * SZ - effectiveH/2 + SZ/2;
   (AVT_STATE.camera as any)._targetX = AVT_STATE.camera.x;
   (AVT_STATE.camera as any)._targetY = AVT_STATE.camera.y;
@@ -6229,8 +6243,8 @@ function _avtCameraUpdate() {
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   // Mobile: margem maior → câmera segue antes do personagem chegar à borda → mais centralizado
   const MARGIN = (navigator.maxTouchPoints > 0 || 'ontouchstart' in window) ? 0.30 : 0.20;
-  const mW = canvas.width  * MARGIN;
-  const mH = canvas.height * MARGIN;
+  const mW = _avtViewW()  * MARGIN;
+  const mH = _avtViewH() * MARGIN;
 
   // No modo controle dispositivo, descontar a altura do overlay inferior para manter
   // o personagem visível acima dos botões de controle. Lê o DOM com throttle de 1s
@@ -6246,7 +6260,7 @@ function _avtCameraUpdate() {
     if (MOBILE_CTRL?.modoCamara === 'centralizada') return;
   }
   const _overlayH = _ctrlDispCam ? ((AVT_STATE as any)._overlayH ?? 160) : 0;
-  const effectiveH = canvas.height - _overlayH;
+  const effectiveH = _avtViewH() - _overlayH;
 
   const j = _avtMeuJogador() || AVT_STATE.entidades.find((e: any) => e.tipo === 'jogador' && e.hp > 0);
   if (!j) return;
@@ -6276,7 +6290,7 @@ function _avtCameraUpdate() {
   let shiftX = 0, shiftY = 0;
   if (xChanged) {
     if (px < mW - hyst)                   shiftX = px - mW;
-    else if (px > canvas.width - mW + hyst) shiftX = px - (canvas.width - mW);
+    else if (px > _avtViewW() - mW + hyst) shiftX = px - (_avtViewW() - mW);
   }
   if (yChanged) {
     if (py < mH - hyst)                   shiftY = py - mH;
@@ -6287,8 +6301,8 @@ function _avtCameraUpdate() {
   // Clamp para evitar câmera presa fora dos limites do mapa
   const dungeon = AVT_STATE.dungeon;
   if (dungeon) {
-    const maxCX = Math.max(0, dungeon.w * SZ - canvas.width);
-    const maxCY = Math.max(0, dungeon.h * SZ - canvas.height);
+    const maxCX = Math.max(0, dungeon.w * SZ - _avtViewW());
+    const maxCY = Math.max(0, dungeon.h * SZ - _avtViewH());
     AVT_STATE.camera._targetX = Math.max(0, Math.min((AVT_STATE.camera as any)._targetX, maxCX));
     AVT_STATE.camera._targetY = Math.max(0, Math.min((AVT_STATE.camera as any)._targetY, maxCY));
   }
@@ -6305,8 +6319,8 @@ function _avtCameraFocarEntidades(entA: any, entB: any) {
   const midX = (ax + bx) / 2, midY = (ay + by) / 2;
   const _ctrlDispCam = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
   const _overlayH = _ctrlDispCam ? ((AVT_STATE as any)._overlayH ?? 160) : 0;
-  const effectiveH = canvas.height - _overlayH;
-  AVT_STATE.camera.x = Math.round(midX * SZ - canvas.width / 2);
+  const effectiveH = _avtViewH() - _overlayH;
+  AVT_STATE.camera.x = Math.round(midX * SZ - _avtViewW() / 2);
   AVT_STATE.camera.y = Math.round(midY * SZ - effectiveH / 2);
   (AVT_STATE.camera as any)._targetX = AVT_STATE.camera.x;
   (AVT_STATE.camera as any)._targetY = AVT_STATE.camera.y;
@@ -6320,17 +6334,17 @@ function _avtCameraUpdateCentralizada(skipClamp?: any) {
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   // No iso (skipClamp) centraliza de verdade, sem descontar o overlay inferior.
   const _overlayH = skipClamp ? 0 : ((AVT_STATE as any)._overlayH ?? 160);
-  const effectiveH = canvas.height - _overlayH;
+  const effectiveH = _avtViewH() - _overlayH;
   const j = _avtMeuJogador() || AVT_STATE.entidades.find((e: any) => e.tipo === 'jogador' && e.hp > 0);
   if (!j) return;
   const rx = j.renderX ?? j.x;
   const ry = j.renderY ?? j.y;
-  let tX = rx * SZ - canvas.width / 2 + SZ / 2;
+  let tX = rx * SZ - _avtViewW() / 2 + SZ / 2;
   let tY = ry * SZ - effectiveH / 2 + SZ / 2;
   const dungeon = AVT_STATE.dungeon;
   if (dungeon && !skipClamp) {
-    tX = Math.max(0, Math.min(tX, Math.max(0, dungeon.w * SZ - canvas.width)));
-    tY = Math.max(0, Math.min(tY, Math.max(0, dungeon.h * SZ - canvas.height)));
+    tX = Math.max(0, Math.min(tX, Math.max(0, dungeon.w * SZ - _avtViewW())));
+    tY = Math.max(0, Math.min(tY, Math.max(0, dungeon.h * SZ - _avtViewH())));
   }
   (AVT_STATE.camera as any)._targetX = tX;
   (AVT_STATE.camera as any)._targetY = tY;
@@ -6473,6 +6487,12 @@ function _avtRenderFrame() {
     if (performance.now() < (AVT_STATE as any)._fxFreezeUntil) return;
     (AVT_STATE as any)._fxFreezeUntil = 0; // expired — clear so it never stays stuck
   }
+
+  // Backing store reduzido (iso+touch): todo o desenho do frame acontece em px
+  // CSS; a escala para o backing menor é aplicada uma vez aqui.
+  const _res = (AVT_STATE as any)._canvasRes || 1;
+  if (_res !== 1) ctx.setTransform(_res, 0, 0, _res, 0, 0);
+  else ctx.setTransform(1, 0, 0, 1, 0, 0);
 
   // Track delta time for patience timers
   const now = performance.now();
@@ -6655,6 +6675,7 @@ function _avtRenderFrame() {
   // Roda ANTES do canvas clear: _onWaypointReached chama _avtCameraUpdate, então
   // camera.x/y fica definitivo antes de tiles e entidades serem desenhados no
   // mesmo frame — elimina o jitter de câmera causado por atualização no meio do frame.
+  const _ctrlEntId = (typeof _avtEntidadeControlada === 'function' ? _avtEntidadeControlada()?.id : null);
   entidades.forEach((e: any) => {
     if (e.renderX == null) {
       e.renderX = e.x; e.renderY = e.y;
@@ -6665,7 +6686,7 @@ function _avtRenderFrame() {
     // catch-up suave para NPCs quando a fila acumula por latência de broadcast;
     // jogador local nunca ultrapassa baseSpeed para respeitar o teto de destreza
     const qLen = e._waypoints.length;
-    const ehJogadorLocal = typeof _avtEntidadeControlada === 'function' && e.id === _avtEntidadeControlada()?.id;
+    const ehJogadorLocal = e.id === _ctrlEntId;
     const catchUp = ehJogadorLocal ? 1 : (qLen > 4 ? Math.min(2.5, 1 + (qLen - 4) * 0.25) : 1);
     let remaining = (dt / 1000) * baseSpeed * catchUp;
 
@@ -6818,10 +6839,10 @@ function _avtRenderFrame() {
 
   let _tileBakeUsado = false;
   if (_pixiWorld) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, _avtViewW(), _avtViewH());
   } else {
   ctx.fillStyle = '#050810';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, _avtViewW(), _avtViewH());
   // Bake estático por fase (inclui hue-rotate e grade); por frame só um blit da
   // região visível, escalado pelo zoom. Mapas gigantes caem no loop legado.
   const _bake = _avtLegacyTileBake(dungeon, _gridStyle, _hue);
@@ -6830,8 +6851,8 @@ function _avtRenderFrame() {
     const _f = AVT_SZ / SZ; // fator tela → bake (bake é a AVT_SZ base)
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(_bake,
-      camera.x * _f, camera.y * _f, canvas.width * _f, canvas.height * _f,
-      0, 0, canvas.width, canvas.height);
+      camera.x * _f, camera.y * _f, _avtViewW() * _f, _avtViewH() * _f,
+      0, 0, _avtViewW(), _avtViewH());
   } else {
   // Aplica a variação de cor da fase mesmo sem tileset carregado (tiles de fundo procedurais também recebem o tint).
   const _hueOn = _hue && ('filter' in ctx);
@@ -6844,7 +6865,7 @@ function _avtRenderFrame() {
       const t  = dungeon.tiles[y]?.[x];
       const px = _tileIso ? (x * SZ - camera.x) : Math.round(x * SZ - camera.x);
       const py = _tileIso ? (y * SZ - camera.y) : Math.round(y * SZ - camera.y);
-      if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
+      if (px + SZ < 0 || px > _avtViewW() || py + SZ < 0 || py > _avtViewH()) continue;
       if ((AVT_STATE as any)._tilesetLoaded) {
         ctx.imageSmoothingEnabled = false;
         // String-key grid (ia_fase): usa a chave diretamente
@@ -6902,13 +6923,13 @@ function _avtRenderFrame() {
     ctx.setLineDash([]);
     for (let gx = 0; gx <= dungeon.w; gx++) {
       const gpx = Math.round(gx * SZ - camera.x);
-      if (gpx < -1 || gpx > canvas.width + 1) continue;
-      ctx.beginPath(); ctx.moveTo(gpx, 0); ctx.lineTo(gpx, canvas.height); ctx.stroke();
+      if (gpx < -1 || gpx > _avtViewW() + 1) continue;
+      ctx.beginPath(); ctx.moveTo(gpx, 0); ctx.lineTo(gpx, _avtViewH()); ctx.stroke();
     }
     for (let gy = 0; gy <= dungeon.h; gy++) {
       const gpy = Math.round(gy * SZ - camera.y);
-      if (gpy < -1 || gpy > canvas.height + 1) continue;
-      ctx.beginPath(); ctx.moveTo(0, gpy); ctx.lineTo(canvas.width, gpy); ctx.stroke();
+      if (gpy < -1 || gpy > _avtViewH() + 1) continue;
+      ctx.beginPath(); ctx.moveTo(0, gpy); ctx.lineTo(_avtViewW(), gpy); ctx.stroke();
     }
   }
 
@@ -6919,7 +6940,7 @@ function _avtRenderFrame() {
       const { col, row } = _fase.porta;
       const fpx = Math.round(col * SZ - camera.x);
       const fpy = Math.round(row * SZ - camera.y);
-      if (fpx + SZ < 0 || fpx > canvas.width || fpy + SZ < 0 || fpy > canvas.height) continue;
+      if (fpx + SZ < 0 || fpx > _avtViewW() || fpy + SZ < 0 || fpy > _avtViewH()) continue;
       const _doorTex = AVT_STATE._tilesetLoaded ? (AVT_STATE as any)._tilesetTextures?.['porta_fase'] : null;
       if (_doorTex) {
         ctx.imageSmoothingEnabled = false;
@@ -6954,7 +6975,7 @@ function _avtRenderFrame() {
     for (const _ep of [_pi.a, _pi.b]) {
       const epx = Math.round(_ep.col * SZ - camera.x);
       const epy = Math.round(_ep.row * SZ - camera.y);
-      if (epx + SZ < 0 || epx > canvas.width || epy + SZ < 0 || epy > canvas.height) continue;
+      if (epx + SZ < 0 || epx > _avtViewW() || epy + SZ < 0 || epy > _avtViewH()) continue;
       ctx.fillStyle = 'rgba(123,47,190,0.18)';
       ctx.fillRect(epx + 2, epy + 2, SZ - 4, SZ - 4);
       ctx.strokeStyle = 'rgba(168,120,255,0.8)';
@@ -6982,7 +7003,7 @@ function _avtRenderFrame() {
   if (_pp && (AVT_STATE._faseAtualId || 'principal') === (_pp._faseOrigem || ((AVT_STATE as any)._faseAtualId || 'principal'))) {
     const ppx = Math.round(_pp.col * SZ - camera.x);
     const ppy = Math.round(_pp.row * SZ - camera.y);
-    if (!(ppx + SZ < 0 || ppx > canvas.width || ppy + SZ < 0 || ppy > canvas.height)) {
+    if (!(ppx + SZ < 0 || ppx > _avtViewW() || ppy + SZ < 0 || ppy > _avtViewH())) {
       const _pulse = 0.5 + 0.4 * Math.abs(Math.sin(Date.now() / 400));
       ctx.fillStyle = `rgba(79,220,140,${0.15 * _pulse + 0.1})`;
       ctx.fillRect(ppx + 2, ppy + 2, SZ - 4, SZ - 4);
@@ -7036,7 +7057,7 @@ function _avtRenderFrame() {
     ctx.save();
     tiles.forEach(({ x, y }: any) => {
       const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
-      if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
+      if (rpx + SZ < 0 || rpx > _avtViewW() || rpy + SZ < 0 || rpy > _avtViewH()) return;
       ctx.fillStyle = 'rgba(79,163,209,0.18)';
       ctx.fillRect(rpx, rpy, SZ, SZ);
       ctx.strokeStyle = 'rgba(79,163,209,0.45)';
@@ -7045,7 +7066,7 @@ function _avtRenderFrame() {
     });
     (tilesAlvo || []).forEach(({ x, y }: any) => {
       const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
-      if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
+      if (rpx + SZ < 0 || rpx > _avtViewW() || rpy + SZ < 0 || rpy > _avtViewH()) return;
       ctx.fillStyle = 'rgba(232,96,76,0.25)';
       ctx.fillRect(rpx, rpy, SZ, SZ);
       ctx.strokeStyle = 'rgba(232,96,76,0.7)';
@@ -7054,7 +7075,7 @@ function _avtRenderFrame() {
     });
     (tilesAlvoVermelho || []).forEach(({ x, y }: any) => {
       const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
-      if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
+      if (rpx + SZ < 0 || rpx > _avtViewW() || rpy + SZ < 0 || rpy > _avtViewH()) return;
       ctx.fillStyle = 'rgba(232,96,76,0.22)';
       ctx.fillRect(rpx, rpy, SZ, SZ);
       ctx.strokeStyle = 'rgba(232,180,76,0.8)';
@@ -7073,7 +7094,7 @@ function _avtRenderFrame() {
     }
     (tilesAlvoAmarelo || []).forEach(({ x, y }: any) => {
       const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
-      if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
+      if (rpx + SZ < 0 || rpx > _avtViewW() || rpy + SZ < 0 || rpy > _avtViewH()) return;
       ctx.fillStyle = 'rgba(200,168,75,0.22)';
       ctx.fillRect(rpx, rpy, SZ, SZ);
       ctx.strokeStyle = 'rgba(200,168,75,0.65)';
@@ -7185,7 +7206,7 @@ function _avtRenderFrame() {
     const _pyRaw = e.renderY * SZ - camera.y;
     const px = (_iso ? _pxRaw : Math.round(_pxRaw)) + _shake;
     const py = (_iso ? _pyRaw : Math.round(_pyRaw)) + (e._tremendo ? Math.round(Math.cos(_t * 0.13) * 3) : 0);
-    if (px+SZ<0 || px>canvas.width || py+SZ<0 || py>canvas.height) { if (_isAvatar || _isInvocado) ctx.globalAlpha = 1; return; }
+    if (px+SZ<0 || px>_avtViewW() || py+SZ<0 || py>_avtViewH()) { if (_isAvatar || _isInvocado) ctx.globalAlpha = 1; return; }
 
     const isBoss = e.isBoss === true;
     const rBase = Math.floor(SZ * 0.36);
@@ -7366,7 +7387,7 @@ function _avtRenderFrame() {
     // Barra de mana abaixo da HP bar (apenas jogadores)
     let _lastBarBottomY = barY + barH;
     if (e.tipo === 'jogador') {
-      const _dbCM = AVT_STATE.chars.find((c: any) => c.id === e.dbId || c.nome === e.nome);
+      const _dbCM = _avtCharDeEnt(e);
       const _rsvsM = _dbCM ? _avtRecursosDoChar(_dbCM) : [];
       const _rsvM = _rsvsM[0];
       let _manaPct = 0;
@@ -7391,7 +7412,7 @@ function _avtRenderFrame() {
     }
 
     // Equipped weapon icon overlay (bottom-right corner)
-    const dbCharForEquip = AVT_STATE.chars.find((c: any)=>c.id===e.dbId||c.nome===e.nome);
+    const dbCharForEquip = _avtCharDeEnt(e);
     const equippedWeapon = dbCharForEquip?.custom_attrs?.equipamento?.arma_principal;
     if (equippedWeapon && typeof equippedWeapon === 'object' && equippedWeapon.img_url) {
       const iconSz = Math.round(SZ * 0.38);
@@ -7455,12 +7476,21 @@ function _avtRenderFrame() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const _maxNomeW = SZ * 1.6;
-    let _nomeLabel = e.nome;
-    if (ctx.measureText(_nomeLabel).width > _maxNomeW) {
-      while (_nomeLabel.length > 1 && ctx.measureText(_nomeLabel + '…').width > _maxNomeW) {
-        _nomeLabel = _nomeLabel.slice(0, -1);
+    // Truncamento cacheado por entidade (measureText por frame custa em mobile);
+    // invalida quando nome/tamanho/fonte mudam.
+    let _nomeLabel;
+    const _lblKey = e.nome + '|' + SZ + '|' + (_polirLabel ? 1 : 0);
+    if (e._lblCache && e._lblCache.k === _lblKey) {
+      _nomeLabel = e._lblCache.out;
+    } else {
+      _nomeLabel = e.nome;
+      if (ctx.measureText(_nomeLabel).width > _maxNomeW) {
+        while (_nomeLabel.length > 1 && ctx.measureText(_nomeLabel + '…').width > _maxNomeW) {
+          _nomeLabel = _nomeLabel.slice(0, -1);
+        }
+        _nomeLabel += '…';
       }
-      _nomeLabel += '…';
+      e._lblCache = { k: _lblKey, out: _nomeLabel };
     }
     if (_polirLabel) {
       ctx.lineWidth = Math.max(2, Math.round(SZ * 0.06));
@@ -7599,7 +7629,7 @@ function _avtRenderFrame() {
       const _oy = Math.round((o.y ?? 0) * dungeon.h);
       const px = Math.round(_ox * SZ - camera.x);
       const py = Math.round(_oy * SZ - camera.y);
-      if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
+      if (px + SZ < 0 || px > _avtViewW() || py + SZ < 0 || py > _avtViewH()) continue;
       const ocx = px + SZ / 2, ocy = py + SZ / 2;
       const tipo = o.tipo;
       if (tipo === 'bau' || tipo === 'chest') {
@@ -7721,9 +7751,11 @@ function _avtRenderMinimap() {
   if (!dungeon || !dungeon.tiles) { mm.style!.display = 'none'; return; }
   mm.style!.display = 'block';
 
-  // Throttle: pontos do minimapa a 10 Hz são suficientes (e o mapa é estático)
+  // Throttle: pontos do minimapa a 10 Hz são suficientes (e o mapa é estático);
+  // em touch, 3 Hz — cada redraw é clear + blit + glow por entidade.
   const _mmNow = performance.now();
-  if (AVT_STATE._mmLastDraw && _mmNow - (AVT_STATE as any)._mmLastDraw < 100) return;
+  const _mmMinMs = (typeof _avtIsTouchDevice === 'function' && _avtIsTouchDevice()) ? 333 : 100;
+  if (AVT_STATE._mmLastDraw && _mmNow - (AVT_STATE as any)._mmLastDraw < _mmMinMs) return;
   (AVT_STATE as any)._mmLastDraw = _mmNow;
 
   const W = dungeon.w, H = dungeon.h;
@@ -7806,8 +7838,8 @@ function _avtRenderEffectCountersOverlay() {
   const vivos = new Set();
 
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  const canvasW = AVT_STATE.canvas.width;
-  const canvasH = AVT_STATE.canvas.height;
+  const canvasW = _avtViewW();
+  const canvasH = _avtViewH();
 
   (AVT_STATE.entidades || []).forEach((ent: any) => {
     const efeitos = _avtEfetosAtivosEnt(ent);
@@ -8252,6 +8284,7 @@ function _avtDesenharIsoIa(ctx: any, ent: any, footX: any, footY: any, SZ: any, 
       presetId: data.walkPreset || 'quique',
       params: data.walkParams || null,
       pernas: pernasGlobal && (data.pernas !== false),
+      fatias: (typeof AVT_GRAFICOS === 'undefined') || AVT_GRAFICOS.fatias !== false,
     });
   } else {
     const H = SZ * 1.12, W = H * (img.naturalWidth / img.naturalHeight);
@@ -8306,10 +8339,28 @@ function _avtDesenharAparencia(ctx: any, ent: any, cx: any, cy: any, SZ: any, ap
 // MOVIMENTO FLUIDO — velocidade por destreza
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Índice de personagens por id e nome, reconstruído quando a lista muda de
+// referência ou tamanho — evita AVT_STATE.chars.find() por entidade por frame
+// nos caminhos quentes do render loop (velocidade, barra de mana, arma equipada).
+function _avtCharDeEnt(ent: any) {
+  const chars = AVT_STATE.chars || [];
+  let ix = (AVT_STATE as any)._charIdx;
+  if (!ix || ix.ref !== chars || ix.n !== chars.length) {
+    const porId = new Map(); const porNome = new Map();
+    for (const c of chars) {
+      if (c.id != null) porId.set(String(c.id), c);
+      if (c.nome && !porNome.has(c.nome)) porNome.set(c.nome, c);
+    }
+    ix = (AVT_STATE as any)._charIdx = { ref: chars, n: chars.length, porId, porNome };
+  }
+  return (ent.dbId != null && ix.porId.get(String(ent.dbId)))
+    || (ent.nome && ix.porNome.get(ent.nome)) || null;
+}
+
 function _avtGetVelocidadeMovimento(ent: any) {
   const ms  = _avtGetVelocidadeCorridaMs();
   const pct = _avtGetDestrezaVelPct();
-  const dbChar = AVT_STATE.chars.find((c: any) => c.id === ent.dbId || c.nome === ent.nome);
+  const dbChar = _avtCharDeEnt(ent);
   const dex  = dbChar?.custom_attrs?.atributos?.destreza ?? ent.atributos?.destreza ?? 10;
   let mult = Math.max(0.2, 1 + ((dex - 10) * pct) / 100);
   if (ent?._dominado) mult *= 1.3;
@@ -10620,15 +10671,15 @@ function _avtEnquadrarAlvosCamera(alvos: any, jogador: any) {
   minX -= margin; minY -= margin; maxX += margin; maxY += margin;
   const rangeX = maxX - minX, rangeY = maxY - minY;
   const newZoom = Math.min(
-    canvas.width  / (rangeX * AVT_SZ),
-    canvas.height / (rangeY * AVT_SZ),
+    _avtViewW()  / (rangeX * AVT_SZ),
+    _avtViewH() / (rangeY * AVT_SZ),
     AVT_STATE.camera.zoom * 1.2
   );
   const clampedZoom = Math.max(0.4, Math.min(newZoom, 3.0));
   const SZn = Math.round(AVT_SZ * clampedZoom);
   AVT_STATE.camera.zoom = clampedZoom;
-  AVT_STATE.camera.x = Math.round(((minX + maxX) / 2) * SZn - canvas.width  / 2);
-  AVT_STATE.camera.y = Math.round(((minY + maxY) / 2) * SZn - canvas.height / 2);
+  AVT_STATE.camera.x = Math.round(((minX + maxX) / 2) * SZn - _avtViewW()  / 2);
+  AVT_STATE.camera.y = Math.round(((minY + maxY) / 2) * SZn - _avtViewH() / 2);
 }
 
 // Exibe o seletor de skills do primeiro ataque (sem alvo pré-selecionado)
@@ -13576,7 +13627,7 @@ function _avtGetCharScreenPos(charNome: any) {
   const canvasX = Math.round(ent.x * SZ - AVT_STATE.camera.x + SZ / 2);
   const canvasY = Math.round(ent.y * SZ - AVT_STATE.camera.y + SZ / 2);
   // Verificar se está dentro dos limites visíveis do canvas
-  if (canvasX < 0 || canvasX > canvas.width || canvasY < 0 || canvasY > canvas.height) return null;
+  if (canvasX < 0 || canvasX > _avtViewW() || canvasY < 0 || canvasY > _avtViewH()) return null;
   const rect = canvas.getBoundingClientRect();
   return { x: rect.left + canvasX, y: rect.top + canvasY };
 }
@@ -14496,7 +14547,14 @@ function _avtHudMostrar(show: any) {
 function _avtSkillOverlayGetAlvoScreenPos(alvo: any) {
   const canvas = AVT_STATE.canvas;
   if (!canvas || !alvo) return null;
-  const rect = canvas.getBoundingClientRect();
+  // getBoundingClientRect força layout numa camada 3D — cacheia por ~100ms
+  // (chamado por frame pelo posicionador do botão de rolar).
+  const _rcNow = performance.now();
+  let _rc = (AVT_STATE as any)._canvasRectCache;
+  if (!_rc || _rcNow - _rc.t > 100 || _rc.el !== canvas) {
+    _rc = (AVT_STATE as any)._canvasRectCache = { t: _rcNow, el: canvas, rect: canvas.getBoundingClientRect() };
+  }
+  const rect = _rc.rect;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const rx = alvo.renderX ?? alvo.x;
   const ry = alvo.renderY ?? alvo.y;
@@ -17607,8 +17665,13 @@ function _avtRecursosDoChar(char: any) {
   const atrs = char.custom_attrs?.atributos || {};
   const recursos: any = [];
   ((AVT_STATE as any).attrDefs || []).forEach((def: any) => {
-    let cfg: any = {};
-    try { cfg = typeof def.opcoes === 'string' ? JSON.parse(def.opcoes) : (def.opcoes || {}); } catch(e) {}
+    // Parse 1x por def (era JSON.parse por def, por jogador, POR FRAME via a
+    // barra de mana do render loop). attrDefs recarrega objetos novos ao editar.
+    let cfg: any = def._opcParsed;
+    if (cfg === undefined) {
+      try { cfg = typeof def.opcoes === 'string' ? JSON.parse(def.opcoes) : (def.opcoes || {}); } catch(e) { cfg = {}; }
+      def._opcParsed = cfg;
+    }
     if (cfg.e_recurso && (cfg as any).max_attr) {
       const atual = parseFloat(atrs[def.nome] ?? 0);
       const max   = parseFloat(atrs[(cfg as any).max_attr] ?? 0);
@@ -21084,7 +21147,9 @@ function _avtVfxHost() {
   try {
     const overlayCanvas = document.createElement('canvas');
     overlayCanvas.id = 'avt-vfx-host';
-    overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+    // Dimensões LÓGICAS em px CSS (o backing do canvas principal pode estar
+    // reduzido em iso+touch; PIXI aplica a própria resolution sobre o lógico).
+    overlayCanvas.width = _avtViewW(); overlayCanvas.height = _avtViewH();
     overlayCanvas.style!.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
     canvas.parentElement.style.position = 'relative';
     canvas.parentElement.appendChild(overlayCanvas);
@@ -21093,20 +21158,21 @@ function _avtVfxHost() {
       antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
       resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1),
       autoDensity: true,
-      width: canvas.width, height: canvas.height, powerPreference: 'high-performance',
+      width: _avtViewW(), height: _avtViewH(), powerPreference: 'high-performance',
     });
     h = _avtVfxHostState = { app, canvasRef: canvas, overlayCanvas, active: new Set() };
     // Tamanho CSS pretendido do overlay. Comparar overlayCanvas.width (backing
-    // store = CSS × resolution) com c.width falha sempre que resolution ≠ 1 (iso
-    // usa ~0.55) e disparava renderer.resize() a cada tick.
-    h._syncW = canvas.width; h._syncH = canvas.height;
+    // store = CSS × resolution) com o viewport falha sempre que resolution ≠ 1
+    // (iso usa ~0.55) e disparava renderer.resize() a cada tick.
+    h._syncW = _avtViewW(); h._syncH = _avtViewH();
     // Sincroniza tamanho/posição com o canvas do mapa (barato; roda só com efeitos ativos)
     h._syncFn = () => {
       const c = h.canvasRef;
       if (!c || !c.isConnected) return;
-      if (h._syncW !== c.width || h._syncH !== c.height) {
-        h._syncW = c.width; h._syncH = c.height;
-        try { h.app.renderer.resize(c.width, c.height); } catch(_) {}
+      const vw = _avtViewW(), vh = _avtViewH();
+      if (h._syncW !== vw || h._syncH !== vh) {
+        h._syncW = vw; h._syncH = vh;
+        try { h.app.renderer.resize(vw, vh); } catch(_) {}
       }
       const l = c.offsetLeft + 'px', t = c.offsetTop + 'px';
       if (h.overlayCanvas.style.left !== l) h.overlayCanvas.style.left = l;
@@ -21303,7 +21369,7 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
 
     if (!_usaHost) {
       overlayCanvas = document.createElement('canvas');
-      overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+      overlayCanvas.width = _avtViewW(); overlayCanvas.height = _avtViewH();
       overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
       canvas.parentElement.style.position = 'relative';
       canvas.parentElement.appendChild(overlayCanvas);
@@ -21322,7 +21388,7 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
         app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0,
           antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
           resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
-          width: canvas.width, height: canvas.height, powerPreference:'high-performance' });
+          width: _avtViewW(), height: _avtViewH(), powerPreference:'high-performance' });
       }
 
       // ── Stage tree ────────────────────────────────────────────────────────
@@ -21779,14 +21845,14 @@ function _avtPlayTravelBody(travelCfg: any, atacScr: any, alvoScr: any, cor: any
       if (!_usaHost) {
         overlayCanvas = document.createElement('canvas');
         overlayCanvas.id = 'avt-pixi-body-overlay-' + Math.random().toString(36).slice(2,8);
-        overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+        overlayCanvas.width = _avtViewW(); overlayCanvas.height = _avtViewH();
         overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:99`;
         canvas.parentElement.style.position = 'relative';
         canvas.parentElement.appendChild(overlayCanvas);
         app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha:0,
           antialias: !(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS?.isoAtivo),
           resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
-          width: canvas.width, height: canvas.height });
+          width: _avtViewW(), height: _avtViewH() });
       }
       const _destroyApp = () => {
         if (_usaHost) { try { app.destroy(); } catch(_) {} }
@@ -21932,8 +21998,8 @@ function _avtPixiSpineAnim(spineConfig: any, screenX: any, screenY: any) {
 
     const overlayCanvas = document.createElement('canvas');
     overlayCanvas.id = 'avt-pixi-spine-overlay';
-    overlayCanvas.width = canvas.width;
-    overlayCanvas.height = canvas.height;
+    overlayCanvas.width = _avtViewW();
+    overlayCanvas.height = _avtViewH();
     overlayCanvas.style!.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:101`;
     canvas.parentElement.style.position = 'relative';
     canvas.parentElement.appendChild(overlayCanvas);
@@ -21943,7 +22009,7 @@ function _avtPixiSpineAnim(spineConfig: any, screenX: any, screenY: any) {
     try {
       app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0,
         resolution: (typeof _avtVfxOverlayResolution === 'function' ? _avtVfxOverlayResolution() : 1), autoDensity: true,
-        width: canvas.width, height: canvas.height });
+        width: _avtViewW(), height: _avtViewH() });
       PIXI.Assets.load([spineConfig.skeleton, spineConfig.atlas].filter(Boolean)).then((resources: any) => {
         try {
           const SpineClass = PIXI.spine && PIXI.spine.Spine;
@@ -31813,8 +31879,8 @@ try{
     const cy = (j.renderY != null ? j.renderY : j.y);
     const _ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
     const _overlayH = _ctrlDisp ? ((AVT_STATE as any)._overlayH ?? 160) : 0;
-    const effectiveH = canvas.height - _overlayH;
-    const targetX = cx * SZ - canvas.width / 2 + SZ / 2;
+    const effectiveH = _avtViewH() - _overlayH;
+    const targetX = cx * SZ - _avtViewW() / 2 + SZ / 2;
     const targetY = cy * SZ - effectiveH / 2 + SZ / 2;
     AVT_STATE.camera.x = targetX;
     AVT_STATE.camera.y = targetY;

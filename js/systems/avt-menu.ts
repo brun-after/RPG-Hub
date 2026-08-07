@@ -36,6 +36,7 @@ var AVT_GRAFICOS: Record<string, any> = {
   atmosfera: true,    // vinheta + luz ambiente nos jogadores
   profundidade: true, // y-sort + ângulo 2:1 (estilo Diablo)
   pernas: true,       // movimentação de pernas dos tokens (passada articulada) ao andar
+  fatias: true,       // billboard fatiado (18 tiras) nos tokens iso; false = 1 drawImage só
   polimento: true,    // números arredondados + labels mais legíveis
   vfxProjecao: true,  // efeitos de habilidade posicionados pela projeção iso (tile/profundidade corretos)
   vfxBillboard: true, // efeitos de habilidade "em pé" (sem cisalhamento), acompanhando os personagens
@@ -55,16 +56,30 @@ var AVT_GRAFICOS: Record<string, any> = {
 
 const _AVT_GRAFICOS_KEY = 'rpghub_avt_graficos';
 
+// Detecção de touch para defaults conservadores em celulares/tablets.
+function _avtIsTouchDevice() {
+  try { return ('ontouchstart' in window) || navigator.maxTouchPoints > 0; } catch (_) { return false; }
+}
+window._avtIsTouchDevice = _avtIsTouchDevice;
+
 // ── PRESETS DE QUALIDADE ─────────────────────────────────────────────────────
 // Cada preset seta em lote os toggles que custam frame time. "baixo" corta os
-// custos por-frame (atmosfera, y-sort, pernas, CSS contínuo, luz GPU).
+// custos por-frame (atmosfera, y-sort, pernas, CSS contínuo, luz GPU, fatias).
+// "minimo" não aparece nos botões — é o último degrau da degradação adaptativa
+// para celulares fracos: desliga também billboards e VFX iso.
 const _AVT_QUALIDADE_PRESETS: Record<string, any> = {
+  minimo: { ativo: false, atmosfera: false, profundidade: false, pernas: false,
+            polimento: false, cssFx: false, luzGpu: false, fatias: false,
+            bilbordes: false, vfxProjecao: false, vfxBillboard: false },
   baixo: { ativo: false, atmosfera: false, profundidade: false, pernas: false,
-           polimento: false, cssFx: false, luzGpu: false },
+           polimento: false, cssFx: false, luzGpu: false, fatias: false,
+           bilbordes: true, vfxProjecao: true, vfxBillboard: true },
   medio: { atmosfera: true, profundidade: true, pernas: true,
-           polimento: true, cssFx: true, luzGpu: true },
+           polimento: true, cssFx: true, luzGpu: true, fatias: true,
+           bilbordes: true, vfxProjecao: true, vfxBillboard: true },
   alto:  { ativo: true, atmosfera: true, profundidade: true, pernas: true,
-           polimento: true, cssFx: true, luzGpu: true },
+           polimento: true, cssFx: true, luzGpu: true, fatias: true,
+           bilbordes: true, vfxProjecao: true, vfxBillboard: true },
 };
 
 function _avtGraficosPreset(nome: any, opts: any) {
@@ -107,7 +122,7 @@ window._avtGraficosCssFxAplicar = _avtGraficosCssFxAplicar;
 // Degrada um nível com aviso; nunca sobe sozinho (o jogador decide subir).
 function _avtGraficosDegradar() {
   if (AVT_GRAFICOS.adaptativo === false) return false;
-  const ordem = ['alto', 'medio', 'baixo'];
+  const ordem = ['alto', 'medio', 'baixo', 'minimo'];
   const atual = AVT_GRAFICOS.preset;
   // preset null (personalizado): trata como "alto" para poder degradar
   const idx = atual ? ordem.indexOf(atual) : 0;
@@ -116,7 +131,10 @@ function _avtGraficosDegradar() {
   _avtGraficosPreset(novo, { silencioso: true });
   try {
     if (typeof mostrarToast === 'function') {
-      mostrarToast('⚙ FPS baixo — qualidade gráfica reduzida para "' + novo + '". Ajuste no menu ⚙ Gráficos.', '');
+      const msg = novo === 'minimo'
+        ? '⚙ FPS muito baixo — modo de emergência "mínimo" ativado (efeitos desligados). Ajuste no menu ⚙ Gráficos.'
+        : '⚙ FPS baixo — qualidade gráfica reduzida para "' + novo + '". Ajuste no menu ⚙ Gráficos.';
+      mostrarToast(msg, '');
     }
   } catch(_) {}
   return true;
@@ -164,11 +182,31 @@ function _avtVfxOverlayResolution() {
 }
 window._avtVfxOverlayResolution = _avtVfxOverlayResolution;
 
+// Resolução do canvas principal 2D e do mundo PIXI: em iso num dispositivo touch,
+// renderiza a 1/oversize. O wrap iso é 1,8× maior para cobrir os cantos girados;
+// pagar 3,24× de fill-rate em três canvases empilhados é o que trava o jogo em
+// GPU móvel — mesma mitigação já aplicada aos overlays de VFX acima. O canvas
+// mantém o tamanho CSS cheio; só o backing store encolhe.
+function _avtMainCanvasResolution() {
+  if (!(typeof AVT_GRAFICOS !== 'undefined' && AVT_GRAFICOS && AVT_GRAFICOS.isoAtivo)) return 1;
+  if (!_avtIsTouchDevice()) return 1;
+  return 1 / (_ISO_OVERSIZE || 1.8);
+}
+window._avtMainCanvasResolution = _avtMainCanvasResolution;
+
 function _avtGraficosCarregar() {
+  let raw: any = null;
   try {
-    const raw = localStorage.getItem(_AVT_GRAFICOS_KEY);
+    raw = localStorage.getItem(_AVT_GRAFICOS_KEY);
     if (raw) Object.assign(AVT_GRAFICOS, JSON.parse(raw));
   } catch(e) {}
+  // Primeira visita num dispositivo touch: preset conservador — o custo de
+  // iso + filtros do padrão travava celulares. O jogador pode subir no menu.
+  if (!raw && _avtIsTouchDevice()) {
+    Object.assign(AVT_GRAFICOS, _AVT_QUALIDADE_PRESETS.baixo);
+    AVT_GRAFICOS.preset = 'baixo';
+    _avtGraficosSalvar();
+  }
   // Migração: os controles isométricos agora são automáticos (remapeamento central
   // tela→grade em _avtRemapDirTelaParaGrade); as flags de opt-in deixaram de existir.
   delete AVT_GRAFICOS.isoTeclado;
@@ -528,7 +566,10 @@ function _avtGraficosAplicar() {
   _avtGarantirFiltros3D();
   const canvas = AVT_STATE?.canvas || document.getElementById('avt-canvas');
   if (!canvas) return;
-  canvas.style.filter = AVT_GRAFICOS.ativo ? `url(#avt-filtro3d-${AVT_GRAFICOS.nivel})` : '';
+  // Touch: o filtro SVG feConvolveMatrix sobre um canvas repintado todo frame
+  // dentro de uma camada 3D é um dos gatilhos de travamento em GPU móvel — off.
+  const filtroOn = AVT_GRAFICOS.ativo && !_avtIsTouchDevice();
+  canvas.style.filter = filtroOn ? `url(#avt-filtro3d-${AVT_GRAFICOS.nivel})` : '';
   _avtGraficosIsoAplicar();
 }
 
@@ -715,9 +756,36 @@ function _avtMenuHtmlGraficos() {
       }).join('')}
 
       <div style="font-size:0.6rem;color:#5a6b7a;margin-top:2px">Para um sprite isométrico personalizado, configure na ficha do personagem.</div>
+
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:rgba(200,168,75,0.55);text-transform:uppercase;letter-spacing:.08em;margin:14px 0 8px">🔧 Avançado</div>
+      ${[
+        ['cssFx',          'Animações CSS decorativas', 'Glow/pulso contínuos de tokens e elementos da HUD.'],
+        ['luzGpu',         'Luz dinâmica (GPU)',        'Camada WebGL de tochas/auras dos jogadores (iso + atmosfera).'],
+        ['vfxOverlayUnico','Overlay único de efeitos',  'Um único contexto WebGL persistente para os efeitos de habilidade (recomendado). Desligue apenas se os efeitos falharem no seu dispositivo.'],
+      ].map(([chave, titulo, desc]) => `
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:9px 10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:8px">
+        <input type="checkbox" id="avt-cfg-adv-${chave}"
+               style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
+               ${g[chave as any] !== false ? 'checked' : ''}
+               onchange="_avtGraficosAvancadoToggle('${chave}', this.checked)">
+        <div>
+          <div style="font-size:0.8rem;color:var(--texto,#c8d8e8)">${titulo}</div>
+          <div style="font-size:0.7rem;color:var(--suave,#7a92aa);margin-top:2px">${desc}</div>
+        </div>
+      </label>`).join('')}
     </div>
   `;
 }
+
+// Toggles avançados (cssFx/luzGpu/vfxOverlayUnico): flags lidas pelo pipeline de
+// render/VFX que antes só mudavam como efeito colateral dos presets.
+function _avtGraficosAvancadoToggle(chave: any, ativo: any) {
+  AVT_GRAFICOS[chave] = !!ativo;
+  AVT_GRAFICOS.preset = null; // ajuste manual → sai do preset em lote
+  _avtGraficosSalvar();
+  _avtGraficosAplicarTudo();
+}
+window._avtGraficosAvancadoToggle = _avtGraficosAvancadoToggle;
 
 window._avtGraficosToggle        = _avtGraficosToggle;
 window._avtGraficosNivel         = _avtGraficosNivel;
