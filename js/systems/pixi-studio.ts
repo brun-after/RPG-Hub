@@ -304,7 +304,9 @@ function _psDefaultConfig() {
     version: 3, behavior: 'one-shot', duracao_ms: 1000, posicao: 'alvo',
     camera: { shake: { amp: 4, decay: 0.92, freq: 32 } },
     lighting: { bloom: { threshold: 0.6, intensity: 0.7, quality: 4 }, tone: 'filmic' },
-    background: { darken: 0.1 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
+    // darken 0: animação nova não escurece o mapa por padrão — o mestre liga
+    // conscientemente pelo slider "Escurecer fundo" (era 0.1 e lia como bug em jogo).
+    background: { darken: 0 }, audio: { cast: '', impact: '', volume: 0.75 }, global: false,
     layers: [
       { id: 'l_' + Date.now(), tipo: 'emitter', nome: 'Partículas', visivel: true, z: 3,
         blendMode: 'add', texture: 'spark', texture_url: null as any, glow: null as any,
@@ -795,7 +797,26 @@ ${L.bloom ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;marg
   <select onchange="psSetLighting('tone',this.value)" style="width:100%;padding:5px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem">
     ${[['none','nenhum'],['filmic','filmic'],['aces','aces']].map(([v,l])=>`<option value="${v}"${(L.tone||'none')===v?' selected':''}>${l}</option>`).join('')}
   </select></div>
+${_psBackgroundHtml(cfg)}
 </div>`;
+}
+// ── Background dim (darken + vinheta) ────────────────────────────────────────
+function _psBackgroundHtml(cfg: any) {
+  const bg = cfg.background || {};
+  const d = bg.darken || 0;
+  return `<div style="border-top:1px solid var(--borda);padding-top:8px;margin-top:8px">
+<div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">Fundo</div>
+<div class="form-group"><label style="font-size:0.6rem;display:flex;justify-content:space-between">Escurecer fundo<span>${d.toFixed(2)}</span></label>
+  <input type="range" min="0" max="0.8" step="0.05" value="${d}" oninput="this.previousElementSibling.querySelector('span').textContent=parseFloat(this.value).toFixed(2);psSetBackground('darken',parseFloat(this.value))" style="width:100%"></div>
+<label style="display:flex;align-items:center;gap:6px;font-size:0.7rem;cursor:pointer;margin-top:4px">
+  <input type="checkbox" ${bg.radialDim ? 'checked' : ''} onchange="psSetBackground('radialDim',this.checked)"> Vinheta radial (escurece só as bordas)</label>
+</div>`;
+}
+function psSetBackground(key: any, val: any) {
+  const cfg = PIXI_STUDIO_STATE.atual?.config_json; if (!cfg) return;
+  if (!cfg.background) cfg.background = {};
+  cfg.background[key] = val;
+  _psSetDirty(true); psPreviewRebuildAll();
 }
 function psToggleBloom(on: any) {
   const cfg = PIXI_STUDIO_STATE.atual?.config_json; if (!cfg) return;
@@ -3301,6 +3322,7 @@ window.psUpdateAudioEvent     = psUpdateAudioEvent;
 window.psRemoveAudioEvent     = psRemoveAudioEvent;
 window.psToggleBloom          = psToggleBloom;
 window.psSetLighting          = psSetLighting;
+window.psSetBackground        = psSetBackground;
 window.psSetTravel            = psSetTravel;
 window.psChainAdd             = psChainAdd;
 window.psChainSetDelay        = psChainSetDelay;
@@ -3422,6 +3444,8 @@ Object.defineProperty(globalThis, "_psLightingHtml", { configurable: true, get: 
 Object.defineProperty(globalThis, "psToggleBloom", { configurable: true, get: () => psToggleBloom, set: (__v) => { psToggleBloom = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "psSetLighting", { configurable: true, get: () => psSetLighting, set: (__v) => { psSetLighting = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "psSetBackground", { configurable: true, get: () => psSetBackground, set: (__v) => { psSetBackground = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_psScreenFxHtml", { configurable: true, get: () => _psScreenFxHtml, set: (__v) => { _psScreenFxHtml = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
