@@ -3991,6 +3991,180 @@ function _avtEntrarModoFonteSomPlacement(fonteId: any) {
 }
 window._avtEntrarModoFonteSomPlacement = _avtEntrarModoFonteSomPlacement;
 
+// ── Armadilhas do mestre: ferramentas de criação/edição ──────────────────────
+// Espelham o trio baú/fonte-de-som: seção no painel (aba mapa), modal de
+// edição e posicionamento por clique no canvas. Runtime do disparo em
+// _avtChecarArmadilhaMestreNaPosicao.
+
+function _avtGetTrapById(trapId: any) {
+  return AVT_STATE.dungeon?.render_data?.objetos?.find((o: any) =>
+    o.tipo === 'armadilha_mestre' && String(o.id) === String(trapId)) || null;
+}
+
+function _avtMestreAddTrap() {
+  const rd = AVT_STATE.dungeon?.render_data || (AVT_STATE.dungeon ? (AVT_STATE.dungeon.render_data = {}) : null);
+  if (!rd) { mostrarToast('Nenhum mapa carregado', 'aviso'); return; }
+  if (!Array.isArray(rd.objetos)) rd.objetos = [];
+  const trap = { id: 'traphm_' + Date.now(), tipo: 'armadilha_mestre', nome: 'Armadilha',
+    x: 0.5, y: 0.5, formula: '2d6', efeito: null as any,
+    modo: 'oneshot', rearmar_s: 30, armada: true, _rearmarEm: null as any };
+  rd.objetos.push(trap);
+  _avtSalvarDungeon();
+  try { _avtBroadcast('avt_obj_spawn', { obj: trap }); } catch(_) {}
+  _avtTrapEditar(trap.id);
+}
+window._avtMestreAddTrap = _avtMestreAddTrap;
+
+function _avtEntrarModoTrapPlacement(trapId: any) {
+  (AVT_STATE as any)._modoTrapPlacement = { trapId };
+  if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = 'crosshair';
+  mostrarToast('📍 Clique no mapa para posicionar a armadilha', 'ok');
+}
+window._avtEntrarModoTrapPlacement = _avtEntrarModoTrapPlacement;
+
+function _avtTrapsSecao(emJogo: any) {
+  const dungeon = AVT_STATE.dungeon;
+  const traps = (dungeon?.render_data?.objetos || []).filter((o: any) => o.tipo === 'armadilha_mestre');
+  const dw = dungeon?.w || 1, dh = dungeon?.h || 1;
+  return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🪤 Armadilhas</div>
+        <div class="avt-mp-hint" style="margin-bottom:6px">Invisíveis para os jogadores — disparam quando um jogador pisa (dano + efeito opcional). Só o mestre vê o marcador no mapa.</div>
+        ${dungeon ? `
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:8px" onclick="_avtMestreAddTrap()">🪤 + Nova armadilha</button>
+        ${traps.length ? traps.map((o: any) => {
+          const safe = String(o.id).replace(/'/g,"\\'");
+          const tx = Math.round((o.x ?? 0) * dw), ty = Math.round((o.y ?? 0) * dh);
+          const estado = o.armada === false ? '· desarmada' : '';
+          const modoLbl = o.modo === 'rearmar' ? `rearma ${o.rearmar_s ?? 30}s` : 'única';
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;padding:6px 8px;background:rgba(232,96,76,0.04);border:1px solid rgba(232,96,76,0.14);border-radius:6px">
+            <span style="flex:1;font-size:0.72rem;color:#c8d8e8">🪤 ${_escHtml(o.nome || 'Armadilha')} <span style="font-size:0.6rem;color:#7a92aa">Col ${tx}, Ln ${ty} · ${_escHtml(o.formula || '1d6')} · ${modoLbl} ${estado}</span></span>
+            ${emJogo ? `<button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" title="Posicionar no mapa" onclick="document.getElementById('avt-mestre-panel').style.display='none';_avtEntrarModoTrapPlacement('${safe}')">📍</button>` : ''}
+            <button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" onclick="_avtTrapEditar('${safe}')">✏</button>
+            <button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 7px;font-size:0.65rem" onclick="_avtTrapRemover('${safe}')">✕</button>
+          </div>`;
+        }).join('') : '<div class="avt-mp-hint">Nenhuma armadilha no mapa.</div>'}
+        ` : '<div class="avt-mp-hint">Sem mapa carregado.</div>'}
+      </div>`;
+}
+window._avtTrapsSecao = _avtTrapsSecao;
+
+function _avtTrapEditar(trapId: any) {
+  const trap = _avtGetTrapById(trapId);
+  if (!trap) return;
+  const emJogo = !(typeof _avtEmMenuConfig === 'function' && _avtEmMenuConfig());
+  const inpSt = 'width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem';
+  let overlay = document.getElementById('avt-trap-editor-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'avt-trap-editor-overlay';
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(overlay);
+  }
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  const tx = Math.round((trap.x ?? 0.5) * dw), ty = Math.round((trap.y ?? 0.5) * dh);
+  const safe = String(trapId).replace(/'/g,"\\'");
+  const efTipo = trap.efeito?.tipo || '';
+  overlay.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(232,96,76,0.3);border-radius:12px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-family:var(--fonte-d);font-size:1rem;color:#e8604c">🪤 Armadilha</div>
+        <button onclick="document.getElementById('avt-trap-editor-overlay').style.display='none'" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem">×</button>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Nome</label>
+        <input id="avt-trap-nome" value="${_escHtml(trap.nome || 'Armadilha')}" style="${inpSt}">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Dano (fórmula de dados)</label>
+          <input id="avt-trap-formula" value="${_escHtml(trap.formula || '2d6')}" placeholder="2d6" style="${inpSt}">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Efeito extra</label>
+          <select id="avt-trap-efeito" onchange="document.getElementById('avt-trap-efeito-cfg').style.display=this.value?'grid':'none'" style="${inpSt}">
+            <option value="" ${!efTipo?'selected':''}>Só dano</option>
+            <option value="dot" ${efTipo==='dot'?'selected':''}>🩸 + DOT</option>
+            <option value="stun" ${efTipo==='stun'?'selected':''}>⚡ + Stun</option>
+          </select>
+        </div>
+      </div>
+      <div id="avt-trap-efeito-cfg" style="display:${efTipo?'grid':'none'};grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Fórmula do DOT (se DOT)</label>
+          <input id="avt-trap-ef-formula" value="${_escHtml(trap.efeito?.dot_formula || '1d4')}" style="${inpSt}">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Duração (turnos)</label>
+          <input id="avt-trap-ef-turnos" type="number" min="1" max="99" value="${trap.efeito?.duracao_turnos ?? 2}" style="${inpSt}">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Modo</label>
+          <select id="avt-trap-modo" onchange="document.getElementById('avt-trap-rearmar-s').disabled=this.value!=='rearmar'" style="${inpSt}">
+            <option value="oneshot" ${trap.modo!=='rearmar'?'selected':''}>Dispara uma vez</option>
+            <option value="rearmar" ${trap.modo==='rearmar'?'selected':''}>Rearma após N segundos</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Rearmar após (s)</label>
+          <input id="avt-trap-rearmar-s" type="number" min="1" max="3600" value="${trap.rearmar_s ?? 30}" ${trap.modo!=='rearmar'?'disabled':''} style="${inpSt}">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="flex:1">
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Posição no mapa</label>
+          <div style="padding:5px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">Col ${tx}, Linha ${ty}</div>
+        </div>
+        ${emJogo ? `<button class="avt-mp-btn" style="padding:5px 10px;font-size:0.72rem;margin-top:14px;white-space:nowrap" onclick="document.getElementById('avt-trap-editor-overlay').style.display='none';document.getElementById('avt-mestre-panel').style.display='none';_avtEntrarModoTrapPlacement('${safe}')">📍 Posicionar no mapa</button>` : ''}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtTrapSalvar('${safe}')">💾 Salvar</button>
+        <button class="avt-mp-btn avt-mp-btn-danger" style="flex:1" onclick="document.getElementById('avt-trap-editor-overlay').style.display='none'">✕ Fechar</button>
+      </div>
+    </div>`;
+  overlay.style!.display = 'flex';
+}
+window._avtTrapEditar = _avtTrapEditar;
+
+function _avtTrapSalvar(trapId: any) {
+  const trap = _avtGetTrapById(trapId);
+  if (!trap) return;
+  trap.nome = document.getElementById('avt-trap-nome')?.value!.trim!()! || 'Armadilha';
+  trap.formula = document.getElementById('avt-trap-formula')?.value!.trim!()! || '2d6';
+  const efTipo = document.getElementById('avt-trap-efeito')?.value || '';
+  const efTurnos = Math.max(1, parseInt(document.getElementById('avt-trap-ef-turnos')?.value!) || 2);
+  if (efTipo === 'dot') {
+    trap.efeito = { tipo: 'dot', dot_formula: document.getElementById('avt-trap-ef-formula')?.value!.trim!()! || '1d4',
+      dot_variante: 'sangramento', duracao_turnos: efTurnos };
+  } else if (efTipo === 'stun') {
+    trap.efeito = { tipo: 'stun', duracao_turnos: efTurnos };
+  } else {
+    trap.efeito = null;
+  }
+  trap.modo = document.getElementById('avt-trap-modo')?.value === 'rearmar' ? 'rearmar' : 'oneshot';
+  trap.rearmar_s = Math.max(1, parseInt(document.getElementById('avt-trap-rearmar-s')?.value!) || 30);
+  _avtSalvarDungeon();
+  try { _avtBroadcast('avt_obj_spawn', { obj: trap }); } catch(_) {}
+  const overlay = document.getElementById('avt-trap-editor-overlay');
+  if (overlay) overlay.style!.display = 'none';
+  mostrarToast('Armadilha salva', 'sucesso');
+  _avtMestrePainelRender();
+}
+window._avtTrapSalvar = _avtTrapSalvar;
+
+function _avtTrapRemover(trapId: any) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd?.objetos) return;
+  const idx = rd.objetos.findIndex((o: any) => String(o.id) === String(trapId));
+  if (idx >= 0) rd.objetos.splice(idx, 1);
+  _avtSalvarDungeon();
+  try { _avtBroadcast('avt_obj_pickup', { objId: trapId }); } catch(_) {}
+  _avtMestrePainelRender();
+}
+window._avtTrapRemover = _avtTrapRemover;
+
 function _avtMestreRemoverBau(bauId: any) {
   const rd = AVT_STATE.dungeon?.render_data;
   if (!rd?.objetos) return;
@@ -8862,6 +9036,23 @@ function _avtCanvasClick(e: any) {
     return;
   }
 
+  // Trap placement mode (mestre): click to set trap position on the map
+  if ((AVT_STATE as any)._modoTrapPlacement) {
+    const { trapId } = (AVT_STATE as any)._modoTrapPlacement;
+    (AVT_STATE as any)._modoTrapPlacement = null;
+    canvas.style.cursor = '';
+    const trap = _avtGetTrapById(trapId);
+    if (trap && AVT_STATE.dungeon) {
+      trap.x = tileX / AVT_STATE.dungeon.w;
+      trap.y = tileY / AVT_STATE.dungeon.h;
+      _avtSalvarDungeon();
+      try { _avtBroadcast('avt_obj_spawn', { obj: trap }); } catch(_) {}
+      mostrarToast(`Armadilha posicionada em coluna ${tileX}, linha ${tileY}`, 'ok');
+      _avtTrapEditar(trapId);
+    }
+    return;
+  }
+
   // Modo armadilha: clique escolhe a célula onde armar
   if ((AVT_STATE as any)._modoArmadilhaCelula) {
     _avtArmarArmadilhaEm(tileX, tileY);
@@ -9160,6 +9351,14 @@ function _avtCanvasKey(e: any) {
     if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
     mostrarToast('Posicionamento cancelado', 'aviso');
     _avtFonteSomEditar(fonteId);
+    return;
+  }
+  if (e.key === 'Escape' && (AVT_STATE as any)._modoTrapPlacement) {
+    const { trapId } = (AVT_STATE as any)._modoTrapPlacement;
+    (AVT_STATE as any)._modoTrapPlacement = null;
+    if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
+    mostrarToast('Posicionamento cancelado', 'aviso');
+    _avtTrapEditar(trapId);
     return;
   }
 
@@ -21831,6 +22030,7 @@ function _avtMpConteudoAba() {
         </div>
       </div>
       ${_avtFontesSomSecao(emJogo)}
+      ${_avtTrapsSecao(emJogo)}
       ${(emJogo && AVT_STATE._faseStack && AVT_STATE._faseStack.length) ? `
       <div class="avt-mp-secao">
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtVoltarFaseAnterior()">⬅ Voltar ao mapa anterior</button>
