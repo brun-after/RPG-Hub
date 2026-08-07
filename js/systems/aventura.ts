@@ -19950,7 +19950,7 @@ function _avtCameraFX(app: any, worldRoot: any, uiRoot: any, camCfg: any, totalD
   }
 
   // RGB split filter (chromatic aberration)
-  let rgb = null;
+  let rgb: any = null;
   if ((C as any).chromaticAberration && !reducedMotion && PIXI.filters && PIXI.filters.RGBSplitFilter) {
     rgb = new PIXI.filters.RGBSplitFilter([0,0],[0,0],[0,0]);
     uiRoot.filters = (uiRoot.filters || []).concat(rgb);
@@ -20010,6 +20010,13 @@ function _avtCameraFX(app: any, worldRoot: any, uiRoot: any, camCfg: any, totalD
   app.ticker.add(tick);
   return () => {
     try { app.ticker.remove(tick); } catch(_) {}
+    // O RGBSplit pendurado em uiRoot.filters segura framebuffers que nenhum outro
+    // teardown alcança — remove da lista e destrói aqui, onde a ref existe.
+    if (rgb) {
+      try { uiRoot.filters = (uiRoot.filters || []).filter((f: any) => f !== rgb); } catch(_) {}
+      try { (rgb as any).destroy && (rgb as any).destroy(); } catch(_) {}
+      rgb = null;
+    }
     worldRoot.position.set(baseX, baseY);
     worldRoot.scale.set(baseScale);
     (AVT_STATE as any)._fxFreezeUntil = 0;
@@ -20655,6 +20662,13 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
           packs.forEach((p: any) => p.emitters.forEach((em: any) => {
             try { em.emit = false; em.destroy(); } catch(_) {}
           }));
+          // Filtros seguram render-textures que o destroy do stage NÃO libera —
+          // sem destruí-los explicitamente cada efeito vazava GPU (o editor já
+          // fazia isto via _psDestroyFilters; o runtime nunca recebeu o mesmo).
+          if (typeof _psAvtDestroyFilters === 'function') {
+            _psAvtDestroyFilters(worldRoot);
+            packs.forEach((p: any) => { if (p.layerContainer) _psAvtDestroyFilters(p.layerContainer); });
+          }
           if (_usaHost) {
             try { app.destroy(); } catch(_) {} // adapter: destrói o Container e libera o host
           } else {
@@ -20670,6 +20684,7 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
         // emitters) deixaria bgRoot/dim adicionados sincronamente presos no stage
         // do host para sempre — retângulo escuro permanente sobre o mapa.
         console.warn('[pixi-fx] montagem de camadas falhou:', e);
+        if (typeof _psAvtDestroyFilters === 'function') _psAvtDestroyFilters(worldRoot);
         if (_usaHost) {
           try { if (app) app.destroy(); } catch(_) {} // adapter: remove tickFns e destrói o Container
         } else {

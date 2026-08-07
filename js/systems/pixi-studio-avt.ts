@@ -44,6 +44,24 @@ function _psAvtAcquireApp() {
   };
 }
 
+// Espelho do _psDestroyFilters do editor: filtros seguram render-textures/framebuffers
+// que o PIXI NÃO libera no destroy do node — sem isto cada efeito em jogo vazava GPU.
+function _psAvtDestroyFilters(node: any) {
+  const fs = node && node.filters;
+  if (Array.isArray(fs)) fs.forEach((f: any) => { try { f && f.destroy && f.destroy(); } catch (_) {} });
+  if (node) node.filters = null;
+}
+
+// setTimeout rastreado: timers de fases futuras (chain, impacto de projétil, SFX)
+// precisam morrer no teardown (troca de fase/saída) — um setTimeout cru continuaria
+// e tocaria a animação/som na cena seguinte.
+var _PS_AVT_TIMERS = new Set<any>();
+function _psAvtDelay(fn: any, ms: any) {
+  const id = setTimeout(() => { _PS_AVT_TIMERS.delete(id); try { fn(); } catch (_) {} }, ms);
+  _PS_AVT_TIMERS.add(id);
+  return id;
+}
+
 // Registra um efeito one-shot no rastreio global, para que avtPixiCleanupAll consiga
 // destruí-lo em teardown (troca de fase/saída) mesmo antes do timer de fim disparar.
 function _psAvtTrack(cleanup: any, durMs: any) {
@@ -427,28 +445,41 @@ function _psSanitizeCfg(cfg: any) {
 // ── Load animation config (from cache or Supabase) ─────────────────────────
 // Falhas/IDs inexistentes entram num cache negativo de 30s — sem ele, cada uso da
 // skill re-batia na rede pelo mesmo ID quebrado.
-const _PS_CFG_FAIL = new Map(); // animId -> ts da falha
+const _PS_CFG_FAIL = new Map(); // animId -> ts da falha (cap de tamanho em _psCfgFail)
+const _PS_CFG_INFLIGHT = new Map(); // animId -> Promise — dedupe de requests simultâneos
+function _psCfgFail(animId: any) {
+  _PS_CFG_FAIL.set(animId, Date.now());
+  // IDs quebrados variados (ex.: skills apontando para animações apagadas) não
+  // podem crescer o mapa sem limite — descarta a entrada mais antiga.
+  if (_PS_CFG_FAIL.size > 100) _PS_CFG_FAIL.delete(_PS_CFG_FAIL.keys().next().value);
+}
 async function _psAvtLoadCfg(animId: any) {
   if (!animId) return null;
   const failTs = _PS_CFG_FAIL.get(animId);
   if (failTs && Date.now() - failTs < 30000) return null;
   const cache = (typeof PIXI_STUDIO_STATE !== 'undefined') ? PIXI_STUDIO_STATE._animCache : null;
   if (cache && cache[animId]) return cache[animId];
-  try {
-    const rows = await _avtSb(`pixi_animations?id=eq.${encodeURIComponent(animId)}&select=config_json`);
-    const cfg = _psSanitizeCfg(rows && rows[0] && rows[0].config_json);
-    if (cfg && cache) {
-      cache[animId] = cfg;
-      setTimeout(() => { delete cache[animId]; }, 30000);
+  // N usos simultâneos da mesma skill compartilham um único request ao PostgREST
+  if (_PS_CFG_INFLIGHT.has(animId)) return _PS_CFG_INFLIGHT.get(animId);
+  const p = (async () => {
+    try {
+      const rows = await _avtSb(`pixi_animations?id=eq.${encodeURIComponent(animId)}&select=config_json`);
+      const cfg = _psSanitizeCfg(rows && rows[0] && rows[0].config_json);
+      if (cfg && cache) {
+        cache[animId] = cfg;
+        setTimeout(() => { delete cache[animId]; }, 30000);
+      }
+      if (!cfg) _psCfgFail(animId);
+      else _PS_CFG_FAIL.delete(animId);
+      return cfg || null;
+    } catch (e) {
+      console.warn('[pixi-studio-avt] Failed to load anim', animId, e);
+      _psCfgFail(animId);
+      return null;
     }
-    if (!cfg) _PS_CFG_FAIL.set(animId, Date.now());
-    else _PS_CFG_FAIL.delete(animId);
-    return cfg || null;
-  } catch (e) {
-    console.warn('[pixi-studio-avt] Failed to load anim', animId, e);
-    _PS_CFG_FAIL.set(animId, Date.now());
-    return null;
-  }
+  })().finally(() => _PS_CFG_INFLIGHT.delete(animId));
+  _PS_CFG_INFLIGHT.set(animId, p);
+  return p;
 }
 
 // ── Delay de viagem SÍNCRONO de uma animação do Studio ─────────────────────
@@ -470,7 +501,9 @@ function avtPixiGetAnimDelaySync(animId: any) {
 // ── Build screen coordinates from entity (mirrors _avtPlaySkillAnim) ───────
 function _psAvtToScreen(ent: any) {
   const canvas = AVT_STATE.canvas;
-  if (!canvas) return { x: canvas ? canvas.width / 2 : 400, y: canvas ? canvas.height / 2 : 300 };
+  // Null-safe nos dois argumentos: _psAvtFollow chama com targetEnt nulo no
+  // fallback e `live.renderX` lançaria TypeError.
+  if (!ent || !canvas) return { x: canvas ? canvas.width / 2 : 400, y: canvas ? canvas.height / 2 : 300 };
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const live = typeof _avtEntViva === 'function' ? _avtEntViva(ent) : ent;
   return {
@@ -497,7 +530,9 @@ function _psAvtInterpKf(kfs: any, t: any) {
   if (t >= kfs[kfs.length - 1].t) return Object.assign({}, kfs[kfs.length - 1]);
   for (let i = 0; i < kfs.length - 1; i++) {
     if (t >= kfs[i].t && t <= kfs[i + 1].t) {
-      const fRaw = (t - kfs[i].t) / (kfs[i + 1].t - kfs[i].t);
+      // Keyframes com o mesmo t zeram o denominador → NaN em x/y/scale/rotation
+      const denom = kfs[i + 1].t - kfs[i].t;
+      const fRaw = denom > 0 ? (t - kfs[i].t) / denom : 0;
       // Apply per-keyframe easing (owned by the outgoing keyframe). Default linear.
       const f = (typeof window !== 'undefined' && window._psEase)
         ? window._psEase(kfs[i].ease || 'linear', fRaw) : fRaw;
@@ -787,7 +822,8 @@ function _avtScaleEmitterCfg(cfg: any, s: any) {
 // Uses a similarity transform to map studio-space → screen-space. Each layer is wrapped
 // in a pose-aware iso root (upright/floor) and lifted to its configured height.
 async function _psAvtRenderWithSpawnPath(cfg: any, atacScr: any, alvoScr: any, casterEnt: any, targetEnt: any) {
-  const layers = (cfg.layers || []).filter((l: any) => l.emitter);
+  // l.visivel: paridade com os demais renderers — camada oculta no Studio não emite em jogo
+  const layers = (cfg.layers || []).filter((l: any) => l.visivel && l.emitter);
   if (!layers.length) return;
 
   await _avtEnsurePixiParticles();
@@ -851,6 +887,7 @@ async function _psAvtRenderWithSpawnPath(cfg: any, atacScr: any, alvoScr: any, c
   };
 
   const emitters: any = [];
+  const layerContainers: any = [];
   for (const l of layers) {
     const anchor = _psAvtLayerAnchor(l, atacScr, alvoScr, casterEnt, targetEnt);
     // spawn_path spans both tokens → pivot at the travel midpoint; static → the layer anchor.
@@ -858,6 +895,7 @@ async function _psAvtRenderWithSpawnPath(cfg: any, atacScr: any, alvoScr: any, c
     const span = _avtVfxSpanFns(anchor.pose, pivot);
     const root = _avtVfxRoot(sceneRoot, anchor.pose, pivot, anchor.lift);
     const container = new PIXI.Container();
+    layerContainers.push(container);
     container.blendMode = bm[l.blendMode] ?? PIXI.BLEND_MODES.ADD;
     // Per-layer glow + tint + user filters (preserve the studio look)
     const layerFilters = (typeof _avtBuildPixiFilters === 'function') ? _avtBuildPixiFilters(l.filters, container) : [];
@@ -942,6 +980,8 @@ async function _psAvtRenderWithSpawnPath(cfg: any, atacScr: any, alvoScr: any, c
     for (const { em } of emitters) {
       try { if (!em.destroyed) em.destroy(); } catch (_) {}
     }
+    _psAvtDestroyFilters(sceneRoot);
+    layerContainers.forEach((c: any) => _psAvtDestroyFilters(c));
     acq.destroy();
   }, durMs + 300);
 }
@@ -964,7 +1004,7 @@ async function avtPixiPlayAnimation(animId: any, atacanteEnt: any, alvoEnt: any,
     if (cfg.audio.cast)   AudioManager.playSFX(cfg.audio.cast,   { volume: vol });
     if (cfg.audio.impact) {
       const delay = (behavior === 'projectile') ? (cfg.behavior_config?.projectile_speed_ms || 500) : 0;
-      if (delay > 0) setTimeout(() => AudioManager.playSFX(cfg.audio.impact, { volume: vol }), delay);
+      if (delay > 0) _psAvtDelay(() => AudioManager.playSFX(cfg.audio.impact, { volume: vol }), delay);
       else           AudioManager.playSFX(cfg.audio.impact, { volume: vol });
     }
   }
@@ -1151,7 +1191,7 @@ function _psAvtProjectile(cfg: any, atacScr: any, alvoScr: any, alvoEnt: any, at
 
   // Phase 2: impact anim at the target's live position after travel time (re-acquired
   // so it lands on the target token's current spot, never the one captured at fire time)
-  setTimeout(() => {
+  _psAvtDelay(() => {
     if (typeof _avtPixiParticleAnim === 'function') {
       const ends = _psAvtLiveEnds(atacanteEnt, alvoEnt, atacScr, alvoScr);
       _avtPixiParticleAnim(avtCfg, ends.atac, ends.alvo, 'alvo');
@@ -1283,11 +1323,13 @@ function _psAvtChain(cfg: any, atacanteEnt: any, alvoEnt: any, isAreaMode: any) 
   const seq = cfg.behavior_config?.sequence || [];
   let delay = 0;
   for (const step of seq) {
-    const stepDelay = delay;
-    setTimeout(() => {
-      if (step.animId) avtPixiPlayAnimation(step.animId, atacanteEnt, alvoEnt, isAreaMode);
-    }, stepDelay);
+    // Soma ANTES de agendar: a UI promete "delay (ms) antes deste passo", mas o
+    // acumulador era somado depois — o delay de cada passo atrasava o seguinte,
+    // o do 1º era ignorado e o do último nunca valia.
     delay += (step.delay_ms || 0);
+    _psAvtDelay(() => {
+      if (step.animId) avtPixiPlayAnimation(step.animId, atacanteEnt, alvoEnt, isAreaMode);
+    }, delay);
   }
 }
 
@@ -1295,23 +1337,37 @@ function _psAvtChain(cfg: any, atacanteEnt: any, alvoEnt: any, isAreaMode: any) 
 // Used for status effects that last multiple turns (HoT, DoT, Atravessar, etc.)
 // key: unique string (e.g. "entId_efeitoNome") to identify this animation
 // posicao: 'alvo' | 'atacante' | 'meio' — which entity to follow
+//
+// Guarda anti-race: o stop roda ANTES de dois awaits. Duas chamadas próximas com a
+// mesma key (reaplicação de buff, local + broadcast do peer) registravam as duas e o
+// cleanup da primeira se perdia — emissor órfão até o TTL. O token por key invalida a
+// chamada mais antiga; a geração invalida tudo que estava em voo num avtPixiCleanupAll.
+var _psAvtGen = 0;
+var _PS_PERSIST_PENDING = new Map();  // key -> token da chamada mais recente
 async function avtPixiPlayPersistent(animId: any, alvoEnt: any, casterEnt: any, posicao: any, key: any) {
   avtPixiStopPersistent(key);  // stop any existing animation for this key
+  const token = {};
+  const gen = _psAvtGen;
+  _PS_PERSIST_PENDING.set(key, token);
+  const stale = () => _PS_PERSIST_PENDING.get(key) !== token || _psAvtGen !== gen;
+  const bail = () => { if (!stale()) _PS_PERSIST_PENDING.delete(key); };
 
   const cfg = await _psAvtLoadCfg(animId);
-  if (!cfg || !cfg.layers?.length) return;
+  if (stale()) return;
+  if (!cfg || !cfg.layers?.length) return bail();
 
   await _avtEnsurePixiParticles();
-  if (typeof PIXI === 'undefined') return;
+  if (stale()) return;
+  if (typeof PIXI === 'undefined') return bail();
 
   const canvas = AVT_STATE.canvas;
-  if (!canvas) return;
+  if (!canvas) return bail();
 
   const primaryEnt = (posicao === 'atacante') ? (casterEnt || alvoEnt) : (alvoEnt || casterEnt);
-  if (!primaryEnt) return;
+  if (!primaryEnt) return bail();
 
   const acq = _psAvtAcquireApp();
-  if (!acq) return;
+  if (!acq) return bail();
   const app = acq.app;
 
   const vfxScale = _avtVfxScale(cfg);
@@ -1458,6 +1514,7 @@ async function avtPixiPlayPersistent(animId: any, alvoEnt: any, casterEnt: any, 
   app.ticker.add(trackFn);
 
   let _persistDone = false;
+  const entry: any = {};
   const cleanup = () => {
     if (_persistDone) return;
     _persistDone = true;
@@ -1467,10 +1524,17 @@ async function avtPixiPlayPersistent(animId: any, alvoEnt: any, casterEnt: any, 
       try { if (!em.em.destroyed) em.em.destroy(); } catch (_) {}
     }
     acq.destroy();
-    _PS_PERSISTENT.delete(key);
+    // Só remove a PRÓPRIA entrada: uma chamada stale limpando-se não pode
+    // derrubar o registro da chamada mais nova que já assumiu a key.
+    if (_PS_PERSISTENT.get(key) === entry) _PS_PERSISTENT.delete(key);
   };
+  entry.cleanup = cleanup;
 
-  _PS_PERSISTENT.set(key, { cleanup });
+  // A key foi reivindicada por outra chamada (ou houve teardown global) durante a
+  // montagem — desfaz tudo que este caminho alocou em vez de registrar um órfão.
+  if (stale()) { cleanup(); return; }
+  _PS_PERSISTENT.set(key, entry);
+  _PS_PERSIST_PENDING.delete(key);
 }
 
 function avtPixiStopPersistent(key: any) {
@@ -1480,6 +1544,12 @@ function avtPixiStopPersistent(key: any) {
 
 // ── Cleanup all active animations (one-shots, follow/channel E persistentes) ──
 function avtPixiCleanupAll() {
+  // Invalida montagens de persistentes em voo (paradas num await) e mata os
+  // timers de fases futuras (chain/impacto/SFX) — nada pode tocar na cena seguinte.
+  _psAvtGen++;
+  _PS_PERSIST_PENDING.clear();
+  for (const id of _PS_AVT_TIMERS) clearTimeout(id);
+  _PS_AVT_TIMERS.clear();
   const entries = _PS_AVT_ACTIVE.slice();
   _PS_AVT_ACTIVE = [];
   for (const entry of entries) {
@@ -1587,3 +1657,9 @@ Object.defineProperty(globalThis, "_psVignetteTexture", { configurable: true, ge
 Object.defineProperty(globalThis, "_psFixEmitterGhost", { configurable: true, get: () => _psFixEmitterGhost, set: (__v) => { _psFixEmitterGhost = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_psSanitizeCfg", { configurable: true, get: () => _psSanitizeCfg, set: (__v) => { _psSanitizeCfg = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtDestroyFilters", { configurable: true, get: () => _psAvtDestroyFilters, set: (__v) => { _psAvtDestroyFilters = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psAvtDelay", { configurable: true, get: () => _psAvtDelay, set: (__v) => { _psAvtDelay = __v; } });
+Object.defineProperty(globalThis, "_PS_AVT_TIMERS", { configurable: true, get: () => _PS_AVT_TIMERS, set: (__v) => { _PS_AVT_TIMERS = __v; } });
+Object.defineProperty(globalThis, "_PS_PERSIST_PENDING", { configurable: true, get: () => _PS_PERSIST_PENDING, set: (__v) => { _PS_PERSIST_PENDING = __v; } });
