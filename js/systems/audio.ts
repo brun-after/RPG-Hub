@@ -12,10 +12,6 @@ const DEFAULT_SOUNDTRACKS: Record<string, any> = {
     { id:'cipher',     label:'Cipher',                    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cipher.mp3' },
     { id:'sneaky',     label:'Sneaky Adventure',          url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Sneaky%20Adventure.mp3' },
     { id:'cataclysm',  label:'Cataclysmic Molten Core',   url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cataclysmic%20Molten%20Core.mp3' },
-    { id:'monkeys',    label:'Monkeys Spinning Monkeys',  url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Monkeys%20Spinning%20Monkeys.mp3' },
-    { id:'carefree',   label:'Carefree',                  url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Carefree.mp3' },
-    { id:'pixelland',  label:'Pixelland',                 url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Pixelland.mp3' },
-    { id:'fluffing',   label:'Fluffing a Duck',           url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Fluffing%20a%20Duck.mp3' },
     { id:'bummin',     label:'Bummin on Tremelo',         url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Bummin%20on%20Tremelo.mp3' },
   ],
   combate: [
@@ -91,6 +87,12 @@ const SOUND_BANK = Object.fromEntries(
   Object.entries(DEFAULT_SFX_LIBRARY).map(([k, v]) => [k, v.url])
 );
 
+// Guarda-corpos anti-ruído do playSFX: intervalo mínimo entre tocadas do mesmo
+// som e teto de instâncias simultâneas por URL. Colapsam AoE multi-alvo, eco de
+// ataques remotos e spam de botões de teste numa quantidade audível de tocadas.
+const _SFX_INTERVALO_MIN_MS = 80;
+const _SFX_VOZES_MAX = 4;
+
 // ── Tabela de auto-mapeamento: tipo de animação + contexto → {cast, impact} ──
 const _SFX_AUTO_MAP: Record<string, any> = {
   // Projétil por tipo de dano
@@ -160,6 +162,8 @@ class _AudioManager {
     this._currentPhaseId  = 'main';
     this._defaultExploracao = null;
     this._sfxCache           = {};
+    this._sfxLastPlay        = Object.create(null); // url → ts da última tocada (rate-limit)
+    this._sfxVoices          = Object.create(null); // url → nº de instâncias tocando (teto de vozes)
     this.volume              = { music: 0.45, sfx: 0.75 };
     this._musicVolUser       = false; // true quando o jogador ajustou o slider local de música
     this._playerPref         = null;  // preferência de trilhas do jogador (setPlayerPref)
@@ -287,6 +291,9 @@ class _AudioManager {
     } catch (_) { return false; }
   }
 
+  // `volume` do chamador é um ganho relativo (0–1, padrão 1) multiplicado pelo
+  // volume global de SFX — o slider do menu vale para todo som, inclusive os
+  // call sites que passam volume explícito.
   playSFX(idOrUrl: any, { volume, pitchVariance = 0, pan = 0 }: any = {}) {
     if (this._muted || typeof Howl === 'undefined') return;
     const url = this._resolveId(idOrUrl);
@@ -296,7 +303,11 @@ class _AudioManager {
     // skill re-dispara o download morto e um toast de erro para o jogador.
     this._sfxDead = this._sfxDead || Object.create(null);
     if (this._sfxDead[url]) return;
-    const vol = Math.min(1, Math.max(0, volume ?? this.volume.sfx));
+    const vol = Math.min(1, Math.max(0, (volume ?? 1) * this.volume.sfx));
+    if (vol <= 0.001) return;
+    const agora = Date.now();
+    if (agora - (this._sfxLastPlay[url] || 0) < _SFX_INTERVALO_MIN_MS) return;
+    if ((this._sfxVoices[url] || 0) >= _SFX_VOZES_MAX) return;
     let howl = this._sfxCache[url];
     if (!howl) {
       const local = this._isSameOrigin(url);
@@ -310,6 +321,7 @@ class _AudioManager {
           const primeira = !this._sfxDead[url];
           this._sfxDead[url] = true;
           delete this._sfxCache[url];
+          delete this._sfxVoices[url];
           try { howl.unload(); } catch (_) {}
           console.warn('[SFX] Falha ao carregar:', url, err);
           if (primeira) {
@@ -319,8 +331,18 @@ class _AudioManager {
         onplayerror:  (_id: any, err: any) => console.warn('[SFX] Falha ao tocar:', url, err),
       });
       this._sfxCache[url] = howl;
+    } else if (!(this._sfxVoices[url] > 0)) {
+      // Sem vozes ativas, ajusta o volume do próprio Howl antes do play(): o som
+      // nasce no volume desta chamada em vez de estrear no da 1ª chamada (pop).
+      try { howl.volume(vol); } catch (_) {}
     }
+    this._sfxLastPlay[url] = agora;
     const id = howl.play();
+    this._sfxVoices[url] = (this._sfxVoices[url] || 0) + 1;
+    const dec = () => { this._sfxVoices[url] = Math.max(0, (this._sfxVoices[url] || 1) - 1); };
+    howl.once('end', dec, id);
+    howl.once('stop', dec, id);
+    howl.once('playerror', dec, id);
     howl.volume(vol, id);
     // Panning estéreo (posicional): só funciona no caminho Web Audio (assets locais)
     if (pan && typeof howl.stereo === 'function' && howl._webAudio) {
@@ -338,8 +360,17 @@ class _AudioManager {
     if (typeof Howl === 'undefined') return null;
     const url = this._resolveId(idOrUrl);
     if (!url) return null;
+    // Mesmo back-off do playSFX: URL de host externo que falhou não é re-tentada.
+    this._sfxDead = this._sfxDead || Object.create(null);
+    if (this._sfxDead[url]) return null;
     try {
-      const howl = new Howl({ src: [url], loop: true, volume: 0, html5: !this._isSameOrigin(url) });
+      const howl: any = new Howl({
+        src: [url], loop: true, volume: 0, html5: !this._isSameOrigin(url),
+        onloaderror: () => {
+          this._sfxDead[url] = true;
+          try { howl.unload(); } catch (_) {}
+        },
+      });
       howl.play();
       return howl;
     } catch (_) { return null; }
@@ -421,7 +452,9 @@ class _AudioManager {
 
   setMuted(muted: any) {
     this._muted = !!muted;
-    if (this._currentBgm) this._currentBgm.volume(this._muted ? 0 : this.volume.music);
+    // Ao desmutar, restaura o volume efetivo da fase (volume_musica do mestre,
+    // quando não há ajuste local) em vez de impor o padrão do jogador.
+    if (this._currentBgm) this._currentBgm.volume(this._muted ? 0 : this._bgmVolume(this._effectiveAudio()));
   }
 
   toggleMute() {
@@ -443,12 +476,14 @@ class _AudioManager {
 
   _getOrPickDefaultTrack(tipo: any, phaseId: any) {
     const key = `rpghub_track_${tipo}_${phaseId}`;
-    try {
-      const cached = sessionStorage.getItem(key);
-      if (cached) return cached;
-    } catch (_) {}
     const list = DEFAULT_SOUNDTRACKS[tipo] || [];
     if (!list.length) return null;
+    try {
+      const cached = sessionStorage.getItem(key);
+      // O cache só vale se a faixa ainda existir na lista padrão — faixas
+      // removidas da lista são re-sorteadas em vez de ressuscitar da sessão.
+      if (cached && list.some((t: any) => t.url === cached)) return cached;
+    } catch (_) {}
     const pick = list[Math.floor(Math.random() * list.length)].url;
     try { sessionStorage.setItem(key, pick); } catch (_) {}
     return pick;

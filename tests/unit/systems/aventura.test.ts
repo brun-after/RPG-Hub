@@ -181,21 +181,19 @@ describe('_avtCelulaOcupada', () => {
   });
 });
 
-describe('_avtSfxVolDist (volume global de SFX + atenuação por distância)', () => {
+describe('_avtSfxVolDist (ganho de design + atenuação por distância)', () => {
   beforeEach(() => {
     g.AVT_STATE = { entidades: [], myCharNome: null, isMestre: false, camera: null, canvas: null };
     g.AudioManager = { volume: { sfx: 1 } };
   });
 
-  it('aplica -25% do modo aventura e o volume global do slider', () => {
-    expect(g._avtSfxVolDist(0.8, null)).toBeCloseTo(0.8 * 0.75 * 1);
-    g.AudioManager.volume.sfx = 0.5;
-    expect(g._avtSfxVolDist(0.8, null)).toBeCloseTo(0.8 * 0.75 * 0.5);
+  it('aplica -25% do modo aventura sobre o ganho de design', () => {
+    expect(g._avtSfxVolDist(0.8, null)).toBeCloseTo(0.8 * 0.75);
   });
 
-  it('slider a zero silencia qualquer SFX posicional', () => {
-    g.AudioManager.volume.sfx = 0;
-    expect(g._avtSfxVolDist(0.8, null)).toBe(0);
+  it('não pré-multiplica o volume global do slider (playSFX já o aplica)', () => {
+    g.AudioManager.volume.sfx = 0.5;
+    expect(g._avtSfxVolDist(0.8, null)).toBeCloseTo(0.8 * 0.75);
   });
 
   it('atenua linearmente pela distância do ouvinte até silenciar a 20 células', () => {
