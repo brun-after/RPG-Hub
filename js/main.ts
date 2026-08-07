@@ -64,6 +64,7 @@ import './systems/catalog-packages';
 import './systems/catalog';
 import './systems/attribute-mapping';
 import './systems/rest';
+import './ui/confirm';
 import './ui/tutorial';
 import './systems/creative';
 import './systems/pixi-studio-presets';
