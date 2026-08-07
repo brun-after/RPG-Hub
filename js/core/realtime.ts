@@ -435,6 +435,14 @@ function iniciarRealtime(rpgId: string){
 
        // ── CHARACTERS ──
        if(topic.includes('characters')){
+         // Supressão de eco do salvamento otimista: se temos write em voo
+         // para este personagem, o estado local é mais novo que o record —
+         // aplicá-lo reverteria a edição (mesma classe de problema da
+         // "autoridade dupla" do npc_state abaixo). Se o settle foi há <1,5s,
+         // o record é o eco do nosso próprio write: aplicar é idempotente,
+         // mas sem toast de "atualizado".
+         const _eco=(typeof osEco==='function'&&rec.id!=null&&ev!=='DELETE')?osEco('characters:'+rec.id):null;
+         if(_eco==='pendente')return;
          _syncAvtCharFromRecord(rec, ev, msg.payload.old_record);
          if(typeof rec.custom_attrs==='string'){try{rec.custom_attrs=JSON.parse(rec.custom_attrs);}catch(e){rec.custom_attrs={};}}
          else if(!rec.custom_attrs||typeof rec.custom_attrs!=='object'){rec.custom_attrs={};}
@@ -454,7 +462,7 @@ function iniciarRealtime(rpgId: string){
            RPG_DATA!.characters[idx]=rec;
            if(FICHAS_VIEW===rec.nome&&typeof renderFichaView==='function')renderFichaView(rec.nome);
            else{if(CHAR_VIEW===rec.nome)renderCharView(rec.nome);if(ATTR_VIEW===rec.nome)renderAttrView(rec.nome);}
-           mostrarToast(`↺ ${rec.nome} atualizado`,'');
+           if(_eco!=='recente')mostrarToast(`↺ ${rec.nome} atualizado`,'');
          } else if(ev==='INSERT'){
            RPG_DATA!.characters.push(rec);
            mostrarToast(`✦ ${rec.nome} adicionado`,'sucesso');
@@ -469,6 +477,8 @@ function iniciarRealtime(rpgId: string){
            const oldRec=msg.payload.old_record||{};
            const skId=oldRec.id||rec.id;
            RPG_DATA!.skills=RPG_DATA!.skills.filter(s=>s.id!==skId);
+         } else if(typeof osEco==='function'&&rec.id!=null&&osEco('skills:'+rec.id)==='pendente'){
+           // Eco de write otimista em voo — estado local é mais novo.
          } else {
            if(typeof rec.animacao==='string'){try{rec.animacao=JSON.parse(rec.animacao);}catch(e){rec.animacao=null;}}
            if(typeof rec.efeitos_bonus==='string'){try{rec.efeitos_bonus=JSON.parse(rec.efeitos_bonus);}catch(e){rec.efeitos_bonus=[];}}
@@ -500,6 +510,8 @@ function iniciarRealtime(rpgId: string){
            const oldRec=msg.payload.old_record||{};
            const lId=oldRec.id||rec.id;
            RPG_DATA!.lore=RPG_DATA!.lore.filter(l=>l.id!==lId);
+         } else if(typeof osEco==='function'&&rec.id!=null&&osEco('lore:'+rec.id)==='pendente'){
+           // Eco de write otimista em voo — estado local é mais novo.
          } else {
            const idx=RPG_DATA!.lore.findIndex(l=>l.id===rec.id);
            if(idx>=0)RPG_DATA!.lore[idx]=rec;
@@ -532,12 +544,17 @@ function iniciarRealtime(rpgId: string){
            }catch(e){}
          }
          if(rec.arena_estado!==undefined){
-           try{
-             const raw=rec.arena_estado;
-             AR.estado=typeof raw==='object'?raw:JSON.parse(raw||'{}');
-             if(!AR.estado.log)AR.estado.log=[];
-             if(typeof renderMesa==='function')renderMesa();
-           }catch(e){}
+           // Eco do save otimista/debounced da arena em voo: aplicar o record
+           // sobrescreveria AR.estado com uma versão anterior.
+           const _ecoAr=(typeof osEco==='function'&&rec.rpg_id)?osEco('rpg_registry:arena:'+rec.rpg_id):null;
+           if(_ecoAr!=='pendente'){
+             try{
+               const raw=rec.arena_estado;
+               AR.estado=typeof raw==='object'?raw:JSON.parse(raw||'{}');
+               if(!AR.estado.log)AR.estado.log=[];
+               if(typeof renderMesa==='function')renderMesa();
+             }catch(e){}
+           }
          }
          if(rec.config!==undefined){
            try{

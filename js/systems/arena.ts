@@ -1538,7 +1538,10 @@ function arIniciarRealtime(rpgId: any) {
         // ── RPG_REGISTRY ──
         if (topic.includes('rpg_registry')) {
           // arena_estado
-          if (rec.arena_estado !== undefined) {
+          // Eco do save otimista/debounced em voo: o AR.estado local é mais
+          // novo que o record — aplicá-lo reverteria ações recém-feitas.
+          const _ecoAr=(typeof osEco==='function'&&rec.rpg_id)?osEco('rpg_registry:arena:'+rec.rpg_id):null;
+          if (rec.arena_estado !== undefined && _ecoAr !== 'pendente') {
             try {
               const raw = rec.arena_estado;
               AR.estado = typeof raw==='object'?raw:JSON.parse(raw||'{}');

@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import '../../js/core/realtime';
 import { MockWebSocket } from '../helpers/mock-ws';
-import { resetEstadoGlobal } from '../helpers/fixtures';
+import { makeChar, resetEstadoGlobal } from '../helpers/fixtures';
 
 const g = globalThis as any;
 
@@ -206,6 +206,65 @@ describe('avt_player_hp (patch v12 clobbered — comportamento atual)', () => {
 
     const hps = ws.framesDe('broadcast').filter(f => f.payload.event === 'avt_player_hp');
     expect(hps.map(f => f.payload.payload.hp)).toEqual([50, 40, 0]);
+  });
+});
+
+describe('supressão de eco do salvamento otimista (characters)', () => {
+  const TOPICO = 'realtime:public:characters:rpg_id=eq.rpg-teste';
+
+  function prepararChar() {
+    g.RPG_DATA = {
+      rpgId: 'rpg-teste',
+      characters: [makeChar({ id: 'uuid-aria', nome: 'Aria', rpg_id: 'rpg-teste', hp_atual: 100 })],
+      mapas: [],
+      skills: [], lore: [],
+    };
+    g.renderCharButtons = vi.fn();
+    g.mostrarToast = vi.fn();
+  }
+
+  function updateAria(hp: number) {
+    return {
+      event: 'UPDATE',
+      topic: TOPICO,
+      payload: { record: { id: 'uuid-aria', nome: 'Aria', rpg_id: 'rpg-teste', hp_atual: hp, custom_attrs: {}, map_positions: {}, buffs: [] } },
+    };
+  }
+
+  it("com write em voo ('pendente') o record NÃO é aplicado nem toasta", async () => {
+    prepararChar();
+    const ws = conectarAberto();
+    // write otimista em voo para a mesma chave
+    let resolver!: () => void;
+    g.salvarOtimista({ chave: 'characters:uuid-aria', persistir: () => new Promise<void>(r => { resolver = r; }) });
+
+    ws._message(updateAria(10));   // eco chega enquanto o write está em voo
+    expect(g.RPG_DATA.characters[0].hp_atual).toBe(100);   // estado local preservado
+    expect(g.mostrarToast).not.toHaveBeenCalled();
+
+    resolver();
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
+  it("após o settle ('recente') o record é aplicado sem toast de atualizado", async () => {
+    prepararChar();
+    const ws = conectarAberto();
+    g.salvarOtimista({ chave: 'characters:uuid-aria', persistir: async () => {} });
+    await vi.advanceTimersByTimeAsync(0);   // settle → janela 'recente'
+
+    ws._message(updateAria(42));
+    expect(g.RPG_DATA.characters[0].hp_atual).toBe(42);    // eco próprio aplicado (idempotente)
+    expect(g.mostrarToast).not.toHaveBeenCalledWith('↺ Aria atualizado', '');
+  });
+
+  it('update de terceiros (sem write nosso) aplica e toasta normalmente', async () => {
+    prepararChar();
+    const ws = conectarAberto();
+    await vi.advanceTimersByTimeAsync(2000);   // fora de qualquer janela de eco
+
+    ws._message(updateAria(7));
+    expect(g.RPG_DATA.characters[0].hp_atual).toBe(7);
+    expect(g.mostrarToast).toHaveBeenCalledWith('↺ Aria atualizado', '');
   });
 });
 
