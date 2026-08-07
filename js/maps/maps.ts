@@ -5798,24 +5798,7 @@ async function salvarConfigMapa() {
       render_data: novoRenderData,
     };
     await sb(`mapas?id=eq.${encodeURIComponent(entry.id)}`, { method:'PATCH', body:JSON.stringify(patch) });
-    // Feedback visual no botão de salvar
-    const _btnSalvar = document.querySelector('#modal-mapa-config-overlay .btn-primario');
-    if (_btnSalvar) {
-      const _txtOrig = _btnSalvar.textContent;
-      _btnSalvar.textContent = '✓ Salvo!';
-      _btnSalvar.style!.background = '#27ae60';
-      _btnSalvar.style!.color = '#fff';
-      _btnSalvar.disabled = true;
-      setTimeout(() => {
-        _btnSalvar.textContent = _txtOrig;
-        _btnSalvar.style!.background = '';
-        _btnSalvar.style!.color = '';
-        _btnSalvar.disabled = false;
-        fecharModalMapaConfig();
-      }, 1200);
-    } else {
-      fecharModalMapaConfig();
-    }
+    fecharModalMapaConfig();
     mostrarToast('Mapa atualizado!', 'sucesso');
     renderMapasTab();
     // Reaplicar visual imediatamente — transform3d já está em m.transform3d

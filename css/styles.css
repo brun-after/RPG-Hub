@@ -290,6 +290,8 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .toast.visivel { transform:translateX(-50%) translateY(0); }
 .toast.sucesso { color:#5ee09a; border-color:rgba(39,174,96,0.4); }
 .toast.erro { color:#e74c3c; border-color:rgba(192,57,43,0.4); }
+.toast.aviso { color:#f0c05a; border-color:rgba(240,192,90,0.4); }
+.toast.info { color:#7ec8f0; border-color:rgba(79,163,209,0.4); }
 /* ── MAPAS ─────────────────────────────────────────────────── */
 .preset3d-btn{padding:3px 7px;background:rgba(126,200,240,0.07);border:1px solid rgba(126,200,240,0.2);border-radius:5px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer;letter-spacing:0.04em;transition:background 0.15s}
 .preset3d-btn:hover{background:rgba(126,200,240,0.16)}

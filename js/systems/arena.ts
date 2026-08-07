@@ -1440,7 +1440,7 @@ async function confirmarDeletarArena() {
     await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {method:'DELETE'});
     arFecharRealtime();
     arToast('Arena deletada','sucesso');
-    setTimeout(()=>{ AR.session=null; document.getElementById('arena-session')!.style!.display='none'; document.getElementById('arena-hub')!.style!.display='block'; carregarArenaList(); },800);
+    AR.session=null; document.getElementById('arena-session')!.style!.display='none'; document.getElementById('arena-hub')!.style!.display='block'; carregarArenaList();
   } catch(e) { arToast('Erro ao deletar','erro'); }
 }
 

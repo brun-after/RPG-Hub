@@ -379,6 +379,7 @@ async function salvarAtributos(nome: any){
    if(typeof renderFichaView==='function') renderFichaView(nome); else renderAttrView(nome);
  }catch(e){
    mostrarToast('Erro ao salvar atributos','erro');
+ }finally{
    if(btnSalvar){btnSalvar.disabled=false;btnSalvar.textContent='Salvar';}
  }
 }
