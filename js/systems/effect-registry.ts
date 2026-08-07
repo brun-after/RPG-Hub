@@ -219,6 +219,15 @@
       duracaoDe: (ef: any) => ef.invocar_duracao_turnos,
       campos: ['invocar_ids', 'invocar_modo', 'invocar_qtd', 'invocar_duracao_modo', 'invocar_duracao_turnos'],
     },
+    {
+      // isStatus:false — a armadilha não é status no alvo: intercepta a seleção
+      // de alvo e vive em AVT_STATE._armadilhaCells até um inimigo pisar.
+      id: 'armadilha', label: 'Armadilha', icone: '🪤', cor: '#e8604c',
+      isStatus: false, positivo: true, orbEligible: false,
+      detect: (ef: any) => ef.tipo === 'armadilha' || !!ef.armadilha_formula,
+      duracaoDe: (ef: any) => ef.duracao_turnos,
+      campos: ['armadilha_formula', 'armadilha_efeito', 'armadilha_max', 'armadilha_cor'],
+    },
   ];
 
   const byId: Record<string, any> = {};

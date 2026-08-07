@@ -100,6 +100,8 @@ const _AVT_EVENTOS_DE_FASE = new Set([
   'avt_convite_combate', 'avt_bau_aberto', 'avt_obj_spawn', 'avt_obj_pickup',
   'avt_skill_anim', 'avt_attack_anim', 'avt_efeito_anim_start', 'avt_efeito_anim_stop',
   'avt_dano_visual', 'avt_dano_visual_batch', 'avt_rastro_marcar', 'avt_entidade_nova',
+  'avt_armadilha_marcar', 'avt_armadilha_remover', 'avt_armadilha_obj_disparo',
+  'avt_loja_update',
 ]);
 
 // Helper central de broadcast para Modo Aventura.
@@ -923,6 +925,273 @@ function _avtRenderRastroCells(ctx: any, camera: any, SZ: any, canvas: any) {
     ctx.strokeStyle = `rgba(${rgb},0.5)`;
     ctx.lineWidth = 1;
     ctx.strokeRect(px + 1.5, py + 1.5, SZ - 3, SZ - 3);
+  }
+}
+
+// ══ Armadilhas de skill (jogador arma; dispara quando INIMIGO pisa) ══════════
+// Células one-shot em AVT_STATE._armadilhaCells. Diferente do rastro (que fere
+// cada inimigo 1× e persiste), a armadilha é consumida no primeiro disparo e
+// pode carregar um efeito extra (dot/stun). Posicionamento é do cliente do
+// caster; o DISPARO é autoritativo (host), pois quem move NPC é o host.
+
+// Efeito 'armadilha' de uma skill (normalizado), ou null.
+function _avtSkillTemArmadilha(sk: any) {
+  if (!sk) return null;
+  const efs = _avtNormalizarEfeitosSkill(sk.efeitos_bonus);
+  return (efs || []).find((e: any) => e && e.tipo === 'armadilha') || null;
+}
+window._avtSkillTemArmadilha = _avtSkillTemArmadilha;
+
+function _avtArmadilhasDoCaster(casterNome: any) {
+  const now = Date.now();
+  return ((AVT_STATE as any)._armadilhaCells || [])
+    .filter((c: any) => c.caster === casterNome && now < c.expiry_ms);
+}
+window._avtArmadilhasDoCaster = _avtArmadilhasDoCaster;
+
+// Remove uma armadilha localmente; broadcast fica a cargo do chamador.
+function _avtArmadilhaRemoverLocal(trapId: any) {
+  const cells = (AVT_STATE as any)._armadilhaCells;
+  if (!cells) return;
+  (AVT_STATE as any)._armadilhaCells = cells.filter((c: any) => c.id !== trapId);
+}
+
+// Arma uma armadilha na célula. `_fromNet`: veio de avt_armadilha_marcar (não
+// re-broadcasta e preserva id/expiry do emissor para manter os clientes iguais).
+function _avtArmadilhaMarcarCelula(caster: any, x: any, y: any, ef: any, _fromNet?: any, _net?: any) {
+  if (!caster || !ef) return null;
+  const tx = Math.round(x), ty = Math.round(y);
+  if (typeof _avtTilePassavel === 'function' && !_avtTilePassavel(tx, ty, AVT_STATE.dungeon)) return null;
+  if (!(AVT_STATE as any)._armadilhaCells) (AVT_STATE as any)._armadilhaCells = [];
+  const casterNome = typeof caster === 'string' ? caster : caster.nome;
+  const casterId = typeof caster === 'object' ? (caster.id || null) : null;
+  const dur = Math.max(1, ef.duracao_turnos || 10);
+  const max = Math.max(1, parseInt(ef.armadilha_max) || 3);
+  const cor = ef.armadilha_cor || '#e8604c';
+  const cell = {
+    id: (_fromNet && _net?.trapId) || ('trap_' + (casterId || casterNome) + '_' + Date.now() + '_' + Math.floor(Math.random() * 1e4)),
+    x: tx, y: ty,
+    formula: ef.armadilha_formula || '1d6',
+    efeito: ef.armadilha_efeito || null,
+    expiry_ms: (_fromNet && typeof _net?.expiry_ms === 'number') ? _net.expiry_ms : (Date.now() + dur * _avtGetEfeitoCooldownMs()),
+    caster: casterNome, casterId, cor, max,
+  };
+  // Já existe armadilha na mesma célula (de qualquer caster): a nova substitui.
+  const dup = (AVT_STATE as any)._armadilhaCells.find((c: any) => c.x === tx && c.y === ty);
+  if (dup) _avtArmadilhaRemoverLocal(dup.id);
+  // Limite por caster: excedeu → remove a mais antiga (só o cliente que armou avisa a rede).
+  const doCaster = _avtArmadilhasDoCaster(casterNome);
+  if (doCaster.length >= max) {
+    const antiga = doCaster.sort((a: any, b: any) => a.expiry_ms - b.expiry_ms)[0];
+    _avtArmadilhaRemoverLocal(antiga.id);
+    if (!_fromNet) {
+      try { _avtBroadcast('avt_armadilha_remover', { trapId: antiga.id, motivo: 'limite' }); } catch(_) {}
+    }
+  }
+  (AVT_STATE as any)._armadilhaCells.push(cell);
+  if (!_fromNet) {
+    try {
+      _avtBroadcast('avt_armadilha_marcar', {
+        trapId: cell.id, x: tx, y: ty, formula: cell.formula, efeito: cell.efeito,
+        expiry_ms: cell.expiry_ms, caster: casterNome, casterId, cor, max,
+      });
+    } catch(_) {}
+  }
+  return cell;
+}
+window._avtArmadilhaMarcarCelula = _avtArmadilhaMarcarCelula;
+
+// Efeito extra da armadilha (dot/stun) no alvo — executado pela autoridade.
+// Espelha o push de status de skill: em combate (bloco alvo-único) e OOC.
+function _avtArmadilhaAplicarEfeito(cell: any, entAlvo: any) {
+  const ef = cell?.efeito;
+  if (!ef || !ef.tipo || !entAlvo) return;
+  const bat = (typeof _avtBatalhaDeEnt === 'function') ? _avtBatalhaDeEnt(entAlvo.id) : null;
+  if (!entAlvo.status_effects) entAlvo.status_effects = [];
+  const entry: any = { ...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
+    expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs(),
+    _casterNome: cell.caster, _casterId: cell.casterId };
+  if (!bat) entry._ooc = true;
+  entAlvo.status_effects.push(entry);
+  if (bat) {
+    const _ini = bat.iniciativa?.find((e: any) => e.id === entAlvo.id);
+    if (_ini) {
+      if (!_ini.status_effects) _ini.status_effects = [];
+      _ini.status_effects.push({ ...entry });
+    }
+  } else {
+    if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+    AVT_STATE._oocStatusEffects.push({ entId: entAlvo.id, entNome: entAlvo.nome, ef: { ...entry }, lastTickAt: Date.now() });
+  }
+  if (ef.tipo === 'stun')    entAlvo._stunned    = true;
+  if (ef.tipo === 'silence') entAlvo._silenciado = true;
+  if (ef.tipo === 'dot')     { try { _avtMostrarDotDrip(entAlvo, ef.dot_variante); } catch(_) {} }
+  _avtLog(`  ↳ ${ef.tipo} da armadilha aplicado em ${entAlvo.nome} (${ef.duracao_turnos ?? 1}t)`, bat?.id);
+}
+
+// Dispara a armadilha quando uma entidade hostil entra/está na célula.
+// Só a autoridade decide (é ela quem move NPCs); propaga via avt_hp_update +
+// avt_armadilha_remover. One-shot: a célula é consumida.
+function _avtArmadilhaChecarEntrada(ent: any, x: any, y: any) {
+  if (!_avtEhAutoridade()) return;
+  const cells = (AVT_STATE as any)._armadilhaCells;
+  if (!cells || !cells.length || !_avtRastroEhHostil(ent)) return;
+  const tx = Math.round(x), ty = Math.round(y), now = Date.now();
+  const cell = cells.find((c: any) => now < c.expiry_ms && c.x === tx && c.y === ty);
+  if (!cell) return;
+  _avtArmadilhaRemoverLocal(cell.id);
+  const dano = _avtRolarFormula(cell.formula || '1d6');
+  if (dano > 0) {
+    ent.hp = Math.max(0, ent.hp - dano);
+    try { _avtAplicarDanoPersistir(ent, ent.hp); } catch(_) {}
+    try { _avtMostrarDanoAbaixoHp(ent, dano, false); } catch(_) {}
+    try { _avtBroadcast('avt_hp_update', { nome: ent.nome, hp: ent.hp, hpMax: ent.hpMax }); } catch(_) {}
+  }
+  const _batT = (typeof _avtBatalhaDeEnt === 'function') ? _avtBatalhaDeEnt(ent.id) : null;
+  _avtLog(`🪤 ${ent.nome} pisou na armadilha de ${cell.caster} e sofre ${dano}`, _batT?.id);
+  try { _avtArmadilhaAplicarEfeito(cell, ent); } catch(_) {}
+  try { _avtBroadcast('avt_armadilha_remover', { trapId: cell.id, motivo: 'disparo', alvoNome: ent.nome, dano }); } catch(_) {}
+  if (ent.hp <= 0) { _avtNpcMorreu(ent, _batT || null, { creditoNome: cell.caster }); if (_batT) _avtCheckVitoria(_batT); }
+}
+window._avtArmadilhaChecarEntrada = _avtArmadilhaChecarEntrada;
+
+function _avtArmadilhaPrune() {
+  const cells = (AVT_STATE as any)._armadilhaCells;
+  if (!cells || !cells.length) return;
+  const now = Date.now();
+  (AVT_STATE as any)._armadilhaCells = cells.filter((c: any) => now < c.expiry_ms);
+}
+window._avtArmadilhaPrune = _avtArmadilhaPrune;
+
+window.avtReceberArmadilhaMarcar = function(p: any) {
+  try {
+    if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return;
+    if (!_avtMinhaFase(p.faseId)) return; // isolamento por fase
+    if (p.expiry_ms && Date.now() >= p.expiry_ms) return;
+    _avtArmadilhaMarcarCelula(p.caster || p.casterId, p.x, p.y, {
+      tipo: 'armadilha', armadilha_formula: p.formula, armadilha_efeito: p.efeito,
+      armadilha_max: p.max, armadilha_cor: p.cor,
+    }, true, p);
+  } catch(_) {}
+};
+
+window.avtReceberArmadilhaRemover = function(p: any) {
+  try {
+    if (!p || !p.trapId) return;
+    if (!_avtMinhaFase(p.faseId)) return;
+    _avtArmadilhaRemoverLocal(p.trapId);
+    if (p.motivo === 'disparo' && p.alvoNome) {
+      _avtLog(`🪤 ${p.alvoNome} pisou numa armadilha e sofreu ${p.dano ?? 0}`);
+    }
+  } catch(_) {}
+};
+
+// Modo de mira da armadilha: destaca células válidas (passáveis e livres no
+// alcance da skill) e espera um clique no canvas — em vez de escolher um alvo.
+function _avtIniciarModoArmadilha(skId: any, casterEnt: any) {
+  if (!casterEnt) return;
+  const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
+  const ef = _avtSkillTemArmadilha(sk);
+  if (!ef) return;
+  const alcance = sk?.alcance_celulas ?? 2;
+  const ax = Math.round(casterEnt.x), ay = Math.round(casterEnt.y);
+  const tiles = [];
+  for (let dy = -alcance; dy <= alcance; dy++) {
+    for (let dx = -alcance; dx <= alcance; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > alcance) continue;
+      const tx = ax + dx, ty = ay + dy;
+      if (!_avtTilePassavel(tx, ty, AVT_STATE.dungeon)) continue;
+      if (AVT_STATE.entidades.some((e: any) => e.hp > 0 && !e.escondido &&
+          Math.round(e.x) === tx && Math.round(e.y) === ty)) continue;
+      tiles.push({ x: tx, y: ty });
+    }
+  }
+  (AVT_STATE as any)._habilidadeRange = { tiles, tilesAlvo: [] };
+  (AVT_STATE as any)._modoArmadilhaCelula = { skId, casterId: casterEnt.id };
+  try { if (AVT_STATE.canvas) AVT_STATE.canvas.style!.cursor = 'crosshair'; } catch(_) {}
+  mostrarToast('🪤 Clique numa célula para armar a armadilha (Esc cancela)', 'ok', 3000);
+}
+window._avtIniciarModoArmadilha = _avtIniciarModoArmadilha;
+
+function _avtCancelarModoArmadilha() {
+  (AVT_STATE as any)._modoArmadilhaCelula = null;
+  (AVT_STATE as any)._habilidadeRange = null;
+  try { if (AVT_STATE.canvas) AVT_STATE.canvas.style!.cursor = 'default'; } catch(_) {}
+}
+window._avtCancelarModoArmadilha = _avtCancelarModoArmadilha;
+
+// Clique do canvas no modo armadilha: valida célula, cobra custo/cooldown
+// (combate: turnos; OOC: ms) e arma. Armar NÃO encerra o turno (paridade com mover).
+async function _avtArmarArmadilhaEm(tileX: any, tileY: any) {
+  const modo = (AVT_STATE as any)._modoArmadilhaCelula;
+  if (!modo) return;
+  const sk = AVT_STATE.skills.find((s: any) => s.id === modo.skId);
+  const ef = _avtSkillTemArmadilha(sk);
+  const caster = AVT_STATE.entidades.find((e: any) => e.id === modo.casterId) || _avtMeuJogador();
+  if (!sk || !ef || !caster || caster.hp <= 0) { _avtCancelarModoArmadilha(); return; }
+  const alcance = sk.alcance_celulas ?? 2;
+  const dist = Math.max(Math.abs(tileX - Math.round(caster.x)), Math.abs(tileY - Math.round(caster.y)));
+  if (dist > alcance) { mostrarToast('❌ Fora do alcance', 'aviso'); return; }
+  if (!_avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) { mostrarToast('❌ Célula inválida', 'aviso'); return; }
+  if (AVT_STATE.entidades.some((e: any) => e.hp > 0 && !e.escondido &&
+      Math.round(e.x) === tileX && Math.round(e.y) === tileY)) {
+    mostrarToast('❌ Célula ocupada', 'aviso'); return;
+  }
+
+  const bat = (typeof _avtBatalhaDeEnt === 'function') ? _avtBatalhaDeEnt(caster.id) : null;
+  if (bat) {
+    const cdKey = caster.id + '_' + sk.id;
+    if (((bat._cooldowns || {})[cdKey] || 0) > 0) { mostrarToast('⏱ Habilidade em cooldown', 'aviso'); return; }
+    if (sk.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
+      const ok = await _avtDescontarCustoSkill(caster.nome, sk.custo_rsv);
+      if (!ok) return;
+    }
+    if (sk.cooldown_turnos > 0) {
+      if (!bat._cooldowns) bat._cooldowns = {};
+      bat._cooldowns[cdKey] = sk.cooldown_turnos;
+    }
+  } else {
+    const oocKey = (caster.id || caster.nome) + '_' + sk.id;
+    if ((AVT_STATE._oocCooldowns[oocKey] || 0) > Date.now()) { mostrarToast('⏱ Habilidade em cooldown', 'aviso'); return; }
+    if (sk.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
+      const ok = await _avtDescontarCustoSkill(caster.nome, sk.custo_rsv);
+      if (!ok) return;
+    }
+    _avtSetOocCooldown(oocKey, Date.now() + (sk.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000);
+  }
+
+  const cell = _avtArmadilhaMarcarCelula(caster, tileX, tileY, ef);
+  _avtCancelarModoArmadilha();
+  if (cell) {
+    _avtLog(`🪤 ${caster.nome} armou uma armadilha`, bat?.id);
+    mostrarToast(`🪤 Armadilha armada (${_avtArmadilhasDoCaster(caster.nome).length}/${cell.max})`, 'ok', 2200);
+    try { avtJogadorPainelRender(); } catch(_) {}
+  }
+}
+window._avtArmarArmadilhaEm = _avtArmarArmadilhaEm;
+
+// Desenha as armadilhas armadas (glifo + borda pulsante). Inimigos são NPCs —
+// não há "esconder do adversário": todo cliente vê as armadilhas do grupo.
+function _avtRenderArmadilhaCells(ctx: any, camera: any, SZ: any, canvas: any) {
+  const cells = (AVT_STATE as any)._armadilhaCells;
+  if (!cells || !cells.length) return;
+  const now = Date.now();
+  const pulse = 0.35 + 0.25 * (0.5 + 0.5 * Math.sin(now / 300));
+  for (const cell of cells) {
+    if (now >= cell.expiry_ms) continue;
+    const px = Math.round(cell.x * SZ - camera.x);
+    const py = Math.round(cell.y * SZ - camera.y);
+    if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
+    const rgb = _avtHexRgb(cell.cor || '#e8604c');
+    ctx.strokeStyle = `rgba(${rgb},${pulse.toFixed(3)})`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 3.5, py + 3.5, SZ - 7, SZ - 7);
+    ctx.font = `${Math.round(SZ * 0.5)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 0.9;
+    ctx.fillText('🪤', px + SZ / 2, py + SZ / 2);
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -3723,6 +3992,378 @@ function _avtEntrarModoFonteSomPlacement(fonteId: any) {
 }
 window._avtEntrarModoFonteSomPlacement = _avtEntrarModoFonteSomPlacement;
 
+// ── Armadilhas do mestre: ferramentas de criação/edição ──────────────────────
+// Espelham o trio baú/fonte-de-som: seção no painel (aba mapa), modal de
+// edição e posicionamento por clique no canvas. Runtime do disparo em
+// _avtChecarArmadilhaMestreNaPosicao.
+
+function _avtGetTrapById(trapId: any) {
+  return AVT_STATE.dungeon?.render_data?.objetos?.find((o: any) =>
+    o.tipo === 'armadilha_mestre' && String(o.id) === String(trapId)) || null;
+}
+
+function _avtMestreAddTrap() {
+  const rd = AVT_STATE.dungeon?.render_data || (AVT_STATE.dungeon ? (AVT_STATE.dungeon.render_data = {}) : null);
+  if (!rd) { mostrarToast('Nenhum mapa carregado', 'aviso'); return; }
+  if (!Array.isArray(rd.objetos)) rd.objetos = [];
+  const trap = { id: 'traphm_' + Date.now(), tipo: 'armadilha_mestre', nome: 'Armadilha',
+    x: 0.5, y: 0.5, formula: '2d6', efeito: null as any,
+    modo: 'oneshot', rearmar_s: 30, armada: true, _rearmarEm: null as any };
+  rd.objetos.push(trap);
+  _avtSalvarDungeon();
+  try { _avtBroadcast('avt_obj_spawn', { obj: trap }); } catch(_) {}
+  _avtTrapEditar(trap.id);
+}
+window._avtMestreAddTrap = _avtMestreAddTrap;
+
+function _avtEntrarModoTrapPlacement(trapId: any) {
+  (AVT_STATE as any)._modoTrapPlacement = { trapId };
+  if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = 'crosshair';
+  mostrarToast('📍 Clique no mapa para posicionar a armadilha', 'ok');
+}
+window._avtEntrarModoTrapPlacement = _avtEntrarModoTrapPlacement;
+
+function _avtTrapsSecao(emJogo: any) {
+  const dungeon = AVT_STATE.dungeon;
+  const traps = (dungeon?.render_data?.objetos || []).filter((o: any) => o.tipo === 'armadilha_mestre');
+  const dw = dungeon?.w || 1, dh = dungeon?.h || 1;
+  return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🪤 Armadilhas</div>
+        <div class="avt-mp-hint" style="margin-bottom:6px">Invisíveis para os jogadores — disparam quando um jogador pisa (dano + efeito opcional). Só o mestre vê o marcador no mapa.</div>
+        ${dungeon ? `
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:8px" onclick="_avtMestreAddTrap()">🪤 + Nova armadilha</button>
+        ${traps.length ? traps.map((o: any) => {
+          const safe = String(o.id).replace(/'/g,"\\'");
+          const tx = Math.round((o.x ?? 0) * dw), ty = Math.round((o.y ?? 0) * dh);
+          const estado = o.armada === false ? '· desarmada' : '';
+          const modoLbl = o.modo === 'rearmar' ? `rearma ${o.rearmar_s ?? 30}s` : 'única';
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;padding:6px 8px;background:rgba(232,96,76,0.04);border:1px solid rgba(232,96,76,0.14);border-radius:6px">
+            <span style="flex:1;font-size:0.72rem;color:#c8d8e8">🪤 ${_escHtml(o.nome || 'Armadilha')} <span style="font-size:0.6rem;color:#7a92aa">Col ${tx}, Ln ${ty} · ${_escHtml(o.formula || '1d6')} · ${modoLbl} ${estado}</span></span>
+            ${emJogo ? `<button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" title="Posicionar no mapa" onclick="document.getElementById('avt-mestre-panel').style.display='none';_avtEntrarModoTrapPlacement('${safe}')">📍</button>` : ''}
+            <button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" onclick="_avtTrapEditar('${safe}')">✏</button>
+            <button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 7px;font-size:0.65rem" onclick="_avtTrapRemover('${safe}')">✕</button>
+          </div>`;
+        }).join('') : '<div class="avt-mp-hint">Nenhuma armadilha no mapa.</div>'}
+        ` : '<div class="avt-mp-hint">Sem mapa carregado.</div>'}
+      </div>`;
+}
+window._avtTrapsSecao = _avtTrapsSecao;
+
+function _avtTrapEditar(trapId: any) {
+  const trap = _avtGetTrapById(trapId);
+  if (!trap) return;
+  const emJogo = !(typeof _avtEmMenuConfig === 'function' && _avtEmMenuConfig());
+  const inpSt = 'width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem';
+  let overlay = document.getElementById('avt-trap-editor-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'avt-trap-editor-overlay';
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(overlay);
+  }
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  const tx = Math.round((trap.x ?? 0.5) * dw), ty = Math.round((trap.y ?? 0.5) * dh);
+  const safe = String(trapId).replace(/'/g,"\\'");
+  const efTipo = trap.efeito?.tipo || '';
+  overlay.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(232,96,76,0.3);border-radius:12px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-family:var(--fonte-d);font-size:1rem;color:#e8604c">🪤 Armadilha</div>
+        <button onclick="document.getElementById('avt-trap-editor-overlay').style.display='none'" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem">×</button>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Nome</label>
+        <input id="avt-trap-nome" value="${_escHtml(trap.nome || 'Armadilha')}" style="${inpSt}">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Dano (fórmula de dados)</label>
+          <input id="avt-trap-formula" value="${_escHtml(trap.formula || '2d6')}" placeholder="2d6" style="${inpSt}">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Efeito extra</label>
+          <select id="avt-trap-efeito" onchange="document.getElementById('avt-trap-efeito-cfg').style.display=this.value?'grid':'none'" style="${inpSt}">
+            <option value="" ${!efTipo?'selected':''}>Só dano</option>
+            <option value="dot" ${efTipo==='dot'?'selected':''}>🩸 + DOT</option>
+            <option value="stun" ${efTipo==='stun'?'selected':''}>⚡ + Stun</option>
+          </select>
+        </div>
+      </div>
+      <div id="avt-trap-efeito-cfg" style="display:${efTipo?'grid':'none'};grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Fórmula do DOT (se DOT)</label>
+          <input id="avt-trap-ef-formula" value="${_escHtml(trap.efeito?.dot_formula || '1d4')}" style="${inpSt}">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Duração (turnos)</label>
+          <input id="avt-trap-ef-turnos" type="number" min="1" max="99" value="${trap.efeito?.duracao_turnos ?? 2}" style="${inpSt}">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Modo</label>
+          <select id="avt-trap-modo" onchange="document.getElementById('avt-trap-rearmar-s').disabled=this.value!=='rearmar'" style="${inpSt}">
+            <option value="oneshot" ${trap.modo!=='rearmar'?'selected':''}>Dispara uma vez</option>
+            <option value="rearmar" ${trap.modo==='rearmar'?'selected':''}>Rearma após N segundos</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Rearmar após (s)</label>
+          <input id="avt-trap-rearmar-s" type="number" min="1" max="3600" value="${trap.rearmar_s ?? 30}" ${trap.modo!=='rearmar'?'disabled':''} style="${inpSt}">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="flex:1">
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Posição no mapa</label>
+          <div style="padding:5px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">Col ${tx}, Linha ${ty}</div>
+        </div>
+        ${emJogo ? `<button class="avt-mp-btn" style="padding:5px 10px;font-size:0.72rem;margin-top:14px;white-space:nowrap" onclick="document.getElementById('avt-trap-editor-overlay').style.display='none';document.getElementById('avt-mestre-panel').style.display='none';_avtEntrarModoTrapPlacement('${safe}')">📍 Posicionar no mapa</button>` : ''}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtTrapSalvar('${safe}')">💾 Salvar</button>
+        <button class="avt-mp-btn avt-mp-btn-danger" style="flex:1" onclick="document.getElementById('avt-trap-editor-overlay').style.display='none'">✕ Fechar</button>
+      </div>
+    </div>`;
+  overlay.style!.display = 'flex';
+}
+window._avtTrapEditar = _avtTrapEditar;
+
+function _avtTrapSalvar(trapId: any) {
+  const trap = _avtGetTrapById(trapId);
+  if (!trap) return;
+  trap.nome = document.getElementById('avt-trap-nome')?.value!.trim!()! || 'Armadilha';
+  trap.formula = document.getElementById('avt-trap-formula')?.value!.trim!()! || '2d6';
+  const efTipo = document.getElementById('avt-trap-efeito')?.value || '';
+  const efTurnos = Math.max(1, parseInt(document.getElementById('avt-trap-ef-turnos')?.value!) || 2);
+  if (efTipo === 'dot') {
+    trap.efeito = { tipo: 'dot', dot_formula: document.getElementById('avt-trap-ef-formula')?.value!.trim!()! || '1d4',
+      dot_variante: 'sangramento', duracao_turnos: efTurnos };
+  } else if (efTipo === 'stun') {
+    trap.efeito = { tipo: 'stun', duracao_turnos: efTurnos };
+  } else {
+    trap.efeito = null;
+  }
+  trap.modo = document.getElementById('avt-trap-modo')?.value === 'rearmar' ? 'rearmar' : 'oneshot';
+  trap.rearmar_s = Math.max(1, parseInt(document.getElementById('avt-trap-rearmar-s')?.value!) || 30);
+  _avtSalvarDungeon();
+  try { _avtBroadcast('avt_obj_spawn', { obj: trap }); } catch(_) {}
+  const overlay = document.getElementById('avt-trap-editor-overlay');
+  if (overlay) overlay.style!.display = 'none';
+  mostrarToast('Armadilha salva', 'sucesso');
+  _avtMestrePainelRender();
+}
+window._avtTrapSalvar = _avtTrapSalvar;
+
+function _avtTrapRemover(trapId: any) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd?.objetos) return;
+  const idx = rd.objetos.findIndex((o: any) => String(o.id) === String(trapId));
+  if (idx >= 0) rd.objetos.splice(idx, 1);
+  _avtSalvarDungeon();
+  try { _avtBroadcast('avt_obj_pickup', { objId: trapId }); } catch(_) {}
+  _avtMestrePainelRender();
+}
+window._avtTrapRemover = _avtTrapRemover;
+
+// ── Lojas: ferramentas do mestre ─────────────────────────────────────────────
+// Espelham o trio do baú. O runtime de compra/venda vive em avt-inventario.ts
+// (avtAbrirLoja / avtLojaComprar / avtLojaVender).
+
+function _avtMestreGetLoja(lojaId: any) {
+  return AVT_STATE.dungeon?.render_data?.objetos?.find((o: any) =>
+    o.tipo === 'loja' && String(o.id) === String(lojaId)) || null;
+}
+
+function _avtMestreAddLoja() {
+  const rd = AVT_STATE.dungeon?.render_data || (AVT_STATE.dungeon ? (AVT_STATE.dungeon.render_data = {}) : null);
+  if (!rd) { mostrarToast('Nenhum mapa carregado', 'aviso'); return; }
+  if (!Array.isArray(rd.objetos)) rd.objetos = [];
+  const loja = { id: 'loja_' + Date.now(), tipo: 'loja', nome: 'Loja', icone: '🛒',
+    img_url: null as any, x: 0.5, y: 0.5, estoque: [] as any[] };
+  rd.objetos.push(loja);
+  _avtSalvarDungeon();
+  try { _avtBroadcast('avt_obj_spawn', { obj: loja }); } catch(_) {}
+  _avtMestreEditarLoja(loja.id);
+}
+window._avtMestreAddLoja = _avtMestreAddLoja;
+
+function _avtEntrarModoLojaPlacement(lojaId: any) {
+  (AVT_STATE as any)._modoLojaPlacement = { lojaId };
+  if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = 'crosshair';
+  mostrarToast('📍 Clique no mapa para posicionar a loja', 'ok');
+}
+window._avtEntrarModoLojaPlacement = _avtEntrarModoLojaPlacement;
+
+function _avtLojasSecao(emJogo: any) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  const lojas = (rd?.objetos || []).filter((o: any) => o.tipo === 'loja');
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🛒 Lojas</div>
+        <div class="avt-mp-hint" style="margin-bottom:6px">Ponto de compra/venda no mapa. Os preços vêm do 💰 Valor base de cada item do catálogo; a % de revenda fica na aba ⚖ Balanceamento.</div>
+        ${rd ? `
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:8px" onclick="_avtMestreAddLoja()">🛒 + Nova loja</button>
+        ${lojas.length ? lojas.map((o: any) => {
+          const safe = String(o.id).replace(/'/g,"\\'");
+          const tx = Math.round((o.x ?? 0) * dw), ty = Math.round((o.y ?? 0) * dh);
+          const nItens = (o.estoque || []).length;
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;padding:6px 8px;background:rgba(200,168,75,0.04);border:1px solid rgba(200,168,75,0.14);border-radius:6px">
+            <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${_escHtml(o.icone || '🛒')} ${_escHtml(o.nome || 'Loja')} <span style="font-size:0.6rem;color:#7a92aa">Col ${tx}, Ln ${ty} · ${nItens} item(ns)</span></span>
+            ${emJogo ? `<button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" title="Posicionar no mapa" onclick="document.getElementById('avt-mestre-panel').style.display='none';_avtEntrarModoLojaPlacement('${safe}')">📍</button>` : ''}
+            <button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" onclick="_avtMestreEditarLoja('${safe}')">✏</button>
+            <button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 7px;font-size:0.65rem" onclick="_avtMestreRemoverLoja('${safe}')">✕</button>
+          </div>`;
+        }).join('') : '<div class="avt-mp-hint">Nenhuma loja no mapa.</div>'}
+        ` : '<div class="avt-mp-hint">Sem mapa carregado.</div>'}
+      </div>`;
+}
+window._avtLojasSecao = _avtLojasSecao;
+
+// Editor de loja com builder de estoque. Trabalha numa cópia (_AVT_LOJA_EDIT)
+// e só grava no objeto ao salvar.
+let _AVT_LOJA_EDIT: any = null;
+
+function _avtMestreEditarLoja(lojaId: any) {
+  const loja = _avtMestreGetLoja(lojaId);
+  if (!loja) return;
+  _AVT_LOJA_EDIT = { lojaId: String(lojaId), estoque: (loja.estoque || []).map((e: any) => ({ ...e })) };
+  _avtLojaEditorRender();
+}
+window._avtMestreEditarLoja = _avtMestreEditarLoja;
+
+function _avtLojaEditorRender() {
+  const st = _AVT_LOJA_EDIT;
+  const loja = st ? _avtMestreGetLoja(st.lojaId) : null;
+  if (!st || !loja) return;
+  const emJogo = !(typeof _avtEmMenuConfig === 'function' && _avtEmMenuConfig());
+  const inpSt = 'box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem';
+  let overlay = document.getElementById('avt-loja-editor-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'avt-loja-editor-overlay';
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(overlay);
+  }
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  const tx = Math.round((loja.x ?? 0.5) * dw), ty = Math.round((loja.y ?? 0.5) * dh);
+  const safe = String(st.lojaId).replace(/'/g,"\\'");
+  const catalog = AVT_STATE.itemCatalog || [];
+  const nomeItem = (id: any) => {
+    const d = catalog.find((i: any) => String(i.id) === String(id));
+    return d ? `${d.icone || '📦'} ${d.nome}` : `#${id}`;
+  };
+  const precoLabel = (id: any) => {
+    const d = catalog.find((i: any) => String(i.id) === String(id));
+    const v = parseFloat(d?.valor_base);
+    return Number.isFinite(v) ? `💰 ${Math.round(v)}` : '<span style="color:#e0a54a">⚠ sem preço</span>';
+  };
+  overlay.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(200,168,75,0.3);border-radius:12px;padding:20px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8a84b">🛒 Loja</div>
+        <button onclick="document.getElementById('avt-loja-editor-overlay').style.display='none'" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 90px;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Nome</label>
+          <input id="avt-loja-ed-nome" value="${_escHtml(loja.nome || 'Loja')}" style="width:100%;${inpSt}">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Ícone (emoji)</label>
+          <input id="avt-loja-ed-icone" value="${_escHtml(loja.icone || '🛒')}" maxlength="4" style="width:100%;${inpSt}">
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Imagem (URL, opcional — substitui o emoji no mapa)</label>
+        <input id="avt-loja-ed-img" value="${_escHtml(loja.img_url || '')}" placeholder="https://…" style="width:100%;${inpSt}">
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:4px">📦 Estoque</label>
+        ${st.estoque.length ? st.estoque.map((e: any, i: number) => `
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;padding:5px 8px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.12);border-radius:6px">
+            <span style="flex:1;font-size:0.7rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(nomeItem(e.item_id))}</span>
+            <span style="font-size:0.62rem;color:#c8a84b;flex-shrink:0">${precoLabel(e.item_id)}</span>
+            <span style="font-size:0.62rem;color:#7a92aa;flex-shrink:0">${e.qtd == null ? '∞' : '×' + e.qtd}</span>
+            <button onclick="_avtLojaEditorRmItem(${i})" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.8rem;padding:0">✕</button>
+          </div>`).join('') : '<div style="font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Estoque vazio.</div>'}
+        <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+          <select id="avt-loja-ed-additem" style="flex:1;${inpSt}">
+            <option value="">— Item do catálogo —</option>
+            ${catalog.map((i: any) => `<option value="${_escHtml(String(i.id).replace(/'/g, "\\'"))}">${_escHtml(i.nome)}${Number.isFinite(parseFloat(i.valor_base)) ? ' (💰' + Math.round(parseFloat(i.valor_base)) + ')' : ' (⚠ sem preço)'}</option>`).join('')}
+          </select>
+          <input id="avt-loja-ed-addqtd" type="number" min="1" value="5" title="Quantidade" style="width:52px;text-align:center;${inpSt}">
+          <label style="display:flex;align-items:center;gap:3px;font-size:0.62rem;color:#7a92aa;flex-shrink:0" title="Estoque infinito">
+            <input type="checkbox" id="avt-loja-ed-addinf">∞</label>
+          <button class="avt-mp-btn avt-mp-btn-ok" style="padding:4px 10px;font-size:0.7rem" onclick="_avtLojaEditorAddItem()">＋</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="flex:1">
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Posição no mapa</label>
+          <div style="padding:5px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">Col ${tx}, Linha ${ty}</div>
+        </div>
+        ${emJogo ? `<button class="avt-mp-btn" style="padding:5px 10px;font-size:0.72rem;margin-top:14px;white-space:nowrap" onclick="document.getElementById('avt-loja-editor-overlay').style.display='none';document.getElementById('avt-mestre-panel').style.display='none';_avtEntrarModoLojaPlacement('${safe}')">📍 Posicionar no mapa</button>` : ''}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtLojaEditorSalvar('${safe}')">💾 Salvar</button>
+        <button class="avt-mp-btn avt-mp-btn-danger" style="flex:1" onclick="document.getElementById('avt-loja-editor-overlay').style.display='none'">✕ Fechar</button>
+      </div>
+    </div>`;
+  overlay.style!.display = 'flex';
+}
+
+function _avtLojaEditorAddItem() {
+  const st = _AVT_LOJA_EDIT;
+  if (!st) return;
+  const itemId = document.getElementById('avt-loja-ed-additem')?.value;
+  if (!itemId) { mostrarToast('Escolha um item do catálogo', 'aviso'); return; }
+  const inf = !!document.getElementById('avt-loja-ed-addinf')?.checked;
+  const qtd = inf ? null : Math.max(1, parseInt(document.getElementById('avt-loja-ed-addqtd')?.value!) || 1);
+  const ex = st.estoque.find((e: any) => String(e.item_id) === String(itemId));
+  if (ex) ex.qtd = (ex.qtd == null || qtd == null) ? null : ex.qtd + qtd;
+  else st.estoque.push({ item_id: itemId, qtd });
+  _avtLojaEditorRender();
+}
+window._avtLojaEditorAddItem = _avtLojaEditorAddItem;
+
+function _avtLojaEditorRmItem(idx: any) {
+  const st = _AVT_LOJA_EDIT;
+  if (!st) return;
+  st.estoque.splice(idx, 1);
+  _avtLojaEditorRender();
+}
+window._avtLojaEditorRmItem = _avtLojaEditorRmItem;
+
+function _avtLojaEditorSalvar(lojaId: any) {
+  const st = _AVT_LOJA_EDIT;
+  const loja = _avtMestreGetLoja(lojaId);
+  if (!st || !loja) return;
+  loja.nome = document.getElementById('avt-loja-ed-nome')?.value!.trim!()! || 'Loja';
+  loja.icone = (document.getElementById('avt-loja-ed-icone')?.value || '🛒').trim() || '🛒';
+  loja.img_url = (document.getElementById('avt-loja-ed-img')?.value || '').trim() || null;
+  loja.estoque = st.estoque.map((e: any) => ({ ...e }));
+  _avtSalvarDungeon();
+  try { _avtBroadcast('avt_obj_spawn', { obj: loja }); } catch(_) {}
+  const overlay = document.getElementById('avt-loja-editor-overlay');
+  if (overlay) overlay.style!.display = 'none';
+  mostrarToast('Loja salva', 'sucesso');
+  _avtMestrePainelRender();
+}
+window._avtLojaEditorSalvar = _avtLojaEditorSalvar;
+
+function _avtMestreRemoverLoja(lojaId: any) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd?.objetos) return;
+  const idx = rd.objetos.findIndex((o: any) => String(o.id) === String(lojaId));
+  if (idx >= 0) rd.objetos.splice(idx, 1);
+  _avtSalvarDungeon();
+  try { _avtBroadcast('avt_obj_pickup', { objId: lojaId }); } catch(_) {}
+  _avtMestrePainelRender();
+}
+window._avtMestreRemoverLoja = _avtMestreRemoverLoja;
+
 function _avtMestreRemoverBau(bauId: any) {
   const rd = AVT_STATE.dungeon?.render_data;
   if (!rd?.objetos) return;
@@ -4232,7 +4873,7 @@ async function _avtCarregarDados(rpgId: any) {
     _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
     _avtSb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=nome`),
     _avtSb(`skills?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
-    _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus&order=id`).catch((): any[] => []),
+    _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,valor_base&order=id`).catch((): any[] => []),
     _avtSb(`attr_defs?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=ordem`).catch((): any[] => [])
   ]);
 
@@ -4290,6 +4931,12 @@ async function _avtCarregarDados(rpgId: any) {
   AVT_STATE.npcTimers = {};
   AVT_STATE._lastFrameTs = 0;
   AVT_STATE.batalhas = [];
+  // Runtime por sessão: células e relógios de varredura não sobrevivem a um novo
+  // carregamento (re-entrada/troca de RPG sem reload herdaria estado velho).
+  (AVT_STATE as any)._rastroCells = [];
+  (AVT_STATE as any)._armadilhaCells = [];
+  AVT_STATE._ultimaVerifProxGlobal = 0;
+  (AVT_STATE as any)._ultimaAutoAtaqueVerif = 0;
 
   await _avtCarregarAtribuicaoJogador(rpgId);
 
@@ -4367,6 +5014,7 @@ function _avtIniciarRTNet(rpgId: any, onHostElected: any) {
         batalhaAutoSuspensa:AVT_STATE.batalhaAutoSuspensa,
         // Rastros contaminados: hitSet (Set) → array para serializar.
         _rastroCells: ((AVT_STATE as any)._rastroCells || []).map((c: any) => ({ ...c, hitSet: Array.from(c.hitSet || []) })),
+        _armadilhaCells: (AVT_STATE as any)._armadilhaCells || [],
       }));
       if (AVT_STATE._charHpFlushTimer) clearInterval((AVT_STATE as any)._charHpFlushTimer);
       (AVT_STATE as any)._charHpFlushTimer = setInterval(() => {
@@ -5880,6 +6528,25 @@ function _avtRenderFrame() {
         AVT_STATE.entidades.forEach((e: any) => { try { _avtRastroChecarEntrada(e, e.x, e.y); } catch(_) {} });
       }
     } catch(_) {}
+    // Armadilhas de skill: prune + disparo em hostis parados sobre a célula
+    try {
+      _avtArmadilhaPrune();
+      if ((AVT_STATE as any)._armadilhaCells?.length) {
+        AVT_STATE.entidades.forEach((e: any) => { try { _avtArmadilhaChecarEntrada(e, e.x, e.y); } catch(_) {} });
+      }
+    } catch(_) {}
+    // Armadilhas do mestre: rearmar as desarmadas cujo prazo venceu (cada
+    // cliente rearma localmente pelo timestamp compartilhado no disparo)
+    try {
+      const _rdRearm = AVT_STATE.dungeon?.render_data;
+      if (_rdRearm?.objetos?.length) {
+        for (const _oRe of _rdRearm.objetos) {
+          if (_oRe.tipo === 'armadilha_mestre' && _oRe._rearmarEm && Date.now() >= _oRe._rearmarEm) {
+            _oRe.armada = true; _oRe._rearmarEm = null;
+          }
+        }
+      }
+    } catch(_) {}
     // Checa todos os jogadores vivos fora de combate (útil no host p/ jogadores remotos)
     AVT_STATE.entidades
       .filter((e: any) => e.tipo === 'jogador' && e.hp > 0 && !_avtBatalhaDeEnt(e.id))
@@ -5952,10 +6619,12 @@ function _avtRenderFrame() {
         if (_rpWp) _avtRastroMarcarCelula(_jPlayer, cell.x, cell.y, _rpWp.rastro_formula || '1d6', _rpWp.duracao_turnos ?? 3, _rpWp.rastro_cor);
         _avtRecuperarPorMovimento(_jPlayer, 1);
         try { _avtColetarObjsNaPosicao(_jPlayer); } catch(_) {}
-        // Pisar num baú precisa repintar o painel para o botão "Abrir Baú"
-        // aparecer (baús não são auto-coletados, então a coleta não repinta).
+        try { _avtChecarArmadilhaMestreNaPosicao(_jPlayer); } catch(_) {}
+        // Pisar num baú/loja precisa repintar o painel para o cartão contextual
+        // aparecer (não são auto-coletados, então a coleta não repinta).
         try {
-          if (_avtBauNaPosicao(Math.round(cell.x), Math.round(cell.y))) avtJogadorPainelRender();
+          if (_avtBauNaPosicao(Math.round(cell.x), Math.round(cell.y)) ||
+              (typeof _avtLojaNaPosicao === 'function' && _avtLojaNaPosicao(Math.round(cell.x), Math.round(cell.y)))) avtJogadorPainelRender();
         } catch(_) {}
         _avtCameraUpdate();
         const fimDoCaminho = restantes === 0 &&
@@ -6016,6 +6685,7 @@ function _avtRenderFrame() {
           }
           if (e.tipo === 'inimigo') _avtNpcTentarPorta(e, tgt.x, tgt.y);
           try { _avtRastroChecarEntrada(e, tgt.x, tgt.y); } catch (_) {}
+          try { _avtArmadilhaChecarEntrada(e, tgt.x, tgt.y); } catch (_) {}
           continue;
         }
         break;
@@ -6032,6 +6702,7 @@ function _avtRenderFrame() {
           }
           if (e.tipo === 'inimigo') _avtNpcTentarPorta(e, tgt.x, tgt.y);
           try { _avtRastroChecarEntrada(e, tgt.x, tgt.y); } catch (_) {}
+          try { _avtArmadilhaChecarEntrada(e, tgt.x, tgt.y); } catch (_) {}
         } else {
           break;
         }
@@ -6201,6 +6872,7 @@ function _avtRenderFrame() {
 
   // Rastros contaminados (Rastro Persona / Rastro Anima)
   try { _avtRenderRastroCells(ctx, camera, SZ, canvas); } catch(_) {}
+  try { _avtRenderArmadilhaCells(ctx, camera, SZ, canvas); } catch(_) {}
 
   // Overlay de grade suave nos tilesets (linhas finas e translúcidas)
   // (com a camada PIXI ativa OU o bake legado, a grade já foi assada junto com os tiles)
@@ -6919,6 +7591,19 @@ function _avtRenderFrame() {
           ctx.fillText(o.aberto ? '📭' : '📦', ocx, ocy);
         }
         ctx.restore();
+      } else if (tipo === 'loja') {
+        // Loja: visível a todos (sprite via img_url ou emoji do objeto).
+        const img = o.img_url ? _avtObjImg(o.img_url) : null;
+        ctx.save();
+        if (img) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, px + 2, py + 2, SZ - 4, SZ - 4);
+        } else {
+          ctx.font = `${Math.round(SZ * 0.62)}px serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(o.icone || '🛒', ocx, ocy);
+        }
+        ctx.restore();
       } else if (tipo === 'loot') {
         const img = o.img_url ? _avtObjImg(o.img_url) : null;
         const _bob = Math.sin(now / 400 + (_ox + _oy)) * (SZ * 0.05);
@@ -6968,6 +7653,17 @@ function _avtRenderFrame() {
           ctx.font = `${Math.round(SZ * 0.5)}px serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText('🔊', ocx, ocy);
+          ctx.restore();
+        }
+      } else if (tipo === 'armadilha_mestre') {
+        // Armadilha do mestre: OCULTA dos jogadores — só o mestre vê o marcador
+        // (alpha reduzido quando desarmada/aguardando rearme).
+        if (_avtSouMestre()) {
+          ctx.save();
+          ctx.globalAlpha = o.armada === false ? 0.35 : 0.75;
+          ctx.font = `${Math.round(SZ * 0.5)}px serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('🪤', ocx, ocy);
           ctx.restore();
         }
       }
@@ -8198,6 +8894,8 @@ function _avtMostrarRollCenter(resultado: any, isCrit: any, multInfo: any) {
 function _avtAtivarModoAlvo(skId: any, atacante: any) {
   _avtLimparModoAlvo();
   const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
+  // Armadilha mira uma CÉLULA, não um alvo
+  if (_avtSkillTemArmadilha(sk)) { _avtIniciarModoArmadilha(skId, atacante); return; }
   const alcance = _avtAlcanceAlvoJogador(sk, atacante);
   const tipoArea = sk?.tipo_area || null;
   const tamanhoArea = sk?.tamanho_area || 1;
@@ -8556,6 +9254,46 @@ function _avtCanvasClick(e: any) {
     return;
   }
 
+  // Shop placement mode (mestre): click to set shop position on the map
+  if ((AVT_STATE as any)._modoLojaPlacement) {
+    const { lojaId } = (AVT_STATE as any)._modoLojaPlacement;
+    (AVT_STATE as any)._modoLojaPlacement = null;
+    canvas.style.cursor = '';
+    const lojaPl = _avtMestreGetLoja(lojaId);
+    if (lojaPl && AVT_STATE.dungeon) {
+      lojaPl.x = tileX / AVT_STATE.dungeon.w;
+      lojaPl.y = tileY / AVT_STATE.dungeon.h;
+      _avtSalvarDungeon();
+      try { _avtBroadcast('avt_obj_spawn', { obj: lojaPl }); } catch(_) {}
+      mostrarToast(`Loja posicionada em coluna ${tileX}, linha ${tileY}`, 'ok');
+      _avtMestreEditarLoja(lojaId);
+    }
+    return;
+  }
+
+  // Trap placement mode (mestre): click to set trap position on the map
+  if ((AVT_STATE as any)._modoTrapPlacement) {
+    const { trapId } = (AVT_STATE as any)._modoTrapPlacement;
+    (AVT_STATE as any)._modoTrapPlacement = null;
+    canvas.style.cursor = '';
+    const trap = _avtGetTrapById(trapId);
+    if (trap && AVT_STATE.dungeon) {
+      trap.x = tileX / AVT_STATE.dungeon.w;
+      trap.y = tileY / AVT_STATE.dungeon.h;
+      _avtSalvarDungeon();
+      try { _avtBroadcast('avt_obj_spawn', { obj: trap }); } catch(_) {}
+      mostrarToast(`Armadilha posicionada em coluna ${tileX}, linha ${tileY}`, 'ok');
+      _avtTrapEditar(trapId);
+    }
+    return;
+  }
+
+  // Modo armadilha: clique escolhe a célula onde armar
+  if ((AVT_STATE as any)._modoArmadilhaCelula) {
+    _avtArmarArmadilhaEm(tileX, tileY);
+    return;
+  }
+
   const ent = AVT_STATE.entidades.find((e: any) => Math.round(e.x)===tileX && Math.round(e.y)===tileY);
 
   // Master reposition mode: move selected entity to clicked tile
@@ -8641,6 +9379,7 @@ function _avtCanvasClick(e: any) {
           _avtBcastTokenMove({ nome: ativo.nome, x: tileX, y: tileY });
           if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
           else _avtDebounceSalvarPosicaoNpc(ativo);
+          try { _avtChecarArmadilhaMestreNaPosicao(entAtivo || ativo); } catch(_) {}
         }
       }
     } else if ((AVT_STATE as any)._modoAlvoHabilidade) {
@@ -8826,6 +9565,12 @@ function _avtCanvasKey(e: any) {
   const _key  = (e.key  || '').toLowerCase();
   const _code = e.code  || '';
 
+  // ── Escape: cancelar modo de armar armadilha ─────────────────────────────
+  if (e.key === 'Escape' && (AVT_STATE as any)._modoArmadilhaCelula) {
+    _avtCancelarModoArmadilha();
+    mostrarToast('Armadilha cancelada', '');
+    return;
+  }
   // ── Escape: cancelar modo de posicionamento de baú ───────────────────────
   if (e.key === 'Escape' && (AVT_STATE as any)._modoBauPlacement) {
     const { bauId } = (AVT_STATE as any)._modoBauPlacement;
@@ -8842,6 +9587,35 @@ function _avtCanvasKey(e: any) {
     mostrarToast('Posicionamento cancelado', 'aviso');
     _avtFonteSomEditar(fonteId);
     return;
+  }
+  if (e.key === 'Escape' && (AVT_STATE as any)._modoTrapPlacement) {
+    const { trapId } = (AVT_STATE as any)._modoTrapPlacement;
+    (AVT_STATE as any)._modoTrapPlacement = null;
+    if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
+    mostrarToast('Posicionamento cancelado', 'aviso');
+    _avtTrapEditar(trapId);
+    return;
+  }
+  if (e.key === 'Escape' && (AVT_STATE as any)._modoLojaPlacement) {
+    const { lojaId } = (AVT_STATE as any)._modoLojaPlacement;
+    (AVT_STATE as any)._modoLojaPlacement = null;
+    if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
+    mostrarToast('Posicionamento cancelado', 'aviso');
+    _avtMestreEditarLoja(lojaId);
+    return;
+  }
+  if (e.key === 'Escape') {
+    // Mira de skill/primeiro-ataque ativa → cancela; sem nada para cancelar,
+    // alterna o overlay de pausa (que não pausa a simulação).
+    if ((AVT_STATE as any)._modoAlvoHabilidade || AVT_STATE._primeiroAtaqueModoAlvo) {
+      try { _avtLimparModoAlvo(); } catch(_) {}
+      AVT_STATE._primeiroAtaqueModoAlvo = null;
+      (AVT_STATE as any)._habilidadeRange = null;
+      if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
+      mostrarToast('Mira cancelada', '', 1200);
+      return;
+    }
+    if (typeof avtPausaToggle === 'function') { avtPausaToggle(); return; }
   }
 
   // ── NumpadAdd (+): efetivar ataque / rolar dados ─────────────────────────
@@ -9416,6 +10190,7 @@ function _avtMoverJogador(dx: any, dy: any) {
       // Rastro Persona: contaminar a célula em que o jogador pisou (combate)
       const _rpMv = _avtRastroPersonaAtivo(jogador);
       if (_rpMv) _avtRastroMarcarCelula(jogador, nx, ny, _rpMv.rastro_formula || '1d6', _rpMv.duracao_turnos ?? 3, _rpMv.rastro_cor);
+      try { _avtChecarArmadilhaMestreNaPosicao(jogador); } catch(_) {}
       _avtBroadcastBatalha(minhaBat); // sincroniza movimentoRestante com todos os clientes
       if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
       else _avtDebounceSalvarPosicaoNpc(ativo);
@@ -9497,6 +10272,11 @@ function _avtMoverJogador(dx: any, dy: any) {
         }
         _avtRecuperarPorMovimento(jogador, 1);
         try { _avtColetarObjsNaPosicao(jogador); } catch(_) {}
+        try { _avtChecarArmadilhaMestreNaPosicao(jogador); } catch(_) {}
+        try {
+          if (_avtBauNaPosicao(Math.round(cell.x), Math.round(cell.y)) ||
+              (typeof _avtLojaNaPosicao === 'function' && _avtLojaNaPosicao(Math.round(cell.x), Math.round(cell.y)))) avtJogadorPainelRender();
+        } catch(_) {}
         _avtCameraUpdate();
       };
     }
@@ -9874,8 +10654,8 @@ function _avtMostrarPrimeiroAtaqueModal(jogador: any) {
       class="avt-skill-overlay-item" ${disabled}
       data-sk-alcance="${alcance}"
       data-cdkey="${cdKey}"
-      title="${(sk.efeito||'').replace(/"/g,'&quot;')}">
-      <span>${sk.habilidade}<span class="avt-cd-label">${cdStr}</span></span>
+      title="${_escHtml(sk.efeito||'')}">
+      <span>${_escHtml(sk.habilidade)}<span class="avt-cd-label">${cdStr}</span></span>
       <span style="font-size:0.58rem;color:#7a92aa">${sk.formula_dano||'1d6'} · ⟷${alcance}c</span>
     </div>`;
   }).join('');
@@ -9964,6 +10744,9 @@ async function _avtPrimeiroAtaqueSelecionarSkill(skId: any) {
   if (!jogador) return;
 
   const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
+
+  // Skills de armadilha: escolher uma célula para armar (não um alvo)
+  if (_avtSkillTemArmadilha(sk)) { _avtIniciarModoArmadilha(skId, jogador); return; }
 
   // Skills de aliado: mostrar lista de aliados (fora de combate não há bat.iniciativa, usa entidades)
   if (sk?.alvo_tipo === 'aliado') {
@@ -10128,6 +10911,8 @@ async function _avtAplicarSkillAliadoOoc(skId: any, alvoId: any) {
 // Ativa o modo de destaque de range para seleção de alvo de primeiro ataque (desktop)
 function _avtAtivarModoAlvoPrimeiroAtaque(skId: any, atacante: any) {
   const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
+  // Armadilha mira uma CÉLULA, não um alvo
+  if (_avtSkillTemArmadilha(sk)) { _avtIniciarModoArmadilha(skId, atacante); return; }
   const alcance = _avtAlcanceAlvoJogador(sk, atacante);
   const tiles = [];
   const tilesAlvoVermelho: any = [];
@@ -10292,6 +11077,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId: any, targetId: any, _remote:
   }
 
   const sk = skId ? AVT_STATE.skills.find((s: any) => s.id === skId) : null;
+  // Skill de armadilha nunca executa como ataque — redireciona à mira de célula.
+  if (_avtSkillTemArmadilha(sk)) { _avtIniciarModoArmadilha(skId, jogador); return; }
   const _tipoAreaOoc       = sk?.tipo_area || null;
   const _isTodosInimigoOoc = sk?.alvo_tipo === 'todos_inimigos';
   const _isAreaOoc         = _tipoAreaOoc === 'quadrado' || _tipoAreaOoc === 'linha' || _isTodosInimigoOoc;
@@ -13787,8 +14574,8 @@ function _avtMostrarSkillOverlay() {
       const cd = (b._cooldowns || {})[cdKey] || 0;  // usa cooldowns da batalha (fix P5)
       return `<div onclick="${cd > 0 ? '' : `_avtSkillOverlaySel('${sk.id}')`}"
         class="avt-skill-overlay-item ${pendingId===sk.id?'avt-skill-overlay-ativo':''} ${cd > 0 ? 'avt-skill-overlay-disabled' : ''}"
-        title="${(sk.efeito||'').replace(/"/g,'&quot;')}">
-        <span>${sk.habilidade}</span>
+        title="${_escHtml(sk.efeito||'')}">
+        <span>${_escHtml(sk.habilidade)}</span>
         <span style="font-size:0.58rem;color:#7a92aa">${sk.formula_dano||'1d6'}${cd > 0 ? ` ⏱${cd}` : ''}</span>
       </div>`;
     }).join('')}
@@ -14077,6 +14864,15 @@ async function _avtExecutarAtaque() {
   if (_ativoSilEnt?._silenciado) {
     mostrarToast('🔇 Silenciado! Não pode atacar nem usar habilidades.', 'aviso');
     return;
+  }
+  // Skill de armadilha pendente nunca "rola ataque" — redireciona à mira de célula.
+  {
+    const _skPendTrap = (AVT_STATE as any)._pendingSkillId
+      ? AVT_STATE.skills.find((s: any) => s.id === (AVT_STATE as any)._pendingSkillId) : null;
+    if (_avtSkillTemArmadilha(_skPendTrap)) {
+      _avtIniciarModoArmadilha((AVT_STATE as any)._pendingSkillId, _ativoSilEnt || ativo);
+      return;
+    }
   }
   // Efeito sem_ataque ativo bloqueia o ataque conforme o tipo configurado
   // (todos | fisico | magico — comparado ao tipo_dano da skill/ataque escolhido).
@@ -14812,10 +15608,10 @@ function _avtHudUpdate() {
       ...mySkillsHud.map((sk: any) => {
         const cd = (b._cooldowns || {})[ativo.id + '_' + sk.id] || 0;
         const safeId = sk.id.replace(/'/g, "\\'");
-        const safeEfeito = (sk.efeito || '').replace(/"/g, '&quot;');
+        const safeEfeito = _escHtml(sk.efeito || '');
         return `<div class="avt-skill-overlay-item${_pendingId===sk.id?' avt-skill-overlay-ativo':''}${cd>0?' avt-skill-overlay-disabled':''}"
           onclick="${cd>0?'void 0':`_avtSkillOverlaySel('${safeId}')`}" title="${safeEfeito}">
-          <span>${sk.habilidade}</span>${cd>0?`<span style="font-size:0.5rem;color:#c8a84b;margin-left:4px">⏱${cd}</span>`:''}
+          <span>${_escHtml(sk.habilidade)}</span>${cd>0?`<span style="font-size:0.5rem;color:#c8a84b;margin-left:4px">⏱${cd}</span>`:''}
           <span style="font-size:0.55rem;color:#7a92aa">${sk.formula_dano||'1d6'}${cd>0?` ⏱${cd}`:''}</span>
         </div>`;
       })
@@ -17079,6 +17875,16 @@ function avtJogadorPainelRender(targetEl?: any, opts?: any) {
     </div>`;
   }
 
+  // ── 6b. Loja na posição (ou adjacente) ────────────────────────
+  const lojaNaPosicao = (typeof _avtLojaNaPosicao === 'function') ? _avtLojaNaPosicao(Math.round(jogador.x), Math.round(jogador.y)) : null;
+  if (lojaNaPosicao) {
+    html += `
+    <div style="border:1px solid rgba(200,168,75,0.25);border-radius:8px;padding:10px">
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#c8a84b;margin-bottom:8px">${_escHtml(lojaNaPosicao.icone || '🛒')} ${_escHtml(lojaNaPosicao.nome || 'Loja')}</div>
+      <button onclick="avtAbrirLoja('${_escHtml(String(lojaNaPosicao.id).replace(/'/g, "\\'"))}')" style="background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 12px;cursor:pointer;width:100%">🛒 Abrir Loja</button>
+    </div>`;
+  }
+
   // ── 7. Consumíveis rápidos ─────────────────────────────────────
   if (char) html += (typeof avtInvRenderConsumiveisHud === 'function' ? avtInvRenderConsumiveisHud(char) : '');
 
@@ -17144,11 +17950,11 @@ function avtJogadorPainelRender(targetEl?: any, opts?: any) {
         return `
         <div style="border:1px solid ${emCd ? 'rgba(100,100,100,0.1)' : 'rgba(79,163,209,0.14)'};border-radius:7px;padding:9px 10px;opacity:${emCd ? '0.5' : '1'};background:${emCd ? 'rgba(10,15,25,0.4)' : 'transparent'}">
           <div style="display:flex;align-items:center;gap:5px;margin-bottom:${(danoHtml || custoHtml) ? '4px' : '0'};flex-wrap:wrap">
-            <span style="font-family:var(--fonte-d);font-size:0.75rem;color:${emCd ? '#556677' : '#c8d8e8'};flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.habilidade}</span>
+            <span style="font-family:var(--fonte-d);font-size:0.75rem;color:${emCd ? '#556677' : '#c8d8e8'};flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(s.habilidade)}</span>
             <span style="font-family:var(--fonte-d);font-size:0.5rem;padding:1px 5px;border:1px solid ${tipoCor}44;border-radius:3px;color:${tipoCor};flex-shrink:0">${tipoLabel}</span>
             ${emCd ? `<span style="font-family:var(--fonte-d);font-size:0.58rem;color:#f0a050;background:rgba(240,160,80,0.1);border:1px solid rgba(240,160,80,0.2);border-radius:3px;padding:1px 5px;flex-shrink:0">⏳${cd}t</span>` : ''}
           </div>
-          ${s.efeito && !danoHtml ? `<div style="font-size:0.6rem;color:#7a92aa;margin-bottom:3px;line-height:1.4">${s.efeito}</div>` : ''}
+          ${s.efeito && !danoHtml ? `<div style="font-size:0.6rem;color:#7a92aa;margin-bottom:3px;line-height:1.4">${_escHtml(s.efeito)}</div>` : ''}
           ${(danoHtml || custoHtml) ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${danoHtml}${custoHtml}</div>` : ''}
         </div>`;
       }).join('')}
@@ -17182,6 +17988,103 @@ function _avtBauNaPosicao(x: any, y: any) {
     return ox === x && oy === y;
   }) || null;
 }
+
+// ── Armadilhas do mestre (objetos de fase) ────────────────────────────────────
+// Ocultas dos jogadores (render só para o mestre, padrão som_ambiente) e
+// disparadas quando um JOGADOR pisa. Quem decide o disparo é o cliente do
+// próprio jogador (autoridade do próprio HP — mesmo padrão da coleta), que
+// propaga o estado via avt_armadilha_obj_disparo; mestre/host persiste.
+
+function _avtArmadilhaMestreNaPosicao(x: any, y: any) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd?.objetos) return null;
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  return rd.objetos.find((o: any) => {
+    if (o.tipo !== 'armadilha_mestre' || o.armada === false) return false;
+    return Math.round((o.x ?? 0) * dw) === x && Math.round((o.y ?? 0) * dh) === y;
+  }) || null;
+}
+window._avtArmadilhaMestreNaPosicao = _avtArmadilhaMestreNaPosicao;
+
+function _avtChecarArmadilhaMestreNaPosicao(jogador: any) {
+  if (!jogador || jogador.tipo !== 'jogador' || jogador.hp <= 0) return;
+  if (jogador.nome !== AVT_STATE.myCharNome) return;
+  const jx = Math.round(jogador.x), jy = Math.round(jogador.y);
+  const trap = _avtArmadilhaMestreNaPosicao(jx, jy);
+  if (!trap) return;
+
+  const rd = AVT_STATE.dungeon.render_data;
+  const modo = trap.modo === 'rearmar' ? 'rearmar' : 'oneshot';
+  let rearmarEmMs = null;
+  if (modo === 'oneshot') {
+    const idx = rd.objetos.findIndex((o: any) => String(o.id) === String(trap.id));
+    if (idx >= 0) rd.objetos.splice(idx, 1);
+  } else {
+    trap.armada = false;
+    trap._rearmarEm = rearmarEmMs = Date.now() + Math.max(1, parseFloat(trap.rearmar_s) || 30) * 1000;
+  }
+
+  const dano = _avtRolarFormula(trap.formula || '1d6');
+  if (dano > 0) {
+    try { _avtRTBroadcastPlayerDamage(jogador.nome, dano, trap.nome || 'Armadilha'); } catch(_) {}
+    try { _avtMostrarDanoAbaixoHp(jogador, dano, false); } catch(_) {}
+  }
+  try { _avtSfxPosicional('impacto_fisico', jogador, 0.6); } catch(_) {}
+  mostrarToast(`🪤 Você ativou uma armadilha! −${dano} HP`, 'erro');
+  _avtLog(`🪤 ${jogador.nome} ativou a armadilha ${trap.nome || ''}`.trim());
+
+  // Efeito extra (dot/stun) em si mesmo — status OOC; em P2P não-host o efeito
+  // vai ao host (só ele tica DOT/efeitos OOC), espelho do fluxo de skill OOC.
+  const ef = trap.efeito;
+  if (ef?.tipo) {
+    try {
+      if (!jogador.status_effects) jogador.status_effects = [];
+      const entry: any = { ...ef, _turnos_restantes: ef.duracao_turnos ?? 1, _ooc: true,
+        expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs(),
+        _casterNome: trap.nome || 'Armadilha' };
+      jogador.status_effects.push(entry);
+      if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+      AVT_STATE._oocStatusEffects.push({ entId: jogador.id, entNome: jogador.nome, ef: { ...entry }, lastTickAt: Date.now() });
+      if (ef.tipo === 'stun')    jogador._stunned    = true;
+      if (ef.tipo === 'silence') jogador._silenciado = true;
+      if (ef.tipo === 'dot')     { try { _avtMostrarDotDrip(jogador, ef.dot_variante); } catch(_) {} }
+      if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost()) {
+        RTNet.sendToHost('avt_player_action', {
+          tipo: 'ooc_effect_apply',
+          entId: jogador.id, entNome: jogador.nome,
+          oocEntry: { entId: jogador.id, entNome: jogador.nome, ef: { ...entry }, lastTickAt: Date.now() },
+          statusEffect: entry,
+        });
+      }
+    } catch(_) {}
+  }
+
+  try { _avtBroadcast('avt_armadilha_obj_disparo', { objId: trap.id, jogadorNome: jogador.nome, dano, modo, rearmarEmMs }); } catch(_) {}
+  try { _avtSalvarDungeon(); } catch(_) {} // no-op em convidado (guard de autoridade)
+  try { avtJogadorPainelRender(); } catch(_) {}
+}
+window._avtChecarArmadilhaMestreNaPosicao = _avtChecarArmadilhaMestreNaPosicao;
+
+window.avtReceberArmadilhaObjDisparo = function(p: any) {
+  try {
+    if (!p || !p.objId) return;
+    if (!_avtMinhaFase(p.faseId)) return;
+    const rd = AVT_STATE.dungeon?.render_data;
+    if (!rd?.objetos) return;
+    const idx = rd.objetos.findIndex((o: any) => String(o.id) === String(p.objId));
+    if (idx < 0) return;
+    if (p.modo === 'rearmar') {
+      rd.objetos[idx].armada = false;
+      rd.objetos[idx]._rearmarEm = p.rearmarEmMs || null;
+    } else {
+      rd.objetos.splice(idx, 1);
+    }
+    if (typeof _avtSouMestre === 'function' && _avtSouMestre()) {
+      mostrarToast(`🪤 ${p.jogadorNome || 'Jogador'} ativou uma armadilha (−${p.dano ?? 0} HP)`, 'aviso');
+    }
+    if (_avtPodeSalvarRegistro()) { try { _avtSalvarDungeon(); } catch(_) {} }
+  } catch(_) {}
+};
 
 // Coleta automática de loot/orbes na célula do jogador (chamada ao chegar numa
 // célula durante a exploração). Coleta TODOS os objetos coletáveis na posição.
@@ -17440,7 +18343,12 @@ function avtReceberObjSpawn({ obj, faseId }: any = {}) {
     if (!AVT_STATE.dungeon.render_data) AVT_STATE.dungeon.render_data = {};
     const rd = AVT_STATE.dungeon.render_data;
     if (!rd.objetos) rd.objetos = [];
-    if (!rd.objetos.some((o: any) => String(o.id) === String(obj.id))) rd.objetos.push(obj);
+    // Merge por id: reposicionamento/edição de objeto pelo mestre em jogo
+    // também sincroniza (antes, id existente era ignorado e só a próxima carga
+    // da fase refletia a mudança).
+    const ex = rd.objetos.find((o: any) => String(o.id) === String(obj.id));
+    if (ex) Object.assign(ex, obj);
+    else rd.objetos.push(obj);
   } catch(_) {}
 }
 window.avtReceberObjSpawn = avtReceberObjSpawn;
@@ -17517,7 +18425,7 @@ async function avtImportarCatalogoConfirmar() {
   }
 
   // Reload catalog
-  const catalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate`).catch((): any[] => []);
+  const catalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate,valor_base`).catch((): any[] => []);
   AVT_STATE.itemCatalog = catalog || [];
 
   document.getElementById('avt-catalog-import-modal')?.remove();
@@ -17579,6 +18487,10 @@ function _avtCatItemEditor(itemId: any) {
           <label style="${labCss}">Slot (equip.)</label>
           <input id="avt-catitem-slot" value="${esc(v.slot_padrao)}" placeholder="ex: arma_principal" style="${inputCss}">
         </div>
+        <div>
+          <label style="${labCss}">💰 Valor base (ouro)</label>
+          <input type="number" id="avt-catitem-valor" min="0" step="1" value="${(v as any).valor_base ?? ''}" placeholder="preço na loja" style="${inputCss}">
+        </div>
       </div>
       <div style="border:1px solid rgba(231,76,60,0.2);border-radius:6px;padding:8px;margin-bottom:12px">
         <label style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:#c8d8e8;cursor:pointer">
@@ -17629,6 +18541,7 @@ async function _avtCatItemSalvar(itemId: any) {
     img_url: (document.getElementById('avt-catitem-img-url')?.value || '').trim() || null,
     droppable: !!document.getElementById('avt-catitem-droppable')?.checked,
     drop_rate: parseFloat(document.getElementById('avt-catitem-droprate')?.value!) || 0,
+    valor_base: (() => { const _v = parseFloat(document.getElementById('avt-catitem-valor')?.value!); return Number.isFinite(_v) && _v >= 0 ? _v : null; })(),
   };
   try {
     if (itemId) {
@@ -17642,7 +18555,7 @@ async function _avtCatItemSalvar(itemId: any) {
         body: JSON.stringify({ ...payload, rpg_id: rpgId })
       });
     }
-    AVT_STATE.itemCatalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate`).catch(()=>AVT_STATE.itemCatalog||[]);
+    AVT_STATE.itemCatalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate,valor_base`).catch(()=>AVT_STATE.itemCatalog||[]);
     document.getElementById('avt-catitem-editor-overlay')?.remove();
     mostrarToast('Item salvo!', 'ok');
     _avtMestrePainelRender();
@@ -17656,7 +18569,7 @@ async function _avtCatItemRemover(itemId: any) {
   const rpgId = AVT_STATE.rpgId;
   try {
     await _avtSb(`item_catalog?id=eq.${encodeURIComponent(itemId)}`, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
-    AVT_STATE.itemCatalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate`).catch(()=>AVT_STATE.itemCatalog||[]);
+    AVT_STATE.itemCatalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate,valor_base`).catch(()=>AVT_STATE.itemCatalog||[]);
     document.getElementById('avt-catitem-editor-overlay')?.remove();
     mostrarToast('Item excluído', 'ok');
     _avtMestrePainelRender();
@@ -21450,6 +22363,7 @@ function _avtMpConteudoAba() {
         </div>
       </div>
       ${_avtFontesSomSecao(emJogo)}
+      ${_avtTrapsSecao(emJogo)}
       ${(emJogo && AVT_STATE._faseStack && AVT_STATE._faseStack.length) ? `
       <div class="avt-mp-secao">
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtVoltarFaseAnterior()">⬅ Voltar ao mapa anterior</button>
@@ -21666,6 +22580,7 @@ function _avtMpConteudoAba() {
         }).join('')}
         ` : ''}
       </div>
+      ${_avtLojasSecao(emJogo)}
 
 `;
     }
@@ -21710,6 +22625,16 @@ function _avtMpConteudoAba() {
           <span style="font-size:0.7rem;color:#b07ef0">🔮 % chance de orbe de efeito</span>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDropsConfig()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🛒 Loja</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Percentual do valor base pago ao jogador quando ele VENDE um item na loja (a compra usa o valor base cheio do catálogo).</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-loja-revenda-pct" min="0" max="100" step="1" value="${Math.round(lc.loja_revenda_pct != null ? lc.loja_revenda_pct : 50)}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#c8a84b">% do valor na venda</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarLojaConfig()" style="width:100%">💾 Salvar</button>
       </div>
       ${(() => {
         const d = _avtDynSpawnConfig();
@@ -22764,6 +23689,23 @@ async function _avtSalvarDropsConfig() {
 }
 window._avtSalvarDropsConfig = _avtSalvarDropsConfig;
 
+// Salva a config da loja (percentual de revenda).
+async function _avtSalvarLojaConfig() {
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  const raw = parseInt(document.getElementById('avt-mp-loja-revenda-pct')?.value!);
+  const cfg = { loja_revenda_pct: isNaN(raw) ? 50 : Math.max(0, Math.min(100, raw)) };
+  Object.assign(rpg.theme_json.level_config, cfg);
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    try { _avtBroadcast('avt_level_config_update', { config: cfg }); } catch(_) {}
+    mostrarToast('Configuração da loja salva!', 'sucesso');
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtSalvarLojaConfig = _avtSalvarLojaConfig;
+
 // Salva a config dos spawns dinâmicos de baús/loot/orbes.
 async function _avtSalvarDynSpawnConfig() {
   const rpg = AVT_STATE.rpg;
@@ -23187,6 +24129,10 @@ function avtAplicarSnapshotMerge(snap: any) {
       (AVT_STATE as any)._rastroCells = snap._rastroCells
         .filter((c: any) => c && _nowR < c.expiry_ms)
         .map((c: any) => ({ ...c, hitSet: new Set(c.hitSet || []) }));
+    }
+    if (Array.isArray(snap._armadilhaCells)) {
+      const _nowT = Date.now();
+      (AVT_STATE as any)._armadilhaCells = snap._armadilhaCells.filter((c: any) => c && _nowT < c.expiry_ms);
     }
     if ('batalhaAutoSuspensa' in snap) AVT_STATE.batalhaAutoSuspensa = snap.batalhaAutoSuspensa;
     try { if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar(); } catch(_) {}
@@ -26596,13 +27542,14 @@ function _avtSkmRenderEfeitos() {
     {v:'fantasma',l:'👻 Fantasma'},{v:'atravessar',l:'🧱 Atravessar'},
     {v:'necromante',l:'☠ Necromante'},
     {v:'rastro_persona',l:'🐾 Rastro Persona'},{v:'rastro_anima',l:'✨ Rastro Anima'},
+    {v:'armadilha',l:'🪤 Armadilha'},
     {v:'empurrao',l:'💨 Empurrão / Puxão'},
     {v:'ab_cd_reduzir',l:'⏩ AB: Reduzir cooldown'},{v:'ab_dano_buff',l:'💪 AB: Buff de dano'},
     {v:'ab_multi_alvo',l:'🎯 AB: Múltiplos alvos'},{v:'ab_alcance_buff',l:'📏 AB: Aumentar alcance'},
   ];
   const inpSt = 'padding:3px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem';
   cont.innerHTML = _AVT_SK_MODAL.efeitos.map((ef,i)=>{
-    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar','fantasma','atravessar','necromante','rastro_persona','rastro_anima','ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo);
+    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar','fantasma','atravessar','necromante','rastro_persona','rastro_anima','armadilha','ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(ef.tipo);
     return `<div style="padding:7px 8px;margin-bottom:6px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:6px">
       <div style="display:flex;gap:5px;align-items:center;margin-bottom:2px">
         <select onchange="_avtSkmEfTipoChange(${i},this.value)" style="${inpSt};flex:1">
@@ -26629,6 +27576,31 @@ function _avtSkmRenderEfeitos() {
         <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#5ee09a">Cor do rastro:
           <input type="color" value="${ef.rastro_cor||'#5ee09a'}" oninput="_AVT_SK_MODAL.efeitos[${i}].rastro_cor=this.value"
             style="width:32px;height:22px;padding:1px;border:1px solid rgba(94,224,154,0.4);border-radius:3px;background:#0a0f18;cursor:pointer"></label>
+      </div>` : ''}
+      ${ef.tipo==='armadilha' ? _avtSkmMiniDiceBuilderHTML(i,'armadilha','🪤 Dano da armadilha (fórmula de dados)') : ''}
+      ${ef.tipo==='armadilha' ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#e8604c" title="Nº máximo de armadilhas suas armadas ao mesmo tempo (a mais antiga cai)">Máx. simultâneas:
+          <input type="number" min="1" max="20" value="${ef.armadilha_max??3}" oninput="_AVT_SK_MODAL.efeitos[${i}].armadilha_max=Math.max(1,+this.value)"
+            style="width:48px;${inpSt};text-align:center"></label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#e8604c">Cor:
+          <input type="color" value="${ef.armadilha_cor||'#e8604c'}" oninput="_AVT_SK_MODAL.efeitos[${i}].armadilha_cor=this.value"
+            style="width:32px;height:22px;padding:1px;border:1px solid rgba(232,96,76,0.4);border-radius:3px;background:#0a0f18;cursor:pointer"></label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#e8604c" title="Efeito extra aplicado no inimigo que pisar">Ao disparar:
+          <select onchange="_avtSkmArmEfeitoChange(${i},this.value)" style="${inpSt}">
+            <option value="none" ${!ef.armadilha_efeito?'selected':''}>Só dano</option>
+            <option value="dot" ${ef.armadilha_efeito?.tipo==='dot'?'selected':''}>🩸 + DOT</option>
+            <option value="stun" ${ef.armadilha_efeito?.tipo==='stun'?'selected':''}>⚡ + Stun</option>
+          </select></label>
+        ${ef.armadilha_efeito?.tipo==='dot' ? `
+          <input type="text" value="${(ef.armadilha_efeito.dot_formula||'1d4').replace(/"/g,'&quot;')}" placeholder="1d4" title="Fórmula do DOT por turno"
+            oninput="_AVT_SK_MODAL.efeitos[${i}].armadilha_efeito.dot_formula=this.value" style="width:64px;${inpSt}">
+          <input type="number" min="1" max="99" value="${ef.armadilha_efeito.duracao_turnos??2}" title="Duração do DOT (turnos)"
+            oninput="_AVT_SK_MODAL.efeitos[${i}].armadilha_efeito.duracao_turnos=Math.max(1,+this.value)" style="width:42px;${inpSt};text-align:center">
+          <span style="font-size:0.62rem;color:#7a92aa">turnos de DOT</span>` : ''}
+        ${ef.armadilha_efeito?.tipo==='stun' ? `
+          <input type="number" min="1" max="99" value="${ef.armadilha_efeito.duracao_turnos??1}" title="Duração do stun (turnos)"
+            oninput="_AVT_SK_MODAL.efeitos[${i}].armadilha_efeito.duracao_turnos=Math.max(1,+this.value)" style="width:42px;${inpSt};text-align:center">
+          <span style="font-size:0.62rem;color:#7a92aa">turnos de stun</span>` : ''}
       </div>` : ''}
       ${ef.tipo==='empurrao' ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:4px">
         <label style="display:flex;align-items:center;gap:4px;font-size:0.65rem;color:#f0a84b" title="Empurrar afasta o alvo; Puxão aproxima-o do conjurador">💨 Direção:
@@ -26719,6 +27691,11 @@ function _avtSkmRenderEfeitos() {
         if (ef.rastro_formula && !ef.rastro_fb?.length) ef.rastro_fb = _avtEfFBParseFormula(ef.rastro_formula);
         _avtEfFBAtualizarUI(i, 'rastro');
       }
+      // Armadilha usa a chave de builder 'armadilha' → ef.armadilha_formula
+      if (ef.tipo==='armadilha') {
+        if (ef.armadilha_formula && !ef.armadilha_fb?.length) ef.armadilha_fb = _avtEfFBParseFormula(ef.armadilha_formula);
+        _avtEfFBAtualizarUI(i, 'armadilha');
+      }
     });
   }, 0);
 }
@@ -26741,6 +27718,11 @@ function _avtSkmEfTipoChange(i: any, val: any) {
   } else if (val === 'empurrao') {
     if (ef.empurrao_direcao == null)   ef.empurrao_direcao = 'longe';
     if (ef.empurrao_distancia == null) ef.empurrao_distancia = 3;
+  } else if (val === 'armadilha') {
+    if (ef.armadilha_formula == null) ef.armadilha_formula = '';
+    if (ef.armadilha_max == null)     ef.armadilha_max = 3;
+    if (ef.armadilha_cor == null)     ef.armadilha_cor = '#e8604c';
+    if (ef.duracao_turnos == null)    ef.duracao_turnos = 10;
   }
   if (['ab_cd_reduzir','ab_dano_buff','ab_multi_alvo','ab_alcance_buff'].includes(val) && ef.duracao_turnos == null) {
     ef.duracao_turnos = 3;
@@ -26748,6 +27730,17 @@ function _avtSkmEfTipoChange(i: any, val: any) {
   _avtSkmRenderEfeitos();
 }
 window._avtSkmEfTipoChange = _avtSkmEfTipoChange;
+
+// Troca o efeito extra da armadilha (nenhum/dot/stun), semeando defaults.
+function _avtSkmArmEfeitoChange(i: any, val: any) {
+  const ef = _AVT_SK_MODAL.efeitos[i];
+  if (!ef) return;
+  if (val === 'dot')       ef.armadilha_efeito = { tipo: 'dot', dot_formula: '1d4', dot_variante: 'sangramento', duracao_turnos: 2 };
+  else if (val === 'stun') ef.armadilha_efeito = { tipo: 'stun', duracao_turnos: 1 };
+  else                     ef.armadilha_efeito = null;
+  _avtSkmRenderEfeitos();
+}
+window._avtSkmArmEfeitoChange = _avtSkmArmEfeitoChange;
 
 // ── Persistent animation picker helpers (per-effect, adventure mode) ─────────
 

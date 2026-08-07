@@ -1797,13 +1797,14 @@ window._avtMenuUploadImagem = _avtMenuUploadImagem;
 // GUIA
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _avtMenuAbrirGuia() {
-  const html = `
+// HTML do guia — compartilhado entre o painel do menu e o overlay de pausa.
+function _avtMenuGuiaHtml() {
+  return `
     <div style="font-family:var(--fonte-d);color:#c8d8e8;display:flex;flex-direction:column;gap:20px;max-width:600px">
 
       <section>
         <div style="font-size:0.65rem;color:#c8a84b;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">🎮 Movimento</div>
-        <p style="font-size:0.72rem;color:#7a92aa;line-height:1.6">Use <b style="color:#c8d8e8">WASD</b> ou as <b style="color:#c8d8e8">setas do teclado</b> para mover seu personagem pelo dungeon. No celular, use o <b style="color:#c8d8e8">D-pad</b> que aparece na tela. Clique em qualquer ponto do mapa para mover até lá.</p>
+        <p style="font-size:0.72rem;color:#7a92aa;line-height:1.6">Use <b style="color:#c8d8e8">WASD</b> para mover seu personagem pelo dungeon — as <b style="color:#c8d8e8">setas do teclado</b> alternam o inimigo alvo. No celular, use o <b style="color:#c8d8e8">D-pad</b> que aparece na tela. Clique em qualquer ponto do mapa para mover até lá.</p>
       </section>
 
       <section>
@@ -1827,15 +1828,97 @@ function _avtMenuAbrirGuia() {
       </section>
 
       <section>
+        <div style="font-size:0.65rem;color:#c8a84b;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">🪤 Armadilhas</div>
+        <p style="font-size:0.72rem;color:#7a92aa;line-height:1.6">Skills com efeito <b style="color:#c8d8e8">Armadilha</b> deixam você armar uma célula do mapa: clique na célula destacada e o primeiro <b style="color:#c8d8e8">inimigo</b> que pisar sofre o dano (e efeitos como DOT/Stun). Cada uma dispara só uma vez e expira com o tempo. Cuidado: o mestre também pode esconder armadilhas no mapa — e essas você não vê!</p>
+      </section>
+
+      <section>
+        <div style="font-size:0.65rem;color:#c8a84b;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">🛒 Loja</div>
+        <p style="font-size:0.72rem;color:#7a92aa;line-height:1.6">Ao parar sobre uma <b style="color:#c8d8e8">loja</b> (ou numa célula vizinha), o cartão 🛒 aparece no seu painel de personagem. Compre itens com o <b style="color:#c8d8e8">ouro</b> ganho em baús e venda itens da mochila por uma fração do valor. Itens equipados precisam ser desequipados antes de vender.</p>
+      </section>
+
+      <section>
         <div style="font-size:0.65rem;color:#c8a84b;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">🌐 Host</div>
         <p style="font-size:0.72rem;color:#7a92aa;line-height:1.6">O <b style="color:#c8d8e8">host</b> é o jogador que coordena a sessão. Geralmente é o primeiro a entrar ou aquele que clica em "Iniciar como Host". Ao mudar de fase, pode ser necessário eleger um novo host para aquela fase.</p>
       </section>
 
     </div>
   `;
-  _avtMenuAbrirPanel(html, '📖 Guia do Jogo');
+}
+
+function _avtMenuAbrirGuia() {
+  _avtMenuAbrirPanel(_avtMenuGuiaHtml(), '📖 Guia do Jogo');
 }
 window._avtMenuAbrirGuia = _avtMenuAbrirGuia;
+
+// ─── Pausa in-game ────────────────────────────────────────────────────────────
+// Overlay leve DENTRO do jogo: NÃO derruba RTNet nem pausa a simulação (o
+// multiplayer continua rodando). A saída real segue sendo voltarAoMenuDeJogo().
+
+function avtPausaAbrir(aba?: any) {
+  (window as any)._avtPausaAba = aba || 'menu';
+  _avtPausaRender();
+}
+window.avtPausaAbrir = avtPausaAbrir;
+
+function avtPausaFechar() {
+  document.getElementById('avt-pausa-overlay')?.remove();
+}
+window.avtPausaFechar = avtPausaFechar;
+
+function avtPausaToggle() {
+  if (document.getElementById('avt-pausa-overlay')) avtPausaFechar();
+  else avtPausaAbrir();
+}
+window.avtPausaToggle = avtPausaToggle;
+
+function _avtPausaRender() {
+  const aba = (window as any)._avtPausaAba || 'menu';
+  let overlay = document.getElementById('avt-pausa-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'avt-pausa-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Menu de pausa');
+    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(3,5,10,0.78);z-index:9700;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(2px)';
+    overlay.addEventListener('click', (e: any) => { if (e.target === overlay) avtPausaFechar(); });
+    document.body.appendChild(overlay);
+  }
+  const btn = (onclick: string, label: string, ativo = false) => `
+    <button onclick="${onclick}" aria-label="${label.replace(/"/g,'&quot;')}"
+      style="width:100%;padding:10px 14px;margin-bottom:8px;border-radius:8px;cursor:pointer;text-align:left;
+      font-family:var(--fonte-d);font-size:0.78rem;letter-spacing:.04em;
+      background:${ativo ? 'rgba(200,168,75,0.12)' : 'rgba(79,163,209,0.06)'};
+      border:1px solid ${ativo ? 'rgba(200,168,75,0.4)' : 'rgba(79,163,209,0.2)'};
+      color:${ativo ? '#c8a84b' : '#c8d8e8'}">${label}</button>`;
+
+  let corpo = '';
+  if (aba === 'config') {
+    corpo = `<div style="max-height:56vh;overflow-y:auto;padding-right:4px">${typeof _avtMenuHtmlConfigJogador === 'function' ? _avtMenuHtmlConfigJogador() : ''}</div>`;
+  } else if (aba === 'guia') {
+    corpo = `<div style="max-height:56vh;overflow-y:auto;padding-right:4px">${_avtMenuGuiaHtml()}</div>`;
+  }
+
+  overlay.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(79,163,209,0.3);border-radius:14px;padding:22px;width:100%;max-width:${aba === 'menu' ? '340px' : '640px'};max-height:92vh;overflow-y:auto" onclick="event.stopPropagation()">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-family:var(--fonte-d);font-size:1.05rem;color:#c8a84b;letter-spacing:.08em">⏸ Pausa</div>
+        <button onclick="avtPausaFechar()" aria-label="Fechar pausa" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.3rem">×</button>
+      </div>
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#7a92aa;margin-bottom:14px">O mundo continua rodando para os outros jogadores.</div>
+      ${aba === 'menu' ? `
+        ${btn('avtPausaFechar()', '▶ Continuar')}
+        ${btn("avtPausaAbrir('config')", '⚙ Configurações')}
+        ${btn("avtPausaAbrir('guia')", '📖 Guia do Jogo')}
+        ${btn('avtPausaFechar();voltarAoMenuDeJogo()', '← Sair para o Menu')}
+      ` : `
+        ${btn("avtPausaAbrir('menu')", '← Voltar', false)}
+        ${corpo}
+      `}
+    </div>`;
+  try { (overlay.querySelector('button') as any)?.focus?.(); } catch(_) {}
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STUDIO PIXI
