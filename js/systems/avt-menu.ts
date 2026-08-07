@@ -50,6 +50,7 @@ var AVT_GRAFICOS: Record<string, any> = {
   volMusica: null,    // null = padrão do AudioManager (0.45)
   volSfx: null,       // null = padrão do AudioManager (0.75)
   sfxPassos: true,    // passos posicionais dos jogadores
+  mudo: false,        // silencia música e SFX sem perder os volumes
 };
 
 const _AVT_GRAFICOS_KEY = 'rpghub_avt_graficos';
@@ -178,6 +179,7 @@ function _avtAudioAplicar() {
     if (typeof AudioManager === 'undefined') return;
     if (typeof AVT_GRAFICOS.volMusica === 'number') AudioManager.setMusicVolume(AVT_GRAFICOS.volMusica);
     if (typeof AVT_GRAFICOS.volSfx === 'number')    AudioManager.setSfxVolume(AVT_GRAFICOS.volSfx);
+    AudioManager.setMuted(AVT_GRAFICOS.mudo === true);
   } catch(_) {}
 }
 window._avtAudioAplicar = _avtAudioAplicar;
@@ -665,6 +667,16 @@ function _avtMenuHtmlGraficos() {
 
     <div style="margin-bottom:20px">
       <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">🔊 Áudio</div>
+
+      <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:9px 10px;background:var(--escuro,#0a0f18);border:1px solid var(--borda,rgba(79,163,209,0.15));border-radius:8px;margin-bottom:10px">
+        <input type="checkbox" style="width:18px;height:18px;accent-color:var(--destaque,#c8a84b)"
+               ${g.mudo === true ? 'checked' : ''}
+               onchange="AVT_GRAFICOS.mudo = this.checked; _avtAudioAplicar(); _avtGraficosSalvar()">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.8rem;color:var(--texto,#c8d8e8)">🔇 Silenciar tudo</div>
+          <div style="font-size:0.7rem;color:var(--suave,#7a92aa);margin-top:2px">Desliga música e efeitos sem alterar os volumes abaixo.</div>
+        </div>
+      </label>
 
       <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Volume da música</label>
       <input type="range" min="0" max="1" step="0.05"
