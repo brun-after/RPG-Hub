@@ -2584,28 +2584,14 @@ function _avtCriarRenderMapaSub(opcao: any) {
     AVT_STATE._criando.mapa = 'procedural';
 
   } else if (opcao === 'editor') {
+    const _mapaAtual: any = (AVT_STATE._criando as any)?.mapa;
+    const _temGrid = _mapaAtual && typeof _mapaAtual === 'object' && Array.isArray(_mapaAtual.tiles);
     sub.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-        <span style="font-size:0.7rem;color:#7a92aa">Tamanho:</span>
-        <select id="avt-ed-tamanho" onchange="_avtEditorTamanho(this.value)"
-          style="padding:4px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.7rem">
-          <option value="22x16">Pequena (22×16 — ~5 salas)</option>
-          <option value="40x28">Média (40×28 — ~12 salas)</option>
-          <option value="60x40" selected>Grande (60×40 — ~25 salas)</option>
-          <option value="80x56">Enorme (80×56 — ~50 salas)</option>
-        </select>
-        <span style="font-size:0.68rem;color:#7a92aa">·</span>
-        <button onclick="_avtEditorAcaoSet('piso')" id="avt-ed-btn-piso" class="avt-ed-btn avt-ed-btn-ativo">Piso</button>
-        <button onclick="_avtEditorAcaoSet('parede')" id="avt-ed-btn-parede" class="avt-ed-btn">Parede</button>
-        <button onclick="_avtEditorAcaoSet('sala')" id="avt-ed-btn-sala" class="avt-ed-btn">Sala</button>
-        <button onclick="_avtEditorLimpar()" class="avt-ed-btn">Limpar</button>
-        <button onclick="_avtEditorReset()" class="avt-ed-btn">Resetar</button>
-      </div>
-      <div style="overflow:auto;max-height:380px;border:1px solid rgba(79,163,209,0.15);border-radius:6px">
-        <canvas id="avt-ed-canvas" style="cursor:crosshair;display:block;touch-action:none"></canvas>
+      <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start">
+        <div style="font-size:0.68rem;color:#7a92aa;line-height:1.5">Desenhe o mapa no editor de fases — tela cheia, com zoom/pan, balde, retângulo, desfazer e suporte a toque.</div>
+        <button onclick="_avtCriandoAbrirEditor()" class="avt-ed-btn avt-ed-btn-ativo" style="padding:10px 16px;font-size:0.75rem">🖉 Abrir editor de mapa</button>
+        <div id="avt-criando-editor-status" style="font-size:0.66rem;color:#4fa3d1">${_temGrid ? `✓ Mapa ${_mapaAtual.w}×${_mapaAtual.h} pronto — ${_mapaAtual.rooms?.length || 0} sala(s)` : 'Nenhum mapa desenhado ainda'}</div>
       </div>`;
-    _avtEd.w = 60; _avtEd.h = 40;
-    setTimeout(_avtEditorInit, 50);
 
   } else if (opcao === 'json') {
     sub.innerHTML = `
@@ -2613,12 +2599,11 @@ function _avtCriarRenderMapaSub(opcao: any) {
         <div style="flex:1;min-width:120px">
           <label style="display:block;font-size:0.65rem;color:rgba(79,163,209,0.7);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Nº de salas</label>
           <input id="avt-json-salas" type="number" min="1" max="50" value="10"
-            style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem"
-            oninput="_avtJsonAtualizarPrompt()">
+            style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
         </div>
         <div style="flex:2;min-width:150px">
           <label style="display:block;font-size:0.65rem;color:rgba(79,163,209,0.7);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Tamanho do grid</label>
-          <select id="avt-json-tamanho" onchange="_avtJsonAtualizarPrompt()"
+          <select id="avt-json-tamanho"
             style="width:100%;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
             <option value="22x16">Pequena (22×16)</option>
             <option value="40x28">Média (40×28)</option>
@@ -2966,152 +2951,26 @@ function _avtCriarAvancar() {
 // TILE EDITOR
 // ─────────────────────────────────────────────────────────────────────────────
 
-var _avtEd: any = { tiles: null, w: 60, h: 40, acao: 'piso', painting: false, salaStart: null };
 
-function _avtEditorTamanho(val: any) {
-  const [w, h] = val.split('x').map(Number);
-  _avtEd.w = w; _avtEd.h = h;
-  _avtEd.tiles = null;
-  _avtEditorInit();
-}
-
-function _avtEditorInit() {
-  const EDSZ = 14, W = _avtEd.w, H = _avtEd.h;
-  if (!_avtEd.tiles) _avtEditorReset();
-  const canvas = document.getElementById('avt-ed-canvas');
-  if (!canvas) return;
-  canvas.width  = W * EDSZ;
-  canvas.height = H * EDSZ;
-  canvas.style!.width  = (W * EDSZ) + 'px';
-  canvas.style!.height = (H * EDSZ) + 'px';
-  _avtEditorRenderCanvas();
-
-  const getTile = (e: any) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = W * EDSZ / rect.width;
-    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    const scaleY = H * EDSZ / rect.height;
-    return { tx: Math.floor(cx * scaleX / EDSZ), ty: Math.floor(cy * scaleY / EDSZ) };
-  };
-
-  const paint = (e: any) => {
-    if (!_avtEd.painting) return;
-    const {tx, ty} = getTile(e);
-    if (tx < 0 || ty < 0 || tx >= W || ty >= H) return;
-    if (_avtEd.acao === 'sala' && _avtEd.salaStart) {
-      // Preview only — fill on mouseup
-    } else {
-      _avtEd.tiles[ty][tx] = _avtEd.acao === 'parede' ? AVT_T.PAREDE : AVT_T.PISO;
-    }
-    _avtEditorRenderCanvas();
-    AVT_STATE._criando.mapa = _avtEditorExport();
-  };
-
-  canvas.onmousedown = canvas.ontouchstart = (e: any) => {
-    e.preventDefault(); _avtEd.painting = true;
-    if (_avtEd.acao === 'sala') { _avtEd.salaStart = getTile(e); return; }
-    paint(e);
-  };
-  canvas.onmousemove = canvas.ontouchmove = (e: any) => { e.preventDefault(); paint(e); };
-  canvas.onmouseup = canvas.ontouchend = (e: any) => {
-    if (_avtEd.acao === 'sala' && _avtEd.salaStart) {
-      const {tx, ty} = getTile(e);
-      const x0=Math.min(_avtEd.salaStart.tx,tx), y0=Math.min(_avtEd.salaStart.ty,ty);
-      const x1=Math.max(_avtEd.salaStart.tx,tx), y1=Math.max(_avtEd.salaStart.ty,ty);
-      for (let y=y0; y<=y1; y++) for (let x=x0; x<=x1; x++) _avtEd.tiles[y][x] = AVT_T.PISO;
-      _avtEd.salaStart = null;
-    }
-    _avtEd.painting = false;
-    _avtEditorRenderCanvas();
-    AVT_STATE._criando.mapa = _avtEditorExport();
-  };
-  document.onmouseup = () => { _avtEd.painting = false; };
-}
-
-function _avtEditorReset() {
-  _avtEd.tiles = _avtGerarDungeon(_avtEd.w, _avtEd.h).tiles;
-  _avtEditorRenderCanvas();
-  AVT_STATE._criando.mapa = _avtEditorExport();
-}
-
-function _avtEditorLimpar() {
-  _avtEd.tiles = Array.from({length: _avtEd.h}, () => Array(_avtEd.w).fill(AVT_T.PAREDE));
-  _avtEditorRenderCanvas();
-  AVT_STATE._criando.mapa = _avtEditorExport();
-}
-
-function _avtEditorAcaoSet(acao: any) {
-  _avtEd.acao = acao;
-  ['piso','parede','sala'].forEach(a => {
-    const btn = document.getElementById(`avt-ed-btn-${a}`);
-    if (btn) btn.classList.toggle('avt-ed-btn-ativo', a === acao);
+// Abre o editor de fases (fase-editor.ts) em modo rascunho para o wizard de
+// criação de campanha; o resultado vai direto em AVT_STATE._criando.mapa.
+function _avtCriandoAbrirEditor() {
+  const atual: any = (AVT_STATE._criando as any)?.mapa;
+  const temGrid = atual && typeof atual === 'object' && Array.isArray(atual.tiles);
+  (window as any).avtFaseEditorAbrir({
+    modo: 'draft',
+    w: temGrid ? atual.w : 40,
+    h: temGrid ? atual.h : 28,
+    tiles: temGrid ? atual.tiles : null,
+    rooms: temGrid ? (atual.rooms || []) : [],
+    onExport: (d: any) => {
+      AVT_STATE._criando.mapa = d;
+      const st = document.getElementById('avt-criando-editor-status');
+      if (st) st.textContent = `✓ Mapa ${d.w}×${d.h} pronto — ${d.rooms?.length || 0} sala(s)`;
+    },
   });
 }
-
-function _avtEditorRenderCanvas() {
-  const canvas = document.getElementById('avt-ed-canvas');
-  if (!canvas || !_avtEd.tiles) return;
-  const ctx = canvas.getContext!('2d');
-  const EDSZ = 14, W = _avtEd.w, H = _avtEd.h;
-  ctx.fillStyle = '#020408';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const t = _avtEd.tiles[y][x];
-      const px = x * EDSZ, py = y * EDSZ;
-      if (t === AVT_T.SAIDA) {
-        ctx.fillStyle = '#0d2a10';
-        ctx.fillRect(px, py, EDSZ, EDSZ);
-        ctx.strokeStyle = 'rgba(46,204,113,0.35)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(px + 0.5, py + 0.5, EDSZ - 1, EDSZ - 1);
-        ctx.fillStyle = 'rgba(46,204,113,0.5)';
-        ctx.fillRect(px + EDSZ/2 - 1, py + EDSZ/2 - 1, 2, 2);
-      } else if (t === AVT_T.PISO) {
-        ctx.fillStyle = '#162840';
-        ctx.fillRect(px, py, EDSZ, EDSZ);
-        ctx.strokeStyle = 'rgba(79,163,209,0.14)';
-        ctx.lineWidth = 0.5;
-        ctx.strokeRect(px + 0.5, py + 0.5, EDSZ - 1, EDSZ - 1);
-        ctx.fillStyle = 'rgba(79,163,209,0.2)';
-        ctx.fillRect(px + EDSZ/2 - 0.5, py + EDSZ/2 - 0.5, 1, 1);
-      } else {
-        // Parede: diferencia as que fazem borda com piso (edge walls) das paredes internas
-        const adjFloor = (
-          (_avtEd.tiles[y-1]?.[x] === AVT_T.PISO) ||
-          (_avtEd.tiles[y+1]?.[x] === AVT_T.PISO) ||
-          (_avtEd.tiles[y]?.[x-1] === AVT_T.PISO) ||
-          (_avtEd.tiles[y]?.[x+1] === AVT_T.PISO)
-        );
-        ctx.fillStyle = adjFloor ? '#0b0e18' : '#060810';
-        ctx.fillRect(px, py, EDSZ, EDSZ);
-        if (adjFloor) {
-          ctx.strokeStyle = 'rgba(79,163,209,0.12)';
-          ctx.lineWidth = 0.5;
-          ctx.strokeRect(px + 0.5, py + 0.5, EDSZ - 1, EDSZ - 1);
-        }
-      }
-    }
-  }
-  // Legenda compacta
-  const leg = document.getElementById('avt-ed-legenda');
-  if (leg) return;
-  const legEl = document.createElement('div');
-  legEl.id = 'avt-ed-legenda';
-  legEl.style!.cssText = 'display:flex;gap:10px;flex-wrap:wrap;margin-top:5px;font-size:0.6rem;color:#7a92aa;font-family:var(--fonte-d,monospace)';
-  legEl.innerHTML = `
-    <span><span style="display:inline-block;width:10px;height:10px;background:#162840;border:1px solid rgba(79,163,209,0.14);vertical-align:middle;margin-right:3px"></span>Piso</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#060810;vertical-align:middle;margin-right:3px"></span>Parede</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#0b0e18;border:1px solid rgba(79,163,209,0.12);vertical-align:middle;margin-right:3px"></span>Borda de parede</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#0d2a10;border:1px solid rgba(46,204,113,0.35);vertical-align:middle;margin-right:3px"></span>Saída</span>`;
-  canvas.parentNode!.insertBefore(legEl, canvas.nextSibling);
-}
-
-function _avtEditorExport() {
-  const rooms: any = [];
-  return { tiles: _avtEd.tiles, w: _avtEd.w, h: _avtEd.h, rooms, inimigos: [] as any[] };
-}
+window._avtCriandoAbrirEditor = _avtCriandoAbrirEditor;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JSON IMPORT
@@ -3178,9 +3037,6 @@ REGRAS:
 - ${salas >= 20 ? 'Para dungeons grandes: distribua salas em clusters temáticos (entrada, desenvolvimento, clímax)' : 'Organize as salas em progressão linear com uma bifurcação opcional'}`;
 }
 
-function _avtJsonAtualizarPrompt() {
-  // Atualiza o prompt ao mudar salas/tamanho na UI do modo json
-}
 
 function _avtCopiarPromptJson() {
   const params = _avtGetGridParams('avt-json');
@@ -23237,428 +23093,12 @@ function _avtMpConteudoAba() {
 // tileset (string semântica) · Porta (interna/fase, com destino) · Apagar.
 // Aprende as edições e re-renderiza ao vivo + broadcast ao salvar.
 // ════════════════════════════════════════════════════════════════════════════
-const _AVT_ED_SZ = 14;
-
+// Editor de mapa do mestre: delega ao editor de fases novo (fase-editor.ts).
+// O nome antigo é mantido porque há onclick inline no painel do mestre.
 function _avtMestreAbrirEditorUnificado() {
-  const dungeon = AVT_STATE.dungeon;
-  if (!dungeon) { mostrarToast('Nenhum mapa carregado', 'aviso'); return; }
-
-  let overlay = document.getElementById('avt-mestre-map-editor-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'avt-mestre-map-editor-overlay';
-    overlay.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px;overflow:auto';
-    document.body.appendChild(overlay);
-  }
-  overlay.style!.display = 'flex';
-
-  const EDSZ = _AVT_ED_SZ;
-  const W = dungeon.w, H = dungeon.h;
-
-  // Estado de edição
-  _avtEd.tiles         = dungeon.tiles.map((r: any) => [...r]);
-  (_avtEd as any).tilesBaseline = dungeon.tiles.map((r: any) => [...r]);   // p/ o diff de aprendizado
-  _avtEd.w = W; _avtEd.h = H;
-  (_avtEd as any).tool = 'wall';
-  (_avtEd as any).tsBrush = null;
-  (_avtEd as any).pendingDoorAnchor = null;
-  (_avtEd as any).portasInternas = (dungeon._portasInternas || []).map((p: any) => JSON.parse(JSON.stringify(p)));
-  (_avtEd as any).fasesExtras    = (AVT_STATE.rpg?.theme_json?.fases_extras || []).map((f: any) => JSON.parse(JSON.stringify(f)));
-
   // Migração: tileset_paints é morto (nunca renderizado) — limpa no próximo save.
   if (AVT_STATE.rpg?.theme_json?.tileset_paints) delete AVT_STATE.rpg.theme_json.tileset_paints;
-
-  const tilesetUrl = AVT_STATE.rpg?.theme_json?.tileset_img_url || dungeon.tileset_img_url || null;
-  const tsCfg = (AVT_STATE as any)._tilesetConfig || dungeon.tileset_config || null;
-  const TS_COLS = tsCfg?.cols || 4, TS_ROWS = tsCfg?.rows || 4;
-  const dentroFaseExtra = (AVT_STATE._faseAtualId && (AVT_STATE as any)._faseAtualId !== 'principal');
-
-  const toolBtn = (id: any, label: any) => `<button id="avt-ed-tool-${id}" class="avt-mp-btn avt-ed-tool ${(_avtEd as any).tool===id?'avt-mp-btn-ativo':''}" onclick="_avtEdSetTool('${id}')">${label}</button>`;
-
-  overlay.innerHTML = `
-    <div style="width:100%;max-width:1100px">
-      <div class="avt-ed-toolbar">
-        <div class="avt-ed-group">
-          ${toolBtn('floor','🟫 Piso')}${toolBtn('wall','🔲 Parede')}
-        </div>
-        <div class="avt-ed-group">${toolBtn('door','🚪 Porta')}</div>
-        <div class="avt-ed-group">${toolBtn('erase','🧽 Apagar')}</div>
-        <span class="avt-ed-spacer"></span>
-        ${tilesetUrl ? `<button class="avt-mp-btn" onclick="_avtEdDistribuirTileset()">✦ Distribuir automaticamente</button>` : ''}
-        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtMestreSalvarMapaUnificado()">💾 Salvar</button>
-        <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
-      </div>
-      <div id="avt-ed-status" style="font-size:0.66rem;color:#7a92aa;margin-bottom:8px">Ferramenta: Parede · clique/arraste para pintar.</div>
-      ${dentroFaseExtra ? `<div style="font-size:0.64rem;color:#f0cc6a;margin-bottom:8px">⚠ Você está numa fase extra. Portas de fase só funcionam editando a partir da fase inicial.</div>` : ''}
-      <div style="display:flex;gap:12px;flex-wrap:wrap">
-        ${tilesetUrl ? `
-        <div style="flex:0 0 auto">
-          <div style="font-size:0.62rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Tileset — clique p/ a peça exata</div>
-          <div id="avt-ts-picker" style="border:1px solid rgba(79,163,209,0.2);border-radius:6px;overflow:hidden;cursor:crosshair;position:relative">
-            <img id="avt-ts-img" src="${tilesetUrl}" style="display:block;image-rendering:pixelated;max-width:256px">
-            <canvas id="avt-ts-overlay" style="position:absolute;top:0;left:0;pointer-events:none"></canvas>
-          </div>
-          <div id="avt-ts-brush-info" style="font-size:0.6rem;color:#4fa3d1;margin-top:4px">Nenhuma peça selecionada</div>
-        </div>` : `
-        <div style="flex:0 0 auto;max-width:200px;font-size:0.64rem;color:#7a92aa;line-height:1.5">
-          Este dungeon não tem tileset. Pinte com Piso/Parede ou
-          <button onclick="_avtMestreToggleTrocaTileset()" style="background:none;border:none;color:#4fa3d1;cursor:pointer;text-decoration:underline;padding:0;font-size:0.64rem">carregue um tileset</button>.
-          <div id="avt-ts-troca-painel" style="display:none;margin-top:8px">
-            <div style="display:flex;gap:6px;margin-bottom:6px">
-              <input id="avt-mp-ts-cols" type="number" value="4" min="4" max="10" style="width:48px;padding:4px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8">
-              <input id="avt-mp-ts-rows" type="number" value="4" min="4" max="10" style="width:48px;padding:4px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8">
-            </div>
-            <label style="display:inline-block;padding:5px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:5px;color:#4fa3d1;font-size:0.62rem;cursor:pointer">📁 Imagem<input type="file" accept="image/*" style="display:none" onchange="_avtMestreHandleTilesetUpload(this)"></label>
-            <span id="avt-mp-ts-nome" style="font-size:0.6rem;color:#7a92aa"></span>
-            <img id="avt-mp-ts-preview" style="display:none;max-width:100%;max-height:100px;margin-top:6px;border:1px solid rgba(79,163,209,0.2);border-radius:4px;image-rendering:pixelated">
-            <button onclick="_avtMestreAplicarTilesetUpload()" style="display:block;margin-top:6px;padding:6px 10px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.3);border-radius:5px;color:#27ae60;font-size:0.64rem;cursor:pointer">✓ Aplicar</button>
-          </div>
-        </div>`}
-        <div style="flex:1;min-width:260px">
-          <div style="overflow:auto;max-height:66vh;border:1px solid rgba(255,255,255,0.1);border-radius:8px">
-            <canvas id="avt-ed-canvas-mestre" style="display:block;image-rendering:pixelated"></canvas>
-          </div>
-          <div style="margin-top:6px;font-size:0.62rem;color:#7a92aa">Piso/Parede criam ou removem colisão · peça do tileset fixa o desenho exato · a aparência atualiza ao salvar.</div>
-        </div>
-      </div>
-    </div>`;
-
-  const canvas = document.getElementById('avt-ed-canvas-mestre');
-  if (!canvas) return;
-  canvas.width = W * EDSZ; canvas.height = H * EDSZ;
-  canvas.style!.width = (W * EDSZ) + 'px'; canvas.style!.height = (H * EDSZ) + 'px';
-
-  // Render WYSIWYG (espelha o render loop ao vivo: tileset + autotiler)
-  (_avtEd as any)._render = function() {
-    const ctx = canvas.getContext!('2d');
-    const view = { w: W, h: H, tiles: _avtEd.tiles, _chestPositions: dungeon._chestPositions };
-    ctx.imageSmoothingEnabled = false;
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const t = _avtEd.tiles[y]?.[x];
-        const px = x * EDSZ, py = y * EDSZ;
-        let drawn = false;
-        if (AVT_STATE._tilesetLoaded && (AVT_STATE as any)._tilesetTextures) {
-          const key = typeof t === 'string' ? t : _avtGetTileSemanticKey(x, y, view);
-          const img = key ? (AVT_STATE as any)._tilesetTextures[key] : null;
-          if (img) { ctx.drawImage(img, px, py, EDSZ, EDSZ); drawn = true; }
-        }
-        if (!drawn) {
-          ctx.fillStyle = (t === AVT_T.SAIDA) ? '#1a3a1a' : _avtChaveEhParede(t) ? '#0a0c14' : '#101520';
-          ctx.fillRect(px, py, EDSZ, EDSZ);
-          ctx.strokeStyle = '#1b2536'; ctx.lineWidth = 0.5;
-          ctx.strokeRect(px + 0.5, py + 0.5, EDSZ - 1, EDSZ - 1);
-        }
-      }
-    }
-    ctx.font = `${Math.round(EDSZ * 0.8)}px serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ((_avtEd as any).portasInternas || []).forEach((p: any) => [p.a, p.b].forEach(ep => {
-      if (!ep) return;
-      ctx.fillStyle = 'rgba(168,120,255,0.95)';
-      ctx.fillText('🌀', ep.col * EDSZ + EDSZ / 2, ep.row * EDSZ + EDSZ / 2);
-    }));
-    ((_avtEd as any).fasesExtras || []).forEach((f: any) => {
-      const pr = f.porta; if (!pr) return;
-      ctx.fillStyle = 'rgba(200,168,75,0.95)';
-      ctx.fillText('🚪', pr.col * EDSZ + EDSZ / 2, pr.row * EDSZ + EDSZ / 2);
-    });
-    if ((_avtEd as any).pendingDoorAnchor) {
-      const a = (_avtEd as any).pendingDoorAnchor;
-      ctx.strokeStyle = '#a878ff'; ctx.lineWidth = 2;
-      ctx.strokeRect(a.col * EDSZ + 1, a.row * EDSZ + 1, EDSZ - 2, EDSZ - 2);
-    }
-    AVT_STATE.entidades.forEach((ent: any) => {
-      if (ent.x < 0 || ent.x >= W || ent.y < 0 || ent.y >= H) return;
-      ctx.fillStyle = ent.cor || (ent.tipo === 'jogador' ? '#4fa3d1' : '#e74c3c');
-      ctx.beginPath();
-      ctx.arc(ent.x * EDSZ + EDSZ / 2, ent.y * EDSZ + EDSZ / 2, EDSZ / 2 - 1, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  };
-  (_avtEd as any)._render();
-
-  // Garante que as texturas do tileset estejam em memória; sem isso o canvas
-  // mostraria apenas cores sólidas (dá a impressão de que o tileset "sumiu").
-  if (tilesetUrl && tsCfg && !(AVT_STATE as any)._tilesetLoaded && typeof _avtCarregarTileset === 'function') {
-    _avtCarregarTileset(tilesetUrl, tsCfg).then(() => (_avtEd as any)._render?.()).catch(() => {});
-  }
-
-  const coords = (e: any) => {
-    const rect = canvas.getBoundingClientRect();
-    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    return { tx: Math.floor(cx / rect.width * W), ty: Math.floor(cy / rect.height * H) };
-  };
-  let painting = false;
-  // Ferramentas de "clique único" (abrem modal/criam par) não devem repetir no arraste.
-  const isClickTool = () => (_avtEd as any).tool === 'door' ||
-    (_avtEd.tool === 'tileset' && (_avtEd as any).tsBrush?.fn === 'door');
-  const onDown = (e: any) => {
-    e.preventDefault();
-    const { tx, ty } = coords(e);
-    _avtEdAplicarTool(tx, ty);
-    painting = !isClickTool();
-  };
-  const onMove = (e: any) => { if (!painting) return; e.preventDefault(); const { tx, ty } = coords(e); _avtEdAplicarTool(tx, ty); };
-  canvas.addEventListener('mousedown', onDown);
-  canvas.addEventListener('mousemove', onMove);
-  canvas.addEventListener('mouseup', () => { painting = false; });
-  canvas.addEventListener('touchstart', onDown);
-  canvas.addEventListener('touchmove', onMove);
-  canvas.addEventListener('touchend', () => { painting = false; });
-
-  // Picker de blocos do tileset
-  const tsImg = document.getElementById('avt-ts-img');
-  const tsOverlay = document.getElementById('avt-ts-overlay');
-  if (tsImg && tsOverlay) {
-    const picker = document.getElementById('avt-ts-picker');
-    picker!.addEventListener('click', e => {
-      const rect = tsImg.getBoundingClientRect();
-      const cellW = rect.width / TS_COLS, cellH = rect.height / TS_ROWS;
-      const tc = Math.floor((e.clientX - rect.left) / cellW);
-      const tr = Math.floor((e.clientY - rect.top) / cellH);
-      const key = _avtBlocoChavePorCelula(tc, tr);
-      const fn = _avtBlocoFuncao(key);
-      (_avtEd as any).tsBrush = { tc, tr, key, fn };
-      (_avtEd as any).tool = 'tileset';
-      _avtEdAtualizarBotoes();
-      const fnLabel = fn === 'wall' ? 'Parede' : fn === 'door' ? 'Porta' : 'Piso';
-      const info = document.getElementById('avt-ts-brush-info');
-      if (info) info.textContent = key ? `Peça: ${key} (${fnLabel})` : `Bloco (${tc},${tr}) — ${fnLabel}`;
-      _avtEdStatus(`Peça do tileset: ${key || (tc + ',' + tr)} → ${fnLabel}`);
-      const oc = tsOverlay.getContext!('2d');
-      tsOverlay.style!.width = rect.width + 'px'; tsOverlay.style!.height = rect.height + 'px';
-      tsOverlay.width = rect.width; tsOverlay.height = rect.height;
-      oc.clearRect(0, 0, tsOverlay.width, tsOverlay.height);
-      oc.strokeStyle = '#4fa3d1'; oc.lineWidth = 2;
-      oc.strokeRect(tc * cellW + 1, tr * cellH + 1, cellW - 2, cellH - 2);
-    });
-  }
-}
-
-function _avtEdStatus(msg: any) {
-  const el = document.getElementById('avt-ed-status');
-  if (el) el.textContent = msg;
-}
-
-function _avtEdAtualizarBotoes() {
-  document.querySelectorAll('#avt-mestre-map-editor-overlay .avt-ed-tool')
-    .forEach(b => b.classList.remove('avt-mp-btn-ativo'));
-  const btn = document.getElementById('avt-ed-tool-' + (_avtEd as any).tool);
-  if (btn) btn.classList.add('avt-mp-btn-ativo');
-}
-
-function _avtEdSetTool(tool: any) {
-  (_avtEd as any).tool = tool;
-  if (tool !== 'tileset') (_avtEd as any).tsBrush = null;
-  if (tool !== 'door') (_avtEd as any).pendingDoorAnchor = null;
-  _avtEdAtualizarBotoes();
-  const labels: Record<string, any> = { floor: 'Piso', wall: 'Parede', door: 'Porta', erase: 'Apagar' };
-  _avtEdStatus('Ferramenta: ' + (labels[tool] || tool));
-  (_avtEd as any)._render?.();
-}
-
-// ── Distribuição automática: "assa" as peças do tileset em todo o mapa ──────────
-// Para cada célula não-vazia computa a chave semântica (parede_*/canto_*/piso_*/…)
-// e a grava no grid. Persiste no Salvar; a colisão segue correta porque o grid usa
-// _avtChaveEhParede para identificar todas as chaves de parede.
-function _avtEdDistribuirTileset() {
-  if (!_avtEd.tiles) return;
-  const tsCfg = (AVT_STATE as any)._tilesetConfig || AVT_STATE.dungeon?.tileset_config;
-  if (!tsCfg?.blocos) { mostrarToast('Tileset sem configuração de blocos', 'aviso'); return; }
-  const W = _avtEd.w, H = _avtEd.h;
-  // View numérica do grid original: a detecção de vizinhos do autotiler compara com
-  // AVT_T.PISO, então normalizamos mesmo se o grid já tiver chaves de string assadas.
-  const numTiles = _avtEd.tiles.map((row: any) => row.map((t: any) => {
-    if (t === null || t === undefined) return null;
-    if (typeof t === 'number') return t;
-    return (t.startsWith('piso') || t === 'bau' || t.startsWith('objeto')) ? AVT_T.PISO : AVT_T.PAREDE;
-  }));
-  const view = { w: W, h: H, tiles: numTiles, _chestPositions: AVT_STATE.dungeon?._chestPositions };
-  let n = 0;
-  const novo = _avtEd.tiles.map((r: any) => [...r]);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const t = _avtEd.tiles[y]?.[x];
-      if (t === null || t === undefined) continue;   // void permanece sólido
-      if (t === AVT_T.SAIDA) continue;               // preserva a saída
-      const key = _avtGetTileSemanticKey(x, y, view);
-      if (key) { novo[y][x] = key; n++; }
-    }
-  }
-  _avtEd.tiles = novo;
-  _avtEdStatus(`Tileset distribuído em ${n} células.`);
-  mostrarToast('Tileset distribuído pelo mapa', 'ok');
-  (_avtEd as any)._render?.();
-}
-
-// Dispatcher de pintura
-function _avtEdAplicarTool(tx: any, ty: any) {
-  if (!_avtEd.tiles || tx < 0 || ty < 0 || tx >= _avtEd.w || ty >= _avtEd.h) return;
-  if (!_avtEd.tiles[ty]) _avtEd.tiles[ty] = [];
-  const tool = (_avtEd as any).tool;
-  if (tool === 'floor') {
-    _avtEd.tiles[ty][tx] = AVT_T.PISO;
-  } else if (tool === 'wall') {
-    _avtEd.tiles[ty][tx] = AVT_T.PAREDE;
-  } else if (tool === 'erase') {
-    _avtEdApagar(tx, ty); return;
-  } else if (tool === 'door' || (tool === 'tileset' && (_avtEd as any).tsBrush?.fn === 'door')) {
-    if ((_avtEd as any).pendingDoorAnchor) { _avtEdCompletarPortaInterna(tx, ty); }
-    else { _avtEdAbrirConfigPorta(tx, ty); }
-    return;
-  } else if (tool === 'tileset' && (_avtEd as any).tsBrush?.key) {
-    _avtEd.tiles[ty][tx] = (_avtEd as any).tsBrush.key;   // peça semântica exata (string)
-  }
-  (_avtEd as any)._render?.();
-}
-
-function _avtEdApagar(col: any, row: any) {
-  // Remove par interno (par inteiro) e porta de fase nesta célula.
-  const antes = (_avtEd as any).portasInternas.length;
-  _avtEd.portasInternas = (_avtEd as any).portasInternas.filter((p: any) =>
-    !((p.a && p.a.col === col && p.a.row === row) || (p.b && p.b.col === col && p.b.row === row)));
-  if ((_avtEd as any).portasInternas.length !== antes) mostrarToast('Porta interna removida', 'ok');
-  (_avtEd as any).fasesExtras.forEach((f: any) => {
-    if (f.porta && f.porta.col === col && f.porta.row === row) { f.porta = null; mostrarToast('Porta de fase removida', 'ok'); }
-  });
-  _avtEd.tiles[row][col] = AVT_T.PAREDE;   // volta a parede/void
-  (_avtEd as any)._render?.();
-}
-
-// ── Portas no editor ─────────────────────────────────────────────────────────
-function _avtEdAbrirConfigPorta(col: any, row: any) {
-  (_avtEd as any)._portaCfgCell = { col, row };
-  let modal = document.getElementById('avt-ed-porta-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'avt-ed-porta-modal';
-    modal.style!.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9600;display:flex;align-items:center;justify-content:center';
-    document.body.appendChild(modal);
-  }
-  const fases = (_avtEd as any).fasesExtras || [];
-  modal.innerHTML = `
-    <div style="background:#0d1320;border:1px solid rgba(79,163,209,0.3);border-radius:10px;padding:18px;width:320px;max-width:92vw">
-      <div style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8d8e8;margin-bottom:12px">🚪 Posicionar porta (${col},${row})</div>
-      <label style="display:block;font-size:0.72rem;color:#c8d8e8;margin-bottom:6px"><input type="radio" name="avt-ed-porta-tipo" value="interna" checked> 🌀 Porta interna (teleporte)</label>
-      <label style="display:block;font-size:0.72rem;color:#c8d8e8;margin-bottom:10px"><input type="radio" name="avt-ed-porta-tipo" value="fase"> 🚪 Porta de fase</label>
-      <div id="avt-ed-porta-fase-cfg" style="display:none;border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;margin-bottom:10px">
-        ${fases.length ? `
-        <label style="display:block;font-size:0.64rem;color:#7a92aa;margin-bottom:4px">Leva à fase</label>
-        <select id="avt-ed-porta-fase-sel" style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;margin-bottom:8px">
-          ${fases.map((f: any) => `<option value="${f.id}">${f.nome}</option>`).join('')}
-        </select>
-        <label style="display:block;font-size:0.64rem;color:#7a92aa;margin-bottom:4px">Tranca</label>
-        <select id="avt-ed-porta-lock" style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem">
-          <option value="livre">🔓 Livre</option>
-          <option value="chave">🔑 Chave</option>
-          <option value="npc">⚔ Derrotar NPC/Boss</option>
-        </select>` : `<div style="font-size:0.66rem;color:#f0cc6a">Nenhuma fase extra criada. Use "🚪 + Nova Fase" antes de ligar uma porta de fase.</div>`}
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-ed-porta-modal').style.display='none'">Cancelar</button>
-        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtEdConfirmarPorta()">Confirmar</button>
-      </div>
-    </div>`;
-  modal.style!.display = 'flex';
-  modal.querySelectorAll('input[name="avt-ed-porta-tipo"]').forEach(r =>
-    r.addEventListener('change', () => {
-      const tipo = document.querySelector('input[name="avt-ed-porta-tipo"]:checked')?.value;
-      const cfg = document.getElementById('avt-ed-porta-fase-cfg');
-      if (cfg) cfg.style!.display = tipo === 'fase' ? 'block' : 'none';
-    }));
-}
-
-function _avtEdConfirmarPorta() {
-  const cell = (_avtEd as any)._portaCfgCell;
-  if (!cell) return;
-  const tipo = document.querySelector('input[name="avt-ed-porta-tipo"]:checked')?.value || 'interna';
-  document.getElementById('avt-ed-porta-modal')!.style!.display = 'none';
-  if (tipo === 'interna') {
-    (_avtEd as any).pendingDoorAnchor = { col: cell.col, row: cell.row };
-    _avtEd.tiles[cell.row][cell.col] = AVT_T.PISO; // passável
-    _avtEdStatus('Porta interna: clique na célula de destino (teleporte).');
-    mostrarToast('Clique no destino da porta interna', 'ok');
-  } else {
-    const faseId = document.getElementById('avt-ed-porta-fase-sel')?.value;
-    if (!faseId) { mostrarToast('Crie uma fase antes', 'aviso'); return; }
-    const lock = document.getElementById('avt-ed-porta-lock')?.value || 'livre';
-    const fase = (_avtEd as any).fasesExtras.find((f: any) => f.id === faseId);
-    if (fase) {
-      fase.porta = { col: cell.col, row: cell.row, lock_type: lock,
-        chave_palavra: fase.porta?.chave_palavra || '', npc_boss_id: fase.porta?.npc_boss_id || '' };
-      _avtEd.tiles[cell.row][cell.col] = AVT_T.PISO;
-      mostrarToast('Porta de fase posicionada', 'ok');
-    }
-  }
-  (_avtEd as any)._render?.();
-}
-
-function _avtEdCompletarPortaInterna(col: any, row: any) {
-  const a = (_avtEd as any).pendingDoorAnchor;
-  (_avtEd as any).pendingDoorAnchor = null;
-  if (!a) return;
-  if (a.col === col && a.row === row) { mostrarToast('Destino deve ser outra célula', 'aviso'); return; }
-  const maxNum = (_avtEd as any).portasInternas.reduce((m: any, p: any) => Math.max(m, p.numero || 0), 1);
-  const numero = maxNum + 1;
-  (_avtEd as any).portasInternas.push({ numero, nome: 'Porta ' + numero, a: { col: a.col, row: a.row }, b: { col, row } });
-  _avtEd.tiles[row][col] = AVT_T.PISO;
-  _avtEdStatus('Porta interna criada.');
-  mostrarToast('Porta interna criada', 'ok');
-  (_avtEd as any)._render?.();
-}
-
-async function _avtMestreSalvarMapaUnificado() {
-  if (!_avtEd.tiles || !AVT_STATE.dungeon) return;
-  // Aprendizado: diff baseline×editado + estatísticas → perfil de estilo
-  try {
-    const tj = AVT_STATE.rpg.theme_json = AVT_STATE.rpg.theme_json || {};
-    const profile = tj.generation_style_profile || {};
-    const rules = _avtAprenderPlacements((_avtEd as any).tilesBaseline, _avtEd.tiles, _avtEd.w, _avtEd.h, profile.placement_rules || {});
-    // dungeon temporário p/ stats (com as portas e tiles editados)
-    const dungeonStats = { tiles: _avtEd.tiles, rooms: AVT_STATE.dungeon.rooms, _portasInternas: (_avtEd as any).portasInternas };
-    tj.generation_style_profile = _avtMesclarPerfilEstilo(profile, _avtDerivarStats(dungeonStats), rules);
-  } catch(e) { console.warn('[avt] aprendizado de estilo falhou:', e); }
-
-  // Aplicar ao dungeon ativo
-  AVT_STATE.dungeon.tiles = _avtEd.tiles.map((r: any) => [...r]);
-  AVT_STATE.dungeon._portasInternas = (_avtEd as any).portasInternas;
-
-  // Persistir estado da fase atual no lugar certo (principal vs fase extra)
-  const tj = AVT_STATE.rpg.theme_json;
-  const faseId = (AVT_STATE as any)._faseAtualId || 'principal';
-  _avtGravarDungeonNoSlot(tj);
-  // Portas de fase editadas (merge das coords) — mantém objetos das fases já existentes
-  if ((_avtEd as any).fasesExtras && tj.fases_extras) {
-    tj.fases_extras.forEach((f: any) => {
-      const ed = _avtEd.fasesExtras.find((x: any) => x.id === f.id);
-      if (ed) f.porta = ed.porta;
-    });
-  }
-  if (tj.tileset_paints) delete tj.tileset_paints;
-
-  const overlay = document.getElementById('avt-mestre-map-editor-overlay');
-  if (overlay) overlay.style!.display = 'none';
-  try {
-    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
-      method: 'PATCH', body: JSON.stringify({ theme_json: tj })
-    });
-    mostrarToast('Mapa salvo!', 'ok');
-  } catch (e: any) {
-    mostrarToast('Mapa atualizado localmente (erro ao persistir: ' + (e?.message || e) + ')', 'aviso');
-  }
-  // Invalida os bakes estáticos locais do próprio mestre (o broadcast não ecoa de volta)
-  AVT_STATE._dungeonRev = ((AVT_STATE as any)._dungeonRev || 0) + 1;
-  if (typeof _avtTileBakeInvalidate === 'function') _avtTileBakeInvalidate();
-  // Broadcast p/ os outros clientes (escopo por fase)
-  try {
-    _avtBroadcast?.('avt_dungeon_update', {
-      faseId,
-      dungeon: AVT_STATE.dungeon,
-      fases_extras: tj.fases_extras || []
-    });
-  } catch(_) {}
+  (window as any).avtFaseEditorAbrir({ modo: 'live' });
 }
 
 // Recebe atualização de mapa de outro cliente (mestre editou ao vivo)
@@ -23683,10 +23123,6 @@ function avtReceberDungeonUpdate(p: any) {
 window.avtReceberDungeonUpdate = avtReceberDungeonUpdate;
 window._avtMestreAbrirEditorUnificado = _avtMestreAbrirEditorUnificado;
 // Handlers inline (onclick/onchange) do editor unificado precisam estar no escopo global.
-window._avtEdSetTool = _avtEdSetTool;
-window._avtEdDistribuirTileset = _avtEdDistribuirTileset;
-window._avtMestreSalvarMapaUnificado = _avtMestreSalvarMapaUnificado;
-window._avtEdConfirmarPorta = _avtEdConfirmarPorta;
 window._avtMestreToggleTrocaTileset = _avtMestreToggleTrocaTileset;
 window._avtMestreHandleTilesetUpload = _avtMestreHandleTilesetUpload;
 window._avtMestreAplicarTilesetUpload = _avtMestreAplicarTilesetUpload;
@@ -24805,17 +24241,6 @@ function _avtMestreToggleTrocaTileset() {
   painel.style!.display = painel.style!.display === 'none' ? 'block' : 'none';
 }
 
-function _avtMestreCopiarPromptTileset() {
-  const cols = parseInt(document.getElementById('avt-mp-ts-cols')?.value || '4', 10);
-  const rows = parseInt(document.getElementById('avt-mp-ts-rows')?.value || '4', 10);
-  const estilo = AVT_STATE.rpg?.name || 'pixel art fantasy dungeon';
-  if (typeof faseTilesetImgPromptTemplate === 'function') {
-    const prompt = faseTilesetImgPromptTemplate({ estilo, cols, rows });
-    navigator.clipboard.writeText(prompt)
-      .then(() => mostrarToast('📋 Prompt copiado!', 'ok'))
-      .catch(() => mostrarToast('Erro ao copiar', 'err'));
-  }
-}
 
 function _avtMestreHandleTilesetUpload(input: any) {
   const file = input?.files?.[0];
@@ -25057,25 +24482,12 @@ function _avtNfRenderMapaSub(opcao: any) {
       <div id="avt-nf-claude-status" style="font-size:0.68rem;color:#7a92aa"></div>
     </div>`;
   } else if (opcao === 'editor') {
-    sub.innerHTML = `<div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center">
-        <span style="font-size:0.65rem;color:#7a92aa">Tamanho:</span>
-        <select id="avt-nf-ed-tamanho" onchange="_avtNfEditorTamanho(this.value)"
-          style="padding:3px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.68rem">
-          <option value="22x16">22×16</option>
-          <option value="40x28" selected>40×28</option>
-          <option value="60x40">60×40</option>
-        </select>
-        <button onclick="_avtNfEditorAcao('piso')" class="avt-ed-btn avt-ed-btn-ativo" id="avt-nf-btn-piso">Piso</button>
-        <button onclick="_avtNfEditorAcao('parede')" class="avt-ed-btn" id="avt-nf-btn-parede">Parede</button>
-        <button onclick="_avtNfEditorLimpar()" class="avt-ed-btn">Limpar</button>
-        <button onclick="_avtNfEditorExport()" class="avt-mp-btn avt-mp-btn-ok" style="font-size:0.65rem;padding:3px 10px">✓ Usar este mapa</button>
-      </div>
-      <div style="overflow:auto;max-height:220px;border:1px solid rgba(79,163,209,0.12);border-radius:5px">
-        <canvas id="avt-nf-ed-canvas" style="cursor:crosshair;display:block;touch-action:none"></canvas>
-      </div>
+    const _nfMapa: any = w.dungeon;
+    const _nfTem = _nfMapa && Array.isArray(_nfMapa.tiles);
+    sub.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+      <button onclick="_avtNfAbrirEditor()" class="avt-ed-btn avt-ed-btn-ativo" style="padding:8px 14px">🖉 Abrir editor de mapa</button>
+      <div id="avt-nf-editor-status" style="font-size:0.66rem;color:#4fa3d1">${_nfTem ? `✓ Mapa ${_nfMapa.w}×${_nfMapa.h} pronto` : 'Nenhum mapa desenhado ainda'}</div>
     </div>`;
-    setTimeout(_avtNfEditorInit, 50);
   }
 }
 
@@ -25155,63 +24567,27 @@ async function _avtNfGerarComClaude() {
   }
 }
 
-// Minimal canvas editor for nova fase
-const _avtNfEd = { tiles: null as any, w: 40, h: 28, acao: 'piso', drawing: false };
-function _avtNfEditorInit() {
-  const canvas = document.getElementById('avt-nf-ed-canvas');
-  if (!canvas) return;
-  canvas.width = _avtNfEd.w * 12; canvas.height = _avtNfEd.h * 12;
-  if (!_avtNfEd.tiles) _avtNfEd.tiles = Array.from({length:_avtNfEd.h}, ()=>Array(_avtNfEd.w).fill(AVT_T.PAREDE));
-  _avtNfEditorDraw();
-  const paint = (e: any) => {
-    const r = canvas.getBoundingClientRect();
-    const cw = r.width/_avtNfEd.w, ch = r.height/_avtNfEd.h;
-    const tx = Math.floor((e.clientX-r.left)/cw), ty = Math.floor((e.clientY-r.top)/ch);
-    if (tx>=0&&tx<_avtNfEd.w&&ty>=0&&ty<_avtNfEd.h) {
-      _avtNfEd.tiles[ty][tx] = _avtNfEd.acao==='piso' ? AVT_T.PISO : AVT_T.PAREDE;
-      _avtNfEditorDraw();
-    }
-  };
-  canvas.onmousedown = e => { _avtNfEd.drawing=true; paint(e); };
-  canvas.onmousemove = e => { if(_avtNfEd.drawing) paint(e); };
-  canvas.onmouseup = () => { _avtNfEd.drawing=false; };
-}
-function _avtNfEditorDraw() {
-  const canvas = document.getElementById('avt-nf-ed-canvas');
-  if (!canvas||!_avtNfEd.tiles) return;
-  const ctx = canvas.getContext!('2d');
-  const cw = canvas.width!/_avtNfEd.w, ch = canvas.height!/_avtNfEd.h;
-  for (let y=0;y<_avtNfEd.h;y++) for (let x=0;x<_avtNfEd.w;x++) {
-    ctx.fillStyle = _avtNfEd.tiles[y][x]===AVT_T.PISO?'#1a2535':'#0a0c14';
-    ctx.fillRect(x*cw,y*ch,cw,ch);
-  }
-}
-function _avtNfEditorAcao(a: any) {
-  _avtNfEd.acao = a;
-  ['piso','parede'].forEach(k => {
-    const b = document.getElementById('avt-nf-btn-'+k);
-    if (b) b.classList.toggle('avt-ed-btn-ativo', k===a);
+// Editor de mapa da Nova Fase: abre o fase-editor (fase-editor.ts) em modo
+// rascunho — com touch, zoom, balde e undo (o mini editor antigo era só mouse).
+function _avtNfAbrirEditor() {
+  const w = AVT_STATE._novaFaseWizard;
+  if (!w) return;
+  const atual: any = w.dungeon;
+  const temGrid = atual && Array.isArray(atual.tiles);
+  (window as any).avtFaseEditorAbrir({
+    modo: 'draft',
+    w: temGrid ? atual.w : 40,
+    h: temGrid ? atual.h : 28,
+    tiles: temGrid ? atual.tiles : null,
+    rooms: temGrid ? (atual.rooms || []) : [],
+    onExport: (d: any) => {
+      w.dungeon = d;
+      mostrarToast('Mapa do editor definido!', 'ok');
+      _avtMestreNovaFaseRender();
+    },
   });
 }
-function _avtNfEditorTamanho(v: any) {
-  const [ww,hh] = v.split('x').map(Number);
-  _avtNfEd.w=ww; _avtNfEd.h=hh;
-  _avtNfEd.tiles = Array.from({length:hh},()=>Array(ww).fill(AVT_T.PAREDE));
-  const c = document.getElementById('avt-nf-ed-canvas');
-  if (c) { c.width=ww*12; c.height=hh*12; }
-  _avtNfEditorDraw();
-}
-function _avtNfEditorLimpar() {
-  _avtNfEd.tiles = Array.from({length:_avtNfEd.h},()=>Array(_avtNfEd.w).fill(AVT_T.PAREDE));
-  _avtNfEditorDraw();
-}
-function _avtNfEditorExport() {
-  const w = AVT_STATE._novaFaseWizard;
-  if (!w||!_avtNfEd.tiles) return;
-  w.dungeon = { tiles:_avtNfEd.tiles.map((r: any)=>[...r]), w:_avtNfEd.w, h:_avtNfEd.h, rooms:[] };
-  mostrarToast('Mapa do editor definido!', 'ok');
-  _avtMestreNovaFaseRender();
-}
+window._avtNfAbrirEditor = _avtNfAbrirEditor;
 
 function _avtNfHandleTilesetImg(input: any) {
   const file = input?.files?.[0];
@@ -32781,27 +32157,10 @@ Object.defineProperty(globalThis, "avtCriarImportCampanha", { configurable: true
 Object.defineProperty(globalThis, "_avtCriarVoltar", { configurable: true, get: () => _avtCriarVoltar, set: (__v) => { _avtCriarVoltar = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtCriarAvancar", { configurable: true, get: () => _avtCriarAvancar, set: (__v) => { _avtCriarAvancar = __v; } });
-Object.defineProperty(globalThis, "_avtEd", { configurable: true, get: () => _avtEd, set: (__v) => { _avtEd = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorTamanho", { configurable: true, get: () => _avtEditorTamanho, set: (__v) => { _avtEditorTamanho = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorInit", { configurable: true, get: () => _avtEditorInit, set: (__v) => { _avtEditorInit = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorReset", { configurable: true, get: () => _avtEditorReset, set: (__v) => { _avtEditorReset = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorLimpar", { configurable: true, get: () => _avtEditorLimpar, set: (__v) => { _avtEditorLimpar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorAcaoSet", { configurable: true, get: () => _avtEditorAcaoSet, set: (__v) => { _avtEditorAcaoSet = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorRenderCanvas", { configurable: true, get: () => _avtEditorRenderCanvas, set: (__v) => { _avtEditorRenderCanvas = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEditorExport", { configurable: true, get: () => _avtEditorExport, set: (__v) => { _avtEditorExport = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtGetGridParams", { configurable: true, get: () => _avtGetGridParams, set: (__v) => { _avtGetGridParams = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtGerarPromptJson", { configurable: true, get: () => _avtGerarPromptJson, set: (__v) => { _avtGerarPromptJson = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtJsonAtualizarPrompt", { configurable: true, get: () => _avtJsonAtualizarPrompt, set: (__v) => { _avtJsonAtualizarPrompt = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtCopiarPromptJson", { configurable: true, get: () => _avtCopiarPromptJson, set: (__v) => { _avtCopiarPromptJson = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
@@ -33556,29 +32915,8 @@ Object.defineProperty(globalThis, "_avtMestrePainelRender", { configurable: true
 Object.defineProperty(globalThis, "_avtMpAba", { configurable: true, get: () => _avtMpAba, set: (__v) => { _avtMpAba = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMpConteudoAba", { configurable: true, get: () => _avtMpConteudoAba, set: (__v) => { _avtMpConteudoAba = __v; } });
-Object.defineProperty(globalThis, "_AVT_ED_SZ", { configurable: true, get: () => _AVT_ED_SZ });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMestreAbrirEditorUnificado", { configurable: true, get: () => _avtMestreAbrirEditorUnificado, set: (__v) => { _avtMestreAbrirEditorUnificado = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdStatus", { configurable: true, get: () => _avtEdStatus, set: (__v) => { _avtEdStatus = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdAtualizarBotoes", { configurable: true, get: () => _avtEdAtualizarBotoes, set: (__v) => { _avtEdAtualizarBotoes = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdSetTool", { configurable: true, get: () => _avtEdSetTool, set: (__v) => { _avtEdSetTool = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdDistribuirTileset", { configurable: true, get: () => _avtEdDistribuirTileset, set: (__v) => { _avtEdDistribuirTileset = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdAplicarTool", { configurable: true, get: () => _avtEdAplicarTool, set: (__v) => { _avtEdAplicarTool = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdApagar", { configurable: true, get: () => _avtEdApagar, set: (__v) => { _avtEdApagar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdAbrirConfigPorta", { configurable: true, get: () => _avtEdAbrirConfigPorta, set: (__v) => { _avtEdAbrirConfigPorta = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdConfirmarPorta", { configurable: true, get: () => _avtEdConfirmarPorta, set: (__v) => { _avtEdConfirmarPorta = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtEdCompletarPortaInterna", { configurable: true, get: () => _avtEdCompletarPortaInterna, set: (__v) => { _avtEdCompletarPortaInterna = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMestreSalvarMapaUnificado", { configurable: true, get: () => _avtMestreSalvarMapaUnificado, set: (__v) => { _avtMestreSalvarMapaUnificado = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "avtReceberDungeonUpdate", { configurable: true, get: () => avtReceberDungeonUpdate, set: (__v) => { avtReceberDungeonUpdate = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
@@ -33679,8 +33017,6 @@ Object.defineProperty(globalThis, "_avtMpTilesetFile", { configurable: true, get
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMestreToggleTrocaTileset", { configurable: true, get: () => _avtMestreToggleTrocaTileset, set: (__v) => { _avtMestreToggleTrocaTileset = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMestreCopiarPromptTileset", { configurable: true, get: () => _avtMestreCopiarPromptTileset, set: (__v) => { _avtMestreCopiarPromptTileset = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMestreHandleTilesetUpload", { configurable: true, get: () => _avtMestreHandleTilesetUpload, set: (__v) => { _avtMestreHandleTilesetUpload = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMestreAplicarTilesetUpload", { configurable: true, get: () => _avtMestreAplicarTilesetUpload, set: (__v) => { _avtMestreAplicarTilesetUpload = __v; } });
@@ -33702,19 +33038,6 @@ Object.defineProperty(globalThis, "_avtNfGerarProcedural", { configurable: true,
 Object.defineProperty(globalThis, "_avtNfJsonParse", { configurable: true, get: () => _avtNfJsonParse, set: (__v) => { _avtNfJsonParse = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtNfGerarComClaude", { configurable: true, get: () => _avtNfGerarComClaude, set: (__v) => { _avtNfGerarComClaude = __v; } });
-Object.defineProperty(globalThis, "_avtNfEd", { configurable: true, get: () => _avtNfEd });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtNfEditorInit", { configurable: true, get: () => _avtNfEditorInit, set: (__v) => { _avtNfEditorInit = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtNfEditorDraw", { configurable: true, get: () => _avtNfEditorDraw, set: (__v) => { _avtNfEditorDraw = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtNfEditorAcao", { configurable: true, get: () => _avtNfEditorAcao, set: (__v) => { _avtNfEditorAcao = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtNfEditorTamanho", { configurable: true, get: () => _avtNfEditorTamanho, set: (__v) => { _avtNfEditorTamanho = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtNfEditorLimpar", { configurable: true, get: () => _avtNfEditorLimpar, set: (__v) => { _avtNfEditorLimpar = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtNfEditorExport", { configurable: true, get: () => _avtNfEditorExport, set: (__v) => { _avtNfEditorExport = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtNfHandleTilesetImg", { configurable: true, get: () => _avtNfHandleTilesetImg, set: (__v) => { _avtNfHandleTilesetImg = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])

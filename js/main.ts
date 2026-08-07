@@ -54,6 +54,7 @@ import './systems/arena';
 import './systems/inventory';
 import './systems/aventura';
 import './aventura/renderer-pixi';
+import './aventura/fase-editor';
 import './systems/avt-walk-presets';
 import './systems/avt-menu';
 import './systems/avt-inventario';

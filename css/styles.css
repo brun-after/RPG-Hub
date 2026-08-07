@@ -2891,3 +2891,37 @@ body.avt-fx-low .anim-shimmer,
 body.avt-fx-low .realtime-dot { animation: none !important; }
 body.avt-fx-low .anim-crystal svg,
 body.avt-fx-low .anim-sigil svg { filter: none !important; }
+
+/* ── Editor de fases (fase-editor.ts) ─────────────────────────────────────── */
+#avt-fase-editor .fed-toolbar {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  padding: 8px 10px; border-bottom: 1px solid rgba(79,163,209,0.15);
+  background: rgba(10,15,24,0.9);
+}
+#avt-fase-editor .fed-btn {
+  background: rgba(79,163,209,0.08); border: 1px solid rgba(79,163,209,0.25);
+  border-radius: 6px; color: #c8d8e8; font-family: var(--fonte-d,serif);
+  font-size: 0.7rem; padding: 6px 9px; cursor: pointer; touch-action: manipulation;
+}
+#avt-fase-editor .fed-btn-on { background: rgba(200,168,75,0.2); border-color: rgba(200,168,75,0.6); color: #c8a84b; }
+#avt-fase-editor .fed-btn-ok { background: rgba(39,174,96,0.15); border-color: rgba(39,174,96,0.4); color: #2ecc71; }
+#avt-fase-editor .fed-btn-danger { background: rgba(232,80,60,0.12); border-color: rgba(232,80,60,0.35); color: #e8604c; }
+#avt-fase-editor .fed-sep { width: 1px; height: 20px; background: rgba(79,163,209,0.2); margin: 0 4px; }
+#avt-fase-editor .fed-num {
+  width: 52px; padding: 5px 4px; background: #0a0f18;
+  border: 1px solid rgba(79,163,209,0.2); border-radius: 5px; color: #c8d8e8;
+  font-size: 0.7rem; text-align: center;
+}
+#avt-fase-editor .fed-status { font-size: 0.64rem; color: #7a92aa; padding: 5px 12px; }
+#avt-fase-editor .fed-body { flex: 1; display: flex; min-height: 0; }
+#avt-fase-editor .fed-palette {
+  flex: 0 0 200px; padding: 10px; overflow-y: auto;
+  border-right: 1px solid rgba(79,163,209,0.12);
+}
+#avt-fase-editor .fed-palette-title {
+  font-size: 0.6rem; color: #7a92aa; text-transform: uppercase;
+  letter-spacing: .06em; margin-bottom: 6px;
+}
+#avt-fase-editor .fed-rot-row { display: flex; gap: 4px; align-items: center; margin-top: 8px; }
+#avt-fase-editor .fed-brush-info { font-size: 0.6rem; color: #4fa3d1; margin-top: 4px; }
+#avt-fase-editor .fed-canvas-wrap { flex: 1; min-width: 0; position: relative; overflow: hidden; }
