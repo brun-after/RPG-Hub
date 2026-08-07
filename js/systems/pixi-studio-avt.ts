@@ -75,6 +75,40 @@ function _psAvtTexFrom(url: any) {
   } catch (_) { return PIXI.Texture.WHITE; }
 }
 
+// Textura de vinheta radial (canvas 2D, cacheada): centro transparente → bordas pretas.
+let _psVignetteTex: any = null;
+function _psVignetteTexture() {
+  if (_psVignetteTex && _psVignetteTex.baseTexture && _psVignetteTex.baseTexture.valid !== false) return _psVignetteTex;
+  const S = 256;
+  const c = document.createElement('canvas'); c.width = c.height = S;
+  const g = c.getContext('2d')!;
+  const grd = g.createRadialGradient(S / 2, S / 2, S * 0.22, S / 2, S / 2, S * 0.52);
+  grd.addColorStop(0, 'rgba(0,0,0,0)');
+  grd.addColorStop(0.65, 'rgba(0,0,0,0.6)');
+  grd.addColorStop(1, 'rgba(0,0,0,1)');
+  g.fillStyle = grd; g.fillRect(0, 0, S, S);
+  _psVignetteTex = PIXI.Texture.from(c);
+  return _psVignetteTex;
+}
+
+// Node de escurecimento de fundo. Usa renderer.screen (coordenadas do stage), NÃO
+// renderer.width/height: este é o backing store (screen × resolution) e no overlay
+// iso (resolution 1/1.8) o retângulo sairia parcial/deslocado — a "sombra retangular"
+// sobre o mapa. radialDim ganha vinheta real; sem darken explícito assume 0.3 (legado).
+function _psBuildBackgroundDim(app: any, bg: any) {
+  if (!bg || (!bg.darken && !bg.radialDim)) return null;
+  const W = app.renderer.screen.width, H = app.renderer.screen.height;
+  const a = Math.min(1, bg.darken || 0.3);
+  if (bg.radialDim) {
+    const sp = new PIXI.Sprite(_psVignetteTexture());
+    sp.width = W; sp.height = H; sp.alpha = a;
+    return sp;
+  }
+  const dim = new PIXI.Graphics();
+  dim.beginFill(0x000000, a).drawRect(0, 0, W, H).endFill();
+  return dim;
+}
+
 // ── Transform studio-space coordinates to adventure screen-space ─────────────
 function _psStudioToScreen(px: any, py: any, atacScr: any, alvoScr: any) {
   const dx_s = _PS_ALVO_REF.x - _PS_ATAC_REF.x;  // 320
@@ -760,13 +794,8 @@ async function _psAvtRenderWithSpawnPath(cfg: any, atacScr: any, alvoScr: any, c
   app.stage.addChild(bgRoot, sceneRoot, uiRoot);
 
   // Background dim / vignette (full screen, behind the effects)
-  if (cfg.background && (cfg.background.darken || cfg.background.radialDim)) {
-    const dim = new PIXI.Graphics();
-    const a = cfg.background.darken || 0.3;
-    dim.beginFill(0x000000, a).drawRect(0, 0, app.renderer.width, app.renderer.height).endFill();
-    if (cfg.background.radialDim) dim.blendMode = PIXI.BLEND_MODES.MULTIPLY;
-    bgRoot.addChild(dim);
-  }
+  const bgDim = _psBuildBackgroundDim(app, cfg.background);
+  if (bgDim) bgRoot.addChild(bgDim);
 
   // Scene-level lighting (bloom + tone) + user filters, applied to the whole effect.
   const sceneFilters = [];
@@ -1081,10 +1110,12 @@ function _psAvtProjectile(cfg: any, atacScr: any, alvoScr: any, alvoEnt: any, at
   const avtCfg  = _psToAvtConfig(cfg);
   if (!avtCfg) return 0;
 
-  // Phase 1: cast anim at the caster's live position
+  // Phase 1: cast anim at the caster's live position. background:null — as janelas
+  // cast+impact se sobrepõem e o dim de fundo empilharia (2× o escurecimento);
+  // só a fase de impacto carrega o background.
   if (typeof _avtPixiParticleAnim === 'function') {
     const castAtac = atacanteEnt ? _psAvtToScreen(atacanteEnt) : atacScr;
-    _avtPixiParticleAnim(Object.assign({}, avtCfg, { duration: Math.min(400, speedMs) }),
+    _avtPixiParticleAnim(Object.assign({}, avtCfg, { duration: Math.min(400, speedMs), background: null }),
       castAtac, castAtac, 'atacante');
   }
 
@@ -1518,3 +1549,7 @@ Object.defineProperty(globalThis, "avtPixiPlayPersistent", { configurable: true,
 Object.defineProperty(globalThis, "avtPixiStopPersistent", { configurable: true, get: () => avtPixiStopPersistent, set: (__v) => { avtPixiStopPersistent = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "avtPixiCleanupAll", { configurable: true, get: () => avtPixiCleanupAll, set: (__v) => { avtPixiCleanupAll = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psBuildBackgroundDim", { configurable: true, get: () => _psBuildBackgroundDim, set: (__v) => { _psBuildBackgroundDim = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_psVignetteTexture", { configurable: true, get: () => _psVignetteTexture, set: (__v) => { _psVignetteTexture = __v; } });

@@ -2164,11 +2164,10 @@ function psPreviewRebuildAll() {
   const fxOn = (PIXI_STUDIO_STATE as any)._fxEnabled !== false;
   (PIXI_STUDIO_STATE as any)._originGizmo = null;
 
-  // Background darken (parity with runtime _avtPixiParticleAnim) — behind effect layers
-  if (fxOn && cfg.background && cfg.background.darken) {
-    const dim = new PIXI.Graphics();
-    dim.beginFill(0x000000, cfg.background.darken).drawRect(0, 0, app.renderer.width, app.renderer.height).endFill();
-    worldRoot.addChild(dim);
+  // Background darken/vinheta (parity with runtime _avtPixiParticleAnim) — behind effect layers
+  if (fxOn && typeof _psBuildBackgroundDim === 'function') {
+    const dim = _psBuildBackgroundDim(app, cfg.background);
+    if (dim) worldRoot.addChild(dim);
   }
 
   for (const layer of sorted) {

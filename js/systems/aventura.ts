@@ -19932,7 +19932,9 @@ function _avtCameraFX(app: any, worldRoot: any, uiRoot: any, camCfg: any, totalD
   if (Craw.hitstop && IP.hitstopMul > 0) (C as any).hitstop = Object.assign({}, Craw.hitstop, { ms: (Craw.hitstop.ms || 0) * IP.hitstopMul });
   if (Craw.zoomPunch && IP.zoomPunchMul > 0) (C as any).zoomPunch = Object.assign({}, Craw.zoomPunch, { scale: 1 + ((Craw.zoomPunch.scale || 1) - 1) * IP.zoomPunchMul });
   if (Craw.chromaticAberration && IP.chromaticMul > 0) (C as any).chromaticAberration = Object.assign({}, Craw.chromaticAberration, { amount: (Craw.chromaticAberration.amount || 0) * IP.chromaticMul });
-  const W = app.renderer.width, H = app.renderer.height;
+  // renderer.screen (coordenadas do stage), não renderer.width/height (backing store):
+  // com resolution ≠ 1 (overlay iso) o flash cobriria só parte da tela.
+  const W = app.renderer.screen.width, H = app.renderer.screen.height;
   const baseX = worldRoot.position.x, baseY = worldRoot.position.y;
   const baseScale = worldRoot.scale.x;
 
@@ -20374,12 +20376,9 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
       app.stage.addChild(uiRoot);
 
       // Background dim (vignette) — tela cheia, atrás dos efeitos (não billboarda)
-      if (root.background && (root.background.darken || root.background.radialDim)) {
-        const dim = new PIXI.Graphics();
-        const a = root.background.darken || 0.3;
-        dim.beginFill(0x000000, a).drawRect(0,0,app.renderer.width, app.renderer.height).endFill();
-        if (root.background.radialDim) dim.blendMode = PIXI.BLEND_MODES.MULTIPLY;
-        bgRoot.addChild(dim);
+      if (typeof _psBuildBackgroundDim === 'function') {
+        const dim = _psBuildBackgroundDim(app, root.background);
+        if (dim) bgRoot.addChild(dim);
       }
 
       // Global filters: bloom + tone + user-defined
@@ -20666,6 +20665,20 @@ function _avtPixiParticleAnim(particleConfig: any, atacScr: any, alvoScr: any, p
           }
           (AVT_STATE as any)._fxFreezeUntil = 0;
         }, totalDuration + 1100);
+      }).catch((e) => {
+        // Sem este catch, uma exceção na montagem assíncrona (cameraFX, filtros,
+        // emitters) deixaria bgRoot/dim adicionados sincronamente presos no stage
+        // do host para sempre — retângulo escuro permanente sobre o mapa.
+        console.warn('[pixi-fx] montagem de camadas falhou:', e);
+        if (_usaHost) {
+          try { if (app) app.destroy(); } catch(_) {} // adapter: remove tickFns e destrói o Container
+        } else {
+          if (overlayCanvas) overlayCanvas.remove();
+          try { if (app) (app as any).destroy(true); } catch(_) {}
+          _avtPixiActiveApps--;
+          _avtPixiDrainQueue();
+        }
+        (AVT_STATE as any)._fxFreezeUntil = 0;
       });
     } catch(e) {
       console.warn('[pixi-fx] erro ao iniciar:', e);
