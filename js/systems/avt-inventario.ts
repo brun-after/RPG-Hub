@@ -640,6 +640,8 @@ function _avtLojaPrecoVenda(def: any) {
 async function avtAbrirLoja(lojaId: any) {
   const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
   if (!jogador) return mostrarToast('Nenhum personagem vinculado', 'aviso');
+  // Janela de baú/loja já aberta em contagem: exclusão mútua via congelamento.
+  if (typeof _avtJogadorCongelado === 'function' && _avtJogadorCongelado()) return;
   const loja = _avtLojaGetById(lojaId);
   if (!loja) return mostrarToast('Loja não encontrada', 'erro');
   // O cartão pode ficar no painel após o jogador se afastar — revalida posição.
@@ -651,17 +653,56 @@ async function avtAbrirLoja(lojaId: any) {
   }
   const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === jogador.nome);
   if (!char?.id) return;
+  // Cooldown por jogador e por loja (wall-clock, sincronizado via avt_ooc_cooldown).
+  const cdKey = 'loja_' + char.id + '_' + String(loja.id);
+  const cdAte = ((typeof AVT_STATE !== 'undefined' && AVT_STATE._oocCooldowns) || {})[cdKey] || 0;
+  if (cdAte > Date.now()) {
+    mostrarToast('🛒 Loja em recarga — aguarde ' + Math.ceil((cdAte - Date.now()) / 1000) + 's', 'aviso');
+    return;
+  }
   if (!(AVT_INV.inventarios as any)[char.id]) await avtInvCarregarChar(char.id);
-  (AVT_INV as any)._lojaAberta = { lojaId: String(loja.id), aba: 'comprar' };
+  const icfg = (typeof _avtInteracaoConfig === 'function') ? _avtInteracaoConfig() : { lojaCountdownS: 5, lojaCooldownS: 10 };
+  (AVT_INV as any)._lojaAberta = {
+    lojaId: String(loja.id), aba: 'comprar', charId: char.id,
+    fechaEm: Date.now() + icfg.lojaCountdownS * 1000,
+  };
   _avtLojaRenderModal();
+  // Contagem acima do modal (fecha sozinha ao zerar) + jogador congelado
+  // (pausado para todos os efeitos) enquanto a janela está aberta.
+  if (typeof _avtCountdownBadgeMostrar === 'function') {
+    _avtCountdownBadgeMostrar({
+      deadline: (AVT_INV as any)._lojaAberta.fechaEm,
+      topCss: 'max(8px, calc(6vh - 34px))', zIndex: 9510, prefixo: '🛒',
+      onDone: () => _avtLojaFecharComCooldown(),
+    });
+  }
+  if (typeof _avtCongelarJogadorLocal === 'function') _avtCongelarJogadorLocal(icfg.lojaCountdownS * 1000);
 }
 window.avtAbrirLoja = avtAbrirLoja;
 
-function avtFecharLoja() {
+function avtFecharLoja(force?: any) {
+  const st = (AVT_INV as any)._lojaAberta;
+  // Durante a contagem a janela não fecha por × /clique fora — ela É a contagem.
+  if (!force && st?.fechaEm && st.fechaEm > Date.now()) {
+    mostrarToast('⏳ A loja fecha em ' + Math.ceil((st.fechaEm - Date.now()) / 1000) + 's', 'aviso');
+    return;
+  }
   (AVT_INV as any)._lojaAberta = null;
   document.getElementById('avt-loja-modal')?.remove();
+  if (typeof _avtCountdownBadgeLimpar === 'function') _avtCountdownBadgeLimpar();
 }
 window.avtFecharLoja = avtFecharLoja;
+
+// Fecha a janela (forçado) e arma o cooldown por jogador daquela loja.
+function _avtLojaFecharComCooldown() {
+  const st = (AVT_INV as any)._lojaAberta;
+  if (st?.charId && st?.lojaId && typeof _avtSetOocCooldown === 'function') {
+    const icfg = (typeof _avtInteracaoConfig === 'function') ? _avtInteracaoConfig() : { lojaCooldownS: 10 };
+    _avtSetOocCooldown('loja_' + st.charId + '_' + st.lojaId, Date.now() + icfg.lojaCooldownS * 1000);
+  }
+  avtFecharLoja(true);
+}
+window._avtLojaFecharComCooldown = _avtLojaFecharComCooldown;
 
 function _avtLojaAba(aba: any) {
   const st = (AVT_INV as any)._lojaAberta;
@@ -677,7 +718,7 @@ function _avtLojaRenderModal() {
   const loja = _avtLojaGetById(st.lojaId);
   const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
   const char = jogador ? (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === jogador.nome) : null;
-  if (!loja || !char) { avtFecharLoja(); return; }
+  if (!loja || !char) { avtFecharLoja(true); return; }
 
   let overlay = document.getElementById('avt-loja-modal');
   if (!overlay) {

@@ -4868,6 +4868,8 @@ async function _avtCarregarDados(rpgId: any) {
   _avtBausPreDungeonParaMapa();
   _avtNormalizarObjetosDungeon(AVT_STATE.dungeon);
   (AVT_STATE as any)._dynSpawnNextAt = -1; // boot: adia 1º spawn até pós-eleição
+  (AVT_STATE as any)._congeladoAte = 0;    // descarta congelamento de sessão anterior
+  (AVT_STATE as any)._cullGraceAte = 0;    // re-arma a carência de boot do cull
   // Início é sempre a fase inicial (fase 1). Entrar/Jogar nunca herda a fase de
   // outro jogador — o isolamento por fase cuida do resto.
   (AVT_STATE as any)._faseAtualId = 'principal';
@@ -6518,6 +6520,9 @@ function _avtRenderFrame() {
     }
   }
 
+  // Congelamento de interação (baú/loja): mantém/expira o freeze do jogador local
+  try { _avtCongelamentoTick(); } catch(_) {}
+
   // Verificação periódica de proximidade para jogadores parados (throttle 1s)
   // Permite que inimigos detectem e reajam a jogadores que não estão se movendo.
   const _agoraVerif = Date.now();
@@ -6549,6 +6554,11 @@ function _avtRenderFrame() {
         }
       }
     } catch(_) {}
+    // Despawn de baús abertos e traps dinâmicas expiradas (host da fase)
+    try { _avtCullObjetosExpirados(Date.now()); } catch(_) {}
+    // Prompt de interação: re-render por segundo para a contagem de recarga da
+    // loja andar mesmo com o jogador parado (a função é barata e assina por sig)
+    try { _avtInteracaoPromptUpdate(); } catch(_) {}
     // Checa todos os jogadores vivos fora de combate (útil no host p/ jogadores remotos)
     AVT_STATE.entidades
       .filter((e: any) => e.tipo === 'jogador' && e.hp > 0 && !_avtBatalhaDeEnt(e.id))
@@ -6564,7 +6574,7 @@ function _avtRenderFrame() {
   if (_agoraVerif - ((AVT_STATE as any)._ultimaAutoAtaqueVerif || 0) >= 250) {
     (AVT_STATE as any)._ultimaAutoAtaqueVerif = _agoraVerif;
     const _jLocalAuto = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
-    if (_jLocalAuto && !(AVT_STATE as any)._pausaLocal && !_avtMinhaBatalha() && !AVT_STATE._primeiroAtaqueModoAlvo) {
+    if (_jLocalAuto && !(AVT_STATE as any)._pausaLocal && !_avtJogadorCongelado() && !_avtMinhaBatalha() && !AVT_STATE._primeiroAtaqueModoAlvo) {
       try { _avtVerificarAutoAtaqueBasico(_jLocalAuto); } catch(_) {}
     }
   }
@@ -9591,7 +9601,7 @@ function _avtCanvasClick(e: any) {
     AVT_STATE.alvoSelecionado = ent.id;
   } else if (!ent || ent.tipo !== 'inimigo') {
     const jogador = _avtEntidadeControlada();
-    if (jogador && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
+    if (jogador && !_avtJogadorCongelado() && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
       // Interrompe caminho atual e limpa fila de waypoints existente
       (AVT_STATE as any)._caminhoDestino = null;
       if (!Array.isArray(jogador._waypoints)) jogador._waypoints = [];
@@ -10270,6 +10280,8 @@ function _avtMoverJogador(dx: any, dy: any) {
   // Entidade morta não se move (cobre desktop + d-pad mobile, que roteiam por aqui).
   // Evita enfileirar waypoints/gastar movimento antes de _avtProcessarMorteJogador concluir.
   if (jogador.hp <= 0) return;
+  // Congelado pela janela de baú/loja: imóvel até a contagem terminar.
+  if (_avtJogadorCongelado()) return;
   if (minhaBat?.moverModo) {
     // Combate: movimento célula inteira (snap posição fracionária de exploração para inteiro)
     const baseX = Math.round(jogador.x), baseY = Math.round(jogador.y);
@@ -12480,6 +12492,9 @@ function _avtTickEfeitosOOC(now: any) {
     if (nowMs - rec.lastTickAt >= cdMs) {
       // Pausar tick OOC quando entidade está em combate ativo (evita duplo-processamento com _avtProcessarStatusEffects)
       if (typeof _avtBatalhaDeEnt === 'function' && _avtBatalhaDeEnt(rec.entId)) return true;
+      // Entidade pausada (menu ou congelamento de baú/loja) é imune a efeitos:
+      // pula o tick e re-baseia o relógio para o dano não "acumular" no despausar.
+      if (ent._pausado) { rec.lastTickAt = nowMs; return true; }
       rec.lastTickAt = nowMs;
       const ef = rec.ef;
       if (ef.tipo === 'necromante' && ent._dominado) {
@@ -13469,6 +13484,16 @@ async function _avtProcessarMorteJogador(ent: any, bat: any) {
   if (ent._processandoMorte) return;
   ent._processandoMorte = true;
 
+  // Morreu com janela de baú/loja aberta: encerra o congelamento imediatamente
+  // (o tick por frame faria isso, mas o fluxo de morte fica limpo) e fecha a
+  // loja ARMANDO o cooldown — morrer não é atalho para burlar a recarga.
+  if (ent.nome === AVT_STATE.myCharNome) {
+    (AVT_STATE as any)._congeladoAte = 0;
+    if (!(AVT_STATE as any)._pausaLocal) delete ent._pausado;
+    try { if (typeof _avtLojaFecharComCooldown === 'function' && (typeof AVT_INV !== 'undefined') && (AVT_INV as any)._lojaAberta) _avtLojaFecharComCooldown(); } catch(_) {}
+    try { document.getElementById('avt-loot-popup')?.remove(); _avtCountdownBadgeLimpar(); } catch(_) {}
+  }
+
   const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
   const xpPerdido         = lc.xp_perda_morte ?? 50;
   const downgradeNivel    = lc.morte_downgrade_nivel ?? false;
@@ -13485,9 +13510,21 @@ async function _avtProcessarMorteJogador(ent: any, bat: any) {
   const novoXp     = Math.max(0, xpAtual - xpPerdido);
   let nivelDepois  = nivelAntes;
 
+  // Perda de ouro na morte: percentual aleatório entre min e max do ouro atual.
+  // Pega carona no PATCH de custom_attrs abaixo (sem segunda requisição em corrida).
+  const ouroMinPct = lc.morte_ouro_perda_min_pct ?? 10;
+  const ouroMaxPct = lc.morte_ouro_perda_max_pct ?? 50;
+  const ouroAntes  = dbChar?.custom_attrs?.ouro || 0;
+  const _pctOuro   = ouroMinPct + Math.random() * Math.max(0, ouroMaxPct - ouroMinPct);
+  const ouroPerdido = Math.min(ouroAntes, Math.max(0, Math.floor(ouroAntes * _pctOuro / 100)));
+  const novoOuro    = Math.max(0, ouroAntes - ouroPerdido);
+
   if (dbChar) {
     dbChar.xp = novoXp;
     if (dbChar.custom_attrs) dbChar.custom_attrs.xp = novoXp;
+    if (ouroPerdido > 0) {
+      dbChar.custom_attrs = { ...(dbChar.custom_attrs || {}), ouro: novoOuro };
+    }
 
     if (downgradeNivel && nivelAntes > 1) {
       const xpLimiar = _avtXpParaNivel(nivelAntes - 1);
@@ -13527,6 +13564,10 @@ async function _avtProcessarMorteJogador(ent: any, bat: any) {
       }).catch(() => {});
       // Propagar perda de XP/nível para as cópias do personagem em outras aventuras.
       _avtSyncLinhagem(dbChar);
+      // Invalida cache de inventário/painéis com o novo ouro nos outros clientes
+      if (ouroPerdido > 0) {
+        try { if (typeof avtInvBroadcastUpdate === 'function') avtInvBroadcastUpdate(dbChar.id, { ouro: novoOuro }); } catch(_) {}
+      }
     }
   }
 
@@ -13535,10 +13576,11 @@ async function _avtProcessarMorteJogador(ent: any, bat: any) {
 
   // Anima subtração de XP no canvas/HUD
   _avtMostrarXpLoss(ent.nome, xpPerdido);
+  if (ouroPerdido > 0) mostrarToast(`🪙 -${ouroPerdido} ouro`, 'erro');
 
   // Informa todos os clientes
   _avtBroadcast('avt_jogador_morreu', {
-    charNome: ent.nome, xpPerdido, novoXp, nivelAntes, nivelDepois
+    charNome: ent.nome, xpPerdido, novoXp, nivelAntes, nivelDepois, ouroPerdido, novoOuro
   });
 
   // Fase 1 — reviver: restaura HP e devolve o controle, MAS mantém invisível para inimigos.
@@ -13567,7 +13609,7 @@ async function _avtProcessarMorteJogador(ent: any, bat: any) {
   }, invisMs);
 }
 
-function avtReceberJogadorMorreu({ charNome, xpPerdido, novoXp, nivelAntes, nivelDepois }: any) {
+function avtReceberJogadorMorreu({ charNome, xpPerdido, novoXp, nivelAntes, nivelDepois, ouroPerdido, novoOuro }: any) {
   if (!AVT_STATE.rpgId) return;
   const char = AVT_STATE.chars.find((c: any) => c.nome === charNome);
   if (char) {
@@ -13577,17 +13619,19 @@ function avtReceberJogadorMorreu({ charNome, xpPerdido, novoXp, nivelAntes, nive
       char.nivel = nivelDepois;
       if (char.custom_attrs) char.custom_attrs.nivel = nivelDepois;
     }
+    if (char.custom_attrs && novoOuro != null) char.custom_attrs.ouro = novoOuro;
   }
   const ent = AVT_STATE.entidades.find((e: any) => e.nome === charNome);
   if (ent) {
     ent._invisivelParaInimigos = true;
     if (nivelDepois !== nivelAntes) ent.nivel = nivelDepois;
   }
+  const _sufOuro = (ouroPerdido > 0) ? ` · -${ouroPerdido} ouro` : '';
   if (charNome === AVT_STATE.myCharNome) {
     _avtMostrarXpLoss(charNome, xpPerdido);
-    mostrarToast(`💀 ${charNome} caiu! -${xpPerdido} XP`, 'erro');
+    mostrarToast(`💀 ${charNome} caiu! -${xpPerdido} XP${_sufOuro}`, 'erro');
   } else {
-    mostrarToast(`💀 ${charNome} caiu!`, 'aviso');
+    mostrarToast(`💀 ${charNome} caiu!${_sufOuro}`, 'aviso');
   }
   _avtHudUpdate();
   _avtRenderHpBar();
@@ -13628,8 +13672,13 @@ function _avtDefinirPausaLocal(pausado: any) {
   (AVT_STATE as any)._pausaLocal = !!pausado;
   const j = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
   if (j && j.tipo === 'jogador') {
-    if (pausado) j._pausado = true; else delete j._pausado;
-    try { _avtBroadcast('avt_jogador_pausado', { charNome: j.nome, pausado: !!pausado }); } catch (_) {}
+    // Congelamento de interação ativo: o despausar do menu não limpa o flag —
+    // o _avtCongelamentoTick libera (e broadcasta) quando o deadline vencer.
+    const manterCongelado = !pausado && _avtJogadorCongelado();
+    if (pausado) j._pausado = true; else if (!manterCongelado) delete j._pausado;
+    if (!manterCongelado) {
+      try { _avtBroadcast('avt_jogador_pausado', { charNome: j.nome, pausado: !!pausado }); } catch (_) {}
+    }
   }
   try {
     if (typeof AudioManager !== 'undefined') {
@@ -13646,6 +13695,45 @@ function avtReceberJogadorPausado({ charNome, pausado }: any) {
   if (pausado) ent._pausado = true; else delete ent._pausado;
 }
 window.avtReceberJogadorPausado = avtReceberJogadorPausado;
+
+// ── CONGELAMENTO DE INTERAÇÃO (baú/loja) ─────────────────────────────────────
+// Enquanto a janela de baú/loja conta para fechar, o jogador local fica
+// congelado: imóvel e com _pausado ativo (inimigos ignoram, DOT não tica).
+// Difere da pausa de menu: não mexe na música e expira sozinha por deadline —
+// o destravamento é dirigido por frame (_avtCongelamentoTick), nunca fica preso.
+function _avtJogadorCongelado() {
+  return ((AVT_STATE as any)._congeladoAte || 0) > Date.now();
+}
+window._avtJogadorCongelado = _avtJogadorCongelado;
+
+function _avtCongelarJogadorLocal(ms: any) {
+  const j = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
+  if (!j || j.tipo !== 'jogador') return;
+  (AVT_STATE as any)._congeladoAte = Math.max((AVT_STATE as any)._congeladoAte || 0, Date.now() + (ms || 0));
+  j._pausado = true;
+  if (Array.isArray(j._waypoints)) j._waypoints.length = 0;
+  (AVT_STATE as any)._caminhoDestino = null;
+  try { _avtBroadcast('avt_jogador_pausado', { charNome: j.nome, pausado: true }); } catch (_) {}
+}
+window._avtCongelarJogadorLocal = _avtCongelarJogadorLocal;
+
+// Chamado a cada frame: re-assere _pausado enquanto congelado (o despausar do
+// menu não pode limpá-lo no meio) e libera ao vencer o deadline.
+function _avtCongelamentoTick() {
+  const ate = (AVT_STATE as any)._congeladoAte || 0;
+  if (!ate) return;
+  const j = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
+  if (Date.now() >= ate) {
+    (AVT_STATE as any)._congeladoAte = 0;
+    if (j && j.tipo === 'jogador' && !(AVT_STATE as any)._pausaLocal) {
+      delete j._pausado;
+      try { _avtBroadcast('avt_jogador_pausado', { charNome: j.nome, pausado: false }); } catch (_) {}
+    }
+    return;
+  }
+  if (j && j.tipo === 'jogador') j._pausado = true;
+}
+window._avtCongelamentoTick = _avtCongelamentoTick;
 
 // ── SAÍDA EXPLÍCITA DA PARTIDA ────────────────────────────────────────────────
 // O jogador voltou ao menu/hub: o personagem sai do jogo IMEDIATAMENTE em todos
@@ -14287,8 +14375,24 @@ function _avtDynSpawnConfig() {
     lootChance:  lc.dyn_loot_chance != null ? lc.dyn_loot_chance : 0.50,
     orbeMax:     lc.dyn_orbe_max   != null ? lc.dyn_orbe_max   : 3,
     orbeChance:  lc.dyn_orbe_chance != null ? lc.dyn_orbe_chance : 0.30,
+    trapMax:     lc.dyn_trap_max   != null ? lc.dyn_trap_max   : 2,
+    trapChance:  lc.dyn_trap_chance != null ? lc.dyn_trap_chance : 0.30,
+    trapTtlS:    lc.dyn_trap_ttl_s != null ? lc.dyn_trap_ttl_s : 180,
   };
 }
+
+// Config das janelas de interação (baú/loja): contagem até fechar, despawn do
+// baú aberto e cooldown por jogador da loja.
+function _avtInteracaoConfig() {
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  return {
+    bauCountdownS:  lc.bau_countdown_s  != null ? lc.bau_countdown_s  : 3,
+    bauDespawnS:    lc.bau_despawn_s    != null ? lc.bau_despawn_s    : 5,
+    lojaCountdownS: lc.loja_countdown_s != null ? lc.loja_countdown_s : 5,
+    lojaCooldownS:  lc.loja_cooldown_s  != null ? lc.loja_cooldown_s  : 10,
+  };
+}
+window._avtInteracaoConfig = _avtInteracaoConfig;
 
 // Baú dinâmico: 1–2 itens droppable do catálogo + ouro escalado pelo nível da fase.
 function _avtGerarBauDinamico(pos: any) {
@@ -14345,14 +14449,8 @@ function _avtDynSpawnTick(now: any) {
   if (typeof _avtSouHostDaFaseAtual === 'function' && !_avtSouHostDaFaseAtual()) return;
 
   const rd = AVT_STATE.dungeon.render_data;
-  // Baús dinâmicos já abertos saem do mapa (mantém objetos[] enxuto).
-  const abertos = (rd.objetos || []).filter((o: any) => String(o.id).startsWith('dynb_') && o.aberto);
-  if (abertos.length) {
-    rd.objetos = rd.objetos.filter((o: any) => !(String(o.id).startsWith('dynb_') && o.aberto));
-    try { _avtNormalizarObjetosDungeon(AVT_STATE.dungeon); _avtSalvarDungeon(); } catch(_) {}
-    abertos.forEach((o: any) => { try { _avtBroadcast('avt_obj_pickup', { objId: o.id }); } catch(_) {} });
-  }
-
+  // (Baús abertos e traps dinâmicas expiradas são removidos por
+  // _avtCullObjetosExpirados, no bloco de 1s do frame — caminho único de remoção.)
   const conta = (pfx: any) => (rd.objetos || []).filter((o: any) => String(o.id).startsWith(pfx)).length;
   for (let i = conta('dynb_'); i < cfg.bauMax; i++) {
     if (Math.random() >= cfg.bauChance) continue;
@@ -14375,8 +14473,68 @@ function _avtDynSpawnTick(now: any) {
     else if (typeof _avtGerarOrbeEfeito === 'function') _avtGerarOrbeEfeito(pos, 'dyno_');
     else _avtGerarOrbeNpc(pos, 'orbe_hp', lc.orbe_hp_tiers, 'dyno_');
   }
+  for (let i = conta('dynt_'); i < cfg.trapMax; i++) {
+    if (Math.random() >= cfg.trapChance) continue;
+    const pos = _avtCelulaLivreAleatoria();
+    if (pos) _avtGerarTrapDinamica(pos);
+  }
 }
 window._avtDynSpawnTick = _avtDynSpawnTick;
+
+// Armadilha dinâmica: objeto armadilha_mestre oneshot com dano escalado pelo
+// nível da fase e TTL (_expiraEm) — não disparada, some e reaparece em outro
+// lugar nos ticks seguintes (cull + repopulação). Invisível para jogadores,
+// como as armadilhas do mestre.
+function _avtGerarTrapDinamica(pos: any) {
+  const cfg: any = _avtDynSpawnConfig();
+  const nivel = AVT_STATE.dungeon?._npcLevel || 1;
+  const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+  _avtSpawnObjMapa({
+    id: 'dynt_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    tipo: 'armadilha_mestre', nome: 'Armadilha',
+    x: pos.x / dw, y: pos.y / dh,
+    formula: Math.min(6, Math.max(1, Math.round(nivel))) + 'd6',
+    efeito: null, modo: 'oneshot', armada: true, _rearmarEm: null,
+    _expiraEm: Date.now() + cfg.trapTtlS * 1000,
+  });
+}
+window._avtGerarTrapDinamica = _avtGerarTrapDinamica;
+
+// ── Cull de objetos expirados (host da fase, chamado no bloco de 1s) ─────────
+// Remove do mapa baús abertos com _despawnEm vencido (estado legado — aberto
+// antes desta feature — ganha stamp retroativo na primeira passada) e traps
+// dinâmicas com TTL vencido. Remove TAMBÉM de rd.baus: sem isso o normalizador
+// (_avtNormalizarObjetosDungeon) ressuscitaria o baú a partir do array-fonte.
+function _avtCullObjetosExpirados(now: any) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd?.objetos?.length) return;
+  // Carência de boot (mesma razão do sentinel -1 do spawner): logo após o load
+  // todo cliente se acha host solo por alguns segundos — remover+salvar nessa
+  // janela gravaria theme_json em corrida com o host verdadeiro.
+  if (((AVT_STATE as any)._dynSpawnNextAt ?? 0) === -1) { (AVT_STATE as any)._cullGraceAte = 0; return; }
+  if (!(AVT_STATE as any)._cullGraceAte) { (AVT_STATE as any)._cullGraceAte = now + 20_000; return; }
+  if (now < (AVT_STATE as any)._cullGraceAte) return;
+  if (typeof _avtSouHostDaFaseAtual === 'function' && !_avtSouHostDaFaseAtual()) return;
+
+  const icfg = _avtInteracaoConfig();
+  const removidos: any[] = [];
+  for (const o of rd.objetos) {
+    if ((o.tipo === 'bau' || o.tipo === 'chest') && o.aberto) {
+      if (!o._despawnEm) { o._despawnEm = now + icfg.bauDespawnS * 1000; continue; }
+      if (now >= o._despawnEm) removidos.push(o);
+    } else if (o.tipo === 'armadilha_mestre' && String(o.id).startsWith('dynt_')
+               && o._expiraEm && now >= o._expiraEm) {
+      removidos.push(o);
+    }
+  }
+  if (!removidos.length) return;
+  const ids = new Set(removidos.map((o: any) => String(o.id)));
+  rd.objetos = rd.objetos.filter((o: any) => !ids.has(String(o.id)));
+  if (Array.isArray(rd.baus)) rd.baus = rd.baus.filter((b: any) => !ids.has(String(b.id)));
+  try { _avtNormalizarObjetosDungeon(AVT_STATE.dungeon); _avtSalvarDungeon(); } catch(_) {}
+  removidos.forEach((o: any) => { try { _avtBroadcast('avt_obj_pickup', { objId: o.id }); } catch(_) {} });
+}
+window._avtCullObjetosExpirados = _avtCullObjetosExpirados;
 
 // Debounced save of dungeon position to DB (so late-joining players see correct positions)
 var _avtSavePosTimers: Record<string, any> = {};
@@ -18216,8 +18374,18 @@ function _avtInteracaoPromptUpdate() {
     ? _avtLojaNaPosicao(Math.round(jogador.x), Math.round(jogador.y)) : null;
   const ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL.modoTela === 'dispositivo';
 
+  // Cooldown da loja para o jogador local (segundos restantes; 0 = disponível)
+  let lojaCdS = 0;
+  if (loja && jogador) {
+    const _charCd = AVT_STATE.chars.find((c: any) => c.nome === jogador.nome);
+    if (_charCd?.id) {
+      const _cdAte = (AVT_STATE._oocCooldowns || {})['loja_' + _charCd.id + '_' + String(loja.id)] || 0;
+      lojaCdS = Math.max(0, Math.ceil((_cdAte - Date.now()) / 1000));
+    }
+  }
+
   // Painel do modo controle só re-renderiza quando o conjunto de interações muda
-  const sig = (bau ? 'b:' + bau.id : '') + '|' + (loja ? 'l:' + loja.id : '');
+  const sig = (bau ? 'b:' + bau.id : '') + '|' + (loja ? 'l:' + loja.id : '') + '|cd:' + lojaCdS;
   if (sig !== (AVT_STATE as any)._interacaoSig) {
     (AVT_STATE as any)._interacaoSig = sig;
     if (ctrlDisp && typeof _atualizarZonaDireita === 'function') { try { _atualizarZonaDireita(); } catch(_) {} }
@@ -18238,7 +18406,15 @@ function _avtInteracaoPromptUpdate() {
   }
   if (loja) {
     const safe = _escHtml(String(loja.id).replace(/'/g, "\\'"));
-    html += btn(`avtAbrirLoja('${safe}')`, _escHtml(loja.icone || '🛒'), 'Abrir ' + _escHtml(loja.nome || 'Loja'), 'L');
+    if (lojaCdS > 0) {
+      // Em recarga: botão desabilitado com contagem (atualizado pelo bloco de 1s)
+      html += `
+    <button disabled style="display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(5,8,16,0.92);border:1px solid rgba(100,110,125,0.35);border-radius:8px;color:#556878;font-family:var(--fonte-d);font-size:0.72rem;padding:8px 16px;cursor:default;box-shadow:0 2px 12px rgba(0,0,0,0.5)">
+      <span>${_escHtml(loja.icone || '🛒')} ${_escHtml(loja.nome || 'Loja')} (${lojaCdS}s)</span>
+    </button>`;
+    } else {
+      html += btn(`avtAbrirLoja('${safe}')`, _escHtml(loja.icone || '🛒'), 'Abrir ' + _escHtml(loja.nome || 'Loja'), 'L');
+    }
   }
   el.innerHTML = html;
   el.style!.display = 'flex';
@@ -18482,10 +18658,45 @@ function _avtOrbConsumirCargas(casterEnt: any) {
 }
 
 // Open a chest at player's position
+// ── Badge de contagem regressiva (acima da janela de baú/loja) ───────────────
+// Div única fixa no body (não filha do modal: _avtLojaRenderModal reescreve o
+// innerHTML do overlay a cada aba/compra). Conta a partir do deadline absoluto
+// (robusto a throttling de aba) e chama onDone ao zerar.
+var _avtCountdownTimer: any = null;
+function _avtCountdownBadgeLimpar() {
+  if (_avtCountdownTimer) { clearInterval(_avtCountdownTimer); _avtCountdownTimer = null; }
+  document.getElementById('avt-countdown-badge')?.remove();
+}
+window._avtCountdownBadgeLimpar = _avtCountdownBadgeLimpar;
+
+function _avtCountdownBadgeMostrar({ deadline, topCss, zIndex, prefixo, onDone }: any = {}) {
+  _avtCountdownBadgeLimpar();
+  const el = document.createElement('div');
+  el.id = 'avt-countdown-badge';
+  el.style!.cssText = `position:fixed;left:50%;top:${topCss || '20%'};transform:translateX(-50%);z-index:${zIndex || 9310};background:rgba(5,8,16,0.95);border:1px solid rgba(200,168,75,0.5);border-radius:999px;padding:4px 14px;font-family:var(--fonte-d);font-size:0.8rem;color:#c8a84b;box-shadow:0 2px 12px rgba(0,0,0,0.5);pointer-events:none`;
+  document.body.appendChild(el);
+  let ultimoS = -1;
+  const _tick = () => {
+    const s = Math.max(0, Math.ceil(((deadline || 0) - Date.now()) / 1000));
+    if (s !== ultimoS) { ultimoS = s; el.textContent = `⏳ ${prefixo ? prefixo + ' ' : ''}${s}s`; }
+    if (s <= 0) {
+      _avtCountdownBadgeLimpar();
+      try { if (typeof onDone === 'function') onDone(); } catch (_) {}
+    }
+  };
+  _tick();
+  if (_avtCountdownTimer === null && document.getElementById('avt-countdown-badge')) {
+    _avtCountdownTimer = setInterval(_tick, 250);
+  }
+}
+window._avtCountdownBadgeMostrar = _avtCountdownBadgeMostrar;
+
 // ── Popup de loot (baú aberto) ───────────────────────────────────────────────
 // Lista o que foi recebido: itens (ícone + nome ×qtd) e ouro. Clique fecha;
-// auto-fecha com fade. Ícone ausente no loot é resolvido pelo catálogo.
-function _avtLootPopupMostrar({ titulo, itens, ouro }: any = {}) {
+// auto-fecha com fade. Com countdownS, vira a "janela do baú": não fecha por
+// clique, exibe o badge de contagem acima e fecha sozinha ao zerar.
+// Ícone ausente no loot é resolvido pelo catálogo.
+function _avtLootPopupMostrar({ titulo, itens, ouro, countdownS }: any = {}) {
   document.getElementById('avt-loot-popup')?.remove();
   const cat = (AVT_STATE.itemCatalog || []).concat((typeof AVT_INV !== 'undefined' && AVT_INV?.catalogo) || []);
   const _icone = (it: any) => it.icone
@@ -18508,16 +18719,29 @@ function _avtLootPopupMostrar({ titulo, itens, ouro }: any = {}) {
   el.innerHTML = `
     <div style="color:#c8a84b;font-size:0.78rem;margin-bottom:6px">📦 ${_escHtml(titulo || 'Baú')}</div>
     ${linhas}${linhaOuro}
-    <div style="color:#7a92aa;font-size:0.55rem;margin-top:8px;text-align:center">toque para fechar</div>`;
-  const _fechar = () => { el.style!.opacity = '0'; setTimeout(() => el.remove(), 400); };
-  el.addEventListener('click', _fechar);
+    <div style="color:#7a92aa;font-size:0.55rem;margin-top:8px;text-align:center">${countdownS ? `fecha em ${parseInt(countdownS)}s` : 'toque para fechar'}</div>`;
+  const _fechar = () => { _avtCountdownBadgeLimpar(); el.style!.opacity = '0'; setTimeout(() => el.remove(), 400); };
   document.body.appendChild(el);
-  setTimeout(_fechar, 4500);
+  if (countdownS) {
+    // Janela com contagem: sem fechamento por clique; o badge dirige o fechamento
+    // (backup por timeout caso o badge seja removido por fora).
+    el.style!.cursor = 'default';
+    _avtCountdownBadgeMostrar({
+      deadline: Date.now() + countdownS * 1000,
+      topCss: 'calc(38% - 96px)', zIndex: 9310, prefixo: '📦', onDone: _fechar,
+    });
+    setTimeout(_fechar, countdownS * 1000 + 600);
+  } else {
+    el.addEventListener('click', _fechar);
+    setTimeout(_fechar, 4500);
+  }
 }
 
 async function avtAbrirBau(bauId: any) {
   const jogador = _avtMeuJogador();
   if (!jogador) return;
+  // Janela de baú/loja já aberta em contagem: exclusão mútua via congelamento.
+  if (_avtJogadorCongelado()) return;
   const rd = AVT_STATE.dungeon?.render_data;
   const bau = rd?.objetos?.find((o: any) => o.id === bauId || String(o.id) === String(bauId));
   if (!bau) { mostrarToast('Baú não encontrado', 'erro'); return; }
@@ -18540,6 +18764,10 @@ async function avtAbrirBau(bauId: any) {
     mostrarToast('🔓 Baú destrancado!', 'sucesso');
   }
   bau.aberto = true;
+  // Baú aberto some do mapa após alguns segundos (cull do host em
+  // _avtCullObjetosExpirados). O stamp entra ANTES do _avtSalvarDungeon para
+  // persistir junto — um reload no meio do timer ainda despawna.
+  bau._despawnEm = Date.now() + _avtInteracaoConfig().bauDespawnS * 1000;
   // Mantém o array de origem do gerador (render_data.baus) coerente para o
   // fase-renderer da campanha e recomputa _chestPositions (arte de tile).
   try {
@@ -18590,7 +18818,10 @@ async function avtAbrirBau(bauId: any) {
     }
   }
 
-  _avtLootPopupMostrar({ titulo: bau.nome || 'Baú', itens: loot, ouro: bau.ouro || 0 });
+  const _icfgBau = _avtInteracaoConfig();
+  _avtLootPopupMostrar({ titulo: bau.nome || 'Baú', itens: loot, ouro: bau.ouro || 0, countdownS: _icfgBau.bauCountdownS });
+  // O jogador fica congelado (pausado para todos os efeitos) enquanto a janela conta.
+  _avtCongelarJogadorLocal(_icfgBau.bauCountdownS * 1000);
   _avtBroadcast('avt_bau_aberto', { bauId, jogadorNome: jogador.nome });
   // [4.6] Garante invalidação do cache de inventário mesmo no caminho de fallback
   // (POST direto sem avtInvDarItem). Inclui ouro atualizado do baú.
@@ -18608,6 +18839,8 @@ function avtReceberBauAberto({ bauId, jogadorNome, faseId }: any = {}) {
     const bau = (rd.objetos || []).find((o: any) => o.id === bauId || String(o.id) === String(bauId));
     if (bau) {
       bau.aberto = true;
+      // Stamp local do despawn (a remoção autoritativa é do host, no cull do 1s).
+      if (!bau._despawnEm) bau._despawnEm = Date.now() + _avtInteracaoConfig().bauDespawnS * 1000;
       const bSrc = (rd.baus || []).find((b: any) => String(b.id) === String(bau.id));
       if (bSrc) bSrc.aberto = true;
       _avtNormalizarObjetosDungeon(AVT_STATE.dungeon);
@@ -18649,10 +18882,24 @@ function avtReceberObjPickup({ objId, faseId }: any = {}) {
     const idx = rd.objetos.findIndex((o: any) => String(o.id) === String(objId));
     if (idx >= 0) {
       const o = rd.objetos[idx];
-      const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
-      _avtSfxPosicional(o.tipo === 'loot' ? 'coin_pickup' : 'buff_activate',
-        { x: (o.x ?? 0) * dw, y: (o.y ?? 0) * dh }, 0.5);
+      // Despawn silencioso de baú/armadilha (cull do host) — som só em coleta real.
+      if (o.tipo !== 'bau' && o.tipo !== 'chest' && o.tipo !== 'armadilha_mestre') {
+        const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+        _avtSfxPosicional(o.tipo === 'loot' ? 'coin_pickup' : 'buff_activate',
+          { x: (o.x ?? 0) * dw, y: (o.y ?? 0) * dh }, 0.5);
+      }
       rd.objetos.splice(idx, 1);
+    }
+    // Remove também dos arrays-fonte do gerador: sem isso, o próximo
+    // _avtNormalizarObjetosDungeon (rodado em todo avt_bau_aberto) ressuscita
+    // o objeto a partir de rd.baus/rd.itens_no_chao neste cliente.
+    if (Array.isArray(rd.baus)) {
+      const bIdx = rd.baus.findIndex((b: any) => String(b.id) === String(objId));
+      if (bIdx >= 0) rd.baus.splice(bIdx, 1);
+    }
+    if (Array.isArray(rd.itens_no_chao)) {
+      const iIdx = rd.itens_no_chao.findIndex((i: any) => String(i.id) === String(objId));
+      if (iIdx >= 0) rd.itens_no_chao.splice(iIdx, 1);
     }
     try { if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender(); } catch(_) {}
   } catch(_) {}
@@ -22932,7 +23179,7 @@ function _avtMpConteudoAba() {
         return `
       <div class="avt-mp-secao">
         <div class="avt-mp-label">🌱 Spawns Dinâmicos no Mapa</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">O host da fase semeia baús, loot e orbes em células livres ao carregar o mapa e repõe a cada intervalo. "Chance" é a probabilidade de preencher cada vaga livre por ciclo.</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">O host da fase semeia baús, loot, orbes e armadilhas em células livres ao carregar o mapa e repõe a cada intervalo. "Chance" é a probabilidade de preencher cada vaga livre por ciclo. Armadilhas dinâmicas são invisíveis aos jogadores, disparam uma vez e mudam de lugar ao fim da "vida".</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <input type="checkbox" id="avt-mp-dyn-ativo" ${d.ativo ? 'checked' : ''}>
           <span style="font-size:0.7rem;color:#7a92aa">Ativado</span>
@@ -22951,11 +23198,19 @@ function _avtMpConteudoAba() {
           <input type="number" id="avt-mp-dyn-loot-pct" min="0" max="100" value="${Math.round(d.lootChance * 100)}" style="${inCss}">
           <span style="font-size:0.7rem;color:#7a92aa">% chance</span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <input type="number" id="avt-mp-dyn-orbe-max" min="0" max="20" value="${d.orbeMax}" style="${inCss}">
           <span style="font-size:0.7rem;color:#b07ef0">🔮 máx. orbes</span>
           <input type="number" id="avt-mp-dyn-orbe-pct" min="0" max="100" value="${Math.round(d.orbeChance * 100)}" style="${inCss}">
           <span style="font-size:0.7rem;color:#7a92aa">% chance</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-dyn-trap-max" min="0" max="20" value="${d.trapMax}" style="${inCss}">
+          <span style="font-size:0.7rem;color:#d06a5a">🪤 máx. armadilhas</span>
+          <input type="number" id="avt-mp-dyn-trap-pct" min="0" max="100" value="${Math.round(d.trapChance * 100)}" style="${inCss}">
+          <span style="font-size:0.7rem;color:#7a92aa">% chance</span>
+          <input type="number" id="avt-mp-dyn-trap-ttl" min="15" max="3600" step="5" value="${d.trapTtlS}" style="${inCss}">
+          <span style="font-size:0.7rem;color:#7a92aa">vida (s)</span>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDynSpawnConfig()" style="width:100%">💾 Salvar</button>
       </div>`;
@@ -23106,6 +23361,19 @@ function _avtMpConteudoAba() {
           <span style="font-size:0.7rem;color:#7a92aa">XP perdido</span>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarXpPerdaMorte()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🪙 Ouro perdido ao morrer (%)</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Ao morrer, o personagem perde um percentual aleatório do ouro acumulado, sorteado entre o mínimo e o máximo (padrão: 10% a 50%).</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-morte-ouro-min" min="0" max="100" step="1" value="${lc.morte_ouro_perda_min_pct ?? 10}"
+            style="width:70px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">% mín</span>
+          <input type="number" id="avt-mp-morte-ouro-max" min="0" max="100" step="1" value="${lc.morte_ouro_perda_max_pct ?? 50}"
+            style="width:70px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">% máx</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarMorteOuroPerda()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-label">📉 Redução de XP por repetição</div>
@@ -23599,6 +23867,9 @@ async function _avtSalvarDynSpawnConfig() {
     dyn_loot_chance:       pct('avt-mp-dyn-loot-pct', 0.50),
     dyn_orbe_max:          num('avt-mp-dyn-orbe-max', 3, 0, 20),
     dyn_orbe_chance:       pct('avt-mp-dyn-orbe-pct', 0.30),
+    dyn_trap_max:          num('avt-mp-dyn-trap-max', 2, 0, 20),
+    dyn_trap_chance:       pct('avt-mp-dyn-trap-pct', 0.30),
+    dyn_trap_ttl_s:        num('avt-mp-dyn-trap-ttl', 180, 15, 3600),
   };
   Object.assign(rpg.theme_json.level_config, cfg);
   try {
@@ -24185,6 +24456,23 @@ async function _avtSalvarXpPerdaMorte() {
     mostrarToast(`XP perdido ao morrer: ${val}`, 'sucesso');
   } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
+
+async function _avtSalvarMorteOuroPerda() {
+  const min = Math.max(0, Math.min(100, parseInt((document.getElementById('avt-mp-morte-ouro-min') as any)?.value) || 0));
+  const max = Math.max(min, Math.min(100, parseInt((document.getElementById('avt-mp-morte-ouro-max') as any)?.value) || 0));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.morte_ouro_perda_min_pct = min;
+  rpg.theme_json.level_config.morte_ouro_perda_max_pct = max;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    try { _avtBroadcast('avt_level_config_update', { config: { morte_ouro_perda_min_pct: min, morte_ouro_perda_max_pct: max } }); } catch(_) {}
+    mostrarToast(`Ouro perdido ao morrer: ${min}% a ${max}%`, 'sucesso');
+  } catch (e: any) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtSalvarMorteOuroPerda = _avtSalvarMorteOuroPerda;
 
 async function _avtSalvarXpDecayAtivo() {
   const val = !!document.getElementById('avt-mp-xp-decay-ativo')?.checked;

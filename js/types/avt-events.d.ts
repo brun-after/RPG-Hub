@@ -21,7 +21,7 @@ declare global {
     avt_convite_combate: { batId?: any; expiry?: any; aliadoIds?: any; faseId?: any; [k: string]: any };
     avt_xp_ganho: { ganhos?: any; [k: string]: any };
     avt_level_up: { charNome?: any; novoNivel?: any; [k: string]: any };
-    avt_jogador_morreu: { charNome?: any; xpPerdido?: any; novoXp?: any; nivelAntes?: any; nivelDepois?: any; [k: string]: any };
+    avt_jogador_morreu: { charNome?: any; xpPerdido?: any; novoXp?: any; nivelAntes?: any; nivelDepois?: any; ouroPerdido?: any; novoOuro?: any; [k: string]: any };
     avt_jogador_ressurgiu: { charNome?: any; novoHp?: any; [k: string]: any };
     avt_jogador_visivel: { charNome?: any; [k: string]: any };
     avt_jogador_pausado: { charNome?: any; pausado?: any; [k: string]: any };
