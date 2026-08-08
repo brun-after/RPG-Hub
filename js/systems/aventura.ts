@@ -6497,6 +6497,7 @@ function _avtRenderFrame() {
   // Update patience timers (only for enemies not already in a combat)
   _avtAtualizarPaciencias(dt);
   _avtAtualizarPerseguicoes(dt);
+  _avtAtualizarInvocacoes(dt);
   // Em P2P, só o host aplica OOC tick (HP, flags). Não-host apenas exibe countdown via _oocStatusEffects.
   if (typeof RTNet === 'undefined' || !RTNet.initialized || RTNet.isHost()) {
     _avtTickEfeitosOOC(now);
@@ -32328,6 +32329,154 @@ function _avtRolarFormulaInvocado(invDef: any, tipo: any, donoNome: any) {
     base += Math.ceil(val * scalingPct / 100);
   }
   return Math.max(1, base);
+}
+
+// ── IA fora de combate das invocações ────────────────────────────────────────
+// Simulada no cliente do dono (que já roda o countdown de turnos e controla a
+// criatura em combate). Movimento propaga via avt_token_move; dano em inimigo
+// só é aplicado pela autoridade, no mesmo padrão do rastro contaminado.
+const _AVT_INV_AI_STEP_MS = 380;
+const _AVT_INV_AI_RAIO_ENGAJE = 5;
+
+function _avtAtualizarInvocacoes(dt: any) {
+  if (!dt || AVT_STATE._jogoAutoSuspenso) return;
+  const invs = AVT_STATE.invocacoes_ativas || [];
+  if (!invs.length) return;
+  const meu = _avtMeuJogador();
+  if (!meu) return;
+
+  for (const inv of invs) {
+    if (inv.dono_char_nome !== meu.nome) continue; // cada cliente simula só as suas
+    const comp = inv.invocacao_def?.comportamento || 'agressivo';
+    if (comp === 'dummy') continue; // isca fica parada de propósito
+    const ent = AVT_STATE.entidades.find((e: any) => e.id === inv.id);
+    if (!ent || ent.hp <= 0) continue;
+    if (_avtBatalhaDeEnt(inv.id)) continue; // em combate, o dono controla o turno
+    const dono = AVT_STATE.entidades.find((e: any) => e.nome === inv.dono_char_nome && e.tipo === 'jogador');
+    if (!dono) continue;
+
+    if (inv._aiAtkCd > 0) inv._aiAtkCd -= dt;
+    if (inv._aiHealCd > 0) inv._aiHealCd -= dt;
+    inv._aiStep = (inv._aiStep ?? 0) - dt;
+    if (inv._aiStep > 0) continue;
+    inv._aiStep = _AVT_INV_AI_STEP_MS;
+
+    // Curador: cura o dono ferido (o cliente do dono é a autoridade do próprio HP)
+    if (comp === 'curador' && dono.hp > 0 && dono.hp < dono.hpMax && (inv._aiHealCd ?? 0) <= 0) {
+      const cura = _avtRolarFormulaInvocado(inv.invocacao_def, 'cura', inv.dono_char_nome);
+      _avtAplicarDanoPersistir(dono, Math.min(dono.hpMax, dono.hp + cura));
+      try { _avtMostrarCuraAcimaDaHead(dono, cura); } catch(_) {}
+      try { _avtBroadcast('avt_hp_update', { nome: dono.nome, hp: dono.hp, hpMax: dono.hpMax }); } catch(_) {}
+      _avtLog(`💚 ${ent.nome} cura ${dono.nome} em ${cura}`);
+      inv._aiHealCd = _avtGetSecsPerTurno() * 2000;
+    }
+
+    let alvo = _avtInvEscolherAlvo(inv, ent, dono, comp);
+    // Protetor não abandona o dono: além do raio de guarda, volta em vez de caçar
+    if (comp === 'protetor' && alvo &&
+        Math.max(Math.abs(ent.x - dono.x), Math.abs(ent.y - dono.y)) > 3) alvo = null;
+
+    if (alvo) {
+      const dAlvo = Math.max(Math.abs(ent.x - alvo.x), Math.abs(ent.y - alvo.y));
+      if (dAlvo <= 1) {
+        if ((inv._aiAtkCd ?? 0) <= 0 && _avtEhAutoridade()) {
+          const dano = _avtRolarFormulaInvocado(inv.invocacao_def, 'dano', inv.dono_char_nome);
+          alvo.hp = Math.max(0, alvo.hp - dano);
+          try { _avtAplicarDanoPersistir(alvo, alvo.hp); } catch(_) {}
+          try { _avtMostrarDanoAbaixoHp(alvo, dano, false); } catch(_) {}
+          try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
+          _avtLog(`🔮 ${ent.nome} ataca ${alvo.nome}: ${dano} de dano`);
+          if (alvo.hp <= 0) _avtNpcMorreu(alvo, null, { creditoNome: inv.dono_char_nome });
+          inv._aiAtkCd = _avtGetSecsPerTurno() * 1000;
+        }
+        continue; // adjacente ao alvo: não anda
+      }
+    }
+
+    // Anda em direção ao alvo engajado; sem alvo, segue o dono a 2 células
+    const destino = alvo || dono;
+    const distDest = Math.max(Math.abs(ent.x - destino.x), Math.abs(ent.y - destino.y));
+    if (distDest <= (alvo ? 1 : 2)) { inv._aiPath = null; continue; }
+    _avtInvAndarPara(inv, ent, destino);
+  }
+}
+
+function _avtInvEscolherAlvo(inv: any, ent: any, dono: any, comp: any) {
+  if (comp === 'curador') return null;
+  let cands = AVT_STATE.entidades.filter((e: any) =>
+    e.tipo === 'inimigo' && e.hp > 0 && !e.escondido && !_avtBatalhaDeEnt(e.id));
+  if (comp === 'protetor') {
+    // Só reage a ameaças ao dono: quem o persegue ou chegou muito perto dele
+    cands = cands.filter((e: any) => {
+      const t = AVT_STATE.npcTimers?.[e.id];
+      if (t && t.isPursuing && t.targetId === dono.id) return true;
+      return Math.max(Math.abs(e.x - dono.x), Math.abs(e.y - dono.y)) <= 2;
+    });
+  } else {
+    cands = cands.filter((e: any) =>
+      Math.max(Math.abs(e.x - ent.x), Math.abs(e.y - ent.y)) <= _AVT_INV_AI_RAIO_ENGAJE);
+  }
+  if (!cands.length) return null;
+  if (comp === 'assassino') return cands.reduce((a: any, b: any) => (b.hp < a.hp ? b : a), cands[0]);
+  return cands.reduce((a: any, b: any) => {
+    const da = Math.max(Math.abs(a.x - ent.x), Math.abs(a.y - ent.y));
+    const db = Math.max(Math.abs(b.x - ent.x), Math.abs(b.y - ent.y));
+    return db < da ? b : a;
+  }, cands[0]);
+}
+
+function _avtInvAndarPara(inv: any, ent: any, destino: any) {
+  const curX = Math.round(ent.x), curY = Math.round(ent.y);
+  const goalX = Math.round(destino.x), goalY = Math.round(destino.y);
+
+  const _mover = (dx: any, dy: any) => {
+    const nx = curX + dx, ny = curY + dy;
+    if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon) &&
+        !_avtCelulaOcupada(nx, ny, ent.id, ent.tipo, false)) {
+      ent.x = nx; ent.y = ny;
+      if (!Array.isArray(inv._aiRecent)) inv._aiRecent = [];
+      inv._aiRecent.push(`${nx},${ny}`);
+      if (inv._aiRecent.length > 3) inv._aiRecent.shift();
+      try { _avtBcastTokenMove({ nome: ent.nome, x: nx, y: ny }); } catch(_) {}
+      return true;
+    }
+    return false;
+  };
+
+  let needRecalc = !Array.isArray(inv._aiPath) || !inv._aiPath.length ||
+    !inv._aiPathGoal ||
+    Math.abs(inv._aiPathGoal.x - goalX) + Math.abs(inv._aiPathGoal.y - goalY) >= 2;
+  if (!needRecalc) {
+    const next = inv._aiPath[0];
+    if (!next || !_avtTilePassavel(next.x, next.y, AVT_STATE.dungeon) ||
+        _avtCelulaOcupada(next.x, next.y, ent.id, ent.tipo, false)) needRecalc = true;
+  }
+  if (needRecalc) {
+    const full = _avtPathfindSimples(curX, curY, goalX, goalY, 120);
+    inv._aiPath = (full && full.length > 1) ? full.slice(1) : null;
+    inv._aiPathGoal = inv._aiPath ? { x: goalX, y: goalY } : null;
+  }
+
+  if (Array.isArray(inv._aiPath) && inv._aiPath.length) {
+    const next = inv._aiPath[0];
+    if (_mover(next.x - curX, next.y - curY)) { inv._aiPath.shift(); return; }
+    inv._aiPath = null;
+    inv._aiPathGoal = null;
+  }
+
+  // Fallback guloso: vizinho livre que mais aproxima, evitando células recentes
+  const recent = Array.isArray(inv._aiRecent) ? inv._aiRecent : [];
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  let best: any = null, bestDist = Infinity;
+  for (const [dx, dy] of dirs) {
+    const nx = curX + dx, ny = curY + dy;
+    if (recent.includes(`${nx},${ny}`)) continue;
+    if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon) ||
+        _avtCelulaOcupada(nx, ny, ent.id, ent.tipo, false)) continue;
+    const d = Math.abs(nx - goalX) + Math.abs(ny - goalY);
+    if (d < bestDist) { bestDist = d; best = [dx, dy]; }
+  }
+  if (best) _mover(best[0], best[1]);
 }
 
 /* [migração-esm] accessors globais */
