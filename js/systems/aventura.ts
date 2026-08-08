@@ -9225,6 +9225,11 @@ function _avtCelulaOcupada(nx: any, ny: any, entId: any, entTipo: any, emCombate
     if (e.tipo === 'avatar') return true;
     // Entidade com fantasma não bloqueia (fora de combate)
     if (!emCombate && e._fantasma) return false;
+    // Invocação aliada não bloqueia jogadores fora de combate (nem outras
+    // invocações) — evita a criatura que segue o dono entupir corredores.
+    // Inimigo continua barrado (body-block do protetor e da isca é feature).
+    if (!emCombate && (e.tipo === 'invocado' || entTipo === 'invocado') &&
+        e.tipo !== 'inimigo' && entTipo !== 'inimigo') return false;
     // Jogador vs Jogador
     if (e.tipo === 'jogador' && entTipo === 'jogador') return AVT_STATE.colisaoJogJog;
     // Jogador vs NPC ou NPC vs Jogador
