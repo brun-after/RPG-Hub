@@ -3600,17 +3600,37 @@ async function _avtMestreAtribuirJogador(playerId: any, charNome: any) {
   } catch (e: any) { mostrarToast('Erro ao atribuir: ' + (e?.message||e), 'erro'); }
 }
 
-// Receptor: o jogador atribuído atualiza seu vínculo localmente
+// Receptor: o jogador atribuído atualiza seu vínculo localmente.
+// Também faz upsert do membro (clientes com membros stale — a lista só era
+// carregada uma vez) e spawna/desesconde o personagem vinculado, para que um
+// jogador entrando no meio da sessão apareça em todos os clientes sem reload.
 function avtReceberMemberLinked({ player_id, linked }: any) {
   if (!player_id) return;
-  const m = (AVT_STATE.membros || []).find((x: any) => x.player_id === player_id);
-  if (m) m.linked = linked || null;
+  AVT_STATE.membros = AVT_STATE.membros || [];
+  let m = AVT_STATE.membros.find((x: any) => x.player_id === player_id);
+  if (!m) { m = { player_id, linked: null }; AVT_STATE.membros.push(m); }
+  const anterior = m.linked;
+  m.linked = linked || null;
+  if (linked) {
+    try {
+      const ent = typeof _avtSpawnCharJogador === 'function' ? _avtSpawnCharJogador(linked) : null;
+      if (ent) delete ent._charSaiu; // vínculo novo = jogador de volta ao jogo
+    } catch(_) {}
+  } else if (anterior && anterior !== AVT_STATE.myCharNome && !_avtCharTemVinculo(anterior)) {
+    // Desvinculado e ninguém mais o controla: sai do jogo.
+    const entAnt = (AVT_STATE.entidades || []).find((e: any) => e.tipo === 'jogador' && e.nome === anterior);
+    if (entAnt && AVT_STATE.npcControlando !== entAnt.id) {
+      entAnt.escondido = true;
+      entAnt._charOffline = true;
+    }
+  }
   if (SESSION?.user?.id === player_id) {
     AVT_STATE.myCharNome = linked || null;
     if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar();
     if (typeof _avtHudUpdate === 'function') _avtHudUpdate();
     mostrarToast(linked ? `🎭 Você controla: ${linked}` : 'Seu personagem foi desvinculado', 'ok');
   }
+  try { _avtAtualizarVisibilidadeOffline(); } catch(_) {}
 }
 window.avtReceberMemberLinked = avtReceberMemberLinked;
 
@@ -3618,6 +3638,13 @@ async function _avtMestreSelecionarPersonagem(charNome: any) {
   if (!SESSION?.user?.id) return;
   const charAnterior = AVT_STATE.myCharNome;
   AVT_STATE.myCharNome = charNome || null;
+  // Personagem nunca spawnado (sem vínculo até agora): entra no jogo já visível.
+  if (charNome) {
+    try {
+      const _e = typeof _avtSpawnCharJogador === 'function' ? _avtSpawnCharJogador(charNome) : null;
+      if (_e) { _e.escondido = false; _e._charOffline = false; delete _e._charSaiu; }
+    } catch(_) {}
+  }
   // Esconde da cena o personagem que o mestre largou, caso ninguém online o controle.
   if (charAnterior && charAnterior !== charNome) {
     const entAnt = AVT_STATE.entidades.find((e: any) => e.tipo === 'jogador' && e.nome === charAnterior);
@@ -4939,6 +4966,15 @@ function _avtIniciarRTNet(rpgId: any, onHostElected: any) {
         } catch(_) {}
       });
       try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
+      // Vínculo feito no menu (antes do RTNet subir): broadcast agora, para os
+      // clientes já na sessão atualizarem membros e spawnarem o personagem.
+      try {
+        const _pendLink = (AVT_STATE as any)._memberLinkPendente;
+        if (_pendLink) {
+          _avtBroadcast('avt_member_linked', _pendLink);
+          (AVT_STATE as any)._memberLinkPendente = null;
+        }
+      } catch(_) {}
       _avtSalaEspera(AVT_STATE.rpg.name, onHostElected);
     }).catch((e: any) => {
       console.warn('[AVT] RTNet.init falhou:', e);
@@ -5657,22 +5693,26 @@ function _avtPopularEntidadesInimigos(dungeon: any) {
   }
 }
 
-function _avtPopularEntidades() {
+// Personagem tem um jogador vinculado (rpg_members.linked)? Sem vínculo, o
+// personagem não está "em uso" e não deve existir no mapa.
+function _avtCharTemVinculo(charNome: any) {
+  return (AVT_STATE.membros || []).some((m: any) => m.linked === charNome);
+}
+window._avtCharTemVinculo = _avtCharTemVinculo;
+
+// Cria (sem inserir) a entidade de jogador para o personagem c no índice i da
+// lista de chars — extraído de _avtPopularEntidades para permitir spawn
+// dinâmico (jogador entra no meio da sessão / mestre atribui personagem).
+// Determinístico entre clientes: posição salva (avt_x/avt_y) vence; senão
+// spawn do tileset com offset pelo índice estável do personagem.
+function _avtCriarEntidadeJogador(c: any, i: any): any {
   const d = AVT_STATE.dungeon;
-  AVT_STATE.entidades = [];
-  AVT_STATE.npcTimers = {};
-  if (!d || !d.rooms?.length && !d.tiles) return;
-
-  const rooms = d.rooms?.length ? d.rooms : _avtDetectarSalas(d);
+  const rooms = d?.rooms?.length ? d.rooms : (d ? _avtDetectarSalas(d) : []);
   const cores = ['#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e8604c'];
-
-  // Spawn explícito do tileset, ou primeiro tile passável da primeira sala
-  const spawns = d._spawnJogadores?.length ? d._spawnJogadores : null;
+  const spawns = d?._spawnJogadores?.length ? d._spawnJogadores : null;
   const primRoom = rooms[0];
-
-  AVT_STATE.chars.filter((c: any) => c.custom_attrs?.tipo_personagem !== 'npc').forEach((c: any, i: any) => {
-    const col = c.custom_attrs?.cor || cores[i % cores.length];
-    const ca  = c.custom_attrs || {};
+  const col = c.custom_attrs?.cor || cores[i % cores.length];
+  const ca  = c.custom_attrs || {};
     // Garantir que jogador tem atributos — senão fórmula de HP/dano degenera.
     // Semeia defaults por classe e persiste em custom_attrs.atributos para
     // que personagens legados (criados antes desta feature) passem a multiplicar.
@@ -5709,7 +5749,7 @@ function _avtPopularEntidades() {
     const _hpAttrValJ = _hpAttrKeyJ ? parseFloat(_hpAtrsJ[_hpAttrKeyJ] || 0) : 0;
     const _hpMaxJ = Math.max(1, Math.round(_hpBaseJ + _hpAttrValJ * _hpMultJ));
     const _hpAtualJ = c.hp_atual ? Math.min(c.hp_atual, _hpMaxJ) : _hpMaxJ;
-    AVT_STATE.entidades.push({
+    return {
       id: c.id || c.nome, nome: c.nome, tipo: 'jogador',
       x: sx, y: sy, renderX: sx, renderY: sy, _velocidadeLerp: null, _waypoints: [],
       hp: _hpAtualJ, hpMax: _hpMaxJ, cor: col, dbId: c.id,
@@ -5720,14 +5760,47 @@ function _avtPopularEntidades() {
       // sumia, caindo no top-down até salvar de novo na sessão.
       custom_attrs: ca,
       _charOffline: false
-    });
-    // Esconder personagem se o jogador vinculado estiver offline (somente em sessão multiplayer)
-    if (AVT_STATE.membros?.length && c.nome !== AVT_STATE.myCharNome) {
-      const _ent = AVT_STATE.entidades[AVT_STATE.entidades.length - 1];
-      if (!_avtJogadorEstaOnline(c.nome)) {
-        _ent.escondido = true;
-        _ent._charOffline = true;
-      }
+    };
+}
+window._avtCriarEntidadeJogador = _avtCriarEntidadeJogador;
+
+// Spawn dinâmico: insere o personagem no mapa se ainda não existir (jogador
+// entrou no meio da sessão, mestre atribuiu, heartbeat de um char ausente).
+function _avtSpawnCharJogador(charNome: any) {
+  if (!charNome) return null;
+  const existente = (AVT_STATE.entidades || []).find((e: any) => e.tipo === 'jogador' && e.nome === charNome);
+  if (existente) return existente;
+  const idx = (AVT_STATE.chars || []).findIndex((c: any) => c.nome === charNome);
+  if (idx < 0 || !AVT_STATE.dungeon) return null;
+  const c = AVT_STATE.chars[idx];
+  if (c.custom_attrs?.tipo_personagem === 'npc') return null;
+  const ent = _avtCriarEntidadeJogador(c, idx);
+  AVT_STATE.entidades.push(ent);
+  return ent;
+}
+window._avtSpawnCharJogador = _avtSpawnCharJogador;
+
+function _avtPopularEntidades() {
+  const d = AVT_STATE.dungeon;
+  AVT_STATE.entidades = [];
+  AVT_STATE.npcTimers = {};
+  if (!d || !d.rooms?.length && !d.tiles) return;
+
+  // Sessão sem dados de membros (solo, fetch falhou, campanha sem vínculos):
+  // impossível saber o que está "em uso" — mantém o comportamento clássico de
+  // spawnar todos. Com membros, personagem só existe no jogo se estiver em uso.
+  const temMembros = !!AVT_STATE.membros?.length;
+  AVT_STATE.chars.filter((c: any) => c.custom_attrs?.tipo_personagem !== 'npc').forEach((c: any, i: any) => {
+    const ehMeu = c.nome === AVT_STATE.myCharNome;
+    // Sem vínculo, o personagem não entra no mapa — só via avt_member_linked
+    // (spawn dinâmico) ou seleção do mestre.
+    if (temMembros && !ehMeu && !_avtCharTemVinculo(c.nome)) return;
+    const ent = _avtCriarEntidadeJogador(c, i);
+    AVT_STATE.entidades.push(ent);
+    // Vinculado mas offline: nasce escondido (inerte p/ render, colisão e IA).
+    if (temMembros && !ehMeu && !_avtJogadorEstaOnline(c.nome)) {
+      ent.escondido = true;
+      ent._charOffline = true;
     }
   });
 
@@ -6490,7 +6563,7 @@ function _avtRenderFrame() {
   if (_agoraVerif - ((AVT_STATE as any)._ultimaAutoAtaqueVerif || 0) >= 250) {
     (AVT_STATE as any)._ultimaAutoAtaqueVerif = _agoraVerif;
     const _jLocalAuto = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
-    if (_jLocalAuto && !_avtMinhaBatalha() && !AVT_STATE._primeiroAtaqueModoAlvo) {
+    if (_jLocalAuto && !(AVT_STATE as any)._pausaLocal && !_avtMinhaBatalha() && !AVT_STATE._primeiroAtaqueModoAlvo) {
       try { _avtVerificarAutoAtaqueBasico(_jLocalAuto); } catch(_) {}
     }
   }
@@ -6532,7 +6605,9 @@ function _avtRenderFrame() {
   // frame, garantindo que camera.x/y esteja finalizado antes de qualquer desenho.
   const _jPlayer = (typeof _avtEntidadeControlada === 'function') ? _avtEntidadeControlada() : _avtMeuJogador();
   if (_jPlayer && (AVT_STATE as any)._caminhoDestino?.length > 0 && !_avtMinhaBatalha()) {
-    if (_jPlayer._wpCallbackOwner !== 'local-path') {
+    // Tolerante a tag-sem-função: clones (JSON round-trip) preservam a tag mas
+    // perdem o callback — sem o typeof, o guard nunca reinstalava.
+    if (_jPlayer._wpCallbackOwner !== 'local-path' || typeof _jPlayer._onWaypointReached !== 'function') {
       _jPlayer._wpCallbackOwner = 'local-path';
       _jPlayer._onWaypointReached = function (cell: any, restantes: any) {
         _avtCheckProximidadeInimigos(_jPlayer);
@@ -7399,6 +7474,17 @@ function _avtRenderFrame() {
       ctx.fillStyle = 'rgba(220,230,240,0.78)';
     }
     ctx.fillText(_nomeLabel, cx, _nameY);
+
+    // Indicador de pausa: o grupo vê que o jogador está pausado (inimigos o ignoram)
+    if (e._pausado && e.tipo === 'jogador') {
+      ctx.save();
+      ctx.font = `${Math.max(10, Math.round(SZ * 0.4))}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = 0.65 + 0.3 * Math.abs(Math.sin(_t * 0.003));
+      ctx.fillText('⏸', cx, _nameY - Math.round(SZ * 0.42));
+      ctx.restore();
+    }
 
     // Filtro cinza proporcional para jogador invisível (morto/recuperando)
     if (e._invisivelParaInimigos && e.tipo === 'jogador') {
@@ -9028,7 +9114,8 @@ function _avtNpcPatrulharFrame(now: any) {
     !AVT_STATE.npcTimers[e.id]?.isPursuing
   );
   if (!inimigos.length) return;
-  const jogadores = AVT_STATE.entidades.filter((e: any) => e.tipo === 'jogador' && e.hp > 0);
+  // Escondido (offline/saiu) ou pausado não atrai a patrulha.
+  const jogadores = AVT_STATE.entidades.filter((e: any) => e.tipo === 'jogador' && e.hp > 0 && !e.escondido && !e._pausado);
   const tick = Math.floor(now / 2000);
   inimigos.forEach((e: any) => {
     // Dedup: evita que múltiplos clientes reprocessem o mesmo NPC no mesmo tick de 2s
@@ -9130,6 +9217,8 @@ function _avtCelulaOcupada(nx: any, ny: any, entId: any, entTipo: any, emCombate
   return AVT_STATE.entidades.some((e: any) => {
     if (e.id === entId) return false;
     if (e.escondido) return false;
+    // Jogador morto/caído não bloqueia a célula (o corpo virava parede).
+    if (e.tipo === 'jogador' && typeof e.hp === 'number' && e.hp <= 0) return false;
     if (Math.round(e.x) !== nx || Math.round(e.y) !== ny) return false;
     // Avatar sempre bloqueia
     if (e.tipo === 'avatar') return true;
@@ -9546,6 +9635,16 @@ function _avtCanvasKey(e: any) {
   const _tgt = e.target;
   if (_tgt && (_tgt.tagName === 'INPUT' || _tgt.tagName === 'TEXTAREA' || _tgt.isContentEditable)) return;
 
+  // Overlay de pausa aberto: engole WASD/atalhos (o personagem pausado não
+  // pode agir); Escape continua fechando a pausa.
+  if (document.getElementById('avt-pausa-overlay')) {
+    if (e.key === 'Escape' && typeof window.avtPausaToggle === 'function') {
+      e.preventDefault();
+      window.avtPausaToggle();
+    }
+    return;
+  }
+
   const _key  = (e.key  || '').toLowerCase();
   const _code = e.code  || '';
 
@@ -9855,7 +9954,13 @@ function _avtPersonagemCombateAtivo(charNome: any) {
 // Verifica se o jogador vinculado a charNome está online (visto nos últimos 2 min)
 function _avtJogadorEstaOnline(charNome: any) {
   const membro = (AVT_STATE.membros || []).find((m: any) => m.linked === charNome);
-  if (!membro) return false;
+  if (!membro) {
+    // Linha de membro ausente/stale NESTE cliente (a lista só é carregada na
+    // entrada): o heartbeat de jogo decide — um personagem ativamente jogando
+    // não pode ser escondido só porque meu membros está desatualizado.
+    const ent = (AVT_STATE.entidades || []).find((e: any) => e.nome === charNome);
+    return !!ent && Date.now() - (ent._lastGameSeen || 0) < 120000;
+  }
   const ts = _avtPresencaTs(membro);
   return Date.now() - ts < 120000;
 }
@@ -9876,6 +9981,9 @@ function _avtAtualizarVisibilidadeOffline() {
     const mestroControlando = AVT_STATE.npcControlando === e.id;
     const ehMeuPersonagem = e.nome === AVT_STATE.myCharNome;
     if (!souAutoridade && !ehMeuPersonagem && !mestroControlando) return;
+    // Saiu explicitamente da partida: a presença de CHAT (jogador segue no
+    // site) não ressuscita o personagem — só heartbeat de jogo/vínculo novo.
+    if (e._charSaiu && !mestroControlando && !ehMeuPersonagem) return;
     if (!online && !mestroControlando && !ehMeuPersonagem) {
       if (!e.escondido) {
         e.escondido = true;
@@ -10253,8 +10361,9 @@ function _avtMoverJogador(dx: any, dy: any) {
       ? jogador._waypoints[jogador._waypoints.length - 1]
       : { x: jogador.x, y: jogador.y };
     if (lastQ.x === nx && lastQ.y === ny) return;
-    // Garante callback registrado (mesmo do _caminhoDestino)
-    if (jogador._wpCallbackOwner !== 'local-step') {
+    // Garante callback registrado (mesmo do _caminhoDestino). Tolerante a
+    // tag-sem-função: clones (JSON round-trip) preservam a tag mas perdem o callback.
+    if (jogador._wpCallbackOwner !== 'local-step' || typeof jogador._onWaypointReached !== 'function') {
       jogador._wpCallbackOwner = 'local-step';
       jogador._onWaypointReached = function (cell: any /*, restantes */) {
         _avtCheckProximidadeInimigos(jogador);
@@ -11614,12 +11723,17 @@ function _avtCheckProximidadeInimigos(jogadorMovendo: any) {
   // Checa proximidade do jogador passado — também chamado periodicamente para jogadores parados
   if (!jogadorMovendo || _avtBatalhaDeEnt(jogadorMovendo.id)) return;
   if (!_avtPersonagemCombateAtivo(jogadorMovendo.nome)) return;
+  // Fora do jogo (offline/saiu) → não existe para a percepção dos inimigos.
+  if (jogadorMovendo.escondido) return;
   // Only check enemies that are NOT already in a combat
   const enemiesLivres = AVT_STATE.entidades.filter((e: any) => e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id));
   if (!enemiesLivres.length) return;
   enemiesLivres.forEach((ini: any) => {
     const raio = ini.deteccaoRaio ?? 3;
-    const emRaio = Math.abs(jogadorMovendo.x - ini.x) + Math.abs(jogadorMovendo.y - ini.y) <= raio;
+    // Jogador pausado é imperceptível: tratado como "fora do raio", o que
+    // desativa/reseta paciência pendente pelo ramo existente abaixo.
+    const emRaio = !jogadorMovendo._pausado &&
+      Math.abs(jogadorMovendo.x - ini.x) + Math.abs(jogadorMovendo.y - ini.y) <= raio;
     if (!AVT_STATE.npcTimers[ini.id]) {
       _avtInitNpcTimer(ini);
     }
@@ -11668,6 +11782,18 @@ function _avtAtualizarPaciencias(dt: any) {
     // Pausa paciência enquanto menu do personagem ou painel do mestre estiver aberto
     // (desde que o inimigo ainda não esteja perseguindo ativamente)
     if (AVT_STATE._menuJogadorAberto && !timer.isPursuing) continue;
+    // Alvo pausado congela a paciência; alvo escondido (offline/saiu) desarma-a.
+    if (timer.targetId && !timer.isPursuing) {
+      const _alvoPac = AVT_STATE.entidades.find((e: any) => e.id === timer.targetId);
+      if (_alvoPac?._pausado) continue;
+      if (_alvoPac?.escondido) {
+        timer.ativo = false;
+        timer.targetId = null;
+        timer.patience = timer.maxPatience;
+        timer._pacienciaRolada = false;
+        continue;
+      }
+    }
     // [NPC-SYNC] Só o host eleito atualiza o relógio de paciência do NPC (apenas em modo RTNet ativo).
     if ((AVT_STATE as any).npcSyncEnabled && typeof RTNet !== 'undefined' && RTNet?.initialized && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
     // Skip if this enemy is already in a combat
@@ -11679,7 +11805,7 @@ function _avtAtualizarPaciencias(dt: any) {
         if (timer.isPursuing && timer.tentativeTargetId) {
           // Já perseguindo: tentar trocar de alvo
           const newAlvo = AVT_STATE.entidades.find((e: any) => e.id === timer.tentativeTargetId);
-          if (newAlvo && newAlvo.hp > 0 && !newAlvo._invisivelParaInimigos) {
+          if (newAlvo && newAlvo.hp > 0 && !newAlvo._invisivelParaInimigos && !newAlvo._pausado && !newAlvo.escondido) {
             timer.targetId = timer.tentativeTargetId;
             mostrarToast(`👁 ${ini.nome} trocou de alvo!`, 'aviso');
             try { _avtBroadcastNpc('avt_npc_perseguindo', { id, targetId: timer.targetId }); } catch(_) {}
@@ -11810,7 +11936,7 @@ function _avtIniciarPerseguicao(enemyId: any) {
   timer.attackCooldownTimer = 0;
   timer.ativo = false;
   if (!timer.targetId) {
-    const nearest = AVT_STATE.entidades.filter((e: any) => e.tipo === 'jogador' && e.hp > 0 && !e._invisivelParaInimigos)
+    const nearest = AVT_STATE.entidades.filter((e: any) => e.tipo === 'jogador' && e.hp > 0 && !e._invisivelParaInimigos && !e._pausado && !e.escondido)
       .sort((a: any, b: any) => (Math.abs(a.x - ini.x) + Math.abs(a.y - ini.y)) - (Math.abs(b.x - ini.x) + Math.abs(b.y - ini.y)))[0];
     timer.targetId = nearest?.id || null;
   }
@@ -11904,7 +12030,7 @@ function _avtAtualizarPerseguicoes(dt: any) {
     const raio = Math.max(1, ini.deteccaoRaio || 6);
     let best: any = null, bestDist = Infinity;
     AVT_STATE.entidades.forEach((j: any) => {
-      if (j.tipo !== 'jogador' || j.hp <= 0 || j._invisivelParaInimigos) return;
+      if (j.tipo !== 'jogador' || j.hp <= 0 || j._invisivelParaInimigos || j._pausado || j.escondido) return;
       const d = Math.abs(j.x - ini.x) + Math.abs(j.y - ini.y);
       if (d <= raio && d < bestDist) { bestDist = d; best = j; }
     });
@@ -11925,7 +12051,9 @@ function _avtAtualizarPerseguicoes(dt: any) {
     const ini = AVT_STATE.entidades.find((e: any) => e.id === id);
     if (!ini || ini.hp <= 0) { _avtCancelarPerseguicao(id); continue; }
     let alvo = timer.targetId ? AVT_STATE.entidades.find((e: any) => e.id === timer.targetId) : null;
-    if (!alvo || alvo.hp <= 0 || alvo._invisivelParaInimigos) {
+    // escondido = saiu do jogo → perseguição termina (retarget/cancelar).
+    // _pausado NÃO entra aqui: perseguição a jogador pausado congela mais abaixo.
+    if (!alvo || alvo.hp <= 0 || alvo._invisivelParaInimigos || alvo.escondido) {
       // Tenta retargetar antes de cancelar (evita ciclo patrulha→perseguição imediato)
       if (_tentarRetarget(ini, timer)) {
         alvo = AVT_STATE.entidades.find((e: any) => e.id === timer.targetId);
@@ -11945,6 +12073,11 @@ function _avtAtualizarPerseguicoes(dt: any) {
       alvo = _nearAv;
       timer.targetId = _nearAv.id;
     }
+
+    // Alvo pausado: congela a perseguição inteira — não anda, não conta
+    // inação/desistência/falhas de path — preservando isPursuing/targetId
+    // para retomar exatamente de onde parou quando o jogador despausar.
+    if (alvo && alvo._pausado) continue;
 
     timer.inactionTimer += dt;
     timer.pursuitStepTimer -= dt;
@@ -13477,6 +13610,54 @@ function avtReceberJogadorVisivel({ charNome }: any) {
   _avtHudUpdate();
 }
 window.avtReceberJogadorVisivel = avtReceberJogadorVisivel;
+
+// ── PAUSA IN-GAME ─────────────────────────────────────────────────────────────
+// A pausa é local (a simulação global continua para os outros), mas o flag
+// _pausado precisa chegar ao host da fase, onde a IA roda: inimigos não podem
+// ADQUIRIR um jogador pausado como alvo, e perseguições já em andamento
+// CONGELAM (preservando targetId/isPursuing) para retomar no despausar.
+// Distinto de _invisivelParaInimigos, que CANCELA perseguições.
+function _avtDefinirPausaLocal(pausado: any) {
+  if (!!(AVT_STATE as any)._pausaLocal === !!pausado) return; // idempotente (trocas de aba do overlay)
+  (AVT_STATE as any)._pausaLocal = !!pausado;
+  const j = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
+  if (j && j.tipo === 'jogador') {
+    if (pausado) j._pausado = true; else delete j._pausado;
+    try { _avtBroadcast('avt_jogador_pausado', { charNome: j.nome, pausado: !!pausado }); } catch (_) {}
+  }
+  try {
+    if (typeof AudioManager !== 'undefined') {
+      if (pausado) AudioManager.pauseMusic(); else AudioManager.resumeMusic();
+    }
+  } catch (_) {}
+}
+window._avtDefinirPausaLocal = _avtDefinirPausaLocal;
+
+function avtReceberJogadorPausado({ charNome, pausado }: any) {
+  if (!AVT_STATE.rpgId || !charNome || charNome === AVT_STATE.myCharNome) return;
+  const ent = AVT_STATE.entidades.find((e: any) => e.tipo === 'jogador' && e.nome === charNome);
+  if (!ent) return;
+  if (pausado) ent._pausado = true; else delete ent._pausado;
+}
+window.avtReceberJogadorPausado = avtReceberJogadorPausado;
+
+// ── SAÍDA EXPLÍCITA DA PARTIDA ────────────────────────────────────────────────
+// O jogador voltou ao menu/hub: o personagem sai do jogo IMEDIATAMENTE em todos
+// os clientes. _charSaiu impede o reconciliador de visibilidade de ressuscitar
+// o personagem enquanto a presença de CHAT do jogador (que continua no site)
+// ainda está fresca — só um sinal real de jogo (heartbeat/vínculo) o traz de
+// volta. Queda de conexão NÃO passa por aqui: usa a carência de presença (~2min).
+function avtReceberCharSaiu({ charNome }: any) {
+  if (!AVT_STATE.rpgId || !charNome || charNome === AVT_STATE.myCharNome) return;
+  const ent = AVT_STATE.entidades.find((e: any) => e.tipo === 'jogador' && e.nome === charNome);
+  if (!ent || AVT_STATE.npcControlando === ent.id) return;
+  ent.escondido = true;
+  ent._charOffline = true;
+  ent._charSaiu = true;
+  ent._lastGameSeen = 0;
+  delete ent._pausado;
+}
+window.avtReceberCharSaiu = avtReceberCharSaiu;
 
 // ── LEVEL-UP VISUAL EFFECTS ───────────────────────────────────────────────────
 
@@ -17037,11 +17218,11 @@ async function _avtNpcTurno(bat: any) {
 
   // Target players in THIS combat — prefer lowest HP. If none, fall back to GLOBAL pursuit.
   // Ignora jogadores invisíveis (ressuscitando após morte).
-  let jogadores = AVT_STATE.entidades.filter((e: any) => e.tipo==='jogador' && e.hp>0 && !e._invisivelParaInimigos && bat.envolvidos.includes(e.id));
+  let jogadores = AVT_STATE.entidades.filter((e: any) => e.tipo==='jogador' && e.hp>0 && !e._invisivelParaInimigos && !e.escondido && bat.envolvidos.includes(e.id));
   let perseguicaoGlobal = false;
   if (!jogadores.length) {
     // Ninguém visível no combate — tenta perseguir o jogador vivo mais próximo no mapa todo
-    const todos = AVT_STATE.entidades.filter((e: any) => e.tipo==='jogador' && e.hp>0 && !e._invisivelParaInimigos);
+    const todos = AVT_STATE.entidades.filter((e: any) => e.tipo==='jogador' && e.hp>0 && !e._invisivelParaInimigos && !e.escondido);
     if (!todos.length) { avtCombateEncerrar(bat.id); return; }
     if (!AVT_STATE._fleeTracker) AVT_STATE._fleeTracker = {};
     AVT_STATE._fleeTracker[entNpc.id] = { pursuing: true, prevDist: Infinity };
@@ -23786,7 +23967,10 @@ function avtAplicarSnapshotMerge(snap: any) {
             if (typeof remoto.y === 'number') local.y = remoto.y;
           }
         } else {
-          // Entidade desconhecida localmente — adiciona
+          // Entidade desconhecida localmente — adiciona. Exceto jogador sem
+          // vínculo (snapshot velho de antes do gate de spawn): personagem que
+          // não está em uso não volta ao jogo por merge.
+          if (remoto.tipo === 'jogador' && remoto.nome !== meuNome && !_avtCharTemVinculo(remoto.nome)) return;
           AVT_STATE.entidades.push(remoto);
         }
       });
@@ -25070,6 +25254,24 @@ function _avtAplicarTilesetFase(faseObj: any) {
     .catch(() => {});
 }
 
+// FIX F8/CÂMERA: estado de movimento/predição não pode viajar entre fases.
+// O _avtDeepClone (JSON round-trip) descarta funções mas preserva strings —
+// _wpCallbackOwner sobrevivia sem o _onWaypointReached correspondente e os
+// guards de reinstalação nunca recriavam o callback (câmera parava de seguir,
+// baús/armadilhas/portas deixavam de disparar na fase nova).
+function _avtLimparEstadoMovimentoClone(ent: any) {
+  if (!ent) return ent;
+  delete ent._waypoints;
+  delete ent._pendingInputs;
+  delete ent._lerpTo;
+  delete ent.renderX;
+  delete ent.renderY;
+  delete ent._onWaypointReached;
+  delete ent._wpCallbackOwner;
+  return ent;
+}
+window._avtLimparEstadoMovimentoClone = _avtLimparEstadoMovimentoClone;
+
 async function _avtCarregarFase(faseId: any, opts = {}) {
   if (!faseId) return;
   // FIX F8: guard de reentrância — a função tem awaits antes do snapshot; duas
@@ -25117,13 +25319,7 @@ async function _avtCarregarFaseInner(faseId: any, opts = {}) {
   const jogadorClone = jogadorVivo ? _avtDeepClone(jogadorVivo) : null;
   // FIX F8: o clone não pode carregar estado de movimento/predição da fase antiga
   // (waypoints/inputs pendentes causavam um "deslize" após o teleporte de spawn).
-  if (jogadorClone) {
-    delete jogadorClone._waypoints;
-    delete jogadorClone._pendingInputs;
-    delete jogadorClone._lerpTo;
-    delete jogadorClone.renderX;
-    delete jogadorClone.renderY;
-  }
+  _avtLimparEstadoMovimentoClone(jogadorClone);
 
   // FIX F3: se eu era o host da fase que estou deixando, libero explicitamente
   // para o próximo host assumir sem esperar a expiração.
@@ -25151,6 +25347,8 @@ async function _avtCarregarFaseInner(faseId: any, opts = {}) {
   (AVT_STATE as any)._dynSpawnNextAt = 0;
   // FIX F8: porta boss→próxima fase da fase anterior não vale nesta.
   (AVT_STATE as any)._portaProximaFase = null;
+  // FIX CÂMERA: caminho clicado na fase anterior não vale aqui.
+  (AVT_STATE as any)._caminhoDestino = null;
   // Bakes estáticos (tiles 2D legado + minimapa) são por fase.
   if (typeof _avtTileBakeInvalidate === 'function') _avtTileBakeInvalidate();
   // Sons ambientes pertencem à fase anterior — o tick recria os da nova.
@@ -30603,8 +30801,11 @@ try{
       const _origBroadcast = window._avtBroadcast;
       const wrapped = function(this: any, tipo: any, payload: any) {
         try {
-          // Pausado? Bloqueia mutations
-          if (_isPaused() && tipo !== 'avt_dado_rolado' && tipo !== 'avt_skill_selecionada') return;
+          // Pausado? Bloqueia mutations (pausa/despausa e saída do jogador sempre
+          // passam — presos aqui, o personagem ficaria imperceptível ou fantasma
+          // no mapa para sempre)
+          if (_isPaused() && tipo !== 'avt_dado_rolado' && tipo !== 'avt_skill_selecionada' &&
+              tipo !== 'avt_jogador_pausado' && tipo !== 'avt_char_saiu') return;
 
           // Movimento de NPC/inimigo: só o host DA FASE propaga.
           if (tipo === 'avt_token_move' && _isRTNet() && !_souHostDaFase()) {
@@ -30662,6 +30863,8 @@ try{
           morto: !!(e.morto || (e.tipo !== 'jogador' && typeof e.hp === 'number' && e.hp <= 0)),
           anim: e._currentAnim || null,
           escondido: e.escondido || false,
+          // Pausa in-game do jogador: propaga p/ late joiners e troca de host.
+          pausado: !!e._pausado,
           status_effects: e.status_effects || [],
           atravessar: !!e.atravessar,
           fantasma: !!e.fantasma,
@@ -30724,7 +30927,13 @@ try{
         // sentidos (revela e esconde), mas nunca esconde meu próprio personagem.
         // Para inimigos/NPCs mantém-se hide-only (revelar é exclusivo de avt_npc_respawn).
         if (ent.tipo === 'jogador') {
-          if (ent.nome !== meCharNome) ent.escondido = (r.escondido === true);
+          if (ent.nome !== meCharNome) {
+            ent.escondido = (r.escondido === true);
+            // Pausa in-game espelha o host; meu flag local é autoritativo p/ mim.
+            if (r.pausado !== undefined) {
+              if (r.pausado) ent._pausado = true; else delete ent._pausado;
+            }
+          }
         } else if (r.escondido === true || (typeof r.hp === 'number' && r.hp <= 0 && ent.tipo === 'inimigo')) {
           ent.escondido = true;
         }
@@ -30993,6 +31202,7 @@ try{
       const ent = _findEnt(id) || _findEnt(nome);
       if (!ent || ent.hp <= 0) return;
       ent._lastGameSeen = Date.now();
+      delete ent._charSaiu; // sinal real de jogo: se tinha saído, voltou
       // Confirma o seq processado SEMPRE para o cliente reconciliar: o tick ecoa
       // ent._ackSeq e o cliente descarta inputs <= ackSeq.
       const _ackInput = () => {
@@ -31386,9 +31596,16 @@ try{
         if (!RTNet.isHost || !RTNet.isHost()) return;
         const { nome, hp, hpMax, status_effects, morto } = payload || {};
         if (!nome) return;
-        const ent = AVT_STATE.entidades.find((e: any) => e.nome === nome);
+        let ent = AVT_STATE.entidades.find((e: any) => e.nome === nome);
+        // Heartbeat de personagem ausente na minha lista (membros stale no boot,
+        // avt_member_linked perdido, troca de host): auto-cura criando a entidade
+        // — um jogador ativo materializa em <=500ms e o tick reconcilia posição.
+        if (!ent && typeof window._avtSpawnCharJogador === 'function') {
+          try { ent = window._avtSpawnCharJogador(nome); } catch(_) {}
+        }
         if (!ent) return;
         ent._lastGameSeen = Date.now();
+        delete ent._charSaiu; // sinal real de jogo: se tinha saído, voltou
         if (typeof hp === 'number')    ent.hp = hp;
         if (typeof hpMax === 'number') ent.hpMax = hpMax;
         if (Array.isArray(status_effects)) ent.status_effects = status_effects;
@@ -31517,6 +31734,18 @@ try{
   // capturar window.sairAventura de forma síncrona aqui pegaria undefined e o
   // hook nunca instalaria (timers de HP/regen e o flush final ficavam sem rodar).
   function _avtHookTeardown(origem: any) {
+    // Sair pausado deixaria o personagem imperceptível para sempre no host —
+    // despausa (e broadcasta) enquanto o RTNet ainda está de pé.
+    try { if (typeof window._avtDefinirPausaLocal === 'function') window._avtDefinirPausaLocal(false); } catch(_) {}
+    // Saída explícita: o personagem deixa o jogo na hora em todos os clientes
+    // (a presença de chat manteria o token no mapa por tempo indefinido).
+    try {
+      const _jSaindo = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
+      if (_jSaindo && _jSaindo.tipo === 'jogador') _avtBroadcast('avt_char_saiu', { charNome: _jSaindo.nome });
+    } catch(_) {}
+    // BGM não é parada pelas rotas de saída (só os sons ambiente são) — sem
+    // isto a música da aventura continua tocando no menu/hub.
+    try { if (typeof AudioManager !== 'undefined') AudioManager.stopMusic({ fade: 400 }); } catch(_) {}
     try { _avtPararHpHeartbeat(); } catch(_) {}
     try { _avtPararRegenHpPorSegundo(); } catch(_) {}
     try { _avtPararRegenManaPorSegundo(); } catch(_) {}

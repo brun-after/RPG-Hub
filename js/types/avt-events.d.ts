@@ -24,6 +24,8 @@ declare global {
     avt_jogador_morreu: { charNome?: any; xpPerdido?: any; novoXp?: any; nivelAntes?: any; nivelDepois?: any; [k: string]: any };
     avt_jogador_ressurgiu: { charNome?: any; novoHp?: any; [k: string]: any };
     avt_jogador_visivel: { charNome?: any; [k: string]: any };
+    avt_jogador_pausado: { charNome?: any; pausado?: any; [k: string]: any };
+    avt_char_saiu: { charNome?: any; [k: string]: any };
     avt_skill_selecionada: { atacanteNome?: any; skillNome?: any; alvoNome?: any; [k: string]: any };
     avt_dado_rolado: { atacanteNome?: any; alvoNome?: any; skillNome?: any; dados?: any; total?: any; isCrit?: any; isFumble?: any; [k: string]: any };
     avt_dano_visual: { alvoNome?: any; dano?: any; isCrit?: any; faseId?: any; [k: string]: any };

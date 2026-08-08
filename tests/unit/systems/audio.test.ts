@@ -152,3 +152,97 @@ describe('trilhas padrão de exploração (sem faixas cômicas + cache de sessã
     expect(am._getOrPickDefaultTrack('exploracao', 'fase-y')).toBe(valida);
   });
 });
+
+// Dublê de Howl para BGM: play/pause/stop/fade/playing.
+class FakeBgmHowl {
+  static instances: any[] = [];
+  opts: any;
+  _playing = false;
+  pauseCalls = 0;
+  stopCalls = 0;
+  constructor(opts: any) { this.opts = opts; FakeBgmHowl.instances.push(this); }
+  play() { this._playing = true; }
+  pause() { this._playing = false; this.pauseCalls++; }
+  stop() { this._playing = false; this.stopCalls++; }
+  fade() {}
+  playing() { return this._playing; }
+  volume() { return this.opts.volume ?? 0; }
+}
+
+describe('stopMusic (saída para o menu não deixa rastro)', () => {
+  let am: any;
+  beforeEach(() => {
+    FakeBgmHowl.instances = [];
+    vi.stubGlobal('Howl', FakeBgmHowl);
+    am = novoManager();
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('limpa _pendingBgm e reseta o estado mesmo sem BGM ativa', () => {
+    am._pendingBgm = { url: 'trilha', volume: 0.5 };
+    am._musicState = 'combat';
+    am._musicPausada = true;
+    am.stopMusic({ fade: 0 });
+    expect(am._pendingBgm).toBeNull();
+    expect(am._musicState).toBe('silent');
+    expect(am._musicPausada).toBe(false);
+  });
+
+  it('para a BGM ativa e o clique seguinte não a ressuscita', () => {
+    am._playBgm('trilha', { volume: 0.5, fade: 0 });
+    const bgm = FakeBgmHowl.instances[0];
+    am.stopMusic({ fade: 0 });
+    expect(bgm.stopCalls).toBeGreaterThan(0);
+    expect(am._currentBgm).toBeNull();
+    document.dispatchEvent(new Event('click')); // retry de autoplay
+    expect(FakeBgmHowl.instances).toHaveLength(1); // nenhuma nova instância
+  });
+});
+
+describe('pauseMusic/resumeMusic (pausa in-game)', () => {
+  let am: any;
+  beforeEach(() => {
+    FakeBgmHowl.instances = [];
+    vi.stubGlobal('Howl', FakeBgmHowl);
+    am = novoManager();
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('pausa a BGM atual e retoma do ponto', () => {
+    am._playBgm('trilha', { volume: 0.5, fade: 0 });
+    const bgm = FakeBgmHowl.instances[0];
+    am.pauseMusic();
+    expect(bgm.playing()).toBe(false);
+    expect(am._musicPausada).toBe(true);
+    am.resumeMusic();
+    expect(bgm.playing()).toBe(true);
+    expect(am._musicPausada).toBe(false);
+  });
+
+  it('clique durante a pausa não ressuscita a BGM (retry bloqueado)', () => {
+    am._playBgm('trilha', { volume: 0.5, fade: 0 });
+    am.pauseMusic();
+    document.dispatchEvent(new Event('click'));
+    expect(FakeBgmHowl.instances).toHaveLength(1);
+    expect(am._currentBgm.playing()).toBe(false);
+  });
+
+  it('troca de trilha durante a pausa só agenda; resume toca a pendente', () => {
+    am._playBgm('exploracao', { volume: 0.5, fade: 0 });
+    am.pauseMusic();
+    am._playBgm('combate', { volume: 0.7, fade: 0 }); // ex.: perseguição começou
+    expect(am._currentBgm).toBeNull();               // nada tocando durante a pausa
+    expect(am._pendingBgm).toEqual({ url: 'combate', volume: 0.7 });
+    am.resumeMusic();
+    const nova = FakeBgmHowl.instances[FakeBgmHowl.instances.length - 1];
+    expect(nova.opts.src).toEqual(['combate']);
+    expect(nova.playing()).toBe(true);
+  });
+
+  it('resumeMusic sem pausa ativa é no-op', () => {
+    am._playBgm('trilha', { volume: 0.5, fade: 0 });
+    const antes = FakeBgmHowl.instances.length;
+    am.resumeMusic();
+    expect(FakeBgmHowl.instances).toHaveLength(antes);
+  });
+});

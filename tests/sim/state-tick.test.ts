@@ -12,7 +12,7 @@ const g = globalThis as any;
 
 const CAMPOS_TICK = [
   'id', 'nome', 'x', 'y', 'hp', 'hpMax', 'tipo', 'morto', 'anim', 'escondido',
-  'status_effects', 'atravessar', 'fantasma', 'ackSeq', 'dominado',
+  'pausado', 'status_effects', 'atravessar', 'fantasma', 'ackSeq', 'dominado',
   'donoNome', 'cor', 'pat',
 ].sort();
 

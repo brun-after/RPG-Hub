@@ -168,6 +168,7 @@ class _AudioManager {
     this._musicVolUser       = false; // true quando o jogador ajustou o slider local de música
     this._playerPref         = null;  // preferência de trilhas do jogador (setPlayerPref)
     this._muted              = false;
+    this._musicPausada       = false; // pausa in-game: BGM suspensa, retomável do ponto
     this._pendingBgm         = null;  // {url, volume} para retry após autoplay bloqueado
     this._userSfxBiblioteca  = [];    // [{id, nome, url, cat}] — carregado sob demanda
     this._userSfxLoaded      = false;
@@ -175,6 +176,7 @@ class _AudioManager {
 
     // Retry BGM na primeira interação do usuário (política de autoplay dos browsers)
     const _retryBgm = () => {
+      if (this._musicPausada) return; // cliques no overlay de pausa não ressuscitam a BGM
       if (!this._pendingBgm) return;
       if (this._currentBgm?.playing()) return;
       const { url, volume } = this._pendingBgm;
@@ -253,6 +255,11 @@ class _AudioManager {
   }
 
   stopMusic({ fade = 800 } = {}) {
+    // Limpar mesmo sem BGM ativa: o retry de autoplay (click/keydown) lê
+    // _pendingBgm e ressuscitaria a trilha já no próximo clique no menu.
+    this._pendingBgm = null;
+    this._musicState = 'silent';
+    this._musicPausada = false;
     if (!this._currentBgm) return;
     if (typeof Howl !== 'undefined' && fade > 0) {
       const bgm = this._currentBgm;
@@ -264,8 +271,30 @@ class _AudioManager {
     this._currentBgm = null;
   }
 
+  // ── Pausa in-game: suspende a BGM retomável do ponto onde parou ───────────
+  pauseMusic() {
+    this._musicPausada = true;
+    try { this._currentBgm?.pause(); } catch (_) {}
+  }
+
+  resumeMusic() {
+    if (!this._musicPausada) return;
+    this._musicPausada = false;
+    if (this._currentBgm) {
+      try { if (!this._currentBgm.playing()) this._currentBgm.play(); } catch (_) {}
+    } else if (this._pendingBgm) {
+      // Trilha trocou durante a pausa (ex.: combate começou) — toca a pendente.
+      this._playBgm(this._pendingBgm.url, { volume: this._pendingBgm.volume });
+    }
+  }
+
   _playBgm(url: any, { volume = this.volume.music, fade = 800 } = {}) {
     this._pendingBgm = { url, volume };  // Guarda para retry caso autoplay esteja bloqueado
+    if (this._musicPausada) {
+      // Troca de trilha durante a pausa: só agenda — resumeMusic toca a pendente.
+      if (this._currentBgm) { try { this._currentBgm.stop(); } catch (_) {} this._currentBgm = null; }
+      return;
+    }
     if (typeof Howl === 'undefined') return;
     if (this._currentBgm) {
       const old = this._currentBgm;
