@@ -253,6 +253,11 @@ class _AudioManager {
   }
 
   stopMusic({ fade = 800 } = {}) {
+    // Limpar mesmo sem BGM ativa: o retry de autoplay (click/keydown) lê
+    // _pendingBgm e ressuscitaria a trilha já no próximo clique no menu.
+    this._pendingBgm = null;
+    this._musicState = 'silent';
+    this._musicPausada = false;
     if (!this._currentBgm) return;
     if (typeof Howl !== 'undefined' && fade > 0) {
       const bgm = this._currentBgm;

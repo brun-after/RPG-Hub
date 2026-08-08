@@ -31517,6 +31517,9 @@ try{
   // capturar window.sairAventura de forma síncrona aqui pegaria undefined e o
   // hook nunca instalaria (timers de HP/regen e o flush final ficavam sem rodar).
   function _avtHookTeardown(origem: any) {
+    // BGM não é parada pelas rotas de saída (só os sons ambiente são) — sem
+    // isto a música da aventura continua tocando no menu/hub.
+    try { if (typeof AudioManager !== 'undefined') AudioManager.stopMusic({ fade: 400 }); } catch(_) {}
     try { _avtPararHpHeartbeat(); } catch(_) {}
     try { _avtPararRegenHpPorSegundo(); } catch(_) {}
     try { _avtPararRegenManaPorSegundo(); } catch(_) {}
