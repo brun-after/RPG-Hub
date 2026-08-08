@@ -872,6 +872,8 @@ function sairAventura() {
   if (avt) avt.style!.display = 'none';
   const menu = document.getElementById('avt-menu-screen');
   if (menu) menu.style!.display = 'none';
+  try { const _ip = document.getElementById('avt-interacao-prompt'); if (_ip) { _ip.style!.display = 'none'; _ip.innerHTML = ''; } } catch(_) {}
+  (AVT_STATE as any)._interacaoSig = '';
   document.getElementById('hub')!.style!.display = 'block';
   avtHubRenderSection();
   AVT_STATE.rpgId   = null;

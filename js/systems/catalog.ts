@@ -4416,6 +4416,24 @@ function _atualizarZonaDireitaAventura() {
   const mostrarSkills = emMeuTurno || primAtaque || algumPerseguindo;
 
   if (!mostrarSkills) {
+    // Interação contextual fora de combate: baú/loja sob o jogador controlado
+    if (jogador && typeof _avtBauNaPosicao === 'function') {
+      const _bauCtx  = _avtBauNaPosicao(Math.round(jogador.x), Math.round(jogador.y));
+      const _lojaCtx = typeof _avtLojaNaPosicao === 'function'
+        ? _avtLojaNaPosicao(Math.round(jogador.x), Math.round(jogador.y)) : null;
+      const _mkBtnInt = (icone: any, rotulo: any, acao: any) => {
+        const b = document.createElement('button');
+        b.style!.cssText = 'width:100%;min-height:48px;padding:8px;background:linear-gradient(135deg,rgba(200,168,75,0.3),rgba(200,168,75,0.12));border:2px solid rgba(200,168,75,0.6);border-radius:8px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;touch-action:manipulation;margin-bottom:5px';
+        b.textContent = `${icone} ${rotulo}`;
+        b.addEventListener('touchend', ev => { ev.preventDefault(); acao(); });
+        b.addEventListener('click', () => acao());
+        return b;
+      };
+      if (_bauCtx && !_bauCtx.aberto && typeof avtAbrirBau === 'function')
+        ctxEl.appendChild(_mkBtnInt('📦', 'Abrir ' + (_bauCtx.nome || 'Baú'), () => avtAbrirBau(_bauCtx.id)));
+      if (_lojaCtx && typeof avtAbrirLoja === 'function')
+        ctxEl.appendChild(_mkBtnInt(_lojaCtx.icone || '🛒', 'Abrir ' + (_lojaCtx.nome || 'Loja'), () => avtAbrirLoja(_lojaCtx.id)));
+    }
     if (bat && !emMeuTurno && ativo) {
       // Painel de observação
       const hpAtual = ativo.hp ?? '?';

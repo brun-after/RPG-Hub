@@ -6546,8 +6546,10 @@ function _avtRenderFrame() {
         try { _avtColetarObjsNaPosicao(_jPlayer); } catch(_) {}
         try { _avtChecarArmadilhaMestreNaPosicao(_jPlayer); } catch(_) {}
         // Pisar num baú/loja precisa repintar o painel para o cartão contextual
-        // aparecer (não são auto-coletados, então a coleta não repinta).
+        // aparecer (não são auto-coletados, então a coleta não repinta). O prompt
+        // flutuante atualiza em TODA chegada — também para sumir ao sair da célula.
         try {
+          _avtInteracaoPromptUpdate();
           if (_avtBauNaPosicao(Math.round(cell.x), Math.round(cell.y)) ||
               (typeof _avtLojaNaPosicao === 'function' && _avtLojaNaPosicao(Math.round(cell.x), Math.round(cell.y)))) avtJogadorPainelRender();
         } catch(_) {}
@@ -9643,6 +9645,20 @@ function _avtCanvasKey(e: any) {
     return;
   }
 
+  // ── B / L: abrir baú / loja sob o jogador (PC desktop) ────────────────────
+  if (_key === 'b' || _key === 'l') {
+    const _jogInt = _avtMeuJogador();
+    if (_jogInt) {
+      if (_key === 'b') {
+        const _bauInt = _avtBauNaPosicao(Math.round(_jogInt.x), Math.round(_jogInt.y));
+        if (_bauInt && !_bauInt.aberto) { e.preventDefault(); avtAbrirBau(_bauInt.id); return; }
+      } else if (typeof _avtLojaNaPosicao === 'function') {
+        const _lojaInt = _avtLojaNaPosicao(Math.round(_jogInt.x), Math.round(_jogInt.y));
+        if (_lojaInt && typeof avtAbrirLoja === 'function') { e.preventDefault(); avtAbrirLoja(_lojaInt.id); return; }
+      }
+    }
+  }
+
   // ── WASD: mover personagem ────────────────────────────────────────────────
   // WASD sempre em direções de TELA (W=cima, A=esquerda, S=baixo, D=direita);
   // _avtRemapDirTelaParaGrade converte para a grade quando o isométrico está ativo.
@@ -10263,6 +10279,7 @@ function _avtMoverJogador(dx: any, dy: any) {
         try { _avtColetarObjsNaPosicao(jogador); } catch(_) {}
         try { _avtChecarArmadilhaMestreNaPosicao(jogador); } catch(_) {}
         try {
+          _avtInteracaoPromptUpdate();
           if (_avtBauNaPosicao(Math.round(cell.x), Math.round(cell.y)) ||
               (typeof _avtLojaNaPosicao === 'function' && _avtLojaNaPosicao(Math.round(cell.x), Math.round(cell.y)))) avtJogadorPainelRender();
         } catch(_) {}
@@ -17706,6 +17723,7 @@ function avtJogadorPainel() {
 window.avtJogadorPainel = avtJogadorPainel;
 
 function avtJogadorPainelRender(targetEl?: any, opts?: any) {
+  try { _avtInteracaoPromptUpdate(); } catch(_) {}
   const compact = !!(opts && opts.compact);
   const el = targetEl || document.getElementById('avt-pp-content');
   if (!el) return;
@@ -17993,6 +18011,49 @@ function _avtBauNaPosicao(x: any, y: any) {
   }) || null;
 }
 
+// ── Prompt de interação (baú/loja sob o jogador) ─────────────────────────────
+// Botões flutuantes sobre o mapa (desktop/touch comum) ou refresh do painel do
+// modo controle (dispositivo). Chamado a cada chegada de célula e nos renders
+// do painel do jogador — barato quando nada mudou.
+function _avtInteracaoPromptUpdate() {
+  const el = document.getElementById('avt-interacao-prompt');
+  if (!el) return;
+  const jogador = _avtMeuJogador();
+  const emJogo = !!AVT_STATE.dungeon && document.getElementById('aventura-screen')?.style!.display !== 'none';
+  const bauRaw = (jogador && emJogo) ? _avtBauNaPosicao(Math.round(jogador.x), Math.round(jogador.y)) : null;
+  const bau  = bauRaw && !bauRaw.aberto ? bauRaw : null;
+  const loja = (jogador && emJogo && typeof _avtLojaNaPosicao === 'function')
+    ? _avtLojaNaPosicao(Math.round(jogador.x), Math.round(jogador.y)) : null;
+  const ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL.modoTela === 'dispositivo';
+
+  // Painel do modo controle só re-renderiza quando o conjunto de interações muda
+  const sig = (bau ? 'b:' + bau.id : '') + '|' + (loja ? 'l:' + loja.id : '');
+  if (sig !== (AVT_STATE as any)._interacaoSig) {
+    (AVT_STATE as any)._interacaoSig = sig;
+    if (ctrlDisp && typeof _atualizarZonaDireita === 'function') { try { _atualizarZonaDireita(); } catch(_) {} }
+  }
+
+  if (ctrlDisp || (!bau && !loja)) { el.style!.display = 'none'; el.innerHTML = ''; return; }
+
+  const _isTouchDev = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const btn = (onclick: any, icone: any, rotulo: any, tecla: any) => `
+    <button onclick="${onclick}" style="display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(5,8,16,0.92);border:1px solid rgba(200,168,75,0.4);border-radius:8px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.72rem;padding:8px 16px;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.5)">
+      <span>${icone} ${rotulo}</span>
+      ${_isTouchDev ? '' : `<kbd style="background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.3);border-radius:4px;padding:1px 6px;font-size:0.62rem;font-family:inherit">${tecla}</kbd>`}
+    </button>`;
+  let html = '';
+  if (bau) {
+    const safe = _escHtml(String(bau.id).replace(/'/g, "\\'"));
+    html += btn(`avtAbrirBau('${safe}')`, '📦', 'Abrir ' + _escHtml(bau.nome || 'Baú'), 'B');
+  }
+  if (loja) {
+    const safe = _escHtml(String(loja.id).replace(/'/g, "\\'"));
+    html += btn(`avtAbrirLoja('${safe}')`, _escHtml(loja.icone || '🛒'), 'Abrir ' + _escHtml(loja.nome || 'Loja'), 'L');
+  }
+  el.innerHTML = html;
+  el.style!.display = 'flex';
+}
+
 // ── Armadilhas do mestre (objetos de fase) ────────────────────────────────────
 // Ocultas dos jogadores (render só para o mestre, padrão som_ambiente) e
 // disparadas quando um JOGADOR pisa. Quem decide o disparo é o cliente do
@@ -18231,6 +18292,39 @@ function _avtOrbConsumirCargas(casterEnt: any) {
 }
 
 // Open a chest at player's position
+// ── Popup de loot (baú aberto) ───────────────────────────────────────────────
+// Lista o que foi recebido: itens (ícone + nome ×qtd) e ouro. Clique fecha;
+// auto-fecha com fade. Ícone ausente no loot é resolvido pelo catálogo.
+function _avtLootPopupMostrar({ titulo, itens, ouro }: any = {}) {
+  document.getElementById('avt-loot-popup')?.remove();
+  const cat = (AVT_STATE.itemCatalog || []).concat((typeof AVT_INV !== 'undefined' && AVT_INV?.catalogo) || []);
+  const _icone = (it: any) => it.icone
+    || cat.find((d: any) => String(d.id) === String(it.item_catalog_id || it.item_def_id || it.id))?.icone || '📦';
+  const linhas = (itens || []).map((it: any) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+      <span style="font-size:1rem">${_escHtml(_icone(it))}</span>
+      <span style="flex:1;color:#c8d8e8">${_escHtml(it.nome || 'Item')}</span>
+      <span style="color:#7a92aa">×${parseInt(it.quantidade) || 1}</span>
+    </div>`).join('');
+  const linhaOuro = ouro ? `
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+      <span style="font-size:1rem">🪙</span>
+      <span style="flex:1;color:#f0cc6a">Ouro</span>
+      <span style="color:#f0cc6a">+${ouro}</span>
+    </div>` : '';
+  const el = document.createElement('div');
+  el.id = 'avt-loot-popup';
+  el.style!.cssText = 'position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:9300;min-width:220px;max-width:min(320px,86vw);background:rgba(5,8,16,0.96);border:1px solid rgba(200,168,75,0.45);border-radius:10px;padding:12px 16px;font-family:var(--fonte-d);font-size:0.72rem;box-shadow:0 4px 24px rgba(0,0,0,0.6);cursor:pointer;transition:opacity .4s';
+  el.innerHTML = `
+    <div style="color:#c8a84b;font-size:0.78rem;margin-bottom:6px">📦 ${_escHtml(titulo || 'Baú')}</div>
+    ${linhas}${linhaOuro}
+    <div style="color:#7a92aa;font-size:0.55rem;margin-top:8px;text-align:center">toque para fechar</div>`;
+  const _fechar = () => { el.style!.opacity = '0'; setTimeout(() => el.remove(), 400); };
+  el.addEventListener('click', _fechar);
+  document.body.appendChild(el);
+  setTimeout(_fechar, 4500);
+}
+
 async function avtAbrirBau(bauId: any) {
   const jogador = _avtMeuJogador();
   if (!jogador) return;
@@ -18282,7 +18376,6 @@ async function avtAbrirBau(bauId: any) {
     const ca = { ...(char.custom_attrs || {}), ouro: (char.custom_attrs?.ouro || 0) + bau.ouro };
     char.custom_attrs = ca;
     await _avtSb('characters?id=eq.' + encodeURIComponent(char.id), { method: 'PATCH', body: JSON.stringify({ custom_attrs: ca }) }).catch(()=>{});
-    mostrarToast(`📦 Baú: +${bau.ouro} ouro!`, 'sucesso');
   }
 
   // Add items to inventario and sync to AVT_INV
@@ -18307,7 +18400,7 @@ async function avtAbrirBau(bauId: any) {
     }
   }
 
-  if (loot.length) mostrarToast(`📦 Baú aberto! ${loot.length} item(ns) adicionado(s) ao inventário`, 'sucesso');
+  _avtLootPopupMostrar({ titulo: bau.nome || 'Baú', itens: loot, ouro: bau.ouro || 0 });
   _avtBroadcast('avt_bau_aberto', { bauId, jogadorNome: jogador.nome });
   // [4.6] Garante invalidação do cache de inventário mesmo no caminho de fallback
   // (POST direto sem avtInvDarItem). Inclui ouro atualizado do baú.
@@ -32846,6 +32939,8 @@ Object.defineProperty(globalThis, "avtJogadorPainel", { configurable: true, get:
 Object.defineProperty(globalThis, "avtJogadorPainelRender", { configurable: true, get: () => avtJogadorPainelRender, set: (__v) => { avtJogadorPainelRender = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtBauNaPosicao", { configurable: true, get: () => _avtBauNaPosicao, set: (__v) => { _avtBauNaPosicao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInteracaoPromptUpdate", { configurable: true, get: () => _avtInteracaoPromptUpdate, set: (__v) => { _avtInteracaoPromptUpdate = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtColetarObjsNaPosicao", { configurable: true, get: () => _avtColetarObjsNaPosicao, set: (__v) => { _avtColetarObjsNaPosicao = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
