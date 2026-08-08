@@ -1915,11 +1915,16 @@ window._avtMenuAbrirGuia = _avtMenuAbrirGuia;
 
 function avtPausaAbrir(aba?: any) {
   (window as any)._avtPausaAba = aba || 'menu';
+  // Pausa "de verdade" para este jogador: música pausa e o flag _pausado é
+  // propagado ao host (inimigos deixam de perceber o personagem). O setter é
+  // idempotente, então trocar de aba (config/guia) não re-dispara nada.
+  try { (window as any)._avtDefinirPausaLocal?.(true); } catch(_) {}
   _avtPausaRender();
 }
 window.avtPausaAbrir = avtPausaAbrir;
 
 function avtPausaFechar() {
+  try { (window as any)._avtDefinirPausaLocal?.(false); } catch(_) {}
   document.getElementById('avt-pausa-overlay')?.remove();
 }
 window.avtPausaFechar = avtPausaFechar;

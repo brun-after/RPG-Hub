@@ -130,6 +130,7 @@ window.RTNet = (() => {
     avt_jogador_morreu:    { handler: 'avtReceberJogadorMorreu',    persist: 'immediate', reliable: true  },
     avt_jogador_ressurgiu: { handler: 'avtReceberJogadorRessurgiu', persist: 'immediate', reliable: true  },
     avt_jogador_visivel:   { handler: 'avtReceberJogadorVisivel',   persist: 'immediate', reliable: true  },
+    avt_jogador_pausado:   { handler: 'avtReceberJogadorPausado',   persist: 'immediate', reliable: true  },
     avt_skill_selecionada: { handler: 'avtReceberSkillSelecionada', persist: 'never',     reliable: false, relay: true },
     avt_dado_rolado:       { handler: 'avtReceberDadoRolado',       persist: 'never',     reliable: false, relay: true },
     avt_dano_visual:       { handler: 'avtReceberDanoVisual',       persist: 'never',     reliable: false, relay: true },

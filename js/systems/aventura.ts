@@ -6490,7 +6490,7 @@ function _avtRenderFrame() {
   if (_agoraVerif - ((AVT_STATE as any)._ultimaAutoAtaqueVerif || 0) >= 250) {
     (AVT_STATE as any)._ultimaAutoAtaqueVerif = _agoraVerif;
     const _jLocalAuto = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
-    if (_jLocalAuto && !_avtMinhaBatalha() && !AVT_STATE._primeiroAtaqueModoAlvo) {
+    if (_jLocalAuto && !(AVT_STATE as any)._pausaLocal && !_avtMinhaBatalha() && !AVT_STATE._primeiroAtaqueModoAlvo) {
       try { _avtVerificarAutoAtaqueBasico(_jLocalAuto); } catch(_) {}
     }
   }
@@ -7401,6 +7401,17 @@ function _avtRenderFrame() {
       ctx.fillStyle = 'rgba(220,230,240,0.78)';
     }
     ctx.fillText(_nomeLabel, cx, _nameY);
+
+    // Indicador de pausa: o grupo vê que o jogador está pausado (inimigos o ignoram)
+    if (e._pausado && e.tipo === 'jogador') {
+      ctx.save();
+      ctx.font = `${Math.max(10, Math.round(SZ * 0.4))}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = 0.65 + 0.3 * Math.abs(Math.sin(_t * 0.003));
+      ctx.fillText('⏸', cx, _nameY - Math.round(SZ * 0.42));
+      ctx.restore();
+    }
 
     // Filtro cinza proporcional para jogador invisível (morto/recuperando)
     if (e._invisivelParaInimigos && e.tipo === 'jogador') {
@@ -9030,7 +9041,8 @@ function _avtNpcPatrulharFrame(now: any) {
     !AVT_STATE.npcTimers[e.id]?.isPursuing
   );
   if (!inimigos.length) return;
-  const jogadores = AVT_STATE.entidades.filter((e: any) => e.tipo === 'jogador' && e.hp > 0);
+  // Escondido (offline/saiu) ou pausado não atrai a patrulha.
+  const jogadores = AVT_STATE.entidades.filter((e: any) => e.tipo === 'jogador' && e.hp > 0 && !e.escondido && !e._pausado);
   const tick = Math.floor(now / 2000);
   inimigos.forEach((e: any) => {
     // Dedup: evita que múltiplos clientes reprocessem o mesmo NPC no mesmo tick de 2s
@@ -9547,6 +9559,16 @@ function _avtCanvasKey(e: any) {
   // Ignora se foco está em campo editável (input/textarea/contentEditable)
   const _tgt = e.target;
   if (_tgt && (_tgt.tagName === 'INPUT' || _tgt.tagName === 'TEXTAREA' || _tgt.isContentEditable)) return;
+
+  // Overlay de pausa aberto: engole WASD/atalhos (o personagem pausado não
+  // pode agir); Escape continua fechando a pausa.
+  if (document.getElementById('avt-pausa-overlay')) {
+    if (e.key === 'Escape' && typeof window.avtPausaToggle === 'function') {
+      e.preventDefault();
+      window.avtPausaToggle();
+    }
+    return;
+  }
 
   const _key  = (e.key  || '').toLowerCase();
   const _code = e.code  || '';
@@ -11617,12 +11639,17 @@ function _avtCheckProximidadeInimigos(jogadorMovendo: any) {
   // Checa proximidade do jogador passado — também chamado periodicamente para jogadores parados
   if (!jogadorMovendo || _avtBatalhaDeEnt(jogadorMovendo.id)) return;
   if (!_avtPersonagemCombateAtivo(jogadorMovendo.nome)) return;
+  // Fora do jogo (offline/saiu) → não existe para a percepção dos inimigos.
+  if (jogadorMovendo.escondido) return;
   // Only check enemies that are NOT already in a combat
   const enemiesLivres = AVT_STATE.entidades.filter((e: any) => e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id));
   if (!enemiesLivres.length) return;
   enemiesLivres.forEach((ini: any) => {
     const raio = ini.deteccaoRaio ?? 3;
-    const emRaio = Math.abs(jogadorMovendo.x - ini.x) + Math.abs(jogadorMovendo.y - ini.y) <= raio;
+    // Jogador pausado é imperceptível: tratado como "fora do raio", o que
+    // desativa/reseta paciência pendente pelo ramo existente abaixo.
+    const emRaio = !jogadorMovendo._pausado &&
+      Math.abs(jogadorMovendo.x - ini.x) + Math.abs(jogadorMovendo.y - ini.y) <= raio;
     if (!AVT_STATE.npcTimers[ini.id]) {
       _avtInitNpcTimer(ini);
     }
@@ -11671,6 +11698,18 @@ function _avtAtualizarPaciencias(dt: any) {
     // Pausa paciência enquanto menu do personagem ou painel do mestre estiver aberto
     // (desde que o inimigo ainda não esteja perseguindo ativamente)
     if (AVT_STATE._menuJogadorAberto && !timer.isPursuing) continue;
+    // Alvo pausado congela a paciência; alvo escondido (offline/saiu) desarma-a.
+    if (timer.targetId && !timer.isPursuing) {
+      const _alvoPac = AVT_STATE.entidades.find((e: any) => e.id === timer.targetId);
+      if (_alvoPac?._pausado) continue;
+      if (_alvoPac?.escondido) {
+        timer.ativo = false;
+        timer.targetId = null;
+        timer.patience = timer.maxPatience;
+        timer._pacienciaRolada = false;
+        continue;
+      }
+    }
     // [NPC-SYNC] Só o host eleito atualiza o relógio de paciência do NPC (apenas em modo RTNet ativo).
     if ((AVT_STATE as any).npcSyncEnabled && typeof RTNet !== 'undefined' && RTNet?.initialized && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
     // Skip if this enemy is already in a combat
@@ -11682,7 +11721,7 @@ function _avtAtualizarPaciencias(dt: any) {
         if (timer.isPursuing && timer.tentativeTargetId) {
           // Já perseguindo: tentar trocar de alvo
           const newAlvo = AVT_STATE.entidades.find((e: any) => e.id === timer.tentativeTargetId);
-          if (newAlvo && newAlvo.hp > 0 && !newAlvo._invisivelParaInimigos) {
+          if (newAlvo && newAlvo.hp > 0 && !newAlvo._invisivelParaInimigos && !newAlvo._pausado && !newAlvo.escondido) {
             timer.targetId = timer.tentativeTargetId;
             mostrarToast(`👁 ${ini.nome} trocou de alvo!`, 'aviso');
             try { _avtBroadcastNpc('avt_npc_perseguindo', { id, targetId: timer.targetId }); } catch(_) {}
@@ -11813,7 +11852,7 @@ function _avtIniciarPerseguicao(enemyId: any) {
   timer.attackCooldownTimer = 0;
   timer.ativo = false;
   if (!timer.targetId) {
-    const nearest = AVT_STATE.entidades.filter((e: any) => e.tipo === 'jogador' && e.hp > 0 && !e._invisivelParaInimigos)
+    const nearest = AVT_STATE.entidades.filter((e: any) => e.tipo === 'jogador' && e.hp > 0 && !e._invisivelParaInimigos && !e._pausado && !e.escondido)
       .sort((a: any, b: any) => (Math.abs(a.x - ini.x) + Math.abs(a.y - ini.y)) - (Math.abs(b.x - ini.x) + Math.abs(b.y - ini.y)))[0];
     timer.targetId = nearest?.id || null;
   }
@@ -11907,7 +11946,7 @@ function _avtAtualizarPerseguicoes(dt: any) {
     const raio = Math.max(1, ini.deteccaoRaio || 6);
     let best: any = null, bestDist = Infinity;
     AVT_STATE.entidades.forEach((j: any) => {
-      if (j.tipo !== 'jogador' || j.hp <= 0 || j._invisivelParaInimigos) return;
+      if (j.tipo !== 'jogador' || j.hp <= 0 || j._invisivelParaInimigos || j._pausado || j.escondido) return;
       const d = Math.abs(j.x - ini.x) + Math.abs(j.y - ini.y);
       if (d <= raio && d < bestDist) { bestDist = d; best = j; }
     });
@@ -11928,7 +11967,9 @@ function _avtAtualizarPerseguicoes(dt: any) {
     const ini = AVT_STATE.entidades.find((e: any) => e.id === id);
     if (!ini || ini.hp <= 0) { _avtCancelarPerseguicao(id); continue; }
     let alvo = timer.targetId ? AVT_STATE.entidades.find((e: any) => e.id === timer.targetId) : null;
-    if (!alvo || alvo.hp <= 0 || alvo._invisivelParaInimigos) {
+    // escondido = saiu do jogo → perseguição termina (retarget/cancelar).
+    // _pausado NÃO entra aqui: perseguição a jogador pausado congela mais abaixo.
+    if (!alvo || alvo.hp <= 0 || alvo._invisivelParaInimigos || alvo.escondido) {
       // Tenta retargetar antes de cancelar (evita ciclo patrulha→perseguição imediato)
       if (_tentarRetarget(ini, timer)) {
         alvo = AVT_STATE.entidades.find((e: any) => e.id === timer.targetId);
@@ -11948,6 +11989,11 @@ function _avtAtualizarPerseguicoes(dt: any) {
       alvo = _nearAv;
       timer.targetId = _nearAv.id;
     }
+
+    // Alvo pausado: congela a perseguição inteira — não anda, não conta
+    // inação/desistência/falhas de path — preservando isPursuing/targetId
+    // para retomar exatamente de onde parou quando o jogador despausar.
+    if (alvo && alvo._pausado) continue;
 
     timer.inactionTimer += dt;
     timer.pursuitStepTimer -= dt;
@@ -13480,6 +13526,36 @@ function avtReceberJogadorVisivel({ charNome }: any) {
   _avtHudUpdate();
 }
 window.avtReceberJogadorVisivel = avtReceberJogadorVisivel;
+
+// ── PAUSA IN-GAME ─────────────────────────────────────────────────────────────
+// A pausa é local (a simulação global continua para os outros), mas o flag
+// _pausado precisa chegar ao host da fase, onde a IA roda: inimigos não podem
+// ADQUIRIR um jogador pausado como alvo, e perseguições já em andamento
+// CONGELAM (preservando targetId/isPursuing) para retomar no despausar.
+// Distinto de _invisivelParaInimigos, que CANCELA perseguições.
+function _avtDefinirPausaLocal(pausado: any) {
+  if (!!(AVT_STATE as any)._pausaLocal === !!pausado) return; // idempotente (trocas de aba do overlay)
+  (AVT_STATE as any)._pausaLocal = !!pausado;
+  const j = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
+  if (j && j.tipo === 'jogador') {
+    if (pausado) j._pausado = true; else delete j._pausado;
+    try { _avtBroadcast('avt_jogador_pausado', { charNome: j.nome, pausado: !!pausado }); } catch (_) {}
+  }
+  try {
+    if (typeof AudioManager !== 'undefined') {
+      if (pausado) AudioManager.pauseMusic(); else AudioManager.resumeMusic();
+    }
+  } catch (_) {}
+}
+window._avtDefinirPausaLocal = _avtDefinirPausaLocal;
+
+function avtReceberJogadorPausado({ charNome, pausado }: any) {
+  if (!AVT_STATE.rpgId || !charNome || charNome === AVT_STATE.myCharNome) return;
+  const ent = AVT_STATE.entidades.find((e: any) => e.tipo === 'jogador' && e.nome === charNome);
+  if (!ent) return;
+  if (pausado) ent._pausado = true; else delete ent._pausado;
+}
+window.avtReceberJogadorPausado = avtReceberJogadorPausado;
 
 // ── LEVEL-UP VISUAL EFFECTS ───────────────────────────────────────────────────
 
@@ -17040,11 +17116,11 @@ async function _avtNpcTurno(bat: any) {
 
   // Target players in THIS combat — prefer lowest HP. If none, fall back to GLOBAL pursuit.
   // Ignora jogadores invisíveis (ressuscitando após morte).
-  let jogadores = AVT_STATE.entidades.filter((e: any) => e.tipo==='jogador' && e.hp>0 && !e._invisivelParaInimigos && bat.envolvidos.includes(e.id));
+  let jogadores = AVT_STATE.entidades.filter((e: any) => e.tipo==='jogador' && e.hp>0 && !e._invisivelParaInimigos && !e.escondido && bat.envolvidos.includes(e.id));
   let perseguicaoGlobal = false;
   if (!jogadores.length) {
     // Ninguém visível no combate — tenta perseguir o jogador vivo mais próximo no mapa todo
-    const todos = AVT_STATE.entidades.filter((e: any) => e.tipo==='jogador' && e.hp>0 && !e._invisivelParaInimigos);
+    const todos = AVT_STATE.entidades.filter((e: any) => e.tipo==='jogador' && e.hp>0 && !e._invisivelParaInimigos && !e.escondido);
     if (!todos.length) { avtCombateEncerrar(bat.id); return; }
     if (!AVT_STATE._fleeTracker) AVT_STATE._fleeTracker = {};
     AVT_STATE._fleeTracker[entNpc.id] = { pursuing: true, prevDist: Infinity };
@@ -30620,8 +30696,9 @@ try{
       const _origBroadcast = window._avtBroadcast;
       const wrapped = function(this: any, tipo: any, payload: any) {
         try {
-          // Pausado? Bloqueia mutations
-          if (_isPaused() && tipo !== 'avt_dado_rolado' && tipo !== 'avt_skill_selecionada') return;
+          // Pausado? Bloqueia mutations (pausa/despausa do jogador sempre passa —
+          // um despausar preso aqui deixaria o personagem imperceptível para sempre)
+          if (_isPaused() && tipo !== 'avt_dado_rolado' && tipo !== 'avt_skill_selecionada' && tipo !== 'avt_jogador_pausado') return;
 
           // Movimento de NPC/inimigo: só o host DA FASE propaga.
           if (tipo === 'avt_token_move' && _isRTNet() && !_souHostDaFase()) {
@@ -30679,6 +30756,8 @@ try{
           morto: !!(e.morto || (e.tipo !== 'jogador' && typeof e.hp === 'number' && e.hp <= 0)),
           anim: e._currentAnim || null,
           escondido: e.escondido || false,
+          // Pausa in-game do jogador: propaga p/ late joiners e troca de host.
+          pausado: !!e._pausado,
           status_effects: e.status_effects || [],
           atravessar: !!e.atravessar,
           fantasma: !!e.fantasma,
@@ -30741,7 +30820,13 @@ try{
         // sentidos (revela e esconde), mas nunca esconde meu próprio personagem.
         // Para inimigos/NPCs mantém-se hide-only (revelar é exclusivo de avt_npc_respawn).
         if (ent.tipo === 'jogador') {
-          if (ent.nome !== meCharNome) ent.escondido = (r.escondido === true);
+          if (ent.nome !== meCharNome) {
+            ent.escondido = (r.escondido === true);
+            // Pausa in-game espelha o host; meu flag local é autoritativo p/ mim.
+            if (r.pausado !== undefined) {
+              if (r.pausado) ent._pausado = true; else delete ent._pausado;
+            }
+          }
         } else if (r.escondido === true || (typeof r.hp === 'number' && r.hp <= 0 && ent.tipo === 'inimigo')) {
           ent.escondido = true;
         }
@@ -31534,6 +31619,9 @@ try{
   // capturar window.sairAventura de forma síncrona aqui pegaria undefined e o
   // hook nunca instalaria (timers de HP/regen e o flush final ficavam sem rodar).
   function _avtHookTeardown(origem: any) {
+    // Sair pausado deixaria o personagem imperceptível para sempre no host —
+    // despausa (e broadcasta) enquanto o RTNet ainda está de pé.
+    try { if (typeof window._avtDefinirPausaLocal === 'function') window._avtDefinirPausaLocal(false); } catch(_) {}
     // BGM não é parada pelas rotas de saída (só os sons ambiente são) — sem
     // isto a música da aventura continua tocando no menu/hub.
     try { if (typeof AudioManager !== 'undefined') AudioManager.stopMusic({ fade: 400 }); } catch(_) {}
