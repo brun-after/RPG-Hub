@@ -179,6 +179,17 @@ describe('_avtCelulaOcupada', () => {
     g.AVT_STATE.entidades = [ent({ tipo: 'avatar', escondido: true })];
     expect(g._avtCelulaOcupada(3, 3, 'e2', 'jogador', false)).toBe(false);
   });
+
+  it('invocado não bloqueia aliados fora de combate; bloqueia em combate e inimigos sempre', () => {
+    g.AVT_STATE.entidades = [ent({ tipo: 'invocado' })];
+    expect(g._avtCelulaOcupada(3, 3, 'e2', 'jogador', false)).toBe(false);
+    expect(g._avtCelulaOcupada(3, 3, 'e2', 'invocado', false)).toBe(false);
+    expect(g._avtCelulaOcupada(3, 3, 'e2', 'jogador', true)).toBe(true);
+    expect(g._avtCelulaOcupada(3, 3, 'e2', 'inimigo', false)).toBe(true);
+    // Jogador parado também não barra a invocação fora de combate
+    g.AVT_STATE.entidades = [ent()];
+    expect(g._avtCelulaOcupada(3, 3, 'e2', 'invocado', false)).toBe(false);
+  });
 });
 
 describe('_avtSfxVolDist (ganho de design + atenuação por distância)', () => {
