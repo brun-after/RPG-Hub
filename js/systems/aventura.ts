@@ -4859,6 +4859,9 @@ async function _avtCarregarDados(rpgId: any) {
   _avtCarregarTodasAparencias();
   _avtCarregarBatalhasAtivas().catch(()=>{});
   if (typeof avtInvInit === 'function') avtInvInit(rpgId).catch(() => {});
+  // Catálogo de invocações: só o entrarRPG (campanha) o carregava — na aventura,
+  // skills invocar_catalogo e os botões "✨ Invocar" ficavam com o catálogo vazio.
+  if (typeof invocacoesCarregarDados === 'function') await invocacoesCarregarDados(rpgId).catch(() => {});
 }
 window._avtCarregarDados = _avtCarregarDados;
 
@@ -31594,6 +31597,14 @@ function _avtInvocacoesDisponiveis(char: any) {
 // invoca cada uma escolhida via avtInvocar (com duração opcional sobrescrita).
 function _avtAplicarEfeitoInvocar(casterChar: any, ef: any, bat: any) {
   if (!casterChar || !ef) return;
+  // Catálogo frio (entrada que não passou por _avtCarregarDados): carrega e re-tenta,
+  // espelhando o lazy-load do combate de campanha (combat.ts).
+  if (typeof INV_OCACOES !== 'undefined' && !INV_OCACOES.carregado
+      && typeof invocacoesCarregarDados === 'function' && AVT_STATE.rpgId) {
+    Promise.resolve(invocacoesCarregarDados(AVT_STATE.rpgId))
+      .then(() => _avtAplicarEfeitoInvocar(casterChar, ef, bat)).catch(() => {});
+    return;
+  }
   const disp = _avtInvocacoesDisponiveis(casterChar);
   const idsConfig = Array.isArray(ef.invocar_ids) ? ef.invocar_ids : [];
 
