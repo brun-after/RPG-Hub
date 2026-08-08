@@ -2024,8 +2024,26 @@ async function _avtMenuEntrarJogo({ charNome, faseId }: any) {
           `rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${encodeURIComponent(uid)}`,
           { method: 'PATCH', body: JSON.stringify({ linked: charNome }) }
         ).catch(() => {});
+        // Upsert local + broadcast: os clientes já na sessão têm membros stale
+        // (a lista só é carregada na entrada) — sem isto o host esconderia o
+        // personagem recém-vinculado como "offline". O RTNet ainda não subiu
+        // aqui, então o broadcast fica pendente e é enviado quando ele iniciar.
+        try {
+          AVT_STATE.membros = AVT_STATE.membros || [];
+          let _m = AVT_STATE.membros.find((x: any) => x.player_id === uid);
+          if (!_m) { _m = { player_id: uid, linked: null }; AVT_STATE.membros.push(_m); }
+          _m.linked = charNome;
+          (AVT_STATE as any)._memberLinkPendente = { player_id: uid, linked: charNome };
+        } catch(_) {}
       }
       AVT_STATE.myCharNome = charNome;
+      // As entidades foram populadas na abertura do menu, quando este personagem
+      // podia ainda não ter vínculo (e portanto não spawnou) — garante que o MEU
+      // personagem existe e está visível ao entrar no jogo.
+      try {
+        const _minhaEnt = (window as any)._avtSpawnCharJogador?.(charNome);
+        if (_minhaEnt) { _minhaEnt.escondido = false; _minhaEnt._charOffline = false; delete _minhaEnt._charSaiu; }
+      } catch(_) {}
     }
 
     // Aplicar preferências de controle mobile

@@ -3600,17 +3600,37 @@ async function _avtMestreAtribuirJogador(playerId: any, charNome: any) {
   } catch (e: any) { mostrarToast('Erro ao atribuir: ' + (e?.message||e), 'erro'); }
 }
 
-// Receptor: o jogador atribuído atualiza seu vínculo localmente
+// Receptor: o jogador atribuído atualiza seu vínculo localmente.
+// Também faz upsert do membro (clientes com membros stale — a lista só era
+// carregada uma vez) e spawna/desesconde o personagem vinculado, para que um
+// jogador entrando no meio da sessão apareça em todos os clientes sem reload.
 function avtReceberMemberLinked({ player_id, linked }: any) {
   if (!player_id) return;
-  const m = (AVT_STATE.membros || []).find((x: any) => x.player_id === player_id);
-  if (m) m.linked = linked || null;
+  AVT_STATE.membros = AVT_STATE.membros || [];
+  let m = AVT_STATE.membros.find((x: any) => x.player_id === player_id);
+  if (!m) { m = { player_id, linked: null }; AVT_STATE.membros.push(m); }
+  const anterior = m.linked;
+  m.linked = linked || null;
+  if (linked) {
+    try {
+      const ent = typeof _avtSpawnCharJogador === 'function' ? _avtSpawnCharJogador(linked) : null;
+      if (ent) delete ent._charSaiu; // vínculo novo = jogador de volta ao jogo
+    } catch(_) {}
+  } else if (anterior && anterior !== AVT_STATE.myCharNome && !_avtCharTemVinculo(anterior)) {
+    // Desvinculado e ninguém mais o controla: sai do jogo.
+    const entAnt = (AVT_STATE.entidades || []).find((e: any) => e.tipo === 'jogador' && e.nome === anterior);
+    if (entAnt && AVT_STATE.npcControlando !== entAnt.id) {
+      entAnt.escondido = true;
+      entAnt._charOffline = true;
+    }
+  }
   if (SESSION?.user?.id === player_id) {
     AVT_STATE.myCharNome = linked || null;
     if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar();
     if (typeof _avtHudUpdate === 'function') _avtHudUpdate();
     mostrarToast(linked ? `🎭 Você controla: ${linked}` : 'Seu personagem foi desvinculado', 'ok');
   }
+  try { _avtAtualizarVisibilidadeOffline(); } catch(_) {}
 }
 window.avtReceberMemberLinked = avtReceberMemberLinked;
 
@@ -3618,6 +3638,13 @@ async function _avtMestreSelecionarPersonagem(charNome: any) {
   if (!SESSION?.user?.id) return;
   const charAnterior = AVT_STATE.myCharNome;
   AVT_STATE.myCharNome = charNome || null;
+  // Personagem nunca spawnado (sem vínculo até agora): entra no jogo já visível.
+  if (charNome) {
+    try {
+      const _e = typeof _avtSpawnCharJogador === 'function' ? _avtSpawnCharJogador(charNome) : null;
+      if (_e) { _e.escondido = false; _e._charOffline = false; delete _e._charSaiu; }
+    } catch(_) {}
+  }
   // Esconde da cena o personagem que o mestre largou, caso ninguém online o controle.
   if (charAnterior && charAnterior !== charNome) {
     const entAnt = AVT_STATE.entidades.find((e: any) => e.tipo === 'jogador' && e.nome === charAnterior);
@@ -4939,6 +4966,15 @@ function _avtIniciarRTNet(rpgId: any, onHostElected: any) {
         } catch(_) {}
       });
       try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
+      // Vínculo feito no menu (antes do RTNet subir): broadcast agora, para os
+      // clientes já na sessão atualizarem membros e spawnarem o personagem.
+      try {
+        const _pendLink = (AVT_STATE as any)._memberLinkPendente;
+        if (_pendLink) {
+          _avtBroadcast('avt_member_linked', _pendLink);
+          (AVT_STATE as any)._memberLinkPendente = null;
+        }
+      } catch(_) {}
       _avtSalaEspera(AVT_STATE.rpg.name, onHostElected);
     }).catch((e: any) => {
       console.warn('[AVT] RTNet.init falhou:', e);
@@ -5657,22 +5693,26 @@ function _avtPopularEntidadesInimigos(dungeon: any) {
   }
 }
 
-function _avtPopularEntidades() {
+// Personagem tem um jogador vinculado (rpg_members.linked)? Sem vínculo, o
+// personagem não está "em uso" e não deve existir no mapa.
+function _avtCharTemVinculo(charNome: any) {
+  return (AVT_STATE.membros || []).some((m: any) => m.linked === charNome);
+}
+window._avtCharTemVinculo = _avtCharTemVinculo;
+
+// Cria (sem inserir) a entidade de jogador para o personagem c no índice i da
+// lista de chars — extraído de _avtPopularEntidades para permitir spawn
+// dinâmico (jogador entra no meio da sessão / mestre atribui personagem).
+// Determinístico entre clientes: posição salva (avt_x/avt_y) vence; senão
+// spawn do tileset com offset pelo índice estável do personagem.
+function _avtCriarEntidadeJogador(c: any, i: any): any {
   const d = AVT_STATE.dungeon;
-  AVT_STATE.entidades = [];
-  AVT_STATE.npcTimers = {};
-  if (!d || !d.rooms?.length && !d.tiles) return;
-
-  const rooms = d.rooms?.length ? d.rooms : _avtDetectarSalas(d);
+  const rooms = d?.rooms?.length ? d.rooms : (d ? _avtDetectarSalas(d) : []);
   const cores = ['#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e8604c'];
-
-  // Spawn explícito do tileset, ou primeiro tile passável da primeira sala
-  const spawns = d._spawnJogadores?.length ? d._spawnJogadores : null;
+  const spawns = d?._spawnJogadores?.length ? d._spawnJogadores : null;
   const primRoom = rooms[0];
-
-  AVT_STATE.chars.filter((c: any) => c.custom_attrs?.tipo_personagem !== 'npc').forEach((c: any, i: any) => {
-    const col = c.custom_attrs?.cor || cores[i % cores.length];
-    const ca  = c.custom_attrs || {};
+  const col = c.custom_attrs?.cor || cores[i % cores.length];
+  const ca  = c.custom_attrs || {};
     // Garantir que jogador tem atributos — senão fórmula de HP/dano degenera.
     // Semeia defaults por classe e persiste em custom_attrs.atributos para
     // que personagens legados (criados antes desta feature) passem a multiplicar.
@@ -5709,7 +5749,7 @@ function _avtPopularEntidades() {
     const _hpAttrValJ = _hpAttrKeyJ ? parseFloat(_hpAtrsJ[_hpAttrKeyJ] || 0) : 0;
     const _hpMaxJ = Math.max(1, Math.round(_hpBaseJ + _hpAttrValJ * _hpMultJ));
     const _hpAtualJ = c.hp_atual ? Math.min(c.hp_atual, _hpMaxJ) : _hpMaxJ;
-    AVT_STATE.entidades.push({
+    return {
       id: c.id || c.nome, nome: c.nome, tipo: 'jogador',
       x: sx, y: sy, renderX: sx, renderY: sy, _velocidadeLerp: null, _waypoints: [],
       hp: _hpAtualJ, hpMax: _hpMaxJ, cor: col, dbId: c.id,
@@ -5720,14 +5760,47 @@ function _avtPopularEntidades() {
       // sumia, caindo no top-down até salvar de novo na sessão.
       custom_attrs: ca,
       _charOffline: false
-    });
-    // Esconder personagem se o jogador vinculado estiver offline (somente em sessão multiplayer)
-    if (AVT_STATE.membros?.length && c.nome !== AVT_STATE.myCharNome) {
-      const _ent = AVT_STATE.entidades[AVT_STATE.entidades.length - 1];
-      if (!_avtJogadorEstaOnline(c.nome)) {
-        _ent.escondido = true;
-        _ent._charOffline = true;
-      }
+    };
+}
+window._avtCriarEntidadeJogador = _avtCriarEntidadeJogador;
+
+// Spawn dinâmico: insere o personagem no mapa se ainda não existir (jogador
+// entrou no meio da sessão, mestre atribuiu, heartbeat de um char ausente).
+function _avtSpawnCharJogador(charNome: any) {
+  if (!charNome) return null;
+  const existente = (AVT_STATE.entidades || []).find((e: any) => e.tipo === 'jogador' && e.nome === charNome);
+  if (existente) return existente;
+  const idx = (AVT_STATE.chars || []).findIndex((c: any) => c.nome === charNome);
+  if (idx < 0 || !AVT_STATE.dungeon) return null;
+  const c = AVT_STATE.chars[idx];
+  if (c.custom_attrs?.tipo_personagem === 'npc') return null;
+  const ent = _avtCriarEntidadeJogador(c, idx);
+  AVT_STATE.entidades.push(ent);
+  return ent;
+}
+window._avtSpawnCharJogador = _avtSpawnCharJogador;
+
+function _avtPopularEntidades() {
+  const d = AVT_STATE.dungeon;
+  AVT_STATE.entidades = [];
+  AVT_STATE.npcTimers = {};
+  if (!d || !d.rooms?.length && !d.tiles) return;
+
+  // Sessão sem dados de membros (solo, fetch falhou, campanha sem vínculos):
+  // impossível saber o que está "em uso" — mantém o comportamento clássico de
+  // spawnar todos. Com membros, personagem só existe no jogo se estiver em uso.
+  const temMembros = !!AVT_STATE.membros?.length;
+  AVT_STATE.chars.filter((c: any) => c.custom_attrs?.tipo_personagem !== 'npc').forEach((c: any, i: any) => {
+    const ehMeu = c.nome === AVT_STATE.myCharNome;
+    // Sem vínculo, o personagem não entra no mapa — só via avt_member_linked
+    // (spawn dinâmico) ou seleção do mestre.
+    if (temMembros && !ehMeu && !_avtCharTemVinculo(c.nome)) return;
+    const ent = _avtCriarEntidadeJogador(c, i);
+    AVT_STATE.entidades.push(ent);
+    // Vinculado mas offline: nasce escondido (inerte p/ render, colisão e IA).
+    if (temMembros && !ehMeu && !_avtJogadorEstaOnline(c.nome)) {
+      ent.escondido = true;
+      ent._charOffline = true;
     }
   });
 
@@ -9144,6 +9217,8 @@ function _avtCelulaOcupada(nx: any, ny: any, entId: any, entTipo: any, emCombate
   return AVT_STATE.entidades.some((e: any) => {
     if (e.id === entId) return false;
     if (e.escondido) return false;
+    // Jogador morto/caído não bloqueia a célula (o corpo virava parede).
+    if (e.tipo === 'jogador' && typeof e.hp === 'number' && e.hp <= 0) return false;
     if (Math.round(e.x) !== nx || Math.round(e.y) !== ny) return false;
     // Avatar sempre bloqueia
     if (e.tipo === 'avatar') return true;
@@ -9879,7 +9954,13 @@ function _avtPersonagemCombateAtivo(charNome: any) {
 // Verifica se o jogador vinculado a charNome está online (visto nos últimos 2 min)
 function _avtJogadorEstaOnline(charNome: any) {
   const membro = (AVT_STATE.membros || []).find((m: any) => m.linked === charNome);
-  if (!membro) return false;
+  if (!membro) {
+    // Linha de membro ausente/stale NESTE cliente (a lista só é carregada na
+    // entrada): o heartbeat de jogo decide — um personagem ativamente jogando
+    // não pode ser escondido só porque meu membros está desatualizado.
+    const ent = (AVT_STATE.entidades || []).find((e: any) => e.nome === charNome);
+    return !!ent && Date.now() - (ent._lastGameSeen || 0) < 120000;
+  }
   const ts = _avtPresencaTs(membro);
   return Date.now() - ts < 120000;
 }
@@ -9900,6 +9981,9 @@ function _avtAtualizarVisibilidadeOffline() {
     const mestroControlando = AVT_STATE.npcControlando === e.id;
     const ehMeuPersonagem = e.nome === AVT_STATE.myCharNome;
     if (!souAutoridade && !ehMeuPersonagem && !mestroControlando) return;
+    // Saiu explicitamente da partida: a presença de CHAT (jogador segue no
+    // site) não ressuscita o personagem — só heartbeat de jogo/vínculo novo.
+    if (e._charSaiu && !mestroControlando && !ehMeuPersonagem) return;
     if (!online && !mestroControlando && !ehMeuPersonagem) {
       if (!e.escondido) {
         e.escondido = true;
@@ -13556,6 +13640,24 @@ function avtReceberJogadorPausado({ charNome, pausado }: any) {
   if (pausado) ent._pausado = true; else delete ent._pausado;
 }
 window.avtReceberJogadorPausado = avtReceberJogadorPausado;
+
+// ── SAÍDA EXPLÍCITA DA PARTIDA ────────────────────────────────────────────────
+// O jogador voltou ao menu/hub: o personagem sai do jogo IMEDIATAMENTE em todos
+// os clientes. _charSaiu impede o reconciliador de visibilidade de ressuscitar
+// o personagem enquanto a presença de CHAT do jogador (que continua no site)
+// ainda está fresca — só um sinal real de jogo (heartbeat/vínculo) o traz de
+// volta. Queda de conexão NÃO passa por aqui: usa a carência de presença (~2min).
+function avtReceberCharSaiu({ charNome }: any) {
+  if (!AVT_STATE.rpgId || !charNome || charNome === AVT_STATE.myCharNome) return;
+  const ent = AVT_STATE.entidades.find((e: any) => e.tipo === 'jogador' && e.nome === charNome);
+  if (!ent || AVT_STATE.npcControlando === ent.id) return;
+  ent.escondido = true;
+  ent._charOffline = true;
+  ent._charSaiu = true;
+  ent._lastGameSeen = 0;
+  delete ent._pausado;
+}
+window.avtReceberCharSaiu = avtReceberCharSaiu;
 
 // ── LEVEL-UP VISUAL EFFECTS ───────────────────────────────────────────────────
 
@@ -23865,7 +23967,10 @@ function avtAplicarSnapshotMerge(snap: any) {
             if (typeof remoto.y === 'number') local.y = remoto.y;
           }
         } else {
-          // Entidade desconhecida localmente — adiciona
+          // Entidade desconhecida localmente — adiciona. Exceto jogador sem
+          // vínculo (snapshot velho de antes do gate de spawn): personagem que
+          // não está em uso não volta ao jogo por merge.
+          if (remoto.tipo === 'jogador' && remoto.nome !== meuNome && !_avtCharTemVinculo(remoto.nome)) return;
           AVT_STATE.entidades.push(remoto);
         }
       });
@@ -30696,9 +30801,11 @@ try{
       const _origBroadcast = window._avtBroadcast;
       const wrapped = function(this: any, tipo: any, payload: any) {
         try {
-          // Pausado? Bloqueia mutations (pausa/despausa do jogador sempre passa —
-          // um despausar preso aqui deixaria o personagem imperceptível para sempre)
-          if (_isPaused() && tipo !== 'avt_dado_rolado' && tipo !== 'avt_skill_selecionada' && tipo !== 'avt_jogador_pausado') return;
+          // Pausado? Bloqueia mutations (pausa/despausa e saída do jogador sempre
+          // passam — presos aqui, o personagem ficaria imperceptível ou fantasma
+          // no mapa para sempre)
+          if (_isPaused() && tipo !== 'avt_dado_rolado' && tipo !== 'avt_skill_selecionada' &&
+              tipo !== 'avt_jogador_pausado' && tipo !== 'avt_char_saiu') return;
 
           // Movimento de NPC/inimigo: só o host DA FASE propaga.
           if (tipo === 'avt_token_move' && _isRTNet() && !_souHostDaFase()) {
@@ -31095,6 +31202,7 @@ try{
       const ent = _findEnt(id) || _findEnt(nome);
       if (!ent || ent.hp <= 0) return;
       ent._lastGameSeen = Date.now();
+      delete ent._charSaiu; // sinal real de jogo: se tinha saído, voltou
       // Confirma o seq processado SEMPRE para o cliente reconciliar: o tick ecoa
       // ent._ackSeq e o cliente descarta inputs <= ackSeq.
       const _ackInput = () => {
@@ -31488,9 +31596,16 @@ try{
         if (!RTNet.isHost || !RTNet.isHost()) return;
         const { nome, hp, hpMax, status_effects, morto } = payload || {};
         if (!nome) return;
-        const ent = AVT_STATE.entidades.find((e: any) => e.nome === nome);
+        let ent = AVT_STATE.entidades.find((e: any) => e.nome === nome);
+        // Heartbeat de personagem ausente na minha lista (membros stale no boot,
+        // avt_member_linked perdido, troca de host): auto-cura criando a entidade
+        // — um jogador ativo materializa em <=500ms e o tick reconcilia posição.
+        if (!ent && typeof window._avtSpawnCharJogador === 'function') {
+          try { ent = window._avtSpawnCharJogador(nome); } catch(_) {}
+        }
         if (!ent) return;
         ent._lastGameSeen = Date.now();
+        delete ent._charSaiu; // sinal real de jogo: se tinha saído, voltou
         if (typeof hp === 'number')    ent.hp = hp;
         if (typeof hpMax === 'number') ent.hpMax = hpMax;
         if (Array.isArray(status_effects)) ent.status_effects = status_effects;
@@ -31622,6 +31737,12 @@ try{
     // Sair pausado deixaria o personagem imperceptível para sempre no host —
     // despausa (e broadcasta) enquanto o RTNet ainda está de pé.
     try { if (typeof window._avtDefinirPausaLocal === 'function') window._avtDefinirPausaLocal(false); } catch(_) {}
+    // Saída explícita: o personagem deixa o jogo na hora em todos os clientes
+    // (a presença de chat manteria o token no mapa por tempo indefinido).
+    try {
+      const _jSaindo = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
+      if (_jSaindo && _jSaindo.tipo === 'jogador') _avtBroadcast('avt_char_saiu', { charNome: _jSaindo.nome });
+    } catch(_) {}
     // BGM não é parada pelas rotas de saída (só os sons ambiente são) — sem
     // isto a música da aventura continua tocando no menu/hub.
     try { if (typeof AudioManager !== 'undefined') AudioManager.stopMusic({ fade: 400 }); } catch(_) {}
