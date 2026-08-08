@@ -6532,7 +6532,9 @@ function _avtRenderFrame() {
   // frame, garantindo que camera.x/y esteja finalizado antes de qualquer desenho.
   const _jPlayer = (typeof _avtEntidadeControlada === 'function') ? _avtEntidadeControlada() : _avtMeuJogador();
   if (_jPlayer && (AVT_STATE as any)._caminhoDestino?.length > 0 && !_avtMinhaBatalha()) {
-    if (_jPlayer._wpCallbackOwner !== 'local-path') {
+    // Tolerante a tag-sem-função: clones (JSON round-trip) preservam a tag mas
+    // perdem o callback — sem o typeof, o guard nunca reinstalava.
+    if (_jPlayer._wpCallbackOwner !== 'local-path' || typeof _jPlayer._onWaypointReached !== 'function') {
       _jPlayer._wpCallbackOwner = 'local-path';
       _jPlayer._onWaypointReached = function (cell: any, restantes: any) {
         _avtCheckProximidadeInimigos(_jPlayer);
@@ -10253,8 +10255,9 @@ function _avtMoverJogador(dx: any, dy: any) {
       ? jogador._waypoints[jogador._waypoints.length - 1]
       : { x: jogador.x, y: jogador.y };
     if (lastQ.x === nx && lastQ.y === ny) return;
-    // Garante callback registrado (mesmo do _caminhoDestino)
-    if (jogador._wpCallbackOwner !== 'local-step') {
+    // Garante callback registrado (mesmo do _caminhoDestino). Tolerante a
+    // tag-sem-função: clones (JSON round-trip) preservam a tag mas perdem o callback.
+    if (jogador._wpCallbackOwner !== 'local-step' || typeof jogador._onWaypointReached !== 'function') {
       jogador._wpCallbackOwner = 'local-step';
       jogador._onWaypointReached = function (cell: any /*, restantes */) {
         _avtCheckProximidadeInimigos(jogador);
@@ -25070,6 +25073,24 @@ function _avtAplicarTilesetFase(faseObj: any) {
     .catch(() => {});
 }
 
+// FIX F8/CÂMERA: estado de movimento/predição não pode viajar entre fases.
+// O _avtDeepClone (JSON round-trip) descarta funções mas preserva strings —
+// _wpCallbackOwner sobrevivia sem o _onWaypointReached correspondente e os
+// guards de reinstalação nunca recriavam o callback (câmera parava de seguir,
+// baús/armadilhas/portas deixavam de disparar na fase nova).
+function _avtLimparEstadoMovimentoClone(ent: any) {
+  if (!ent) return ent;
+  delete ent._waypoints;
+  delete ent._pendingInputs;
+  delete ent._lerpTo;
+  delete ent.renderX;
+  delete ent.renderY;
+  delete ent._onWaypointReached;
+  delete ent._wpCallbackOwner;
+  return ent;
+}
+window._avtLimparEstadoMovimentoClone = _avtLimparEstadoMovimentoClone;
+
 async function _avtCarregarFase(faseId: any, opts = {}) {
   if (!faseId) return;
   // FIX F8: guard de reentrância — a função tem awaits antes do snapshot; duas
@@ -25117,13 +25138,7 @@ async function _avtCarregarFaseInner(faseId: any, opts = {}) {
   const jogadorClone = jogadorVivo ? _avtDeepClone(jogadorVivo) : null;
   // FIX F8: o clone não pode carregar estado de movimento/predição da fase antiga
   // (waypoints/inputs pendentes causavam um "deslize" após o teleporte de spawn).
-  if (jogadorClone) {
-    delete jogadorClone._waypoints;
-    delete jogadorClone._pendingInputs;
-    delete jogadorClone._lerpTo;
-    delete jogadorClone.renderX;
-    delete jogadorClone.renderY;
-  }
+  _avtLimparEstadoMovimentoClone(jogadorClone);
 
   // FIX F3: se eu era o host da fase que estou deixando, libero explicitamente
   // para o próximo host assumir sem esperar a expiração.
@@ -25151,6 +25166,8 @@ async function _avtCarregarFaseInner(faseId: any, opts = {}) {
   (AVT_STATE as any)._dynSpawnNextAt = 0;
   // FIX F8: porta boss→próxima fase da fase anterior não vale nesta.
   (AVT_STATE as any)._portaProximaFase = null;
+  // FIX CÂMERA: caminho clicado na fase anterior não vale aqui.
+  (AVT_STATE as any)._caminhoDestino = null;
   // Bakes estáticos (tiles 2D legado + minimapa) são por fase.
   if (typeof _avtTileBakeInvalidate === 'function') _avtTileBakeInvalidate();
   // Sons ambientes pertencem à fase anterior — o tick recria os da nova.
