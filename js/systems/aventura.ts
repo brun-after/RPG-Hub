@@ -32074,12 +32074,21 @@ function _avtNpcTurnoInvocado(bat: any) {
       const donoHpMax = dono?.hpMax || dono?.hp || 1;
       if (dono && dono.hp < donoHpMax * 0.5 && invDef.cura_formula) {
         const cura = _avtRolarFormulaInvocado(invDef, 'cura', entInv._invAtiva?.dono_char_nome);
+        // Skill de cura vinculada: animação + nome no log + cooldown
+        const _skCura = _avtInvSkillVinculada(invDef, 'cura',
+          (sk: any) => ((bat._cooldowns || {})[entInv.id + '_' + sk.id] || 0) <= 0);
+        if (_skCura) {
+          if (!bat._cooldowns) bat._cooldowns = {};
+          if ((_skCura.cooldown_turnos || 0) > 0)
+            bat._cooldowns[entInv.id + '_' + _skCura.id] = _skCura.cooldown_turnos;
+          try { _avtSkillAnimEmit({ sk: _skCura, casterEnt: entInv, alvoEnt: dono }); } catch(_) {}
+        }
         dono.hp = Math.min(donoHpMax, dono.hp + cura);
         const donoInit = bat.iniciativa.find((e: any) => e.id === dono.id);
         if (donoInit) donoInit.hp = dono.hp;
         _avtMostrarCuraAcimaDaHead(dono, cura);
         try { _avtBroadcast('avt_hp_update', { nome: dono.nome, hp: dono.hp, hpMax: dono.hpMax }); } catch(_) {}
-        _avtLog(`💚 ${inv.nome} cura ${dono.nome} por ${cura} HP`, bat.id);
+        _avtLog(`💚 ${inv.nome} ${_skCura ? `usa [${_skCura.habilidade}] e ` : ''}cura ${dono.nome} por ${cura} HP`, bat.id);
         _avtBroadcastBatalha(bat);
         _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
         return;
@@ -32124,29 +32133,36 @@ function _avtNpcTurnoInvocado(bat: any) {
     let _formulaUsada = invDef.dano_formula || '1d6';
     let _skNome = 'Ataque básico';
 
+    const _cdBase = entInv.id + '_';
+    let _skEscolhida = null;
     if (_invAtiva?._ehNecromante) {
       const _npcSks = (AVT_STATE.skills || []).filter((sk: any) =>
         (_invAtiva._npcNome && sk.personagem === _invAtiva._npcNome) ||
         (_invAtiva._npcDbId && sk.character_id === _invAtiva._npcDbId)
       );
-      const _cdBase = entInv.id + '_';
       const _availSks = _npcSks.filter((sk: any) =>
         sk.tipo_dano !== 'cura' && ((bat._cooldowns || {})[_cdBase + sk.id] || 0) <= 0
       );
-      const _basicCdKey = _cdBase + 'basico';
-      const _basicDispo = ((bat._cooldowns || {})[_basicCdKey] || 0) <= 0;
-      const _skEscolhida = _availSks.length
+      _skEscolhida = _availSks.length
         ? _availSks.reduce((a: any, b: any) => _avtDanoEsperado(a.formula_dano) >= _avtDanoEsperado(b.formula_dano) ? a : b)
         : null;
+    } else {
+      // Invocação de catálogo: skills vinculadas em invDef.habilidades
+      _skEscolhida = _avtInvSkillVinculada(invDef, 'dano',
+        (sk: any) => ((bat._cooldowns || {})[_cdBase + sk.id] || 0) <= 0);
+    }
 
-      if (_skEscolhida) {
-        _skUsada = _skEscolhida;
-        _formulaUsada = _skEscolhida.formula_dano || '1d6';
-        _skNome = _skEscolhida.habilidade || 'Habilidade';
-        if (!bat._cooldowns) bat._cooldowns = {};
-        if ((_skEscolhida.cooldown_turnos || 0) > 0)
-          bat._cooldowns[_cdBase + _skEscolhida.id] = _skEscolhida.cooldown_turnos;
-      } else if (_basicDispo) {
+    if (_skEscolhida) {
+      _skUsada = _skEscolhida;
+      _formulaUsada = _skEscolhida.formula_dano || '1d6';
+      _skNome = _skEscolhida.habilidade || 'Habilidade';
+      if (!bat._cooldowns) bat._cooldowns = {};
+      if ((_skEscolhida.cooldown_turnos || 0) > 0)
+        bat._cooldowns[_cdBase + _skEscolhida.id] = _skEscolhida.cooldown_turnos;
+    } else if (_invAtiva?._ehNecromante) {
+      // Necromante sem skill pronta: ataque básico tem cooldown próprio
+      const _basicCdKey = _cdBase + 'basico';
+      if (((bat._cooldowns || {})[_basicCdKey] || 0) <= 0) {
         if (!bat._cooldowns) bat._cooldowns = {};
         bat._cooldowns[_basicCdKey] = _avtGetAtaqueBasicoCooldown();
         _formulaUsada = _invAtiva._formulaAtaqueBasico || invDef.dano_formula || '1d6';
@@ -32317,8 +32333,8 @@ function avtReceberInvocacaoDestruida({ invId }: any) {
 }
 window.avtReceberInvocacaoDestruida = avtReceberInvocacaoDestruida;
 
-function _avtRolarFormulaInvocado(invDef: any, tipo: any, donoNome: any) {
-  const formula = tipo === 'cura' ? invDef.cura_formula : invDef.dano_formula;
+function _avtRolarFormulaInvocado(invDef: any, tipo: any, donoNome: any, formulaOverride?: any) {
+  const formula = formulaOverride || (tipo === 'cura' ? invDef.cura_formula : invDef.dano_formula);
   let base = _avtRolarFormula(formula || '1d6');
   const scalingAttr = tipo === 'cura' ? invDef.cura_atributo_scaling : invDef.dano_atributo_scaling;
   const scalingPct  = tipo === 'cura' ? invDef.cura_atributo_pct     : invDef.dano_atributo_pct;
@@ -32329,6 +32345,22 @@ function _avtRolarFormulaInvocado(invDef: any, tipo: any, donoNome: any) {
     base += Math.ceil(val * scalingPct / 100);
   }
   return Math.max(1, base);
+}
+
+// Skill vinculada à invocação de catálogo (invDef.habilidades = UUIDs de skills).
+// tipo 'cura' retorna a primeira skill de cura; 'dano' retorna a de maior dano
+// esperado. prontoFn filtra por cooldown do contexto (batalha ou IA OOC).
+function _avtInvSkillVinculada(invDef: any, tipo: any, prontoFn?: any) {
+  const ids = Array.isArray(invDef?.habilidades)
+    ? invDef.habilidades.filter((h: any) => typeof h === 'string') : [];
+  if (!ids.length) return null;
+  const pool = (AVT_STATE.skills || []).filter((sk: any) => ids.includes(sk.id) &&
+    (tipo === 'cura' ? sk.tipo_dano === 'cura' : sk.tipo_dano !== 'cura') &&
+    (!prontoFn || prontoFn(sk)));
+  if (!pool.length) return null;
+  if (tipo === 'cura') return pool[0];
+  return pool.reduce((a: any, b: any) =>
+    _avtDanoEsperado(a.formula_dano) >= _avtDanoEsperado(b.formula_dano) ? a : b);
 }
 
 // ── IA fora de combate das invocações ────────────────────────────────────────
@@ -32357,6 +32389,7 @@ function _avtAtualizarInvocacoes(dt: any) {
 
     if (inv._aiAtkCd > 0) inv._aiAtkCd -= dt;
     if (inv._aiHealCd > 0) inv._aiHealCd -= dt;
+    if (inv._aiSkillCd > 0) inv._aiSkillCd -= dt;
     inv._aiStep = (inv._aiStep ?? 0) - dt;
     if (inv._aiStep > 0) continue;
     inv._aiStep = _AVT_INV_AI_STEP_MS;
@@ -32364,10 +32397,12 @@ function _avtAtualizarInvocacoes(dt: any) {
     // Curador: cura o dono ferido (o cliente do dono é a autoridade do próprio HP)
     if (comp === 'curador' && dono.hp > 0 && dono.hp < dono.hpMax && (inv._aiHealCd ?? 0) <= 0) {
       const cura = _avtRolarFormulaInvocado(inv.invocacao_def, 'cura', inv.dono_char_nome);
+      const _skCuraOoc = _avtInvSkillVinculada(inv.invocacao_def, 'cura');
+      if (_skCuraOoc) { try { _avtSkillAnimEmit({ sk: _skCuraOoc, casterEnt: ent, alvoEnt: dono }); } catch(_) {} }
       _avtAplicarDanoPersistir(dono, Math.min(dono.hpMax, dono.hp + cura));
       try { _avtMostrarCuraAcimaDaHead(dono, cura); } catch(_) {}
       try { _avtBroadcast('avt_hp_update', { nome: dono.nome, hp: dono.hp, hpMax: dono.hpMax }); } catch(_) {}
-      _avtLog(`💚 ${ent.nome} cura ${dono.nome} em ${cura}`);
+      _avtLog(`💚 ${ent.nome} ${_skCuraOoc ? `usa [${_skCuraOoc.habilidade}] e ` : ''}cura ${dono.nome} em ${cura}`);
       inv._aiHealCd = _avtGetSecsPerTurno() * 2000;
     }
 
@@ -32380,12 +32415,19 @@ function _avtAtualizarInvocacoes(dt: any) {
       const dAlvo = Math.max(Math.abs(ent.x - alvo.x), Math.abs(ent.y - alvo.y));
       if (dAlvo <= 1) {
         if ((inv._aiAtkCd ?? 0) <= 0 && _avtEhAutoridade()) {
-          const dano = _avtRolarFormulaInvocado(inv.invocacao_def, 'dano', inv.dono_char_nome);
+          // Usa a skill vinculada quando fora de cooldown; senão, ataque básico
+          const _skOoc = ((inv._aiSkillCd ?? 0) <= 0)
+            ? _avtInvSkillVinculada(inv.invocacao_def, 'dano') : null;
+          const dano = _avtRolarFormulaInvocado(inv.invocacao_def, 'dano', inv.dono_char_nome, _skOoc?.formula_dano);
+          if (_skOoc) {
+            try { _avtSkillAnimEmit({ sk: _skOoc, casterEnt: ent, alvoEnt: alvo }); } catch(_) {}
+            inv._aiSkillCd = Math.max(1, _skOoc.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000;
+          }
           alvo.hp = Math.max(0, alvo.hp - dano);
           try { _avtAplicarDanoPersistir(alvo, alvo.hp); } catch(_) {}
           try { _avtMostrarDanoAbaixoHp(alvo, dano, false); } catch(_) {}
           try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
-          _avtLog(`🔮 ${ent.nome} ataca ${alvo.nome}: ${dano} de dano`);
+          _avtLog(`🔮 ${ent.nome}${_skOoc ? ` usa [${_skOoc.habilidade}] em` : ' ataca'} ${alvo.nome}: ${dano} de dano`);
           if (alvo.hp <= 0) _avtNpcMorreu(alvo, null, { creditoNome: inv.dono_char_nome });
           inv._aiAtkCd = _avtGetSecsPerTurno() * 1000;
         }
