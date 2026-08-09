@@ -2640,6 +2640,20 @@ Resistência elemental:
         </label>
       </div>
     </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+      <div>
+        <label style="font-size:0.72rem;color:var(--suave);display:block;margin-bottom:4px" title="Em combate: autônoma = a IA age no turno dela; comandada = o dono escolhe a ação">Controle em combate</label>
+        <select id="inv-controle" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.82rem;padding:6px 8px">
+          <option value="autonoma">🤖 Autônoma — IA age no turno dela</option>
+          <option value="comandada">🎮 Comandada — dono escolhe a ação</option>
+        </select>
+      </div>
+      <div style="align-self:end">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.78rem;color:var(--texto);padding-bottom:6px" title="Se desmarcado, a invocação continua no mapa quando o invocador morre">
+          <input type="checkbox" id="inv-morre-dono" checked> Desfaz-se se o dono morrer
+        </label>
+      </div>
+    </div>
 
     <!-- ── Estatísticas ── -->
     <div style="font-size:0.75rem;color:#b07ef0;margin-bottom:8px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.06em">⚔ Estatísticas de Combate</div>

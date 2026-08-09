@@ -44,6 +44,7 @@ declare global {
     avt_colisao_config: { colisaoJogJog?: any; colisaoJogNpc?: any; [k: string]: any };
     avt_entidade_nova: { entidade?: any; casterId?: any; faseId?: any; [k: string]: any };
     avt_invocacao_destruida: { invId?: any; motivo?: any; [k: string]: any };
+    avt_invocacao_update: { invId?: any; hp?: any; turnosRestantes?: any; ordem?: any; modo?: any; rampTurnos?: any; rampAbates?: any; [k: string]: any };
     avt_move_input: { [k: string]: any };
     avt_item_equipado: { charNome?: any; slotKey?: any; itemId?: any; nomeItem?: any; bonusSnapshot?: any; atributosAtuais?: any; [k: string]: any };
     avt_item_desequipado: { charNome?: any; slotKey?: any; atributosAtuais?: any; [k: string]: any };

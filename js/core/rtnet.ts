@@ -153,6 +153,7 @@ window.RTNet = (() => {
     avt_colisao_config:       { handler: 'avtReceberColisaoConfig' },
     avt_entidade_nova:        { handler: 'avtReceberEntidadeNova' },
     avt_invocacao_destruida:  { handler: 'avtReceberInvocacaoDestruida' },
+    avt_invocacao_update:     { handler: 'avtReceberInvocacaoUpdate',    persist: 'never', reliable: true },
     // [MOVE-INPUT]
     avt_move_input:           { handler: 'avtReceberMoveInput',          persist: 'never', reliable: true },
     // [SYNC-COMPLETO]

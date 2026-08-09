@@ -101,7 +101,7 @@ const _AVT_EVENTOS_DE_FASE = new Set([
   'avt_skill_anim', 'avt_attack_anim', 'avt_efeito_anim_start', 'avt_efeito_anim_stop',
   'avt_dano_visual', 'avt_dano_visual_batch', 'avt_rastro_marcar', 'avt_entidade_nova',
   'avt_armadilha_marcar', 'avt_armadilha_remover', 'avt_armadilha_obj_disparo',
-  'avt_loja_update',
+  'avt_loja_update', 'avt_invocacao_destruida', 'avt_invocacao_update',
 ]);
 
 // Helper central de broadcast para Modo Aventura.
@@ -4939,6 +4939,10 @@ function _avtIniciarRTNet(rpgId: any, onHostElected: any) {
         // Rastros contaminados: hitSet (Set) → array para serializar.
         _rastroCells: ((AVT_STATE as any)._rastroCells || []).map((c: any) => ({ ...c, hitSet: Array.from(c.hitSet || []) })),
         _armadilhaCells: (AVT_STATE as any)._armadilhaCells || [],
+        // Invocações ativas (F5): registro compartilhado — estado de IA transitório fica fora.
+        invocacoes_ativas: (AVT_STATE.invocacoes_ativas || []).map(
+          ({ _aiPath, _aiPathGoal, _aiRecent, ...rest }: any) => rest
+        ),
       }));
       if (AVT_STATE._charHpFlushTimer) clearInterval((AVT_STATE as any)._charHpFlushTimer);
       (AVT_STATE as any)._charHpFlushTimer = setInterval(() => {
@@ -13326,6 +13330,15 @@ function avtReceberEntidadeNova({ entidade, casterId, faseId }: any = {}) {
   if (!_avtMinhaFase(faseId)) return; // isolamento por fase (F2)
   if (!entidade || AVT_STATE.entidades.some((e: any) => e.id === entidade.id)) return;
   AVT_STATE.entidades.push(entidade);
+  // Invocação: registrar também em invocacoes_ativas (F5). O payload carrega a
+  // referência _invAtiva no spread — sem o registro, este cliente classificava
+  // a invocação aliada como hostil e não resolvia o dono dela.
+  if (entidade.tipo === 'invocado' && entidade._invAtiva) {
+    AVT_STATE.invocacoes_ativas = AVT_STATE.invocacoes_ativas || [];
+    if (!AVT_STATE.invocacoes_ativas.some((i: any) => i.id === entidade._invAtiva.id)) {
+      AVT_STATE.invocacoes_ativas.push(entidade._invAtiva);
+    }
+  }
   if (casterId && AVT_STATE.aparencias[casterId]) AVT_STATE.aparencias[entidade.id] = AVT_STATE.aparencias[casterId];
   if (casterId && AVT_STATE.entAnim[casterId]) AVT_STATE.entAnim[entidade.id] = { ...AVT_STATE.entAnim[casterId] };
 }
@@ -14890,6 +14903,12 @@ function _avtMostrarSkillOverlay() {
   const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
   if (!b || !ativo || (ativo.tipo !== 'jogador' && ativo.tipo !== 'invocado')) return;
+  // F3: turno de invocado só abre overlay para o DONO, e apenas em modo comandada
+  // (autônoma = a IA age no host; os dois caminhos não disputam mais o turno).
+  if (ativo.tipo === 'invocado') {
+    const _invCtl = _avtInvAtivaDe(ativo);
+    if (!_invCtl || _invCtl._modo !== 'comandada' || _invCtl.dono_char_nome !== AVT_STATE.myCharNome) return;
+  }
   // No modo controle dispositivo: usar a UI fixa em vez de overlay flutuante
   const _ctrlDispSk = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo' && typeof _emModoAventura === 'function' && _emModoAventura();
   if (_ctrlDispSk) {
@@ -17358,7 +17377,7 @@ async function _avtNpcTurno(bat: any) {
   if (!bat) return;
   const npc = bat.iniciativa[bat.turnoIdx];
   if (!npc || (npc.tipo !== 'inimigo' && npc.tipo !== 'invocado')) return;
-  if (npc.tipo === 'invocado') { _avtNpcTurnoInvocado(bat); return; }
+  if (npc.tipo === 'invocado') { if (_avtInvTurnoAutonomo(npc)) _avtNpcTurnoInvocado(bat); return; }
   const entNpc = AVT_STATE.entidades.find((e: any) => e.id===npc.id);
   if (!entNpc || entNpc.hp<=0 || entNpc.escondido) {
     _avtTurnoAvancar(bat); return;
@@ -17407,7 +17426,10 @@ async function _avtNpcTurno(bat: any) {
   const _npcAindaAtivo = bat.iniciativa[bat.turnoIdx]?.id === _npcIdAtThisCall;
   if (!_npcAindaAtivo) return;
   // Re-verificar tipo após CAS: a dominação pode ter ocorrido durante o await
-  if (bat.iniciativa[bat.turnoIdx]?.tipo === 'invocado') { _avtNpcTurnoInvocado(bat); return; }
+  if (bat.iniciativa[bat.turnoIdx]?.tipo === 'invocado') {
+    if (_avtInvTurnoAutonomo(bat.iniciativa[bat.turnoIdx])) _avtNpcTurnoInvocado(bat);
+    return;
+  }
 
   // AI globally disabled — pass turn
   if (!AVT_STATE.npcIaAtiva) {
@@ -18254,10 +18276,16 @@ function avtJogadorPainelRender(targetEl?: any, opts?: any) {
         const _hpIv = _entIv ? _entIv.hp : inv.hp_atual;
         const hpPct = inv.hpMax > 0 ? Math.max(0, Math.min(100, (_hpIv / inv.hpMax) * 100)) : 0;
         const hpCol = hpPct > 50 ? '#27ae60' : hpPct > 25 ? '#c8a84b' : '#e74c3c';
+        const _invIdSafe = String(inv.id).replace(/'/g, "\\'");
+        const _modoCmd = inv._modo === 'comandada';
         return `<div style="border:1px solid rgba(176,126,240,0.2);border-radius:7px;padding:7px 10px">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
             <span style="font-family:var(--fonte-d);font-size:0.72rem;color:#b07ef0">🔮 ${def.nome || 'Invocação'}</span>
-            <span style="font-family:var(--fonte-d);font-size:0.58rem;color:#7a92aa;margin-left:auto">⏳ ${inv._turnosRestantes ?? '?'}t</span>
+            <button onclick="_avtInvocacaoAlternarModo('${_invIdSafe}')"
+              title="${_modoCmd ? 'Comandada: você escolhe a ação nos turnos dela' : 'Autônoma: a IA age nos turnos dela'} — clique para alternar"
+              style="margin-left:auto;background:none;border:1px solid rgba(176,126,240,0.25);border-radius:5px;
+              color:#b07ef0;font-size:0.62rem;padding:1px 6px;cursor:pointer">${_modoCmd ? '🎮' : '🤖'}</button>
+            <span style="font-family:var(--fonte-d);font-size:0.58rem;color:#7a92aa">⏳ ${inv._turnosRestantes ?? '?'}t</span>
           </div>
           <div style="height:4px;background:rgba(176,126,240,0.1);border-radius:3px;overflow:hidden">
             <div style="height:100%;width:${hpPct}%;background:${hpCol};border-radius:3px;transition:width .3s"></div>
@@ -24334,6 +24362,16 @@ function avtAplicarSnapshotMerge(snap: any) {
       const _nowT = Date.now();
       (AVT_STATE as any)._armadilhaCells = snap._armadilhaCells.filter((c: any) => c && _nowT < c.expiry_ms);
     }
+    // Invocações ativas (F5): as MINHAS são autoritativas locais (a IA delas roda
+    // aqui e o snapshot remoto pode estar atrasado); as dos outros vêm do host.
+    if (Array.isArray(snap.invocacoes_ativas)) {
+      const _minhasInvSnap = (AVT_STATE.invocacoes_ativas || []).filter((i: any) => i.dono_char_nome === meuNome);
+      const _idsMinhasSnap = new Set(_minhasInvSnap.map((i: any) => i.id));
+      AVT_STATE.invocacoes_ativas = [
+        ..._minhasInvSnap,
+        ...snap.invocacoes_ativas.filter((i: any) => i.dono_char_nome !== meuNome && !_idsMinhasSnap.has(i.id)),
+      ];
+    }
     if ('batalhaAutoSuspensa' in snap) AVT_STATE.batalhaAutoSuspensa = snap.batalhaAutoSuspensa;
     try { if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar(); } catch(_) {}
   } catch(e) { try { console.warn('[AVT] avtAplicarSnapshotMerge:', e); } catch(_) {} }
@@ -27350,6 +27388,8 @@ function _avtCharEditorRenderInvocacoes(container: any, ent: any, dbChar: any) {
                 </div>
               </div>
               <div class="avt-ce2-skill-actions">
+                <button class="avt-ce2-sm-btn" onclick="_avtInvocacaoAlternarModo('${idSafe}')"
+                  title="${inv._modo === 'comandada' ? 'Comandada: você escolhe a ação nos turnos dela' : 'Autônoma: a IA age nos turnos dela'} — clique para alternar">${inv._modo === 'comandada' ? '🎮' : '🤖'}</button>
                 <button class="avt-ce2-sm-btn danger" onclick="_avtDispensarInvocacao('${idSafe}')" title="Dispensar invocação">✕</button>
               </div>
             </div>
@@ -32267,6 +32307,8 @@ function avtInvocar(charNome: any, invocacaoId: any, opts = {}) {
     estado: 'ativo',
     _cooldowns: {},
     _turnosRestantes: duracao,
+    // F3: quem age no turno em combate — a IA ('autonoma') ou o dono ('comandada')
+    _modo: invDef.controle === 'comandada' ? 'comandada' : 'autonoma',
   };
   AVT_STATE.invocacoes_ativas.push(invAtiva);
 
@@ -32722,6 +32764,50 @@ function _avtNpcTurnoInvocado(bat: any) {
   _avtBroadcastBatalha(bat);
   _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
 }
+
+// F3: no turno do invocado em combate, quem age — a IA (modo autônoma, ou o
+// dono ausente) ou o dono via overlay de skills (modo comandada). A decisão
+// roda no host; a queda para IA com dono offline evita travar o combate.
+function _avtInvTurnoAutonomo(entInv: any) {
+  const inv = _avtInvAtivaDe(entInv);
+  if (!inv || (inv._modo || 'autonoma') !== 'comandada') return true;
+  return !_avtJogadorEstaOnline(inv.dono_char_nome);
+}
+
+// Alterna autônoma ↔ comandada (botão nos painéis). Só o dono (ou o mestre).
+function _avtInvocacaoAlternarModo(invId: any) {
+  const inv = (AVT_STATE.invocacoes_ativas || []).find((i: any) => i.id === invId);
+  if (!inv) return;
+  if (inv.dono_char_nome !== AVT_STATE.myCharNome && !_avtSouMestre()) return;
+  inv._modo = inv._modo === 'comandada' ? 'autonoma' : 'comandada';
+  mostrarToast(inv._modo === 'comandada'
+    ? '🎮 Você comanda os turnos desta invocação'
+    : '🤖 A invocação age sozinha nos turnos', 'ok');
+  _avtBroadcast('avt_invocacao_update', { invId, modo: inv._modo });
+  try { avtJogadorPainelRender(); } catch(_) {}
+  try { _avtCharEditorRender(); } catch(_) {}
+}
+
+// Estado de nível-invocação vindo do dono (modo, ordens, ramp, duração).
+function avtReceberInvocacaoUpdate({ invId, faseId, ...campos }: any = {}) {
+  if (!_avtMinhaFase(faseId)) return; // isolamento por fase
+  const inv = (AVT_STATE.invocacoes_ativas || []).find((i: any) => i.id === invId);
+  const ent = AVT_STATE.entidades.find((e: any) => e.id === invId);
+  if (!inv && !ent) return;
+  if (typeof campos.hp === 'number') {
+    if (ent) ent.hp = campos.hp;
+    if (inv) inv.hp_atual = campos.hp;
+  }
+  if (typeof campos.turnosRestantes === 'number' || campos.turnosRestantes === null) {
+    if (inv) inv._turnosRestantes = campos.turnosRestantes;
+    if (ent) ent._turnosRestantes = campos.turnosRestantes;
+  }
+  if (campos.modo) { if (inv) inv._modo = campos.modo; }
+  if ('ordem' in campos) { if (inv) inv._ordem = campos.ordem; }
+  if (typeof campos.rampTurnos === 'number') { if (inv) inv._rampTurnos = campos.rampTurnos; }
+  if (typeof campos.rampAbates === 'number') { if (inv) inv._rampAbates = campos.rampAbates; }
+}
+window.avtReceberInvocacaoUpdate = avtReceberInvocacaoUpdate;
 
 function avtReceberInvocacaoDestruida({ invId }: any) {
   if (!invId) return;
@@ -34379,5 +34465,11 @@ Object.defineProperty(globalThis, "_avtInvocacaoExplosao", { configurable: true,
 Object.defineProperty(globalThis, "_avtNpcTurnoInvocado", { configurable: true, get: () => _avtNpcTurnoInvocado, set: (__v) => { _avtNpcTurnoInvocado = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "avtReceberInvocacaoDestruida", { configurable: true, get: () => avtReceberInvocacaoDestruida, set: (__v) => { avtReceberInvocacaoDestruida = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtReceberInvocacaoUpdate", { configurable: true, get: () => avtReceberInvocacaoUpdate, set: (__v) => { avtReceberInvocacaoUpdate = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInvTurnoAutonomo", { configurable: true, get: () => _avtInvTurnoAutonomo, set: (__v) => { _avtInvTurnoAutonomo = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInvocacaoAlternarModo", { configurable: true, get: () => _avtInvocacaoAlternarModo, set: (__v) => { _avtInvocacaoAlternarModo = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtRolarFormulaInvocado", { configurable: true, get: () => _avtRolarFormulaInvocado, set: (__v) => { _avtRolarFormulaInvocado = __v; } });
