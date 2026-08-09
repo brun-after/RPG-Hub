@@ -34369,7 +34369,9 @@ Object.defineProperty(globalThis, "avtInvocar", { configurable: true, get: () =>
 Object.defineProperty(globalThis, "_avtCriarEntidadeInvocacao", { configurable: true, get: () => _avtCriarEntidadeInvocacao, set: (__v) => { _avtCriarEntidadeInvocacao = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtDestruirInvocacao", { configurable: true, get: () => _avtDestruirInvocacao, set: (__v) => { _avtDestruirInvocacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtInvAtivaDe", { configurable: true, get: () => _avtInvAtivaDe, set: (__v) => { _avtInvAtivaDe = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtAplicarDanoInvocacao", { configurable: true, get: () => _avtAplicarDanoInvocacao, set: (__v) => { _avtAplicarDanoInvocacao = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtInvocacaoExplosao", { configurable: true, get: () => _avtInvocacaoExplosao, set: (__v) => { _avtInvocacaoExplosao = __v; } });
