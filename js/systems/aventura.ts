@@ -929,6 +929,11 @@ window.avtReceberInvUpdate = async function(p: any) {
       char.custom_attrs = char.custom_attrs || {};
       char.custom_attrs.ouro = p.ouro;
     }
+    // Ordem da mochila (atalhos 1-9/0) também vive em custom_attrs
+    if (Array.isArray(p.inv_ordem) && char) {
+      char.custom_attrs = char.custom_attrs || {};
+      char.custom_attrs.inv_ordem = p.inv_ordem;
+    }
     if (typeof avtInvCarregarChar === 'function') { try { await avtInvCarregarChar(charId); } catch(_) {} }
     // Re-render: painel/HUD do jogador local e modais de inventário abertos.
     const charNome = char?.nome || null;
@@ -9664,6 +9669,30 @@ function _avtCanvasKey(e: any) {
   const _key  = (e.key  || '').toLowerCase();
   const _code = e.code  || '';
 
+  // ── I: abrir/fechar inventário; com o modal aberto, 1-9/0 usam os itens ──
+  const _invModal  = document.getElementById('avt-inventario-modal');
+  const _invAberto = !!_invModal && _invModal.style!.display !== 'none';
+  if (_key === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    if (_invAberto) { if (typeof avtFecharInventario === 'function') avtFecharInventario(); }
+    else if (typeof avtAbrirInventario === 'function') avtAbrirInventario();
+    return;
+  }
+  if (_invAberto) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (typeof avtFecharInventario === 'function') avtFecharInventario();
+      return;
+    }
+    const _digInv = _code.match(/^(?:Digit|Numpad)(\d)$/);
+    if (_digInv && typeof _avtInvUsarPorNumero === 'function') {
+      e.preventDefault();
+      _avtInvUsarPorNumero(parseInt(_digInv[1], 10));
+    }
+    // Modal aberto engole os demais atalhos (WASD/skills) — nada de agir às cegas.
+    return;
+  }
+
   // ── Escape: cancelar modo de armar armadilha ─────────────────────────────
   if (e.key === 'Escape' && (AVT_STATE as any)._modoArmadilhaCelula) {
     _avtCancelarModoArmadilha();
@@ -17781,6 +17810,8 @@ function _avtAtualizarUiPorRole() {
   if (btnM) btnM.style!.display = ehMestre ? 'inline-flex' : 'none';
   const btnP = document.getElementById('avt-btn-player');
   if (btnP) btnP.style!.display = ehMestre ? 'none' : 'inline-flex';
+  const btnInv = document.getElementById('avt-btn-inventario');
+  if (btnInv) btnInv.style!.display = ehMestre ? 'none' : 'inline-flex';
   const btnEnc = document.getElementById('avt-btn-encerrar');
   if (btnEnc && ehMestre) btnEnc.style!.display = 'none';
   const btnC = document.getElementById('avt-btn-combate');

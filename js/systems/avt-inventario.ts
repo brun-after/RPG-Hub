@@ -912,6 +912,80 @@ window.avtReceberLojaUpdate = function (p: any) {
   } catch (_) {}
 };
 
+// ─── ORDEM DA MOCHILA & ATALHOS (1-9 e 0) ────────────────────────────────────
+// A ordem escolhida pelo jogador vive em characters.custom_attrs.inv_ordem
+// (array de ids da tabela inventario): persiste entre dispositivos sem coluna
+// nova e sincroniza pelo avt_inv_update (campo direto, como o ouro).
+
+function _avtInvIsTouch() {
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+}
+
+// Mochila (itens não equipados) na ordem do jogador; itens fora da lista salva
+// mantêm a ordem natural, depois dos ordenados.
+function _avtInvBagOrdenada(char: any) {
+  const inv = (AVT_INV.inventarios as any)[char?.id] || [];
+  const bag = inv.filter((i: any) => !i.equipado || !i.slot_equipado);
+  const ordem = Array.isArray(char?.custom_attrs?.inv_ordem) ? char.custom_attrs.inv_ordem.map(String) : [];
+  if (!ordem.length) return bag;
+  const pos: Record<string, number> = {};
+  ordem.forEach((id: any, i: number) => { if (!(id in pos)) pos[id] = i; });
+  return bag
+    .map((item: any, i: number) => ({ item, i }))
+    .sort((a: any, b: any) => {
+      const pa = pos[String(a.item.id)] ?? ordem.length + a.i;
+      const pb = pos[String(b.item.id)] ?? ordem.length + b.i;
+      return pa - pb;
+    })
+    .map((e: any) => e.item);
+}
+
+// Move um item da mochila para cima/baixo (delta ±1) e persiste a ordem.
+async function avtInvMoverOrdem(charNome: any, invId: any, delta: any) {
+  const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === charNome);
+  if (!char?.id) return;
+  const ids = _avtInvBagOrdenada(char).map((i: any) => String(i.id));
+  const idx  = ids.indexOf(String(invId));
+  const novo = idx + (delta < 0 ? -1 : 1);
+  if (idx < 0 || novo < 0 || novo >= ids.length) return;
+  [ids[idx], ids[novo]] = [ids[novo], ids[idx]];
+  if (!char.custom_attrs) char.custom_attrs = {};
+  char.custom_attrs.inv_ordem = ids;
+  const modal = document.getElementById('avt-inventario-modal');
+  if (modal && modal.style!.display !== 'none') avtInvRenderPanel(charNome, 'avt-inv-body');
+  if (typeof avtJogadorPainelRender === 'function') avtJogadorPainelRender();
+  try {
+    await sb(`characters?id=eq.${encodeURIComponent(char.id)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ custom_attrs: char.custom_attrs }),
+    });
+  } catch (_) {}
+  avtInvBroadcastUpdate(char.id, { inv_ordem: ids });
+}
+
+// Ativação a partir do modal: a janela fecha assim que o uso é acionado.
+// Itens sem ação (tipo "outro") mantêm o modal aberto — só sai o aviso.
+function avtInvAtivarDoModal(charNome: any, invId: any) {
+  const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === charNome);
+  const inv  = char ? ((AVT_INV.inventarios as any)[char.id] || []) : [];
+  const item = inv.find((i: any) => String(i.id) === String(invId));
+  const def  = item ? AVT_INV.catalogo.find(d => d.id === (item.item_catalog_id || item.item_def_id)) : null;
+  if (def && (def.tipo === 'equipamento' || def.tipo === 'consumivel')) avtFecharInventario();
+  avtInvUsarConsumivel(charNome, invId);
+}
+
+// Teclas 1-9 e 0 com o modal aberto (PC): usa o item daquela posição da mochila.
+function _avtInvUsarPorNumero(num: any) {
+  const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+  if (!jogador) return;
+  const char = (typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars : []).find((c: any) => c.nome === jogador.nome);
+  if (!char?.id) return;
+  const idx  = num === 0 ? 9 : num - 1;
+  const item = _avtInvBagOrdenada(char)[idx];
+  if (!item) return;
+  avtInvAtivarDoModal(char.nome, item.id);
+}
+
 // ─── RENDERIZAÇÃO ─────────────────────────────────────────────────────────────
 
 async function avtAbrirInventario() {
@@ -924,6 +998,9 @@ async function avtAbrirInventario() {
 
   const modal = document.getElementById('avt-inventario-modal');
   if (modal) {
+    // Dica de atalhos do teclado só faz sentido fora do touch
+    const hint = document.getElementById('avt-inv-hint');
+    if (hint) hint.style!.display = _avtInvIsTouch() ? 'none' : '';
     modal.style!.display = 'flex';
     avtInvRenderPanel(jogador.nome, 'avt-inv-body');
   }
@@ -988,7 +1065,8 @@ function avtInvRenderPanel(charNome: any, containerId: any) {
   html += `</div></div>`;
 
   // ── Mochila ──
-  const bagItems = inv.filter((i: any) => !i.equipado || !i.slot_equipado);
+  const bagItems = _avtInvBagOrdenada(char);
+  const isTouch  = _avtInvIsTouch();
 
   if (!bagItems.length) {
     html += `<div style="font-family:var(--fonte-d);font-size:0.7rem;color:#7a92aa;text-align:center;padding:18px 0;border:1px solid rgba(79,163,209,0.08);border-radius:8px">Mochila vazia</div>`;
@@ -996,19 +1074,23 @@ function avtInvRenderPanel(charNome: any, containerId: any) {
     html += `<div style="font-family:var(--fonte-d);font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">🎒 Mochila</div>`;
     html += `<div style="display:flex;flex-direction:column;gap:5px">`;
 
-    for (const item of bagItems) {
+    const setaSt = (dis: any) => `background:none;border:1px solid rgba(79,163,209,0.18);border-radius:4px;color:#7a92aa;font-size:0.5rem;line-height:1;padding:2px 5px;cursor:${dis ? 'default' : 'pointer'};opacity:${dis ? 0.25 : 1}`;
+
+    for (let idx = 0; idx < bagItems.length; idx++) {
+      const item = bagItems[idx];
       const def = AVT_INV.catalogo.find(d => d.id === (item.item_catalog_id || item.item_def_id));
       if (!def) continue;
       const idSafe   = String(item.id).replace(/'/g, "\\'");
       const rarColor = _AVT_RAR_COR[def.raridade] || '#888';
+      const ativavel = def.tipo === 'equipamento' || def.tipo === 'consumivel';
 
       let actionBtn = '';
       if (def.tipo === 'equipamento') {
-        actionBtn = `<button onclick="avtInvEquipar('${nomeSafe}','${idSafe}')"
+        actionBtn = `<button onclick="event.stopPropagation();avtInvAtivarDoModal('${nomeSafe}','${idSafe}')"
           style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.25);border-radius:5px;
                  color:#4fa3d1;font-family:var(--fonte-d);font-size:0.58rem;padding:4px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap">⚔ Equipar</button>`;
       } else if (def.tipo === 'consumivel') {
-        actionBtn = `<button onclick="avtInvUsarConsumivel('${nomeSafe}','${idSafe}')"
+        actionBtn = `<button onclick="event.stopPropagation();avtInvAtivarDoModal('${nomeSafe}','${idSafe}')"
           style="background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.22);border-radius:5px;
                  color:#5ee09a;font-family:var(--fonte-d);font-size:0.58rem;padding:4px 10px;cursor:pointer;flex-shrink:0;white-space:nowrap">✦ Usar</button>`;
       }
@@ -1016,8 +1098,23 @@ function avtInvRenderPanel(charNome: any, containerId: any) {
       const efLabel   = _avtInvEfLabel(def.efeitos);
       const qtdSuffix = (item.quantidade || 1) > 1 ? ` · ×${item.quantidade}` : '';
 
+      // Atalho numérico das 10 primeiras posições (1-9, 0) — badge só no PC
+      const numLabel = idx < 10 ? String((idx + 1) % 10) : '';
+      const badge = (!isTouch && numLabel)
+        ? `<span title="Atalho: tecla ${numLabel}" style="flex-shrink:0;width:16px;height:16px;border:1px solid rgba(200,168,75,0.35);border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:var(--fonte-d);font-size:0.55rem;color:#c8a84b">${numLabel}</span>`
+        : '';
+      const setas = `
+        <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
+          <button ${idx === 0 ? 'disabled' : `onclick="event.stopPropagation();avtInvMoverOrdem('${nomeSafe}','${idSafe}',-1)"`} title="Mover para cima" style="${setaSt(idx === 0)}">▲</button>
+          <button ${idx === bagItems.length - 1 ? 'disabled' : `onclick="event.stopPropagation();avtInvMoverOrdem('${nomeSafe}','${idSafe}',1)"`} title="Mover para baixo" style="${setaSt(idx === bagItems.length - 1)}">▼</button>
+        </div>`;
+
+      // No celular, tocar na linha já usa/equipa o item (e a janela fecha)
+      const rowClick = (isTouch && ativavel) ? ` onclick="avtInvAtivarDoModal('${nomeSafe}','${idSafe}')"` : '';
+
       html += `
-      <div style="display:flex;align-items:center;gap:8px;border:1px solid rgba(79,163,209,0.1);border-radius:7px;padding:7px 10px;background:rgba(5,8,16,0.3)">
+      <div${rowClick} style="display:flex;align-items:center;gap:8px;border:1px solid rgba(79,163,209,0.1);border-radius:7px;padding:7px 10px;background:rgba(5,8,16,0.3)${isTouch && ativavel ? ';cursor:pointer' : ''}">
+        ${badge}
         ${_avtInvIco(def,20)}
         <div style="flex:1;min-width:0">
           <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(def.nome)}</div>
@@ -1025,6 +1122,7 @@ function avtInvRenderPanel(charNome: any, containerId: any) {
           ${def.descricao ? `<div style="font-size:0.57rem;color:#556;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(def.descricao)}</div>` : ''}
         </div>
         ${actionBtn}
+        ${setas}
       </div>`;
     }
 
@@ -1076,7 +1174,8 @@ function avtInvRenderSlotsHud(char: any) {
 // Render quick consumables for the player HUD (replaces section 7)
 function avtInvRenderConsumiveisHud(char: any) {
   if (!char?.id) return '';
-  const inv = (AVT_INV.inventarios as any)[char.id] || [];
+  // Mesma ordem do modal: os atalhos numéricos e o HUD mostram os mesmos primeiros itens
+  const inv = _avtInvBagOrdenada(char);
   const consumiveis = inv.filter((i: any) => {
     const def = AVT_INV.catalogo.find(d => d.id === (i.item_catalog_id || i.item_def_id));
     return def?.tipo === 'consumivel' && (i.quantidade || 0) > 0;
@@ -1206,6 +1305,10 @@ window.avtInvDarOuro             = avtInvDarOuro;
 window.avtInvRemoverOuro         = avtInvRemoverOuro;
 window.avtAbrirInventario        = avtAbrirInventario;
 window.avtFecharInventario       = avtFecharInventario;
+window.avtInvAtivarDoModal       = avtInvAtivarDoModal;
+window.avtInvMoverOrdem          = avtInvMoverOrdem;
+window._avtInvUsarPorNumero      = _avtInvUsarPorNumero;
+window._avtInvBagOrdenada        = _avtInvBagOrdenada;
 window.avtInvRenderPanel         = avtInvRenderPanel;
 window.avtInvRenderSlotsHud      = avtInvRenderSlotsHud;
 window.avtInvRenderConsumiveisHud = avtInvRenderConsumiveisHud;
@@ -1246,6 +1349,16 @@ Object.defineProperty(globalThis, "avtInvDarOuro", { configurable: true, get: ()
 Object.defineProperty(globalThis, "avtInvRemoverOuro", { configurable: true, get: () => avtInvRemoverOuro, set: (__v) => { avtInvRemoverOuro = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "avtAbrirInventario", { configurable: true, get: () => avtAbrirInventario, set: (__v) => { avtAbrirInventario = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInvIsTouch", { configurable: true, get: () => _avtInvIsTouch, set: (__v) => { _avtInvIsTouch = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInvBagOrdenada", { configurable: true, get: () => _avtInvBagOrdenada, set: (__v) => { _avtInvBagOrdenada = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvMoverOrdem", { configurable: true, get: () => avtInvMoverOrdem, set: (__v) => { avtInvMoverOrdem = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "avtInvAtivarDoModal", { configurable: true, get: () => avtInvAtivarDoModal, set: (__v) => { avtInvAtivarDoModal = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInvUsarPorNumero", { configurable: true, get: () => _avtInvUsarPorNumero, set: (__v) => { _avtInvUsarPorNumero = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "avtFecharInventario", { configurable: true, get: () => avtFecharInventario, set: (__v) => { avtFecharInventario = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])

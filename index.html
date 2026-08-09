@@ -452,6 +452,7 @@
     <div id="avt-nome" style="font-family:var(--fonte-d);font-size:0.9rem;letter-spacing:.1em;color:#c8a84b;flex:1"></div>
     <div id="avt-hp-bars" style="display:flex;gap:10px;align-items:center"></div>
     <button onclick="avtMestrePainel()" id="avt-btn-mestre" aria-label="Painel do mestre" style="display:none;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">⚙ Mestre</button>
+    <button onclick="avtAbrirInventario()" id="avt-btn-inventario" aria-label="Inventário (tecla I)" title="Inventário (I)" style="display:none;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase;touch-action:manipulation">🎒 Inventário</button>
     <button onclick="avtJogadorPainel()" id="avt-btn-player" aria-label="Painel do personagem" style="display:none;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">👤 Personagem</button>
     <button onclick="avtEncerrarMeuCombate()" id="avt-btn-encerrar" aria-label="Encerrar meu combate" style="display:none;background:rgba(232,96,76,0.1);border:1px solid rgba(232,96,76,0.3);border-radius:6px;color:#e8604c;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">⚑ Encerrar</button>
 <button onclick="_avtToggleDpad()" id="avt-btn-dpad" aria-label="Mostrar ou ocultar o D-pad" style="display:none;background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">🕹</button>
@@ -548,10 +549,11 @@
 </div>
 
 <!-- ══ AVENTURA — Inventário do Jogador ══════════════════════ -->
-<div id="avt-inventario-modal" style="display:none;position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,0.82);align-items:center;justify-content:center;padding:12px" onclick="if(event.target===this)avtFecharInventario()">
+<div id="avt-inventario-modal" style="display:none;position:fixed;inset:0;z-index:9300;background:rgba(0,0,0,0.82);align-items:center;justify-content:center;padding:12px" onclick="if(event.target===this)avtFecharInventario()">
   <div style="background:rgba(5,8,16,0.98);border:1px solid rgba(79,163,209,0.22);border-radius:12px;width:min(460px,96vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid rgba(79,163,209,0.1);flex-shrink:0">
       <span style="font-family:var(--fonte-d);font-size:0.78rem;color:#c8d8e8;letter-spacing:.1em">🎒 INVENTÁRIO</span>
+      <span id="avt-inv-hint" style="display:none;font-family:var(--fonte-d);font-size:0.55rem;color:#7a92aa;letter-spacing:.03em;margin:0 10px;flex:1;text-align:right">1–9 e 0 usam · ▲▼ reordenam · I fecha</span>
       <button onclick="avtFecharInventario()" style="background:none;border:none;color:#7a92aa;font-size:1.2rem;cursor:pointer;line-height:1;padding:2px 8px">✕</button>
     </div>
     <div id="avt-inv-body" style="overflow-y:auto;padding:14px;flex:1;min-height:0"></div>
