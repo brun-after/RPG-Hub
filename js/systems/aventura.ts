@@ -742,7 +742,7 @@ function _avtRastroMarcarCelula(caster: any, x: any, y: any, formula: any, durac
 function _avtRastroEhHostil(e: any) {
   if (!e || e.hp <= 0 || e.escondido || e._dominado) return false;
   if (e.tipo === 'inimigo') return true;
-  if (e.tipo === 'invocado') return !(AVT_STATE.invocacoes_ativas || []).some((i: any) => i.id === e.id);
+  if (e.tipo === 'invocado') return !_avtInvAtivaDe(e);
   return false;
 }
 
@@ -13574,6 +13574,18 @@ async function _avtProcessarMorteJogador(ent: any, bat: any) {
   // Marca invisível para inimigos
   ent._invisivelParaInimigos = true;
 
+  // Invocações não sobrevivem à morte do dono. Dominados do Necromante ficam
+  // de fora (o efeito 'necromante' gerencia o retorno deles à morte), assim
+  // como definições com morre_com_dono === false (coluna da tabela invocacoes).
+  (AVT_STATE.invocacoes_ativas || [])
+    .filter((i: any) => i.dono_char_nome === ent.nome)
+    .forEach((i: any) => {
+      if (i.invocacao_def?.morre_com_dono === false) return;
+      const _entInvDono = AVT_STATE.entidades.find((e: any) => e.id === i.id);
+      if (_entInvDono?._dominado) return;
+      _avtDestruirInvocacao(i.id, bat || _avtBatalhaDeEnt(i.id) || null, 'dono_morreu');
+    });
+
   // Anima subtração de XP no canvas/HUD
   _avtMostrarXpLoss(ent.nome, xpPerdido);
   if (ouroPerdido > 0) mostrarToast(`🪙 -${ouroPerdido} ouro`, 'erro');
@@ -16171,9 +16183,16 @@ function _avtProcessarStatusEffects(bat: any, ent: any) {
     switch (ef.tipo) {
       case 'dot':
         if (ef.dot_formula) {
-          const dano = _avtRolarFormula(ef.dot_formula);
-          ent.hp = Math.max(0, ent.hp - dano);
-          if (entObj) entObj.hp = ent.hp;
+          let dano = _avtRolarFormula(ef.dot_formula);
+          const _entRealDot = entObj || ent;
+          if (_entRealDot.tipo === 'invocado' && !_entRealDot._dominado) {
+            // Funil da invocação: resistência, espelhos de HP e destruição ao zerar
+            dano = _avtAplicarDanoInvocacao(_entRealDot, dano, bat);
+            ent.hp = _entRealDot.hp;
+          } else {
+            ent.hp = Math.max(0, ent.hp - dano);
+            if (entObj) entObj.hp = ent.hp;
+          }
           _avtMostrarDanoAbaixoHp(entObj || ent, dano, false);
           _avtMostrarDotDrip(entObj || ent, ef.dot_variante);
           _avtBroadcast('avt_dano_visual', {alvoNome:ent.nome, dano, isCrit:false});
@@ -16463,6 +16482,14 @@ function _avtTurnoAvancar(bat: any) {
         if (_efNecPre) _avtNecromanteDominar(_entNecPre, _efNecPre, bat);
       }
     }
+  });
+  // Invocação que zerou HP não fica presa na iniciativa passando turno: destruir
+  // de vez (o filtro abaixo isenta 'invocado' de propósito, para preservar
+  // avatares e dominados — cujo ciclo de vida é próprio).
+  bat.iniciativa.slice().forEach((ini: any) => {
+    if (ini.tipo !== 'invocado' || ini.hp > 0 || ini._dominado) return;
+    const _entInvMorta = AVT_STATE.entidades.find((e: any) => e.id === ini.id);
+    if (!_entInvMorta || !_entInvMorta._dominado) _avtDestruirInvocacao(ini.id, bat, 'morreu');
   });
   bat.iniciativa = bat.iniciativa.filter((e: any) => e.tipo === 'avatar' || e.tipo === 'invocado' || e.hp > 0);
   bat.envolvidos = bat.envolvidos.filter((id: any) => bat.iniciativa.some((e: any) => e.id === id));
@@ -16786,9 +16813,13 @@ function _avtNpcExecutarAtaque(bat: any, npc: any, entNpc: any, skillAlvo: any, 
                 _avtRenderHpBar();
                 return;
               }
-              const realNpcAlvo = _avtAplicarImunidadeDano(entAlvA, real);
+              let realNpcAlvo = _avtAplicarImunidadeDano(entAlvA, real);
               if (alvA.tipo === 'jogador') {
                 try { _avtRTBroadcastPlayerDamage(alvA.nome, realNpcAlvo, npc.nome); } catch(_) {}
+              } else if (entAlvA?.tipo === 'invocado' && !entAlvA._dominado) {
+                // Funil da invocação: resistência, espelhos de HP e destruição ao zerar
+                realNpcAlvo = _avtAplicarDanoInvocacao(entAlvA, realNpcAlvo, bat);
+                alvA.hp = entAlvA.hp;
               } else {
                 alvA.hp = Math.max(0, alvA.hp - realNpcAlvo);
                 if (entAlvA) { entAlvA.hp = alvA.hp; _avtAplicarDanoPersistir(entAlvA, entAlvA.hp); }
@@ -16835,6 +16866,11 @@ function _avtNpcExecutarAtaque(bat: any, npc: any, entNpc: any, skillAlvo: any, 
         real = _avtAplicarImunidadeDano(entAlvo || skillAlvo, real);
         if (skillAlvo.tipo === 'jogador') {
           try { _avtRTBroadcastPlayerDamage(skillAlvo.nome, real, npc.nome); } catch(_) {}
+        } else if (entAlvo?.tipo === 'invocado' && !entAlvo._dominado) {
+          // Funil da invocação: resistência, espelhos de HP e destruição ao zerar
+          real = _avtAplicarDanoInvocacao(entAlvo, real, bat);
+          skillAlvo.hp = entAlvo.hp;
+          if (initEnt) initEnt.hp = entAlvo.hp;
         } else {
           skillAlvo.hp = Math.max(0, skillAlvo.hp - real);
           if (entAlvo) { entAlvo.hp = skillAlvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
@@ -17669,6 +17705,23 @@ function _avtRenderHpBar() {
       <span class="avt-hp-val">${j.hp}/${j.hpMax}</span>
     </div>`;
   }).join('');
+
+  // Sub-barras das invocações do MEU personagem (compactas, tom roxo)
+  const _minhasInvBar = AVT_STATE.entidades.filter((e: any) =>
+    e.tipo === 'invocado' && _avtInvAtivaDe(e)?.dono_char_nome === AVT_STATE.myCharNome);
+  if (_minhasInvBar.length) {
+    wrap.innerHTML += _minhasInvBar.map((iv: any) => {
+      const pct = iv.hpMax > 0 ? Math.max(0, iv.hp / iv.hpMax * 100) : 0;
+      const col = pct > 50 ? '#27ae60' : pct > 25 ? '#f39c12' : '#e74c3c';
+      return `<div class="avt-hp-item" style="opacity:0.85;transform:scale(0.92);transform-origin:left center">
+        <span class="avt-hp-nome" style="color:#b07ef0">🔮 ${(iv.nome || '').split(' ')[0]}</span>
+        <div style="display:flex;flex-direction:column;flex:1;gap:2px">
+          <div class="avt-hp-bar-wrap"><div class="avt-hp-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+        </div>
+        <span class="avt-hp-val">${iv.hp}/${iv.hpMax}</span>
+      </div>`;
+    }).join('');
+  }
 }
 
 function _avtToggleLog() {
@@ -18196,7 +18249,10 @@ function avtJogadorPainelRender(targetEl?: any, opts?: any) {
       <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em">🔮 Invocações</div>
       ${_minhasInvs.map((inv: any) => {
         const def = inv.invocacao_def || {};
-        const hpPct = inv.hpMax > 0 ? Math.max(0, Math.min(100, (inv.hp_atual / inv.hpMax) * 100)) : 0;
+        // HP vivo vem da entidade (autoritativo); hp_atual é fallback/espelho
+        const _entIv = AVT_STATE.entidades.find((e: any) => e.id === inv.id);
+        const _hpIv = _entIv ? _entIv.hp : inv.hp_atual;
+        const hpPct = inv.hpMax > 0 ? Math.max(0, Math.min(100, (_hpIv / inv.hpMax) * 100)) : 0;
         const hpCol = hpPct > 50 ? '#27ae60' : hpPct > 25 ? '#c8a84b' : '#e74c3c';
         return `<div style="border:1px solid rgba(176,126,240,0.2);border-radius:7px;padding:7px 10px">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
@@ -27273,7 +27329,10 @@ function _avtCharEditorRenderInvocacoes(container: any, ent: any, dbChar: any) {
       <div style="margin-bottom:14px">
         <div class="avt-ce2-skill-manage-title" style="margin-bottom:6px">⚡ Ativas no campo (${ativas.length})</div>
         ${ativas.map((inv: any) => {
-          const hpPct = inv.hpMax > 0 ? Math.max(0, Math.min(100, inv.hp_atual / inv.hpMax * 100)) : 0;
+          // HP vivo vem da entidade (autoritativo); hp_atual é fallback/espelho
+          const _entIv = AVT_STATE.entidades.find((e: any) => e.id === inv.id);
+          const _hpIv = _entIv ? _entIv.hp : inv.hp_atual;
+          const hpPct = inv.hpMax > 0 ? Math.max(0, Math.min(100, _hpIv / inv.hpMax * 100)) : 0;
           const hpCol = hpPct > 50 ? '#27ae60' : hpPct > 25 ? '#c8a84b' : '#e74c3c';
           const idSafe = inv.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
           return `
@@ -27283,7 +27342,7 @@ function _avtCharEditorRenderInvocacoes(container: any, ent: any, dbChar: any) {
               <div class="avt-ce2-skill-meta">
                 <div class="avt-ce2-skill-name" style="color:#b07ef0">${inv.invocacao_def?.nome || inv.id}</div>
                 <div class="avt-ce2-skill-badges">
-                  <span class="avt-ce2-skill-badge purple">${inv.hp_atual}/${inv.hpMax} HP</span>
+                  <span class="avt-ce2-skill-badge purple">${_hpIv}/${inv.hpMax} HP</span>
                   <span class="avt-ce2-skill-badge purple">⏱ ${inv._turnosRestantes}t</span>
                 </div>
                 <div style="height:4px;background:rgba(176,126,240,0.12);border-radius:2px;margin-top:5px;overflow:hidden">
@@ -27367,7 +27426,7 @@ window._avtCharEditorRenderInvocacoes = _avtCharEditorRenderInvocacoes;
 
 function _avtDispensarInvocacao(invId: any) {
   const bat = _avtMinhaBatalha() || AVT_STATE.batalhas?.[Object.keys(AVT_STATE.batalhas||{})[0]];
-  _avtDestruirInvocacao(invId, bat || null);
+  _avtDestruirInvocacao(invId, bat || null, 'dispensada');
   mostrarToast('Invocação dispensada', 'ok');
   _avtCharEditorRender();
 }
@@ -32261,8 +32320,52 @@ function _avtCriarEntidadeInvocacao(invAtiva: any, entDono: any) {
   return ent;
 }
 
-function _avtDestruirInvocacao(invId: any, bat: any) {
+// Resolve a entrada de invocacoes_ativas de uma entidade invocada: pela lista
+// local (cliente do dono), pela referência embutida no broadcast (peers — o
+// avt_entidade_nova carrega _invAtiva no spread) ou pela mãe de uma unidade
+// de enxame (_enxameMae).
+function _avtInvAtivaDe(ent: any) {
+  if (!ent) return null;
+  const invs = AVT_STATE.invocacoes_ativas || [];
+  return invs.find((i: any) => i.id === ent.id)
+      || (ent._enxameMae ? invs.find((i: any) => i.id === ent._enxameMae) : null)
+      || ent._invAtiva || null;
+}
+
+// Funil único de dano em invocação: aplica a resistência da definição
+// (redução plana), espelha o HP em entidade/invAtiva/iniciativa, propaga e
+// destrói ao zerar — sites de dano não precisam conhecer o ciclo de vida.
+// Retorna o dano efetivamente aplicado. Dominados do Necromante ficam fora
+// (ciclo próprio via efeito).
+function _avtAplicarDanoInvocacao(entInv: any, dano: any, bat: any) {
+  if (!entInv) return 0;
+  const inv = _avtInvAtivaDe(entInv);
+  const def = inv?.invocacao_def || {};
+  let real = Math.max(0, Math.round(dano) || 0);
+  let res = parseFloat(def.resistencia_base) || 0;
+  if (def.resistencia_atributo_scaling && def.resistencia_atributo_pct) {
+    const donoChar = AVT_STATE.chars.find((c: any) => c.nome === inv?.dono_char_nome);
+    const attrVal = parseFloat(donoChar?.custom_attrs?.atributos?.[def.resistencia_atributo_scaling] ?? 0) || 0;
+    res += Math.ceil(attrVal * (parseFloat(def.resistencia_atributo_pct) || 0) / 100);
+  }
+  if (res > 0 && real > 0) {
+    const bloqueado = Math.min(real, Math.round(res));
+    real -= bloqueado;
+    if (bloqueado > 0) _avtLog(`🛡 ${entInv.nome} resiste ${bloqueado} de dano`, bat?.id);
+  }
+  entInv.hp = Math.max(0, (entInv.hp ?? 0) - real);
+  if (inv) inv.hp_atual = entInv.hp;
+  const ini = bat?.iniciativa?.find((e: any) => e.id === entInv.id);
+  if (ini) ini.hp = entInv.hp;
+  try { _avtBroadcast('avt_hp_update', { nome: entInv.nome, hp: entInv.hp, hpMax: entInv.hpMax }); } catch(_) {}
+  if (entInv.hp <= 0 && !entInv._dominado) _avtDestruirInvocacao(entInv.id, bat, 'morreu');
+  return real;
+}
+
+function _avtDestruirInvocacao(invId: any, bat: any, motivo: any = 'expirou') {
   const ent = AVT_STATE.entidades.find((e: any) => e.id === invId);
+  const inv = (AVT_STATE.invocacoes_ativas || []).find((i: any) => i.id === invId);
+  if (!ent && !inv) return; // já destruída (chamada duplicada ou eco de broadcast)
   if (ent?.dummy_explosivo && bat) {
     _avtInvocacaoExplosao(ent, bat);
   }
@@ -32272,8 +32375,13 @@ function _avtDestruirInvocacao(invId: any, bat: any) {
     bat.iniciativa = bat.iniciativa.filter((e: any) => e.id !== invId);
     bat.envolvidos  = bat.envolvidos.filter((id: any) => id !== invId);
   }
-  _avtLog(`💨 Invocação ${ent?.nome || invId} desapareceu`, bat?.id);
-  _avtBroadcast('avt_invocacao_destruida', { invId });
+  const _nomeInv = ent?.nome || inv?.invocacao_def?.nome || invId;
+  const _msgDestr = motivo === 'morreu'      ? `💀 Invocação ${_nomeInv} foi destruída!`
+                  : motivo === 'dono_morreu' ? `💨 ${_nomeInv} se desfez com a queda do invocador`
+                  : motivo === 'dispensada'  ? `💨 ${_nomeInv} foi dispensada`
+                  : `💨 Invocação ${_nomeInv} desapareceu`;
+  _avtLog(_msgDestr, bat?.id);
+  _avtBroadcast('avt_invocacao_destruida', { invId, motivo });
 }
 
 function _avtInvocacaoExplosao(ent: any, bat: any) {
@@ -34261,6 +34369,10 @@ Object.defineProperty(globalThis, "avtInvocar", { configurable: true, get: () =>
 Object.defineProperty(globalThis, "_avtCriarEntidadeInvocacao", { configurable: true, get: () => _avtCriarEntidadeInvocacao, set: (__v) => { _avtCriarEntidadeInvocacao = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtDestruirInvocacao", { configurable: true, get: () => _avtDestruirInvocacao, set: (__v) => { _avtDestruirInvocacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInvAtivaDe", { configurable: true, get: () => _avtInvAtivaDe, set: (__v) => { _avtInvAtivaDe = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtAplicarDanoInvocacao", { configurable: true, get: () => _avtAplicarDanoInvocacao, set: (__v) => { _avtAplicarDanoInvocacao = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtInvocacaoExplosao", { configurable: true, get: () => _avtInvocacaoExplosao, set: (__v) => { _avtInvocacaoExplosao = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
