@@ -75,6 +75,93 @@ describe('undo/redo', () => {
   });
 });
 
+describe('zoom (_fedCalcularZoomFit)', () => {
+  it('enquadra um 60×40 num canvas 800×500 com folga e pan centralizado', () => {
+    const f = g._fedCalcularZoomFit(800, 500, 60, 40);
+    // limitante vertical: 0.95 * 500/(40*24)
+    expect(f.zoom).toBeCloseTo(0.95 * 500 / (40 * 24), 4);
+    expect(f.panX).toBeCloseTo((800 - 60 * 24 * f.zoom) / 2, 4);
+    expect(f.panY).toBeCloseTo((500 - 40 * 24 * f.zoom) / 2, 4);
+  });
+
+  it('mapa minúsculo não passa do teto 1.5', () => {
+    expect(g._fedCalcularZoomFit(800, 500, 8, 8).zoom).toBe(1.5);
+  });
+
+  it('canvas minúsculo respeita o piso FED_ZMIN', () => {
+    expect(g._fedCalcularZoomFit(40, 30, 120, 120).zoom).toBeCloseTo(0.1, 6);
+  });
+});
+
+describe('vínculo peça↔função (_fedVincularPapel)', () => {
+  beforeEach(() => {
+    FED.modo = 'draft';
+    FED.tsCfg = { version: 2, cols: 5, rows: 4, blocos: { bau: 'bloco_3_2' } };
+  });
+
+  it('vincula uma função a outra célula do atlas (re-vínculo substitui)', () => {
+    expect(g._fedVincularPapel('bau', 2, 3)).toBe('bau');
+    expect(FED.tsCfg.blocos.bau).toBe('bloco_2_3');
+  });
+
+  it('sanitiza chave livre', () => {
+    expect(g._fedVincularPapel('decor 1', 4, 0)).toBe('decor_1');
+    expect(FED.tsCfg.blocos.decor_1).toBe('bloco_4_0');
+  });
+
+  it('chave vazia ou inválida não vincula', () => {
+    expect(g._fedVincularPapel('', 1, 1)).toBe(null);
+    expect(g._fedVincularPapel('___', 1, 1)).toBe(null);
+    expect(Object.keys(FED.tsCfg.blocos)).toEqual(['bau']);
+  });
+
+  it('_fedChavePorCelula resolve pelo config do draft (inclusive refs com @t)', () => {
+    FED.tsCfg.blocos.parede_L = 'bloco_1_0@1';
+    expect(g._fedChavePorCelula(3, 2)).toBe('bau');
+    expect(g._fedChavePorCelula(1, 0)).toBe('parede_L');
+    expect(g._fedChavePorCelula(0, 0)).toBe(null);
+  });
+});
+
+describe('tileset em draft', () => {
+  it('_fedPreloadTileset usa {aplicar:false} e guarda as texturas locais', async () => {
+    const chamadas: any[] = [];
+    const orig = g._avtCarregarTileset;
+    g._avtCarregarTileset = (_u: any, _c: any, opts: any) => {
+      chamadas.push(opts);
+      return Promise.resolve({ piso_1: 'tex' });
+    };
+    try {
+      FED.modo = 'draft'; FED.tsUrl = 'blob:atlas'; FED.tsHerdadoDe = null;
+      FED.tsCfg = { version: 2, cols: 4, rows: 4, blocos: {} };
+      FED.texs = null; FED.aberto = false;
+      g._fedPreloadTileset();
+      await new Promise(r => setTimeout(r, 0));
+      expect(chamadas).toEqual([{ aplicar: false }]);
+      expect(FED.texs).toEqual({ piso_1: 'tex' });
+    } finally { g._avtCarregarTileset = orig; }
+  });
+
+  it('_fedExportarDraft inclui tileset_config só quando o tileset é próprio', () => {
+    FED.modo = 'draft';
+    FED.tiles = grade(6, 5, 0); FED.tiles[1][1] = 1;
+    FED.rooms = [{ id: 'sala_1', x: 1, y: 1, w: 1, h: 1, tipo: 'entrada' }];
+    FED.portasInternas = []; FED.spawns = [];
+    FED.tsCfg = { version: 2, cols: 4, rows: 4, blocos: { bau: 'bloco_3_2' } };
+    FED.tsHerdadoDe = null;
+    let exportado: any = null;
+    FED.onExport = (d: any) => { exportado = d; };
+    g._fedExportarDraft();
+    expect(exportado.tileset_config).toEqual(FED.tsCfg);
+    expect(exportado.tileset_config).not.toBe(FED.tsCfg); // cópia, não referência
+
+    FED.tsHerdadoDe = 'Fase inicial';
+    FED.onExport = (d: any) => { exportado = d; };
+    g._fedExportarDraft();
+    expect(exportado.tileset_config).toBeUndefined();
+  });
+});
+
 describe('_fedDerivarRooms', () => {
   it('deriva bounding boxes de componentes conexos de piso', () => {
     // duas salas desconexas: 2×2 no topo-esq e 1×3 na direita

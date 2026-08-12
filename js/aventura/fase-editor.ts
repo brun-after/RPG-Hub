@@ -26,6 +26,9 @@ const FED: any = {
   tool: 'wall', brushKey: null as any, brushXf: 0,
   undo: [] as any[], redo: [] as any[], _stroke: null as any,
   zoom: 1, panX: 0, panY: 0,
+  // Tileset do modo draft: url/config vêm do chamador (wizard/Nova Fase) e as
+  // texturas ficam locais (FED.texs) — nunca tocam AVT_STATE da fase ao vivo.
+  tsUrl: null as any, tsCfg: null as any, tsHerdadoDe: null as any, texs: null as any,
   pendingDoorAnchor: null as any, _portaCfgCell: null as any,
   _rectAnchor: null as any, _rectHover: null as any,
   onExport: null as any,
@@ -33,18 +36,48 @@ const FED: any = {
 };
 
 const FED_SZ = 24; // px por tile no zoom 1
+const FED_ZMIN = 0.1; // 120×120 tiles precisa de ~0.12 para caber em telas pequenas
+const FED_ZMAX = 6;
 
 function _fedTilesetTexturas() {
+  if (FED.texs) return FED.texs; // draft: texturas locais
   const A: any = (window as any).AVT_STATE;
-  return (FED.modo === 'live' && A?._tilesetLoaded && A?._tilesetTextures) ? A._tilesetTextures : null;
+  return (A?._tilesetLoaded && A?._tilesetTextures) ? A._tilesetTextures : null;
 }
 function _fedTilesetCfg() {
+  if (FED.tsCfg) return FED.tsCfg; // draft
   const A: any = (window as any).AVT_STATE;
-  return A?._tilesetConfig || A?.dungeon?.tileset_config || null;
+  return A?._tilesetConfig || A?.dungeon?.tileset_config
+    || A?.rpg?.theme_json?.dungeon_data?.tileset_config || null;
 }
-function _fedTilesetUrl() {
+// Resolve o tileset visível no editor. Em live prefere o tileset APLICADO da
+// fase atual (_tilesetImgUrl) — o resolver antigo ignorava fases extras com
+// tileset próprio e mostrava a paleta do tileset principal.
+function _fedResolverTileset() {
+  if (FED.modo !== 'live') return { url: FED.tsUrl, cfg: FED.tsCfg, herdadoDe: FED.tsHerdadoDe };
   const A: any = (window as any).AVT_STATE;
-  return A?.rpg?.theme_json?.tileset_img_url || A?.dungeon?.tileset_img_url || null;
+  const url = A?._tilesetImgUrl || A?.dungeon?.tileset_img_url
+    || A?.rpg?.theme_json?.dungeon_data?.tileset_img_url
+    || A?.rpg?.theme_json?.tileset_img_url || null;
+  return { url, cfg: _fedTilesetCfg(), herdadoDe: A?._tilesetHerdadoDe || null };
+}
+// Garante as texturas em memória ao abrir; sem isso o canvas mostrava só cores
+// sólidas e o Distribuir gravava chaves invisíveis (a queixa do "tileset sumiu").
+function _fedPreloadTileset() {
+  const W: any = window as any;
+  const ts = _fedResolverTileset();
+  if (!ts.url || !ts.cfg || typeof W._avtCarregarTileset !== 'function') return;
+  const A: any = W.AVT_STATE;
+  if (FED.modo === 'live') {
+    if (A?._tilesetLoaded && A?._tilesetTextures) return;
+    W._avtCarregarTileset(ts.url, ts.cfg)
+      .then(() => { _fedRender(); _fedInfoPincel(); })
+      .catch(() => {});
+  } else {
+    W._avtCarregarTileset(ts.url, ts.cfg, { aplicar: false })
+      .then((texs: any) => { FED.texs = texs || null; _fedRender(); _fedInfoPincel(); })
+      .catch(() => {});
+  }
 }
 
 // ── Abertura ─────────────────────────────────────────────────────────────────
@@ -67,7 +100,8 @@ function avtFaseEditorAbrir(opts: any) {
     FED.portasInternas = (dungeon._portasInternas || []).map((p: any) => JSON.parse(JSON.stringify(p)));
     FED.fasesExtras = (W.AVT_STATE.rpg?.theme_json?.fases_extras || []).map((f: any) => JSON.parse(JSON.stringify(f)));
     FED.spawns = (dungeon._spawnJogadores || []).map((s: any) => ({ ...s }));
-    FED.onExport = null;
+    FED.onExport = null; FED.onTilesetDraft = null;
+    FED.tsUrl = null; FED.tsCfg = null; FED.tsHerdadoDe = null;
   } else {
     FED.w = opts.w || 24; FED.h = opts.h || 18;
     FED.tiles = opts.tiles
@@ -80,16 +114,23 @@ function avtFaseEditorAbrir(opts: any) {
     FED.fasesExtras = [];
     FED.spawns = (opts.spawn_jogadores || []).map((s: any) => ({ ...s }));
     FED.onExport = opts.onExport || null;
+    FED.onTilesetDraft = opts.onTilesetDraft || null;
+    FED.tsUrl = opts.tilesetUrl || null;
+    FED.tsCfg = opts.tilesetConfig ? JSON.parse(JSON.stringify(opts.tilesetConfig)) : null;
+    FED.tsHerdadoDe = opts.tilesetHerdadoDe || null;
   }
 
   FED.tool = 'wall'; FED.brushKey = null; FED.brushXf = 0;
   FED.undo = []; FED.redo = []; FED._stroke = null;
   FED.pendingDoorAnchor = null; FED._rectAnchor = null; FED._rectHover = null;
   FED.zoom = 1; FED.panX = 0; FED.panY = 0;
+  FED.texs = null;
+  FED._fitInicial = true;
   FED.aberto = true;
 
   _fedMontarUI();
   _fedRender();
+  _fedPreloadTileset();
 }
 
 // ── UI ───────────────────────────────────────────────────────────────────────
@@ -102,7 +143,10 @@ function _fedMontarUI() {
   }
   (ov as any).style.cssText = 'position:fixed;inset:0;background:rgba(4,7,13,0.97);z-index:9500;display:flex;flex-direction:column;font-family:var(--fonte-d,serif)';
 
-  const tsUrl = FED.modo === 'live' ? _fedTilesetUrl() : null;
+  const W: any = window as any;
+  const ts = _fedResolverTileset();
+  const tsUrl = ts.url;
+  const tsSrc = tsUrl && typeof W.normalizeImgUrl === 'function' ? W.normalizeImgUrl(tsUrl) : tsUrl;
   const tool = (id: string, label: string, titulo: string) =>
     `<button id="fed-tool-${id}" class="fed-btn ${FED.tool === id ? 'fed-btn-on' : ''}" title="${titulo}" onclick="_fedSetTool('${id}')">${label}</button>`;
 
@@ -121,26 +165,34 @@ function _fedMontarUI() {
       <input id="fed-w" type="number" min="8" max="120" value="${FED.w}" class="fed-num">
       <input id="fed-h" type="number" min="8" max="120" value="${FED.h}" class="fed-num">
       <button class="fed-btn" onclick="_fedResize()" title="Redimensionar (corta/expande com vazio)">⤢</button>
+      <span class="fed-sep"></span>
+      <button class="fed-btn" onclick="_fedZoomStep(-1)" title="Afastar (-)">−</button>
+      <button class="fed-btn" id="fed-zoom-pct" onclick="_fedZoomReset()" title="Zoom atual — clique para 100%">${Math.round(FED.zoom * 100)}%</button>
+      <button class="fed-btn" onclick="_fedZoomStep(1)" title="Aproximar (+)">+</button>
+      <button class="fed-btn" onclick="_fedZoomFit()" title="Ajustar o mapa à tela (0)">⛶</button>
       <span style="flex:1"></span>
-      ${FED.modo === 'live' && tsUrl ? `<button class="fed-btn" onclick="_fedDistribuir()" title="Recalcula as peças do tileset por vizinhança (preserva portas/saída)">✦ Distribuir</button>` : ''}
+      ${tsUrl ? `<button class="fed-btn" onclick="_fedDistribuir()" title="Recalcula as peças do tileset por vizinhança (preserva portas/saída)">✦ Distribuir</button>` : ''}
+      <button class="fed-btn" onclick="_fedToggleTilesetPanel()" title="Enviar ou trocar o tileset desta fase">🖼 Tileset</button>
       ${FED.modo === 'live'
         ? `<button class="fed-btn fed-btn-ok" onclick="_fedSalvarLive()">💾 Salvar</button>`
         : `<button class="fed-btn fed-btn-ok" onclick="_fedExportarDraft()">✓ Usar este mapa</button>`}
       <button class="fed-btn fed-btn-danger" onclick="avtFaseEditorFechar()">✕</button>
     </div>
-    <div id="fed-status" class="fed-status">Ferramenta: Parede — clique/arraste para pintar. Roda = zoom · botão do meio ou 2 dedos = pan · R gira · F espelha.</div>
+    <div id="fed-status" class="fed-status">Ferramenta: Parede — clique/arraste para pintar. Roda ou +/− = zoom · 0 = ajustar à tela · botão do meio ou 2 dedos = pan · R gira · F espelha.</div>
     <div class="fed-body">
       ${tsUrl ? `
       <div class="fed-palette">
         <div class="fed-palette-title">Tileset — clique na peça</div>
+        ${ts.herdadoDe ? `<div class="fed-brush-info" style="color:#c8a84b">Herdado de "${ts.herdadoDe}"</div>` : ''}
         <div id="fed-ts-wrap" style="position:relative;cursor:crosshair">
-          <img id="fed-ts-img" src="${tsUrl}" style="display:block;image-rendering:pixelated;width:100%">
+          <img id="fed-ts-img" src="${tsSrc}" style="display:block;image-rendering:pixelated;width:100%">
           <canvas id="fed-ts-sel" style="position:absolute;inset:0;pointer-events:none"></canvas>
         </div>
         <div class="fed-rot-row">
           <button class="fed-btn" onclick="_fedGirar(-1)" title="Girar anti-horário">⟲</button>
           <button class="fed-btn" onclick="_fedGirar(1)" title="Girar horário (R)">⟳</button>
           <button class="fed-btn" onclick="_fedFlip()" title="Espelhar (F)">⇋</button>
+          <button class="fed-btn" onclick="_fedRevincularSelecionada()" title="Vincular a peça selecionada a uma função (porta, baú…)">🔗</button>
           <canvas id="fed-brush-prev" width="34" height="34" style="border:1px solid rgba(79,163,209,0.3);border-radius:4px;image-rendering:pixelated"></canvas>
         </div>
         <div id="fed-brush-info" class="fed-brush-info">Nenhuma peça selecionada</div>
@@ -155,9 +207,14 @@ function _fedMontarUI() {
   const fit = () => {
     canvas.width = wrap.clientWidth || 800;
     canvas.height = wrap.clientHeight || 500;
+    // Primeira medição após abrir: enquadra o mapa (um 60×40 abria cortado
+    // no zoom 1 ancorado no canto).
+    if (FED._fitInicial) { FED._fitInicial = false; _fedZoomFit(); return; }
     _fedRender();
   };
   setTimeout(fit, 0);
+  // Remount (ex.: após aplicar tileset) não pode acumular listeners de resize
+  if ((FED as any)._fitFn) window.removeEventListener('resize', (FED as any)._fitFn);
   window.addEventListener('resize', fit);
   (FED as any)._fitFn = fit;
 
@@ -170,6 +227,7 @@ function avtFaseEditorFechar() {
   const ov = document.getElementById('avt-fase-editor');
   if (ov) (ov as any).style.display = 'none';
   FED.aberto = false;
+  FED.texs = null; // libera as texturas locais do draft
   if ((FED as any)._fitFn) { window.removeEventListener('resize', (FED as any)._fitFn); (FED as any)._fitFn = null; }
   if ((FED as any)._keyFn) { window.removeEventListener('keydown', (FED as any)._keyFn); (FED as any)._keyFn = null; }
 }
@@ -321,7 +379,7 @@ function _fedResize() {
 function _fedDistribuir() {
   const W: any = window as any;
   const T = W.AVT_T || { PAREDE: 0, PISO: 1, SAIDA: 2 };
-  const view = { w: FED.w, h: FED.h, tiles: FED.tiles, _chestPositions: FED.chestPositions };
+  const view = { w: FED.w, h: FED.h, tiles: FED.tiles, _chestPositions: FED.chestPositions, tileset_config: _fedTilesetCfg() };
   _fedStrokeStart();
   for (let y = 0; y < FED.h; y++) {
     for (let x = 0; x < FED.w; x++) {
@@ -391,7 +449,7 @@ function _fedBindCanvas(canvas: HTMLCanvasElement) {
     if (FED._pinchStart && FED._pointers.size === 2) {
       const pts = [...FED._pointers.values()];
       const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      const fator = Math.max(0.25, Math.min(4, FED._pinchStart.zoom * (d / Math.max(1, FED._pinchStart.d))));
+      const fator = Math.max(FED_ZMIN, Math.min(FED_ZMAX, FED._pinchStart.zoom * (d / Math.max(1, FED._pinchStart.d))));
       _fedZoomAt(FED._pinchStart.cx, FED._pinchStart.cy, fator, canvas);
       return;
     }
@@ -431,7 +489,7 @@ function _fedBindCanvas(canvas: HTMLCanvasElement) {
 
   canvas.addEventListener('wheel', (ev: WheelEvent) => {
     ev.preventDefault();
-    const fator = Math.max(0.25, Math.min(4, FED.zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    const fator = Math.max(FED_ZMIN, Math.min(FED_ZMAX, FED.zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15)));
     _fedZoomAt(ev.clientX, ev.clientY, fator, canvas);
   }, { passive: false });
 }
@@ -443,6 +501,49 @@ function _fedZoomAt(clientX: number, clientY: number, novoZoom: number, canvas: 
   FED.panX = mx - ((mx - FED.panX) / FED.zoom) * novoZoom;
   FED.panY = my - ((my - FED.panY) / FED.zoom) * novoZoom;
   FED.zoom = novoZoom;
+  _fedZoomLabelAtualizar();
+  _fedRender();
+}
+
+// ── Controles de zoom (botões/teclado — roda e pinch passam por _fedZoomAt) ──
+function _fedZoomLabelAtualizar() {
+  const el = document.getElementById('fed-zoom-pct');
+  if (el) el.textContent = Math.round(FED.zoom * 100) + '%';
+}
+
+// Pura (testável): zoom que enquadra o mapa inteiro com folga de 5%, centrado.
+// Teto 1.5 — mapas minúsculos não explodem em tiles gigantes.
+function _fedCalcularZoomFit(cw: number, ch: number, w: number, h: number) {
+  const mw = Math.max(1, w) * FED_SZ, mh = Math.max(1, h) * FED_SZ;
+  const z = Math.max(FED_ZMIN, Math.min(1.5, 0.95 * Math.min(cw / mw, ch / mh)));
+  return { zoom: z, panX: (cw - mw * z) / 2, panY: (ch - mh * z) / 2 };
+}
+
+function _fedZoomFit() {
+  const canvas = document.getElementById('fed-canvas') as HTMLCanvasElement;
+  if (!canvas) return;
+  const f = _fedCalcularZoomFit(canvas.width, canvas.height, FED.w, FED.h);
+  FED.zoom = f.zoom; FED.panX = f.panX; FED.panY = f.panY;
+  _fedZoomLabelAtualizar();
+  _fedRender();
+}
+
+function _fedZoomStep(sinal: number) {
+  const canvas = document.getElementById('fed-canvas') as HTMLCanvasElement;
+  if (!canvas) return;
+  const r = canvas.getBoundingClientRect();
+  const novo = Math.max(FED_ZMIN, Math.min(FED_ZMAX, FED.zoom * (sinal > 0 ? 1.25 : 0.8)));
+  _fedZoomAt(r.left + r.width / 2, r.top + r.height / 2, novo, canvas);
+}
+
+function _fedZoomReset() {
+  const canvas = document.getElementById('fed-canvas') as HTMLCanvasElement;
+  if (!canvas) return;
+  // 100% com o centro do mapa no centro da tela
+  FED.zoom = 1;
+  FED.panX = (canvas.width - FED.w * FED_SZ) / 2;
+  FED.panY = (canvas.height - FED.h * FED_SZ) / 2;
+  _fedZoomLabelAtualizar();
   _fedRender();
 }
 
@@ -458,6 +559,9 @@ function _fedBindTeclado() {
       else avtFaseEditorFechar();
     } else if (k === 'r') { _fedGirar(1); }
     else if (k === 'f') { _fedFlip(); }
+    else if (k === '+' || k === '=') { _fedZoomStep(1); }
+    else if (k === '-' || k === '_') { _fedZoomStep(-1); }
+    else if (k === '0') { _fedZoomFit(); }
     else if ((ev.ctrlKey || ev.metaKey) && k === 'z') { ev.preventDefault(); _fedUndo(); }
     else if ((ev.ctrlKey || ev.metaKey) && k === 'y') { ev.preventDefault(); _fedRedo(); }
   };
@@ -478,14 +582,26 @@ function _fedBindPalette() {
     const tc = Math.floor(((ev.clientX - r.left) / r.width) * cols);
     const tr = Math.floor(((ev.clientY - r.top) / r.height) * rows);
     if (tc < 0 || tr < 0 || tc >= cols || tr >= rows) return;
-    const W: any = window as any;
-    const key = W._avtBlocoChavePorCelula ? W._avtBlocoChavePorCelula(tc, tr) : null;
-    if (!key) { _fedAtribuirPapel(tc, tr); return; }
+    FED._selAtlas = { tc, tr };
+    _fedMarcarSelecao(tc, tr, cols, rows, img);
+    // Em draft o lookup global olha o config da fase ao vivo — resolve local.
+    const key = _fedChavePorCelula(tc, tr);
+    if (!key) { _fedAbrirModalPapel(tc, tr); return; }
     FED.brushKey = key; FED.brushXf = 0;
     _fedSetTool('tile');
     _fedInfoPincel();
-    _fedMarcarSelecao(tc, tr, cols, rows, img);
   });
+}
+
+// Chave semântica mapeada numa célula do atlas, no config resolvido do editor
+// (equivalente ao _avtBlocoChavePorCelula global, mas ciente do draft).
+function _fedChavePorCelula(tc: number, tr: number) {
+  const cfg = _fedTilesetCfg();
+  const alvo = `bloco_${tc}_${tr}`;
+  for (const [k, v] of Object.entries<any>(cfg?.blocos || {})) {
+    if (String(v).replace(/@[1-7]$/, '') === alvo) return k;
+  }
+  return null;
 }
 
 function _fedMarcarSelecao(tc: number, tr: number, cols: number, rows: number, img: HTMLImageElement) {
@@ -529,27 +645,312 @@ function _fedFlip() {
   _fedInfoPincel();
 }
 
-// Célula do atlas sem papel mapeado: oferece atribuir uma chave em vez do
-// antigo no-op silencioso do picker.
-function _fedAtribuirPapel(tc: number, tr: number) {
+// ── Painel 🖼 Tileset: enviar/trocar o atlas da fase ─────────────────────────
+// Substitui o painel do editor antigo que ficou órfão no c198b18 — desde então
+// não havia como adicionar/trocar tileset numa aventura existente.
+function _fedToggleTilesetPanel() {
+  const W: any = window as any;
+  const ts = _fedResolverTileset();
+  const cfg = ts.cfg;
+  FED._tsModalFile = null;
+  let modal = document.getElementById('fed-ts-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'fed-ts-modal';
+    (modal as any).style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9600;display:flex;align-items:center;justify-content:center';
+    document.body.appendChild(modal);
+  }
+  const tsSrc = ts.url && typeof W.normalizeImgUrl === 'function' ? W.normalizeImgUrl(ts.url) : ts.url;
+  modal.innerHTML = `
+    <div style="background:#0d1320;border:1px solid rgba(79,163,209,0.3);border-radius:10px;padding:18px;width:340px;max-width:92vw">
+      <div style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8d8e8;margin-bottom:12px">🖼 Tileset da fase</div>
+      ${ts.herdadoDe ? `<div style="font-size:0.66rem;color:#c8a84b;margin-bottom:8px">Atualmente herdado de "${ts.herdadoDe}" — enviar um atlas cria um tileset próprio.</div>` : ''}
+      <label style="display:block;font-size:0.72rem;color:#c8d8e8;margin-bottom:8px;cursor:pointer">
+        📁 Imagem do atlas <input id="fed-ts-file" type="file" accept="image/*" style="display:none" onchange="_fedTsModalHandleFile(this)">
+        <span id="fed-ts-file-nome" style="color:#7a92aa;font-size:0.66rem;margin-left:6px">${ts.url && !ts.herdadoDe ? '(mantém o atual)' : 'nenhuma escolhida'}</span>
+      </label>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <span style="font-size:0.66rem;color:#7a92aa">Colunas</span>
+        <input id="fed-ts-cols" type="number" min="4" max="5" value="${cfg?.cols || 4}" class="fed-num">
+        <span style="font-size:0.66rem;color:#7a92aa">Linhas</span>
+        <input id="fed-ts-rows" type="number" min="4" max="5" value="${cfg?.rows || 4}" class="fed-num">
+      </div>
+      <img id="fed-ts-modal-prev" src="${tsSrc || ''}" style="display:${tsSrc ? 'block' : 'none'};image-rendering:pixelated;max-width:100%;max-height:160px;border:1px solid rgba(79,163,209,0.2);border-radius:5px;margin-bottom:10px">
+      <div style="display:flex;gap:8px;justify-content:space-between">
+        <button class="fed-btn" onclick="_fedCopiarPromptTileset()" title="Prompt pronto para gerar o atlas numa IA de imagem">📋 Prompt de IA</button>
+        <span style="flex:1"></span>
+        <button class="fed-btn fed-btn-danger" onclick="document.getElementById('fed-ts-modal').style.display='none'">Cancelar</button>
+        <button class="fed-btn fed-btn-ok" onclick="_fedAplicarTileset()">✓ Aplicar</button>
+      </div>
+    </div>`;
+  (modal as any).style.display = 'flex';
+}
+
+function _fedTsModalHandleFile(input: any) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  FED._tsModalFile = file;
+  const nome = document.getElementById('fed-ts-file-nome');
+  if (nome) nome.textContent = file.name;
+  const prev = document.getElementById('fed-ts-modal-prev') as HTMLImageElement;
+  if (prev) { prev.src = URL.createObjectURL(file); (prev as any).style.display = 'block'; }
+}
+
+function _fedTsModalDims() {
+  const clamp45 = (v: any) => Math.min(5, Math.max(4, parseInt(v, 10) || 4));
+  return {
+    cols: clamp45((document.getElementById('fed-ts-cols') as any)?.value),
+    rows: clamp45((document.getElementById('fed-ts-rows') as any)?.value),
+  };
+}
+
+// Restaura o botão de prompt deletado no c198b18 (template segue vivo).
+function _fedCopiarPromptTileset() {
+  const W: any = window as any;
+  if (typeof W.faseTilesetImgPromptTemplate !== 'function') return;
+  const { cols, rows } = _fedTsModalDims();
+  const estilo = W.AVT_STATE?.rpg?.theme_json?.nome || undefined;
+  navigator.clipboard.writeText(W.faseTilesetImgPromptTemplate({ estilo, cols, rows }))
+    .then(() => W.mostrarToast?.('📋 Prompt de tileset copiado!', 'ok'))
+    .catch(() => W.mostrarToast?.('Erro ao copiar', 'erro'));
+}
+
+async function _fedAplicarTileset() {
+  const W: any = window as any;
+  const { cols, rows } = _fedTsModalDims();
+  const ts = _fedResolverTileset();
+  const file = FED._tsModalFile;
+  // Sem arquivo novo: refatia o atlas atual com os cols/rows informados
+  // (um tileset herdado exige arquivo — a fase ganha um atlas próprio).
+  if (!file && (!ts.url || ts.herdadoDe)) { W.mostrarToast?.('Escolha a imagem do atlas', 'aviso'); return; }
+  const blocosBase = (!file && ts.cfg?.cols === cols && ts.cfg?.rows === rows) ? ts.cfg?.blocos : null;
+  const cfg = { version: 2, cols, rows, blocos: W._avtMergeBlocosCanonicos(blocosBase, cols, rows) };
+  const modal = document.getElementById('fed-ts-modal');
+
+  if (FED.modo === 'live') {
+    const A: any = W.AVT_STATE;
+    if (typeof W._avtRpgAtivo === 'function' && !W._avtRpgAtivo()) return;
+    if (typeof W._avtPodeSalvarRegistro === 'function' && !W._avtPodeSalvarRegistro()) {
+      W.mostrarToast?.('Apenas o mestre/host pode trocar o tileset', 'aviso'); return;
+    }
+    let url = ts.url;
+    if (file) {
+      try {
+        const faseId = A._faseAtualId || 'principal';
+        url = await W.uploadToStorage(file, `aventuras/${A.rpgId}/tileset_${faseId}_${Date.now()}`);
+      } catch (e: any) {
+        W.mostrarToast?.('Erro ao enviar o tileset: ' + (e?.message || e), 'erro'); return;
+      }
+    }
+    const tj = A.rpg.theme_json = A.rpg.theme_json || {};
+    W._avtGravarTilesetNoSlot(tj, url, cfg);
+    A._tilesetLoaded = false; A._tilesetTextures = {};
+    try { await W._avtCarregarTileset(url, cfg); } catch (_) {}
+    if (modal) (modal as any).style.display = 'none';
+    try {
+      await W._avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(A.rpgId)}`, {
+        method: 'PATCH', body: JSON.stringify({ theme_json: tj })
+      });
+      W.mostrarToast?.('Tileset aplicado à fase!', 'ok');
+    } catch (e: any) {
+      W.mostrarToast?.('Tileset aplicado localmente (erro ao persistir: ' + (e?.message || e) + ')', 'aviso');
+    }
+    A._dungeonRev = (A._dungeonRev || 0) + 1;
+    if (typeof W._avtTileBakeInvalidate === 'function') W._avtTileBakeInvalidate();
+    try {
+      W._avtBroadcast?.('avt_dungeon_update', {
+        faseId: A._faseAtualId || 'principal',
+        dungeon: A.dungeon,
+        fases_extras: tj.fases_extras || []
+      });
+    } catch (_) {}
+  } else {
+    // Draft: nada sobe agora — objectURL local + repasse ao wizard, que faz o
+    // upload real no salvar (contrato onTilesetDraft(file, cols, rows)).
+    if (file) {
+      FED.tsUrl = URL.createObjectURL(file);
+      FED.tsHerdadoDe = null;
+      if (typeof FED.onTilesetDraft === 'function') FED.onTilesetDraft(file, cols, rows);
+    }
+    FED.tsCfg = cfg;
+    FED.texs = null;
+    if (modal) (modal as any).style.display = 'none';
+    try {
+      const texs = await W._avtCarregarTileset(FED.tsUrl, cfg, { aplicar: false });
+      FED.texs = texs || null;
+    } catch (_) {}
+    W.mostrarToast?.('Tileset do rascunho atualizado', 'ok');
+  }
+  _fedMontarUI(); // paleta e Distribuir passam a existir
+  _fedRender();
+  _fedInfoPincel();
+}
+
+// ── Vínculo peça↔função (modal — substitui o prompt() antigo) ────────────────
+// Nome amigável de cada papel para o select do modal.
+function _fedRotuloPapel(key: string) {
+  const fixos: any = {
+    porta_fase: '🚪 Porta de fase (saída/portal)', porta: '🌀 Porta interna',
+    bau: '📦 Baú', parede_int: 'Parede interna', piso_1: 'Piso principal',
+  };
+  if (fixos[key]) return fixos[key];
+  let m: any;
+  if ((m = key.match(/^piso_(\d+)$/))) return 'Piso variante ' + m[1];
+  if ((m = key.match(/^objeto_(\d+)$/))) return '🕯 Obstáculo ' + m[1];
+  if ((m = key.match(/^parede_([NSOL])$/))) return 'Parede ' + ({ N: 'Norte', S: 'Sul', O: 'Oeste', L: 'Leste' } as any)[m[1]];
+  if ((m = key.match(/^canto_int_(\w+)$/))) return 'Canto interno ' + m[1];
+  if ((m = key.match(/^canto_(\w+)$/))) return 'Canto ' + m[1];
+  return key;
+}
+
+// Núcleo puro do vínculo: sanitiza a chave e aponta-a para a célula do atlas.
+// Devolve a chave efetiva (ou null se inválida) — testável sem DOM.
+function _fedVincularPapel(key: any, tc: number, tr: number) {
+  const cfg = _fedTilesetCfg();
+  if (!cfg) return null;
+  const k = String(key || '').trim().replace(/[^a-z0-9_]/gi, '_');
+  if (!k || /^_+$/.test(k)) return null;
+  cfg.blocos = cfg.blocos || {};
+  cfg.blocos[k] = `bloco_${tc}_${tr}`;
+  return k;
+}
+
+function _fedAbrirModalPapel(tc: number, tr: number) {
   const W: any = window as any;
   const cfg = _fedTilesetCfg();
   if (!cfg) return;
-  const papel = prompt(
-    `A célula (${tc},${tr}) do atlas não tem papel mapeado.\n` +
-    `Digite uma chave para ela (ex.: piso_6, objeto_4, decor_1) ou deixe vazio para cancelar:`);
-  if (!papel || !papel.trim()) return;
-  const key = papel.trim().replace(/[^a-z0-9_]/gi, '_');
-  cfg.blocos = cfg.blocos || {};
-  cfg.blocos[key] = `bloco_${tc}_${tr}`;
-  const url = _fedTilesetUrl();
-  if (url && typeof W._avtCarregarTileset === 'function') {
-    W._avtCarregarTileset(url, cfg).then(() => {
-      FED.brushKey = key; FED.brushXf = 0;
-      _fedSetTool('tile'); _fedInfoPincel(); _fedRender();
-      W.mostrarToast?.(`Papel "${key}" atribuído à célula (${tc},${tr})`, 'ok');
-    }).catch(() => W.mostrarToast?.('Falha ao refatiar o tileset', 'erro'));
+  FED._papelCell = { tc, tr };
+  const blocoAtual = `bloco_${tc}_${tr}`;
+  const chaveAtual = Object.entries(cfg.blocos || {})
+    .find(([, v]: any) => String(v).replace(/@[1-7]$/, '') === blocoAtual)?.[0] || null;
+  const canonicos: string[] = typeof W._faseTilesetBlocosCanonicos === 'function'
+    ? Object.keys(W._faseTilesetBlocosCanonicos(cfg.cols || 4, cfg.rows || 4)) : [];
+  const extras = Object.keys(cfg.blocos || {}).filter(k => !canonicos.includes(k));
+  const grupos: any = { 'Funções': [], 'Pisos': [], 'Paredes e cantos': [] };
+  for (const k of canonicos) {
+    if (k === 'porta' || k === 'porta_fase' || k === 'bau' || k.startsWith('objeto')) grupos['Funções'].push(k);
+    else if (k.startsWith('piso')) grupos['Pisos'].push(k);
+    else grupos['Paredes e cantos'].push(k);
   }
+  if (extras.length) grupos['Personalizadas'] = extras;
+  const opt = (k: string) => `<option value="${k}" ${k === chaveAtual ? 'selected' : ''}>${_fedRotuloPapel(k)}</option>`;
+  const optgroups = Object.entries(grupos)
+    .map(([g, ks]: any) => `<optgroup label="${g}">${ks.map(opt).join('')}</optgroup>`).join('');
+
+  let modal = document.getElementById('fed-papel-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'fed-papel-modal';
+    (modal as any).style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9600;display:flex;align-items:center;justify-content:center';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div style="background:#0d1320;border:1px solid rgba(79,163,209,0.3);border-radius:10px;padding:18px;width:320px;max-width:92vw">
+      <div style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8d8e8;margin-bottom:10px">🔗 Vincular papel — célula (${tc},${tr})</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+        <canvas id="fed-papel-prev" width="48" height="48" style="border:1px solid rgba(79,163,209,0.3);border-radius:5px;image-rendering:pixelated;flex:0 0 48px"></canvas>
+        <div style="font-size:0.64rem;color:#7a92aa">A peça passa a ser usada sempre que esta função aparecer no mapa (Distribuir, portas, baús…).</div>
+      </div>
+      <label style="display:block;font-size:0.64rem;color:#7a92aa;margin-bottom:4px">Função da peça</label>
+      <select id="fed-papel-sel" onchange="_fedPapelSelChange()" style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;margin-bottom:8px">
+        ${optgroups}
+        <option value="__custom">✏ Outra chave…</option>
+      </select>
+      <input id="fed-papel-custom" placeholder="ex.: decor_1" style="display:none;width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;margin-bottom:8px" oninput="_fedPapelSelChange()">
+      <div id="fed-papel-aviso" style="font-size:0.64rem;color:#f0cc6a;min-height:14px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="fed-btn fed-btn-danger" onclick="document.getElementById('fed-papel-modal').style.display='none'">Cancelar</button>
+        <button class="fed-btn fed-btn-ok" onclick="_fedConfirmarPapel()">✓ Vincular</button>
+      </div>
+    </div>`;
+  (modal as any).style.display = 'flex';
+  _fedPapelPreview(tc, tr);
+  _fedPapelSelChange();
+}
+
+// Miniatura da célula do atlas (recorta a <img> da paleta; separador ignorado)
+function _fedPapelPreview(tc: number, tr: number) {
+  const cv = document.getElementById('fed-papel-prev') as HTMLCanvasElement;
+  const img = document.getElementById('fed-ts-img') as HTMLImageElement;
+  const cfg = _fedTilesetCfg();
+  if (!cv || !img || !cfg || !img.naturalWidth) return;
+  const sw = img.naturalWidth / (cfg.cols || 4), sh = img.naturalHeight / (cfg.rows || 4);
+  const c = cv.getContext('2d')!;
+  c.imageSmoothingEnabled = false;
+  c.clearRect(0, 0, cv.width, cv.height);
+  c.drawImage(img, tc * sw, tr * sh, sw, sh, 0, 0, cv.width, cv.height);
+}
+
+function _fedPapelSelChange() {
+  const sel = (document.getElementById('fed-papel-sel') as any)?.value;
+  const custom = document.getElementById('fed-papel-custom') as any;
+  if (custom) custom.style.display = sel === '__custom' ? 'block' : 'none';
+  const aviso = document.getElementById('fed-papel-aviso');
+  if (!aviso) return;
+  const cfg = _fedTilesetCfg();
+  const cell = FED._papelCell;
+  const key = sel === '__custom' ? String(custom?.value || '').trim().replace(/[^a-z0-9_]/gi, '_') : sel;
+  const ref = key && cfg?.blocos?.[key];
+  const m = ref ? String(ref).match(/^bloco_(\d+)_(\d+)/) : null;
+  aviso.textContent = (m && cell && (+m[1] !== cell.tc || +m[2] !== cell.tr))
+    ? `"${key}" hoje aponta para a célula (${m[1]},${m[2]}) — será substituída.` : '';
+}
+
+async function _fedConfirmarPapel() {
+  const W: any = window as any;
+  const cell = FED._papelCell;
+  if (!cell) return;
+  const sel = (document.getElementById('fed-papel-sel') as any)?.value;
+  const bruto = sel === '__custom' ? (document.getElementById('fed-papel-custom') as any)?.value : sel;
+  const k = _fedVincularPapel(bruto, cell.tc, cell.tr);
+  if (!k) { W.mostrarToast?.('Informe uma chave para a peça', 'aviso'); return; }
+  const modal = document.getElementById('fed-papel-modal');
+  if (modal) (modal as any).style.display = 'none';
+  const cfg = _fedTilesetCfg();
+  const url = _fedResolverTileset().url;
+  try {
+    if (FED.modo === 'live') await W._avtCarregarTileset(url, cfg);
+    else { const texs = await W._avtCarregarTileset(url, cfg, { aplicar: false }); FED.texs = texs || null; }
+  } catch (_) { W.mostrarToast?.('Falha ao refatiar o tileset', 'erro'); }
+  FED.brushKey = k; FED.brushXf = 0;
+  _fedSetTool('tile'); _fedInfoPincel(); _fedRender();
+  if (FED.modo === 'live') await _fedPersistirTilesetCfg(); // antes o vínculo morria no F5
+  W.mostrarToast?.(`Papel "${k}" vinculado à célula (${cell.tc},${cell.tr})`, 'ok');
+}
+
+// 🔗 da paleta: re-vincula a peça selecionada (célula já mapeada ou não)
+function _fedRevincularSelecionada() {
+  const s = FED._selAtlas;
+  if (!s) { (window as any).mostrarToast?.('Clique numa peça da paleta primeiro', 'aviso'); return; }
+  _fedAbrirModalPapel(s.tc, s.tr);
+}
+
+// Persiste o tileset_config da fase atual com a sequência guardada do save
+// (mesma do _fedSalvarLive: guardas → slot → PATCH → rev → invalidate → broadcast).
+async function _fedPersistirTilesetCfg() {
+  const W: any = window as any;
+  const A: any = W.AVT_STATE;
+  if (!A?.rpg) return;
+  if (typeof W._avtRpgAtivo === 'function' && !W._avtRpgAtivo()) return;
+  if (typeof W._avtPodeSalvarRegistro === 'function' && !W._avtPodeSalvarRegistro()) return;
+  const tj = A.rpg.theme_json = A.rpg.theme_json || {};
+  W._avtGravarTilesetNoSlot(tj, _fedResolverTileset().url, _fedTilesetCfg());
+  try {
+    await W._avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(A.rpgId)}`, {
+      method: 'PATCH', body: JSON.stringify({ theme_json: tj })
+    });
+  } catch (e: any) {
+    W.mostrarToast?.('Vínculo aplicado localmente (erro ao persistir: ' + (e?.message || e) + ')', 'aviso');
+  }
+  A._dungeonRev = (A._dungeonRev || 0) + 1;
+  if (typeof W._avtTileBakeInvalidate === 'function') W._avtTileBakeInvalidate();
+  try {
+    W._avtBroadcast?.('avt_dungeon_update', {
+      faseId: A._faseAtualId || 'principal',
+      dungeon: A.dungeon,
+      fases_extras: tj.fases_extras || []
+    });
+  } catch (_) {}
 }
 
 // ── Portas (portado do editor antigo, sobre o estado novo) ───────────────────
@@ -661,7 +1062,7 @@ function _fedRender() {
   ctx.imageSmoothingEnabled = false;
 
   const texs = _fedTilesetTexturas();
-  const view = { w: FED.w, h: FED.h, tiles: FED.tiles, _chestPositions: FED.chestPositions };
+  const view = { w: FED.w, h: FED.h, tiles: FED.tiles, _chestPositions: FED.chestPositions, tileset_config: _fedTilesetCfg() };
 
   for (let y = 0; y < FED.h; y++) {
     for (let x = 0; x < FED.w; x++) {
@@ -824,7 +1225,7 @@ async function _fedSalvarLive() {
 
 function _fedExportarDraft() {
   const rooms = (FED.rooms && FED.rooms.length) ? FED.rooms : _fedDerivarRooms();
-  const data = {
+  const data: any = {
     tiles: FED.tiles.map((r: any) => [...r]),
     w: FED.w, h: FED.h,
     rooms,
@@ -832,6 +1233,9 @@ function _fedExportarDraft() {
     _portasInternas: FED.portasInternas,
     spawn_jogadores: FED.spawns,
   };
+  // Config só quando o draft tem tileset PRÓPRIO (vínculos feitos no editor);
+  // herdado fica de fora — a resolução por fase cuida disso no runtime.
+  if (FED.tsCfg && !FED.tsHerdadoDe) data.tileset_config = JSON.parse(JSON.stringify(FED.tsCfg));
   if (typeof FED.onExport === 'function') FED.onExport(data);
   avtFaseEditorFechar();
   (window as any).mostrarToast?.(`Mapa ${FED.w}×${FED.h} pronto (${rooms.length} sala(s))`, 'ok');
@@ -842,5 +1246,9 @@ Object.assign(window as any, {
   avtFaseEditorAbrir, avtFaseEditorFechar,
   _fedSetTool, _fedUndo, _fedRedo, _fedResize, _fedDistribuir,
   _fedSalvarLive, _fedExportarDraft, _fedGirar, _fedFlip, _fedConfirmarPorta,
+  _fedZoomFit, _fedZoomStep, _fedZoomReset, _fedCalcularZoomFit,
+  _fedToggleTilesetPanel, _fedTsModalHandleFile, _fedCopiarPromptTileset, _fedAplicarTileset,
+  _fedAbrirModalPapel, _fedConfirmarPapel, _fedPapelSelChange, _fedRevincularSelecionada,
+  _fedVincularPapel, _fedChavePorCelula, _fedPreloadTileset, _fedResolverTileset,
   _fedDerivarRooms, _fedSet, _fedFill, _fedRect, _fedStrokeStart, _fedStrokeEnd, FED,
 });

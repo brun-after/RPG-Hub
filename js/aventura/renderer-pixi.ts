@@ -183,6 +183,8 @@ function _bakeFase(dungeon: any, gridStyle: any): void {
   _chunks = [];
 
   const getKey = (window as any)._avtGetTileSemanticKey;
+  const cellBase = (window as any)._avtCellBase;
+  const cellXform = (window as any)._avtCellXform;
 
   for (let cy = 0; cy < dungeon.h; cy += CHUNK) {
     for (let cx = 0; cx < dungeon.w; cx += CHUNK) {
@@ -198,13 +200,29 @@ function _bakeFase(dungeon: any, gridStyle: any): void {
           const px = x * TILE, py = y * TILE;
 
           if (tilesetOn) {
-            // Paridade com o loop legado: chave string direta (ia_fase) ou autotile
-            const key = typeof t === 'string' ? t : (typeof getKey === 'function' ? getKey(x, y, dungeon) : null);
+            // Paridade com o loop legado: chave string direta (ia_fase) ou autotile.
+            // Células com transform D4 ("parede_N@1") resolvem pela chave-base —
+            // a string crua nunca bate no atlas e virava retângulo cinza no play.
+            const key = typeof t === 'string'
+              ? (typeof cellBase === 'function' ? cellBase(t) : t)
+              : (typeof getKey === 'function' ? getKey(x, y, dungeon) : null);
             const tex = key ? _texturaDoTileset(key) : null;
             if (tex) {
               const sp = new PIXI.Sprite(tex);
-              sp.position.set(px, py);
-              sp.width = TILE; sp.height = TILE;
+              const xf = (typeof t === 'string' && typeof cellXform === 'function') ? cellXform(t) : 0;
+              if (xf) {
+                // Mesma semântica do _avtDrawTileXform: flip primeiro, rotação
+                // depois (scale aplica antes de rotation no transform do PIXI).
+                // width/height reatribuem scale — definir ANTES de espelhar.
+                sp.anchor.set(0.5);
+                sp.width = TILE; sp.height = TILE;
+                sp.rotation = (xf & 3) * Math.PI / 2;
+                if (xf >= 4) sp.scale.x = -sp.scale.x;
+                sp.position.set(px + TILE / 2, py + TILE / 2);
+              } else {
+                sp.position.set(px, py);
+                sp.width = TILE; sp.height = TILE;
+              }
               cont.addChild(sp);
               continue;
             }

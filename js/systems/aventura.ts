@@ -2957,17 +2957,51 @@ function _avtCriarAvancar() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 
+// Tileset já escolhido no wizard de criação (qualquer opção de mapa) — url +
+// config para o editor draft mostrar paleta e Distribuir de verdade.
+function _avtCriandoTilesetDraft() {
+  const c: any = AVT_STATE._criando || {};
+  const lerNum = (id: any, fb: any) => {
+    const v = parseInt((document.getElementById(id) as any)?.value || '', 10);
+    return Math.min(5, Math.max(4, Number.isFinite(v) ? v : fb));
+  };
+  if (c._tilesetImgUrl) { // ia_fase / ia_externa
+    const cfg = c._tilesetConfig || c._extCampanhaJSON?.tileset_config || {
+      version: 2, cols: lerNum('avt-tileset-cols', 4), rows: lerNum('avt-tileset-rows', 4),
+      blocos: _avtMergeBlocosCanonicos(null, lerNum('avt-tileset-cols', 4), lerNum('avt-tileset-rows', 4)),
+    };
+    return { url: c._tilesetImgUrl, cfg };
+  }
+  if (c._procTilesetImgUrl) { // procedural com tileset opcional
+    const cols = lerNum('avt-proc-ts-cols', 4), rows = lerNum('avt-proc-ts-rows', 4);
+    return { url: c._procTilesetImgUrl, cfg: { version: 2, cols, rows, blocos: _avtMergeBlocosCanonicos(null, cols, rows) } };
+  }
+  return { url: null, cfg: null };
+}
+
 // Abre o editor de fases (fase-editor.ts) em modo rascunho para o wizard de
 // criação de campanha; o resultado vai direto em AVT_STATE._criando.mapa.
 function _avtCriandoAbrirEditor() {
   const atual: any = (AVT_STATE._criando as any)?.mapa;
   const temGrid = atual && typeof atual === 'object' && Array.isArray(atual.tiles);
+  const ts = _avtCriandoTilesetDraft();
   (window as any).avtFaseEditorAbrir({
     modo: 'draft',
     w: temGrid ? atual.w : 40,
     h: temGrid ? atual.h : 28,
     tiles: temGrid ? atual.tiles : null,
     rooms: temGrid ? (atual.rooms || []) : [],
+    spawn_jogadores: temGrid ? (atual.spawn_jogadores || []) : [],
+    tilesetUrl: ts.url, tilesetConfig: ts.cfg,
+    // Upload dentro do editor: guarda no wizard como o handler do ia_fase faz
+    // (o save da campanha já sobe _tilesetImgFile para o storage).
+    onTilesetDraft: (file: any, cols: any, rows: any) => {
+      const c: any = AVT_STATE._criando;
+      if (!c) return;
+      c._tilesetImgFile = file;
+      c._tilesetImgUrl = file ? URL.createObjectURL(file) : null;
+      c._tilesetConfig = file ? { version: 2, cols, rows, blocos: _avtMergeBlocosCanonicos(null, cols, rows) } : null;
+    },
     onExport: (d: any) => {
       AVT_STATE._criando.mapa = d;
       const st = document.getElementById('avt-criando-editor-status');
@@ -3420,6 +3454,16 @@ async function aventuraCriarSubmit() {
       }
     } else if (c.mapa && typeof c.mapa === 'object') {
       dungeonData = c.mapa;
+      // Tileset enviado de dentro do editor draft (opção "editor")
+      if (c._tilesetImgFile) {
+        try {
+          tilesetImgUrl = await uploadToStorage(c._tilesetImgFile, `aventuras/${rpgId}/tileset`);
+        } catch(e) { console.warn('[tileset-editor] upload failed:', e); }
+        if (tilesetImgUrl) {
+          dungeonData.tileset_config = dungeonData.tileset_config || c._tilesetConfig || null;
+          dungeonData.tileset_img_url = tilesetImgUrl;
+        }
+      }
     }
     // 'fase' option: dungeonData stays null — will be loaded from fase render_data
 
@@ -4651,6 +4695,36 @@ function _avtGravarDungeonNoSlot(t: any) {
   }
 }
 window._avtGravarDungeonNoSlot = _avtGravarDungeonNoSlot;
+
+// Grava url/config do tileset no slot da fase atual (espelha _avtGravarDungeonNoSlot).
+// Na fase extra grava nos DOIS lugares que a cadeia de resolução lê
+// (fases_extras[i].tileset_* e fases_extras[i].dungeon_data.tileset_config).
+// Também atualiza o estado aplicado em memória; o chamador persiste/recarrega.
+function _avtGravarTilesetNoSlot(t: any, url: any, cfg: any) {
+  if (!t) return;
+  const faseId = (AVT_STATE as any)._faseAtualId || 'principal';
+  if (faseId === 'principal') {
+    t.dungeon_data = t.dungeon_data || {};
+    t.dungeon_data.tileset_img_url = url;
+    t.dungeon_data.tileset_config = cfg;
+  } else {
+    const fa = (t.fases_extras || []).find((f: any) => f.id === faseId);
+    if (fa) {
+      fa.tileset_img_url = url;
+      fa.tileset_config = cfg;
+      if (fa.dungeon_data) fa.dungeon_data.tileset_config = cfg;
+    }
+  }
+  if (AVT_STATE.dungeon) {
+    AVT_STATE.dungeon.tileset_img_url = url;
+    AVT_STATE.dungeon.tileset_config = cfg;
+  }
+  (AVT_STATE as any)._tilesetImgUrl = url;
+  (AVT_STATE as any)._tilesetConfig = cfg;
+  (AVT_STATE as any)._tilesetCacheKey = url + '|' + JSON.stringify(cfg);
+  (AVT_STATE as any)._tilesetHerdadoDe = null; // agora tem tileset próprio
+}
+window._avtGravarTilesetNoSlot = _avtGravarTilesetNoSlot;
 
 // Guarda de salvamento: com AVT_STATE.rpg/rpgId anulados (ex.: após sairAventura),
 // o PATCH iria para rpg_id=eq.null — zero linhas, mas "sucesso" no PostgREST —
@@ -6963,11 +7037,22 @@ function _avtRenderFrame() {
 
   // Portas internas de teleporte (mesma fase) — desenhadas em ambos os extremos
   const _portasInt = AVT_STATE.dungeon?._portasInternas || [];
+  // Peça 'porta' vinculada no tileset: vira o visual da porta interna, com um
+  // 🌀 menor no canto como affordance de teleporte; sem vínculo, caixa roxa.
+  const _piTex = AVT_STATE._tilesetLoaded ? (AVT_STATE as any)._tilesetTextures?.['porta'] : null;
   for (const _pi of _portasInt) {
     for (const _ep of [_pi.a, _pi.b]) {
       const epx = Math.round(_ep.col * SZ - camera.x);
       const epy = Math.round(_ep.row * SZ - camera.y);
       if (epx + SZ < 0 || epx > _avtViewW() || epy + SZ < 0 || epy > _avtViewH()) continue;
+      if (_piTex) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(_piTex, epx, epy, SZ, SZ);
+        ctx.font = `${Math.round(SZ * 0.30)}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(200,180,255,0.95)';
+        ctx.fillText('🌀', epx + SZ - Math.round(SZ * 0.20), epy + Math.round(SZ * 0.20));
+      } else {
       ctx.fillStyle = 'rgba(123,47,190,0.18)';
       ctx.fillRect(epx + 2, epy + 2, SZ - 4, SZ - 4);
       ctx.strokeStyle = 'rgba(168,120,255,0.8)';
@@ -6977,6 +7062,7 @@ function _avtRenderFrame() {
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillStyle = 'rgba(200,180,255,0.95)';
       ctx.fillText('🌀', epx + SZ / 2, epy + SZ / 2);
+      }
       // Nome da porta acima
       if (_pi.nome) {
         ctx.font = `${Math.round(SZ * 0.24)}px var(--fonte-d, sans-serif)`;
@@ -7636,12 +7722,22 @@ function _avtRenderFrame() {
       const ocx = px + SZ / 2, ocy = py + SZ / 2;
       const tipo = o.tipo;
       if (tipo === 'bau' || tipo === 'chest') {
+        // Prioridade: imagem própria → peça 'bau' vinculada no tileset → emoji
         const img = o.img_url ? _avtObjImg(o.img_url) : null;
+        const _bauTex = !img && AVT_STATE._tilesetLoaded ? (AVT_STATE as any)._tilesetTextures?.['bau'] : null;
         ctx.save();
         if (o.aberto) ctx.globalAlpha = 0.45;
         if (img) {
           ctx.imageSmoothingEnabled = false;
           ctx.drawImage(img, px + 2, py + 2, SZ - 4, SZ - 4);
+        } else if (_bauTex) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(_bauTex, px + 2, py + 2, SZ - 4, SZ - 4);
+          if (o.aberto) {
+            ctx.font = `${Math.round(SZ * 0.34)}px serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('📭', px + SZ - Math.round(SZ * 0.22), py + Math.round(SZ * 0.22));
+          }
         } else {
           ctx.font = `${Math.round(SZ * 0.62)}px serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -23780,6 +23876,19 @@ function avtReceberDungeonUpdate(p: any) {
   AVT_STATE.dungeon._portasInternas = p.dungeon._portasInternas || [];
   try { _avtNormalizarObjetosDungeon(AVT_STATE.dungeon); } catch(_) {}
   AVT_STATE._tilesetConfig = AVT_STATE.dungeon.tileset_config || (AVT_STATE as any)._tilesetConfig;
+  // Tileset trocado pelo mestre (🖼 no editor): recarrega as texturas — só
+  // reabsorver a config deixava os peers com o atlas antigo fatiado errado.
+  const _tsUrl = AVT_STATE.dungeon.tileset_img_url || (AVT_STATE as any)._tilesetImgUrl;
+  const _tsCfg = (AVT_STATE as any)._tilesetConfig;
+  if (_tsUrl && _tsCfg) {
+    const _ck = _tsUrl + '|' + JSON.stringify(_tsCfg);
+    if ((AVT_STATE as any)._tilesetCacheKey !== _ck) {
+      (AVT_STATE as any)._tilesetCacheKey = _ck;
+      (AVT_STATE as any)._tilesetImgUrl = _tsUrl;
+      (AVT_STATE as any)._tilesetLoaded = false;
+      _avtCarregarTileset(_tsUrl, _tsCfg).catch(() => {});
+    }
+  }
   // FIX F7: edição de tiles em sessão precisa invalidar os bakes estáticos
   // (camada PIXI, tiles 2D legados e minimapa) mesmo sem mudar dimensões/fase.
   AVT_STATE._dungeonRev = ((AVT_STATE as any)._dungeonRev || 0) + 1;
@@ -23788,10 +23897,6 @@ function avtReceberDungeonUpdate(p: any) {
 }
 window.avtReceberDungeonUpdate = avtReceberDungeonUpdate;
 window._avtMestreAbrirEditorUnificado = _avtMestreAbrirEditorUnificado;
-// Handlers inline (onclick/onchange) do editor unificado precisam estar no escopo global.
-window._avtMestreToggleTrocaTileset = _avtMestreToggleTrocaTileset;
-window._avtMestreHandleTilesetUpload = _avtMestreHandleTilesetUpload;
-window._avtMestreAplicarTilesetUpload = _avtMestreAplicarTilesetUpload;
 
 async function _avtSalvarBossDoorConfig() {
   const modo = document.querySelector('input[name="avt-boss-door-mode"]:checked')?.value || 'spawn_door';
@@ -24931,65 +25036,6 @@ async function _avtPackageRemover(pkgId: any) {
 }
 window._avtPackageRemover = _avtPackageRemover;
 
-// ── Upload de tileset no editor do mestre (quando dungeon não tem tileset) ────
-let _avtMpTilesetFile: any = null;
-
-function _avtMestreToggleTrocaTileset() {
-  const painel = document.getElementById('avt-ts-troca-painel');
-  if (!painel) return;
-  painel.style!.display = painel.style!.display === 'none' ? 'block' : 'none';
-}
-
-
-function _avtMestreHandleTilesetUpload(input: any) {
-  const file = input?.files?.[0];
-  if (!file) return;
-  _avtMpTilesetFile = file;
-  const url = URL.createObjectURL(file);
-  const prev = document.getElementById('avt-mp-ts-preview');
-  if (prev) { prev.src = url; prev.style!.display = 'block'; }
-  const nome = document.getElementById('avt-mp-ts-nome');
-  if (nome) nome.textContent = file.name;
-}
-
-async function _avtMestreAplicarTilesetUpload() {
-  if (!_avtMpTilesetFile) { mostrarToast('Selecione uma imagem primeiro', 'aviso'); return; }
-  if (!AVT_STATE.rpg) return;
-  const cols = parseInt(document.getElementById('avt-mp-ts-cols')?.value || '4', 10);
-  const rows = parseInt(document.getElementById('avt-mp-ts-rows')?.value || '4', 10);
-  try {
-    mostrarToast('⏳ Enviando tileset…', 'ok');
-    const url = await uploadToStorage(_avtMpTilesetFile, `aventuras/${AVT_STATE.rpgId}/tileset`);
-    const blocos = typeof _faseTilesetBlocosCanonicos === 'function'
-      ? _faseTilesetBlocosCanonicos(cols, rows)
-      : {};
-    const tilesetConfig = { version: 2, cols, rows, blocos };
-    const dungeon = AVT_STATE.dungeon || {};
-    dungeon.tileset_config  = tilesetConfig;
-    dungeon.tileset_img_url = url;
-    AVT_STATE.dungeon = dungeon;
-    (AVT_STATE as any)._tilesetConfig   = tilesetConfig;
-    (AVT_STATE as any)._tilesetImgUrl   = url;
-    (AVT_STATE as any)._tilesetLoaded   = false;
-    (AVT_STATE as any)._tilesetTextures = {};
-    if (typeof _avtCarregarTileset === 'function') _avtCarregarTileset(url, tilesetConfig);
-    const newTheme = {
-      ...(AVT_STATE.rpg.theme_json || {}),
-      dungeon_data: dungeon,
-      tileset_img_url: url
-    };
-    AVT_STATE.rpg.theme_json = newTheme;
-    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
-      method: 'PATCH', body: JSON.stringify({ theme_json: newTheme })
-    });
-    mostrarToast('Tileset aplicado!', 'ok');
-    document.getElementById('avt-mestre-map-editor-overlay')!.style!.display = 'none';
-    setTimeout(_avtMestreAbrirEditorUnificado, 200);
-  } catch (e: any) {
-    mostrarToast('Erro: ' + (e?.message || e), 'erro');
-  }
-}
-
 // ─── Nova Fase (wizard) ──────────────────────────────────────────────────────
 function _avtMestreNovaFase() {
   AVT_STATE._novaFaseWizard = AVT_STATE._novaFaseWizard || {
@@ -25279,12 +25325,36 @@ function _avtNfAbrirEditor() {
   if (!w) return;
   const atual: any = w.dungeon;
   const temGrid = atual && Array.isArray(atual.tiles);
+  // Tileset do draft: o da própria fase (upload no wizard) ou, sem ele, o
+  // aplicado na fase atual — a fase nova "herda" o visual da anterior.
+  const clamp45 = (v: any) => Math.min(5, Math.max(4, v || 4));
+  let tsUrl: any = null, tsCfg: any = null, tsHerdadoDe: any = null;
+  if (w._tilesetImgUrl) {
+    tsUrl = w._tilesetImgUrl;
+    tsCfg = { version: 2, cols: clamp45(w._tilesetCols), rows: clamp45(w._tilesetRows),
+      blocos: _avtMergeBlocosCanonicos(null, clamp45(w._tilesetCols), clamp45(w._tilesetRows)) };
+  } else if ((AVT_STATE as any)._tilesetImgUrl && (AVT_STATE as any)._tilesetConfig) {
+    tsUrl = (AVT_STATE as any)._tilesetImgUrl;
+    tsCfg = (AVT_STATE as any)._tilesetConfig;
+    tsHerdadoDe = _avtFaseAtualObj()?.nome || 'fase principal';
+  }
   (window as any).avtFaseEditorAbrir({
     modo: 'draft',
     w: temGrid ? atual.w : 40,
     h: temGrid ? atual.h : 28,
     tiles: temGrid ? atual.tiles : null,
     rooms: temGrid ? (atual.rooms || []) : [],
+    spawn_jogadores: temGrid ? (atual.spawn_jogadores || []) : [],
+    tilesetUrl: tsUrl, tilesetConfig: tsCfg, tilesetHerdadoDe: tsHerdadoDe,
+    // Upload feito DENTRO do editor draft: repassa ao wizard, que faz o upload
+    // real no salvar da fase (mesma sequência do _avtNfHandleTilesetImg).
+    onTilesetDraft: (file: any, cols: any, rows: any) => {
+      w._tilesetImgFile = file;
+      w._tilesetImgNome = file?.name || null;
+      w._tilesetImgUrl = file ? URL.createObjectURL(file) : null;
+      w._tilesetCols = cols; w._tilesetRows = rows;
+      _avtMestreNovaFaseRender();
+    },
     onExport: (d: any) => {
       w.dungeon = d;
       mostrarToast('Mapa do editor definido!', 'ok');
@@ -25368,14 +25438,16 @@ async function _avtMestreSalvarNovaFase() {
   const _proxOrdem = (_ordensExistentes.length ? Math.max(..._ordensExistentes) : 0) + 1;
   // Config própria do tileset da fase: sem ela, a imagem era fatiada com o
   // cols/rows da campanha principal (um atlas 5×5 virava lixo num grid 4×4).
-  const faseTilesetCfg = faseTilesetUrl ? {
+  // Preferência: config exportada do editor draft (carrega os vínculos
+  // peça↔função feitos lá) → canônica com os cols/rows do wizard.
+  const faseTilesetCfg = faseTilesetUrl ? (dungeonData?.tileset_config || {
     version: 2,
     cols: Math.min(5, Math.max(4, w._tilesetCols || 4)),
     rows: Math.min(5, Math.max(4, w._tilesetRows || 4)),
     blocos: _avtMergeBlocosCanonicos(null,
       Math.min(5, Math.max(4, w._tilesetCols || 4)),
       Math.min(5, Math.max(4, w._tilesetRows || 4))),
-  } : null;
+  }) : null;
 
   const fase = {
     id: Date.now().toString(),
@@ -25509,11 +25581,17 @@ async function _avtGerarProximaFaseAuto() {
   const npcLvl = (prev.npc_level ?? 1) + 1;
   dungeonData._npcLevel = npcLvl;
   dungeonData._faseSeed = _avtSeedFromStr('auto_' + ordem + '_' + Date.now());
+  // Herda tileset resolvido (próprio → anterior → principal) com url E config:
+  // gravar só prev.tileset_img_url perdia o atlas quando a anterior também
+  // tinha herdado (fase auto n+2 ficava sem tileset).
+  const _tsHerdado = _avtResolverTilesetFase(prev, _avtFasesOrdenadas(),
+    AVT_STATE.rpg?.theme_json?.dungeon_data || null);
   const fase = {
     id: Date.now().toString(),
     nome: `Fase ${ordem + 1}`,
     dungeon_data: dungeonData,
-    tileset_img_url: prev.tileset_img_url || null,
+    tileset_img_url: _tsHerdado?.imgUrl || null,
+    tileset_config: _tsHerdado?.config || null,
     ordem, npc_level: npcLvl,
     tint_hue: ((prev.tint_hue ?? 0) + 28) % 360,
     porta: { col: 0, row: 0, lock_type: 'livre' },
@@ -25648,27 +25726,53 @@ function _avtSnapshotFaseAtual() {
   return id;
 }
 
-// Tileset da fase: SEMPRE usa o tileset_config do tileset principal; só a imagem
-// (se a fase tiver a sua) e a cor (tint_hue) variam por fase.
+// Resolve o tileset EFETIVO de uma fase (pura — testável):
+//   próprio → fase anterior mais próxima com tileset próprio (por ordem) →
+//   principal → null. A config sempre acompanha a imagem escolhida (nunca
+//   mistura cols/rows de um atlas com a imagem de outro); a exceção é a fase
+//   com imagem própria e sem config (legado pré-346c03b), fatiada com a do
+//   principal como sempre foi.
+function _avtResolverTilesetFase(faseObj: any, fasesOrdenadas: any[], principalDD: any) {
+  const cfgDa = (f: any) => f?.tileset_config || f?.dungeon_data?.tileset_config || null;
+  const urlDa = (f: any) => f?.tileset_img_url || f?.dungeon_data?.tileset_img_url || null;
+  const urlPropria = urlDa(faseObj);
+  if (urlPropria) {
+    return { imgUrl: urlPropria, config: cfgDa(faseObj) || principalDD?.tileset_config || null, herdadoDe: null };
+  }
+  const ordem = faseObj?.ordem ?? 9999;
+  const anteriores = (fasesOrdenadas || [])
+    .filter((f: any) => f && f.id !== faseObj?.id && (f.ordem ?? 9999) < ordem)
+    .sort((a: any, b: any) => (b.ordem ?? 0) - (a.ordem ?? 0));
+  for (const f of anteriores) {
+    const url = urlDa(f);
+    if (url) return { imgUrl: url, config: cfgDa(f) || principalDD?.tileset_config || null, herdadoDe: f.nome || f.id };
+  }
+  if (principalDD?.tileset_img_url) {
+    return { imgUrl: principalDD.tileset_img_url, config: principalDD.tileset_config || null, herdadoDe: 'Fase inicial' };
+  }
+  return null;
+}
+window._avtResolverTilesetFase = _avtResolverTilesetFase;
+
+// Tileset da fase: próprio quando existir; sem ele HERDA da fase anterior (ou
+// do principal) — antes uma fase sem tileset só mantinha o da anterior por
+// estado residual, que quebrava na entrada direta/F5. O grid numérico continua
+// distribuído em render-time pelo autotiler, então o padrão acompanha o atlas.
 function _avtAplicarTilesetFase(faseObj: any) {
   (AVT_STATE as any)._faseHueShift = faseObj.tint_hue || 0;
-  // Config/imagem PRÓPRIAS da fase quando existirem; senão herda do principal.
-  const config = faseObj.tileset_config
-    || (faseObj.dungeon_data && faseObj.dungeon_data.tileset_config)
-    || _avtTilesetConfigPrincipal();
-  const imgUrl = faseObj.tileset_img_url
-    || AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_img_url
-    || null;
-  if (!config || !imgUrl) return; // sem tileset configurado: mantém o estado atual
+  const res = _avtResolverTilesetFase(faseObj, _avtFasesOrdenadas(),
+    AVT_STATE.rpg?.theme_json?.dungeon_data || null);
+  if (!res || !res.imgUrl || !res.config) { (AVT_STATE as any)._tilesetHerdadoDe = null; return; }
+  (AVT_STATE as any)._tilesetHerdadoDe = res.herdadoDe || null;
   // Invalida cache por imagem E config (fases podem ter o mesmo URL mas layout distinto).
-  const _cacheKey = imgUrl + '|' + JSON.stringify(config);
+  const _cacheKey = res.imgUrl + '|' + JSON.stringify(res.config);
   if (AVT_STATE._tilesetCacheKey === _cacheKey && (AVT_STATE as any)._tilesetLoaded) return; // já carregado
   (AVT_STATE as any)._tilesetCacheKey = _cacheKey;
-  (AVT_STATE as any)._tilesetImgUrl   = imgUrl;
-  (AVT_STATE as any)._tilesetConfig   = config;
+  (AVT_STATE as any)._tilesetImgUrl   = res.imgUrl;
+  (AVT_STATE as any)._tilesetConfig   = res.config;
   (AVT_STATE as any)._tilesetLoaded   = false;
   (AVT_STATE as any)._tilesetTextures = {};
-  _avtCarregarTileset(imgUrl, config)
+  _avtCarregarTileset(res.imgUrl, res.config)
     .then(() => { (AVT_STATE as any)._tilesetLoaded = true; })
     .catch(() => {});
 }
@@ -34075,13 +34179,6 @@ Object.defineProperty(globalThis, "_avtMestreExcluirCampanha", { configurable: t
 Object.defineProperty(globalThis, "_avtPackageAdicionar", { configurable: true, get: () => _avtPackageAdicionar, set: (__v) => { _avtPackageAdicionar = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtPackageRemover", { configurable: true, get: () => _avtPackageRemover, set: (__v) => { _avtPackageRemover = __v; } });
-Object.defineProperty(globalThis, "_avtMpTilesetFile", { configurable: true, get: () => _avtMpTilesetFile, set: (__v) => { _avtMpTilesetFile = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMestreToggleTrocaTileset", { configurable: true, get: () => _avtMestreToggleTrocaTileset, set: (__v) => { _avtMestreToggleTrocaTileset = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMestreHandleTilesetUpload", { configurable: true, get: () => _avtMestreHandleTilesetUpload, set: (__v) => { _avtMestreHandleTilesetUpload = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMestreAplicarTilesetUpload", { configurable: true, get: () => _avtMestreAplicarTilesetUpload, set: (__v) => { _avtMestreAplicarTilesetUpload = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMestreNovaFase", { configurable: true, get: () => _avtMestreNovaFase, set: (__v) => { _avtMestreNovaFase = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
