@@ -66,6 +66,16 @@
       duracaoDe: (ef: any) => ef.mod_dano_turnos,
       campos: ['mod_dano', 'mod_dano_turnos'],
     },
+    {
+      // Força o aggro: enquanto durar, a pirâmide de alvos do NPC (_avtNpcTurno)
+      // redireciona os ataques ao provocador (resolvido via _provocadorId/_casterId
+      // gravados na aplicação). Sem processamento próprio no tick — só duração.
+      id: 'provocar', label: 'Provocar (forçar aggro)', icone: '🎯', cor: '#e8604c',
+      isStatus: true, positivo: false, orbEligible: false,
+      detect: (ef: any) => ef.tipo === 'provocar' || !!ef.provocar_turnos,
+      duracaoDe: (ef: any) => ef.provocar_turnos ?? ef.duracao_turnos,
+      campos: ['provocar_turnos'],
+    },
 
     // ── Positivos / usuário (candidatos a orbe) ──────────────────────────────
     {

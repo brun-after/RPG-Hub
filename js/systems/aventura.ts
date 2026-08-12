@@ -12933,6 +12933,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId: any, targetId: any) {
     // jogadores aplicam a própria imunidade no dono, em _avtAplicarPlayerDamageLocal).
     let dano = _avtAplicarBuffsDanoSaida(ini, Math.ceil(danoTotal * critMult));
     if (alvo.tipo === 'jogador') {
+      dano = _avtInterceptarDanoGuardiao(AVT_STATE.entidades.find((e: any) => e.id === alvo.id) || alvo, dano, null);
       // HP authority do dono — só emite intent
       try { _avtRTBroadcastPlayerDamage(alvo.nome, dano, ini.nome); } catch(_) {}
     } else {
@@ -16372,6 +16373,10 @@ function _avtProcessarStatusEffects(bat: any, ent: any) {
       case 'silence':
         if (entObj) entObj._silenciado = true;
         break;
+      case 'provocar':
+        // O redirecionamento de alvo é lido na pirâmide de aggro (_avtProvocadorDe
+        // em _avtNpcTurno); aqui só a duração conta, pelo fluxo padrão abaixo.
+        break;
       case 'sem_movimento':
         if (bat) bat.movimentoRestante[ent.id] = 0;
         _avtLog(`🦶 ${ent.nome} está sem movimento.`, bat?.id);
@@ -16959,6 +16964,7 @@ function _avtNpcExecutarAtaque(bat: any, npc: any, entNpc: any, skillAlvo: any, 
               }
               let realNpcAlvo = _avtAplicarImunidadeDano(entAlvA, real);
               if (alvA.tipo === 'jogador') {
+                realNpcAlvo = _avtInterceptarDanoGuardiao(entAlvA, realNpcAlvo, bat);
                 try { _avtRTBroadcastPlayerDamage(alvA.nome, realNpcAlvo, npc.nome); } catch(_) {}
               } else if (entAlvA?.tipo === 'invocado' && !entAlvA._dominado) {
                 // Funil da invocação: resistência, espelhos de HP e destruição ao zerar
@@ -17009,6 +17015,7 @@ function _avtNpcExecutarAtaque(bat: any, npc: any, entNpc: any, skillAlvo: any, 
         const initEnt = bat.iniciativa.find((e: any) => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
         real = _avtAplicarImunidadeDano(entAlvo || skillAlvo, real);
         if (skillAlvo.tipo === 'jogador') {
+          real = _avtInterceptarDanoGuardiao(entAlvo || skillAlvo, real, bat);
           try { _avtRTBroadcastPlayerDamage(skillAlvo.nome, real, npc.nome); } catch(_) {}
         } else if (entAlvo?.tipo === 'invocado' && !entAlvo._dominado) {
           // Funil da invocação: resistência, espelhos de HP e destruição ao zerar
@@ -17495,6 +17502,23 @@ function _avtDanoEsperado(formula: any) {
   return total;
 }
 
+// P2 Provocar: resolve o provocador ativo de um NPC. Procura um efeito
+// 'provocar' vigente nos espelhos de status recebidos (iniciativa primeiro —
+// é nela que _avtProcessarStatusEffects decrementa a duração) e devolve a
+// entidade viva apontada por _provocadorId/_casterId (fallback _casterNome).
+function _avtProvocadorDe(...fontes: any[]) {
+  for (const f of fontes) {
+    const ef = (f?.status_effects || []).find((e: any) =>
+      e.tipo === 'provocar' && (e._turnos_restantes ?? 0) > 0);
+    if (!ef) continue;
+    const pid = ef._provocadorId ?? ef._casterId;
+    const alvo = AVT_STATE.entidades.find((e: any) =>
+      pid != null ? e.id === pid : (ef._casterNome && e.nome === ef._casterNome));
+    if (alvo && alvo.hp > 0) return alvo;
+  }
+  return null;
+}
+
 async function _avtNpcTurno(bat: any) {
   // Só o host executa turnos de NPC em modo RTNet
   if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost()) return;
@@ -17580,13 +17604,18 @@ async function _avtNpcTurno(bat: any) {
   // Priorizar avatares ou dummies invocados: se houver um em campo, NPC persegue ele
   const _avatares = AVT_STATE.entidades.filter((e: any) => e.tipo === 'avatar' && (e._hitsRestantes ?? 1) > 0);
   const _dummies  = AVT_STATE.entidades.filter((e: any) => e.tipo === 'invocado' && e.comportamento === 'dummy' && e.hp > 0 && bat.envolvidos.includes(e.id));
-  // Aggro por Necromante: se este NPC foi atacado por um dominado, focar nele
+  // Aggro (D2): se este NPC foi atacado por um dominado do Necromante OU por
+  // uma invocação, focar em quem bateu — mesmo canal (_alvoId/_alvoAtual)
+  const _ehAlvoAggro = (e: any) => (e._dominado || e.tipo === 'invocado') && e.hp > 0;
   const _aggroAlvo = entNpc._alvoId
-    ? AVT_STATE.entidades.find((e: any) => e.id === entNpc._alvoId && e._dominado && e.hp > 0)
+    ? AVT_STATE.entidades.find((e: any) => e.id === entNpc._alvoId && _ehAlvoAggro(e))
     : entNpc._alvoAtual
-      ? AVT_STATE.entidades.find((e: any) => e.nome === entNpc._alvoAtual && e._dominado && e.hp > 0)
+      ? AVT_STATE.entidades.find((e: any) => e.nome === entNpc._alvoAtual && _ehAlvoAggro(e))
       : null;
+  // Provocado: efeito 'provocar' vigente prende o alvo no provocador
+  const _provocador = _avtProvocadorDe(npc, entNpc);
   if (_aggroAlvo) jogadores = [_aggroAlvo];
+  else if (_provocador) jogadores = [_provocador];
   else if (_dummies.length) jogadores = _dummies;
   else if (_avatares.length) jogadores = _avatares;
 
@@ -18412,6 +18441,10 @@ function avtJogadorPainelRender(targetEl?: any, opts?: any) {
               title="${_modoCmd ? 'Comandada: você escolhe a ação nos turnos dela' : 'Autônoma: a IA age nos turnos dela'} — clique para alternar"
               style="margin-left:auto;background:none;border:1px solid rgba(176,126,240,0.25);border-radius:5px;
               color:#b07ef0;font-size:0.62rem;padding:1px 6px;cursor:pointer">${_modoCmd ? '🎮' : '🤖'}</button>
+            ${def.sacrificio ? `<button onclick="_avtSacrificarInvocacao('${_invIdSafe}')"
+              title="Sacrificar: consome a invocação em troca do efeito configurado"
+              style="background:none;border:1px solid rgba(232,96,76,0.3);border-radius:5px;
+              color:#e8604c;font-size:0.62rem;padding:1px 6px;cursor:pointer">🕯</button>` : ''}
             <span style="font-family:var(--fonte-d);font-size:0.58rem;color:#7a92aa">⏳ ${inv._turnosRestantes ?? '?'}t</span>
           </div>
           <div style="height:4px;background:rgba(176,126,240,0.1);border-radius:3px;overflow:hidden">
@@ -27525,6 +27558,7 @@ function _avtCharEditorRenderInvocacoes(container: any, ent: any, dbChar: any) {
               <div class="avt-ce2-skill-actions">
                 <button class="avt-ce2-sm-btn" onclick="_avtInvocacaoAlternarModo('${idSafe}')"
                   title="${inv._modo === 'comandada' ? 'Comandada: você escolhe a ação nos turnos dela' : 'Autônoma: a IA age nos turnos dela'} — clique para alternar">${inv._modo === 'comandada' ? '🎮' : '🤖'}</button>
+                ${inv.invocacao_def?.sacrificio ? `<button class="avt-ce2-sm-btn danger" onclick="_avtSacrificarInvocacao('${idSafe}')" title="Sacrificar: consome a invocação em troca do efeito configurado">🕯</button>` : ''}
                 <button class="avt-ce2-sm-btn danger" onclick="_avtDispensarInvocacao('${idSafe}')" title="Dispensar invocação">✕</button>
               </div>
             </div>
@@ -32539,11 +32573,38 @@ function _avtAplicarDanoInvocacao(entInv: any, dano: any, bat: any) {
   return real;
 }
 
+// P2 Guardião: invocação com `guardiao` {pct_intercepta, raio} desvia para si
+// parte do dano que o DONO receberia, se estiver a `raio` células (Chebyshev).
+// O desvio entra pelo funil _avtAplicarDanoInvocacao (resistência, espelhos,
+// destruição ao zerar) e o dono recebe só o resto — chamado nos sites de dano
+// NPC→jogador (combate e OOC), antes do intent de player damage.
+function _avtInterceptarDanoGuardiao(alvoEnt: any, dano: any, bat: any) {
+  let restante = Math.max(0, Math.round(dano) || 0);
+  if (restante <= 0 || !alvoEnt || alvoEnt.tipo !== 'jogador') return restante;
+  for (const inv of (AVT_STATE.invocacoes_ativas || [])) {
+    const cfg = inv.invocacao_def?.guardiao;
+    if (!cfg || inv.dono_char_nome !== alvoEnt.nome) continue;
+    const entInv = AVT_STATE.entidades.find((e: any) => e.id === inv.id);
+    if (!entInv || entInv.hp <= 0) continue;
+    const raio = parseFloat(cfg.raio) || 3;
+    if (Math.max(Math.abs(entInv.x - alvoEnt.x), Math.abs(entInv.y - alvoEnt.y)) > raio) continue;
+    const pct = Math.min(100, Math.max(0, parseFloat(cfg.pct_intercepta) || 0));
+    const desvio = Math.min(restante, Math.round(restante * pct / 100));
+    if (desvio <= 0) continue;
+    _avtLog(`🛡 ${entInv.nome} intercepta ${desvio} de dano no lugar de ${alvoEnt.nome}`, bat?.id);
+    _avtAplicarDanoInvocacao(entInv, desvio, bat);
+    restante -= desvio;
+    if (restante <= 0) break;
+  }
+  return restante;
+}
+
 function _avtDestruirInvocacao(invId: any, bat: any, motivo: any = 'expirou') {
   const ent = AVT_STATE.entidades.find((e: any) => e.id === invId);
   const inv = (AVT_STATE.invocacoes_ativas || []).find((i: any) => i.id === invId);
   if (!ent && !inv) return; // já destruída (chamada duplicada ou eco de broadcast)
-  if (ent?.dummy_explosivo && bat) {
+  // Sacrifício tem efeito próprio (executado antes) — não soma a explosão de morte
+  if (ent?.dummy_explosivo && bat && motivo !== 'sacrificio') {
     _avtInvocacaoExplosao(ent, bat);
   }
   AVT_STATE.entidades = AVT_STATE.entidades.filter((e: any) => e.id !== invId);
@@ -32556,16 +32617,19 @@ function _avtDestruirInvocacao(invId: any, bat: any, motivo: any = 'expirou') {
   const _msgDestr = motivo === 'morreu'      ? `💀 Invocação ${_nomeInv} foi destruída!`
                   : motivo === 'dono_morreu' ? `💨 ${_nomeInv} se desfez com a queda do invocador`
                   : motivo === 'dispensada'  ? `💨 ${_nomeInv} foi dispensada`
+                  : motivo === 'sacrificio'  ? `🕯 ${_nomeInv} foi sacrificada`
                   : `💨 Invocação ${_nomeInv} desapareceu`;
   _avtLog(_msgDestr, bat?.id);
   _avtBroadcast('avt_invocacao_destruida', { invId, motivo });
 }
 
-function _avtInvocacaoExplosao(ent: any, bat: any) {
+// Explosão de invocação (dummy explosivo e sacrifício-explosão). `opts`
+// sobrepõe fórmula/raio da definição — o sacrifício traz os seus próprios.
+function _avtInvocacaoExplosao(ent: any, bat: any, opts: any = {}) {
   const invDef = ent._invAtiva?.invocacao_def;
-  const formula = invDef?.dano_formula || '2d6';
+  const formula = opts.formula || invDef?.dano_formula || '2d6';
   const dano = _avtRolarFormula(formula);
-  const raio = 2;
+  const raio = Math.max(1, Math.round(parseFloat(opts.raio)) || 2);
   const alvos = AVT_STATE.entidades.filter((e: any) =>
     e.tipo === 'inimigo' && e.hp > 0 &&
     Math.abs(e.x - ent.x) <= raio && Math.abs(e.y - ent.y) <= raio
@@ -32576,10 +32640,67 @@ function _avtInvocacaoExplosao(ent: any, bat: any) {
     if (alvoBat) alvoBat.hp = alvo.hp;
     _avtMostrarDanoAbaixoHp(alvo, dano, false);
     try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
-    if (alvo.hp <= 0 && bat) { _avtNpcMorreu(alvo, bat); _avtCheckVitoria(bat); }
+    if (alvo.hp <= 0) {
+      const batMorte = bat || _avtBatalhaDeEnt(alvo.id) || null;
+      _avtNpcMorreu(alvo, batMorte);
+      if (batMorte) _avtCheckVitoria(batMorte);
+    }
   });
   if (alvos.length) _avtLog(`💥 ${ent.nome} explode causando ${dano} a ${alvos.length} inimigos!`, bat?.id);
 }
+
+// P2 Sacrifício: consome a invocação em troca do efeito configurado no
+// catálogo (`sacrificio` {tipo:'explosao'|'cura_dono'|'buff_dono', formula,
+// raio, efeitos}). Roda no cliente do dono (autoridade da invocação — D5);
+// a destruição usa motivo 'sacrificio', que NÃO dispara a explosão de morte.
+function _avtSacrificarInvocacao(invId: any) {
+  const inv = (AVT_STATE.invocacoes_ativas || []).find((i: any) => i.id === invId);
+  const ent = AVT_STATE.entidades.find((e: any) => e.id === invId);
+  const sac = inv?.invocacao_def?.sacrificio;
+  if (!inv || !ent || !sac) return;
+  if (inv.dono_char_nome !== AVT_STATE.myCharNome && !_avtSouMestre()) return;
+  const bat = _avtBatalhaDeEnt(invId) || null;
+  const dono = AVT_STATE.entidades.find((e: any) => e.nome === inv.dono_char_nome);
+  if (sac.tipo === 'explosao') {
+    _avtInvocacaoExplosao(ent, bat, { formula: sac.formula, raio: sac.raio });
+  } else if (sac.tipo === 'cura_dono' && dono) {
+    const cura = _avtRolarFormula(sac.formula || '2d6');
+    dono.hp = Math.min(dono.hpMax || (dono.hp + cura), dono.hp + cura);
+    const iniDono = bat?.iniciativa.find((e: any) => e.id === dono.id);
+    if (iniDono) iniDono.hp = dono.hp;
+    _avtAplicarDanoPersistir(dono, dono.hp);
+    _avtMostrarCuraAcimaDaHead(dono, cura);
+    try { _avtBroadcast('avt_hp_update', { nome: dono.nome, hp: dono.hp, hpMax: dono.hpMax }); } catch(_) {}
+    _avtLog(`✨ ${ent.nome} se sacrifica: ${dono.nome} recupera ${cura} HP`, bat?.id);
+  } else if (sac.tipo === 'buff_dono' && dono) {
+    // Efeitos canônicos positivos no dono — em combate espelha na iniciativa,
+    // fora dele registra em _oocStatusEffects (mesmo contrato dos buffs OOC)
+    const efs = (typeof EFFECT_REGISTRY !== 'undefined')
+      ? EFFECT_REGISTRY.normalizarEfeitos(sac.efeitos || []) : (sac.efeitos || []);
+    const _positivos = _avtStatusTipos({ positivos: true });
+    if (!dono.status_effects) dono.status_effects = [];
+    efs.forEach((ef: any) => {
+      if (!_positivos.includes(ef.tipo)) return;
+      const entry = { ...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
+        expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs(),
+        _casterNome: ent.nome, _ooc: !bat };
+      dono.status_effects.push(entry);
+      if (bat) {
+        const iniDono = bat.iniciativa.find((e: any) => e.id === dono.id);
+        if (iniDono) { if (!iniDono.status_effects) iniDono.status_effects = []; iniDono.status_effects.push({ ...entry }); }
+      } else {
+        if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+        AVT_STATE._oocStatusEffects.push({ entId: dono.id, entNome: dono.nome, ef: { ...entry }, lastTickAt: Date.now() });
+      }
+      _avtLog(`  ↳ ${ef.tipo} aplicado em ${dono.nome} (${ef.duracao_turnos ?? 1}t)`, bat?.id);
+    });
+    _avtLog(`✨ ${ent.nome} se sacrifica para fortalecer ${dono.nome}`, bat?.id);
+  }
+  _avtDestruirInvocacao(invId, bat, 'sacrificio');
+  try { avtJogadorPainelRender(); } catch(_) {}
+  try { _avtCharEditorRender(); } catch(_) {}
+}
+window._avtSacrificarInvocacao = _avtSacrificarInvocacao;
 
 function _avtNpcTurnoInvocado(bat: any) {
   const inv = bat.iniciativa[bat.turnoIdx];
@@ -34589,6 +34710,12 @@ Object.defineProperty(globalThis, "_avtInvAtivaDe", { configurable: true, get: (
 Object.defineProperty(globalThis, "_avtAplicarDanoInvocacao", { configurable: true, get: () => _avtAplicarDanoInvocacao, set: (__v) => { _avtAplicarDanoInvocacao = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtInvocacaoExplosao", { configurable: true, get: () => _avtInvocacaoExplosao, set: (__v) => { _avtInvocacaoExplosao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtInterceptarDanoGuardiao", { configurable: true, get: () => _avtInterceptarDanoGuardiao, set: (__v) => { _avtInterceptarDanoGuardiao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtSacrificarInvocacao", { configurable: true, get: () => _avtSacrificarInvocacao, set: (__v) => { _avtSacrificarInvocacao = __v; } });
+// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
+Object.defineProperty(globalThis, "_avtProvocadorDe", { configurable: true, get: () => _avtProvocadorDe, set: (__v) => { _avtProvocadorDe = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtNpcTurnoInvocado", { configurable: true, get: () => _avtNpcTurnoInvocado, set: (__v) => { _avtNpcTurnoInvocado = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])

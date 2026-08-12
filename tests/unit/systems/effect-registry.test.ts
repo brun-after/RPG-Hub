@@ -13,6 +13,7 @@ describe('EFFECT_REGISTRY.detect (table-driven)', () => {
     ['sem_movimento', { sem_movimento: true }],
     ['sem_ataque', { sem_ataque: true }],
     ['mod_dano', { mod_dano: -3 }],
+    ['provocar', { tipo: 'provocar' }],
     ['hot', { hot_formula: '1d4' }],
     ['boost_dano', { boost_dano: 5 }],
     ['rec_atributo', { rec_atributo: 'Mana' }],
@@ -38,6 +39,19 @@ describe('EFFECT_REGISTRY.detect (table-driven)', () => {
     expect(REG().get('dot').duracaoDe({ dot_turnos: 3 })).toBe(3);
     expect(REG().get('boost_dano').duracaoDe({ boost_dano_turnos: 2 })).toBe(2);
     expect(REG().get('cura').duracaoDe({ duracao_turnos: 9 })).toBe(0); // instantâneo
+  });
+
+  it('provocar: detecta pelo campo próprio, dura por provocar_turnos e é status negativo', () => {
+    const t = REG().get('provocar');
+    expect(t.detect({ provocar_turnos: 2 })).toBeTruthy();
+    expect(t.duracaoDe({ provocar_turnos: 2 })).toBe(2);
+    expect(t.duracaoDe({ duracao_turnos: 3 })).toBe(3); // fallback genérico
+    expect(REG().statusTipos({ positivos: false })).toContain('provocar');
+    expect(REG().orbEligible().some((o: any) => o.id === 'provocar')).toBe(false);
+    // Normalização canônica: skill autorada só com provocar_turnos ganha tipo+duração
+    const [norm] = REG().normalizarEfeito({ provocar_turnos: 2 });
+    expect(norm.tipo).toBe('provocar');
+    expect(norm.duracao_turnos).toBe(2);
   });
 
   it('get devolve null para id desconhecido', () => {
