@@ -7033,11 +7033,22 @@ function _avtRenderFrame() {
 
   // Portas internas de teleporte (mesma fase) — desenhadas em ambos os extremos
   const _portasInt = AVT_STATE.dungeon?._portasInternas || [];
+  // Peça 'porta' vinculada no tileset: vira o visual da porta interna, com um
+  // 🌀 menor no canto como affordance de teleporte; sem vínculo, caixa roxa.
+  const _piTex = AVT_STATE._tilesetLoaded ? (AVT_STATE as any)._tilesetTextures?.['porta'] : null;
   for (const _pi of _portasInt) {
     for (const _ep of [_pi.a, _pi.b]) {
       const epx = Math.round(_ep.col * SZ - camera.x);
       const epy = Math.round(_ep.row * SZ - camera.y);
       if (epx + SZ < 0 || epx > _avtViewW() || epy + SZ < 0 || epy > _avtViewH()) continue;
+      if (_piTex) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(_piTex, epx, epy, SZ, SZ);
+        ctx.font = `${Math.round(SZ * 0.30)}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(200,180,255,0.95)';
+        ctx.fillText('🌀', epx + SZ - Math.round(SZ * 0.20), epy + Math.round(SZ * 0.20));
+      } else {
       ctx.fillStyle = 'rgba(123,47,190,0.18)';
       ctx.fillRect(epx + 2, epy + 2, SZ - 4, SZ - 4);
       ctx.strokeStyle = 'rgba(168,120,255,0.8)';
@@ -7047,6 +7058,7 @@ function _avtRenderFrame() {
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillStyle = 'rgba(200,180,255,0.95)';
       ctx.fillText('🌀', epx + SZ / 2, epy + SZ / 2);
+      }
       // Nome da porta acima
       if (_pi.nome) {
         ctx.font = `${Math.round(SZ * 0.24)}px var(--fonte-d, sans-serif)`;
@@ -7706,12 +7718,22 @@ function _avtRenderFrame() {
       const ocx = px + SZ / 2, ocy = py + SZ / 2;
       const tipo = o.tipo;
       if (tipo === 'bau' || tipo === 'chest') {
+        // Prioridade: imagem própria → peça 'bau' vinculada no tileset → emoji
         const img = o.img_url ? _avtObjImg(o.img_url) : null;
+        const _bauTex = !img && AVT_STATE._tilesetLoaded ? (AVT_STATE as any)._tilesetTextures?.['bau'] : null;
         ctx.save();
         if (o.aberto) ctx.globalAlpha = 0.45;
         if (img) {
           ctx.imageSmoothingEnabled = false;
           ctx.drawImage(img, px + 2, py + 2, SZ - 4, SZ - 4);
+        } else if (_bauTex) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(_bauTex, px + 2, py + 2, SZ - 4, SZ - 4);
+          if (o.aberto) {
+            ctx.font = `${Math.round(SZ * 0.34)}px serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('📭', px + SZ - Math.round(SZ * 0.22), py + Math.round(SZ * 0.22));
+          }
         } else {
           ctx.font = `${Math.round(SZ * 0.62)}px serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -25378,14 +25400,16 @@ async function _avtMestreSalvarNovaFase() {
   const _proxOrdem = (_ordensExistentes.length ? Math.max(..._ordensExistentes) : 0) + 1;
   // Config própria do tileset da fase: sem ela, a imagem era fatiada com o
   // cols/rows da campanha principal (um atlas 5×5 virava lixo num grid 4×4).
-  const faseTilesetCfg = faseTilesetUrl ? {
+  // Preferência: config exportada do editor draft (carrega os vínculos
+  // peça↔função feitos lá) → canônica com os cols/rows do wizard.
+  const faseTilesetCfg = faseTilesetUrl ? (dungeonData?.tileset_config || {
     version: 2,
     cols: Math.min(5, Math.max(4, w._tilesetCols || 4)),
     rows: Math.min(5, Math.max(4, w._tilesetRows || 4)),
     blocos: _avtMergeBlocosCanonicos(null,
       Math.min(5, Math.max(4, w._tilesetCols || 4)),
       Math.min(5, Math.max(4, w._tilesetRows || 4))),
-  } : null;
+  }) : null;
 
   const fase = {
     id: Date.now().toString(),
