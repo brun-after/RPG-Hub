@@ -2957,17 +2957,51 @@ function _avtCriarAvancar() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 
+// Tileset já escolhido no wizard de criação (qualquer opção de mapa) — url +
+// config para o editor draft mostrar paleta e Distribuir de verdade.
+function _avtCriandoTilesetDraft() {
+  const c: any = AVT_STATE._criando || {};
+  const lerNum = (id: any, fb: any) => {
+    const v = parseInt((document.getElementById(id) as any)?.value || '', 10);
+    return Math.min(5, Math.max(4, Number.isFinite(v) ? v : fb));
+  };
+  if (c._tilesetImgUrl) { // ia_fase / ia_externa
+    const cfg = c._tilesetConfig || c._extCampanhaJSON?.tileset_config || {
+      version: 2, cols: lerNum('avt-tileset-cols', 4), rows: lerNum('avt-tileset-rows', 4),
+      blocos: _avtMergeBlocosCanonicos(null, lerNum('avt-tileset-cols', 4), lerNum('avt-tileset-rows', 4)),
+    };
+    return { url: c._tilesetImgUrl, cfg };
+  }
+  if (c._procTilesetImgUrl) { // procedural com tileset opcional
+    const cols = lerNum('avt-proc-ts-cols', 4), rows = lerNum('avt-proc-ts-rows', 4);
+    return { url: c._procTilesetImgUrl, cfg: { version: 2, cols, rows, blocos: _avtMergeBlocosCanonicos(null, cols, rows) } };
+  }
+  return { url: null, cfg: null };
+}
+
 // Abre o editor de fases (fase-editor.ts) em modo rascunho para o wizard de
 // criação de campanha; o resultado vai direto em AVT_STATE._criando.mapa.
 function _avtCriandoAbrirEditor() {
   const atual: any = (AVT_STATE._criando as any)?.mapa;
   const temGrid = atual && typeof atual === 'object' && Array.isArray(atual.tiles);
+  const ts = _avtCriandoTilesetDraft();
   (window as any).avtFaseEditorAbrir({
     modo: 'draft',
     w: temGrid ? atual.w : 40,
     h: temGrid ? atual.h : 28,
     tiles: temGrid ? atual.tiles : null,
     rooms: temGrid ? (atual.rooms || []) : [],
+    spawn_jogadores: temGrid ? (atual.spawn_jogadores || []) : [],
+    tilesetUrl: ts.url, tilesetConfig: ts.cfg,
+    // Upload dentro do editor: guarda no wizard como o handler do ia_fase faz
+    // (o save da campanha já sobe _tilesetImgFile para o storage).
+    onTilesetDraft: (file: any, cols: any, rows: any) => {
+      const c: any = AVT_STATE._criando;
+      if (!c) return;
+      c._tilesetImgFile = file;
+      c._tilesetImgUrl = file ? URL.createObjectURL(file) : null;
+      c._tilesetConfig = file ? { version: 2, cols, rows, blocos: _avtMergeBlocosCanonicos(null, cols, rows) } : null;
+    },
     onExport: (d: any) => {
       AVT_STATE._criando.mapa = d;
       const st = document.getElementById('avt-criando-editor-status');
@@ -3420,6 +3454,16 @@ async function aventuraCriarSubmit() {
       }
     } else if (c.mapa && typeof c.mapa === 'object') {
       dungeonData = c.mapa;
+      // Tileset enviado de dentro do editor draft (opção "editor")
+      if (c._tilesetImgFile) {
+        try {
+          tilesetImgUrl = await uploadToStorage(c._tilesetImgFile, `aventuras/${rpgId}/tileset`);
+        } catch(e) { console.warn('[tileset-editor] upload failed:', e); }
+        if (tilesetImgUrl) {
+          dungeonData.tileset_config = dungeonData.tileset_config || c._tilesetConfig || null;
+          dungeonData.tileset_img_url = tilesetImgUrl;
+        }
+      }
     }
     // 'fase' option: dungeonData stays null — will be loaded from fase render_data
 
@@ -25241,12 +25285,36 @@ function _avtNfAbrirEditor() {
   if (!w) return;
   const atual: any = w.dungeon;
   const temGrid = atual && Array.isArray(atual.tiles);
+  // Tileset do draft: o da própria fase (upload no wizard) ou, sem ele, o
+  // aplicado na fase atual — a fase nova "herda" o visual da anterior.
+  const clamp45 = (v: any) => Math.min(5, Math.max(4, v || 4));
+  let tsUrl: any = null, tsCfg: any = null, tsHerdadoDe: any = null;
+  if (w._tilesetImgUrl) {
+    tsUrl = w._tilesetImgUrl;
+    tsCfg = { version: 2, cols: clamp45(w._tilesetCols), rows: clamp45(w._tilesetRows),
+      blocos: _avtMergeBlocosCanonicos(null, clamp45(w._tilesetCols), clamp45(w._tilesetRows)) };
+  } else if ((AVT_STATE as any)._tilesetImgUrl && (AVT_STATE as any)._tilesetConfig) {
+    tsUrl = (AVT_STATE as any)._tilesetImgUrl;
+    tsCfg = (AVT_STATE as any)._tilesetConfig;
+    tsHerdadoDe = _avtFaseAtualObj()?.nome || 'fase principal';
+  }
   (window as any).avtFaseEditorAbrir({
     modo: 'draft',
     w: temGrid ? atual.w : 40,
     h: temGrid ? atual.h : 28,
     tiles: temGrid ? atual.tiles : null,
     rooms: temGrid ? (atual.rooms || []) : [],
+    spawn_jogadores: temGrid ? (atual.spawn_jogadores || []) : [],
+    tilesetUrl: tsUrl, tilesetConfig: tsCfg, tilesetHerdadoDe: tsHerdadoDe,
+    // Upload feito DENTRO do editor draft: repassa ao wizard, que faz o upload
+    // real no salvar da fase (mesma sequência do _avtNfHandleTilesetImg).
+    onTilesetDraft: (file: any, cols: any, rows: any) => {
+      w._tilesetImgFile = file;
+      w._tilesetImgNome = file?.name || null;
+      w._tilesetImgUrl = file ? URL.createObjectURL(file) : null;
+      w._tilesetCols = cols; w._tilesetRows = rows;
+      _avtMestreNovaFaseRender();
+    },
     onExport: (d: any) => {
       w.dungeon = d;
       mostrarToast('Mapa do editor definido!', 'ok');

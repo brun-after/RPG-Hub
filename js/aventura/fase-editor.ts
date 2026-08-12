@@ -26,6 +26,9 @@ const FED: any = {
   tool: 'wall', brushKey: null as any, brushXf: 0,
   undo: [] as any[], redo: [] as any[], _stroke: null as any,
   zoom: 1, panX: 0, panY: 0,
+  // Tileset do modo draft: url/config vêm do chamador (wizard/Nova Fase) e as
+  // texturas ficam locais (FED.texs) — nunca tocam AVT_STATE da fase ao vivo.
+  tsUrl: null as any, tsCfg: null as any, tsHerdadoDe: null as any, texs: null as any,
   pendingDoorAnchor: null as any, _portaCfgCell: null as any,
   _rectAnchor: null as any, _rectHover: null as any,
   onExport: null as any,
@@ -35,16 +38,44 @@ const FED: any = {
 const FED_SZ = 24; // px por tile no zoom 1
 
 function _fedTilesetTexturas() {
+  if (FED.texs) return FED.texs; // draft: texturas locais
   const A: any = (window as any).AVT_STATE;
-  return (FED.modo === 'live' && A?._tilesetLoaded && A?._tilesetTextures) ? A._tilesetTextures : null;
+  return (A?._tilesetLoaded && A?._tilesetTextures) ? A._tilesetTextures : null;
 }
 function _fedTilesetCfg() {
+  if (FED.tsCfg) return FED.tsCfg; // draft
   const A: any = (window as any).AVT_STATE;
-  return A?._tilesetConfig || A?.dungeon?.tileset_config || null;
+  return A?._tilesetConfig || A?.dungeon?.tileset_config
+    || A?.rpg?.theme_json?.dungeon_data?.tileset_config || null;
 }
-function _fedTilesetUrl() {
+// Resolve o tileset visível no editor. Em live prefere o tileset APLICADO da
+// fase atual (_tilesetImgUrl) — o resolver antigo ignorava fases extras com
+// tileset próprio e mostrava a paleta do tileset principal.
+function _fedResolverTileset() {
+  if (FED.modo !== 'live') return { url: FED.tsUrl, cfg: FED.tsCfg, herdadoDe: FED.tsHerdadoDe };
   const A: any = (window as any).AVT_STATE;
-  return A?.rpg?.theme_json?.tileset_img_url || A?.dungeon?.tileset_img_url || null;
+  const url = A?._tilesetImgUrl || A?.dungeon?.tileset_img_url
+    || A?.rpg?.theme_json?.dungeon_data?.tileset_img_url
+    || A?.rpg?.theme_json?.tileset_img_url || null;
+  return { url, cfg: _fedTilesetCfg(), herdadoDe: A?._tilesetHerdadoDe || null };
+}
+// Garante as texturas em memória ao abrir; sem isso o canvas mostrava só cores
+// sólidas e o Distribuir gravava chaves invisíveis (a queixa do "tileset sumiu").
+function _fedPreloadTileset() {
+  const W: any = window as any;
+  const ts = _fedResolverTileset();
+  if (!ts.url || !ts.cfg || typeof W._avtCarregarTileset !== 'function') return;
+  const A: any = W.AVT_STATE;
+  if (FED.modo === 'live') {
+    if (A?._tilesetLoaded && A?._tilesetTextures) return;
+    W._avtCarregarTileset(ts.url, ts.cfg)
+      .then(() => { _fedRender(); _fedInfoPincel(); })
+      .catch(() => {});
+  } else {
+    W._avtCarregarTileset(ts.url, ts.cfg, { aplicar: false })
+      .then((texs: any) => { FED.texs = texs || null; _fedRender(); _fedInfoPincel(); })
+      .catch(() => {});
+  }
 }
 
 // ── Abertura ─────────────────────────────────────────────────────────────────
@@ -68,6 +99,7 @@ function avtFaseEditorAbrir(opts: any) {
     FED.fasesExtras = (W.AVT_STATE.rpg?.theme_json?.fases_extras || []).map((f: any) => JSON.parse(JSON.stringify(f)));
     FED.spawns = (dungeon._spawnJogadores || []).map((s: any) => ({ ...s }));
     FED.onExport = null;
+    FED.tsUrl = null; FED.tsCfg = null; FED.tsHerdadoDe = null;
   } else {
     FED.w = opts.w || 24; FED.h = opts.h || 18;
     FED.tiles = opts.tiles
@@ -80,16 +112,21 @@ function avtFaseEditorAbrir(opts: any) {
     FED.fasesExtras = [];
     FED.spawns = (opts.spawn_jogadores || []).map((s: any) => ({ ...s }));
     FED.onExport = opts.onExport || null;
+    FED.tsUrl = opts.tilesetUrl || null;
+    FED.tsCfg = opts.tilesetConfig ? JSON.parse(JSON.stringify(opts.tilesetConfig)) : null;
+    FED.tsHerdadoDe = opts.tilesetHerdadoDe || null;
   }
 
   FED.tool = 'wall'; FED.brushKey = null; FED.brushXf = 0;
   FED.undo = []; FED.redo = []; FED._stroke = null;
   FED.pendingDoorAnchor = null; FED._rectAnchor = null; FED._rectHover = null;
   FED.zoom = 1; FED.panX = 0; FED.panY = 0;
+  FED.texs = null;
   FED.aberto = true;
 
   _fedMontarUI();
   _fedRender();
+  _fedPreloadTileset();
 }
 
 // ── UI ───────────────────────────────────────────────────────────────────────
@@ -102,7 +139,10 @@ function _fedMontarUI() {
   }
   (ov as any).style.cssText = 'position:fixed;inset:0;background:rgba(4,7,13,0.97);z-index:9500;display:flex;flex-direction:column;font-family:var(--fonte-d,serif)';
 
-  const tsUrl = FED.modo === 'live' ? _fedTilesetUrl() : null;
+  const W: any = window as any;
+  const ts = _fedResolverTileset();
+  const tsUrl = ts.url;
+  const tsSrc = tsUrl && typeof W.normalizeImgUrl === 'function' ? W.normalizeImgUrl(tsUrl) : tsUrl;
   const tool = (id: string, label: string, titulo: string) =>
     `<button id="fed-tool-${id}" class="fed-btn ${FED.tool === id ? 'fed-btn-on' : ''}" title="${titulo}" onclick="_fedSetTool('${id}')">${label}</button>`;
 
@@ -122,7 +162,7 @@ function _fedMontarUI() {
       <input id="fed-h" type="number" min="8" max="120" value="${FED.h}" class="fed-num">
       <button class="fed-btn" onclick="_fedResize()" title="Redimensionar (corta/expande com vazio)">⤢</button>
       <span style="flex:1"></span>
-      ${FED.modo === 'live' && tsUrl ? `<button class="fed-btn" onclick="_fedDistribuir()" title="Recalcula as peças do tileset por vizinhança (preserva portas/saída)">✦ Distribuir</button>` : ''}
+      ${tsUrl ? `<button class="fed-btn" onclick="_fedDistribuir()" title="Recalcula as peças do tileset por vizinhança (preserva portas/saída)">✦ Distribuir</button>` : ''}
       ${FED.modo === 'live'
         ? `<button class="fed-btn fed-btn-ok" onclick="_fedSalvarLive()">💾 Salvar</button>`
         : `<button class="fed-btn fed-btn-ok" onclick="_fedExportarDraft()">✓ Usar este mapa</button>`}
@@ -133,8 +173,9 @@ function _fedMontarUI() {
       ${tsUrl ? `
       <div class="fed-palette">
         <div class="fed-palette-title">Tileset — clique na peça</div>
+        ${ts.herdadoDe ? `<div class="fed-brush-info" style="color:#c8a84b">Herdado de "${ts.herdadoDe}"</div>` : ''}
         <div id="fed-ts-wrap" style="position:relative;cursor:crosshair">
-          <img id="fed-ts-img" src="${tsUrl}" style="display:block;image-rendering:pixelated;width:100%">
+          <img id="fed-ts-img" src="${tsSrc}" style="display:block;image-rendering:pixelated;width:100%">
           <canvas id="fed-ts-sel" style="position:absolute;inset:0;pointer-events:none"></canvas>
         </div>
         <div class="fed-rot-row">
@@ -170,6 +211,7 @@ function avtFaseEditorFechar() {
   const ov = document.getElementById('avt-fase-editor');
   if (ov) (ov as any).style.display = 'none';
   FED.aberto = false;
+  FED.texs = null; // libera as texturas locais do draft
   if ((FED as any)._fitFn) { window.removeEventListener('resize', (FED as any)._fitFn); (FED as any)._fitFn = null; }
   if ((FED as any)._keyFn) { window.removeEventListener('keydown', (FED as any)._keyFn); (FED as any)._keyFn = null; }
 }
@@ -321,7 +363,7 @@ function _fedResize() {
 function _fedDistribuir() {
   const W: any = window as any;
   const T = W.AVT_T || { PAREDE: 0, PISO: 1, SAIDA: 2 };
-  const view = { w: FED.w, h: FED.h, tiles: FED.tiles, _chestPositions: FED.chestPositions };
+  const view = { w: FED.w, h: FED.h, tiles: FED.tiles, _chestPositions: FED.chestPositions, tileset_config: _fedTilesetCfg() };
   _fedStrokeStart();
   for (let y = 0; y < FED.h; y++) {
     for (let x = 0; x < FED.w; x++) {
@@ -542,9 +584,12 @@ function _fedAtribuirPapel(tc: number, tr: number) {
   const key = papel.trim().replace(/[^a-z0-9_]/gi, '_');
   cfg.blocos = cfg.blocos || {};
   cfg.blocos[key] = `bloco_${tc}_${tr}`;
-  const url = _fedTilesetUrl();
+  const url = _fedResolverTileset().url;
   if (url && typeof W._avtCarregarTileset === 'function') {
-    W._avtCarregarTileset(url, cfg).then(() => {
+    const p = FED.modo === 'live'
+      ? W._avtCarregarTileset(url, cfg)
+      : W._avtCarregarTileset(url, cfg, { aplicar: false }).then((texs: any) => { FED.texs = texs || null; });
+    p.then(() => {
       FED.brushKey = key; FED.brushXf = 0;
       _fedSetTool('tile'); _fedInfoPincel(); _fedRender();
       W.mostrarToast?.(`Papel "${key}" atribuído à célula (${tc},${tr})`, 'ok');
@@ -661,7 +706,7 @@ function _fedRender() {
   ctx.imageSmoothingEnabled = false;
 
   const texs = _fedTilesetTexturas();
-  const view = { w: FED.w, h: FED.h, tiles: FED.tiles, _chestPositions: FED.chestPositions };
+  const view = { w: FED.w, h: FED.h, tiles: FED.tiles, _chestPositions: FED.chestPositions, tileset_config: _fedTilesetCfg() };
 
   for (let y = 0; y < FED.h; y++) {
     for (let x = 0; x < FED.w; x++) {

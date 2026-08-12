@@ -679,7 +679,10 @@ function faseTilesetHandleJSONPaste(val: any) {
 }
 
 // ── Carregar tileset e pré-cortar blocos ──────────────────────────────────────
-async function _avtCarregarTileset(imgUrl: any, config: any) {
+// opts.aplicar === false: fatia e devolve as texturas SEM tocar AVT_STATE —
+// usado pelo editor em modo draft, que não pode corromper o tileset da fase
+// ao vivo renderizando por trás do overlay.
+async function _avtCarregarTileset(imgUrl: any, config: any, opts?: any) {
   const img = new Image();
   img.crossOrigin = 'anonymous';
   await new Promise((res, rej) => {
@@ -719,8 +722,11 @@ async function _avtCarregarTileset(imgUrl: any, config: any) {
     textures[semanticKey] = tileImg;
   }
 
-  (AVT_STATE as any)._tilesetTextures = textures;
-  (AVT_STATE as any)._tilesetLoaded   = true;
+  if (opts?.aplicar !== false) {
+    (AVT_STATE as any)._tilesetTextures = textures;
+    (AVT_STATE as any)._tilesetLoaded   = true;
+  }
+  return textures;
 }
 
 // ── Hash pseudo-aleatório por posição (sem padrão diagonal) ──────────────────
@@ -802,22 +808,23 @@ function _avtTilePassavel(x: any, y: any, dungeon: any) {
 }
 
 // ── Autotile para grids binários legados (0/1) ────────────────────────────────
+// A view pode carregar tileset_config próprio (editor em draft); sem ele cai
+// no config aplicado da fase atual.
 function _avtGetTileSemanticKey(x: any, y: any, dungeon: any) {
   const tileAt = (tx: any, ty: any) => dungeon.tiles[ty]?.[tx] === AVT_T.PISO;
   const here = dungeon.tiles[y]?.[x];
+  const config = dungeon?.tileset_config || (AVT_STATE as any)._tilesetConfig;
 
   // SAÍDA com tileset: usa o tile de portal se existir; sem ele, null faz o
   // renderer cair no desenho legado da porta verde (antes caía no autotiler de
   // parede e a saída sumia atrás de um tile de muro).
   if (here === AVT_T.SAIDA) {
-    const blocosS = (AVT_STATE as any)._tilesetConfig?.blocos;
-    return blocosS?.porta_fase ? 'porta_fase' : null;
+    return config?.blocos?.porta_fase ? 'porta_fase' : null;
   }
 
   if (here === AVT_T.PISO) {
     if (dungeon._chestPositions?.some((p: any) => p.x === x && p.y === y)) return 'bau';
     const rng    = _tileRng(x, y);
-    const config = (AVT_STATE as any)._tilesetConfig;
     const varCh  = config?.regras?.piso_variacao_chance ?? 0.15;
     const objCh  = config?.regras?.objeto_chance        ?? 0.03;
     if (rng < objCh)                                   return 'objeto_1';
@@ -830,8 +837,7 @@ function _avtGetTileSemanticKey(x: any, y: any, dungeon: any) {
   const E = tileAt(x+1, y), W = tileAt(x-1, y);
   const NE = tileAt(x+1, y-1), NW = tileAt(x-1, y-1);
   const SE = tileAt(x+1, y+1), SW = tileAt(x-1, y+1);
-  const blocos = (AVT_STATE as any)._tilesetConfig?.blocos;
-  return _avtTipoParede(N, S, E, W, NE, NW, SE, SW, blocos);
+  return _avtTipoParede(N, S, E, W, NE, NW, SE, SW, config?.blocos);
 }
 
 // ── Normalização de grid: recalcula tiles de parede a partir dos vizinhos reais ─
