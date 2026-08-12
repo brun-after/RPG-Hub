@@ -158,6 +158,74 @@ describe('invocações: fundação', () => {
     expect(evs[0].payload.motivo).toBe('dispensada');
   });
 
+  it('F5: peer registra invocacoes_ativas ao receber avt_entidade_nova (rastro não é hostil)', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    sim.state.invocacoes_ativas = [];
+    sim.state.entidades = sim.state.entidades.filter((e: any) => e.tipo !== 'invocado');
+    // Payload como o emitido por avtInvocar em OUTRO cliente (spread da entidade)
+    const invAtiva = {
+      id: 'invocado_remoto_1', invocacao_def: { ...DEF_SENTINELA }, dono_char_nome: 'Bob',
+      hp_atual: 30, hpMax: 30, _turnosRestantes: 3, _cooldowns: {}, _modo: 'autonoma',
+    };
+    g.avtReceberEntidadeNova({
+      entidade: {
+        id: 'invocado_remoto_1', nome: 'Sentinela Sim', tipo: 'invocado',
+        x: 6, y: 3, hp: 30, hpMax: 30, _invAtiva: invAtiva,
+      },
+      faseId: 'principal',
+    });
+    const ent = sim.state.entidades.find((e: any) => e.id === 'invocado_remoto_1');
+    expect(ent).toBeTruthy();
+    expect(sim.state.invocacoes_ativas.some((i: any) => i.id === 'invocado_remoto_1')).toBe(true);
+    // Antes do F5 este cliente classificava a invocação aliada como hostil
+    expect(g._avtRastroEhHostil(ent)).toBe(false);
+  });
+
+  it('F5: merge de snapshot preserva as minhas invocações e adota as dos outros', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const { inv } = invocar(sim); // minha (Alice), autoritativa local
+    const remota = {
+      id: 'invocado_bob_1', invocacao_def: { ...DEF_SENTINELA, id: 'inv-bob' },
+      dono_char_nome: 'Bob', hp_atual: 12, hpMax: 30, _turnosRestantes: 2,
+    };
+    // Snapshot remoto traz a minha DESATUALIZADA (hp 1) + a do Bob
+    g.avtAplicarSnapshotMerge({
+      faseId: 'principal',
+      invocacoes_ativas: [{ ...inv, hp_atual: 1 }, remota],
+    });
+    const minha = sim.state.invocacoes_ativas.find((i: any) => i.id === inv.id);
+    expect(minha).toBe(inv);          // mesma referência local
+    expect(minha.hp_atual).toBe(30);  // snapshot não sobrescreveu a minha
+    expect(sim.state.invocacoes_ativas.some((i: any) => i.id === 'invocado_bob_1')).toBe(true);
+  });
+
+  it('F3: modo vem do catálogo (controle) e decide quem age no turno', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const { inv, ent } = invocar(sim, { controle: 'comandada' });
+    expect(inv._modo).toBe('comandada');
+    // Dono offline (sem heartbeat) → cai para IA, combate não trava
+    expect(g._avtInvTurnoAutonomo(ent)).toBe(true);
+    // Dono online → o host NÃO age; o turno é do dono via overlay
+    sim.jogador()._lastGameSeen = Date.now();
+    expect(g._avtInvTurnoAutonomo(ent)).toBe(false);
+    // Autônoma age sempre, com dono online ou não
+    const { ent: entAuto } = invocar(sim);
+    expect(g._avtInvTurnoAutonomo(entAuto)).toBe(true);
+  });
+
+  it('F3: avtReceberInvocacaoUpdate aplica modo/ordem/hp na entrada local', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const { inv, ent } = invocar(sim);
+    g.avtReceberInvocacaoUpdate({
+      invId: inv.id, faseId: 'principal',
+      modo: 'comandada', ordem: { tipo: 'focar', alvoId: 'ini_0' }, hp: 21,
+    });
+    expect(inv._modo).toBe('comandada');
+    expect(inv._ordem).toEqual({ tipo: 'focar', alvoId: 'ini_0' });
+    expect(inv.hp_atual).toBe(21);
+    expect(ent.hp).toBe(21);
+  });
+
   it('DOT em combate passa pelo funil e destrói a invocação ao zerar', async () => {
     const sim = await bootAventuraSim({ charNome: 'Alice' });
     const { inv, ent } = invocar(sim);

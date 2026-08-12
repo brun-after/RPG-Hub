@@ -227,6 +227,8 @@ function abrirModalInvocacao(invId: any, charNomeHint: any) {
     document.getElementById('inv-comportamento')!.value = inv.comportamento || 'agressivo';
     _invComportamentoChange();
     document.getElementById('inv-dummy-explosivo')!.checked = !!inv.dummy_explosivo;
+    { const _cEl = document.getElementById('inv-controle');   if (_cEl) _cEl.value = inv.controle === 'comandada' ? 'comandada' : 'autonoma'; }
+    { const _mEl = document.getElementById('inv-morre-dono'); if (_mEl) _mEl.checked = inv.morre_com_dono !== false; }
     document.getElementById('inv-dano-formula')!.value = inv.dano_formula || '';
     document.getElementById('inv-dano-attr')!.value = inv.dano_atributo_scaling || '';
     document.getElementById('inv-dano-pct')!.value = inv.dano_atributo_pct || 0;
@@ -260,6 +262,8 @@ function abrirModalInvocacao(invId: any, charNomeHint: any) {
     document.getElementById('inv-comportamento')!.value = 'agressivo';
     _invComportamentoChange();
     document.getElementById('inv-dummy-explosivo')!.checked = false;
+    { const _cEl = document.getElementById('inv-controle');   if (_cEl) _cEl.value = 'autonoma'; }
+    { const _mEl = document.getElementById('inv-morre-dono'); if (_mEl) _mEl.checked = true; }
     document.getElementById('inv-dano-formula')!.value = '1d6';
     document.getElementById('inv-dano-attr')!.value = '';
     document.getElementById('inv-dano-pct')!.value = (0) as any;
@@ -342,6 +346,8 @@ async function salvarInvocacao() {
     visual_config: visualConfig,
     comportamento: document.getElementById('inv-comportamento')!.value! || 'agressivo',
     dummy_explosivo: document.getElementById('inv-dummy-explosivo')!.checked!,
+    controle: document.getElementById('inv-controle')?.value === 'comandada' ? 'comandada' : 'autonoma',
+    morre_com_dono: document.getElementById('inv-morre-dono') ? !!document.getElementById('inv-morre-dono')!.checked : true,
     dano_formula: document.getElementById('inv-dano-formula')!.value!.trim!()! || null,
     dano_atributo_scaling: document.getElementById('inv-dano-attr')!.value! || null,
     dano_atributo_pct: parseFloat(document.getElementById('inv-dano-pct')!.value!) || 0,
