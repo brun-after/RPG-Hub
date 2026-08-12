@@ -36,6 +36,8 @@ const FED: any = {
 };
 
 const FED_SZ = 24; // px por tile no zoom 1
+const FED_ZMIN = 0.1; // 120×120 tiles precisa de ~0.12 para caber em telas pequenas
+const FED_ZMAX = 6;
 
 function _fedTilesetTexturas() {
   if (FED.texs) return FED.texs; // draft: texturas locais
@@ -122,6 +124,7 @@ function avtFaseEditorAbrir(opts: any) {
   FED.pendingDoorAnchor = null; FED._rectAnchor = null; FED._rectHover = null;
   FED.zoom = 1; FED.panX = 0; FED.panY = 0;
   FED.texs = null;
+  FED._fitInicial = true;
   FED.aberto = true;
 
   _fedMontarUI();
@@ -161,6 +164,11 @@ function _fedMontarUI() {
       <input id="fed-w" type="number" min="8" max="120" value="${FED.w}" class="fed-num">
       <input id="fed-h" type="number" min="8" max="120" value="${FED.h}" class="fed-num">
       <button class="fed-btn" onclick="_fedResize()" title="Redimensionar (corta/expande com vazio)">⤢</button>
+      <span class="fed-sep"></span>
+      <button class="fed-btn" onclick="_fedZoomStep(-1)" title="Afastar (-)">−</button>
+      <button class="fed-btn" id="fed-zoom-pct" onclick="_fedZoomReset()" title="Zoom atual — clique para 100%">${Math.round(FED.zoom * 100)}%</button>
+      <button class="fed-btn" onclick="_fedZoomStep(1)" title="Aproximar (+)">+</button>
+      <button class="fed-btn" onclick="_fedZoomFit()" title="Ajustar o mapa à tela (0)">⛶</button>
       <span style="flex:1"></span>
       ${tsUrl ? `<button class="fed-btn" onclick="_fedDistribuir()" title="Recalcula as peças do tileset por vizinhança (preserva portas/saída)">✦ Distribuir</button>` : ''}
       ${FED.modo === 'live'
@@ -168,7 +176,7 @@ function _fedMontarUI() {
         : `<button class="fed-btn fed-btn-ok" onclick="_fedExportarDraft()">✓ Usar este mapa</button>`}
       <button class="fed-btn fed-btn-danger" onclick="avtFaseEditorFechar()">✕</button>
     </div>
-    <div id="fed-status" class="fed-status">Ferramenta: Parede — clique/arraste para pintar. Roda = zoom · botão do meio ou 2 dedos = pan · R gira · F espelha.</div>
+    <div id="fed-status" class="fed-status">Ferramenta: Parede — clique/arraste para pintar. Roda ou +/− = zoom · 0 = ajustar à tela · botão do meio ou 2 dedos = pan · R gira · F espelha.</div>
     <div class="fed-body">
       ${tsUrl ? `
       <div class="fed-palette">
@@ -196,6 +204,9 @@ function _fedMontarUI() {
   const fit = () => {
     canvas.width = wrap.clientWidth || 800;
     canvas.height = wrap.clientHeight || 500;
+    // Primeira medição após abrir: enquadra o mapa (um 60×40 abria cortado
+    // no zoom 1 ancorado no canto).
+    if (FED._fitInicial) { FED._fitInicial = false; _fedZoomFit(); return; }
     _fedRender();
   };
   setTimeout(fit, 0);
@@ -433,7 +444,7 @@ function _fedBindCanvas(canvas: HTMLCanvasElement) {
     if (FED._pinchStart && FED._pointers.size === 2) {
       const pts = [...FED._pointers.values()];
       const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      const fator = Math.max(0.25, Math.min(4, FED._pinchStart.zoom * (d / Math.max(1, FED._pinchStart.d))));
+      const fator = Math.max(FED_ZMIN, Math.min(FED_ZMAX, FED._pinchStart.zoom * (d / Math.max(1, FED._pinchStart.d))));
       _fedZoomAt(FED._pinchStart.cx, FED._pinchStart.cy, fator, canvas);
       return;
     }
@@ -473,7 +484,7 @@ function _fedBindCanvas(canvas: HTMLCanvasElement) {
 
   canvas.addEventListener('wheel', (ev: WheelEvent) => {
     ev.preventDefault();
-    const fator = Math.max(0.25, Math.min(4, FED.zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    const fator = Math.max(FED_ZMIN, Math.min(FED_ZMAX, FED.zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15)));
     _fedZoomAt(ev.clientX, ev.clientY, fator, canvas);
   }, { passive: false });
 }
@@ -485,6 +496,49 @@ function _fedZoomAt(clientX: number, clientY: number, novoZoom: number, canvas: 
   FED.panX = mx - ((mx - FED.panX) / FED.zoom) * novoZoom;
   FED.panY = my - ((my - FED.panY) / FED.zoom) * novoZoom;
   FED.zoom = novoZoom;
+  _fedZoomLabelAtualizar();
+  _fedRender();
+}
+
+// ── Controles de zoom (botões/teclado — roda e pinch passam por _fedZoomAt) ──
+function _fedZoomLabelAtualizar() {
+  const el = document.getElementById('fed-zoom-pct');
+  if (el) el.textContent = Math.round(FED.zoom * 100) + '%';
+}
+
+// Pura (testável): zoom que enquadra o mapa inteiro com folga de 5%, centrado.
+// Teto 1.5 — mapas minúsculos não explodem em tiles gigantes.
+function _fedCalcularZoomFit(cw: number, ch: number, w: number, h: number) {
+  const mw = Math.max(1, w) * FED_SZ, mh = Math.max(1, h) * FED_SZ;
+  const z = Math.max(FED_ZMIN, Math.min(1.5, 0.95 * Math.min(cw / mw, ch / mh)));
+  return { zoom: z, panX: (cw - mw * z) / 2, panY: (ch - mh * z) / 2 };
+}
+
+function _fedZoomFit() {
+  const canvas = document.getElementById('fed-canvas') as HTMLCanvasElement;
+  if (!canvas) return;
+  const f = _fedCalcularZoomFit(canvas.width, canvas.height, FED.w, FED.h);
+  FED.zoom = f.zoom; FED.panX = f.panX; FED.panY = f.panY;
+  _fedZoomLabelAtualizar();
+  _fedRender();
+}
+
+function _fedZoomStep(sinal: number) {
+  const canvas = document.getElementById('fed-canvas') as HTMLCanvasElement;
+  if (!canvas) return;
+  const r = canvas.getBoundingClientRect();
+  const novo = Math.max(FED_ZMIN, Math.min(FED_ZMAX, FED.zoom * (sinal > 0 ? 1.25 : 0.8)));
+  _fedZoomAt(r.left + r.width / 2, r.top + r.height / 2, novo, canvas);
+}
+
+function _fedZoomReset() {
+  const canvas = document.getElementById('fed-canvas') as HTMLCanvasElement;
+  if (!canvas) return;
+  // 100% com o centro do mapa no centro da tela
+  FED.zoom = 1;
+  FED.panX = (canvas.width - FED.w * FED_SZ) / 2;
+  FED.panY = (canvas.height - FED.h * FED_SZ) / 2;
+  _fedZoomLabelAtualizar();
   _fedRender();
 }
 
@@ -500,6 +554,9 @@ function _fedBindTeclado() {
       else avtFaseEditorFechar();
     } else if (k === 'r') { _fedGirar(1); }
     else if (k === 'f') { _fedFlip(); }
+    else if (k === '+' || k === '=') { _fedZoomStep(1); }
+    else if (k === '-' || k === '_') { _fedZoomStep(-1); }
+    else if (k === '0') { _fedZoomFit(); }
     else if ((ev.ctrlKey || ev.metaKey) && k === 'z') { ev.preventDefault(); _fedUndo(); }
     else if ((ev.ctrlKey || ev.metaKey) && k === 'y') { ev.preventDefault(); _fedRedo(); }
   };
@@ -887,5 +944,6 @@ Object.assign(window as any, {
   avtFaseEditorAbrir, avtFaseEditorFechar,
   _fedSetTool, _fedUndo, _fedRedo, _fedResize, _fedDistribuir,
   _fedSalvarLive, _fedExportarDraft, _fedGirar, _fedFlip, _fedConfirmarPorta,
+  _fedZoomFit, _fedZoomStep, _fedZoomReset, _fedCalcularZoomFit,
   _fedDerivarRooms, _fedSet, _fedFill, _fedRect, _fedStrokeStart, _fedStrokeEnd, FED,
 });
