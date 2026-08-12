@@ -226,6 +226,113 @@ describe('invocações: fundação', () => {
     expect(ent.hp).toBe(21);
   });
 
+  it('P2 provocar: _avtProvocadorDe resolve o provocador ativo pelo efeito', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const { ent } = invocar(sim);
+    const goblin = sim.npc('ini_0');
+    // Espelho de iniciativa do NPC com o efeito aplicado pela skill da invocação
+    const npcIni = {
+      ...goblin,
+      status_effects: [{ tipo: 'provocar', _turnos_restantes: 2, _casterId: ent.id, _casterNome: ent.nome }],
+    };
+    expect(g._avtProvocadorDe(npcIni)).toBe(ent);
+    // Sem id, resolve pelo nome do caster
+    npcIni.status_effects = [{ tipo: 'provocar', _turnos_restantes: 1, _casterNome: ent.nome } as any];
+    expect(g._avtProvocadorDe(npcIni)).toBe(ent);
+    // Expirado → ninguém provoca
+    npcIni.status_effects = [{ tipo: 'provocar', _turnos_restantes: 0, _casterId: ent.id } as any];
+    expect(g._avtProvocadorDe(npcIni)).toBe(null);
+    // Provocador morto → cadeia segue para o próximo degrau da pirâmide
+    npcIni.status_effects = [{ tipo: 'provocar', _turnos_restantes: 2, _casterId: ent.id } as any];
+    ent.hp = 0;
+    expect(g._avtProvocadorDe(npcIni)).toBe(null);
+  });
+
+  it('P2 guardião: intercepta pct do dano do dono no raio, pelo funil da invocação', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const { inv, ent } = invocar(sim, { guardiao: { pct_intercepta: 50, raio: 3 } });
+    const alice = sim.jogador();
+    ent.x = alice.x + 1; ent.y = alice.y; // Chebyshev 1 ≤ raio 3
+    const restante = g._avtInterceptarDanoGuardiao(alice, 10, null);
+    expect(restante).toBe(5);
+    expect(ent.hp).toBe(25);        // desvio entrou pelo funil (sem resistência)
+    expect(inv.hp_atual).toBe(25);  // espelho sincronizado
+    // Fora do raio → dano integral ao dono
+    ent.x = alice.x + 9;
+    expect(g._avtInterceptarDanoGuardiao(alice, 10, null)).toBe(10);
+    // Guardião de OUTRO dono não intercepta
+    ent.x = alice.x + 1;
+    inv.dono_char_nome = 'Bob';
+    expect(g._avtInterceptarDanoGuardiao(alice, 10, null)).toBe(10);
+  });
+
+  it('P2 sacrifício cura_dono: cura o dono e destrói com motivo sacrificio', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const { inv } = invocar(sim, { sacrificio: { tipo: 'cura_dono', formula: '5' } });
+    const alice = sim.jogador();
+    alice.hp = Math.max(1, alice.hp - 10);
+    const hpAntes = alice.hp;
+    const broadcasts: any[] = [];
+    const orig = g._avtBroadcast;
+    g._avtBroadcast = (tipo: any, payload: any) => { broadcasts.push({ tipo, payload }); };
+    try { g._avtSacrificarInvocacao(inv.id); } finally { g._avtBroadcast = orig; }
+    expect(alice.hp).toBe(hpAntes + 5);
+    expect(sim.state.invocacoes_ativas.length).toBe(0);
+    expect(sim.state.entidades.some((e: any) => e.id === inv.id)).toBe(false);
+    const ev = broadcasts.find((b: any) => b.tipo === 'avt_invocacao_destruida');
+    expect(ev?.payload?.motivo).toBe('sacrificio');
+  });
+
+  it('P2 sacrifício explosao: fere inimigos no raio com a fórmula própria', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const { inv, ent } = invocar(sim, { sacrificio: { tipo: 'explosao', formula: '3', raio: 2 } });
+    const goblin = sim.npc('ini_0');
+    goblin.x = ent.x + 1; goblin.y = ent.y;
+    const hpAntes = goblin.hp;
+    g._avtSacrificarInvocacao(inv.id);
+    expect(goblin.hp).toBe(hpAntes - 3);
+    expect(sim.state.invocacoes_ativas.length).toBe(0);
+  });
+
+  it('P2 sacrifício buff_dono: efeitos canônicos no dono (status + registro OOC)', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const { inv } = invocar(sim, {
+      sacrificio: { tipo: 'buff_dono', efeitos: [{ tipo: 'boost_dano', boost_dano: 5, duracao_turnos: 2 }] },
+    });
+    const alice = sim.jogador();
+    sim.state._oocStatusEffects = [];
+    g._avtSacrificarInvocacao(inv.id);
+    const ef = (alice.status_effects || []).find((e: any) => e.tipo === 'boost_dano');
+    expect(ef).toBeTruthy();
+    expect(ef._turnos_restantes).toBe(2);
+    expect(ef._ooc).toBe(true); // fora de combate → contrato dos buffs OOC
+    expect(sim.state._oocStatusEffects.some((r: any) => r.entId === alice.id && r.ef.tipo === 'boost_dano')).toBe(true);
+    expect(sim.state.invocacoes_ativas.length).toBe(0);
+  });
+
+  it('P2 destruição com motivo sacrificio NÃO dispara a explosão do dummy', async () => {
+    const sim = await bootAventuraSim({ charNome: 'Alice' });
+    const { inv, ent } = invocar(sim, { dummy_explosivo: true });
+    const goblin = sim.npc('ini_0');
+    goblin.x = ent.x + 1; goblin.y = ent.y;
+    const bat = {
+      id: 'bat-t', iniciativa: [{ ...ent, initRoll: 10 }, { ...goblin, initRoll: 5 }],
+      envolvidos: [ent.id, goblin.id], turnoIdx: 0, log: [], movimentoRestante: {}, _cooldowns: {},
+    };
+    const hpAntes = goblin.hp;
+    g._avtDestruirInvocacao(inv.id, bat, 'sacrificio');
+    expect(goblin.hp).toBe(hpAntes); // sem explosão de morte
+    // Controle: com motivo 'morreu' o dummy explode normalmente
+    const { inv: inv2, ent: ent2 } = invocar(sim, { dummy_explosivo: true });
+    goblin.x = ent2.x + 1; goblin.y = ent2.y;
+    const bat2 = {
+      id: 'bat-t2', iniciativa: [{ ...ent2, initRoll: 10 }, { ...goblin, initRoll: 5 }],
+      envolvidos: [ent2.id, goblin.id], turnoIdx: 0, log: [], movimentoRestante: {}, _cooldowns: {},
+    };
+    g._avtDestruirInvocacao(inv2.id, bat2, 'morreu');
+    expect(goblin.hp).toBeLessThan(hpAntes);
+  });
+
   it('DOT em combate passa pelo funil e destrói a invocação ao zerar', async () => {
     const sim = await bootAventuraSim({ charNome: 'Alice' });
     const { inv, ent } = invocar(sim);
