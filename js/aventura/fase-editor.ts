@@ -1249,6 +1249,6 @@ Object.assign(window as any, {
   _fedZoomFit, _fedZoomStep, _fedZoomReset, _fedCalcularZoomFit,
   _fedToggleTilesetPanel, _fedTsModalHandleFile, _fedCopiarPromptTileset, _fedAplicarTileset,
   _fedAbrirModalPapel, _fedConfirmarPapel, _fedPapelSelChange, _fedRevincularSelecionada,
-  _fedVincularPapel, _fedChavePorCelula,
+  _fedVincularPapel, _fedChavePorCelula, _fedPreloadTileset, _fedResolverTileset,
   _fedDerivarRooms, _fedSet, _fedFill, _fedRect, _fedStrokeStart, _fedStrokeEnd, FED,
 });
