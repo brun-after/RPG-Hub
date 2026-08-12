@@ -25543,11 +25543,17 @@ async function _avtGerarProximaFaseAuto() {
   const npcLvl = (prev.npc_level ?? 1) + 1;
   dungeonData._npcLevel = npcLvl;
   dungeonData._faseSeed = _avtSeedFromStr('auto_' + ordem + '_' + Date.now());
+  // Herda tileset resolvido (próprio → anterior → principal) com url E config:
+  // gravar só prev.tileset_img_url perdia o atlas quando a anterior também
+  // tinha herdado (fase auto n+2 ficava sem tileset).
+  const _tsHerdado = _avtResolverTilesetFase(prev, _avtFasesOrdenadas(),
+    AVT_STATE.rpg?.theme_json?.dungeon_data || null);
   const fase = {
     id: Date.now().toString(),
     nome: `Fase ${ordem + 1}`,
     dungeon_data: dungeonData,
-    tileset_img_url: prev.tileset_img_url || null,
+    tileset_img_url: _tsHerdado?.imgUrl || null,
+    tileset_config: _tsHerdado?.config || null,
     ordem, npc_level: npcLvl,
     tint_hue: ((prev.tint_hue ?? 0) + 28) % 360,
     porta: { col: 0, row: 0, lock_type: 'livre' },
@@ -25682,27 +25688,53 @@ function _avtSnapshotFaseAtual() {
   return id;
 }
 
-// Tileset da fase: SEMPRE usa o tileset_config do tileset principal; só a imagem
-// (se a fase tiver a sua) e a cor (tint_hue) variam por fase.
+// Resolve o tileset EFETIVO de uma fase (pura — testável):
+//   próprio → fase anterior mais próxima com tileset próprio (por ordem) →
+//   principal → null. A config sempre acompanha a imagem escolhida (nunca
+//   mistura cols/rows de um atlas com a imagem de outro); a exceção é a fase
+//   com imagem própria e sem config (legado pré-346c03b), fatiada com a do
+//   principal como sempre foi.
+function _avtResolverTilesetFase(faseObj: any, fasesOrdenadas: any[], principalDD: any) {
+  const cfgDa = (f: any) => f?.tileset_config || f?.dungeon_data?.tileset_config || null;
+  const urlDa = (f: any) => f?.tileset_img_url || f?.dungeon_data?.tileset_img_url || null;
+  const urlPropria = urlDa(faseObj);
+  if (urlPropria) {
+    return { imgUrl: urlPropria, config: cfgDa(faseObj) || principalDD?.tileset_config || null, herdadoDe: null };
+  }
+  const ordem = faseObj?.ordem ?? 9999;
+  const anteriores = (fasesOrdenadas || [])
+    .filter((f: any) => f && f.id !== faseObj?.id && (f.ordem ?? 9999) < ordem)
+    .sort((a: any, b: any) => (b.ordem ?? 0) - (a.ordem ?? 0));
+  for (const f of anteriores) {
+    const url = urlDa(f);
+    if (url) return { imgUrl: url, config: cfgDa(f) || principalDD?.tileset_config || null, herdadoDe: f.nome || f.id };
+  }
+  if (principalDD?.tileset_img_url) {
+    return { imgUrl: principalDD.tileset_img_url, config: principalDD.tileset_config || null, herdadoDe: 'Fase inicial' };
+  }
+  return null;
+}
+window._avtResolverTilesetFase = _avtResolverTilesetFase;
+
+// Tileset da fase: próprio quando existir; sem ele HERDA da fase anterior (ou
+// do principal) — antes uma fase sem tileset só mantinha o da anterior por
+// estado residual, que quebrava na entrada direta/F5. O grid numérico continua
+// distribuído em render-time pelo autotiler, então o padrão acompanha o atlas.
 function _avtAplicarTilesetFase(faseObj: any) {
   (AVT_STATE as any)._faseHueShift = faseObj.tint_hue || 0;
-  // Config/imagem PRÓPRIAS da fase quando existirem; senão herda do principal.
-  const config = faseObj.tileset_config
-    || (faseObj.dungeon_data && faseObj.dungeon_data.tileset_config)
-    || _avtTilesetConfigPrincipal();
-  const imgUrl = faseObj.tileset_img_url
-    || AVT_STATE.rpg?.theme_json?.dungeon_data?.tileset_img_url
-    || null;
-  if (!config || !imgUrl) return; // sem tileset configurado: mantém o estado atual
+  const res = _avtResolverTilesetFase(faseObj, _avtFasesOrdenadas(),
+    AVT_STATE.rpg?.theme_json?.dungeon_data || null);
+  if (!res || !res.imgUrl || !res.config) { (AVT_STATE as any)._tilesetHerdadoDe = null; return; }
+  (AVT_STATE as any)._tilesetHerdadoDe = res.herdadoDe || null;
   // Invalida cache por imagem E config (fases podem ter o mesmo URL mas layout distinto).
-  const _cacheKey = imgUrl + '|' + JSON.stringify(config);
+  const _cacheKey = res.imgUrl + '|' + JSON.stringify(res.config);
   if (AVT_STATE._tilesetCacheKey === _cacheKey && (AVT_STATE as any)._tilesetLoaded) return; // já carregado
   (AVT_STATE as any)._tilesetCacheKey = _cacheKey;
-  (AVT_STATE as any)._tilesetImgUrl   = imgUrl;
-  (AVT_STATE as any)._tilesetConfig   = config;
+  (AVT_STATE as any)._tilesetImgUrl   = res.imgUrl;
+  (AVT_STATE as any)._tilesetConfig   = res.config;
   (AVT_STATE as any)._tilesetLoaded   = false;
   (AVT_STATE as any)._tilesetTextures = {};
-  _avtCarregarTileset(imgUrl, config)
+  _avtCarregarTileset(res.imgUrl, res.config)
     .then(() => { (AVT_STATE as any)._tilesetLoaded = true; })
     .catch(() => {});
 }
