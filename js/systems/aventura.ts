@@ -4696,6 +4696,36 @@ function _avtGravarDungeonNoSlot(t: any) {
 }
 window._avtGravarDungeonNoSlot = _avtGravarDungeonNoSlot;
 
+// Grava url/config do tileset no slot da fase atual (espelha _avtGravarDungeonNoSlot).
+// Na fase extra grava nos DOIS lugares que a cadeia de resolução lê
+// (fases_extras[i].tileset_* e fases_extras[i].dungeon_data.tileset_config).
+// Também atualiza o estado aplicado em memória; o chamador persiste/recarrega.
+function _avtGravarTilesetNoSlot(t: any, url: any, cfg: any) {
+  if (!t) return;
+  const faseId = (AVT_STATE as any)._faseAtualId || 'principal';
+  if (faseId === 'principal') {
+    t.dungeon_data = t.dungeon_data || {};
+    t.dungeon_data.tileset_img_url = url;
+    t.dungeon_data.tileset_config = cfg;
+  } else {
+    const fa = (t.fases_extras || []).find((f: any) => f.id === faseId);
+    if (fa) {
+      fa.tileset_img_url = url;
+      fa.tileset_config = cfg;
+      if (fa.dungeon_data) fa.dungeon_data.tileset_config = cfg;
+    }
+  }
+  if (AVT_STATE.dungeon) {
+    AVT_STATE.dungeon.tileset_img_url = url;
+    AVT_STATE.dungeon.tileset_config = cfg;
+  }
+  (AVT_STATE as any)._tilesetImgUrl = url;
+  (AVT_STATE as any)._tilesetConfig = cfg;
+  (AVT_STATE as any)._tilesetCacheKey = url + '|' + JSON.stringify(cfg);
+  (AVT_STATE as any)._tilesetHerdadoDe = null; // agora tem tileset próprio
+}
+window._avtGravarTilesetNoSlot = _avtGravarTilesetNoSlot;
+
 // Guarda de salvamento: com AVT_STATE.rpg/rpgId anulados (ex.: após sairAventura),
 // o PATCH iria para rpg_id=eq.null — zero linhas, mas "sucesso" no PostgREST —
 // e o toast de "salvo!" mentiria. Falha visível em vez de silêncio.
@@ -23796,6 +23826,19 @@ function avtReceberDungeonUpdate(p: any) {
   AVT_STATE.dungeon._portasInternas = p.dungeon._portasInternas || [];
   try { _avtNormalizarObjetosDungeon(AVT_STATE.dungeon); } catch(_) {}
   AVT_STATE._tilesetConfig = AVT_STATE.dungeon.tileset_config || (AVT_STATE as any)._tilesetConfig;
+  // Tileset trocado pelo mestre (🖼 no editor): recarrega as texturas — só
+  // reabsorver a config deixava os peers com o atlas antigo fatiado errado.
+  const _tsUrl = AVT_STATE.dungeon.tileset_img_url || (AVT_STATE as any)._tilesetImgUrl;
+  const _tsCfg = (AVT_STATE as any)._tilesetConfig;
+  if (_tsUrl && _tsCfg) {
+    const _ck = _tsUrl + '|' + JSON.stringify(_tsCfg);
+    if ((AVT_STATE as any)._tilesetCacheKey !== _ck) {
+      (AVT_STATE as any)._tilesetCacheKey = _ck;
+      (AVT_STATE as any)._tilesetImgUrl = _tsUrl;
+      (AVT_STATE as any)._tilesetLoaded = false;
+      _avtCarregarTileset(_tsUrl, _tsCfg).catch(() => {});
+    }
+  }
   // FIX F7: edição de tiles em sessão precisa invalidar os bakes estáticos
   // (camada PIXI, tiles 2D legados e minimapa) mesmo sem mudar dimensões/fase.
   AVT_STATE._dungeonRev = ((AVT_STATE as any)._dungeonRev || 0) + 1;
@@ -23804,10 +23847,6 @@ function avtReceberDungeonUpdate(p: any) {
 }
 window.avtReceberDungeonUpdate = avtReceberDungeonUpdate;
 window._avtMestreAbrirEditorUnificado = _avtMestreAbrirEditorUnificado;
-// Handlers inline (onclick/onchange) do editor unificado precisam estar no escopo global.
-window._avtMestreToggleTrocaTileset = _avtMestreToggleTrocaTileset;
-window._avtMestreHandleTilesetUpload = _avtMestreHandleTilesetUpload;
-window._avtMestreAplicarTilesetUpload = _avtMestreAplicarTilesetUpload;
 
 async function _avtSalvarBossDoorConfig() {
   const modo = document.querySelector('input[name="avt-boss-door-mode"]:checked')?.value || 'spawn_door';
@@ -24936,65 +24975,6 @@ async function _avtPackageRemover(pkgId: any) {
   if (typeof carregarCatalogo === 'function') carregarCatalogo();
 }
 window._avtPackageRemover = _avtPackageRemover;
-
-// ── Upload de tileset no editor do mestre (quando dungeon não tem tileset) ────
-let _avtMpTilesetFile: any = null;
-
-function _avtMestreToggleTrocaTileset() {
-  const painel = document.getElementById('avt-ts-troca-painel');
-  if (!painel) return;
-  painel.style!.display = painel.style!.display === 'none' ? 'block' : 'none';
-}
-
-
-function _avtMestreHandleTilesetUpload(input: any) {
-  const file = input?.files?.[0];
-  if (!file) return;
-  _avtMpTilesetFile = file;
-  const url = URL.createObjectURL(file);
-  const prev = document.getElementById('avt-mp-ts-preview');
-  if (prev) { prev.src = url; prev.style!.display = 'block'; }
-  const nome = document.getElementById('avt-mp-ts-nome');
-  if (nome) nome.textContent = file.name;
-}
-
-async function _avtMestreAplicarTilesetUpload() {
-  if (!_avtMpTilesetFile) { mostrarToast('Selecione uma imagem primeiro', 'aviso'); return; }
-  if (!AVT_STATE.rpg) return;
-  const cols = parseInt(document.getElementById('avt-mp-ts-cols')?.value || '4', 10);
-  const rows = parseInt(document.getElementById('avt-mp-ts-rows')?.value || '4', 10);
-  try {
-    mostrarToast('⏳ Enviando tileset…', 'ok');
-    const url = await uploadToStorage(_avtMpTilesetFile, `aventuras/${AVT_STATE.rpgId}/tileset`);
-    const blocos = typeof _faseTilesetBlocosCanonicos === 'function'
-      ? _faseTilesetBlocosCanonicos(cols, rows)
-      : {};
-    const tilesetConfig = { version: 2, cols, rows, blocos };
-    const dungeon = AVT_STATE.dungeon || {};
-    dungeon.tileset_config  = tilesetConfig;
-    dungeon.tileset_img_url = url;
-    AVT_STATE.dungeon = dungeon;
-    (AVT_STATE as any)._tilesetConfig   = tilesetConfig;
-    (AVT_STATE as any)._tilesetImgUrl   = url;
-    (AVT_STATE as any)._tilesetLoaded   = false;
-    (AVT_STATE as any)._tilesetTextures = {};
-    if (typeof _avtCarregarTileset === 'function') _avtCarregarTileset(url, tilesetConfig);
-    const newTheme = {
-      ...(AVT_STATE.rpg.theme_json || {}),
-      dungeon_data: dungeon,
-      tileset_img_url: url
-    };
-    AVT_STATE.rpg.theme_json = newTheme;
-    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
-      method: 'PATCH', body: JSON.stringify({ theme_json: newTheme })
-    });
-    mostrarToast('Tileset aplicado!', 'ok');
-    document.getElementById('avt-mestre-map-editor-overlay')!.style!.display = 'none';
-    setTimeout(_avtMestreAbrirEditorUnificado, 200);
-  } catch (e: any) {
-    mostrarToast('Erro: ' + (e?.message || e), 'erro');
-  }
-}
 
 // ─── Nova Fase (wizard) ──────────────────────────────────────────────────────
 function _avtMestreNovaFase() {
@@ -34057,13 +34037,6 @@ Object.defineProperty(globalThis, "_avtMestreExcluirCampanha", { configurable: t
 Object.defineProperty(globalThis, "_avtPackageAdicionar", { configurable: true, get: () => _avtPackageAdicionar, set: (__v) => { _avtPackageAdicionar = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtPackageRemover", { configurable: true, get: () => _avtPackageRemover, set: (__v) => { _avtPackageRemover = __v; } });
-Object.defineProperty(globalThis, "_avtMpTilesetFile", { configurable: true, get: () => _avtMpTilesetFile, set: (__v) => { _avtMpTilesetFile = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMestreToggleTrocaTileset", { configurable: true, get: () => _avtMestreToggleTrocaTileset, set: (__v) => { _avtMestreToggleTrocaTileset = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMestreHandleTilesetUpload", { configurable: true, get: () => _avtMestreHandleTilesetUpload, set: (__v) => { _avtMestreHandleTilesetUpload = __v; } });
-// @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
-Object.defineProperty(globalThis, "_avtMestreAplicarTilesetUpload", { configurable: true, get: () => _avtMestreAplicarTilesetUpload, set: (__v) => { _avtMestreAplicarTilesetUpload = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])
 Object.defineProperty(globalThis, "_avtMestreNovaFase", { configurable: true, get: () => _avtMestreNovaFase, set: (__v) => { _avtMestreNovaFase = __v; } });
 // @ts-expect-error — setter rebinda a function declaration (semântica original dos accessors [migração-esm])

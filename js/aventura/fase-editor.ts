@@ -100,7 +100,7 @@ function avtFaseEditorAbrir(opts: any) {
     FED.portasInternas = (dungeon._portasInternas || []).map((p: any) => JSON.parse(JSON.stringify(p)));
     FED.fasesExtras = (W.AVT_STATE.rpg?.theme_json?.fases_extras || []).map((f: any) => JSON.parse(JSON.stringify(f)));
     FED.spawns = (dungeon._spawnJogadores || []).map((s: any) => ({ ...s }));
-    FED.onExport = null;
+    FED.onExport = null; FED.onTilesetDraft = null;
     FED.tsUrl = null; FED.tsCfg = null; FED.tsHerdadoDe = null;
   } else {
     FED.w = opts.w || 24; FED.h = opts.h || 18;
@@ -114,6 +114,7 @@ function avtFaseEditorAbrir(opts: any) {
     FED.fasesExtras = [];
     FED.spawns = (opts.spawn_jogadores || []).map((s: any) => ({ ...s }));
     FED.onExport = opts.onExport || null;
+    FED.onTilesetDraft = opts.onTilesetDraft || null;
     FED.tsUrl = opts.tilesetUrl || null;
     FED.tsCfg = opts.tilesetConfig ? JSON.parse(JSON.stringify(opts.tilesetConfig)) : null;
     FED.tsHerdadoDe = opts.tilesetHerdadoDe || null;
@@ -171,6 +172,7 @@ function _fedMontarUI() {
       <button class="fed-btn" onclick="_fedZoomFit()" title="Ajustar o mapa à tela (0)">⛶</button>
       <span style="flex:1"></span>
       ${tsUrl ? `<button class="fed-btn" onclick="_fedDistribuir()" title="Recalcula as peças do tileset por vizinhança (preserva portas/saída)">✦ Distribuir</button>` : ''}
+      <button class="fed-btn" onclick="_fedToggleTilesetPanel()" title="Enviar ou trocar o tileset desta fase">🖼 Tileset</button>
       ${FED.modo === 'live'
         ? `<button class="fed-btn fed-btn-ok" onclick="_fedSalvarLive()">💾 Salvar</button>`
         : `<button class="fed-btn fed-btn-ok" onclick="_fedExportarDraft()">✓ Usar este mapa</button>`}
@@ -210,6 +212,8 @@ function _fedMontarUI() {
     _fedRender();
   };
   setTimeout(fit, 0);
+  // Remount (ex.: após aplicar tileset) não pode acumular listeners de resize
+  if ((FED as any)._fitFn) window.removeEventListener('resize', (FED as any)._fitFn);
   window.addEventListener('resize', fit);
   (FED as any)._fitFn = fit;
 
@@ -628,6 +632,147 @@ function _fedFlip() {
   _fedInfoPincel();
 }
 
+// ── Painel 🖼 Tileset: enviar/trocar o atlas da fase ─────────────────────────
+// Substitui o painel do editor antigo que ficou órfão no c198b18 — desde então
+// não havia como adicionar/trocar tileset numa aventura existente.
+function _fedToggleTilesetPanel() {
+  const W: any = window as any;
+  const ts = _fedResolverTileset();
+  const cfg = ts.cfg;
+  FED._tsModalFile = null;
+  let modal = document.getElementById('fed-ts-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'fed-ts-modal';
+    (modal as any).style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9600;display:flex;align-items:center;justify-content:center';
+    document.body.appendChild(modal);
+  }
+  const tsSrc = ts.url && typeof W.normalizeImgUrl === 'function' ? W.normalizeImgUrl(ts.url) : ts.url;
+  modal.innerHTML = `
+    <div style="background:#0d1320;border:1px solid rgba(79,163,209,0.3);border-radius:10px;padding:18px;width:340px;max-width:92vw">
+      <div style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8d8e8;margin-bottom:12px">🖼 Tileset da fase</div>
+      ${ts.herdadoDe ? `<div style="font-size:0.66rem;color:#c8a84b;margin-bottom:8px">Atualmente herdado de "${ts.herdadoDe}" — enviar um atlas cria um tileset próprio.</div>` : ''}
+      <label style="display:block;font-size:0.72rem;color:#c8d8e8;margin-bottom:8px;cursor:pointer">
+        📁 Imagem do atlas <input id="fed-ts-file" type="file" accept="image/*" style="display:none" onchange="_fedTsModalHandleFile(this)">
+        <span id="fed-ts-file-nome" style="color:#7a92aa;font-size:0.66rem;margin-left:6px">${ts.url && !ts.herdadoDe ? '(mantém o atual)' : 'nenhuma escolhida'}</span>
+      </label>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <span style="font-size:0.66rem;color:#7a92aa">Colunas</span>
+        <input id="fed-ts-cols" type="number" min="4" max="5" value="${cfg?.cols || 4}" class="fed-num">
+        <span style="font-size:0.66rem;color:#7a92aa">Linhas</span>
+        <input id="fed-ts-rows" type="number" min="4" max="5" value="${cfg?.rows || 4}" class="fed-num">
+      </div>
+      <img id="fed-ts-modal-prev" src="${tsSrc || ''}" style="display:${tsSrc ? 'block' : 'none'};image-rendering:pixelated;max-width:100%;max-height:160px;border:1px solid rgba(79,163,209,0.2);border-radius:5px;margin-bottom:10px">
+      <div style="display:flex;gap:8px;justify-content:space-between">
+        <button class="fed-btn" onclick="_fedCopiarPromptTileset()" title="Prompt pronto para gerar o atlas numa IA de imagem">📋 Prompt de IA</button>
+        <span style="flex:1"></span>
+        <button class="fed-btn fed-btn-danger" onclick="document.getElementById('fed-ts-modal').style.display='none'">Cancelar</button>
+        <button class="fed-btn fed-btn-ok" onclick="_fedAplicarTileset()">✓ Aplicar</button>
+      </div>
+    </div>`;
+  (modal as any).style.display = 'flex';
+}
+
+function _fedTsModalHandleFile(input: any) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  FED._tsModalFile = file;
+  const nome = document.getElementById('fed-ts-file-nome');
+  if (nome) nome.textContent = file.name;
+  const prev = document.getElementById('fed-ts-modal-prev') as HTMLImageElement;
+  if (prev) { prev.src = URL.createObjectURL(file); (prev as any).style.display = 'block'; }
+}
+
+function _fedTsModalDims() {
+  const clamp45 = (v: any) => Math.min(5, Math.max(4, parseInt(v, 10) || 4));
+  return {
+    cols: clamp45((document.getElementById('fed-ts-cols') as any)?.value),
+    rows: clamp45((document.getElementById('fed-ts-rows') as any)?.value),
+  };
+}
+
+// Restaura o botão de prompt deletado no c198b18 (template segue vivo).
+function _fedCopiarPromptTileset() {
+  const W: any = window as any;
+  if (typeof W.faseTilesetImgPromptTemplate !== 'function') return;
+  const { cols, rows } = _fedTsModalDims();
+  const estilo = W.AVT_STATE?.rpg?.theme_json?.nome || undefined;
+  navigator.clipboard.writeText(W.faseTilesetImgPromptTemplate({ estilo, cols, rows }))
+    .then(() => W.mostrarToast?.('📋 Prompt de tileset copiado!', 'ok'))
+    .catch(() => W.mostrarToast?.('Erro ao copiar', 'erro'));
+}
+
+async function _fedAplicarTileset() {
+  const W: any = window as any;
+  const { cols, rows } = _fedTsModalDims();
+  const ts = _fedResolverTileset();
+  const file = FED._tsModalFile;
+  // Sem arquivo novo: refatia o atlas atual com os cols/rows informados
+  // (um tileset herdado exige arquivo — a fase ganha um atlas próprio).
+  if (!file && (!ts.url || ts.herdadoDe)) { W.mostrarToast?.('Escolha a imagem do atlas', 'aviso'); return; }
+  const blocosBase = (!file && ts.cfg?.cols === cols && ts.cfg?.rows === rows) ? ts.cfg?.blocos : null;
+  const cfg = { version: 2, cols, rows, blocos: W._avtMergeBlocosCanonicos(blocosBase, cols, rows) };
+  const modal = document.getElementById('fed-ts-modal');
+
+  if (FED.modo === 'live') {
+    const A: any = W.AVT_STATE;
+    if (typeof W._avtRpgAtivo === 'function' && !W._avtRpgAtivo()) return;
+    if (typeof W._avtPodeSalvarRegistro === 'function' && !W._avtPodeSalvarRegistro()) {
+      W.mostrarToast?.('Apenas o mestre/host pode trocar o tileset', 'aviso'); return;
+    }
+    let url = ts.url;
+    if (file) {
+      try {
+        const faseId = A._faseAtualId || 'principal';
+        url = await W.uploadToStorage(file, `aventuras/${A.rpgId}/tileset_${faseId}_${Date.now()}`);
+      } catch (e: any) {
+        W.mostrarToast?.('Erro ao enviar o tileset: ' + (e?.message || e), 'erro'); return;
+      }
+    }
+    const tj = A.rpg.theme_json = A.rpg.theme_json || {};
+    W._avtGravarTilesetNoSlot(tj, url, cfg);
+    A._tilesetLoaded = false; A._tilesetTextures = {};
+    try { await W._avtCarregarTileset(url, cfg); } catch (_) {}
+    if (modal) (modal as any).style.display = 'none';
+    try {
+      await W._avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(A.rpgId)}`, {
+        method: 'PATCH', body: JSON.stringify({ theme_json: tj })
+      });
+      W.mostrarToast?.('Tileset aplicado à fase!', 'ok');
+    } catch (e: any) {
+      W.mostrarToast?.('Tileset aplicado localmente (erro ao persistir: ' + (e?.message || e) + ')', 'aviso');
+    }
+    A._dungeonRev = (A._dungeonRev || 0) + 1;
+    if (typeof W._avtTileBakeInvalidate === 'function') W._avtTileBakeInvalidate();
+    try {
+      W._avtBroadcast?.('avt_dungeon_update', {
+        faseId: A._faseAtualId || 'principal',
+        dungeon: A.dungeon,
+        fases_extras: tj.fases_extras || []
+      });
+    } catch (_) {}
+  } else {
+    // Draft: nada sobe agora — objectURL local + repasse ao wizard, que faz o
+    // upload real no salvar (contrato onTilesetDraft(file, cols, rows)).
+    if (file) {
+      FED.tsUrl = URL.createObjectURL(file);
+      FED.tsHerdadoDe = null;
+      if (typeof FED.onTilesetDraft === 'function') FED.onTilesetDraft(file, cols, rows);
+    }
+    FED.tsCfg = cfg;
+    FED.texs = null;
+    if (modal) (modal as any).style.display = 'none';
+    try {
+      const texs = await W._avtCarregarTileset(FED.tsUrl, cfg, { aplicar: false });
+      FED.texs = texs || null;
+    } catch (_) {}
+    W.mostrarToast?.('Tileset do rascunho atualizado', 'ok');
+  }
+  _fedMontarUI(); // paleta e Distribuir passam a existir
+  _fedRender();
+  _fedInfoPincel();
+}
+
 // Célula do atlas sem papel mapeado: oferece atribuir uma chave em vez do
 // antigo no-op silencioso do picker.
 function _fedAtribuirPapel(tc: number, tr: number) {
@@ -945,5 +1090,6 @@ Object.assign(window as any, {
   _fedSetTool, _fedUndo, _fedRedo, _fedResize, _fedDistribuir,
   _fedSalvarLive, _fedExportarDraft, _fedGirar, _fedFlip, _fedConfirmarPorta,
   _fedZoomFit, _fedZoomStep, _fedZoomReset, _fedCalcularZoomFit,
+  _fedToggleTilesetPanel, _fedTsModalHandleFile, _fedCopiarPromptTileset, _fedAplicarTileset,
   _fedDerivarRooms, _fedSet, _fedFill, _fedRect, _fedStrokeStart, _fedStrokeEnd, FED,
 });
