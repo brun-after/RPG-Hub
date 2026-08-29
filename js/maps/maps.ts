@@ -886,7 +886,7 @@ async function _atkInvocarPersonagem(skill: any, invocadorNome: any, contexto: a
     };
 
     try {
-      const novo = await arSb('characters', { method: 'POST', body: JSON.stringify({
+      const novo = await arSb('characters', { method: 'POST', prefer: 'return=representation', body: JSON.stringify({
         rpg_id:      AR.session.rpg_id,
         nome:        nomeInvocado,
         hp_atual:    hp,
@@ -1202,8 +1202,15 @@ async function atkAplicarDano(nomeAlvo: any, dano: any, contexto: any, tipoDano:
     const novoHp = Math.max(0, (c.hp_atual ?? hpMax) - danoFinal);
     if (danoFinal !== dano && typeof (window as any).arLog === 'function') (window as any).arLog(`🛡 ${nomeAlvo} — ${dano} de dano bruto → ${danoFinal} após buffs/resistências`);
     c.hp_atual = novoHp;
-    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
-      { method: 'PATCH', body: JSON.stringify({ hp_atual: novoHp }) });
+    // Otimista: a UI dos callers já reflete c.hp_atual; persiste em background.
+    // persistir() lê o valor vivo — hits rápidos coalescem no valor final.
+    salvarOtimista({
+      chave: 'characters:' + (c.id || (AR.session.rpg_id + ':' + nomeAlvo)),
+      persistir: () => arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+        { method: 'PATCH', body: JSON.stringify({ hp_atual: c.hp_atual }) }),
+      aoFalhar: () => osRefetchCharacter(AR.session.rpg_id, c.id || nomeAlvo),
+      msgErro: `⚠ Falha ao salvar HP de ${nomeAlvo} — ressincronizando…`,
+    });
   } else {
     const c: any = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
     if (!c) return;
@@ -1255,8 +1262,16 @@ async function atkAplicarDano(nomeAlvo: any, dano: any, contexto: any, tipoDano:
     }
     // ─────────────────────────────────────────────────────────────────────
 
-    await saveCharacterStats(RPG_DATA!.rpgId, nomeAlvo, { hp_atual: novoHp });
+    // Otimista: render PRIMEIRO (a barra de HP se move na hora), persiste em
+    // background. persistir() lê c.hp_atual vivo — hits rápidos no mesmo alvo
+    // coalescem no valor final.
     renderCharView(nomeAlvo); renderAttrView(nomeAlvo); mapaRenderStatus();
+    salvarOtimista({
+      chave: 'characters:' + (c.id || nomeAlvo),
+      persistir: () => saveCharacterStats(RPG_DATA!.rpgId, c.id || nomeAlvo, { hp_atual: c.hp_atual }),
+      aoFalhar: () => osRefetchCharacter(RPG_DATA!.rpgId, c.id || nomeAlvo),
+      msgErro: `⚠ Falha ao salvar HP de ${nomeAlvo} — ressincronizando…`,
+    });
     
     // ✅ REC-06: Adicionar ao log de combate
     if (typeof COMBATE_LOG !== 'undefined') {
@@ -1281,8 +1296,11 @@ async function atkAplicarDano(nomeAlvo: any, dano: any, contexto: any, tipoDano:
         c.custom_attrs.salvaguardas = { sucessos: 0, falhas: 0 };
         mostrarToast(nomeAlvo + ' caiu! Salvaguardas de Morte ativas.', 'erro');
         combateBroadcast('personagem_caiu', { nome: nomeAlvo });
-        await saveCharacterStats(RPG_DATA!.rpgId, nomeAlvo, {
-          hp_atual: 0, custom_attrs: c.custom_attrs
+        salvarOtimista({
+          chave: 'characters:' + (c.id || nomeAlvo),
+          persistir: () => saveCharacterStats(RPG_DATA!.rpgId, c.id || nomeAlvo, { hp_atual: c.hp_atual, custom_attrs: c.custom_attrs }),
+          aoFalhar: () => osRefetchCharacter(RPG_DATA!.rpgId, c.id || nomeAlvo),
+          msgErro: `⚠ Falha ao salvar estado de ${nomeAlvo} — ressincronizando…`,
         });
         const entryMor = (RPG_DATA!.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
         if (entryMor) mapaRenderTokens(entryMor.mapa);
@@ -1290,10 +1308,13 @@ async function atkAplicarDano(nomeAlvo: any, dano: any, contexto: any, tipoDano:
       }
       // NPC ou já moribundo → morte direta
       c.custom_attrs.morto = true;
-      try {
-        await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
-          { method:'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
-      } catch(e) {}
+      salvarOtimista({
+        chave: 'characters:' + (c.id || nomeAlvo),
+        persistir: () => sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+          { method:'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) }),
+        aoFalhar: () => osRefetchCharacter(RPG_DATA!.rpgId, c.id || nomeAlvo),
+        msgErro: `⚠ Falha ao salvar estado de ${nomeAlvo} — ressincronizando…`,
+      });
       combateBroadcast('personagem_morto', { nome: nomeAlvo });
       // I9: verificar drop automático se for NPC com tier
       const cMorto = RPG_DATA!.characters.find(x=>x.nome===nomeAlvo);
@@ -5798,24 +5819,7 @@ async function salvarConfigMapa() {
       render_data: novoRenderData,
     };
     await sb(`mapas?id=eq.${encodeURIComponent(entry.id)}`, { method:'PATCH', body:JSON.stringify(patch) });
-    // Feedback visual no botão de salvar
-    const _btnSalvar = document.querySelector('#modal-mapa-config-overlay .btn-primario');
-    if (_btnSalvar) {
-      const _txtOrig = _btnSalvar.textContent;
-      _btnSalvar.textContent = '✓ Salvo!';
-      _btnSalvar.style!.background = '#27ae60';
-      _btnSalvar.style!.color = '#fff';
-      _btnSalvar.disabled = true;
-      setTimeout(() => {
-        _btnSalvar.textContent = _txtOrig;
-        _btnSalvar.style!.background = '';
-        _btnSalvar.style!.color = '';
-        _btnSalvar.disabled = false;
-        fecharModalMapaConfig();
-      }, 1200);
-    } else {
-      fecharModalMapaConfig();
-    }
+    fecharModalMapaConfig();
     mostrarToast('Mapa atualizado!', 'sucesso');
     renderMapasTab();
     // Reaplicar visual imediatamente — transform3d já está em m.transform3d

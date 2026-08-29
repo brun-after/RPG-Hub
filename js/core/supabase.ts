@@ -19,7 +19,10 @@ async function sb<T = any>(path: string, opts: SbOpts = {}, _retry = 0): Promise
   const headers: Record<string, string> = {
     'apikey':       SUPABASE_KEY,
     'Content-Type': 'application/json',
-    'Prefer':       opts.prefer || 'return=representation',
+    // Default return=minimal: writes não devolvem a linha (economiza a
+    // serialização de blobs grandes no servidor). Callers que consomem a
+    // resposta passam prefer:'return=representation' explicitamente.
+    'Prefer':       opts.prefer || 'return=minimal',
     ...(opts.headers || {})
   };
   if (SESSION?.access_token) {
@@ -132,16 +135,7 @@ async function _carregarProgressivo(rpgId: string) {
  // Fase 2: Personagens (sem imagens)
  try {
    const chars=await sb<CharacterRow[]>(`characters?rpg_id=eq.${e}&select=id,rpg_id,nome,hp_atual,hp_max,xp,nivel,pontos_attr,custom_attrs,map_positions,active_map_id,buffs&order=id`);
-   (chars||[]).forEach(c=>{
-     if(typeof c.custom_attrs==='string'){try{c.custom_attrs=JSON.parse(c.custom_attrs);}catch(ex){c.custom_attrs={};}}
-     if(!c.custom_attrs||typeof c.custom_attrs!=='object')c.custom_attrs={};
-     if(!c.map_positions||typeof c.map_positions!=='object')c.map_positions={};
-     if(!Array.isArray(c.buffs))c.buffs=[];
-     c.custom_attrs.nivel       = c.nivel       ?? c.custom_attrs.nivel       ?? 1;
-     c.custom_attrs.hp_max      = c.hp_max       ?? c.custom_attrs.hp_max      ?? 100;
-     c.custom_attrs.xp          = c.xp           ?? c.custom_attrs.xp          ?? 0;
-     c.custom_attrs.pontos_attr = c.pontos_attr  ?? c.custom_attrs.pontos_attr ?? 0;
-   });
+   (chars||[]).forEach(c=>_normalizarCharRow(c));
    RPG_DATA!.characters=chars||[];
    // Espelhar para AVT_STATE.chars — fix dessincronização entre clientes.
    try{
@@ -207,6 +201,21 @@ async function _carregarProgressivo(rpgId: string) {
  }, 300);
 }
 
+// ── NORMALIZAÇÃO DE LINHA DE PERSONAGEM ──────────────────────
+// Compartilhada entre o carregamento progressivo e os re-fetches pontuais
+// (optimistic-save). Espelha os campos derivados dentro de custom_attrs.
+function _normalizarCharRow(c: any){
+ if(typeof c.custom_attrs==='string'){try{c.custom_attrs=JSON.parse(c.custom_attrs);}catch(ex){c.custom_attrs={};}}
+ if(!c.custom_attrs||typeof c.custom_attrs!=='object')c.custom_attrs={};
+ if(!c.map_positions||typeof c.map_positions!=='object')c.map_positions={};
+ if(!Array.isArray(c.buffs))c.buffs=[];
+ c.custom_attrs.nivel       = c.nivel       ?? c.custom_attrs.nivel       ?? 1;
+ c.custom_attrs.hp_max      = c.hp_max      ?? c.custom_attrs.hp_max      ?? 100;
+ c.custom_attrs.xp          = c.xp          ?? c.custom_attrs.xp          ?? 0;
+ c.custom_attrs.pontos_attr = c.pontos_attr ?? c.custom_attrs.pontos_attr ?? 0;
+ return c;
+}
+
 // ── ESCRITA ───────────────────────────────────────────────────
 async function saveCharacterStats(rpgId: string, charNameOrId: string, stats: { hp_atual?: number; custom_attrs?: CustomAttrs; [k: string]: any }){
  const body: any = {};
@@ -218,24 +227,33 @@ async function saveCharacterStats(rpgId: string, charNameOrId: string, stats: { 
    charId = charNameOrId;
    qry = `characters?id=eq.${encodeURIComponent(charNameOrId)}`;
  } else {
-   try{
-     const rows = await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charNameOrId)}&select=id&limit=1`);
-     if(rows && rows[0] && rows[0].id){
-       charId = rows[0].id;
-       qry = `characters?id=eq.${encodeURIComponent(rows[0].id)}`;
-     } else {
+   // Resolver o id localmente evita um SELECT de rede antes do PATCH —
+   // este é o write mais quente do combate (cada ponto de dano).
+   const local = RPG_DATA?.characters?.find(x=>x.nome===charNameOrId&&x.rpg_id===rpgId);
+   if(local?.id){
+     charId = local.id;
+     qry = `characters?id=eq.${encodeURIComponent(local.id)}`;
+   } else {
+     try{
+       const rows = await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charNameOrId)}&select=id&limit=1`);
+       if(rows && rows[0] && rows[0].id){
+         charId = rows[0].id;
+         qry = `characters?id=eq.${encodeURIComponent(rows[0].id)}`;
+       } else {
+         qry = `characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charNameOrId)}`;
+       }
+     }catch(_){
        qry = `characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charNameOrId)}`;
      }
-   }catch(_){
-     qry = `characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charNameOrId)}`;
    }
  }
  await sb(qry,{method:'PATCH',body:JSON.stringify(body)});
- // Propagar mudanças para as cópias do personagem em outras aventuras (mesma linhagem).
+ // Propagar mudanças para as cópias do personagem em outras aventuras (mesma
+ // linhagem) — em background: não faz parte do save crítico.
  try{
    const ca = stats.custom_attrs;
    if(charId && ca?.linhagem_id && typeof window._avtSyncLinhagem==='function'){
-     await window._avtSyncLinhagem({ id: charId, rpg_id: rpgId, custom_attrs: ca, hp_atual: stats.hp_atual });
+     Promise.resolve(window._avtSyncLinhagem({ id: charId, rpg_id: rpgId, custom_attrs: ca, hp_atual: stats.hp_atual })).catch(()=>{});
    }
  }catch(_){}
 }
@@ -633,6 +651,7 @@ Object.defineProperty(globalThis, "getAllRPGs", { configurable: true, writable: 
 Object.defineProperty(globalThis, "getRPGData", { configurable: true, writable: true, value: getRPGData });
 Object.defineProperty(globalThis, "_carregarProgressivo", { configurable: true, writable: true, value: _carregarProgressivo });
 Object.defineProperty(globalThis, "saveCharacterStats", { configurable: true, writable: true, value: saveCharacterStats });
+Object.defineProperty(globalThis, "_normalizarCharRow", { configurable: true, writable: true, value: _normalizarCharRow });
 Object.defineProperty(globalThis, "saveMemberLinked", { configurable: true, writable: true, value: saveMemberLinked });
 Object.defineProperty(globalThis, "deleteRPGData", { configurable: true, writable: true, value: deleteRPGData });
 Object.defineProperty(globalThis, "buildLevelConfig", { configurable: true, writable: true, value: buildLevelConfig });

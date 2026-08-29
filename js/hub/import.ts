@@ -231,7 +231,7 @@ async function enviarImport(){
    const secs=Object.keys(IMPORT_CSVS).filter(k=>IMPORT_CSVS[k]&&IMPORT_CSVS[k].length);
    if(!secs.length){showSt('status-import','Nenhum arquivo carregado','err');return;}
    btn!.disabled=true;btn!.textContent='Atualizando...';
-   try{const upd=await updateRPG(rpgId,IMPORT_CSVS);showSt('status-import',`✓ Atualizado: ${upd.join(', ')}`,'ok');HUB_DATA.rpgs=await getAllRPGs()||[];setTimeout(fecharImport,2000);}
+   try{const upd=await updateRPG(rpgId,IMPORT_CSVS);HUB_DATA.rpgs=await getAllRPGs()||[];fecharImport();mostrarToast(`✓ Atualizado: ${upd.join(', ')}`,'sucesso');}
    catch (e: any){showSt('status-import',`✗ ${e.message}`,'err');}
    finally{btn!.disabled=false;btn!.textContent='Atualizar RPG';}
    return;
@@ -239,7 +239,7 @@ async function enviarImport(){
  if(!IMPORT_CSVS.config||!(IMPORT_CSVS as any).config.length){showSt('status-import','#SECTION:config é obrigatório','err');return;}
  if(IMPORT_CSVS.characters&&IMPORT_CSVS.characters.length&&(!IMPORT_CSVS.attr_defs||!(IMPORT_CSVS as any).attr_defs.length)){showSt('status-import','⚠ #SECTION:characters requer #SECTION:attr_defs para definir os atributos. Adicione a seção attr_defs ao arquivo.','err');return;}
  btn!.disabled=true;btn!.textContent='Importando...';
- try{const rpgId=await importRPG(IMPORT_CSVS, _mapasImportJSON);showSt('status-import',`✓ "${(IMPORT_CSVS as any).config[0].name}" importado!`,'ok');HUB_DATA.rpgs=await getAllRPGs()||[];renderRPGList(HUB_DATA.rpgs);setTimeout(fecharImport,2000);}
+ try{const rpgId=await importRPG(IMPORT_CSVS, _mapasImportJSON);HUB_DATA.rpgs=await getAllRPGs()||[];renderRPGList(HUB_DATA.rpgs);fecharImport();mostrarToast(`✓ "${(IMPORT_CSVS as any).config[0].name}" importado!`,'sucesso');}
  catch (e: any){showSt('status-import',`✗ ${e.message}`,'err');}
  finally{btn!.disabled=false;btn!.textContent='Importar RPG';}
 }
@@ -2703,7 +2703,20 @@ function abrirAba(id: any,btn: any){
   }
   if(RPG_DATA?.rpgId) salvarAba(RPG_DATA.rpgId, id);
 }
-function mostrarToast(msg: any,tipo?: any,_dur?: any){const t=document.getElementById('toast');t!.textContent=msg;t!.className='toast '+(tipo||'');t!.classList.add('visivel');setTimeout(()=>t!.classList.remove('visivel'),2400);}
+let _toastTimer: ReturnType<typeof setTimeout> | null = null;
+const _TOAST_ALIAS: Record<string,string> = { ok:'sucesso', err:'erro' };
+function mostrarToast(msg: any,tipo?: any,dur?: any){
+  const t=document.getElementById('toast'); if(!t)return;
+  const tp=_TOAST_ALIAS[tipo]||tipo||'';
+  // Um toast de erro visível não é sobrescrito por toast comum
+  if(_toastTimer&&t.className.includes('erro')&&tp!=='erro')return;
+  if(_toastTimer)clearTimeout(_toastTimer);
+  t.textContent=msg;
+  t.className='toast '+tp;
+  t.classList.add('visivel');
+  const ms=+dur||(tp==='erro'?6000:2400);
+  _toastTimer=setTimeout(()=>{t.classList.remove('visivel');_toastTimer=null;},ms);
+}
 
 if ('serviceWorker' in navigator) {
    window.addEventListener('load', () => {

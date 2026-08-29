@@ -2780,19 +2780,30 @@ async function atkAplicarSkillSuporte(alvos: any) {
 
 async function atkAplicarCura(nomeAlvo: any, cura: any, contexto: any) {
   if (!cura) return;
+  // Otimista: muta local e persiste em background (persistir lê o valor vivo).
   if (contexto === 'arena') {
     const c = AR.chars.find((x: any) => x.nome === nomeAlvo);
     if (!c) return;
     const hpMax = c.custom_attrs?.hp_max ?? 100;
     c.hp_atual = Math.min(hpMax, (c.hp_atual ?? hpMax) + cura);
-    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
-      { method: 'PATCH', body: JSON.stringify({ hp_atual: c.hp_atual }) });
+    salvarOtimista({
+      chave: 'characters:' + (c.id || (AR.session.rpg_id + ':' + nomeAlvo)),
+      persistir: () => arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+        { method: 'PATCH', body: JSON.stringify({ hp_atual: c.hp_atual }) }),
+      aoFalhar: () => osRefetchCharacter(AR.session.rpg_id, c.id || nomeAlvo),
+      msgErro: `⚠ Falha ao salvar HP de ${nomeAlvo} — ressincronizando…`,
+    });
   } else {
     const c = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
     if (!c) return;
     const hpMax = c.custom_attrs?.hp_max ?? 100;
     c.hp_atual = Math.min(hpMax, (c.hp_atual ?? hpMax) + cura);
-    await saveCharacterStats(RPG_DATA!.rpgId, nomeAlvo, { hp_atual: c.hp_atual });
+    salvarOtimista({
+      chave: 'characters:' + (c.id || nomeAlvo),
+      persistir: () => saveCharacterStats(RPG_DATA!.rpgId, c.id || nomeAlvo, { hp_atual: c.hp_atual }),
+      aoFalhar: () => osRefetchCharacter(RPG_DATA!.rpgId, c.id || nomeAlvo),
+      msgErro: `⚠ Falha ao salvar HP de ${nomeAlvo} — ressincronizando…`,
+    });
   }
 }
 
@@ -2811,13 +2822,16 @@ async function atkAplicarRecuperacaoAtributo(nomeAlvo: any, atributo: any, quant
     mostrarToast(`⚠ ${atributo} de ${nomeAlvo} chegou a zero!`, 'aviso');
   }
   c.custom_attrs.atributos[atributo] = novoValor;
-  if (contexto === 'arena') {
-    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
-      { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
-  } else {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA!.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
-      { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
-  }
+  // Otimista: custom_attrs já mutado acima; persiste em background.
+  const _rpgIdRec = contexto === 'arena' ? AR.session.rpg_id : RPG_DATA!.rpgId;
+  const _sbRec = contexto === 'arena' ? arSb : sb;
+  salvarOtimista({
+    chave: 'characters:' + (c.id || (_rpgIdRec + ':' + nomeAlvo)),
+    persistir: () => _sbRec(`characters?rpg_id=eq.${encodeURIComponent(_rpgIdRec)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) }),
+    aoFalhar: () => osRefetchCharacter(_rpgIdRec, c.id || nomeAlvo),
+    msgErro: `⚠ Falha ao salvar ${atributo} de ${nomeAlvo} — ressincronizando…`,
+  });
 }
 
 // ── SISTEMA DE CUSTO DE RECURSO (Mana, Stamina, Ki, etc.) ────
@@ -3627,7 +3641,12 @@ async function _atkAplicarDanoFinal() {
   const ehSuportePuro = h.tipo_dano === 'suporte' || h.tipo_dano === 'buff';
   
   if (ehCura) {
-    for (const nomeAlvo of alvosAtaque) await atkAplicarCura(nomeAlvo, dano, contexto);
+    for (const nomeAlvo of alvosAtaque) {
+      await atkAplicarCura(nomeAlvo, dano, contexto);
+      // Stagger visual do AoE: a persistência é otimista (sem rede no await),
+      // então o compasso entre alvos precisa ser explícito.
+      if (alvosAtaque.length > 1) await new Promise(r => setTimeout(r, 80));
+    }
     if (typeof AudioManager !== 'undefined') {
       const _sfxCura = h.animacao?.audio?.impact || 'heal_chime';
       AudioManager.playSFX(_sfxCura, { volume: h.animacao?.audio?.volume ?? 0.75 });
@@ -3685,6 +3704,9 @@ async function _atkAplicarDanoFinal() {
           await _batalhaProcessarEventoReativo('ser_reduzido_zero', { atacanteNome, alvoNome: nomeAlvo, dano, habilidade: h, contexto });
         }
       }
+      // Stagger visual do AoE: a persistência é otimista (sem rede no await),
+      // então o compasso entre alvos precisa ser explícito.
+      if (alvosAtaque.length > 1) await new Promise(r => setTimeout(r, 80));
     }
     // Um cast = um som de impacto, mesmo em AoE (dentro do loop, N alvos
     // empilhavam N tocadas idênticas no mesmo frame). Whiff total não toca.

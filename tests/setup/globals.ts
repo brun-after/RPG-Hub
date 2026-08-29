@@ -10,6 +10,7 @@ import '../../js/config';
 import '../../js/state';
 import '../../js/core/utils';
 import '../../js/core/supabase';
+import '../../js/core/optimistic-save';
 import '../../js/core/events';
 
 const g = globalThis as any;

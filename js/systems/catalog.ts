@@ -547,7 +547,7 @@ async function salvarItem() {
 
   // Verificar trade-off severo
   const severo = CATALOGO_STATE.bonusLinhas.some(l => parseFloat(l.valor) < 0 && Math.abs(parseFloat(l.valor)) > 10);
-  if (severo && !confirm('⚠️ Trade-off severo detectado. Confirmar salvar?')) return;
+  if (severo && !await confirmarAsync('⚠️ Trade-off severo detectado. Confirmar salvar?', { ok: 'Salvar' })) return;
 
   const bonusObj: Record<string, any> = {};
   for (const l of CATALOGO_STATE.bonusLinhas) {
@@ -590,19 +590,38 @@ async function salvarItem() {
     tier_max: document.getElementById('fi-droppable')!.checked! ? (parseInt(document.getElementById('fi-tier-max')!.value!)||5) : null
   };
 
+  if (id) {
+    // Otimista (edição): sincroniza os stores locais, fecha o form e
+    // renderiza JÁ (sem refetch — buscar agora leria o dado antigo);
+    // PATCH em background. item_catalog não tem canal realtime, então não
+    // há eco a suprimir.
+    const savedRow = { ...payload, id: parseInt(id) };
+    if (INV.itemDefs) {
+      const idxDef = INV.itemDefs.findIndex((d: any) => d.id === savedRow.id);
+      if (idxDef >= 0) INV.itemDefs[idxDef] = { ...INV.itemDefs[idxDef], ...savedRow };
+      else INV.itemDefs.push(savedRow);
+    }
+    const idxCat = (CATALOGO_STATE.itens || []).findIndex((x: any) => x.id === savedRow.id);
+    if (idxCat >= 0) CATALOGO_STATE.itens[idxCat] = { ...CATALOGO_STATE.itens[idxCat], ...savedRow };
+    mostrarToast('✓ Item atualizado', 'ok');
+    fecharFormItem();
+    filtrarCatalogo();
+    renderTabelasTab();
+    salvarOtimista({
+      chave: 'item_catalog:' + id,
+      persistir: () => sb(`item_catalog?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(payload) }),
+      aoFalhar: async () => { await carregarCatalogo(); renderTabelasTab(); },
+      msgErro: `⚠ Falha ao salvar ${nome} — ressincronizando…`,
+    });
+    return;
+  }
+  // Criação (POST): segue aguardada — precisa do id do servidor.
   const btn = document.getElementById('fi-btn-salvar');
   btn!.disabled = true; btn!.textContent = 'Salvando...';
   try {
-    let savedRow = null;
-    if (id) {
-      const rows = await sb(`item_catalog?id=eq.${id}`, { method:'PATCH', prefer:'return=representation', body: JSON.stringify(payload) });
-      savedRow = rows?.[0] || { ...payload, id: parseInt(id) };
-      mostrarToast('✓ Item atualizado', 'ok');
-    } else {
-      const rows = await sb('item_catalog', { method:'POST', prefer:'return=representation', body: JSON.stringify(payload) });
-      savedRow = rows?.[0] || payload;
-      mostrarToast('✓ Item criado', 'ok');
-    }
+    const rows = await sb('item_catalog', { method:'POST', prefer:'return=representation', body: JSON.stringify(payload) });
+    const savedRow = rows?.[0] || payload;
+    mostrarToast('✓ Item criado', 'ok');
     // Sincronizar com INV.itemDefs para que renderTabelasTab reflita a mudança
     if (savedRow && INV.itemDefs) {
       const idx = INV.itemDefs.findIndex((d: any) => d.id === savedRow.id);
@@ -1389,7 +1408,7 @@ async function invEquipar(invId: any) {
       const n=typeof v==='object'?v.valor:v; const suf=typeof v==='object'&&v.modo==='pct'?'%':'';
       return `${k} ${n}${suf}`;
     }).join(', ');
-    if (!confirm(`⚠️ Este item reduz: ${avisos}\n\nEquipar mesmo assim?`)) return;
+    if (!await confirmarAsync(`⚠️ Este item reduz: ${avisos}\n\nEquipar mesmo assim?`, { ok: 'Equipar' })) return;
   }
 
   // [C] Slot ocupado
@@ -1412,7 +1431,7 @@ async function invEquipar(invId: any) {
   const slotOcupado = ((INV.inventarios as any)[charId] || []).find((i: any) => i.equipado && i.slot_equipado === slotAlvo);
   if (slotOcupado) {
     const nomeAtual = slotOcupado.item?.nome || 'item atual';
-    if (!confirm(`O slot já contém "${nomeAtual}". Substituir?`)) return;
+    if (!await confirmarAsync(`O slot já contém "${nomeAtual}". Substituir?`, { ok: 'Substituir' })) return;
     await invDesequipar(slotOcupado.id, true); // silencioso
   }
 
@@ -1434,35 +1453,34 @@ async function invEquipar(invId: any) {
     ca.atributos[attr] = atual + delta;
   }
 
-  // Atualizar character
+  // Otimista: muta o estado local, fecha o modal e renderiza JÁ; os dois
+  // PATCHes (characters + inventario) saem juntos em background.
   c.custom_attrs = ca;
-  try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}&nome=eq.${encodeURIComponent(INV.charAtivo)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ custom_attrs: ca })
-    });
-    // Atualizar instância de inventário
-    await sb(`inventario?id=eq.${invId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ equipado: true, slot_equipado: slotAlvo, bonus_snapshot: snapshot })
-    });
-    // Atualizar estado local
-    const idx = (INV.inventarios as any)[charId].findIndex((i: any) => i.id === invId);
-    if (idx >= 0) {
-      (INV.inventarios as any)[charId][idx].equipado = true;
-      (INV.inventarios as any)[charId][idx].slot_equipado = slotAlvo;
-      (INV.inventarios as any)[charId][idx].bonus_snapshot = snapshot;
-    }
-    document.getElementById('modal-inv-item-overlay')!.style!.display = 'none';
-    mostrarToast(`✓ ${it.nome} equipado!`, 'ok');
-    renderInvCompleto();
-    if (typeof renderCharView === 'function') renderCharView(INV.charAtivo);
-    if (typeof renderAttrView === 'function') renderAttrView(INV.charAtivo);
-  } catch(e) {
-    mostrarToast('Erro ao equipar. Verifique sua conexão e tente novamente.', 'erro');
-    // Reverter local
-    c.custom_attrs = c.custom_attrs;
+  const idx = (INV.inventarios as any)[charId].findIndex((i: any) => i.id === invId);
+  if (idx >= 0) {
+    (INV.inventarios as any)[charId][idx].equipado = true;
+    (INV.inventarios as any)[charId][idx].slot_equipado = slotAlvo;
+    (INV.inventarios as any)[charId][idx].bonus_snapshot = snapshot;
   }
+  document.getElementById('modal-inv-item-overlay')!.style!.display = 'none';
+  mostrarToast(`✓ ${it.nome} equipado!`, 'ok');
+  renderInvCompleto();
+  if (typeof renderCharView === 'function') renderCharView(INV.charAtivo);
+  if (typeof renderAttrView === 'function') renderAttrView(INV.charAtivo);
+  const _charFiltro = c.id ? `id=eq.${encodeURIComponent(c.id)}` : `rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}&nome=eq.${encodeURIComponent(INV.charAtivo)}`;
+  salvarOtimista({
+    chave: 'inventario:' + invId,
+    persistir: () => Promise.all([
+      sb(`characters?${_charFiltro}`, { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) }),
+      sb(`inventario?id=eq.${invId}`, { method: 'PATCH', body: JSON.stringify({ equipado: true, slot_equipado: slotAlvo, bonus_snapshot: snapshot }) }),
+    ]),
+    aoFalhar: async () => {
+      await osRefetchCharacter(CURRENT_RPG.id, c.id || INV.charAtivo);
+      await osRefetchInventario(charId);
+      renderInvCompleto();
+    },
+    msgErro: `⚠ Falha ao equipar ${it.nome} — ressincronizando…`,
+  });
 }
 
 // ── I3 — DESEQUIPAR ───────────────────────────────────────────────────────
@@ -1494,32 +1512,35 @@ async function invDesequipar(invId: any, silencioso = false) {
     }
   }
 
+  // Otimista: muta local e renderiza JÁ; persiste em background.
   c.custom_attrs = ca;
-  try {
-    await sb(`characters?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}&nome=eq.${encodeURIComponent(INV.charAtivo)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ custom_attrs: ca })
-    });
-    await sb(`inventario?id=eq.${invId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ equipado: false, slot_equipado: null, bonus_snapshot: null })
-    });
-    const idx = (INV.inventarios as any)[charId].findIndex((i: any) => i.id === invId);
-    if (idx >= 0) {
-      (INV.inventarios as any)[charId][idx].equipado = false;
-      (INV.inventarios as any)[charId][idx].slot_equipado = null;
-      (INV.inventarios as any)[charId][idx].bonus_snapshot = null;
-    }
-    if (!silencioso) {
-      document.getElementById('modal-inv-item-overlay')!.style!.display = 'none';
-      mostrarToast(`✓ ${it.nome} desequipado`, '');
-      renderInvCompleto();
-      if (typeof renderCharView === 'function') renderCharView(INV.charAtivo);
-      if (typeof renderAttrView === 'function') renderAttrView(INV.charAtivo);
-    }
-  } catch(e) {
-    if (!silencioso) mostrarToast('Erro ao desequipar. Verifique sua conexão e tente novamente.', 'erro');
+  const idx = (INV.inventarios as any)[charId].findIndex((i: any) => i.id === invId);
+  if (idx >= 0) {
+    (INV.inventarios as any)[charId][idx].equipado = false;
+    (INV.inventarios as any)[charId][idx].slot_equipado = null;
+    (INV.inventarios as any)[charId][idx].bonus_snapshot = null;
   }
+  if (!silencioso) {
+    document.getElementById('modal-inv-item-overlay')!.style!.display = 'none';
+    mostrarToast(`✓ ${it.nome} desequipado`, '');
+    renderInvCompleto();
+    if (typeof renderCharView === 'function') renderCharView(INV.charAtivo);
+    if (typeof renderAttrView === 'function') renderAttrView(INV.charAtivo);
+  }
+  const _charFiltro = c.id ? `id=eq.${encodeURIComponent(c.id)}` : `rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}&nome=eq.${encodeURIComponent(INV.charAtivo)}`;
+  salvarOtimista({
+    chave: 'inventario:' + invId,
+    persistir: () => Promise.all([
+      sb(`characters?${_charFiltro}`, { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) }),
+      sb(`inventario?id=eq.${invId}`, { method: 'PATCH', body: JSON.stringify({ equipado: false, slot_equipado: null, bonus_snapshot: null }) }),
+    ]),
+    aoFalhar: async () => {
+      await osRefetchCharacter(CURRENT_RPG.id, c.id || INV.charAtivo);
+      await osRefetchInventario(charId);
+      renderInvCompleto();
+    },
+    msgErro: `⚠ Falha ao desequipar ${it.nome} — ressincronizando…`,
+  });
 }
 
 // ── REMOVER ITEM DO INVENTÁRIO ────────────────────────────────────────────
@@ -1527,15 +1548,22 @@ async function invRemoverItem(invId: any) {
   const charId = INV.charId;
   const inv = ((INV.inventarios as any)[charId] || []).find((i: any) => i.id === invId);
   if (!inv) return;
+  // Confirmar ANTES de qualquer escrita (antes o confirm ficava depois do
+  // desequipar, que já tinha gravado duas vezes quando o usuário desistia).
+  if (!await confirmarAsync(`Remover "${inv.item?.nome}" do inventário?`, { ok: 'Remover' })) return;
   if (inv.equipado) { await invDesequipar(invId, true); }
-  if (!confirm(`Remover "${inv.item?.nome}" do inventário?`)) return;
-  try {
-    await sb(`inventario?id=eq.${invId}`, { method: 'DELETE', headers:{'Prefer':'return=minimal'} });
-    (INV.inventarios as any)[charId] = (INV.inventarios as any)[charId].filter((i: any) => i.id !== invId);
-    document.getElementById('modal-inv-item-overlay')!.style!.display = 'none';
-    mostrarToast('Item removido', '');
-    renderInvCompleto();
-  } catch (e: any) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  // Otimista: remove da lista local e renderiza JÁ; DELETE em background
+  // (mesma chave do desequipar — o DELETE só sai depois dos PATCHes dele).
+  (INV.inventarios as any)[charId] = (INV.inventarios as any)[charId].filter((i: any) => i.id !== invId);
+  document.getElementById('modal-inv-item-overlay')!.style!.display = 'none';
+  mostrarToast('Item removido', '');
+  renderInvCompleto();
+  salvarOtimista({
+    chave: 'inventario:' + invId,
+    persistir: () => sb(`inventario?id=eq.${invId}`, { method: 'DELETE', headers:{'Prefer':'return=minimal'} }),
+    aoFalhar: async () => { await osRefetchInventario(charId); renderInvCompleto(); },
+    msgErro: '⚠ Falha ao remover o item — ressincronizando…',
+  });
 }
 
 // ── ADICIONAR ITEM (MESTRE) ───────────────────────────────────────────────
@@ -1582,23 +1610,29 @@ async function addInvConfirmar(catalogId: any) {
   if (!c || !it) return;
   const charNivel = c.custom_attrs?.nivel || 1;
   const bloq = charNivel < (it.nivel_minimo_uso || 1);
-  try {
-    const payload = {
-      rpg_id: CURRENT_RPG.id,
-      character_id: charId,
-      item_catalog_id: catalogId,
-      quantidade: 1,
-      equipado: false,
-      bloqueado_por_nivel: bloq,
-      origem: 'doacao_mestre'
-    };
-    const res = await sb('inventario', { method:'POST', body: JSON.stringify(payload) });
-    mostrarToast(`✓ ${it.nome} adicionado${bloq?' (bloqueado, Nv.'+it.nivel_minimo_uso+')':''}`, 'ok');
-    document.getElementById('modal-add-inv-overlay-cat')!.style!.display = 'none';
-    await carregarInventarioChar(charId);
-    // Broadcast
-    _invBroadcastDrop(it, INV.charAtivo, 'doacao_mestre');
-  } catch (e: any) { mostrarToast('Erro: ' + e.message, 'erro'); }
+  const payload = {
+    rpg_id: CURRENT_RPG.id,
+    character_id: charId,
+    item_catalog_id: catalogId,
+    quantidade: 1,
+    equipado: false,
+    bloqueado_por_nivel: bloq,
+    origem: 'doacao_mestre'
+  };
+  // Otimista: fecha o modal e avisa JÁ; o POST e a recarga do inventário
+  // (que traz o id novo do servidor) rodam em background.
+  document.getElementById('modal-add-inv-overlay-cat')!.style!.display = 'none';
+  mostrarToast(`✓ ${it.nome} adicionado${bloq?' (bloqueado, Nv.'+it.nivel_minimo_uso+')':''}`, 'ok');
+  salvarOtimista({
+    chave: 'inventario:add:' + charId,
+    persistir: async () => {
+      await sb('inventario', { method:'POST', body: JSON.stringify(payload) });
+      await carregarInventarioChar(charId);
+      _invBroadcastDrop(it, INV.charAtivo, 'doacao_mestre');
+    },
+    aoFalhar: async () => { await osRefetchInventario(charId); },
+    msgErro: `⚠ Falha ao adicionar ${it.nome} — ressincronizando…`,
+  });
 }
 
 // ── I4 — VERIFICAR DESBLOQUEIO DE ITENS AO SUBIR NÍVEL ──────────────────

@@ -650,15 +650,25 @@ async function salvarSkill() {
   } else {
     body.animacao = null;
   }
+  if (skillId) {
+    // Otimista (edição): muta local, fecha o modal e renderiza JÁ; PATCH em
+    // background. Criação (POST) segue aguardada — precisa do id do servidor.
+    const idx = RPG_DATA!.skills.findIndex(s => s.id == skillId);
+    if (idx >= 0) RPG_DATA!.skills[idx] = { ...RPG_DATA!.skills[idx], ...body };
+    fecharModalSkill();
+    if (FICHAS_VIEW === personagem && typeof renderFichaView === 'function') renderFichaView(personagem); else if (CHAR_VIEW === personagem) renderCharView(personagem);
+    mostrarToast('Habilidade salva!', 'sucesso');
+    salvarOtimista({
+      chave: 'skills:' + skillId,
+      persistir: () => sb(`skills?id=eq.${encodeURIComponent(skillId)}`, { method: 'PATCH', body: JSON.stringify(body) }),
+      aoFalhar: () => osRefetchSkill(skillId),
+      msgErro: '⚠ Falha ao salvar habilidade — ressincronizando…',
+    });
+    return;
+  }
   try {
-    if (skillId) {
-      await sb(`skills?id=eq.${encodeURIComponent(skillId)}`, { method: 'PATCH', body: JSON.stringify(body) });
-      const idx = RPG_DATA!.skills.findIndex(s => s.id == skillId);
-      if (idx >= 0) RPG_DATA!.skills[idx] = { ...RPG_DATA!.skills[idx], ...body };
-    } else {
-      const [nova] = await sb('skills', { method: 'POST', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify(body) });
-      RPG_DATA!.skills.push(nova || body);
-    }
+    const [nova] = await sb('skills', { method: 'POST', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify(body) });
+    RPG_DATA!.skills.push(nova || body);
     fecharModalSkill();
     if (FICHAS_VIEW === personagem && typeof renderFichaView === 'function') renderFichaView(personagem); else if (CHAR_VIEW === personagem) renderCharView(personagem);
     mostrarToast('Habilidade salva!', 'sucesso');

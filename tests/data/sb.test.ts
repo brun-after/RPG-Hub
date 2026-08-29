@@ -30,7 +30,7 @@ describe('sb — requisição e headers', () => {
     expect(url).toBe(`${g.SUPABASE_URL}/rest/v1/characters?select=*`);
     expect(init.headers['apikey']).toBe(g.SUPABASE_KEY);
     expect(init.headers['Content-Type']).toBe('application/json');
-    expect(init.headers['Prefer']).toBe('return=representation');
+    expect(init.headers['Prefer']).toBe('return=minimal'); // default: writes não devolvem a linha
     expect(init.headers['Authorization']).toBeUndefined(); // sem sessão
   });
 
@@ -39,10 +39,10 @@ describe('sb — requisição e headers', () => {
     const fetchMock = vi.fn(async () => makeResponse(200, []));
     vi.stubGlobal('fetch', fetchMock);
 
-    await g.sb('characters', { prefer: 'return=minimal' });
+    await g.sb('characters', { prefer: 'return=representation' });
     const [, init] = fetchMock.mock.calls[0] as any;
     expect(init.headers['Authorization']).toBe('Bearer tok-123');
-    expect(init.headers['Prefer']).toBe('return=minimal');
+    expect(init.headers['Prefer']).toBe('return=representation');
   });
 
   it('204 e corpo vazio retornam null', async () => {
